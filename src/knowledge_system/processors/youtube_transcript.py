@@ -106,6 +106,27 @@ class YouTubeTranscript(BaseModel):
             seconds = self.duration % 60
             lines.append(f'duration: "{minutes}:{seconds:02d}"')
         
+        # Add view count if available
+        if self.view_count:
+            lines.append(f'view_count: {self.view_count}')
+        
+        # Add tags if available (limit to first 10 to keep YAML manageable)
+        if self.tags:
+            tags_subset = self.tags[:10]
+            # Format tags as a YAML array, escaping quotes in tag names
+            safe_tags = [tag.replace('"', '\\"') for tag in tags_subset]
+            tags_yaml = '[' + ', '.join(f'"{tag}"' for tag in safe_tags) + ']'
+            lines.append(f'tags: {tags_yaml}')
+            if len(self.tags) > 10:
+                lines.append(f'# ... and {len(self.tags) - 10} more tags')
+        
+        # Add transcript processing metadata
+        lines.append(f'model: "YouTube Transcript"')
+        lines.append(f'device: "Web API"')
+        
+        # Add extraction timestamp
+        lines.append(f'fetched: "{self.fetched_at.strftime("%Y-%m-%d %H:%M:%S")}"')
+        
         lines.append("---")
         lines.append("")
 
