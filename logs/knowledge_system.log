@@ -334,3 +334,10 @@
 2025-07-21 15:11:51.112 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
 2025-07-21 15:12:05.985 | INFO     | src.knowledge_system.logger:initialize_logging:250 | Logging system initialized
 2025-07-21 15:12:06.143 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 20:56:52.896 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 20:56:53.091 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 20:56:57.832 | INFO     | knowledge_system.utils.hardware_detection:detect_hardware:126 | Detecting hardware specifications...
+2025-07-21 20:56:57.936 | INFO     | knowledge_system.utils.hardware_detection:_detect_apple_silicon:210 | Detected Apple Silicon: M2 Max
+2025-07-21 20:56:57.936 | INFO     | knowledge_system.utils.hardware_detection:detect_hardware:184 | Detected: M2 Max with 12 CPU cores, 38 GPU cores, 96GB RAM
+2025-07-21 20:56:57.936 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:52 | Auto-selecting device for transcription workload with base model
+2025-07-21 20:56:57.936 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:64 | Selected MPS: M2 Max GPU (38 cores)
