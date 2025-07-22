@@ -1,0 +1,82 @@
+# Obsidian Intelligent Linking Configuration
+# Place this file in your project's config/ directory to customize
+# how the knowledge system links to your Obsidian vault
+
+# Topic-based MOC mappings
+# When these topics are detected, suggest links to these MOCs
+topic_mappings:
+  economics: "Economics MOC"
+  finance: "Finance MOC"
+  china: "China Analysis MOC"
+  banking: "Banking MOC"
+  politics: "Political Analysis MOC"
+  technology: "Technology MOC"
+  realestate: "Real Estate MOC"
+  trade: "International Trade MOC"
+  business: "Business Analysis MOC"
+  interview: "Interviews MOC"
+  analysis: "Analysis Framework MOC"
+  
+# Entity-based MOC mappings
+# When these types of entities are found, suggest these MOCs
+entity_mappings:
+  people: "People MOC"
+  organizations: "Organizations MOC"
+  locations: "Geographic Locations MOC"
+  mental_models: "Mental Models MOC"
+  jargon: "Jargon & Terminology MOC"
+
+# Specific entity mappings
+# Map specific people/organizations to dedicated notes
+people_mappings:
+  "Jerome Powell": "Jerome Powell - Fed Chair"
+  "Xi Jinping": "Xi Jinping - China President" 
+  "Elon Musk": "Elon Musk - Tesla SpaceX"
+  "Warren Buffett": "Warren Buffett - Berkshire"
+
+organizations_mappings:
+  "Federal Reserve": "Federal Reserve Bank"
+  "World Bank": "World Bank - International Development"
+  "European Central Bank": "ECB - European Monetary Policy"
+  "Bank of China": "Bank of China - State Banking"
+
+# Location mappings
+location_mappings:
+  "Silicon Valley": "Silicon Valley - Tech Hub"
+  "Wall Street": "Wall Street - Financial District"
+  "Beijing": "Beijing - China Capital"
+  "Washington DC": "Washington DC - US Politics"
+
+# Vault scanning settings
+vault_scanning:
+  enabled: true
+  min_title_length: 4
+  skip_hidden_files: true
+  
+  # File patterns to ignore when scanning
+  ignore_patterns:
+    - "*.template.*"
+    - ".*"  # Hidden files
+    - "Archive/*"
+    - "Templates/*"
+    
+  # Include these directories for scanning
+  include_directories:
+    - "MOCs"
+    - "People"
+    - "Organizations" 
+    - "Analysis"
+    - "Economics"
+    - "Technology"
+
+# Content matching settings
+content_matching:
+  fuzzy_matching: true
+  case_sensitive: false
+  minimum_match_score: 0.7
+  
+  # Boost scores for matches in these sections
+  boost_sections:
+    title: 2.0
+    headings: 1.5
+    tags: 1.3 

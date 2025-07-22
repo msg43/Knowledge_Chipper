@@ -1,0 +1,336 @@
+2025-07-21 09:58:06.613 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 09:58:06.787 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 09:58:10.726 | INFO     | knowledge_system.utils.hardware_detection:detect_hardware:126 | Detecting hardware specifications...
+2025-07-21 09:58:10.895 | INFO     | knowledge_system.utils.hardware_detection:_detect_apple_silicon:210 | Detected Apple Silicon: M2 Max
+2025-07-21 09:58:10.895 | INFO     | knowledge_system.utils.hardware_detection:detect_hardware:184 | Detected: M2 Max with 12 CPU cores, 38 GPU cores, 96GB RAM
+2025-07-21 09:58:10.895 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:52 | Auto-selecting device for transcription workload with base model
+2025-07-21 09:58:10.895 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:64 | Selected MPS: M2 Max GPU (38 cores)
+2025-07-21 10:05:16.397 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 10:05:16.605 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 10:05:21.246 | INFO     | knowledge_system.utils.hardware_detection:detect_hardware:126 | Detecting hardware specifications...
+2025-07-21 10:05:21.354 | INFO     | knowledge_system.utils.hardware_detection:_detect_apple_silicon:210 | Detected Apple Silicon: M2 Max
+2025-07-21 10:05:21.354 | INFO     | knowledge_system.utils.hardware_detection:detect_hardware:184 | Detected: M2 Max with 12 CPU cores, 38 GPU cores, 96GB RAM
+2025-07-21 10:05:21.355 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:52 | Auto-selecting device for transcription workload with base model
+2025-07-21 10:05:21.355 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:64 | Selected MPS: M2 Max GPU (38 cores)
+2025-07-21 10:05:44.794 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 10:05:48.601 | INFO     | knowledge_system.logger:log_system_event:202 | System event: cli - cli_session_started
+2025-07-21 10:05:55.607 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 10:05:59.235 | INFO     | knowledge_system.logger:log_system_event:202 | System event: cli - cli_session_started
+2025-07-21 10:05:59.239 | INFO     | knowledge_system.logger:log_system_event:202 | System event: cli.summarize - batch_summarization_started
+2025-07-21 10:36:16.854 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:52 | Auto-selecting device for transcription workload with base model
+2025-07-21 10:36:16.854 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:64 | Selected MPS: M2 Max GPU (38 cores)
+2025-07-21 10:40:11.945 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:539 | Starting YouTube extraction process - collecting URLs...
+2025-07-21 10:40:11.946 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:541 | Collected 1 URLs for processing
+2025-07-21 10:40:11.946 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:563 | Starting extraction of 1 YouTube URLs to /Users/matthewgreer/Projects/App5/Output
+2025-07-21 10:40:11.959 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:593 | Creating YouTube extraction worker with 1 URLs
+2025-07-21 10:40:11.960 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:43 | YouTubeExtractionWorker created with 1 URLs
+2025-07-21 10:40:11.960 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:47 | URLs to process: ['https://youtu.be/TcxlOiJz8V0?si=wJzGa8yvP79kkQtO']
+2025-07-21 10:40:11.960 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:601 | Starting YouTube extraction worker thread
+2025-07-21 10:40:11.961 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:51 | YouTubeExtractionWorker.run() started with 1 URLs
+2025-07-21 10:40:11.961 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:71 | Cancellation token state at start - cancelled: <bound method CancellationToken.is_cancelled of <knowledge_system.utils.cancellation.CancellationToken object at 0x16e4b52b0>>, paused: False
+2025-07-21 10:40:11.961 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:72 | should_stop flag: False
+2025-07-21 10:40:11.961 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:83 | Processing 1 URLs
+2025-07-21 10:40:11.962 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:92 | URL 1/1: should_stop=False, token_cancelled=False
+2025-07-21 10:40:11.962 | INFO     | knowledge_system.processors.youtube_transcript:process:584 | YouTube transcript extraction starting. Output directory: /Users/matthewgreer/Projects/App5/Output
+2025-07-21 10:40:11.963 | INFO     | knowledge_system.processors.youtube_transcript:process:585 | Output directory exists: True
+2025-07-21 10:40:11.963 | INFO     | knowledge_system.processors.youtube_transcript:process:586 | Output directory is writable: 16877
+2025-07-21 10:40:11.963 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:255 | Fetching transcript for: https://youtu.be/TcxlOiJz8V0?si=wJzGa8yvP79kkQtO
+2025-07-21 10:40:11.963 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:283 | Using Webshare rotating proxy for transcript extraction
+2025-07-21 10:40:11.963 | INFO     | knowledge_system.processors.youtube_metadata:_configure_webshare_proxy:161 | Configured YT-DLP with WebShare rotating proxy
+2025-07-21 10:40:11.963 | INFO     | knowledge_system.processors.youtube_metadata:process:296 | Processing 1 YouTube URLs for metadata extraction
+2025-07-21 10:40:11.974 | INFO     | knowledge_system.processors.youtube_metadata:process:309 | Processing 1/1: TcxlOiJz8V0
+2025-07-21 10:40:22.829 | ERROR    | knowledge_system.processors.youtube_metadata:process:321 | Failed to extract metadata for TcxlOiJz8V0
+2025-07-21 10:40:22.829 | INFO     | knowledge_system.processors.youtube_metadata:process:329 | ==================================================
+2025-07-21 10:40:22.829 | INFO     | knowledge_system.processors.youtube_metadata:process:330 | METADATA EXTRACTION SUMMARY
+2025-07-21 10:40:22.829 | INFO     | knowledge_system.processors.youtube_metadata:process:331 | ==================================================
+2025-07-21 10:40:22.829 | INFO     | knowledge_system.processors.youtube_metadata:process:332 | Total videos: 1
+2025-07-21 10:40:22.830 | INFO     | knowledge_system.processors.youtube_metadata:process:333 | Successful: 0
+2025-07-21 10:40:22.830 | INFO     | knowledge_system.processors.youtube_metadata:process:334 | Failed: 1
+2025-07-21 10:40:22.830 | INFO     | knowledge_system.processors.youtube_metadata:process:335 | Success rate: 0.0%
+2025-07-21 10:40:22.830 | INFO     | knowledge_system.processors.youtube_metadata:process:336 | Processing time: 10.87s
+2025-07-21 10:40:22.830 | INFO     | knowledge_system.processors.youtube_metadata:process:337 | ==================================================
+2025-07-21 10:40:22.830 | INFO     | knowledge_system.processors.youtube_metadata:_write_simple_failure_log:419 | Failure log appended to: logs/youtube_metadata_failures.log
+2025-07-21 10:40:23.413 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:495 | Attempt 1 failed: HTTPSConnectionPool(host='www.youtube.com', port=443): Max retries exceeded with url: /watch?v=TcxlOiJz8V0 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 402 Payment Required')))
+2025-07-21 10:40:23.413 | ERROR    | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:499 | Proxy authentication failed for video TcxlOiJz8V0. Please check your WebShare credentials.
+2025-07-21 10:40:23.413 | WARNING  | knowledge_system.processors.youtube_transcript:process:602 | No transcript returned for https://youtu.be/TcxlOiJz8V0?si=wJzGa8yvP79kkQtO
+2025-07-21 10:40:23.413 | INFO     | knowledge_system.processors.youtube_transcript:process:626 | Saving 0 transcripts to files
+2025-07-21 10:40:23.413 | WARNING  | knowledge_system.processors.youtube_transcript:process:628 | No transcripts available for file writing!
+2025-07-21 10:40:23.414 | INFO     | knowledge_system.processors.youtube_transcript:process:633 | Created thumbnails directory: /Users/matthewgreer/Projects/App5/Output/Thumbnails
+2025-07-21 10:40:23.414 | INFO     | knowledge_system.processors.youtube_transcript:process:730 | Transcript processing completed. Success: False, Files saved: 0
+2025-07-21 10:40:49.211 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:539 | Starting YouTube extraction process - collecting URLs...
+2025-07-21 10:40:49.212 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:541 | Collected 1 URLs for processing
+2025-07-21 10:40:49.212 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:563 | Starting extraction of 1 YouTube URLs to /Users/matthewgreer/Projects/App5/Output
+2025-07-21 10:40:49.222 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:593 | Creating YouTube extraction worker with 1 URLs
+2025-07-21 10:40:49.222 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:43 | YouTubeExtractionWorker created with 1 URLs
+2025-07-21 10:40:49.223 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:47 | URLs to process: ['https://youtu.be/TcxlOiJz8V0?si=wJzGa8yvP79kkQtO']
+2025-07-21 10:40:49.223 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:601 | Starting YouTube extraction worker thread
+2025-07-21 10:40:49.223 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:51 | YouTubeExtractionWorker.run() started with 1 URLs
+2025-07-21 10:40:49.223 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:71 | Cancellation token state at start - cancelled: <bound method CancellationToken.is_cancelled of <knowledge_system.utils.cancellation.CancellationToken object at 0x37375e5e0>>, paused: False
+2025-07-21 10:40:49.223 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:72 | should_stop flag: False
+2025-07-21 10:40:49.223 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:83 | Processing 1 URLs
+2025-07-21 10:40:49.223 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:92 | URL 1/1: should_stop=False, token_cancelled=False
+2025-07-21 10:40:49.224 | INFO     | knowledge_system.processors.youtube_transcript:process:584 | YouTube transcript extraction starting. Output directory: /Users/matthewgreer/Projects/App5/Output
+2025-07-21 10:40:49.224 | INFO     | knowledge_system.processors.youtube_transcript:process:585 | Output directory exists: True
+2025-07-21 10:40:49.224 | INFO     | knowledge_system.processors.youtube_transcript:process:586 | Output directory is writable: 16877
+2025-07-21 10:40:49.224 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:255 | Fetching transcript for: https://youtu.be/TcxlOiJz8V0?si=wJzGa8yvP79kkQtO
+2025-07-21 10:40:49.224 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:283 | Using Webshare rotating proxy for transcript extraction
+2025-07-21 10:40:49.224 | INFO     | knowledge_system.processors.youtube_metadata:_configure_webshare_proxy:161 | Configured YT-DLP with WebShare rotating proxy
+2025-07-21 10:40:49.224 | INFO     | knowledge_system.processors.youtube_metadata:process:296 | Processing 1 YouTube URLs for metadata extraction
+2025-07-21 10:40:49.224 | INFO     | knowledge_system.processors.youtube_metadata:process:309 | Processing 1/1: TcxlOiJz8V0
+2025-07-21 10:40:57.979 | ERROR    | knowledge_system.processors.youtube_metadata:process:321 | Failed to extract metadata for TcxlOiJz8V0
+2025-07-21 10:40:57.979 | INFO     | knowledge_system.processors.youtube_metadata:process:329 | ==================================================
+2025-07-21 10:40:57.979 | INFO     | knowledge_system.processors.youtube_metadata:process:330 | METADATA EXTRACTION SUMMARY
+2025-07-21 10:40:57.979 | INFO     | knowledge_system.processors.youtube_metadata:process:331 | ==================================================
+2025-07-21 10:40:57.980 | INFO     | knowledge_system.processors.youtube_metadata:process:332 | Total videos: 1
+2025-07-21 10:40:57.980 | INFO     | knowledge_system.processors.youtube_metadata:process:333 | Successful: 0
+2025-07-21 10:40:57.980 | INFO     | knowledge_system.processors.youtube_metadata:process:334 | Failed: 1
+2025-07-21 10:40:57.980 | INFO     | knowledge_system.processors.youtube_metadata:process:335 | Success rate: 0.0%
+2025-07-21 10:40:57.980 | INFO     | knowledge_system.processors.youtube_metadata:process:336 | Processing time: 8.76s
+2025-07-21 10:40:57.980 | INFO     | knowledge_system.processors.youtube_metadata:process:337 | ==================================================
+2025-07-21 10:40:57.980 | INFO     | knowledge_system.processors.youtube_metadata:_write_simple_failure_log:419 | Failure log appended to: logs/youtube_metadata_failures.log
+2025-07-21 10:40:58.494 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:495 | Attempt 1 failed: HTTPSConnectionPool(host='www.youtube.com', port=443): Max retries exceeded with url: /watch?v=TcxlOiJz8V0 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 402 Payment Required')))
+2025-07-21 10:40:58.494 | ERROR    | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:499 | Proxy authentication failed for video TcxlOiJz8V0. Please check your WebShare credentials.
+2025-07-21 10:40:58.494 | WARNING  | knowledge_system.processors.youtube_transcript:process:602 | No transcript returned for https://youtu.be/TcxlOiJz8V0?si=wJzGa8yvP79kkQtO
+2025-07-21 10:40:58.494 | INFO     | knowledge_system.processors.youtube_transcript:process:626 | Saving 0 transcripts to files
+2025-07-21 10:40:58.494 | WARNING  | knowledge_system.processors.youtube_transcript:process:628 | No transcripts available for file writing!
+2025-07-21 10:40:58.494 | INFO     | knowledge_system.processors.youtube_transcript:process:633 | Created thumbnails directory: /Users/matthewgreer/Projects/App5/Output/Thumbnails
+2025-07-21 10:40:58.494 | INFO     | knowledge_system.processors.youtube_transcript:process:730 | Transcript processing completed. Success: False, Files saved: 0
+2025-07-21 10:41:44.145 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:539 | Starting YouTube extraction process - collecting URLs...
+2025-07-21 10:41:44.147 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:541 | Collected 1 URLs for processing
+2025-07-21 10:41:44.147 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:563 | Starting extraction of 1 YouTube URLs to /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts
+2025-07-21 10:41:44.159 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:593 | Creating YouTube extraction worker with 1 URLs
+2025-07-21 10:41:44.159 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:43 | YouTubeExtractionWorker created with 1 URLs
+2025-07-21 10:41:44.159 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:47 | URLs to process: ['https://youtu.be/TFyt804sGds?si=g6eC399PNHuriyTY']
+2025-07-21 10:41:44.160 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:601 | Starting YouTube extraction worker thread
+2025-07-21 10:41:44.160 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:51 | YouTubeExtractionWorker.run() started with 1 URLs
+2025-07-21 10:41:44.160 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:71 | Cancellation token state at start - cancelled: <bound method CancellationToken.is_cancelled of <knowledge_system.utils.cancellation.CancellationToken object at 0x16ba85e80>>, paused: False
+2025-07-21 10:41:44.160 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:72 | should_stop flag: False
+2025-07-21 10:41:44.160 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:83 | Processing 1 URLs
+2025-07-21 10:41:44.161 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:92 | URL 1/1: should_stop=False, token_cancelled=False
+2025-07-21 10:41:44.161 | INFO     | knowledge_system.processors.youtube_transcript:process:584 | YouTube transcript extraction starting. Output directory: /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts
+2025-07-21 10:41:44.161 | INFO     | knowledge_system.processors.youtube_transcript:process:585 | Output directory exists: True
+2025-07-21 10:41:44.161 | INFO     | knowledge_system.processors.youtube_transcript:process:586 | Output directory is writable: 16877
+2025-07-21 10:41:44.161 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:255 | Fetching transcript for: https://youtu.be/TFyt804sGds?si=g6eC399PNHuriyTY
+2025-07-21 10:41:44.161 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:283 | Using Webshare rotating proxy for transcript extraction
+2025-07-21 10:41:44.161 | INFO     | knowledge_system.processors.youtube_metadata:_configure_webshare_proxy:161 | Configured YT-DLP with WebShare rotating proxy
+2025-07-21 10:41:44.161 | INFO     | knowledge_system.processors.youtube_metadata:process:296 | Processing 1 YouTube URLs for metadata extraction
+2025-07-21 10:41:44.161 | INFO     | knowledge_system.processors.youtube_metadata:process:309 | Processing 1/1: TFyt804sGds
+2025-07-21 10:41:53.178 | ERROR    | knowledge_system.processors.youtube_metadata:process:321 | Failed to extract metadata for TFyt804sGds
+2025-07-21 10:41:53.178 | INFO     | knowledge_system.processors.youtube_metadata:process:329 | ==================================================
+2025-07-21 10:41:53.178 | INFO     | knowledge_system.processors.youtube_metadata:process:330 | METADATA EXTRACTION SUMMARY
+2025-07-21 10:41:53.178 | INFO     | knowledge_system.processors.youtube_metadata:process:331 | ==================================================
+2025-07-21 10:41:53.178 | INFO     | knowledge_system.processors.youtube_metadata:process:332 | Total videos: 1
+2025-07-21 10:41:53.178 | INFO     | knowledge_system.processors.youtube_metadata:process:333 | Successful: 0
+2025-07-21 10:41:53.178 | INFO     | knowledge_system.processors.youtube_metadata:process:334 | Failed: 1
+2025-07-21 10:41:53.179 | INFO     | knowledge_system.processors.youtube_metadata:process:335 | Success rate: 0.0%
+2025-07-21 10:41:53.179 | INFO     | knowledge_system.processors.youtube_metadata:process:336 | Processing time: 9.02s
+2025-07-21 10:41:53.179 | INFO     | knowledge_system.processors.youtube_metadata:process:337 | ==================================================
+2025-07-21 10:41:53.179 | INFO     | knowledge_system.processors.youtube_metadata:_write_simple_failure_log:419 | Failure log appended to: logs/youtube_metadata_failures.log
+2025-07-21 10:41:53.729 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:495 | Attempt 1 failed: HTTPSConnectionPool(host='www.youtube.com', port=443): Max retries exceeded with url: /watch?v=TFyt804sGds (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 402 Payment Required')))
+2025-07-21 10:41:53.729 | ERROR    | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:499 | Proxy authentication failed for video TFyt804sGds. Please check your WebShare credentials.
+2025-07-21 10:41:53.729 | WARNING  | knowledge_system.processors.youtube_transcript:process:602 | No transcript returned for https://youtu.be/TFyt804sGds?si=g6eC399PNHuriyTY
+2025-07-21 10:41:53.729 | INFO     | knowledge_system.processors.youtube_transcript:process:626 | Saving 0 transcripts to files
+2025-07-21 10:41:53.729 | WARNING  | knowledge_system.processors.youtube_transcript:process:628 | No transcripts available for file writing!
+2025-07-21 10:41:53.729 | INFO     | knowledge_system.processors.youtube_transcript:process:633 | Created thumbnails directory: /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts/Thumbnails
+2025-07-21 10:41:53.729 | INFO     | knowledge_system.processors.youtube_transcript:process:730 | Transcript processing completed. Success: False, Files saved: 0
+2025-07-21 10:43:15.359 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 10:43:15.565 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 10:43:19.997 | INFO     | knowledge_system.utils.hardware_detection:detect_hardware:126 | Detecting hardware specifications...
+2025-07-21 10:43:20.161 | INFO     | knowledge_system.utils.hardware_detection:_detect_apple_silicon:210 | Detected Apple Silicon: M2 Max
+2025-07-21 10:43:20.162 | INFO     | knowledge_system.utils.hardware_detection:detect_hardware:184 | Detected: M2 Max with 12 CPU cores, 38 GPU cores, 96GB RAM
+2025-07-21 10:43:20.162 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:52 | Auto-selecting device for transcription workload with base model
+2025-07-21 10:43:20.162 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:64 | Selected MPS: M2 Max GPU (38 cores)
+2025-07-21 10:44:04.579 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:539 | Starting YouTube extraction process - collecting URLs...
+2025-07-21 10:44:04.579 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:541 | Collected 1 URLs for processing
+2025-07-21 10:44:04.580 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:563 | Starting extraction of 1 YouTube URLs to /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts
+2025-07-21 10:44:04.590 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:593 | Creating YouTube extraction worker with 1 URLs
+2025-07-21 10:44:04.591 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:43 | YouTubeExtractionWorker created with 1 URLs
+2025-07-21 10:44:04.591 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:47 | URLs to process: ['https://youtu.be/TFyt804sGds?si=MbGZzZUb6bYXp7-l']
+2025-07-21 10:44:04.591 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:601 | Starting YouTube extraction worker thread
+2025-07-21 10:44:04.591 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:51 | YouTubeExtractionWorker.run() started with 1 URLs
+2025-07-21 10:44:04.591 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:71 | Cancellation token state at start - cancelled: <bound method CancellationToken.is_cancelled of <knowledge_system.utils.cancellation.CancellationToken object at 0x33dfe7040>>, paused: False
+2025-07-21 10:44:04.592 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:72 | should_stop flag: False
+2025-07-21 10:44:04.592 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:83 | Processing 1 URLs
+2025-07-21 10:44:04.592 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:92 | URL 1/1: should_stop=False, token_cancelled=False
+2025-07-21 10:44:04.604 | INFO     | knowledge_system.processors.youtube_transcript:process:584 | YouTube transcript extraction starting. Output directory: /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts
+2025-07-21 10:44:04.604 | INFO     | knowledge_system.processors.youtube_transcript:process:585 | Output directory exists: True
+2025-07-21 10:44:04.604 | INFO     | knowledge_system.processors.youtube_transcript:process:586 | Output directory is writable: 16877
+2025-07-21 10:44:04.604 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:255 | Fetching transcript for: https://youtu.be/TFyt804sGds?si=MbGZzZUb6bYXp7-l
+2025-07-21 10:44:04.604 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:283 | Using Webshare rotating proxy for transcript extraction
+2025-07-21 10:44:04.604 | INFO     | knowledge_system.processors.youtube_metadata:_configure_webshare_proxy:161 | Configured YT-DLP with WebShare rotating proxy
+2025-07-21 10:44:04.604 | INFO     | knowledge_system.processors.youtube_metadata:process:296 | Processing 1 YouTube URLs for metadata extraction
+2025-07-21 10:44:04.605 | INFO     | knowledge_system.processors.youtube_metadata:process:309 | Processing 1/1: TFyt804sGds
+2025-07-21 10:44:14.530 | ERROR    | knowledge_system.processors.youtube_metadata:process:321 | Failed to extract metadata for TFyt804sGds
+2025-07-21 10:44:14.530 | INFO     | knowledge_system.processors.youtube_metadata:process:329 | ==================================================
+2025-07-21 10:44:14.531 | INFO     | knowledge_system.processors.youtube_metadata:process:330 | METADATA EXTRACTION SUMMARY
+2025-07-21 10:44:14.531 | INFO     | knowledge_system.processors.youtube_metadata:process:331 | ==================================================
+2025-07-21 10:44:14.531 | INFO     | knowledge_system.processors.youtube_metadata:process:332 | Total videos: 1
+2025-07-21 10:44:14.531 | INFO     | knowledge_system.processors.youtube_metadata:process:333 | Successful: 0
+2025-07-21 10:44:14.531 | INFO     | knowledge_system.processors.youtube_metadata:process:334 | Failed: 1
+2025-07-21 10:44:14.531 | INFO     | knowledge_system.processors.youtube_metadata:process:335 | Success rate: 0.0%
+2025-07-21 10:44:14.531 | INFO     | knowledge_system.processors.youtube_metadata:process:336 | Processing time: 9.93s
+2025-07-21 10:44:14.531 | INFO     | knowledge_system.processors.youtube_metadata:process:337 | ==================================================
+2025-07-21 10:44:14.531 | INFO     | knowledge_system.processors.youtube_metadata:_write_simple_failure_log:419 | Failure log appended to: logs/youtube_metadata_failures.log
+2025-07-21 10:44:15.049 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:495 | Attempt 1 failed: HTTPSConnectionPool(host='www.youtube.com', port=443): Max retries exceeded with url: /watch?v=TFyt804sGds (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 402 Payment Required')))
+2025-07-21 10:44:15.050 | ERROR    | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:499 | Proxy authentication failed for video TFyt804sGds. Please check your WebShare credentials.
+2025-07-21 10:44:15.050 | WARNING  | knowledge_system.processors.youtube_transcript:process:602 | No transcript returned for https://youtu.be/TFyt804sGds?si=MbGZzZUb6bYXp7-l
+2025-07-21 10:44:15.050 | INFO     | knowledge_system.processors.youtube_transcript:process:626 | Saving 0 transcripts to files
+2025-07-21 10:44:15.050 | WARNING  | knowledge_system.processors.youtube_transcript:process:628 | No transcripts available for file writing!
+2025-07-21 10:44:15.050 | INFO     | knowledge_system.processors.youtube_transcript:process:633 | Created thumbnails directory: /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts/Thumbnails
+2025-07-21 10:44:15.050 | INFO     | knowledge_system.processors.youtube_transcript:process:730 | Transcript processing completed. Success: False, Files saved: 0
+2025-07-21 10:45:06.296 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:52 | Auto-selecting device for transcription workload with base model
+2025-07-21 10:45:06.297 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:64 | Selected MPS: M2 Max GPU (38 cores)
+2025-07-21 10:45:16.674 | INFO     | knowledge_system.processors.whisper_cpp_transcribe:_process_audio:208 | Processing audio with native whisper.cpp
+2025-07-21 10:45:16.792 | INFO     | knowledge_system.processors.whisper_cpp_transcribe:_process_audio:286 | Running command: whisper-cli -m /Users/matthewgreer/.cache/whisper-cpp/ggml-base.bin -f /var/folders/kg/h1ym660d4jv3l5zwbsz1rmlw0000gn/T/tmp0rpjbm0y.wav --output-json --no-timestamps --output-file /var/folders/kg/h1ym660d4jv3l5zwbsz1rmlw0000gn/T/tmp92an8xdo/output
+2025-07-21 10:45:57.118 | INFO     | knowledge_system.processors.whisper_cpp_transcribe:_process_audio:305 | Successfully loaded JSON output from /var/folders/kg/h1ym660d4jv3l5zwbsz1rmlw0000gn/T/tmp92an8xdo/output.json
+2025-07-21 10:45:57.119 | INFO     | knowledge_system.processors.whisper_cpp_transcribe:_process_audio:351 | Joined 85 text segments, total length: 36709
+2025-07-21 10:46:02.558 | INFO     | knowledge_system.processors.audio_processor:save_transcript_to_markdown:284 | Transcript saved to: /Users/matthewgreer/Projects/App5/Output/Summaries/Test3/Member_Video_21__Securities_Lending__Eurodollar_University_transcript.md
+2025-07-21 10:46:05.694 | INFO     | knowledge_system.processors.whisper_cpp_transcribe:_process_audio:208 | Processing audio with native whisper.cpp
+2025-07-21 10:46:05.750 | INFO     | knowledge_system.processors.whisper_cpp_transcribe:_process_audio:286 | Running command: whisper-cli -m /Users/matthewgreer/.cache/whisper-cpp/ggml-base.bin -f /var/folders/kg/h1ym660d4jv3l5zwbsz1rmlw0000gn/T/tmpv778wev3.wav --output-json --no-timestamps --output-file /var/folders/kg/h1ym660d4jv3l5zwbsz1rmlw0000gn/T/tmp0ex1zh6m/output
+2025-07-21 10:46:23.836 | INFO     | knowledge_system.processors.whisper_cpp_transcribe:_process_audio:305 | Successfully loaded JSON output from /var/folders/kg/h1ym660d4jv3l5zwbsz1rmlw0000gn/T/tmp0ex1zh6m/output.json
+2025-07-21 10:46:23.838 | INFO     | knowledge_system.processors.whisper_cpp_transcribe:_process_audio:351 | Joined 90 text segments, total length: 6901
+2025-07-21 10:46:26.128 | INFO     | knowledge_system.processors.audio_processor:save_transcript_to_markdown:284 | Transcript saved to: /Users/matthewgreer/Projects/App5/Output/Summaries/Test3/Member_Video_26__Collateral_Center__Eurodollar_University_transcript.md
+2025-07-21 10:46:27.437 | INFO     | knowledge_system.processors.whisper_cpp_transcribe:_process_audio:208 | Processing audio with native whisper.cpp
+2025-07-21 10:46:27.489 | INFO     | knowledge_system.processors.whisper_cpp_transcribe:_process_audio:286 | Running command: whisper-cli -m /Users/matthewgreer/.cache/whisper-cpp/ggml-base.bin -f /var/folders/kg/h1ym660d4jv3l5zwbsz1rmlw0000gn/T/tmppvtjh7yd.wav --output-json --no-timestamps --output-file /var/folders/kg/h1ym660d4jv3l5zwbsz1rmlw0000gn/T/tmp5tuyvrbs/output
+2025-07-21 10:46:39.254 | INFO     | knowledge_system.processors.whisper_cpp_transcribe:_process_audio:305 | Successfully loaded JSON output from /var/folders/kg/h1ym660d4jv3l5zwbsz1rmlw0000gn/T/tmp5tuyvrbs/output.json
+2025-07-21 10:46:39.260 | INFO     | knowledge_system.processors.whisper_cpp_transcribe:_process_audio:351 | Joined 26 text segments, total length: 9968
+2025-07-21 10:46:40.429 | INFO     | knowledge_system.processors.audio_processor:save_transcript_to_markdown:284 | Transcript saved to: /Users/matthewgreer/Projects/App5/Output/Summaries/Test3/Theres_No_Going_Back_from_This_James_Webb_Telescope_Uncovers_One_of_the_Oldest_Galaxies_Ever_Seen_transcript.md
+2025-07-21 13:02:53.375 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 13:02:53.514 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 13:02:56.858 | INFO     | knowledge_system.utils.hardware_detection:detect_hardware:126 | Detecting hardware specifications...
+2025-07-21 13:02:56.933 | INFO     | knowledge_system.utils.hardware_detection:_detect_apple_silicon:210 | Detected Apple Silicon: M2 Max
+2025-07-21 13:02:56.933 | INFO     | knowledge_system.utils.hardware_detection:detect_hardware:184 | Detected: M2 Max with 12 CPU cores, 38 GPU cores, 96GB RAM
+2025-07-21 13:02:56.933 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:52 | Auto-selecting device for transcription workload with base model
+2025-07-21 13:02:56.933 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:64 | Selected MPS: M2 Max GPU (38 cores)
+2025-07-21 13:03:33.244 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:539 | Starting YouTube extraction process - collecting URLs...
+2025-07-21 13:03:33.245 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:541 | Collected 1 URLs for processing
+2025-07-21 13:03:33.245 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:563 | Starting extraction of 1 YouTube URLs to /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts
+2025-07-21 13:03:33.255 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:593 | Creating YouTube extraction worker with 1 URLs
+2025-07-21 13:03:33.256 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:43 | YouTubeExtractionWorker created with 1 URLs
+2025-07-21 13:03:33.258 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:47 | URLs to process: ['https://youtu.be/TFyt804sGds?si=MbGZzZUb6bYXp7-l']
+2025-07-21 13:03:33.258 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:601 | Starting YouTube extraction worker thread
+2025-07-21 13:03:33.258 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:51 | YouTubeExtractionWorker.run() started with 1 URLs
+2025-07-21 13:03:33.258 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:71 | Cancellation token state at start - cancelled: <bound method CancellationToken.is_cancelled of <knowledge_system.utils.cancellation.CancellationToken object at 0x16b603f40>>, paused: False
+2025-07-21 13:03:33.258 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:72 | should_stop flag: False
+2025-07-21 13:03:33.258 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:83 | Processing 1 URLs
+2025-07-21 13:03:33.259 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:92 | URL 1/1: should_stop=False, token_cancelled=False
+2025-07-21 13:03:33.271 | INFO     | knowledge_system.processors.youtube_transcript:process:584 | YouTube transcript extraction starting. Output directory: /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts
+2025-07-21 13:03:33.271 | INFO     | knowledge_system.processors.youtube_transcript:process:585 | Output directory exists: True
+2025-07-21 13:03:33.271 | INFO     | knowledge_system.processors.youtube_transcript:process:586 | Output directory is writable: 16877
+2025-07-21 13:03:33.271 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:255 | Fetching transcript for: https://youtu.be/TFyt804sGds?si=MbGZzZUb6bYXp7-l
+2025-07-21 13:03:33.271 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:283 | Using Webshare rotating proxy for transcript extraction
+2025-07-21 13:03:33.271 | INFO     | knowledge_system.processors.youtube_metadata:_configure_webshare_proxy:161 | Configured YT-DLP with WebShare rotating proxy
+2025-07-21 13:03:33.271 | INFO     | knowledge_system.processors.youtube_metadata:process:296 | Processing 1 YouTube URLs for metadata extraction
+2025-07-21 13:03:33.271 | INFO     | knowledge_system.processors.youtube_metadata:process:309 | Processing 1/1: TFyt804sGds
+2025-07-21 13:03:44.266 | ERROR    | knowledge_system.processors.youtube_metadata:process:321 | Failed to extract metadata for TFyt804sGds
+2025-07-21 13:03:44.267 | INFO     | knowledge_system.processors.youtube_metadata:process:329 | ==================================================
+2025-07-21 13:03:44.267 | INFO     | knowledge_system.processors.youtube_metadata:process:330 | METADATA EXTRACTION SUMMARY
+2025-07-21 13:03:44.267 | INFO     | knowledge_system.processors.youtube_metadata:process:331 | ==================================================
+2025-07-21 13:03:44.267 | INFO     | knowledge_system.processors.youtube_metadata:process:332 | Total videos: 1
+2025-07-21 13:03:44.267 | INFO     | knowledge_system.processors.youtube_metadata:process:333 | Successful: 0
+2025-07-21 13:03:44.267 | INFO     | knowledge_system.processors.youtube_metadata:process:334 | Failed: 1
+2025-07-21 13:03:44.267 | INFO     | knowledge_system.processors.youtube_metadata:process:335 | Success rate: 0.0%
+2025-07-21 13:03:44.267 | INFO     | knowledge_system.processors.youtube_metadata:process:336 | Processing time: 11.00s
+2025-07-21 13:03:44.267 | INFO     | knowledge_system.processors.youtube_metadata:process:337 | ==================================================
+2025-07-21 13:03:44.268 | INFO     | knowledge_system.processors.youtube_metadata:_write_simple_failure_log:419 | Failure log appended to: logs/youtube_metadata_failures.log
+2025-07-21 13:03:44.780 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:495 | Attempt 1 failed: HTTPSConnectionPool(host='www.youtube.com', port=443): Max retries exceeded with url: /watch?v=TFyt804sGds (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 402 Payment Required')))
+2025-07-21 13:03:44.781 | ERROR    | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:499 | Proxy authentication failed for video TFyt804sGds. Please check your WebShare credentials.
+2025-07-21 13:03:44.781 | WARNING  | knowledge_system.processors.youtube_transcript:process:602 | No transcript returned for https://youtu.be/TFyt804sGds?si=MbGZzZUb6bYXp7-l
+2025-07-21 13:03:44.781 | INFO     | knowledge_system.processors.youtube_transcript:process:626 | Saving 0 transcripts to files
+2025-07-21 13:03:44.782 | WARNING  | knowledge_system.processors.youtube_transcript:process:628 | No transcripts available for file writing!
+2025-07-21 13:03:44.782 | INFO     | knowledge_system.processors.youtube_transcript:process:633 | Created thumbnails directory: /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts/Thumbnails
+2025-07-21 13:03:44.782 | INFO     | knowledge_system.processors.youtube_transcript:process:730 | Transcript processing completed. Success: False, Files saved: 0
+2025-07-21 13:05:51.413 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:539 | Starting YouTube extraction process - collecting URLs...
+2025-07-21 13:05:51.413 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:541 | Collected 1 URLs for processing
+2025-07-21 13:05:51.414 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:563 | Starting extraction of 1 YouTube URLs to /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts
+2025-07-21 13:05:51.419 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:593 | Creating YouTube extraction worker with 1 URLs
+2025-07-21 13:05:51.420 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:43 | YouTubeExtractionWorker created with 1 URLs
+2025-07-21 13:05:51.420 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:47 | URLs to process: ['https://youtu.be/TFyt804sGds?si=MbGZzZUb6bYXp7-l']
+2025-07-21 13:05:51.420 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:601 | Starting YouTube extraction worker thread
+2025-07-21 13:05:51.420 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:51 | YouTubeExtractionWorker.run() started with 1 URLs
+2025-07-21 13:05:51.420 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:71 | Cancellation token state at start - cancelled: <bound method CancellationToken.is_cancelled of <knowledge_system.utils.cancellation.CancellationToken object at 0x16b6055e0>>, paused: False
+2025-07-21 13:05:51.420 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:72 | should_stop flag: False
+2025-07-21 13:05:51.420 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:83 | Processing 1 URLs
+2025-07-21 13:05:51.420 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:92 | URL 1/1: should_stop=False, token_cancelled=False
+2025-07-21 13:05:51.420 | INFO     | knowledge_system.processors.youtube_transcript:process:584 | YouTube transcript extraction starting. Output directory: /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts
+2025-07-21 13:05:51.426 | INFO     | knowledge_system.processors.youtube_transcript:process:585 | Output directory exists: True
+2025-07-21 13:05:51.426 | INFO     | knowledge_system.processors.youtube_transcript:process:586 | Output directory is writable: 16877
+2025-07-21 13:05:51.426 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:255 | Fetching transcript for: https://youtu.be/TFyt804sGds?si=MbGZzZUb6bYXp7-l
+2025-07-21 13:05:51.426 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:283 | Using Webshare rotating proxy for transcript extraction
+2025-07-21 13:05:51.426 | INFO     | knowledge_system.processors.youtube_metadata:_configure_webshare_proxy:161 | Configured YT-DLP with WebShare rotating proxy
+2025-07-21 13:05:51.426 | INFO     | knowledge_system.processors.youtube_metadata:process:296 | Processing 1 YouTube URLs for metadata extraction
+2025-07-21 13:05:51.426 | INFO     | knowledge_system.processors.youtube_metadata:process:309 | Processing 1/1: TFyt804sGds
+2025-07-21 13:06:01.130 | ERROR    | knowledge_system.processors.youtube_metadata:process:321 | Failed to extract metadata for TFyt804sGds
+2025-07-21 13:06:01.130 | INFO     | knowledge_system.processors.youtube_metadata:process:329 | ==================================================
+2025-07-21 13:06:01.131 | INFO     | knowledge_system.processors.youtube_metadata:process:330 | METADATA EXTRACTION SUMMARY
+2025-07-21 13:06:01.131 | INFO     | knowledge_system.processors.youtube_metadata:process:331 | ==================================================
+2025-07-21 13:06:01.131 | INFO     | knowledge_system.processors.youtube_metadata:process:332 | Total videos: 1
+2025-07-21 13:06:01.131 | INFO     | knowledge_system.processors.youtube_metadata:process:333 | Successful: 0
+2025-07-21 13:06:01.131 | INFO     | knowledge_system.processors.youtube_metadata:process:334 | Failed: 1
+2025-07-21 13:06:01.131 | INFO     | knowledge_system.processors.youtube_metadata:process:335 | Success rate: 0.0%
+2025-07-21 13:06:01.131 | INFO     | knowledge_system.processors.youtube_metadata:process:336 | Processing time: 9.71s
+2025-07-21 13:06:01.131 | INFO     | knowledge_system.processors.youtube_metadata:process:337 | ==================================================
+2025-07-21 13:06:01.132 | INFO     | knowledge_system.processors.youtube_metadata:_write_simple_failure_log:419 | Failure log appended to: logs/youtube_metadata_failures.log
+2025-07-21 13:06:01.592 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:495 | Attempt 1 failed: HTTPSConnectionPool(host='www.youtube.com', port=443): Max retries exceeded with url: /watch?v=TFyt804sGds (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 402 Payment Required')))
+2025-07-21 13:06:01.592 | ERROR    | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:499 | Proxy authentication failed for video TFyt804sGds. Please check your WebShare credentials.
+2025-07-21 13:06:01.592 | WARNING  | knowledge_system.processors.youtube_transcript:process:602 | No transcript returned for https://youtu.be/TFyt804sGds?si=MbGZzZUb6bYXp7-l
+2025-07-21 13:06:01.592 | INFO     | knowledge_system.processors.youtube_transcript:process:626 | Saving 0 transcripts to files
+2025-07-21 13:06:01.593 | WARNING  | knowledge_system.processors.youtube_transcript:process:628 | No transcripts available for file writing!
+2025-07-21 13:06:01.593 | INFO     | knowledge_system.processors.youtube_transcript:process:633 | Created thumbnails directory: /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts/Thumbnails
+2025-07-21 13:06:01.593 | INFO     | knowledge_system.processors.youtube_transcript:process:730 | Transcript processing completed. Success: False, Files saved: 0
+2025-07-21 13:10:33.012 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:539 | Starting YouTube extraction process - collecting URLs...
+2025-07-21 13:10:33.013 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:541 | Collected 1 URLs for processing
+2025-07-21 13:10:33.013 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:563 | Starting extraction of 1 YouTube URLs to /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts
+2025-07-21 13:10:33.021 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:593 | Creating YouTube extraction worker with 1 URLs
+2025-07-21 13:10:33.021 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:43 | YouTubeExtractionWorker created with 1 URLs
+2025-07-21 13:10:33.021 | INFO     | knowledge_system.gui.tabs.youtube_tab:__init__:47 | URLs to process: ['https://youtu.be/TFyt804sGds?si=MbGZzZUb6bYXp7-l']
+2025-07-21 13:10:33.021 | INFO     | knowledge_system.gui.tabs.youtube_tab:_start_processing:601 | Starting YouTube extraction worker thread
+2025-07-21 13:10:33.022 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:51 | YouTubeExtractionWorker.run() started with 1 URLs
+2025-07-21 13:10:33.022 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:71 | Cancellation token state at start - cancelled: <bound method CancellationToken.is_cancelled of <knowledge_system.utils.cancellation.CancellationToken object at 0x35cd23df0>>, paused: False
+2025-07-21 13:10:33.022 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:72 | should_stop flag: False
+2025-07-21 13:10:33.022 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:83 | Processing 1 URLs
+2025-07-21 13:10:33.022 | INFO     | knowledge_system.gui.tabs.youtube_tab:run:92 | URL 1/1: should_stop=False, token_cancelled=False
+2025-07-21 13:10:33.022 | INFO     | knowledge_system.processors.youtube_transcript:process:584 | YouTube transcript extraction starting. Output directory: /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts
+2025-07-21 13:10:33.022 | INFO     | knowledge_system.processors.youtube_transcript:process:585 | Output directory exists: True
+2025-07-21 13:10:33.022 | INFO     | knowledge_system.processors.youtube_transcript:process:586 | Output directory is writable: 16877
+2025-07-21 13:10:33.022 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:255 | Fetching transcript for: https://youtu.be/TFyt804sGds?si=MbGZzZUb6bYXp7-l
+2025-07-21 13:10:33.022 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:283 | Using Webshare rotating proxy for transcript extraction
+2025-07-21 13:10:33.022 | INFO     | knowledge_system.processors.youtube_metadata:_configure_webshare_proxy:161 | Configured YT-DLP with WebShare rotating proxy
+2025-07-21 13:10:33.022 | INFO     | knowledge_system.processors.youtube_metadata:process:296 | Processing 1 YouTube URLs for metadata extraction
+2025-07-21 13:10:33.022 | INFO     | knowledge_system.processors.youtube_metadata:process:309 | Processing 1/1: TFyt804sGds
+2025-07-21 13:10:47.655 | INFO     | knowledge_system.processors.youtube_metadata:process:318 | ✓ Successfully extracted metadata for TFyt804sGds
+2025-07-21 13:10:47.655 | INFO     | knowledge_system.processors.youtube_metadata:process:329 | ==================================================
+2025-07-21 13:10:47.656 | INFO     | knowledge_system.processors.youtube_metadata:process:330 | METADATA EXTRACTION SUMMARY
+2025-07-21 13:10:47.656 | INFO     | knowledge_system.processors.youtube_metadata:process:331 | ==================================================
+2025-07-21 13:10:47.656 | INFO     | knowledge_system.processors.youtube_metadata:process:332 | Total videos: 1
+2025-07-21 13:10:47.656 | INFO     | knowledge_system.processors.youtube_metadata:process:333 | Successful: 1
+2025-07-21 13:10:47.656 | INFO     | knowledge_system.processors.youtube_metadata:process:334 | Failed: 0
+2025-07-21 13:10:47.656 | INFO     | knowledge_system.processors.youtube_metadata:process:335 | Success rate: 100.0%
+2025-07-21 13:10:47.656 | INFO     | knowledge_system.processors.youtube_metadata:process:336 | Processing time: 14.63s
+2025-07-21 13:10:47.656 | INFO     | knowledge_system.processors.youtube_metadata:process:337 | ==================================================
+2025-07-21 13:10:47.656 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:299 | Successfully fetched metadata: Epstein conspiracies divide Trump's MAGA base | Ian Bremmer's Quick Take
+2025-07-21 13:10:51.801 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:356 | Found manual transcript in en
+2025-07-21 13:10:52.124 | INFO     | knowledge_system.processors.youtube_transcript:_fetch_video_transcript:487 | Successfully extracted transcript for TFyt804sGds
+2025-07-21 13:10:52.125 | INFO     | knowledge_system.processors.youtube_transcript:process:626 | Saving 1 transcripts to files
+2025-07-21 13:10:52.125 | INFO     | knowledge_system.processors.youtube_transcript:process:633 | Created thumbnails directory: /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts/Thumbnails
+2025-07-21 13:10:52.126 | INFO     | knowledge_system.processors.youtube_transcript:process:660 | Creating transcript file: /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts/Epstein-conspiracies-divide-Trumps-MAGA-base-Ian-Bremmers-Quick-Take.md
+2025-07-21 13:10:52.126 | INFO     | knowledge_system.processors.youtube_transcript:process:661 | File path exists before writing: True
+2025-07-21 13:10:52.128 | INFO     | knowledge_system.processors.youtube_transcript:process:688 | Successfully wrote 10352 characters to /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts/Epstein-conspiracies-divide-Trumps-MAGA-base-Ian-Bremmers-Quick-Take.md
+2025-07-21 13:10:52.128 | INFO     | knowledge_system.processors.youtube_transcript:process:693 | File verification successful: /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts/Epstein-conspiracies-divide-Trumps-MAGA-base-Ian-Bremmers-Quick-Take.md (10352 bytes)
+2025-07-21 13:10:52.128 | INFO     | knowledge_system.processors.youtube_transcript:process:706 | Downloading thumbnail for TFyt804sGds
+2025-07-21 13:10:52.449 | INFO     | knowledge_system.utils.youtube_utils:download_thumbnail_direct:468 | Successfully downloaded maxres thumbnail (90217 bytes): /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts/Thumbnails/Thumbnails/TFyt804sGds_thumbnail.jpg
+2025-07-21 13:10:52.450 | INFO     | knowledge_system.processors.youtube_transcript:process:715 | Thumbnail saved as: /Users/matthewgreer/Projects/App5/Output/YouTube Transcripts/Thumbnails/Epstein-conspiracies-divide-Trumps-MAGA-base-Ian-Bremmers-Quick-Take-Thumbnail.jpg
+2025-07-21 13:10:52.450 | INFO     | knowledge_system.processors.youtube_transcript:process:730 | Transcript processing completed. Success: True, Files saved: 1
+2025-07-21 13:28:10.052 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 13:28:10.223 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 13:28:13.688 | INFO     | knowledge_system.utils.hardware_detection:detect_hardware:126 | Detecting hardware specifications...
+2025-07-21 13:28:13.892 | INFO     | knowledge_system.utils.hardware_detection:_detect_apple_silicon:210 | Detected Apple Silicon: M2 Max
+2025-07-21 13:28:13.893 | INFO     | knowledge_system.utils.hardware_detection:detect_hardware:184 | Detected: M2 Max with 12 CPU cores, 38 GPU cores, 96GB RAM
+2025-07-21 13:28:13.893 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:52 | Auto-selecting device for transcription workload with base model
+2025-07-21 13:28:13.893 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:64 | Selected MPS: M2 Max GPU (38 cores)
+2025-07-21 13:28:34.126 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:52 | Auto-selecting device for transcription workload with base model
+2025-07-21 13:28:34.127 | INFO     | knowledge_system.utils.device_selection:select_optimal_device:64 | Selected MPS: M2 Max GPU (38 cores)
+2025-07-21 15:11:49.881 | INFO     | src.knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 15:11:51.112 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 15:12:05.985 | INFO     | src.knowledge_system.logger:initialize_logging:250 | Logging system initialized
+2025-07-21 15:12:06.143 | INFO     | knowledge_system.logger:initialize_logging:250 | Logging system initialized
