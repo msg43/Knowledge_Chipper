@@ -1,0 +1,6 @@
+Users can select from:
+tiny (~75 MB)
+base (~142 MB)
+small (~466 MB)
+medium (~1.5 GB)
+large (~3.1 GB)

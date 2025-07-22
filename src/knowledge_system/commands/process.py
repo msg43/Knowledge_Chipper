@@ -1,0 +1,401 @@
+"""
+Process command for the Knowledge System CLI.
+
+Handles comprehensive file processing with transcription, summarization, and MOC generation.
+"""
+
+import sys
+from pathlib import Path
+from typing import List, Optional, Dict, Any
+
+import click
+
+from ..logger import log_system_event
+from .transcribe import format_transcript_content
+from .common import CLIContext, pass_context, console, logger
+
+
+@click.command()
+@click.argument("input_path", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output directory (default: configured output path)",
+)
+@click.option(
+    "--transcribe/--no-transcribe", default=True, help="Transcribe audio/video files"
+)
+@click.option(
+    "--summarize/--no-summarize",
+    default=True,
+    help="Summarize transcripts and documents",
+)
+@click.option("--moc/--no-moc", default=True, help="Generate Maps of Content")
+@click.option(
+    "--recursive/--no-recursive",
+    default=True,
+    help="Process subdirectories recursively (when input is a folder)",
+)
+@click.option(
+    "--patterns",
+    "-p",
+    multiple=True,
+    default=[
+        "*.mp4",
+        "*.mp3",
+        "*.wav",
+        "*.m4a",
+        "*.avi",
+        "*.mov",
+        "*.mkv",
+        "*.pdf",
+        "*.txt",
+        "*.md",
+    ],
+    help="File patterns to process (when input is a folder)",
+)
+@click.option(
+    "--transcription-model",
+    default="base",
+    help="Whisper model to use for transcription",
+)
+@click.option(
+    "--summarization-model",
+    default="gpt-4o-mini-2024-07-18",
+    help="LLM model to use for summarization",
+)
+@click.option(
+    "--device",
+    type=click.Choice(["auto", "cpu", "cuda", "mps"]),
+    default="auto",
+    help="Device to use for processing",
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Show what would be done without making changes"
+)
+@click.option("--progress", is_flag=True, help="Show progress tracking")
+@pass_context
+def process(
+    ctx: CLIContext,
+    input_path: Path,
+    output: Optional[Path],
+    transcribe: bool,
+    summarize: bool,
+    moc: bool,
+    recursive: bool,
+    patterns: List[str],
+    transcription_model: str,
+    summarization_model: str,
+    device: str,
+    dry_run: bool,
+    progress: bool,
+) -> None:
+    """
+    Process files or folders with transcription, summarization, and MOC generation.
+
+    Can process a single file or recursively process all files in a folder
+    that match the specified patterns.
+
+    Examples:
+        knowledge-system process video.mp4
+        knowledge-system process ./videos/ --recursive
+        knowledge-system process ./content/ --no-transcribe --patterns "*.pdf" "*.txt"
+        knowledge-system process audio.wav --output ./results --dry-run
+    """
+    settings = ctx.get_settings()
+
+    if not ctx.quiet:
+        console.print(
+            f"[bold green]{'[DRY RUN] ' if dry_run else ''}Processing:[/bold green] {input_path}"
+        )
+        if input_path.is_dir():
+            console.print(
+                f"[dim]Directory processing: {'recursive' if recursive else 'non-recursive'}, Patterns: {', '.join(patterns)}[/dim]"
+            )
+        console.print(
+            f"[dim]Operations: Transcribe={transcribe}, Summarize={summarize}, MOC={moc}[/dim]"
+        )
+        console.print(
+            f"[dim]Models: Transcription={transcription_model}, Summarization={summarization_model}[/dim]"
+        )
+
+    if dry_run:
+        console.print(
+            "[yellow][DRY RUN] Would process file(s) with the above settings.[/yellow]"
+        )
+        return
+
+    # Determine output path
+    if output is None:
+        output = Path(settings.paths.output_dir)
+
+    # Get list of files to process
+    files_to_process = []
+
+    if input_path.is_file():
+        # Single file processing
+        files_to_process = [input_path]
+    elif input_path.is_dir():
+        # Directory processing
+        if recursive:
+            # Recursive search
+            for pattern in patterns:
+                files_to_process.extend(input_path.rglob(pattern))
+        else:
+            # Non-recursive search
+            for pattern in patterns:
+                files_to_process.extend(input_path.glob(pattern))
+
+        # Remove duplicates and sort
+        files_to_process = sorted(list(set(files_to_process)))
+
+    if not files_to_process:
+        console.print(
+            "[yellow]No files found matching the specified patterns.[/yellow]"
+        )
+        return
+
+    if not ctx.quiet:
+        console.print(
+            f"[dim]Found {len(files_to_process)} files to process[/dim]")
+
+    # Log processing start
+    log_system_event(
+        event="processing_started",
+        component="cli.process",
+        status="info",
+        input_path=str(input_path),
+        output_path=str(output),
+        file_count=len(files_to_process),
+        transcribe=transcribe,
+        summarize=summarize,
+        moc=moc,
+        recursive=recursive,
+    )
+
+    # Track processing results
+    results = {
+        "transcribed": [],
+        "summarized": [],
+        "moc_generated": [],
+        "errors": []
+    }
+
+    # Track files for MOC generation
+    moc_input_files = []
+
+    try:
+        # Import processors
+        from ..processors.audio_processor import AudioProcessor
+        from ..processors.summarizer import SummarizerProcessor
+        from ..processors.moc import MOCProcessor
+
+        # Create processors
+        audio_processor = AudioProcessor(device=device)
+        summarizer_processor = SummarizerProcessor(
+            provider=settings.summarization.provider,
+            model=summarization_model,
+            max_tokens=settings.summarization.max_tokens,
+        )
+        moc_processor = MOCProcessor()
+
+        # Process each file
+        for i, file_path in enumerate(files_to_process, 1):
+            if progress and not ctx.quiet:
+                console.print(
+                    f"[dim]Processing {i}/{len(files_to_process)}: {file_path.name}[/dim]"
+                )
+
+            try:
+                # Step 1: Transcription (if enabled and file is audio/video)
+                transcript_path = None
+                if transcribe and file_path.suffix.lower() in [
+                    ".mp4",
+                    ".mp3",
+                    ".wav",
+                    ".m4a",
+                    ".avi",
+                    ".mov",
+                    ".mkv",
+                ]:
+                    if not ctx.quiet:
+                        console.print(
+                            f"[blue]Transcribing: {file_path.name}[/blue]")
+
+                    result = audio_processor.process(file_path, device=device)
+                    if result.success:
+                        # Save transcript
+                        transcript_file = output / f"{file_path.stem}_transcript.md"
+                        transcript_file.parent.mkdir(parents=True, exist_ok=True)
+
+                        # Format transcript content
+                        content = format_transcript_content(
+                            result.data,
+                            file_path.name,
+                            transcription_model,
+                            device,
+                            "md",
+                            file_path,
+                            timestamps=True,
+                        )
+
+                        with open(transcript_file, "w", encoding="utf-8") as f:
+                            f.write(content)
+
+                        transcript_path = transcript_file
+                        results["transcribed"].append(str(file_path))
+
+                        if not ctx.quiet:
+                            console.print(
+                                f"[green]✓ Transcribed: {file_path.name}[/green]"
+                            )
+                    else:
+                        results["errors"].append(
+                            f"Transcription failed for {file_path.name}: {result.errors}"
+                        )
+                        if not ctx.quiet:
+                            console.print(
+                                f"[red]✗ Transcription failed: {file_path.name}[/red]"
+                            )
+
+                # Step 2: Summarization (if enabled)
+                summary_path = None
+                if summarize:
+                    # Determine what to summarize
+                    input_for_summary = transcript_path if transcript_path else file_path
+
+                    if not ctx.quiet:
+                        console.print(
+                            f"[blue]Summarizing: {input_for_summary.name}[/blue]"
+                        )
+
+                    result = summarizer_processor.process(
+                        input_for_summary, style="structured"
+                    )
+                    if result.success:
+                        # Save summary
+                        summary_file = output / f"{input_for_summary.stem}_summary.md"
+                        summary_file.parent.mkdir(parents=True, exist_ok=True)
+
+                        content = f"# Summary of {input_for_summary.name}\n\n"
+                        content += "**Style:** structured\n"
+                        content += f"**Model:** {summarization_model}\n"
+                        content += f"**Provider:** {result.metadata.get('provider', 'unknown')}\n"
+                        content += f"**Generated:** {result.metadata.get('timestamp', 'unknown')}\n\n"
+                        content += "---\n\n"
+                        content += result.data
+
+                        with open(summary_file, "w", encoding="utf-8") as f:
+                            f.write(content)
+
+                        summary_path = summary_file
+                        results["summarized"].append(str(input_for_summary))
+
+                        if not ctx.quiet:
+                            console.print(
+                                f"[green]✓ Summarized: {input_for_summary.name}[/green]"
+                            )
+                    else:
+                        results["errors"].append(
+                            f"Summarization failed for {input_for_summary.name}: {result.errors}"
+                        )
+                        if not ctx.quiet:
+                            console.print(
+                                f"[red]✗ Summarization failed: {input_for_summary.name}[/red]"
+                            )
+
+                # Collect files for MOC generation (but don't generate yet)
+                if moc:
+                    # Determine what to use for MOC
+                    input_for_moc = (
+                        summary_path
+                        if summary_path
+                        else (transcript_path if transcript_path else file_path)
+                    )
+                    moc_input_files.append(str(input_for_moc))
+
+            except Exception as e:
+                error_msg = f"Processing failed for {file_path.name}: {str(e)}"
+                results["errors"].append(error_msg)
+                if not ctx.quiet:
+                    console.print(f"[red]✗ {error_msg}[/red]")
+
+        # Step 3: MOC Generation (after all files are processed)
+        if moc and moc_input_files:
+            if not ctx.quiet:
+                console.print(
+                    f"\n[blue]Generating Map of Content from {len(moc_input_files)} files...[/blue]"
+                )
+
+            try:
+                result = moc_processor.process(
+                    moc_input_files, theme="topical", depth=3, include_beliefs=True
+                )
+                if result.success:
+                    # Save MOC files
+                    moc_dir = output / "moc"
+                    moc_dir.mkdir(parents=True, exist_ok=True)
+
+                    for filename, content in result.data.items():
+                        file_path = moc_dir / filename
+                        with open(file_path, "w", encoding="utf-8") as f:
+                            f.write(content)
+
+                    results["moc_generated"] = moc_input_files
+
+                    if not ctx.quiet:
+                        console.print(
+                            f"[green]✓ Map of Content generated from {len(moc_input_files)} files[/green]"
+                        )
+                else:
+                    results["errors"].append(
+                        f"MOC generation failed: {result.errors}")
+                    if not ctx.quiet:
+                        console.print(
+                            f"[red]✗ MOC generation failed: {result.errors}[/red]"
+                        )
+            except Exception as e:
+                error_msg = f"MOC generation failed: {str(e)}"
+                results["errors"].append(error_msg)
+                if not ctx.quiet:
+                    console.print(f"[red]✗ {error_msg}[/red]")
+
+        # Print summary
+        if not ctx.quiet:
+            console.print("\n[bold green]Processing completed![/bold green]")
+            console.print(
+                f"[dim]Files transcribed: {len(results['transcribed'])}[/dim]"
+            )
+            console.print(
+                f"[dim]Files summarized: {len(results['summarized'])}[/dim]")
+            if results["moc_generated"]:
+                console.print(
+                    f"[dim]MOC generated from: {len(results['moc_generated'])} files[/dim]"
+                )
+            if results["errors"]:
+                console.print(f"[dim]Errors: {len(results['errors'])}[/dim]")
+                for error in results["errors"]:
+                    console.print(f"[red]  - {error}[/red]")
+
+        # Log processing completion
+        log_system_event(
+            event="processing_completed",
+            component="cli.process",
+            status="info",
+            input_path=str(input_path),
+            output_path=str(output),
+            files_processed=len(files_to_process),
+            transcribed_count=len(results["transcribed"]),
+            summarized_count=len(results["summarized"]),
+            moc_generated=bool(results["moc_generated"]),
+            moc_input_count=len(results["moc_generated"]),
+            error_count=len(results["errors"]),
+        )
+
+    except Exception as e:
+        console.print(f"[red]✗ Unexpected error during processing:[/red] {e}")
+        if ctx.verbose:
+            import traceback
+            console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        sys.exit(1) 
