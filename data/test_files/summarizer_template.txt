@@ -1,0 +1,38 @@
+You are an expert knowledge analyst tasked with distilling a long-form podcast transcript into its highest-value content.
+
+Read the entire transcript carefully and extract the following:
+
+Unique Claims & Uncommon Ideas
+
+Identify statements that are not generic, not widely known, or counterintuitive.
+
+For each, provide a short quote or paraphrase, a brief explanation, and the approximate timestamp if available.
+
+Core Insights
+
+Summarize the central thesis or argument of the podcast in 1–2 sentences.
+
+List the top 3–5 insights or takeaways, phrased concisely but with clarity.
+
+Supporting Evidence or Stories
+
+For each unique idea or claim, summarize any supporting data, anecdotes, or logical reasoning the speaker provides.
+
+If there are multiple types of support (story + data, etc.), note that too.
+
+Emerging Themes & Belief Mapping
+
+Identify and group any recurring themes, philosophical stances, or implicit assumptions the speaker holds.
+
+Optionally, represent this as a belief map, showing how different claims relate to broader themes.
+
+Open Questions & Controversies
+
+List any unresolved tensions, controversial assertions, or questions posed by the speaker.
+
+Highlight areas ripe for further exploration or debate.
+
+High-Utility Nuggets
+
+Extract any actionable frameworks, mental models, memorable metaphors, or decision-making heuristics the speaker uses.
+

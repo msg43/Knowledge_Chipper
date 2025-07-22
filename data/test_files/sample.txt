@@ -1,0 +1,13 @@
+Sample PDF Content
+
+This is a sample text file that represents content extracted from a PDF.
+It contains multiple paragraphs and would typically be processed by our
+PDF extraction tools.
+
+Key Topics Covered:
+- Knowledge management systems
+- Information retrieval
+- Document processing
+- AI-powered summarization
+
+This file serves as test data for our PDF processing pipeline. 

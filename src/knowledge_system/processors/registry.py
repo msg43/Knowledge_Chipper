@@ -1,0 +1,78 @@
+from typing import Dict, List, Optional, Type, Union
+from pathlib import Path
+import re
+from knowledge_system.processors.base import BaseProcessor
+from knowledge_system.processors.youtube_metadata import YouTubeMetadataProcessor
+from knowledge_system.processors.youtube_download import YouTubeDownloadProcessor
+from knowledge_system.processors.pdf import PDFProcessor
+
+# Registry maps extension or pattern to processor class
+_PROCESSOR_REGISTRY: List[Dict] = []
+
+
+def register_processor(
+    processor_cls: Type[BaseProcessor],
+    extensions: Optional[List[str]] = None,
+    url_patterns: Optional[List[str]] = None,
+    name: Optional[str] = None,
+):
+    """Register a processor for file extensions and/or URL patterns."""
+    _PROCESSOR_REGISTRY.append(
+        {
+            "name": name or processor_cls.__name__,
+            "cls": processor_cls,
+            "extensions": [e.lower() for e in (extensions or [])],
+            "url_patterns": url_patterns or [],
+        }
+    )
+
+
+def get_processor_for_input(
+    input_path_or_url: Union[str, Path],
+) -> Optional[Type[BaseProcessor]]:
+    """Return the processor class for a given file path or URL."""
+    s = str(input_path_or_url)
+    # Check URL patterns first
+    for entry in _PROCESSOR_REGISTRY:
+        for pat in entry["url_patterns"]:
+            if re.match(pat, s):
+                return entry["cls"]
+    # Check file extension
+    ext = Path(s).suffix.lower()
+    for entry in _PROCESSOR_REGISTRY:
+        if ext in entry["extensions"]:
+            return entry["cls"]
+    return None
+
+
+def list_processors() -> List[str]:
+    return [entry["name"] for entry in _PROCESSOR_REGISTRY]
+
+
+def get_all_processor_stats() -> Dict[str, Dict]:
+    """Get statistics from all registered processor instances."""
+    from knowledge_system.processors.base import get_processor_registry
+    
+    registry = get_processor_registry()
+    all_stats = {}
+    
+    for name in registry.list_processors():
+        processor = registry.get(name)
+        if processor:
+            all_stats[name] = processor.get_stats()
+    
+    return all_stats
+
+
+# Register built-in processors
+register_processor(
+    YouTubeMetadataProcessor,
+    url_patterns=[r"https?://(www\.)?(youtube\.com|youtu\.be)/.*/?"],
+    name="YouTubeMetadataProcessor",
+)
+register_processor(
+    YouTubeDownloadProcessor,
+    url_patterns=[r"https?://(www\.)?(youtube\.com|youtu\.be)/.*/?"],
+    name="YouTubeDownloadProcessor",
+)
+register_processor(PDFProcessor, extensions=[".pdf"], name="PDFProcessor")

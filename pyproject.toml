@@ -1,0 +1,153 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "knowledge-system"
+version = "0.1.0"
+description = "Knowledge management system with YouTube transcription, LLM summarization, and MOC generation"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    {name = "Knowledge System", email = "dev@knowledge-system.local"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+dependencies = [
+    # Core framework
+    "click>=8.1.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.0.0",
+    "pyyaml>=6.0",
+    "loguru>=0.7.0",
+    "rich>=13.0.0",
+    
+    # Web UI
+    "streamlit>=1.28.0",
+    "streamlit-option-menu>=0.3.0",
+    
+    # File processing
+    "watchdog>=3.0.0",
+    "pypdf2>=3.0.0",
+    "pdfplumber>=0.10.0",
+    
+    # YouTube and video
+    "yt-dlp>=2023.12.0",
+    "requests>=2.31.0",
+    
+    # ML and transcription
+    "torch>=2.1.0",
+    "openai-whisper>=20231117",
+    "transformers>=4.35.0",
+    "pydub>=0.25.1",
+    
+    # LLM APIs
+    "openai>=1.3.0",
+    "anthropic>=0.7.0",
+    
+    # Data and storage
+    "sqlalchemy>=2.0.0",
+    "pandas>=2.0.0",
+    
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "youtube-transcript-api>=1.1.1",
+    "psutil>=5.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.4.0",
+    "build>=0.10.0",
+    "twine>=4.0.0",
+]
+
+gui = [
+    "PyQt6>=6.9.0",
+]
+
+cuda = [
+    "nvidia-ml-py>=12.550.0",  # pynvml for detailed GPU info
+]
+
+[project.scripts]
+knowledge-system = "knowledge_system.cli:main"
+ks = "knowledge_system.cli:main"
+knowledge-system-gui = "knowledge_system.gui:main"
+ks-gui = "knowledge_system.gui:main"
+
+[project.urls]
+# Update these URLs when you have a public repository
+# "Homepage" = "https://github.com/yourusername/knowledge-system"
+# "Bug Reports" = "https://github.com/yourusername/knowledge-system/issues"
+# "Source" = "https://github.com/yourusername/knowledge-system"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["knowledge_system*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=knowledge_system --cov-report=html --cov-report=term-missing"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "whisperx.*",
+    "yt_dlp.*",
+    "streamlit.*",
+]
+ignore_missing_imports = true 
