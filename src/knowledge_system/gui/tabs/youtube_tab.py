@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import os # Added for os.access
 
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QGroupBox, QGridLayout,
@@ -32,6 +33,7 @@ class YouTubeExtractionWorker(QThread):
     extraction_finished = pyqtSignal(dict)  # final results
     extraction_error = pyqtSignal(str)
     payment_required = pyqtSignal()  # 402 Payment Required error
+    playlist_info_updated = pyqtSignal(dict)  # playlist metadata for display
     
     def __init__(self, urls, config, parent=None):
         super().__init__(parent)
@@ -64,29 +66,72 @@ class YouTubeExtractionWorker(QThread):
             
         try:
             from ...processors.youtube_transcript import YouTubeTranscriptProcessor
+            from ...utils.youtube_utils import expand_playlist_urls_with_metadata
             import json
             from pathlib import Path
             from datetime import datetime
             
+            # CRITICAL DEBUG: Log the config received by worker
+            logger.info(f"🔧 Worker received config: {self.config}")
+            logger.info(f"🔧 Output directory from config: {repr(self.config.get('output_dir'))} (type: {type(self.config.get('output_dir'))})")
+            
             # Log cancellation token state before starting
             logger.info(f"Cancellation token state at start - cancelled: {self.cancellation_token.is_cancelled}, paused: {self.cancellation_token.is_paused()}")
             logger.info(f"should_stop flag: {self.should_stop}")
+            
+            # Expand playlists and get metadata
+            logger.info(f"Expanding {len(self.urls)} URLs (checking for playlists)...")
+            expansion_result = expand_playlist_urls_with_metadata(self.urls)
+            expanded_urls = expansion_result['expanded_urls']
+            playlist_info = expansion_result['playlist_info']
+            
+            # Calculate total videos across ALL sources (playlists + individual videos)
+            total_playlist_videos = sum(p['total_videos'] for p in playlist_info) if playlist_info else 0
+            individual_videos = len(expanded_urls) - total_playlist_videos
+            total_videos_all_sources = len(expanded_urls)
+            
+            # Emit comprehensive video information
+            if playlist_info or individual_videos > 0:
+                summary_parts = []
+                if playlist_info:
+                    summary_parts.append(f"{len(playlist_info)} playlist(s) with {total_playlist_videos} videos")
+                if individual_videos > 0:
+                    summary_parts.append(f"{individual_videos} individual video(s)")
+                
+                summary = " + ".join(summary_parts)
+                logger.info(f"📊 Total content to process: {summary} = {total_videos_all_sources} videos total")
+                
+                self.playlist_info_updated.emit({
+                    'playlists': playlist_info,
+                    'total_playlists': len(playlist_info),
+                    'total_videos': total_videos_all_sources,
+                    'playlist_videos': total_playlist_videos,
+                    'individual_videos': individual_videos,
+                    'summary': summary
+                })
+            else:
+                logger.info(f"📊 Total content to process: {total_videos_all_sources} videos")
             
             processor = YouTubeTranscriptProcessor()
             results = {
                 'successful': 0,
                 'failed': 0,
                 'urls_processed': [],
-                'failed_urls': []
+                'failed_urls': [],
+                'playlist_info': playlist_info
             }
             
-            total_urls = len(self.urls)
-            logger.info(f"Processing {total_urls} URLs")
+            total_urls = len(expanded_urls)
+            logger.info(f"Processing {total_urls} URLs (after playlist expansion)")
             
-            # Initial progress update
-            self.progress_updated.emit(0, total_urls, f"🚀 Starting extraction of {total_urls} YouTube URLs...")
+            # Initial progress update with comprehensive summary
+            if playlist_info:
+                start_msg = f"🚀 Starting extraction of {total_videos_all_sources} videos total ({summary})"
+            else:
+                start_msg = f"🚀 Starting extraction of {total_videos_all_sources} videos"
+            self.progress_updated.emit(0, total_urls, start_msg)
             
-            for i, url in enumerate(self.urls):
+            for i, url in enumerate(expanded_urls):
                 # Detailed logging of cancellation check
                 is_should_stop = self.should_stop
                 is_token_cancelled = self.cancellation_token.is_cancelled()
@@ -111,13 +156,55 @@ class YouTubeExtractionWorker(QThread):
                 # Calculate percentage
                 percent = int((i / total_urls) * 100)
                 
+                # Determine playlist context for enhanced progress display
+                playlist_context = ""
+                playlist_number = 0
+                for idx, playlist in enumerate(playlist_info):
+                    if playlist['start_index'] <= i <= playlist['end_index']:
+                        playlist_position = i - playlist['start_index'] + 1
+                        playlist_number = idx + 1
+                        total_playlists = len(playlist_info)
+                        playlist_title = playlist['title'][:25] + ('...' if len(playlist['title']) > 25 else '')
+                        playlist_context = f" [📋 PL{playlist_number}/{total_playlists}: {playlist_title} - #{playlist_position}/{playlist['total_videos']}]"
+                        break
+                
                 # Try to get a meaningful title for progress display
                 display_title = f"Video {video_id}" if video_id else url[-50:]  # Show last 50 chars of URL as fallback
-                self.progress_updated.emit(i, total_urls, f"📹 [{i+1}/{total_urls}] ({percent}%) Processing: {display_title}")
+                
+                # Enhanced global progress with playlist context
+                global_progress = f"Video {i+1}/{total_urls}"
+                self.progress_updated.emit(i, total_urls, f"📹 {global_progress} ({percent}%) Processing: {display_title}{playlist_context}")
                 
                 try:
                     # Sub-step progress: Starting processing
-                    self.progress_updated.emit(i, total_urls, f"🔄 [{i+1}/{total_urls}] ({percent}%) Fetching metadata for: {display_title}")
+                    self.progress_updated.emit(i, total_urls, f"🔄 {global_progress} ({percent}%) Fetching metadata for: {display_title}{playlist_context}")
+                    
+                    # CRITICAL DEBUG: Log processor call parameters for each URL
+                    output_dir_param = self.config.get('output_dir')
+                    logger.info(f"🔧 About to call processor for URL {i+1}/{total_urls}: {url}")
+                    logger.info(f"🔧 Processor parameters:")
+                    logger.info(f"   output_dir: {repr(output_dir_param)} (type: {type(output_dir_param)})")
+                    logger.info(f"   output_format: {self.config.get('format', 'md')}")
+                    logger.info(f"   include_timestamps: {self.config.get('timestamps', True)}")
+                    
+                    # CRITICAL VALIDATION: Check output directory before processing
+                    if output_dir_param:
+                        output_path = Path(output_dir_param)
+                        logger.info(f"🔧 Output directory validation:")
+                        logger.info(f"   Path exists: {output_path.exists()}")
+                        logger.info(f"   Is directory: {output_path.is_dir() if output_path.exists() else 'N/A'}")
+                        logger.info(f"   Is writable: {os.access(output_path, os.W_OK) if output_path.exists() else 'N/A'}")
+                        logger.info(f"   Absolute path: {output_path.absolute()}")
+                        
+                        # Try to create directory if it doesn't exist
+                        if not output_path.exists():
+                            try:
+                                output_path.mkdir(parents=True, exist_ok=True)
+                                logger.info(f"✅ Created output directory: {output_path}")
+                            except Exception as e:
+                                logger.error(f"❌ Failed to create output directory {output_path}: {e}")
+                    else:
+                        logger.warning(f"⚠️ No output_dir parameter provided!")
                     
                     # Pass cancellation token to processor
                     result = processor.process(
@@ -125,8 +212,24 @@ class YouTubeExtractionWorker(QThread):
                         output_dir=self.config.get('output_dir'),
                         output_format=self.config.get('format', 'md'),
                         include_timestamps=self.config.get('timestamps', True),
+                        overwrite=self.config.get('overwrite', False),
                         cancellation_token=self.cancellation_token
                     )
+                    
+                    # CRITICAL DEBUG: Log result summary
+                    logger.info(f"🔧 Processor result for {url}:")
+                    logger.info(f"   success: {result.success}")
+                    if result.data:
+                        saved_files = result.data.get('saved_files', [])
+                        skipped_files = result.data.get('skipped_files', [])
+                        logger.info(f"   saved_files count: {len(saved_files)}")
+                        logger.info(f"   skipped_files count: {len(skipped_files)}")
+                        if saved_files:
+                            logger.info(f"   saved_files: {saved_files}")
+                        if skipped_files:
+                            logger.info(f"   skipped_files: {skipped_files}")
+                    if result.errors:
+                        logger.info(f"   errors: {result.errors}")
                     
                     if result.success:
                         # Get actual title from successful result
@@ -143,36 +246,77 @@ class YouTubeExtractionWorker(QThread):
                             display_actual_title = actual_title
                         
                         # Sub-step progress: Transcript extraction complete
-                        self.progress_updated.emit(i, total_urls, f"📝 [{i+1}/{total_urls}] ({percent}%) Transcript extracted: {display_actual_title}")
+                        self.progress_updated.emit(i, total_urls, f"📝 {global_progress} ({percent}%) Transcript extracted: {display_actual_title}{playlist_context}")
                         
-                        # Sub-step progress: Saving files
+                        # Check if files were actually saved or skipped
                         saved_files = result.data.get('saved_files', [])
+                        skipped_files = result.data.get('skipped_files', [])
                         file_count = len(saved_files)
-                        self.progress_updated.emit(i, total_urls, f"💾 [{i+1}/{total_urls}] ({percent}%) Saved {file_count} file(s): {display_actual_title}")
+                        skipped_count = len(skipped_files)
                         
-                        results['successful'] += 1
-                        results['urls_processed'].append(url)
-                        
-                        # Success message for this URL
-                        success_msg = f"✅ Successfully extracted: {display_actual_title}"
                         if file_count > 0:
-                            success_msg += f" ({file_count} file(s) saved)"
-                        self.url_completed.emit(url, True, success_msg)
+                            # Files were actually saved - true success
+                            self.progress_updated.emit(i, total_urls, f"💾 {global_progress} ({percent}%) Saved {file_count} file(s): {display_actual_title}{playlist_context}")
+                            
+                            results['successful'] += 1
+                            results['urls_processed'].append(url)
+                            
+                            # Success message for this URL (include playlist context)
+                            success_msg = f"✅ Video {i+1}/{total_urls}: {display_actual_title} ({file_count} file(s)){playlist_context}"
+                            self.url_completed.emit(url, True, success_msg)
+                        elif skipped_count > 0:
+                            # Files were skipped due to overwrite=False - this is also success
+                            self.progress_updated.emit(i, total_urls, f"⏭️ {global_progress} ({percent}%) Skipped existing: {display_actual_title}{playlist_context}")
+                            
+                            # Track skipped files separately
+                            if 'skipped' not in results:
+                                results['skipped'] = 0
+                                results['skipped_urls'] = []
+                            results['skipped'] += 1
+                            results['skipped_urls'].append({
+                                'url': url,
+                                'title': actual_title,
+                                'reason': 'File already exists (overwrite disabled)'
+                            })
+                            
+                            # Success message for skipped URL
+                            skip_msg = f"⏭️ Video {i+1}/{total_urls}: {display_actual_title} (overwrite disabled){playlist_context}"
+                            self.url_completed.emit(url, True, skip_msg)
+                        else:
+                            # Success reported but no files saved or skipped - this is actually a partial failure
+                            self.progress_updated.emit(i, total_urls, f"⚠️ {global_progress} ({percent}%) Extracted but not saved: {display_actual_title}{playlist_context}")
+                            
+                            results['failed'] += 1
+                            error_reason = "Transcript extracted but no files were saved"
+                            if result.errors:
+                                error_reason = "; ".join(result.errors)
+                            results['failed_urls'].append({
+                                'url': url,
+                                'title': actual_title,
+                                'error': error_reason
+                            })
+                            
+                            # Partial failure message
+                            failure_msg = f"⚠️ Extracted transcript but failed to save files: {display_actual_title}"
+                            self.url_completed.emit(url, False, failure_msg)
                         
                     else:
-                        # Handle failure
+                        # True failure - extraction failed
                         error_msg = '; '.join(result.errors) if result.errors else 'Unknown error'
-                        results['failed'] += 1
-                        results['failed_urls'].append(url)
+                        logger.error(f"Failed to extract transcript for {url}: {error_msg}")
                         
-                        # Check for 402 Payment Required error and emit special signal
-                        if "402 Payment Required" in error_msg:
+                        # Check for payment required error in result errors
+                        if "402 Payment Required" in error_msg or "payment required" in error_msg.lower():
                             self.payment_required.emit()
                         
-                        # Sub-step progress: Failed
-                        self.progress_updated.emit(i, total_urls, f"❌ [{i+1}/{total_urls}] ({percent}%) Failed: {display_title}")
+                        results['failed'] += 1
+                        results['failed_urls'].append({
+                            'url': url,
+                            'title': display_title,
+                            'error': error_msg
+                        })
                         
-                        # Failure message for this URL
+                        # Failure message
                         failure_msg = f"❌ Failed to extract: {display_title} - {error_msg}"
                         self.url_completed.emit(url, False, failure_msg)
                 
@@ -215,11 +359,16 @@ class YouTubeExtractionWorker(QThread):
             self.cancellation_token.cancel("User requested cancellation")
 
     def _write_failure_log(self, failed_urls):
-        """Write failed URL extractions to a consolidated log file."""
+        """Write failed URL extractions to timestamped log files.
+        
+        Returns:
+            tuple: (log_file_path, csv_file_path) or (None, None) if failed
+        """
         try:
             from datetime import datetime
             from pathlib import Path
             import json
+            import csv
             
             # Get the logs directory from settings
             from ...config import get_settings
@@ -227,30 +376,73 @@ class YouTubeExtractionWorker(QThread):
             logs_dir = Path(settings.paths.logs).expanduser()
             logs_dir.mkdir(parents=True, exist_ok=True)
             
-            # Use a single consolidated log file that appends entries
-            log_file = logs_dir / "youtube_extraction_failures.log"
+            # Create timestamped filenames instead of overwriting
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_file = logs_dir / f"youtube_extraction_failures_{timestamp}.log"
+            csv_file = logs_dir / f"youtube_extraction_failures_{timestamp}.csv"
             
-            # Prepare log data
-            log_entry = {
-                'timestamp': datetime.now().isoformat(),
-                'total_failed': len(failed_urls),
-                'extraction_type': 'youtube_transcripts',
-                'failed_urls': failed_urls
-            }
-            
-            # Append to existing log file
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(f"\n{'='*70}\n")
-                f.write(f"YouTube Extraction Failures - {datetime.now().isoformat()}\n")
-                f.write(f"Total failed: {len(failed_urls)}\n")
+            # Write new timestamped log file
+            with open(log_file, 'w', encoding='utf-8') as f:
                 f.write(f"{'='*70}\n")
-                json.dump(log_entry, f, indent=2, ensure_ascii=False)
+                f.write(f"YouTube Extraction Failures\n")
+                f.write(f"Session: {datetime.now().isoformat()}\n")
+                f.write(f"Total failed: {len(failed_urls)}\n")
+                f.write(f"{'='*70}\n\n")
+                
+                # Write detailed failure information
+                for i, failed_item in enumerate(failed_urls, 1):
+                    if isinstance(failed_item, dict):
+                        url = failed_item.get('url', 'Unknown URL')
+                        title = failed_item.get('title', 'Unknown Title')
+                        error = failed_item.get('error', 'Unknown error')
+                        
+                        f.write(f"{i}. Title: {title}\n")
+                        f.write(f"   URL: {url}\n")
+                        f.write(f"   Error: {error}\n\n")
+                    else:
+                        # Fallback for simple string URLs
+                        f.write(f"{i}. URL: {failed_item}\n")
+                        f.write(f"   Error: No additional information available\n\n")
+                
                 f.write(f"\n{'='*70}\n")
+                f.write(f"Note: This is a session-specific failure log.\n")
+                f.write(f"For retry, use the corresponding CSV file: {csv_file.name}\n")
+                f.write(f"{'='*70}\n")
+            
+            # Create timestamped CSV file with failed URLs for easy re-import
+            formatted_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            with open(csv_file, 'w', newline='', encoding='utf-8') as csvfile:
+                # Write header comments
+                csvfile.write("# YouTube Extraction Failures - URLs for retry\n")
+                csvfile.write(f"# Session: {formatted_timestamp}\n")
+                csvfile.write(f"# Total failures: {len(failed_urls)}\n")
+                csvfile.write("#\n")
+                csvfile.write("# Instructions:\n")
+                csvfile.write("# 1. You can load this file directly into the YouTube tab\n")
+                csvfile.write("# 2. Select 'Or Select File' option and browse to this CSV\n")
+                csvfile.write("# 3. Click 'Extract Transcripts' to retry failed URLs\n")
+                csvfile.write("#\n")
+                
+                # Write URLs - one per line for simplicity
+                for failed_item in failed_urls:
+                    if isinstance(failed_item, dict):
+                        url = failed_item.get('url', '')
+                        if url and url != 'Unknown URL':
+                            csvfile.write(f"{url}\n")
+                    else:
+                        # Fallback for simple string URLs
+                        if failed_item:
+                            csvfile.write(f"{failed_item}\n")
                 
             logger.info(f"Failed extractions logged to: {log_file}")
+            logger.info(f"Failed URLs saved for retry to: {csv_file}")
+            
+            return log_file, csv_file
             
         except Exception as e:
             logger.error(f"Failed to write failure log: {e}")
+            return None, None
 
 
 class YouTubeTab(BaseTab):
@@ -305,7 +497,7 @@ class YouTubeTab(BaseTab):
         # URL input
         self.url_input = QTextEdit()
         self.url_input.setPlaceholderText(
-            "Enter YouTube URLs or Playlist URLs (one per line):\n"
+            "Enter YouTube URLs or Playlist URLs (one per line) - shows total video count across all playlists:\n"
             "https://www.youtube.com/watch?v=...\n"
             "https://youtu.be/...\n"
             "https://www.youtube.com/playlist?list=..."
@@ -323,7 +515,7 @@ class YouTubeTab(BaseTab):
         
         # File input
         file_layout = QHBoxLayout()
-        file_layout.addWidget(QLabel("Select a .TXT, .RTF, or .CSV file with Youtube URLs or Playlist URLs:"))
+        file_layout.addWidget(QLabel("Select a .TXT, .RTF, or .CSV file with YouTube URLs/Playlists (shows total video count across all):"))
         
         self.file_input = QLineEdit()
         self.file_input.setPlaceholderText("Select a file containing URLs...")
@@ -347,17 +539,21 @@ class YouTubeTab(BaseTab):
             self.file_input.setEnabled(False)
             self.browse_btn.setEnabled(False)
             
-            # Visual styling for disabled state
-            self.file_input.setStyleSheet("color: gray;")
+            # BUGFIX: Reset URL input styling and apply disabled styling to file input
+            self.url_input.setStyleSheet("")  # Reset URL input to default
+            self.file_input.setStyleSheet("color: gray;")  # Gray out file input
         else:
             # Enable file input, disable URL input
             self.url_input.setEnabled(False)
             self.file_input.setEnabled(True)
             self.browse_btn.setEnabled(True)
             
-            # Visual styling for disabled state
-            self.url_input.setStyleSheet("color: gray;")
-            self.file_input.setStyleSheet("")  # Reset to default
+            # BUGFIX: Reset file input styling and apply disabled styling to URL input
+            self.url_input.setStyleSheet("color: gray;")  # Gray out URL input
+            self.file_input.setStyleSheet("")  # Reset file input to default
+            
+        # Save the radio button state change
+        self._save_settings()
         
     def _create_settings_section(self) -> QGroupBox:
         """Create the extraction settings section."""
@@ -367,10 +563,8 @@ class YouTubeTab(BaseTab):
         # Output directory
         layout.addWidget(QLabel("Output Directory:"), 0, 0)
         self.output_dir_input = QLineEdit()
-        self.output_dir_input.setPlaceholderText("Choose output directory...")
-        # Set default to transcripts directory
-        default_output = self.get_output_directory(str(self.settings.paths.transcripts))
-        self.output_dir_input.setText(str(default_output))
+        self.output_dir_input.setPlaceholderText("Click Browse to select output directory (required)")
+        # Remove default setting - require user selection
         self.output_dir_input.textChanged.connect(self._on_setting_changed)
         layout.addWidget(self.output_dir_input, 0, 1)
         
@@ -491,7 +685,7 @@ class YouTubeTab(BaseTab):
         
         self.report_btn = QPushButton("View Last Report")
         self.report_btn.clicked.connect(self._view_last_report)
-        self.report_btn.setEnabled(False)
+        self.report_btn.setEnabled(True)  # Always enabled since we can find reports automatically
         self.report_btn.setStyleSheet("background-color: #1976d2;")
         header_layout.addWidget(self.report_btn)
         
@@ -546,8 +740,21 @@ class YouTubeTab(BaseTab):
             
         # Get URLs with early logging
         logger.info("Starting YouTube extraction process - collecting URLs...")
+        logger.info(f"URL radio checked: {self.url_radio.isChecked()}")
+        logger.info(f"File radio checked: {self.file_radio.isChecked()}")
+        if self.file_radio.isChecked():
+            logger.info(f"Selected file: {self.file_input.text().strip()}")
+        
         urls = self._collect_urls()
         logger.info(f"Collected {len(urls)} URLs for processing")
+        
+        # DEBUGGING: Log first few URLs to verify they're valid
+        if urls:
+            logger.info(f"First few URLs: {urls[:3]}")
+            # Validate URLs are properly formatted
+            invalid_urls = [url for url in urls if not (url.startswith('http') and ('youtube.com' in url or 'youtu.be' in url))]
+            if invalid_urls:
+                logger.warning(f"Found {len(invalid_urls)} invalid URLs: {invalid_urls[:3]}")
         
         if not urls:
             logger.info("No URLs found - showing warning to user")
@@ -591,6 +798,15 @@ class YouTubeTab(BaseTab):
             'overwrite': self.overwrite_checkbox.isChecked()
         }
         
+        # CRITICAL DEBUG: Log the exact config being passed to worker
+        logger.info(f"🔧 Extraction config created:")
+        logger.info(f"   output_dir: {repr(config['output_dir'])} (type: {type(config['output_dir'])})")
+        logger.info(f"   format: {config['format']}")
+        logger.info(f"   timestamps: {config['timestamps']}")
+        logger.info(f"   overwrite: {config['overwrite']}")
+        logger.info(f"   Output directory exists: {Path(config['output_dir']).exists() if config['output_dir'] else False}")
+        logger.info(f"   Output directory is writable: {os.access(config['output_dir'], os.W_OK) if config['output_dir'] and Path(config['output_dir']).exists() else 'Unknown'}")
+        
         # Final safety check before creating worker
         if not urls or len(urls) == 0:
             logger.error("CRITICAL: Attempting to create worker with empty URL list - aborting!")
@@ -600,12 +816,14 @@ class YouTubeTab(BaseTab):
         
         # Start extraction worker
         logger.info(f"Creating YouTube extraction worker with {len(urls)} URLs")
+        logger.info(f"Worker config will be: {config}")
         self.extraction_worker = YouTubeExtractionWorker(urls, config, self)
         self.extraction_worker.progress_updated.connect(self._update_extraction_progress)
         self.extraction_worker.url_completed.connect(self._url_extraction_completed)
         self.extraction_worker.extraction_finished.connect(self._extraction_finished)
         self.extraction_worker.extraction_error.connect(self._extraction_error)
         self.extraction_worker.payment_required.connect(self._show_payment_required_dialog)
+        self.extraction_worker.playlist_info_updated.connect(self._handle_playlist_info)
         
         self.active_workers.append(self.extraction_worker)
         logger.info("Starting YouTube extraction worker thread")
@@ -626,47 +844,74 @@ class YouTubeTab(BaseTab):
             self.show_warning("No Process Running", "No YouTube extraction process is currently running.")
             
     def _collect_urls(self) -> List[str]:
-        """Collect URLs from input fields."""
+        """Collect URLs from input fields based on selected input method."""
         urls = []
         
-        # Get URLs from text input
-        text_urls = self.url_input.toPlainText().strip()
-        if text_urls:
-            for line in text_urls.split('\n'):
-                line = line.strip()
-                if line and ('youtube.com' in line or 'youtu.be' in line):
-                    urls.append(line)
-                    
-        # Get URLs from file
-        file_path = self.file_input.text().strip()
-        if file_path:
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    
-                # Handle RTF files
-                if content.startswith('{\\rtf'):
-                    import re
-                    url_pattern = r'https?://[^\s\\,}]+'
-                    found_urls = re.findall(url_pattern, content)
-                    for url in found_urls:
-                        url = url.rstrip('\\,}')
-                        if 'youtube.com' in url or 'youtu.be' in url:
-                            urls.append(url)
-                else:
-                    # Plain text/CSV file
-                    for line in content.split('\n'):
-                        line = line.strip()
-                        if line and not line.startswith('#'):
-                            for url in line.split(','):
-                                url = url.strip()
-                                if url and ('youtube.com' in url or 'youtu.be' in url):
-                                    urls.append(url)
-            except Exception as e:
-                self.show_error("File Error", f"Could not read URL file: {e}")
-                return []
+        # BUGFIX: Only collect URLs from the selected source, not both
+        if self.url_radio.isChecked():
+            # Get URLs from text input ONLY
+            logger.debug("Collecting URLs from text input (URL radio selected)")
+            text_urls = self.url_input.toPlainText().strip()
+            if text_urls:
+                for line in text_urls.split('\n'):
+                    line = line.strip()
+                    if line and ('youtube.com' in line or 'youtu.be' in line):
+                        urls.append(line)
+                logger.debug(f"Found {len(urls)} URLs in text input")
+            else:
+                logger.debug("No URLs found in text input")
+                        
+        elif self.file_radio.isChecked():
+            # Get URLs from file ONLY
+            file_path = self.file_input.text().strip()
+            logger.debug(f"Collecting URLs from file (file radio selected): {file_path}")
+            if file_path:
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        
+                    # Handle RTF files
+                    if content.startswith('{\\rtf'):
+                        import re
+                        url_pattern = r'https?://[^\s\\,}]+'
+                        found_urls = re.findall(url_pattern, content)
+                        for url in found_urls:
+                            url = url.rstrip('\\,}')
+                            if 'youtube.com' in url or 'youtu.be' in url:
+                                urls.append(url)
+                    else:
+                        # Plain text/CSV file
+                        for line in content.split('\n'):
+                            line = line.strip()
+                            if line and not line.startswith('#'):
+                                # Handle both comma-separated and line-separated URLs
+                                if ',' in line:
+                                    # CSV format: split by comma
+                                    for url in line.split(','):
+                                        url = url.strip()
+                                        if url and ('youtube.com' in url or 'youtu.be' in url):
+                                            urls.append(url)
+                                else:
+                                    # Plain text format: one URL per line
+                                    if 'youtube.com' in line or 'youtu.be' in line:
+                                        urls.append(line)
+                    logger.debug(f"Found {len(urls)} URLs in file: {file_path}")
+                except Exception as e:
+                    logger.error(f"Failed to read URL file {file_path}: {e}")
+                    self.show_error("File Error", f"Could not read URL file: {e}")
+                    return []
+            else:
+                logger.debug("No file selected")
+        else:
+            logger.warning("Neither radio button is selected - this should not happen")
                 
-        return list(set(urls))  # Remove duplicates
+        # Remove duplicates and log final result
+        unique_urls = list(set(urls))
+        logger.info(f"Collected {len(unique_urls)} unique URLs from {'text input' if self.url_radio.isChecked() else 'file'}")
+        if len(unique_urls) != len(urls):
+            logger.debug(f"Removed {len(urls) - len(unique_urls)} duplicate URLs")
+            
+        return unique_urls
         
     def _update_extraction_progress(self, current: int, total: int, status: str):
         """Update extraction progress."""
@@ -701,29 +946,70 @@ class YouTubeTab(BaseTab):
         """Handle completion of all extractions."""
         self.append_log("\n" + "="*50)
         self.append_log("🎬 YouTube extraction completed!")
-        self.append_log(f"✅ Successful: {results['successful']}")
+        self.append_log(f"✅ Fully successful: {results['successful']} (extracted and saved)")
+        
+        # Show skipped files if any
+        skipped_count = results.get('skipped', 0)
+        if skipped_count > 0:
+            self.append_log(f"⏭️ Skipped existing: {skipped_count} (files already exist, overwrite disabled)")
+        
         self.append_log(f"❌ Failed: {results['failed']}")
+        
+        # Calculate files that were extracted but not saved (partial failures)
+        total_attempted = results['successful'] + results['failed'] + skipped_count
         
         # Show where files were saved
         output_dir = self.output_dir_input.text().strip()
         if not output_dir:
             output_dir = str(Path.cwd())
         
-        self.append_log(f"\n📁 Files saved to: {output_dir}")
-        self.append_log(f"🖼️  Thumbnails saved to: {output_dir}/Thumbnails/")
+        self.append_log(f"\n📁 Output directory: {output_dir}")
         
         if results['successful'] > 0:
-            self.append_log(f"\n🎉 Successfully processed {results['successful']} video(s)!")
+            self.append_log(f"\n🎉 Successfully processed and saved {results['successful']} video(s)!")
             self.append_log("📝 Check the output directory for .md transcript files")
             self.append_log("🖼️  Check the Thumbnails subdirectory for thumbnail images")
         
-        if results['failed_urls']:
-            self.append_log(f"\n⚠️  {len(results['failed_urls'])} URL(s) failed:")
-            for failed_url in results['failed_urls']:
-                if isinstance(failed_url, dict):
-                    self.append_log(f"  • {failed_url.get('title', 'Unknown')} - {failed_url.get('error', 'Unknown error')}")
+        if skipped_count > 0:
+            self.append_log(f"\n⏭️ Skipped {skipped_count} existing file(s):")
+            for skipped_item in results.get('skipped_urls', []):
+                if isinstance(skipped_item, dict):
+                    title = skipped_item.get('title', 'Unknown Title')
+                    reason = skipped_item.get('reason', 'Already exists')
+                    self.append_log(f"  • {title} - {reason}")
+            self.append_log("💡 To overwrite existing files, check the 'Overwrite existing transcripts' option")
+        
+        if results['failed'] > 0:
+            self.append_log(f"\n⚠️  {results['failed']} video(s) had issues:")
+            for failed_item in results['failed_urls']:
+                if isinstance(failed_item, dict):
+                    title = failed_item.get('title', 'Unknown Title')
+                    error = failed_item.get('error', 'Unknown error')
+                    self.append_log(f"  • {title} - {error}")
                 else:
-                    self.append_log(f"  • {failed_url}")
+                    self.append_log(f"  • {failed_item}")
+        
+        # Write failure log if there were any failures
+        if results['failed'] > 0 and results.get('failed_urls') and self.extraction_worker:
+            log_file, csv_file = self.extraction_worker._write_failure_log(results['failed_urls'])
+            if log_file and csv_file:
+                self.append_log(f"\n📋 Failed extractions logged to: {log_file}")
+                self.append_log(f"🔄 Failed URLs saved for retry to: {csv_file}")
+                self.append_log(f"   💡 Tip: You can load the CSV file directly to retry failed extractions")
+            else:
+                self.append_log(f"\n⚠️ Warning: Could not write failure logs (check logs directory permissions)")
+        
+        # Show summary of what files were actually created
+        total_processed = results['successful'] + skipped_count
+        if total_processed > 0:
+            if results['successful'] > 0 and skipped_count > 0:
+                self.append_log(f"\n📊 Summary: {results['successful']} new files saved, {skipped_count} existing files skipped")
+            elif results['successful'] > 0:
+                self.append_log(f"\n📊 Summary: {results['successful']} transcript files saved to {output_dir}")
+            else:
+                self.append_log(f"\n📊 Summary: {skipped_count} files already existed (no new files created)")
+        else:
+            self.append_log(f"\n📊 Summary: No files were saved. Check the issues above.")
         
         # Reset UI
         self.start_btn.setEnabled(True)
@@ -731,7 +1017,21 @@ class YouTubeTab(BaseTab):
         self.stop_btn.setEnabled(False) # Disable stop button
         self.progress_bar.setVisible(False)
         self.progress_bar.setValue(100)
-        self.progress_label.setText("Extraction completed successfully!")
+        
+        # Enhanced completion message with playlist context
+        total_processed = results['successful'] + skipped_count
+        playlist_count = len(results.get('playlist_info', []))
+        
+        if results['successful'] > 0:
+            if playlist_count > 0:
+                self.progress_label.setText(f"Completed! {results['successful']} files saved from {playlist_count} playlist(s) + individual videos.")
+            else:
+                self.progress_label.setText(f"Completed! {results['successful']} files saved successfully.")
+        else:
+            if playlist_count > 0:
+                self.progress_label.setText(f"Completed - processed {playlist_count} playlist(s) but no files were saved. See log for details.")
+            else:
+                self.progress_label.setText("Completed - but no files were saved. See log for details.")
         
         self.status_updated.emit("YouTube extraction completed")
         self.processing_finished.emit()
@@ -755,24 +1055,133 @@ class YouTubeTab(BaseTab):
         """Show popup dialog for 402 Payment Required error."""
         from PyQt6.QtWidgets import QMessageBox
         
-        msg_box = QMessageBox(self)
-        msg_box.setIcon(QMessageBox.Icon.Warning)
-        msg_box.setWindowTitle("WebShare Payment Required")
-        msg_box.setText("💰 WebShare Account Insufficient Funds")
-        msg_box.setInformativeText("Please add payment at https://panel.webshare.io/ to continue using YouTube extraction")
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
-        msg_box.button(QMessageBox.StandardButton.Ok).setText("DISMISS")
-        msg_box.exec()
+        payment_dialog = QMessageBox(self)
+        payment_dialog.setIcon(QMessageBox.Icon.Warning)
+        payment_dialog.setWindowTitle("WebShare Payment Required")
+        payment_dialog.setText("💰 WebShare Proxy Payment Required")
+        payment_dialog.setInformativeText(
+            "Your WebShare proxy account has run out of funds and requires payment to continue.\n\n"
+            "Please visit https://panel.webshare.io/ to add payment to your account.\n\n"
+            "This is not a bug in our application - it's a billing issue with your proxy service."
+        )
+        payment_dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
+        payment_dialog.exec()
+
+    def _handle_playlist_info(self, playlist_data: dict):
+        """Handle enhanced playlist and video information from worker."""
+        playlists = playlist_data.get('playlists', [])
+        total_playlists = playlist_data.get('total_playlists', 0)
+        total_videos = playlist_data.get('total_videos', 0)
+        playlist_videos = playlist_data.get('playlist_videos', 0)
+        individual_videos = playlist_data.get('individual_videos', 0)
+        summary = playlist_data.get('summary', '')
         
+        # Show comprehensive content summary
+        self.append_log(f"\n📊 Content Analysis:")
+        if summary:
+            self.append_log(f"   • {summary}")
+            self.append_log(f"   • Grand Total: {total_videos} videos to process")
+        else:
+            self.append_log(f"   • Total: {total_videos} videos to process")
+        
+        # Show detailed playlist breakdown
+        if total_playlists > 0:
+            self.append_log(f"\n📋 Playlist Details:")
+            for i, playlist in enumerate(playlists, 1):
+                title = playlist.get('title', 'Unknown Playlist')
+                video_count = playlist.get('total_videos', 0)
+                start_index = playlist.get('start_index', 0) + 1  # Convert to 1-indexed
+                end_index = playlist.get('end_index', 0) + 1    # Convert to 1-indexed
+                
+                # Truncate long playlist titles for readability
+                display_title = title[:50] + "..." if len(title) > 50 else title
+                self.append_log(f"   {i}. {display_title}")
+                self.append_log(f"      └─ {video_count} videos (Global positions {start_index}-{end_index})")
+        
+        self.append_log("")  # Add blank line for spacing
+
+    def _load_settings(self):
+        """Load saved settings from session."""
+        try:
+            # Load output directory
+            saved_output_dir = self.gui_settings.get_output_directory(
+                self.tab_name, 
+                str(self.settings.paths.transcripts)
+            )
+            self.output_dir_input.setText(saved_output_dir)
+            
+            # Load format selection
+            saved_format = self.gui_settings.get_combo_selection(self.tab_name, "format", "md")
+            index = self.format_combo.findText(saved_format)
+            if index >= 0:
+                self.format_combo.setCurrentIndex(index)
+            
+            # Load checkbox states
+            self.timestamps_checkbox.setChecked(
+                self.gui_settings.get_checkbox_state(self.tab_name, "include_timestamps", True)
+            )
+            self.overwrite_checkbox.setChecked(
+                self.gui_settings.get_checkbox_state(self.tab_name, "overwrite_existing", False)
+            )
+            
+            # Load radio button state (use checkbox method for boolean values)
+            url_radio_selected = self.gui_settings.get_checkbox_state(self.tab_name, "url_radio_selected", True)
+            if url_radio_selected:
+                self.url_radio.setChecked(True)
+            else:
+                self.file_radio.setChecked(True)
+            self._on_input_method_changed()  # Apply the selection
+            
+            logger.debug(f"Loaded settings for {self.tab_name} tab")
+        except Exception as e:
+            logger.error(f"Failed to load settings for {self.tab_name} tab: {e}")
+    
+    def _save_settings(self):
+        """Save current settings to session."""
+        try:
+            # Save output directory
+            self.gui_settings.set_output_directory(self.tab_name, self.output_dir_input.text())
+            
+            # Save combo selections
+            self.gui_settings.set_combo_selection(self.tab_name, "format", self.format_combo.currentText())
+            
+            # Save checkbox states
+            self.gui_settings.set_checkbox_state(self.tab_name, "include_timestamps", self.timestamps_checkbox.isChecked())
+            self.gui_settings.set_checkbox_state(self.tab_name, "overwrite_existing", self.overwrite_checkbox.isChecked())
+            
+            # Save radio button state (use checkbox method for boolean values)
+            self.gui_settings.set_checkbox_state(self.tab_name, "url_radio_selected", self.url_radio.isChecked())
+            
+            # Save session data to disk
+            self.gui_settings.save()
+            
+            logger.debug(f"Saved settings for {self.tab_name} tab")
+        except Exception as e:
+            logger.error(f"Failed to save settings for {self.tab_name} tab: {e}")
+    
+    def _on_setting_changed(self):
+        """Called when any setting changes to automatically save."""
+        self._save_settings()
+
     def validate_inputs(self) -> bool:
         """Validate inputs before processing."""
         # Check output directory
         output_dir = self.output_dir_input.text().strip()
-        if output_dir:
-            output_path = Path(output_dir)
-            if not output_path.parent.exists():
-                self.show_error("Invalid Output", "Output directory parent doesn't exist")
-                return False
+        if not output_dir:
+            self.show_error("Invalid Output", "Output directory must be selected.")
+            return False
+        
+        if not Path(output_dir).exists():
+            self.show_error("Invalid Output", f"Output directory does not exist: {output_dir}")
+            return False
+        
+        if not Path(output_dir).is_dir():
+            self.show_error("Invalid Output", f"Output directory is not a directory: {output_dir}")
+            return False
+        
+        if not os.access(output_dir, os.W_OK):
+            self.show_error("Invalid Output", f"Output directory is not writable: {output_dir}")
+            return False
         
         # Check WebShare proxy credentials (required for YouTube processing)
         webshare_username = getattr(self.settings.api_keys, 'webshare_username', None)
@@ -801,54 +1210,7 @@ class YouTubeTab(BaseTab):
         """Reset UI to initial state."""
         self.start_btn.setEnabled(True)
         self.start_btn.setText(self._get_start_button_text())
-    
-    def _load_settings(self):
-        """Load saved settings from session."""
-        try:
-            # Load output directory
-            saved_output_dir = self.gui_settings.get_output_directory(
-                self.tab_name, 
-                str(self.settings.paths.transcripts)
-            )
-            self.output_dir_input.setText(saved_output_dir)
-            
-            # Load format selection
-            saved_format = self.gui_settings.get_combo_selection(self.tab_name, "format", "md")
-            index = self.format_combo.findText(saved_format)
-            if index >= 0:
-                self.format_combo.setCurrentIndex(index)
-            
-            # Load checkbox states
-            self.timestamps_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(self.tab_name, "include_timestamps", True)
-            )
-            self.overwrite_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(self.tab_name, "overwrite_existing", False)
-            )
-            
-            logger.debug(f"Loaded settings for {self.tab_name} tab")
-        except Exception as e:
-            logger.error(f"Failed to load settings for {self.tab_name} tab: {e}")
-    
-    def _save_settings(self):
-        """Save current settings to session."""
-        try:
-            # Save output directory
-            self.gui_settings.set_output_directory(self.tab_name, self.output_dir_input.text())
-            
-            # Save format selection
-            self.gui_settings.set_combo_selection(self.tab_name, "format", self.format_combo.currentText())
-            
-            # Save checkbox states
-            self.gui_settings.set_checkbox_state(self.tab_name, "include_timestamps", self.timestamps_checkbox.isChecked())
-            self.gui_settings.set_checkbox_state(self.tab_name, "overwrite_existing", self.overwrite_checkbox.isChecked())
-            
-            logger.debug(f"Saved settings for {self.tab_name} tab")
-        except Exception as e:
-            logger.error(f"Failed to save settings for {self.tab_name} tab: {e}")
-    
-    def _on_setting_changed(self):
-        """Called when any setting changes to automatically save."""
-        self._save_settings()
         self.stop_btn.setEnabled(False)
-        self.status_updated.emit("Ready") 
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setValue(0)
+        self.progress_label.setText("Ready to extract transcripts") 

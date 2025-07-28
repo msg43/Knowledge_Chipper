@@ -128,8 +128,15 @@ class EnhancedTranscriptionWorker(QThread):
                     # Pass processing parameters (like omp_threads, batch_size, output_dir) to the process method
                     # Include output_dir for markdown file generation
                     processing_kwargs_with_output = processing_kwargs.copy()
-                    if self.gui_settings.get("output_dir"):
-                        processing_kwargs_with_output["output_dir"] = self.gui_settings["output_dir"]
+                    
+                    # REQUIRE: Always ensure output_dir is set for file saving
+                    # User must have specified an output directory
+                    output_dir = self.gui_settings.get("output_dir")
+                    if not output_dir or not output_dir.strip():
+                        # This should be caught by validation, but just in case
+                        raise ValueError("Output directory is required but was not specified")
+                    
+                    processing_kwargs_with_output["output_dir"] = output_dir
                     
                     result = processor.process(Path(file_path), **processing_kwargs_with_output)
                     
@@ -141,11 +148,13 @@ class EnhancedTranscriptionWorker(QThread):
                         # Check if markdown file was saved
                         saved_file = result.metadata.get('saved_markdown_file') if result.metadata else None
                         if saved_file:
-                            status_msg = f'transcription completed ({text_length} characters) - .md file saved'
-                            step_msg = f"✅ Transcription of {file_name} completed and saved to markdown!"
+                            status_msg = f'transcription completed ({text_length:,} characters) - saved to {Path(saved_file).name}'
+                            step_msg = f"✅ Transcription of {file_name} completed and saved to {Path(saved_file).name}"
+                            logger.info(f"Successfully transcribed and saved: {file_path} -> {saved_file}")
                         else:
-                            status_msg = f'transcription completed ({text_length} characters) - in memory only'
-                            step_msg = f"✅ Transcription of {file_name} completed!"
+                            status_msg = f'transcription completed ({text_length:,} characters) - WARNING: file not saved'
+                            step_msg = f"⚠️ Transcription of {file_name} completed but file was not saved!"
+                            logger.warning(f"Transcription succeeded but file not saved for: {file_path}")
                         
                         # Emit progress update with success
                         progress_data = {
@@ -246,8 +255,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         
         # File list with improved size policy
         self.transcription_files = QListWidget()
-        self.transcription_files.setMinimumHeight(120)  # Slightly smaller minimum
-        self.transcription_files.setMaximumHeight(200)  # Set maximum to prevent overflow
+        self.transcription_files.setMinimumHeight(100)  # Smaller minimum height  
+        self.transcription_files.setMaximumHeight(150)  # Smaller maximum to save space
         # Set size policy to allow proper vertical expansion/contraction
         from PyQt6.QtWidgets import QSizePolicy
         self.transcription_files.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -397,19 +406,22 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.format_combo.currentTextChanged.connect(self._on_setting_changed)
         layout.addWidget(self.format_combo, 1, 3)
         
-        # Output directory
+        # Output directory (make more compact)
         layout.addWidget(QLabel("Output Directory:"), 2, 0)
         self.output_dir_input = QLineEdit()
-        self.output_dir_input.setPlaceholderText("Leave empty to save in the same directory as source files")
-        # Set default to transcripts directory
-        default_output = self.get_output_directory(str(self.settings.paths.transcripts))
-        self.output_dir_input.setText(str(default_output))
+        self.output_dir_input.setPlaceholderText("Click Browse to select output directory (required)")
+        # Remove default setting - require user selection
         self.output_dir_input.textChanged.connect(self._on_setting_changed)
-        layout.addWidget(self.output_dir_input, 2, 1, 1, 2)
+        # Make output directory field take only 1 column instead of 2
+        layout.addWidget(self.output_dir_input, 2, 1, 1, 1)
         
         browse_output_btn = QPushButton("Browse")
+        browse_output_btn.setMaximumWidth(80)  # Limit browse button width
         browse_output_btn.clicked.connect(self._select_output_directory)
-        layout.addWidget(browse_output_btn, 2, 3)
+        layout.addWidget(browse_output_btn, 2, 2)
+        
+        # Add some spacing in the last column
+        layout.addWidget(QLabel(""), 2, 3)
         
         # Options
         self.timestamps_checkbox = QCheckBox("Include timestamps")
@@ -853,11 +865,13 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         """Validate inputs before processing."""
         # Check output directory
         output_dir = self.output_dir_input.text().strip()
-        if output_dir:
-            output_path = Path(output_dir)
-            if not output_path.parent.exists():
-                self.show_error("Invalid Output", "Output directory parent doesn't exist")
-                return False
+        if not output_dir:
+            self.show_error("Invalid Output", "Output directory must be selected.")
+            return False
+        
+        if not Path(output_dir).parent.exists():
+            self.show_error("Invalid Output", "Output directory parent doesn't exist")
+            return False
         
         # Check speaker diarization requirements
         if self.diarization_checkbox.isChecked():
@@ -896,44 +910,61 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
     def _load_settings(self):
         """Load saved settings from session."""
         try:
-            # Load output directory
-            saved_output_dir = self.gui_settings.get_output_directory(
-                self.tab_name, 
-                str(self.settings.paths.transcripts)
-            )
-            self.output_dir_input.setText(saved_output_dir)
+            # Block signals during loading to prevent redundant saves
+            widgets_to_block = [
+                self.output_dir_input, self.model_combo, self.device_combo,
+                self.language_combo, self.format_combo, self.timestamps_checkbox,
+                self.diarization_checkbox
+            ]
             
-            # Load model selection
-            saved_model = self.gui_settings.get_combo_selection(self.tab_name, "model", "base")
-            index = self.model_combo.findText(saved_model)
-            if index >= 0:
-                self.model_combo.setCurrentIndex(index)
+            # Block all signals
+            for widget in widgets_to_block:
+                widget.blockSignals(True)
             
-            # Load device selection
-            saved_device = self.gui_settings.get_combo_selection(self.tab_name, "device", "auto")
-            index = self.device_combo.findText(saved_device)
-            if index >= 0:
-                self.device_combo.setCurrentIndex(index)
-            
-            # Load language selection
-            saved_language = self.gui_settings.get_combo_selection(self.tab_name, "language", "auto")
-            index = self.language_combo.findText(saved_language)
-            if index >= 0:
-                self.language_combo.setCurrentIndex(index)
-            
-            # Load format selection
-            saved_format = self.gui_settings.get_combo_selection(self.tab_name, "format", "md")
-            index = self.format_combo.findText(saved_format)
-            if index >= 0:
-                self.format_combo.setCurrentIndex(index)
-            
-            # Load checkbox states
-            self.timestamps_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(self.tab_name, "include_timestamps", True)
-            )
-            self.diarization_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(self.tab_name, "enable_diarization", False)
-            )
+            try:
+                # Load output directory - no hardcoded default
+                saved_output_dir = self.gui_settings.get_output_directory(
+                    self.tab_name, 
+                    ""  # Empty string - require user selection
+                )
+                self.output_dir_input.setText(saved_output_dir)
+                
+                # Load model selection
+                saved_model = self.gui_settings.get_combo_selection(self.tab_name, "model", "base")
+                index = self.model_combo.findText(saved_model)
+                if index >= 0:
+                    self.model_combo.setCurrentIndex(index)
+                
+                # Load device selection
+                saved_device = self.gui_settings.get_combo_selection(self.tab_name, "device", "auto")
+                index = self.device_combo.findText(saved_device)
+                if index >= 0:
+                    self.device_combo.setCurrentIndex(index)
+                
+                # Load language selection
+                saved_language = self.gui_settings.get_combo_selection(self.tab_name, "language", "auto")
+                index = self.language_combo.findText(saved_language)
+                if index >= 0:
+                    self.language_combo.setCurrentIndex(index)
+                
+                # Load format selection
+                saved_format = self.gui_settings.get_combo_selection(self.tab_name, "format", "md")
+                index = self.format_combo.findText(saved_format)
+                if index >= 0:
+                    self.format_combo.setCurrentIndex(index)
+                
+                # Load checkbox states
+                self.timestamps_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(self.tab_name, "include_timestamps", True)
+                )
+                self.diarization_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(self.tab_name, "enable_diarization", False)
+                )
+                
+            finally:
+                # Always restore signals
+                for widget in widgets_to_block:
+                    widget.blockSignals(False)
             self.overwrite_checkbox.setChecked(
                 self.gui_settings.get_checkbox_state(self.tab_name, "overwrite_existing", False)
             )

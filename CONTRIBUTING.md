@@ -1,6 +1,6 @@
-# Contributing to Knowledge System
+# Contributing to Knowledge_Chipper
 
-Thank you for your interest in contributing to the Knowledge System! This document provides guidelines for contributing to the project.
+Thank you for your interest in contributing to Knowledge_Chipper! This document provides guidelines for contributing to the project.
 
 ## 🚀 Quick Start for Contributors
 
@@ -8,8 +8,8 @@ Thank you for your interest in contributing to the Knowledge System! This docume
 
 1. **Fork and clone the repository:**
 ```bash
-git clone https://github.com/msg43/App5.git
-cd App5
+git clone https://github.com/msg43/Knowledge_Chipper.git
+cd Knowledge_Chipper
 ```
 
 2. **Set up development environment:**

@@ -5,6 +5,7 @@ from knowledge_system.processors.base import BaseProcessor
 from knowledge_system.processors.youtube_metadata import YouTubeMetadataProcessor
 from knowledge_system.processors.youtube_download import YouTubeDownloadProcessor
 from knowledge_system.processors.pdf import PDFProcessor
+from knowledge_system.processors.html import HTMLProcessor
 
 # Registry maps extension or pattern to processor class
 _PROCESSOR_REGISTRY: List[Dict] = []
@@ -76,3 +77,4 @@ register_processor(
     name="YouTubeDownloadProcessor",
 )
 register_processor(PDFProcessor, extensions=[".pdf"], name="PDFProcessor")
+register_processor(HTMLProcessor, extensions=[".html", ".htm"], name="HTMLProcessor")

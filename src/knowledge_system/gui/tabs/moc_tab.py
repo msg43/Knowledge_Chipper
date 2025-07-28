@@ -159,6 +159,7 @@ class MOCTab(BaseTab):
         # Custom output
         settings_layout.addWidget(QLabel("Output:"), 2, 0)
         self.output_path_edit = QLineEdit()
+        self.output_path_edit.setPlaceholderText("Click Browse to select output file path (required)")
         self.output_path_edit.setMinimumWidth(250)
         self.output_path_edit.textChanged.connect(self._on_setting_changed)
         settings_layout.addWidget(self.output_path_edit, 2, 1, 1, 2)
@@ -269,6 +270,18 @@ class MOCTab(BaseTab):
             if not file_path.lower().endswith('.md'):
                 self.show_warning("Invalid File Type", f"File is not a markdown file: {file_path}")
                 return False
+        
+        # Check if output path is specified
+        output_path = self.output_path_edit.text().strip()
+        if not output_path:
+            self.show_warning("No Output Path", "Please select an output file path for the MOC.")
+            return False
+            
+        # Check if output directory exists
+        output_dir = Path(output_path).parent
+        if not output_dir.exists():
+            self.show_warning("Invalid Output Directory", f"Output directory does not exist: {output_dir}")
+            return False
                 
         return True
         

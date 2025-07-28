@@ -78,18 +78,19 @@ class BaseTab(QWidget):
         
         self.report_btn = QPushButton("View Last Report")
         self.report_btn.clicked.connect(self._view_last_report)
-        self.report_btn.setEnabled(False)
+        self.report_btn.setEnabled(True)  # Always enabled since we can find reports automatically
         self.report_btn.setStyleSheet("background-color: #1976d2;")
         header_layout.addWidget(self.report_btn)
         
         layout.addLayout(header_layout)
         
-        # Output text area with improved size policy for better resizing
+        # Output text area with responsive resizing behavior
         self.output_text = QTextEdit()
         self.output_text.setReadOnly(True)
-        self.output_text.setMinimumHeight(200)
-        # Use MinimumExpanding vertically to allow proper resizing during window resize
-        self.output_text.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
+        self.output_text.setMinimumHeight(100)  # Allow shrinking to minimal size
+        # Remove maximum height constraint to allow expansion
+        # Use Expanding vertical policy to grow/shrink with window
+        self.output_text.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         layout.addWidget(self.output_text)
         
         return layout
@@ -179,21 +180,70 @@ class BaseTab(QWidget):
         
     def _view_last_report(self):
         """View the last generated report."""
-        if self.current_report:
+        # First try current_report if set
+        report_path = self.current_report
+        
+        # If no current report, find the most recent report file
+        if not report_path:
+            report_path = self._find_latest_report()
+        
+        if report_path and Path(report_path).exists():
             try:
                 import subprocess
                 import platform
                 
                 if platform.system() == "Darwin":  # macOS
-                    subprocess.run(["open", self.current_report])
+                    subprocess.run(["open", str(report_path)])
                 elif platform.system() == "Windows":
-                    subprocess.run(["start", self.current_report], shell=True)
+                    subprocess.run(["start", str(report_path)], shell=True)
                 else:  # Linux
-                    subprocess.run(["xdg-open", self.current_report])
+                    subprocess.run(["xdg-open", str(report_path)])
+                    
+                self.append_log(f"📄 Opened report: {Path(report_path).name}")
             except Exception as e:
                 self.show_error("Error", f"Failed to open report: {e}")
         else:
-            self.show_info("No Report", "No report available yet.")
+            self.show_info("No Report", "No report available yet. Complete a processing operation to generate a report.")
+    
+    def _find_latest_report(self) -> Optional[str]:
+        """Find the most recent report file for this tab type."""
+        try:
+            # Get the tab-specific report type
+            tab_type = getattr(self, 'tab_name', self.__class__.__name__.lower().replace('tab', ''))
+            
+            # Check standard report locations
+            report_dirs = [
+                Path.home() / ".knowledge_system" / "reports",
+                Path("Reports"),
+                Path("logs"),
+            ]
+            
+            latest_report = None
+            latest_time = 0
+            
+            for report_dir in report_dirs:
+                if not report_dir.exists():
+                    continue
+                    
+                # Look for reports matching this tab type
+                patterns = [
+                    f"*{tab_type.lower()}*.md",
+                    f"*{tab_type.lower()}*.txt",
+                    f"*{tab_type.lower()}*.log",
+                ]
+                
+                for pattern in patterns:
+                    for report_file in report_dir.glob(pattern):
+                        if report_file.is_file():
+                            mtime = report_file.stat().st_mtime
+                            if mtime > latest_time:
+                                latest_time = mtime
+                                latest_report = str(report_file)
+            
+            return latest_report
+        except Exception as e:
+            self.logger.error(f"Error finding latest report: {e}")
+            return None
             
     def get_output_directory(self, default_path: str) -> Path:
         """Get the configured output directory or return default."""

@@ -128,7 +128,8 @@ def process(
 
     # Determine output path
     if output is None:
-        output = Path(settings.paths.output_dir)
+        console.print("[red]✗ Error: Output directory is required. Use --output to specify where processed files should be saved.[/red]")
+        sys.exit(1)
 
     # Get list of files to process
     files_to_process = []
@@ -275,10 +276,14 @@ def process(
                     )
                     if result.success:
                         # Save summary
-                        summary_file = output / f"{input_for_summary.stem}_summary.md"
+                        # Clean filename by removing hyphens for better readability
+                        clean_filename_for_file = input_for_summary.stem.replace("-", "_")
+                        summary_file = output / f"{clean_filename_for_file}_summary.md"
                         summary_file.parent.mkdir(parents=True, exist_ok=True)
 
-                        content = f"# Summary of {input_for_summary.name}\n\n"
+                        # Clean filename for title by removing hyphens and file extension
+                        clean_filename = input_for_summary.stem.replace("-", " ")
+                        content = f"# Summary of {clean_filename}\n\n"
                         content += "**Style:** structured\n"
                         content += f"**Model:** {summarization_model}\n"
                         content += f"**Provider:** {result.metadata.get('provider', 'unknown')}\n"

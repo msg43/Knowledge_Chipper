@@ -97,7 +97,8 @@ def moc(
 
     # Determine output path
     if output is None:
-        output = Path(settings.paths.mocs) / "generated_moc.md"
+        console.print("[red]✗ Error: Output directory is required. Use --output to specify where MOC files should be saved.[/red]")
+        sys.exit(1)
 
     # Log MOC generation start
     log_system_event(

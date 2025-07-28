@@ -7,13 +7,15 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QGroupBox, QGridLayout,
     QLabel, QPushButton, QLineEdit, QSpinBox, QComboBox,
     QCheckBox, QListWidget, QFileDialog, QMessageBox,
-    QTextEdit
+    QTextEdit, QDialog, QSizePolicy
 )
 from PyQt6.QtCore import QTimer, pyqtSignal, QThread
 
 from ..components.base_tab import BaseTab
 from ..core.settings_manager import get_gui_settings_manager
+from ..dialogs import ModelDownloadDialog, OllamaServiceDialog
 from ...logger import get_logger
+from ...utils.ollama_manager import get_ollama_manager
 
 logger = get_logger(__name__)
 
@@ -23,7 +25,7 @@ class EnhancedSummarizationWorker(QThread):
     
     progress_updated = pyqtSignal(object)  # SummarizationProgress
     file_completed = pyqtSignal(int, int)  # current, total
-    processing_finished = pyqtSignal()
+    processing_finished = pyqtSignal(int, int, int)  # success_count, failure_count, total_count
     processing_error = pyqtSignal(str)
     
     def __init__(self, files, settings, gui_settings, parent=None):
@@ -33,6 +35,9 @@ class EnhancedSummarizationWorker(QThread):
         self.gui_settings = gui_settings
         self.progress_dialog = None
         self.should_stop = False
+        # Create cancellation token for proper cancellation handling
+        from ...utils.cancellation import CancellationToken
+        self.cancellation_token = CancellationToken()
         
     def run(self):
         """Run the summarization process."""
@@ -40,13 +45,33 @@ class EnhancedSummarizationWorker(QThread):
             from ...processors.summarizer import SummarizerProcessor
             from ...utils.progress import SummarizationProgress
             from ...utils.file_io import overwrite_or_insert_summary_section
+            from ...utils.ollama_manager import get_ollama_manager
             from pathlib import Path
             from datetime import datetime
             
+            provider = self.gui_settings.get('provider', 'openai')
+            model = self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')
+            
+            # Double-check Ollama service for local provider (in case it stopped between GUI check and worker execution)
+            if provider == "local":
+                ollama_manager = get_ollama_manager()
+                if not ollama_manager.is_service_running():
+                    self.processing_error.emit(
+                        "Ollama service is not running. Please start Ollama service first using the Hardware tab or by running 'ollama serve' in your terminal."
+                    )
+                    return
+                
+                # Also check if model is available
+                if not ollama_manager.is_model_available(model):
+                    self.processing_error.emit(
+                        f"Model '{model}' is not available in Ollama. Please download the model first using the Hardware tab or by running 'ollama pull {model}'."
+                    )
+                    return
+            
             # Create processor with GUI settings
             processor = SummarizerProcessor(
-                provider=self.gui_settings.get('provider', 'openai'),
-                model=self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18'),
+                provider=provider,
+                model=model,
                 max_tokens=self.gui_settings.get('max_tokens', 10000)
             )
             
@@ -57,34 +82,167 @@ class EnhancedSummarizationWorker(QThread):
                 if output_dir:
                     output_dir.mkdir(parents=True, exist_ok=True)
             
+            # Build index if not forcing re-summarization
+            summary_index = {}
+            skipped_files = []
+            force_regenerate = self.gui_settings.get('force_regenerate', False)
+            
+            if output_dir and not force_regenerate:
+                summary_index = processor._build_summary_index(output_dir)
+                
+                # Check each file
+                files_to_process = []
+                for file_path in self.files:
+                    file_path_obj = Path(file_path)
+                    needs_summary, reason = processor._check_needs_summarization(file_path_obj, summary_index)
+                    if not needs_summary:
+                        skipped_files.append((file_path, reason))
+                        # Emit progress for skipped file
+                        skip_progress = SummarizationProgress(
+                            current_file=file_path,
+                            total_files=len(self.files),
+                            completed_files=len(skipped_files),
+                            current_step=f"⏭️ Skipping: {reason}",
+                            percent=(len(skipped_files) / len(self.files)) * 100.0,
+                            status="skipped_unchanged",
+                            provider=self.gui_settings.get('provider', 'openai'),
+                            model_name=self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')
+                        )
+                        self.progress_updated.emit(skip_progress)
+                    else:
+                        files_to_process.append(file_path)
+                
+                # Update files list to only process needed files
+                if skipped_files:
+                    self.progress_updated.emit(SummarizationProgress(
+                        current_step=f"⏭️ Skipped {len(skipped_files)} unchanged files",
+                        percent=0.0,
+                        status="skipping_complete",
+                        provider=self.gui_settings.get('provider', 'openai'),
+                        model_name=self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')
+                    ))
+                    self.files = files_to_process
+            
+            success_count = 0
+            failure_count = 0
+            total_count = len(self.files)
+            
+            # Calculate character-based progress weighting for accurate ETAs
+            file_sizes = []
+            total_characters = 0
+            characters_completed = 0
+            
+            # Get file sizes for character-weighted progress
+            for file_path in self.files:
+                try:
+                    file_size = Path(file_path).stat().st_size
+                    file_sizes.append(file_size)
+                    total_characters += file_size
+                except Exception:
+                    # Fallback for files we can't read
+                    estimated_size = 10000  # 10KB default estimate
+                    file_sizes.append(estimated_size)
+                    total_characters += estimated_size
+            
+            logger.info(f"📊 Batch character analysis: {len(self.files)} files, {total_characters:,} total characters")
+            for i, file_path in enumerate(self.files):
+                file_name = Path(file_path).name
+                size_kb = file_sizes[i] / 1024
+                weight_pct = (file_sizes[i] / total_characters) * 100
+                logger.info(f"  📄 {file_name}: {size_kb:.1f}KB ({weight_pct:.1f}% of batch)")
+            
             for i, file_path in enumerate(self.files):
                 if self.should_stop:
-                    break
+                    self.processing_error.emit("Processing was cancelled by user")
+                    return
                     
                 file_path_obj = Path(file_path)
+                current_file_size = file_sizes[i]
                 
-                # Create enhanced progress object
+                # Character-based batch progress calculation
+                batch_progress_start = (characters_completed / total_characters) * 100.0
+                
+                # Create enhanced progress object with character-weighted batch progress
                 progress = SummarizationProgress(
                     current_file=file_path,
                     total_files=len(self.files),
                     completed_files=i,
-                    current_step=f"Processing {file_path_obj.name}...",
-                    percent=(i / len(self.files)) * 100.0,
+                    current_step=f"📄 Starting {file_path_obj.name} ({i+1}/{len(self.files)}) - {current_file_size/1024:.1f}KB",
+                    percent=batch_progress_start,
                     provider=self.gui_settings.get('provider', 'openai'),
                     model_name=self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')
                 )
                 
+                # Add character-based batch information
+                progress.total_characters = total_characters
+                progress.characters_completed = characters_completed
+                progress.current_file_size = current_file_size
+                
                 self.progress_updated.emit(progress)
                 
                 # Process the file
+                template_path = self.gui_settings.get('template_path', None)
+                if template_path:
+                    template_path = Path(template_path)
+                    if not template_path.exists():
+                        template_path = None
+                
+                # Create enhanced progress callback with character-based tracking
+                def enhanced_progress_callback(p):
+                    """Enhanced progress callback with character-based batch tracking."""
+                    # Add batch progress context to the progress object
+                    if hasattr(p, '__dict__'):
+                        # File-level information
+                        p.total_files = len(self.files)
+                        p.completed_files = i  # Files completed so far
+                        p.current_file = file_path
+                        
+                        # Character-based progress calculation
+                        p.total_characters = total_characters
+                        p.current_file_size = current_file_size
+                        
+                        # Handle character progress based on processing status
+                        if hasattr(p, 'status') and p.status == 'completed':
+                            # File completed - mark all characters as done
+                            current_file_chars_done = current_file_size
+                        elif (hasattr(p, 'status') and p.status in ['chunk_completed', 'processing_chunks'] and
+                              hasattr(p, 'chunk_number') and hasattr(p, 'total_chunks') and p.total_chunks):
+                            # Chunking: progress based on completed chunks
+                            chunks_completed = getattr(p, 'chunk_number', 1) - 1  # chunk_number is 1-based
+                            if p.status == 'chunk_completed':
+                                chunks_completed = getattr(p, 'chunk_number', 1)  # Include current chunk as completed
+                            current_file_chars_done = (chunks_completed / p.total_chunks) * current_file_size
+                        else:
+                            # File still in progress - no characters completed yet
+                            current_file_chars_done = 0
+                        
+                        # Total characters completed (previous files + current file completion)
+                        p.characters_completed = characters_completed + current_file_chars_done
+                        
+                        # Note: batch_percent_characters is auto-calculated in __post_init__
+                        # Keep individual file progress in percent field
+                        # p.percent already contains the file-level progress
+                    
+                    self.progress_updated.emit(p)
+                
+                # Check for cancellation before processing each file
+                if self.should_stop:
+                    logger.info("Stopping summarization as requested")
+                    self.cancellation_token.cancel("User requested stop")
+                    break
+                
                 result = processor.process(
-                    file_path,
+                    file_path_obj,
                     style=self.gui_settings.get('style', 'general'),
-                    prompt_template=self.gui_settings.get('template_path', None) or None,
-                    progress_callback=lambda p: self.progress_updated.emit(p)
+                    prompt_template=template_path,
+                    progress_callback=enhanced_progress_callback,
+                    cancellation_token=self.cancellation_token
                 )
                 
                 if result.success:
+                    # File completed successfully - update character counter
+                    characters_completed += current_file_size
+                    
                     # Save the summary to file
                     try:
                         if self.gui_settings.get('update_in_place', False) and file_path_obj.suffix.lower() == ".md":
@@ -95,71 +253,89 @@ class EnhancedSummarizationWorker(QThread):
                                 total_files=len(self.files),
                                 completed_files=i + 1,
                                 current_step=f"✅ Updated summary in-place: {file_path_obj.name}",
-                                percent=((i + 1) / len(self.files)) * 100.0,
+                                percent=100.0,  # Individual file complete
+                                total_characters=total_characters,
+                                characters_completed=characters_completed,
                                 provider=self.gui_settings.get('provider', 'openai'),
                                 model_name=self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')
                             ))
                         else:
                             # Create new summary file
+                            # Clean filename by removing hyphens for better readability
+                            clean_filename = file_path_obj.stem.replace("-", "_")
                             if not output_dir:
                                 # Fallback: create summary next to original file
-                                output_file = file_path_obj.parent / f"{file_path_obj.stem}_summary.md"
+                                output_file = file_path_obj.parent / f"{clean_filename}_summary.md"
                             else:
-                                output_file = output_dir / f"{file_path_obj.stem}_summary.md"
+                                output_file = output_dir / f"{clean_filename}_summary.md"
                             
                             # Ensure output directory exists
                             output_file.parent.mkdir(parents=True, exist_ok=True)
                             
-                            # Write summary with enhanced metadata (like CLI does)
+                            # Extract thumbnail from original file and prepare YAML metadata
                             metadata = result.metadata or {}
+                            thumbnail_content = self._extract_thumbnail_from_file(file_path_obj)
+                            
+                            # Copy thumbnail image file if it exists and update reference
+                            thumbnail_copied, updated_thumbnail_content = self._copy_thumbnail_file_and_update_reference(file_path_obj, output_file, thumbnail_content)
+                            if thumbnail_copied:
+                                thumbnail_content = updated_thumbnail_content
                             
                             with open(output_file, "w", encoding="utf-8") as f:
-                                # Basic metadata
-                                f.write(f"# Summary of {file_path_obj.name}\n\n")
-                                f.write(f"**Source File:** {file_path_obj.name}\n")
-                                f.write(f"**Source Path:** {file_path_obj.absolute()}\n")
-
-                                f.write(f"**Model:** {self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')}\n")
-                                f.write(f"**Provider:** {metadata.get('provider', self.gui_settings.get('provider', 'unknown'))}\n")
-                                if self.gui_settings.get('template_path'):
-                                    f.write(f"**Template:** {self.gui_settings.get('template_path')}\n")
-                                f.write("\n")
+                                # Write YAML frontmatter
+                                f.write("---\n")
+                                # Clean filename for title by removing hyphens and file extension
+                                clean_filename = file_path_obj.stem.replace("-", " ")
+                                f.write(f"title: \"Summary of {clean_filename}\"\n")
+                                f.write(f"source_file: \"{file_path_obj.name}\"\n")
+                                f.write(f"source_path: \"{file_path_obj.absolute()}\"\n")
+                                f.write(f"model: \"{self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')}\"\n")
+                                f.write(f"provider: \"{metadata.get('provider', self.gui_settings.get('provider', 'unknown'))}\"\n")
                                 
-                                # Performance stats
-                                f.write("**Performance:**\n")
+                                if self.gui_settings.get('template_path'):
+                                    f.write(f"template: \"{self.gui_settings.get('template_path')}\"\n")
+                                
+                                # Performance metadata
                                 processing_time = metadata.get('processing_time', 0)
-                                f.write(f"- **Processing Time:** {processing_time:.1f}s\n")
+                                f.write(f"processing_time: {processing_time:.1f}\n")
                                 
                                 prompt_tokens = metadata.get('prompt_tokens', 0)
                                 completion_tokens = metadata.get('completion_tokens', 0)
                                 total_tokens = metadata.get('total_tokens', 0)
-                                f.write(f"- **Tokens Used:** {total_tokens:,} total ({prompt_tokens:,} prompt + {completion_tokens:,} completion)\n")
+                                f.write(f"prompt_tokens: {prompt_tokens}\n")
+                                f.write(f"completion_tokens: {completion_tokens}\n")
+                                f.write(f"total_tokens: {total_tokens}\n")
                                 
                                 tokens_per_second = metadata.get('tokens_per_second', 0)
-                                f.write(f"- **Speed:** {tokens_per_second:.1f} tokens/second\n")
-                                f.write("\n")
+                                f.write(f"speed_tokens_per_second: {tokens_per_second:.1f}\n")
                                 
-                                # Content analysis
-                                f.write("**Content Analysis:**\n")
+                                # Content analysis metadata
                                 input_length = metadata.get('input_length', 0)
                                 summary_length = len(result.data) if result.data else 0
-                                f.write(f"- **Input Length:** {input_length:,} characters\n")
-                                f.write(f"- **Summary Length:** {summary_length:,} characters\n")
+                                f.write(f"input_length: {input_length}\n")
+                                f.write(f"summary_length: {summary_length}\n")
                                 
                                 compression_ratio = metadata.get('compression_ratio', 0)
                                 reduction_percent = (1 - compression_ratio) * 100 if compression_ratio > 0 else 0
-                                f.write(f"- **Compression:** {reduction_percent:.1f}% reduction\n")
-                                f.write("\n")
+                                f.write(f"compression_reduction_percent: {reduction_percent:.1f}\n")
                                 
                                 # Add chunking info if available
                                 if metadata.get('chunks_processed'):
-                                    f.write("**Processing Details:**\n")
-                                    f.write(f"- **Chunks Processed:** {metadata.get('chunks_processed')}\n")
-                                    f.write(f"- **Chunking Strategy:** {metadata.get('chunking_summary', 'N/A')}\n")
-                                    f.write("\n")
+                                    f.write(f"chunks_processed: {metadata.get('chunks_processed')}\n")
+                                    if metadata.get('chunking_summary'):
+                                        f.write(f"chunking_strategy: \"{metadata.get('chunking_summary')}\"\n")
                                 
-                                f.write(f"**Generated:** {datetime.now().isoformat()}\n\n")
+                                f.write(f"generated: \"{datetime.now().isoformat()}\"\n")
                                 f.write("---\n\n")
+                                
+                                # Add thumbnail if found
+                                if thumbnail_content:
+                                    f.write(thumbnail_content + "\n\n")
+                                
+                                # Write the actual summary content
+                                # Clean filename for title by removing hyphens and file extension
+                                clean_filename = file_path_obj.stem.replace("-", " ")
+                                f.write(f"# Summary of {clean_filename}\n\n")
                                 f.write(result.data)
                             
                             self.progress_updated.emit(SummarizationProgress(
@@ -167,37 +343,167 @@ class EnhancedSummarizationWorker(QThread):
                                 total_files=len(self.files),
                                 completed_files=i + 1,
                                 current_step=f"✅ Summary saved: {output_file.name}",
-                                percent=((i + 1) / len(self.files)) * 100.0,
+                                percent=100.0,  # Individual file complete
+                                total_characters=total_characters,
+                                characters_completed=characters_completed,
                                 provider=self.gui_settings.get('provider', 'openai'),
                                 model_name=self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')
                             ))
                             
                     except Exception as save_error:
                         self.processing_error.emit(f"Failed to save summary for {file_path_obj.name}: {save_error}")
+                        failure_count += 1
                         continue
+                    
+                    success_count += 1
                 else:
-                    # Handle processing failure
+                    # Handle processing failure - still update character counter for batch ETA accuracy
+                    characters_completed += current_file_size
+                    
                     error_msg = '; '.join(result.errors) if result.errors else 'Unknown error'
                     self.progress_updated.emit(SummarizationProgress(
                         current_file=file_path,
                         total_files=len(self.files),
                         completed_files=i + 1,
                         current_step=f"❌ Failed: {error_msg}",
-                        percent=((i + 1) / len(self.files)) * 100.0,
+                        percent=100.0,  # Individual file complete (even if failed)
+                        total_characters=total_characters,
+                        characters_completed=characters_completed,
                         provider=self.gui_settings.get('provider', 'openai'),
                         model_name=self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')
                     ))
+                    failure_count += 1
                 
                 self.file_completed.emit(i + 1, len(self.files))
                 
-            self.processing_finished.emit()
+            self.processing_finished.emit(success_count, failure_count, total_count)
             
         except Exception as e:
-            self.processing_error.emit(str(e))
+            # Import CancellationError to handle cancellation properly
+            from ...utils.cancellation import CancellationError
+            
+            if isinstance(e, CancellationError):
+                logger.info(f"Summarization cancelled: {e}")
+                # Don't emit this as an error - it's a normal cancellation
+                self.processing_finished.emit(success_count, failure_count, len(self.files))
+            else:
+                logger.error(f"Summarization error: {e}")
+                self.processing_error.emit(str(e))
     
     def stop(self):
         """Stop the summarization process."""
+        logger.info("EnhancedSummarizationWorker.stop() called")
         self.should_stop = True
+        if hasattr(self, 'cancellation_token') and self.cancellation_token:
+            self.cancellation_token.cancel("User requested cancellation")
+
+    def _extract_thumbnail_from_file(self, file_path: Path) -> str:
+        """
+        Extract thumbnail content from the original markdown file.
+        
+        Looks for thumbnail images in various formats:
+        - ![thumbnail](path/to/image)
+        - ![](path/to/thumbnail.jpg)
+        - References to Thumbnails/ directories
+        
+        Args:
+            file_path: Path to the original markdown file
+            
+        Returns:
+            Thumbnail markdown content if found, empty string otherwise
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Look for thumbnail patterns in the first 2000 characters (usually at top of file)
+            search_content = content[:2000]
+            
+            # Pattern 1: ![thumbnail](path) or ![](path/thumbnail.ext)
+            import re
+            thumbnail_patterns = [
+                r'!\[thumbnail[^\]]*\]\([^)]+\)',  # ![thumbnail](path)
+                r'!\[[^\]]*\]\([^)]*[Tt]humbnail[^)]*\)',  # ![anything](path/thumbnail/path)
+                r'!\[[^\]]*\]\([^)]*[Tt]humbnails?/[^)]+\)',  # ![](Thumbnails/file.jpg)
+                r'!\[[^\]]*\]\([^)]*\.(?:jpg|jpeg|png|gif|webp)[^)]*\)',  # Any image file
+            ]
+            
+            for pattern in thumbnail_patterns:
+                matches = re.findall(pattern, search_content, re.IGNORECASE)
+                if matches:
+                    # Return the first thumbnail found
+                    return matches[0]
+            
+            # Pattern 2: Look for references to Thumbnails directory
+            thumbnails_match = re.search(r'(Thumbnails?/[^\s\]]+\.(?:jpg|jpeg|png|gif|webp))', search_content, re.IGNORECASE)
+            if thumbnails_match:
+                thumbnail_path = thumbnails_match.group(1)
+                return f"![thumbnail]({thumbnail_path})"
+            
+            return ""
+            
+        except Exception as e:
+            logger.debug(f"Could not extract thumbnail from {file_path}: {e}")
+            return ""
+
+    def _copy_thumbnail_file_and_update_reference(self, source_file: Path, output_file: Path, original_thumbnail_content: str) -> tuple[bool, str]:
+        """
+        Copy thumbnail image file from source directory to output Thumbnails subdirectory and update reference.
+        
+        Args:
+            source_file: Path to the source markdown file
+            output_file: Path to the output summary file
+            original_thumbnail_content: Original thumbnail markdown content
+            
+        Returns:
+            Tuple of (success_flag, updated_thumbnail_content)
+        """
+        try:
+            import shutil
+            import re
+            
+            # Read source file to find thumbnail references
+            with open(source_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Look for thumbnail paths in the first 2000 characters
+            search_content = content[:2000]
+            
+            # Extract thumbnail file paths from markdown
+            thumbnail_path_patterns = [
+                r'!\[[^\]]*\]\(([^)]*[Tt]humbnails?/[^)]+\.(?:jpg|jpeg|png|gif|webp))[^)]*\)',  # ![](Thumbnails/file.jpg)
+                r'!\[[^\]]*\]\(([^)]*\.(?:jpg|jpeg|png|gif|webp))[^)]*\)',  # ![](any_image.jpg)
+            ]
+            
+            for pattern in thumbnail_path_patterns:
+                matches = re.findall(pattern, search_content, re.IGNORECASE)
+                for thumbnail_path in matches:
+                    # Resolve thumbnail path relative to source file
+                    source_thumbnail = source_file.parent / thumbnail_path
+                    
+                    if source_thumbnail.exists():
+                        # Create Thumbnails subdirectory in output location
+                        output_thumbnails_dir = output_file.parent / "Thumbnails"
+                        output_thumbnails_dir.mkdir(exist_ok=True)
+                        
+                        # Copy thumbnail to output Thumbnails directory
+                        thumbnail_filename = source_thumbnail.name
+                        output_thumbnail = output_thumbnails_dir / thumbnail_filename
+                        
+                        shutil.copy2(source_thumbnail, output_thumbnail)
+                        logger.info(f"Copied thumbnail: {source_thumbnail} → {output_thumbnail}")
+                        
+                        # Update thumbnail reference to point to Thumbnails subdirectory
+                        updated_content = f"![thumbnail](Thumbnails/{thumbnail_filename})"
+                        return True, updated_content
+                    else:
+                        logger.debug(f"Thumbnail file not found: {source_thumbnail}")
+            
+            return False, original_thumbnail_content
+            
+        except Exception as e:
+            logger.debug(f"Could not copy thumbnail from {source_file}: {e}")
+            return False, original_thumbnail_content
 
 
 class SummarizationTab(BaseTab):
@@ -216,6 +522,12 @@ class SummarizationTab(BaseTab):
         # Input section
         input_group = QGroupBox("Input Documents")
         input_layout = QVBoxLayout()
+
+        # Add supported file types info
+        supported_types_label = QLabel("📁 Supported formats: PDF (.pdf), Text (.txt), Markdown (.md), HTML (.html, .htm), JSON (.json)")
+        supported_types_label.setStyleSheet("color: #666; font-style: italic; margin-bottom: 8px;")
+        supported_types_label.setWordWrap(True)
+        input_layout.addWidget(supported_types_label)
 
         # File list
         self.file_list = QListWidget()
@@ -240,6 +552,8 @@ class SummarizationTab(BaseTab):
         input_layout.addLayout(button_layout)
 
         input_group.setLayout(input_layout)
+        # Input section should also maintain its size and not shrink
+        input_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(input_group)
 
         # Settings section
@@ -312,49 +626,60 @@ class SummarizationTab(BaseTab):
         settings_layout.addWidget(self.update_md_checkbox, 2, 0, 1, 2)
 
         self.progress_checkbox = QCheckBox("Show progress tracking")
+        self.progress_checkbox.toggled.connect(self._on_setting_changed)
         settings_layout.addWidget(self.progress_checkbox, 2, 2, 1, 2)
 
         self.resume_checkbox = QCheckBox("Resume from checkpoint")
         self.resume_checkbox.setToolTip(
             "If a previous summarization was interrupted, resume from where it left off using the checkpoint file"
         )
+        self.resume_checkbox.toggled.connect(self._on_setting_changed)
         settings_layout.addWidget(self.resume_checkbox, 3, 0, 1, 2)
+
+        self.force_regenerate_checkbox = QCheckBox("Force regenerate all")
+        self.force_regenerate_checkbox.setToolTip(
+            "If checked, will regenerate all summaries even if they are up-to-date. Otherwise, only modified files will be summarized."
+        )
+        self.force_regenerate_checkbox.toggled.connect(self._on_setting_changed)
+        settings_layout.addWidget(self.force_regenerate_checkbox, 3, 2, 1, 2)
 
         # Output folder (only shown when not updating in-place)
         self.output_label = QLabel("Output:")
         settings_layout.addWidget(self.output_label, 4, 0)
         self.output_edit = QLineEdit()
-        self.output_edit.setMinimumWidth(250)
+        self.output_edit.setPlaceholderText("Click Browse to select output directory (required)")
         self.output_edit.textChanged.connect(self._on_setting_changed)
-        settings_layout.addWidget(self.output_edit, 4, 1, 1, 3)  # Span 3 columns for consistency
-        self.output_btn = QPushButton("Browse")
-        self.output_btn.setFixedWidth(80)
-        self.output_btn.clicked.connect(self._select_output)
-        settings_layout.addWidget(self.output_btn, 4, 4)
+        settings_layout.addWidget(self.output_edit, 4, 1, 1, 3)
+        browse_output_btn = QPushButton("Browse")
+        browse_output_btn.setFixedWidth(80)
+        browse_output_btn.clicked.connect(self._select_output)
+        # Store reference so other methods can show/hide it
+        self.output_btn = browse_output_btn
+        settings_layout.addWidget(browse_output_btn, 4, 4)
 
         # Initially hide output selector if update in-place is checked
         self._toggle_output_options(self.update_md_checkbox.isChecked())
 
         settings_group.setLayout(settings_layout)
+        # Settings should never shrink - use a fixed size policy
+        settings_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(settings_group)
 
         # Action buttons
         action_layout = self._create_action_layout()
         layout.addLayout(action_layout)
 
-        # Output section
+        # Output section - this should expand and contract with window resizing
         output_layout = self._create_output_section()
-        layout.addLayout(output_layout)
+        layout.addLayout(output_layout, 1)  # Stretch factor of 1 to consume remaining space
 
-        layout.addStretch()
-        
-        # Load saved settings after UI is set up
-        self._load_settings()
+        # Remove addStretch() to allow output section to properly expand
         
     def _connect_signals(self):
         """Connect internal signals."""
-        # Connect any additional signals specific to summarization
-        pass
+        # Load settings after UI is fully set up and signals are connected
+        # Use a timer to ensure this happens after the widget is fully initialized
+        QTimer.singleShot(0, self._load_settings)
         
     def _get_start_button_text(self) -> str:
         """Get the text for the start button."""
@@ -366,18 +691,39 @@ class SummarizationTab(BaseTab):
             return
             
         files = self._get_file_list()
+        logger.info(f"🎯 DEBUG: _start_processing got {len(files) if files else 0} files from _get_file_list()")
+        if files:
+            for i, f in enumerate(files):
+                logger.info(f"🎯 DEBUG: File {i}: '{f}' ({len(f)} chars)")
+        
         if not files:
             self.show_warning("No Files", "Please add files to summarize.")
             return
             
+        # Check if model is available for local provider
+        provider = self.provider_combo.currentText()
+        model = self.model_combo.currentText()
+        
+        logger.info(f"🔧 DEBUG: Starting summarization with provider='{provider}', model='{model}'")
+        self.append_log(f"🔧 Using provider: {provider}, model: {model}")
+        
+        if provider == "local":
+            logger.info(f"🔧 DEBUG: Local provider detected, checking model availability for '{model}'")
+            self.append_log(f"🔧 Checking local model availability: {model}")
+            if not self._check_model_availability(model):
+                logger.info(f"🔧 DEBUG: Model availability check failed for '{model}'")
+                return  # Model check will handle dialog and potential download
+            logger.info(f"🔧 DEBUG: Model availability check passed for '{model}'")
+            
         # Prepare settings
         gui_settings = {
-            'provider': self.provider_combo.currentText(),
-            'model': self.model_combo.currentText(),
+            'provider': provider,
+            'model': model,
             'max_tokens': self.max_tokens_spin.value(),
             'template_path': self.template_path_edit.text(),
             'output_dir': self.output_edit.text() if not self.update_md_checkbox.isChecked() else None,
-            'update_in_place': self.update_md_checkbox.isChecked()
+            'update_in_place': self.update_md_checkbox.isChecked(),
+            'force_regenerate': self.force_regenerate_checkbox.isChecked()
         }
         
         # Start worker
@@ -390,7 +736,31 @@ class SummarizationTab(BaseTab):
         self.active_workers.append(self.summarization_worker)
         self.set_processing_state(True)
         self.clear_log()
-        self.append_log("Starting summarization process...")
+        
+        # Show informative startup message with file count and details
+        file_list = self._get_file_list()
+        file_count = len(file_list)
+        if file_count == 1:
+            file_info = f"file: {Path(file_list[0]).name}"
+        elif file_count <= 3:
+            file_names = [Path(f).name for f in file_list]
+            file_info = f"files: {', '.join(file_names)}"
+        else:
+            file_info = f"{file_count} files"
+            
+        provider = self.provider_combo.currentText()
+        model = self.model_combo.currentText()
+        
+        self.append_log(f"🚀 Starting Enhanced Summarization ({provider} {model})")
+        self.append_log(f"📁 Processing {file_info}")
+        if file_count > 1:
+            self.append_log(f"⏱️  Estimated processing time: {file_count * 2}-{file_count * 5} minutes")
+        self.append_log("=" * 50)
+        
+        # Initialize batch timing when processing actually starts (not when first progress arrives)
+        import time
+        self._batch_start_time = time.time()
+        self._file_start_time = time.time()  # Initialize for first file
         
         self.summarization_worker.start()
         
@@ -402,15 +772,105 @@ class SummarizationTab(BaseTab):
         if not self.update_md_checkbox.isChecked() and not self.output_edit.text():
             self.show_warning("No Output Directory", "Please select an output directory or enable in-place updates.")
             return False
+        
+        # If output directory is specified, validate it exists
+        if not self.update_md_checkbox.isChecked():
+            output_dir = self.output_edit.text().strip()
+            if output_dir:
+                if not Path(output_dir).exists():
+                    self.show_warning("Invalid Output Directory", f"Output directory does not exist: {output_dir}")
+                    return False
+                if not Path(output_dir).is_dir():
+                    self.show_warning("Invalid Output Directory", f"Output directory is not a directory: {output_dir}")
+                    return False
             
         return True
+        
+    def _check_model_availability(self, model: str) -> bool:
+        """Check if the model is available locally and offer to download if not."""
+        try:
+            ollama_manager = get_ollama_manager()
+            
+            # First check if Ollama service is running
+            if not ollama_manager.is_service_running():
+                # Show dialog offering to start Ollama
+                dialog = OllamaServiceDialog(self)
+                
+                # Disable the start button while dialog is shown
+                if hasattr(self, 'start_btn'):
+                    self.start_btn.setEnabled(False)
+                    self.start_btn.setText("⏳ Starting Ollama Service...")
+                
+                # Connect dialog completion to re-enable button
+                def on_service_dialog_finished():
+                    if hasattr(self, 'start_btn'):
+                        self.start_btn.setEnabled(True)
+                        self.start_btn.setText(self._get_start_button_text())
+                
+                dialog.finished.connect(on_service_dialog_finished)
+                result = dialog.exec()
+                
+                if result == QDialog.DialogCode.Accepted:
+                    # Check again if service is now running
+                    if ollama_manager.is_service_running():
+                        return True  # Continue with model checking
+                    else:
+                        return False  # Service still not running
+                else:
+                    return False  # User cancelled
+            
+            # Check if model is available
+            if ollama_manager.is_model_available(model):
+                return True
+            
+            # Model not available - show download dialog
+            dialog = ModelDownloadDialog(model, self)
+            
+            # Disable the start button while dialog is shown
+            if hasattr(self, 'start_btn'):
+                self.start_btn.setEnabled(False)
+                self.start_btn.setText("⏳ Model Download Required")
+            
+            # Connect to download progress to update button text
+            def on_download_progress(progress):
+                if hasattr(self, 'start_btn') and hasattr(progress, 'percent'):
+                    if progress.percent > 0:
+                        self.start_btn.setText(f"⏳ Downloading Model ({progress.percent:.0f}%)")
+            
+            # Connect dialog completion to re-enable button
+            def on_dialog_finished():
+                if hasattr(self, 'start_btn'):
+                    self.start_btn.setEnabled(True)
+                    self.start_btn.setText(self._get_start_button_text())
+            
+            # Connect signals
+            dialog.download_progress.connect(on_download_progress)
+            dialog.download_completed.connect(lambda success: on_dialog_finished())
+            dialog.finished.connect(on_dialog_finished)
+            
+            result = dialog.exec()
+            
+            if result == QDialog.DialogCode.Accepted:
+                # Check again if model is now available
+                return ollama_manager.is_model_available(model)
+            else:
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error checking model availability: {e}")
+            self.show_warning(
+                "Model Check Failed", 
+                f"Could not check model availability: {str(e)}\n\n"
+                f"Please ensure Ollama is properly installed and running."
+            )
+            return False
         
     def _add_files(self):
         """Add files to the summarization list."""
         files, _ = QFileDialog.getOpenFileNames(
             self, "Select Files to Summarize",
             str(Path.home()),
-            "All Supported (*.txt *.md *.pdf *.docx);;Text Files (*.txt);;Markdown Files (*.md);;PDF Files (*.pdf);;Word Documents (*.docx)"
+            "All Supported (*.txt *.md *.pdf *.html *.htm *.json);;Text Files (*.txt);;Markdown Files (*.md);;PDF Files (*.pdf);;HTML Files (*.html *.htm);;JSON Files (*.json);;All Files (*)"
         )
         
         for file_path in files:
@@ -421,7 +881,7 @@ class SummarizationTab(BaseTab):
         folder_path = QFileDialog.getExistingDirectory(self, "Select Folder")
         if folder_path:
             folder = Path(folder_path)
-            extensions = ['.txt', '.md', '.pdf', '.docx']
+            extensions = ['.txt', '.md', '.pdf', '.html', '.htm', '.json']
             
             for file_path in folder.rglob('*'):
                 if file_path.suffix.lower() in extensions:
@@ -433,11 +893,21 @@ class SummarizationTab(BaseTab):
         
     def _get_file_list(self) -> List[str]:
         """Get the list of files to process."""
+        logger.info(f"🎯 DEBUG: _get_file_list() called - file_list has {self.file_list.count()} items")
         files = []
         for i in range(self.file_list.count()):
             item = self.file_list.item(i)
             if item:
-                files.append(item.text())
+                file_path = item.text()
+                logger.info(f"🎯 DEBUG: File list item {i}: '{file_path}' ({len(file_path)} chars)")
+                
+                # Debug: Check if this looks like a file path
+                if len(file_path) < 200 and not file_path.startswith('/') and not file_path.startswith('\\'):
+                    logger.warning(f"🎯 WARNING: Suspicious file path: '{file_path}' - too short or doesn't look like a path")
+                
+                files.append(file_path)
+        
+        logger.info(f"🎯 DEBUG: Total files collected: {len(files)}")
         return files
         
     def _update_models(self):
@@ -515,39 +985,214 @@ class SummarizationTab(BaseTab):
         self.output_btn.setVisible(not in_place)
         
     def _on_progress_updated(self, progress):
-        """Handle progress updates with detailed status information."""
-        if hasattr(progress, 'current_step') and progress.current_step:
-            # Show the detailed progress step
-            self.append_log(progress.current_step)
+        """Handle progress updates with clean, informative status."""
+        import time
+        
+        # Initialize timing tracking (batch time already set when worker starts)
+        if not hasattr(self, '_last_progress_update'):
+            self._last_progress_update = 0
+        
+        current_time = time.time()
+        
+        # Calculate unified ETA based on current file progress
+        file_eta = ""
+        batch_eta = ""
+        
+        # Get file information for consistent ETA calculation
+        total_files = getattr(progress, 'total_files', 1)
+        completed_files = getattr(progress, 'completed_files', 0)
+        
+        if hasattr(progress, 'percent') and progress.percent and progress.percent > 1:
+            # File ETA: linear extrapolation from current file progress
+            file_elapsed = current_time - self._file_start_time
             
-        if hasattr(progress, 'percent'):
-            # Update any progress bars or percentage displays
-            if hasattr(self, 'progress_bar'):
-                self.progress_bar.setValue(int(progress.percent))
+            # Only calculate if we have meaningful data (>1% progress and >3 seconds elapsed)
+            if file_elapsed > 3 and progress.percent > 0:
+                file_total_estimated = (file_elapsed / progress.percent) * 100
+                file_remaining = max(0, file_total_estimated - file_elapsed)
+                
+                # Format file ETA
+                if file_remaining < 60:
+                    file_eta = f" (ETA: {file_remaining:.0f}s)"
+                elif file_remaining < 3600:
+                    file_eta = f" (ETA: {file_remaining/60:.1f}m)"
+                else:
+                    file_eta = f" (ETA: {file_remaining/3600:.1f}h)"
+                
+                # Batch ETA: for single file, same as file ETA; for multiple files, extrapolate
+                if total_files == 1:
+                    # Single file: batch ETA = file ETA
+                    batch_eta = f" | Batch{file_eta.replace(' (', ' ')}"
+                else:
+                    # Multiple files: estimate time for remaining files
+                    batch_elapsed = current_time - self._batch_start_time
+                    if completed_files > 0:
+                        # Estimate based on completed files
+                        avg_time_per_file = batch_elapsed / (completed_files + (progress.percent / 100.0))
+                        remaining_files = total_files - completed_files - (progress.percent / 100.0)
+                        batch_remaining = max(0, remaining_files * avg_time_per_file)
+                    else:
+                        # First file: estimate based on current file progress
+                        estimated_total_time_per_file = file_total_estimated
+                        remaining_files = total_files - (progress.percent / 100.0)
+                        batch_remaining = max(0, remaining_files * estimated_total_time_per_file)
+                    
+                    # Format batch ETA
+                    if batch_remaining < 60:
+                        batch_eta = f" | Batch ETA: {batch_remaining:.0f}s"
+                    elif batch_remaining < 3600:
+                        batch_eta = f" | Batch ETA: {batch_remaining/60:.1f}m"
+                    else:
+                        batch_eta = f" | Batch ETA: {batch_remaining/3600:.1f}h"
+        
+        # Only show key progress updates to reduce noise
+        should_update = False
+        
+        if hasattr(progress, 'status'):
+            # Show important status changes
+            if progress.status in ['starting', 'loading_file', 'chunking', 'generating', 'generating_llm', 'reassembling', 'completed', 'failed']:
+                should_update = True
+            
+            # Always show heartbeat updates during long LLM processing
+            elif progress.status == 'generating_llm':
+                should_update = True
+            
+            # Show chunk progress but throttle updates
+            elif progress.status in ['processing_chunks', 'chunk_completed']:
+                if hasattr(progress, 'percent'):
+                    # Only update every 10% or if significant time has passed
+                    if (progress.percent - self._last_progress_update >= 10) or (current_time - getattr(self, '_last_update_time', 0) > 30):
+                        should_update = True
+                        self._last_progress_update = progress.percent
+                        self._last_update_time = current_time
+        
+        # Format enhanced character-based progress message
+        if should_update and hasattr(progress, 'current_step'):
+            # Use detailed current_step if available, otherwise fall back to status
+            base_message = progress.current_step or getattr(progress, 'status', 'Processing...')
+            
+            # Build enhanced progress information
+            progress_parts = []
+            
+            # Add file progress percentage
+            if hasattr(progress, 'percent') and progress.percent is not None:
+                progress_parts.append(f"({progress.percent:.0f}%)")
+            
+            # Add character-based info for context (but don't show inflated progress during generation)
+            if (hasattr(progress, 'total_characters') and progress.total_characters and
+                hasattr(progress, 'characters_completed') and progress.characters_completed is not None):
+                
+                chars_completed_k = progress.characters_completed / 1000
+                total_chars_k = progress.total_characters / 1000
+                
+                # Only show character progress if we've actually completed some files
+                if progress.characters_completed > 0:
+                    char_progress = (progress.characters_completed / progress.total_characters) * 100.0
+                    progress_parts.append(f"Batch: {char_progress:.0f}% ({chars_completed_k:.1f}k/{total_chars_k:.1f}k chars)")
+                else:
+                    # Show total characters being processed
+                    progress_parts.append(f"Processing: {total_chars_k:.1f}k chars")
+            
+            # Add file information if available
+            if (hasattr(progress, 'current_file') and progress.current_file and
+                hasattr(progress, 'total_files') and progress.total_files and
+                hasattr(progress, 'completed_files') and progress.completed_files is not None):
+                file_info = f"File {progress.completed_files + 1}/{progress.total_files}"
+                progress_parts.append(file_info)
+            
+            # Add chunk info for chunked processing
+            if hasattr(progress, 'chunk_number') and hasattr(progress, 'total_chunks') and progress.total_chunks:
+                progress_parts.append(f"Chunk {progress.chunk_number}/{progress.total_chunks}")
+            
+            # Build the final message
+            if progress_parts:
+                progress_info = " | ".join(progress_parts)
+                full_message = f"{base_message} | {progress_info}{file_eta}{batch_eta}"
+            else:
+                full_message = f"{base_message}{file_eta}{batch_eta}"
+            
+            self.append_log(full_message)
+        
+        # Reset file timing for new files
+        if hasattr(progress, 'status') and progress.status == 'starting':
+            self._file_start_time = current_time
         
     def _on_file_completed(self, current: int, total: int):
         """Handle file completion with detailed progress."""
-        percent = (current / total) * 100 if total > 0 else 0
-        self.append_log(f"Progress: {current}/{total} files completed ({percent:.1f}%)")
+        import time
         
-    def _on_processing_finished(self):
+        # Calculate file processing time
+        if hasattr(self, '_file_start_time'):
+            file_time = time.time() - self._file_start_time
+            if file_time < 60:
+                time_text = f" (completed in {file_time:.0f}s)"
+            else:
+                time_text = f" (completed in {file_time/60:.1f}m)"
+        else:
+            time_text = ""
+        
+        # Calculate overall progress
+        percent = (current / total) * 100 if total > 0 else 0
+        
+        # Calculate batch ETA for remaining files
+        batch_eta = ""
+        if hasattr(self, '_batch_start_time') and current > 0:
+            batch_elapsed = time.time() - self._batch_start_time
+            avg_time_per_file = batch_elapsed / current
+            remaining_files = total - current
+            remaining_time = avg_time_per_file * remaining_files
+            
+            if remaining_files > 0 and remaining_time > 0:
+                if remaining_time < 60:
+                    batch_eta = f" | {remaining_time:.0f}s remaining for batch"
+                elif remaining_time < 3600:
+                    batch_eta = f" | {remaining_time/60:.1f}m remaining for batch"
+                else:
+                    batch_eta = f" | {remaining_time/3600:.1f}h remaining for batch"
+        
+        progress_msg = f"Progress: {current}/{total} files completed ({percent:.0f}%){time_text}{batch_eta}"
+        self.append_log(progress_msg)
+        
+        # Reset file timer for next file
+        if current < total:
+            self._file_start_time = time.time()
+        
+    def _on_processing_finished(self, success_count: int, failure_count: int, total_count: int):
         """Handle processing completion with success summary."""
+        import time
+        
         self.set_processing_state(False)
+        
+        # Calculate total batch time
+        total_time_text = ""
+        if hasattr(self, '_batch_start_time'):
+            total_time = time.time() - self._batch_start_time
+            if total_time < 60:
+                total_time_text = f" in {total_time:.0f}s"
+            elif total_time < 3600:
+                total_time_text = f" in {total_time/60:.1f}m"
+            else:
+                total_time_text = f" in {total_time/3600:.1f}h"
+        
         self.append_log("\n" + "="*50)
-        self.append_log("🎉 SUMMARIZATION COMPLETED SUCCESSFULLY!")
+        self.append_log("🎉 BATCH PROCESSING COMPLETED!")
         self.append_log("="*50)
+        
+        # Show results summary
+        if failure_count == 0:
+            self.append_log(f"✅ All {success_count} files processed successfully{total_time_text}")
+        else:
+            self.append_log(f"📊 Results: {success_count} succeeded, {failure_count} failed{total_time_text}")
         
         # Show output location information
         if self.update_md_checkbox.isChecked():
-            self.append_log("📝 Summary sections have been updated in-place for .md files")
+            self.append_log("📝 Summary sections updated in-place for .md files")
         else:
             output_dir = self.output_edit.text()
             if output_dir:
                 self.append_log(f"📁 Summary files saved to: {output_dir}")
             else:
                 self.append_log("📁 Summary files saved next to original files")
-        
-        self.append_log("✅ All files processed successfully!")
         
         # Enable report button if available
         if hasattr(self, 'report_btn'):
@@ -559,61 +1204,97 @@ class SummarizationTab(BaseTab):
         self.append_log(f"Error: {error}")
         self.show_error("Processing Error", error)
         
+    def _stop_processing(self):
+        """Stop the summarization process."""
+        if self.summarization_worker and self.summarization_worker.isRunning():
+            self.summarization_worker.stop()  # Use the worker's stop method which handles cancellation token
+            self.append_log("⏹ Stopping summarization process...")
+        super()._stop_processing()
+    
     def cleanup_workers(self):
         """Clean up worker threads."""
         if self.summarization_worker and self.summarization_worker.isRunning():
-            self.summarization_worker.stop()
+            self.summarization_worker.stop()  # Use the worker's stop method which handles cancellation token
             self.summarization_worker.wait(3000)
         super().cleanup_workers()
     
     def _load_settings(self):
         """Load saved settings from session."""
+        logger.info(f"🔧 Loading settings for {self.tab_name} tab...")
         try:
-            # Load output directory - use configured summaries path as default
-            default_output_dir = str(self.settings.paths.summaries)
-            saved_output_dir = self.gui_settings.get_output_directory(
-                self.tab_name, 
-                default_output_dir
-            )
-            self.output_edit.setText(saved_output_dir)
+            # Block signals during loading to prevent redundant saves
+            widgets_to_block = [
+                self.output_edit, self.provider_combo, self.model_combo,
+                self.max_tokens_spin, self.template_path_edit,
+                self.update_md_checkbox, self.force_regenerate_checkbox,
+                self.progress_checkbox, self.resume_checkbox
+            ]
             
-            # Load provider selection
-            saved_provider = self.gui_settings.get_combo_selection(self.tab_name, "provider", "local")
-            index = self.provider_combo.findText(saved_provider)
-            if index >= 0:
-                self.provider_combo.setCurrentIndex(index)
-                self._update_models()  # Update models after setting provider
+            # Block all signals
+            for widget in widgets_to_block:
+                widget.blockSignals(True)
             
-            # Load model selection
-            saved_model = self.gui_settings.get_combo_selection(self.tab_name, "model", "qwen2.5-coder:7b-instruct")
-            index = self.model_combo.findText(saved_model)
-            if index >= 0:
-                self.model_combo.setCurrentIndex(index)
-            
-            # Load max tokens
-            saved_max_tokens = self.gui_settings.get_spinbox_value(self.tab_name, "max_tokens", 10000)
-            self.max_tokens_spin.setValue(saved_max_tokens)
-            
+            try:
+                # Load output directory - use configured summaries path as default
+                default_output_dir = str(self.settings.paths.summaries)
+                saved_output_dir = self.gui_settings.get_output_directory(
+                    self.tab_name, 
+                    default_output_dir
+                )
+                self.output_edit.setText(saved_output_dir)
+                
+                # Load provider selection
+                saved_provider = self.gui_settings.get_combo_selection(self.tab_name, "provider", "local")
+                index = self.provider_combo.findText(saved_provider)
+                if index >= 0:
+                    self.provider_combo.setCurrentIndex(index)
+                    self._update_models()  # Update models after setting provider
+                
+                # Load model selection
+                saved_model = self.gui_settings.get_combo_selection(self.tab_name, "model", "qwen2.5-coder:7b-instruct")
+                index = self.model_combo.findText(saved_model)
+                if index >= 0:
+                    self.model_combo.setCurrentIndex(index)
+                
+                # Load max tokens
+                saved_max_tokens = self.gui_settings.get_spinbox_value(self.tab_name, "max_tokens", 10000)
+                self.max_tokens_spin.setValue(saved_max_tokens)
+                
 
+                
+                # Load template path
+                saved_template = self.gui_settings.get_line_edit_text(self.tab_name, "template_path", "")
+                self.template_path_edit.setText(saved_template)
+                
+                # Load checkbox states
+                self.update_md_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(self.tab_name, "update_in_place", False)
+                )
+                self.force_regenerate_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(self.tab_name, "force_regenerate", False)
+                )
+                self.progress_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(self.tab_name, "show_progress", True)
+                )
+                self.resume_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(self.tab_name, "resume_checkpoint", False)
+                )
+                
+                # Update output visibility based on checkbox state
+                self._toggle_output_options(self.update_md_checkbox.isChecked())
+                
+            finally:
+                # Always restore signals, even if an exception occurred
+                for widget in widgets_to_block:
+                    widget.blockSignals(False)
             
-            # Load template path
-            saved_template = self.gui_settings.get_line_edit_text(self.tab_name, "template_path", "")
-            self.template_path_edit.setText(saved_template)
-            
-            # Load checkbox states
-            self.update_md_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(self.tab_name, "update_in_place", False)
-            )
-            
-            # Update output visibility based on checkbox state
-            self._toggle_output_options(self.update_md_checkbox.isChecked())
-            
-            logger.debug(f"Loaded settings for {self.tab_name} tab")
+            logger.info(f"✅ Successfully loaded settings for {self.tab_name} tab")
         except Exception as e:
             logger.error(f"Failed to load settings for {self.tab_name} tab: {e}")
     
     def _save_settings(self):
         """Save current settings to session."""
+        logger.debug(f"💾 Saving settings for {self.tab_name} tab...")
         try:
             # Save output directory
             self.gui_settings.set_output_directory(self.tab_name, self.output_edit.text())
@@ -630,11 +1311,15 @@ class SummarizationTab(BaseTab):
             
             # Save checkbox states
             self.gui_settings.set_checkbox_state(self.tab_name, "update_in_place", self.update_md_checkbox.isChecked())
+            self.gui_settings.set_checkbox_state(self.tab_name, "force_regenerate", self.force_regenerate_checkbox.isChecked())
+            self.gui_settings.set_checkbox_state(self.tab_name, "show_progress", self.progress_checkbox.isChecked())
+            self.gui_settings.set_checkbox_state(self.tab_name, "resume_checkpoint", self.resume_checkbox.isChecked())
             
-            logger.debug(f"Saved settings for {self.tab_name} tab")
+            logger.info(f"✅ Successfully saved settings for {self.tab_name} tab")
         except Exception as e:
             logger.error(f"Failed to save settings for {self.tab_name} tab: {e}")
     
     def _on_setting_changed(self):
         """Called when any setting changes to automatically save."""
+        logger.debug(f"🔄 Setting changed in {self.tab_name} tab, triggering save...")
         self._save_settings() 

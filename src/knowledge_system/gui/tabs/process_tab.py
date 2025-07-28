@@ -348,7 +348,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         # Output directory
         layout.addWidget(QLabel("Output Directory:"), 6, 0)
         self.output_directory = QLineEdit()
-        self.output_directory.setPlaceholderText("Leave empty for default output locations")
+        self.output_directory.setPlaceholderText("Click Browse to select output directory (required)")
         self.output_directory.textChanged.connect(self._on_setting_changed)
         layout.addWidget(self.output_directory, 6, 1, 1, 2)
         
@@ -594,13 +594,27 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         if not self.validate_file_selection("process_files", 1):
             return
             
+        # Check that output directory is selected
+        output_dir = self.output_directory.text().strip()
+        if not output_dir:
+            self.show_warning("No Output Directory", "Please select an output directory before starting processing.")
+            return
+            
+        if not Path(output_dir).exists():
+            self.show_warning("Invalid Output Directory", f"Output directory does not exist: {output_dir}")
+            return
+            
+        if not Path(output_dir).is_dir():
+            self.show_warning("Invalid Output Directory", f"Output directory is not a directory: {output_dir}")
+            return
+            
         # Get configuration from checkboxes and inherited settings
         inherited_config = self._get_inherited_config()
         config = {
             'transcribe': self.transcribe_checkbox.isChecked(),
             'summarize': self.summarize_checkbox.isChecked(),
             'moc': self.moc_checkbox.isChecked(),
-            'output_directory': self.output_directory.text().strip() or None
+            'output_directory': output_dir  # Use validated output directory
         }
         # Merge inherited configuration
         config.update(inherited_config)
@@ -703,26 +717,42 @@ class ProcessTab(BaseTab, FileOperationsMixin):
     def _load_settings(self):
         """Load saved settings from session."""
         try:
-            # Load output directory
-            saved_output_dir = self.gui_settings.get_output_directory(
-                self.tab_name, 
-                ""
-            )
-            self.output_directory.setText(saved_output_dir)
+            # Block signals during loading to prevent redundant saves
+            widgets_to_block = [
+                self.output_directory, self.transcribe_checkbox, 
+                self.summarize_checkbox, self.moc_checkbox, self.dry_run_checkbox
+            ]
             
-            # Load checkbox states
-            self.transcribe_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(self.tab_name, "transcribe", True)
-            )
-            self.summarize_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(self.tab_name, "summarize", True)
-            )
-            self.moc_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(self.tab_name, "moc", True)
-            )
-            self.dry_run_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(self.tab_name, "dry_run", False)
-            )
+            # Block all signals
+            for widget in widgets_to_block:
+                widget.blockSignals(True)
+            
+            try:
+                # Load output directory
+                saved_output_dir = self.gui_settings.get_output_directory(
+                    self.tab_name, 
+                    ""
+                )
+                self.output_directory.setText(saved_output_dir)
+                
+                # Load checkbox states
+                self.transcribe_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(self.tab_name, "transcribe", True)
+                )
+                self.summarize_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(self.tab_name, "summarize", True)
+                )
+                self.moc_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(self.tab_name, "moc", True)
+                )
+                self.dry_run_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(self.tab_name, "dry_run", False)
+                )
+                
+            finally:
+                # Always restore signals
+                for widget in widgets_to_block:
+                    widget.blockSignals(False)
             
             logger.debug(f"Loaded settings for {self.tab_name} tab")
         except Exception as e:
