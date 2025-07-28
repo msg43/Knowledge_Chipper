@@ -329,45 +329,20 @@ and available for future use.</i></p>
             event.accept()
 
 
-class ModelDownloadWorker(QThread):
-    """Worker thread for downloading models."""
-    
-    progress_updated = pyqtSignal(object)  # DownloadProgress
-    download_finished = pyqtSignal()
-    download_error = pyqtSignal(str)
-    
-    def __init__(self, model_name: str):
-        super().__init__()
-        self.model_name = model_name
-        
-    def run(self):
-        """Run the download process."""
-        try:
-            manager = get_ollama_manager()
-            
-            def progress_callback(progress: DownloadProgress):
-                self.progress_updated.emit(progress)
-            
-            success = manager.download_model(self.model_name, progress_callback)
-            
-            if success:
-                self.download_finished.emit()
-            else:
-                self.download_error.emit("Download failed")
-                
-        except Exception as e:
-            logger.error(f"Download worker error: {e}")
-            self.download_error.emit(str(e))
-
-
 class OllamaServiceDialog(QDialog):
-    """Dialog for starting Ollama service."""
+    """Dialog for starting Ollama service with progress tracking."""
+    
+    service_started = pyqtSignal(bool, str)  # success, message
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Start Ollama Service")
         self.setModal(True)
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(450)
+        self.setMinimumHeight(200)
+        
+        self.ollama_manager = get_ollama_manager()
+        self.start_worker = None
         
         self._setup_ui()
         
@@ -384,20 +359,94 @@ class OllamaServiceDialog(QDialog):
         layout.addWidget(header_label)
         
         # Message
-        message = QLabel(
+        self.message_label = QLabel(
             "Ollama service is not running. The service is required to use local AI models.\n\n"
             "Would you like to start the Ollama service now?"
         )
-        message.setWordWrap(True)
-        layout.addWidget(message)
+        self.message_label.setWordWrap(True)
+        layout.addWidget(self.message_label)
+        
+        # Progress section (initially hidden)
+        self.progress_label = QLabel("Starting Ollama service...")
+        self.progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.progress_label.hide()
+        layout.addWidget(self.progress_label)
+        
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0)  # Indeterminate progress
+        self.progress_bar.hide()
+        layout.addWidget(self.progress_bar)
         
         # Buttons
-        buttons = QDialogButtonBox(
+        self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Yes | QDialogButtonBox.StandardButton.No
         )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        self.buttons.accepted.connect(self._start_ollama)
+        self.buttons.rejected.connect(self.reject)
+        layout.addWidget(self.buttons)
+        
+    def _start_ollama(self):
+        """Start the Ollama service in a separate thread."""
+        # Update UI to show progress
+        self.message_label.setText("Starting Ollama service, please wait...")
+        self.progress_label.show()
+        self.progress_bar.show()
+        
+        # Disable buttons during startup
+        self.buttons.button(QDialogButtonBox.StandardButton.Yes).setEnabled(False)
+        self.buttons.button(QDialogButtonBox.StandardButton.No).setText("Cancel")
+        
+        # Start the service
+        self.start_worker = OllamaStartWorker(self.ollama_manager, self)
+        self.start_worker.service_started.connect(self._on_service_started)
+        self.start_worker.start()
+        
+    def _on_service_started(self, success: bool, message: str):
+        """Handle service start completion."""
+        self.progress_bar.hide()
+        
+        if success:
+            self.progress_label.setText("✅ Ollama service started successfully!")
+            self.message_label.setText(message)
+            
+            # Change buttons
+            self.buttons.clear()
+            self.buttons.addButton("Continue", QDialogButtonBox.ButtonRole.AcceptRole)
+            self.buttons.accepted.connect(self.accept)
+            
+            # Emit success signal
+            self.service_started.emit(True, message)
+            
+            # Auto-close after 2 seconds
+            QTimer.singleShot(2000, self.accept)
+        else:
+            self.progress_label.setText("❌ Failed to start Ollama service")
+            self.message_label.setText(f"Error: {message}\n\nYou may need to start Ollama manually.")
+            
+            # Re-enable buttons
+            self.buttons.button(QDialogButtonBox.StandardButton.Yes).setEnabled(True)
+            self.buttons.button(QDialogButtonBox.StandardButton.No).setText("Cancel")
+            
+            # Emit failure signal
+            self.service_started.emit(False, message)
+
+
+class OllamaStartWorker(QThread):
+    """Worker thread for starting Ollama service."""
+    
+    service_started = pyqtSignal(bool, str)  # success, message
+    
+    def __init__(self, ollama_manager, parent=None):
+        super().__init__(parent)
+        self.ollama_manager = ollama_manager
+        
+    def run(self):
+        """Start the Ollama service."""
+        try:
+            success, message = self.ollama_manager.start_service()
+            self.service_started.emit(success, message)
+        except Exception as e:
+            self.service_started.emit(False, f"Unexpected error: {str(e)}")
 
 
 # ============================================================================
@@ -669,10 +718,10 @@ class SummarizationProgressDialog(ProcessingProgressDialog):
         
         # Update details
         details = []
-        if progress.tokens_processed and progress.total_tokens:
-            details.append(f"Tokens: {progress.tokens_processed:,}/{progress.total_tokens:,}")
-        if progress.tokens_generated and progress.max_tokens:
-            details.append(f"Generated: {progress.tokens_generated}/{progress.max_tokens}")
+        if progress.tokens_processed:
+            details.append(f"Tokens processed: {progress.tokens_processed:,}")
+        if progress.tokens_generated:
+            details.append(f"Generated: {progress.tokens_generated:,}")
         if progress.model_name:
             details.append(f"Model: {progress.model_name}")
         if progress.provider:
@@ -765,3 +814,192 @@ class MOCProgressDialog(ProcessingProgressDialog):
             minutes = progress.eta_seconds // 60
             seconds = progress.eta_seconds % 60
             self.eta_label.setText(f"ETA: {minutes}m {seconds}s") 
+
+
+class ModelDownloadWorker(QThread):
+    """Worker thread for downloading models."""
+    
+    progress_updated = pyqtSignal(object)  # DownloadProgress
+    download_finished = pyqtSignal(bool, str)  # success, message
+    
+    def __init__(self, model_name: str, parent=None):
+        super().__init__(parent)
+        self.model_name = model_name
+        self.ollama_manager = get_ollama_manager()
+        
+    def run(self):
+        """Download the model."""
+        try:
+            success = self.ollama_manager.download_model(
+                self.model_name, 
+                progress_callback=self.progress_updated.emit
+            )
+            if success:
+                self.download_finished.emit(True, f"Model '{self.model_name}' downloaded successfully!")
+            else:
+                self.download_finished.emit(False, f"Failed to download model '{self.model_name}'")
+        except Exception as e:
+            self.download_finished.emit(False, f"Error downloading model: {str(e)}")
+
+
+class ModelDownloadDialog(QDialog):
+    """Dialog for downloading missing models with progress tracking."""
+    
+    download_completed = pyqtSignal(bool)  # success
+    download_progress = pyqtSignal(object)  # DownloadProgress - expose progress externally
+    
+    def __init__(self, model_name: str, parent=None):
+        super().__init__(parent)
+        self.model_name = model_name
+        self.download_worker = None
+        self.setWindowTitle("Download Model")
+        self.setModal(True)
+        self.setMinimumWidth(500)
+        self.setMinimumHeight(250)
+        
+        self._setup_ui()
+        
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # Header
+        header_label = QLabel("🤖 Model Not Found")
+        header_font = QFont()
+        header_font.setPointSize(16)
+        header_font.setBold(True)
+        header_label.setFont(header_font)
+        header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(header_label)
+        
+        # Description
+        desc_label = QLabel(
+            f"The model '{self.model_name}' is not available locally.\n\n"
+            f"Would you like to download it now? This may take several minutes depending on the model size.\n\n"
+            f"Note: Summarization will be disabled until the download completes."
+        )
+        desc_label.setWordWrap(True)
+        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(desc_label)
+        
+        # Progress section (initially hidden)
+        self.progress_widget = QVBoxLayout()
+        
+        self.status_label = QLabel("Preparing download...")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.progress_widget.addWidget(self.status_label)
+        
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_widget.addWidget(self.progress_bar)
+        
+        self.details_label = QLabel("")
+        self.details_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.details_label.setStyleSheet("color: #666; font-size: 10px;")
+        self.progress_widget.addWidget(self.details_label)
+        
+        # Add progress widgets to layout but hide them initially
+        progress_container = QVBoxLayout()
+        for i in range(self.progress_widget.count()):
+            widget = self.progress_widget.itemAt(i).widget()
+            if widget:
+                widget.hide()
+                progress_container.addWidget(widget)
+        layout.addLayout(progress_container)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        self.download_btn = QPushButton("📥 Yes, Download Model")
+        self.download_btn.clicked.connect(self._start_download)
+        self.download_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; padding: 8px;")
+        
+        self.cancel_btn = QPushButton("❌ No, Cancel")
+        self.cancel_btn.clicked.connect(self.reject)
+        self.cancel_btn.setStyleSheet("background-color: #f44336; color: white; font-weight: bold; padding: 8px;")
+        
+        button_layout.addWidget(self.download_btn)
+        button_layout.addWidget(self.cancel_btn)
+        layout.addLayout(button_layout)
+        
+    def _start_download(self):
+        """Start the model download."""
+        # Hide description and show progress
+        self.download_btn.hide()
+        self.cancel_btn.setText("Cancel Download")
+        self.cancel_btn.clicked.disconnect()
+        self.cancel_btn.clicked.connect(self._cancel_download)
+        
+        # Show progress widgets
+        for i in range(self.progress_widget.count()):
+            widget = self.progress_widget.itemAt(i).widget()
+            if widget:
+                widget.show()
+        
+        # Start download worker
+        self.download_worker = ModelDownloadWorker(self.model_name, self)
+        self.download_worker.progress_updated.connect(self._update_progress)
+        self.download_worker.progress_updated.connect(self.download_progress.emit)  # Emit externally
+        self.download_worker.download_finished.connect(self._on_download_finished)
+        self.download_worker.start()
+        
+    def _update_progress(self, progress: DownloadProgress):
+        """Update the progress display."""
+        self.status_label.setText(progress.status or "Downloading...")
+        
+        if progress.percent > 0:
+            self.progress_bar.setValue(int(progress.percent))
+        
+        # Build details string
+        details = []
+        if progress.completed > 0 and progress.total > 0:
+            completed_mb = progress.completed / (1024 * 1024)
+            total_mb = progress.total / (1024 * 1024)
+            details.append(f"{completed_mb:.1f} MB / {total_mb:.1f} MB")
+        
+        if progress.speed_mbps > 0:
+            details.append(f"{progress.speed_mbps:.1f} MB/s")
+            
+        if progress.eta_seconds:
+            minutes = progress.eta_seconds // 60
+            seconds = progress.eta_seconds % 60
+            details.append(f"ETA: {minutes}m {seconds}s")
+        
+        self.details_label.setText(" | ".join(details))
+        
+    def _cancel_download(self):
+        """Cancel the download."""
+        if self.download_worker and self.download_worker.isRunning():
+            self.download_worker.terminate()
+            self.download_worker.wait()
+        self.reject()
+        
+    def _on_download_finished(self, success: bool, message: str):
+        """Handle download completion."""
+        if success:
+            self.status_label.setText("✅ Download completed!")
+            self.progress_bar.setValue(100)
+            self.details_label.setText(message)
+            
+            # Change cancel button to close
+            self.cancel_btn.setText("Close")
+            self.cancel_btn.clicked.disconnect()
+            self.cancel_btn.clicked.connect(self.accept)
+            
+            # Emit success signal
+            self.download_completed.emit(True)
+            
+            # Auto-close after 2 seconds
+            QTimer.singleShot(2000, self.accept)
+        else:
+            self.status_label.setText("❌ Download failed!")
+            self.details_label.setText(message)
+            self.progress_bar.setStyleSheet("QProgressBar::chunk { background-color: #f44336; }")
+            
+            # Change cancel button to close
+            self.cancel_btn.setText("Close")
+            self.cancel_btn.clicked.disconnect()
+            self.cancel_btn.clicked.connect(self.reject)
+            
+            # Emit failure signal
+            self.download_completed.emit(False) 

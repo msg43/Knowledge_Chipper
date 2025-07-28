@@ -12,11 +12,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
-
-try:
-    from youtube_transcript_api._api import YouTubeTranscriptApi
-except ImportError:
-    YouTubeTranscriptApi = None
+import os # Added for os.access
 
 from pydantic import BaseModel, Field
 
@@ -28,6 +24,19 @@ from .base import BaseProcessor, ProcessorResult
 from ..utils.text_utils import strip_bracketed_content
 
 logger = get_logger(__name__)
+
+try:
+    from youtube_transcript_api import YouTubeTranscriptApi
+    from youtube_transcript_api.proxies import WebshareProxyConfig
+    logger.debug("Successfully imported YouTubeTranscriptApi and WebshareProxyConfig")
+except ImportError as e:
+    logger.error(f"Failed to import youtube_transcript_api: {e}")
+    YouTubeTranscriptApi = None
+    WebshareProxyConfig = None
+except Exception as e:
+    logger.error(f"Unexpected error importing YouTubeTranscriptApi: {e}")
+    YouTubeTranscriptApi = None
+    WebshareProxyConfig = None
 
 
 class YouTubeTranscript(BaseModel):
@@ -225,7 +234,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         self.prefer_manual = prefer_manual
         self.fallback_to_auto = fallback_to_auto
 
-        if YouTubeTranscriptApi is None:
+        if YouTubeTranscriptApi is None or WebshareProxyConfig is None:
             raise ImportError(
                 "youtube-transcript-api is required for transcript extraction. "
                 "Install it with: pip install youtube-transcript-api"
@@ -303,11 +312,12 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             # Configure YouTube Transcript API with WebShare proxy
             logger.info("Using Webshare rotating proxy for transcript extraction")
             
-            # Set up proxy configuration for youtube-transcript-api
-            proxies = {
-                'http': f"http://{username}:{password}@p.webshare.io:80/",
-                'https': f"http://{username}:{password}@p.webshare.io:80/"
-            }
+            # Set up WebShare proxy configuration
+            proxy_config = WebshareProxyConfig(
+                proxy_username=username,
+                proxy_password=password,
+                retries_when_blocked=3
+            )
             
             # Fetch real metadata using the YouTube metadata processor
             real_metadata = None
@@ -358,7 +368,17 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                             time.sleep(delay)
                     
                     # Get list of available transcripts with proxy
-                    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id, proxies=proxies)
+                    logger.debug(f"Attempting to get transcripts for video_id: {video_id}")
+                    logger.debug(f"YouTubeTranscriptApi type: {type(YouTubeTranscriptApi)}")
+                    logger.debug(f"YouTubeTranscriptApi is None: {YouTubeTranscriptApi is None}")
+                    
+                    # Double-check the API is available
+                    if YouTubeTranscriptApi is None:
+                        raise ImportError("YouTubeTranscriptApi is not available")
+                    
+                    logger.debug("Creating YouTubeTranscriptApi instance with WebShare proxy...")
+                    api = YouTubeTranscriptApi(proxy_config=proxy_config)
+                    transcript_list = api.list(video_id)
                     
                     # Check for cancellation after transcript list fetch
                     if cancellation_token and cancellation_token.is_cancelled():
@@ -521,7 +541,8 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                         break
                     elif "402 Payment Required" in error_msg:
                         logger.error(f"💰 WebShare account requires payment for video {video_id}. Please add funds to your WebShare account at https://panel.webshare.io/")
-                        break
+                        # Return None for payment error instead of creating invalid transcript
+                        return None
                     elif "Tunnel connection failed" in error_msg:
                         logger.error(f"Proxy connection failed for video {video_id}. WebShare proxy may be unavailable.")
                         break
@@ -552,6 +573,122 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             
         return None
 
+    def _build_video_id_index(self, output_dir: Path) -> set:
+        """Build index of existing video IDs from YAML frontmatter in output directory."""
+        video_ids = set()
+        files_scanned = 0
+        files_failed = 0
+        
+        logger.info(f"🔍 Building video ID index from {output_dir}")
+        
+        # Get all potential transcript files
+        file_patterns = ['*.md', '*.txt', '*.srt', '*.vtt']
+        all_files = []
+        for pattern in file_patterns:
+            all_files.extend(output_dir.glob(pattern))
+        
+        total_files = len(all_files)
+        if total_files == 0:
+            logger.info("No existing transcript files found in output directory")
+            return video_ids
+        
+        logger.info(f"Scanning {total_files} files for video IDs...")
+        
+        for file_path in all_files:
+            try:
+                # For .srt and .vtt files, check filename for video ID
+                if file_path.suffix in ['.srt', '.vtt']:
+                    # Extract video ID from filename if present
+                    filename = file_path.stem
+                    # Check if filename contains a YouTube video ID pattern (11 chars)
+                    import re
+                    video_id_pattern = r'[a-zA-Z0-9_-]{11}'
+                    matches = re.findall(video_id_pattern, filename)
+                    for match in matches:
+                        # Verify it looks like a video ID (has mix of letters/numbers)
+                        if any(c.isalpha() for c in match) and any(c.isdigit() or c in '_-' for c in match):
+                            video_ids.add(match)
+                            files_scanned += 1
+                            break
+                else:
+                    # For .md and .txt files, check YAML frontmatter
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        # Read only the first 30 lines (frontmatter area)
+                        found_frontmatter = False
+                        in_frontmatter = False
+                        line_count = 0
+                        
+                        for line in f:
+                            line_count += 1
+                            if line_count > 30:  # Stop after frontmatter area
+                                break
+                            
+                            # Check for frontmatter delimiters
+                            if line.strip() == '---':
+                                if not found_frontmatter:
+                                    found_frontmatter = True
+                                    in_frontmatter = True
+                                    continue
+                                else:
+                                    # End of frontmatter
+                                    break
+                            
+                            # Look for video_id in frontmatter
+                            if in_frontmatter and line.startswith('video_id:'):
+                                # Extract video ID, handling both quoted and unquoted values
+                                parts = line.split(':', 1)
+                                if len(parts) == 2:
+                                    video_id = parts[1].strip().strip('"\'')
+                                    if video_id and len(video_id) > 0:
+                                        video_ids.add(video_id)
+                                        files_scanned += 1
+                                        break
+                        
+            except UnicodeDecodeError:
+                logger.debug(f"Skipping {file_path.name} - encoding error")
+                files_failed += 1
+            except PermissionError:
+                logger.debug(f"Skipping {file_path.name} - permission denied")
+                files_failed += 1
+            except OSError as e:
+                logger.debug(f"Skipping {file_path.name} - OS error: {e}")
+                files_failed += 1
+            except Exception as e:
+                logger.debug(f"Skipping {file_path.name} - unexpected error: {type(e).__name__}: {e}")
+                files_failed += 1
+        
+        # Report results
+        logger.info(f"✅ Index built: Found {len(video_ids)} unique video IDs in {files_scanned} files")
+        if files_failed > 0:
+            logger.warning(f"⚠️  Skipped {files_failed} files due to errors")
+        
+        return video_ids
+
+    def _save_index_to_file(self, index_file: Path, video_ids: set) -> None:
+        """Save video ID index to JSON file."""
+        try:
+            with open(index_file, 'w', encoding='utf-8') as f:
+                json.dump(sorted(list(video_ids)), f, indent=2)
+            logger.debug(f"Saved index with {len(video_ids)} video IDs to {index_file}")
+        except Exception as e:
+            logger.error(f"Failed to save index file: {e}")
+
+    def _update_index_file(self, index_file: Path, video_id: str) -> None:
+        """Append a new video ID to the index file."""
+        try:
+            # Read existing index
+            video_ids = set()
+            if index_file.exists():
+                with open(index_file, 'r', encoding='utf-8') as f:
+                    video_ids = set(json.load(f))
+            
+            # Add new ID and save
+            video_ids.add(video_id)
+            self._save_index_to_file(index_file, video_ids)
+            
+        except Exception as e:
+            logger.error(f"Failed to update index file: {e}")
+
     def process(
         self,
         input_data: Any,
@@ -575,6 +712,10 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     metadata={"processor": self.name, "cancelled": True}
                 )
                 
+            # Extract overwrite parameter from config
+            overwrite_existing = kwargs.get('overwrite', False)
+            logger.info(f"Overwrite existing files: {overwrite_existing}")
+                
             output_format = output_format or "md"
             urls = extract_urls(input_data)
 
@@ -583,9 +724,12 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     success=False, errors=["No valid YouTube URLs found in input"]
                 )
             
-            # Expand any playlist URLs into individual video URLs
-            from ..utils.youtube_utils import expand_playlist_urls
-            urls = expand_playlist_urls(urls)
+            # Expand any playlist URLs into individual video URLs with metadata
+            from ..utils.youtube_utils import expand_playlist_urls_with_metadata
+            expansion_result = expand_playlist_urls_with_metadata(urls)
+            urls = expansion_result['expanded_urls']
+            playlist_info = expansion_result['playlist_info']
+            
             if not urls:
                 return ProcessorResult(
                     success=False, errors=["No valid video URLs found after playlist expansion"]
@@ -602,26 +746,249 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     errors=[f"WebShare configuration issue: {'; '.join(config_issues)}"]
                 )
 
+            # CRITICAL DEBUG: Check what output_dir we received BEFORE converting to Path
+            logger.info(f"🔍 Original output_dir parameter: {repr(output_dir)} (type: {type(output_dir)})")
+            
             output_dir = Path(output_dir).expanduser() if output_dir else Path.cwd()
             output_dir.mkdir(parents=True, exist_ok=True)
             
             logger.info(f"YouTube transcript extraction starting. Output directory: {output_dir}")
             logger.info(f"Output directory exists: {output_dir.exists()}")
             logger.info(f"Output directory is writable: {output_dir.is_dir() and output_dir.stat().st_mode}")
+            logger.info(f"Absolute output path: {output_dir.absolute()}")
+            
+            # Verify if we're using the intended directory
+            cwd = Path.cwd().absolute()
+            if output_dir.absolute() == cwd:
+                logger.warning(f"⚠️ Output directory is current working directory: {cwd}")
+                logger.warning("⚠️ This might indicate the GUI didn't pass the intended output directory")
+            else:
+                logger.info(f"✅ Using specified output directory: {output_dir.absolute()}")
 
             transcripts = []
             errors = []
+            saved_files = []
+            skipped_files = []  # Track files that were skipped due to overwrite=False
+            
+            # Build video ID index if overwrite is disabled
+            existing_video_ids = set()
+            index_file = None
+            skipped_via_index = 0
+            
+            if not overwrite_existing:
+                # Create session-specific index file
+                from datetime import datetime
+                index_filename = f".youtube_index_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                index_file = output_dir / index_filename
+                
+                # Build index from existing files
+                logger.info("🔎 Overwrite disabled - building index of existing videos...")
+                existing_video_ids = self._build_video_id_index(output_dir)
+                
+                if existing_video_ids:
+                    # Save initial index
+                    self._save_index_to_file(index_file, existing_video_ids)
+                    logger.info(f"📊 Index created with {len(existing_video_ids)} existing videos")
+                    logger.info(f"💾 Session index saved to: {index_file.name}")
+            
+            # Create Thumbnails subdirectory upfront
+            thumbnails_dir = output_dir / "Thumbnails"
+            thumbnails_dir.mkdir(exist_ok=True)
+            logger.info(f"Created thumbnails directory: {thumbnails_dir}")
 
-            for url in urls:
+            for i, url in enumerate(urls, 1):
                 try:
                     # Check for cancellation before each URL
                     if cancellation_token and cancellation_token.is_cancelled():
                         logger.info("Processing cancelled by user")
                         break
-                        
+                    
+                    # OPTIMIZATION: Check video ID index before fetching
+                    video_id = self._extract_video_id(url)
+                    if video_id and not overwrite_existing and video_id in existing_video_ids:
+                        logger.info(f"⏭️ Skipping URL {i}/{len(urls)}: Video {video_id} already in index")
+                        skipped_files.append(f"{video_id} (via index)")
+                        skipped_via_index += 1
+                        continue
+                    
+                    # Determine playlist context for progress display
+                    playlist_context = ""
+                    for playlist in playlist_info:
+                        if playlist['start_index'] <= (i - 1) <= playlist['end_index']:
+                            playlist_position = (i - 1) - playlist['start_index'] + 1
+                            playlist_context = f" [Playlist: {playlist['title'][:40]}{'...' if len(playlist['title']) > 40 else ''} - Video {playlist_position}/{playlist['total_videos']}]"
+                            break
+                    
+                    logger.info(f"Processing URL {i}/{len(urls)}: {url}{playlist_context}")
                     transcript = self._fetch_video_transcript(url, cancellation_token)
                     if transcript:
                         transcripts.append(transcript)
+                        
+                        # IMMEDIATE FILE WRITING: Write file right after extraction instead of batching
+                        try:
+                            logger.info(f"Immediately saving transcript for {transcript.video_id}")
+                            
+                            # Create sanitized filename from title with improved error handling
+                            safe_title = re.sub(r"[^\w\s-]", "", transcript.title).strip()
+                            safe_title = re.sub(r"[-\s]+", "-", safe_title)
+                            
+                            # Additional filename safety checks for macOS
+                            if safe_title:
+                                # Remove leading/trailing hyphens
+                                safe_title = safe_title.strip("-")
+                                # Limit length to avoid filesystem issues
+                                if len(safe_title) > 100:
+                                    safe_title = safe_title[:100].rstrip("-")
+                            
+                            logger.debug(f"Sanitized title: '{safe_title}' (length: {len(safe_title) if safe_title else 0})")
+                            
+                            # Determine filename with robust fallback logic
+                            if (safe_title and len(safe_title) > 0 and 
+                                not safe_title.startswith("YouTube-Video") and 
+                                not transcript.title.startswith("YouTube Video ")):
+                                filename = f"{safe_title}.{output_format}"
+                                thumbnail_filename = f"{safe_title}-Thumbnail.jpg"
+                                logger.debug(f"Using title-based filename: '{filename}'")
+                            else:
+                                # Fallback to video ID - ensure it's valid
+                                video_id = transcript.video_id or "unknown_video"
+                                # Sanitize video ID as well (though it should be safe)
+                                video_id = re.sub(r"[^\w-]", "", video_id)
+                                filename = f"{video_id}_transcript.{output_format}"
+                                thumbnail_filename = f"{video_id}-Thumbnail.jpg"
+                                logger.debug(f"Using video_id-based filename: '{filename}' (video_id: '{video_id}')")
+
+                            # Validate filename isn't empty or invalid
+                            if not filename or filename.startswith('.') or len(filename.split('.')[0]) == 0:
+                                logger.error(f"Generated invalid filename '{filename}' for video {transcript.video_id}")
+                                fallback_filename = f"youtube_video_{transcript.video_id or 'unknown'}.{output_format}"
+                                logger.info(f"Using fallback filename: '{fallback_filename}'")
+                                filename = fallback_filename
+
+                            filepath = output_dir / filename
+                            thumbnail_path = thumbnails_dir / thumbnail_filename
+                            
+                            # OVERWRITE CHECKING: Skip existing files if overwrite=False
+                            if filepath.exists() and not overwrite_existing:
+                                logger.info(f"⏭️ Skipping existing transcript: {filepath} (overwrite disabled)")
+                                skipped_files.append(str(filepath))
+                                continue
+                            
+                            logger.info(f"Creating transcript file: {filepath}")
+                            logger.debug(f"Output directory exists: {output_dir.exists()}")
+                            logger.debug(f"Output directory is writable: {os.access(output_dir, os.W_OK) if output_dir.exists() else 'Unknown'}")
+                            logger.debug(f"File path parent exists: {filepath.parent.exists()}")
+
+                            # Write transcript in requested format
+                            vault_path_obj = Path(vault_path) if vault_path else None
+                            interjections_file_obj = Path(interjections_file) if interjections_file else None
+                            
+                            try:
+                                if output_format == "md":
+                                    content = transcript.to_markdown(
+                                        include_timestamps=include_timestamps,
+                                        include_analysis=include_analysis,
+                                        vault_path=vault_path_obj,
+                                        output_dir=output_dir,
+                                        strip_interjections=strip_interjections,
+                                        interjections_file=interjections_file_obj
+                                    )
+                                elif output_format == "srt":
+                                    content = transcript.to_srt(
+                                        strip_interjections=strip_interjections,
+                                        interjections_file=interjections_file_obj
+                                    )
+                                else:
+                                    content = transcript.transcript_text
+
+                                # Validate content isn't empty
+                                if not content or len(content.strip()) == 0:
+                                    logger.error(f"Generated empty content for video {transcript.video_id} (title: '{transcript.title}')")
+                                    errors.append(f"Empty transcript content for {transcript.video_id}")
+                                    continue
+                                    
+                                logger.debug(f"Generated content length: {len(content)} characters")
+                                
+                            except Exception as content_error:
+                                logger.error(f"Failed to generate content for {transcript.video_id}: {content_error}")
+                                errors.append(f"Content generation failed for {transcript.video_id}: {content_error}")
+                                continue
+
+                            # Write file with detailed error handling
+                            try:
+                                logger.debug(f"Attempting to write {len(content)} characters to: {filepath}")
+                                with open(filepath, "w", encoding="utf-8") as f:
+                                    f.write(content)
+                                logger.info(f"✅ Successfully wrote {len(content)} characters to {filepath}")
+                                
+                                # Verify file was written correctly
+                                if filepath.exists():
+                                    file_size = filepath.stat().st_size
+                                    logger.info(f"✅ File verification successful: {filepath} ({file_size} bytes)")
+                                    saved_files.append(str(filepath))
+                                    
+                                    # Update index with successfully saved video
+                                    if not overwrite_existing and index_file and transcript.video_id:
+                                        existing_video_ids.add(transcript.video_id)
+                                        self._update_index_file(index_file, transcript.video_id)
+                                        logger.debug(f"📝 Added {transcript.video_id} to session index")
+                                else:
+                                    logger.error(f"❌ File was not created despite no write errors: {filepath}")
+                                    errors.append(f"File not created: {filepath}")
+                                    
+                            except PermissionError as e:
+                                logger.error(f"❌ Permission denied writing to {filepath}: {e}")
+                                errors.append(f"Permission denied: {filepath} - {e}")
+                                continue
+                            except OSError as e:
+                                logger.error(f"❌ OS error writing to {filepath}: {e}")
+                                errors.append(f"OS error writing {filepath}: {e}")
+                                continue
+                            except Exception as write_error:
+                                logger.error(f"❌ Unexpected error writing {filepath}: {write_error}")
+                                errors.append(f"Write error for {filepath}: {write_error}")
+                                continue
+                            
+                            # Download thumbnail immediately
+                            try:
+                                # Check if thumbnail already exists before downloading
+                                expected_thumbnail_path = thumbnails_dir / thumbnail_filename
+                                if expected_thumbnail_path.exists() and not overwrite_existing:
+                                    logger.info(f"⏭️ Skipping existing thumbnail: {expected_thumbnail_path} (overwrite disabled)")
+                                else:
+                                    logger.info(f"Downloading thumbnail for {transcript.video_id}")
+                                    from ..utils.youtube_utils import download_thumbnail
+                                    
+                                    # Pass thumbnails_dir directly since download_thumbnail now saves to exact directory provided
+                                    thumbnail_result = download_thumbnail(transcript.url, thumbnails_dir, use_cookies=False)
+                                    if thumbnail_result:
+                                        downloaded_path = Path(thumbnail_result)
+                                        
+                                        # Check if we need to rename to match expected filename pattern
+                                        if downloaded_path.exists():
+                                            # The download function saves as {video_id}_thumbnail.jpg
+                                            # But our markdown expects {safe_title}-Thumbnail.jpg
+                                            expected_path = thumbnails_dir / thumbnail_filename
+                                            
+                                            if downloaded_path != expected_path:
+                                                # Move/rename to expected location for consistent naming
+                                                try:
+                                                    downloaded_path.rename(expected_path)
+                                                    logger.info(f"Thumbnail renamed to match title: {expected_path}")
+                                                except Exception as rename_error:
+                                                    logger.warning(f"Failed to rename thumbnail from {downloaded_path} to {expected_path}: {rename_error}")
+                                                    # Keep the original if rename fails
+                                                    logger.info(f"Thumbnail kept at: {downloaded_path}")
+                                            else:
+                                                logger.info(f"Thumbnail saved as: {downloaded_path}")
+                                    else:
+                                        logger.warning(f"Failed to download thumbnail for {transcript.video_id}")
+                            except Exception as e:
+                                logger.warning(f"Thumbnail download failed for {transcript.video_id}: {e}")
+                                
+                        except Exception as file_error:
+                            logger.error(f"Failed to save transcript for {transcript.video_id}: {file_error}")
+                            errors.append(f"File save failed for {transcript.video_id}: {file_error}")
                     else:
                         logger.warning(f"No transcript returned for {url}")
                         errors.append(f"No transcript available for {url}")
@@ -648,120 +1015,60 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     else:
                         errors.append(f"❌ Error processing {url}: {error_msg}")
 
-            # Save transcripts to files
-            logger.info(f"Saving {len(transcripts)} transcripts to files")
-            if not transcripts:
-                logger.warning("No transcripts available for file writing!")
+            # Return results - BUGFIX: Success should mean files were saved, not just transcripts extracted
+            # If cancellation happens during file writing, that should be reported as partial success/failure
+            transcripts_extracted = len(transcripts) > 0
+            files_actually_saved = len(saved_files) > 0
+            files_skipped = len(skipped_files) > 0
             
-            # Create Thumbnails subdirectory
-            thumbnails_dir = output_dir / "Thumbnails"
-            thumbnails_dir.mkdir(exist_ok=True)
-            logger.info(f"Created thumbnails directory: {thumbnails_dir}")
+            # Determine success based on what the user expects:
+            # - If we extracted transcripts and intended to save files, success = files were actually saved OR skipped (both are valid outcomes)
+            # - If we only extracted transcripts (no output_dir), success = transcripts extracted
+            if transcripts_extracted and len(transcripts) > 0:
+                # We extracted transcripts - success depends on whether we intended to save files
+                if output_dir:
+                    # We intended to save files - success means files were actually saved OR skipped due to overwrite=False
+                    success = files_actually_saved or files_skipped
+                    if transcripts_extracted and not files_actually_saved and not files_skipped:
+                        # Special case: transcripts extracted but no files saved and none skipped (likely due to cancellation or errors)
+                        if cancellation_token and cancellation_token.is_cancelled():
+                            errors = errors or []
+                            errors.append(f"Processing was cancelled after extracting {len(transcripts)} transcript(s) but before saving files")
+                        else:
+                            errors = errors or []
+                            errors.append(f"Extracted {len(transcripts)} transcript(s) but failed to save any files to disk")
+                else:
+                    # No output directory specified - success means transcripts were extracted
+                    success = transcripts_extracted
+            else:
+                # No transcripts extracted - always failure
+                success = False
             
-            saved_files = []
-            for transcript in transcripts:
+            logger.info(f"Transcript processing completed. Success: {success}, Transcripts extracted: {len(transcripts)}, Files saved: {len(saved_files)}, Files skipped: {len(skipped_files)}")
+            
+            # Report index optimization statistics if applicable
+            if not overwrite_existing and skipped_via_index > 0:
+                logger.info(f"🚀 Performance optimization: Skipped {skipped_via_index} videos via index lookup (no API calls needed)")
+                time_saved = skipped_via_index * 3  # Estimate ~3 seconds per video
+                logger.info(f"⏱️  Estimated time saved: ~{time_saved} seconds ({time_saved/60:.1f} minutes)")
+            
+            # Clean up session index file
+            if index_file and index_file.exists():
                 try:
-                    # Check for cancellation before file writing
-                    if cancellation_token and cancellation_token.is_cancelled():
-                        logger.info("File writing cancelled by user")
-                        break
-                        
-                    # Create sanitized filename from title
-                    safe_title = re.sub(r"[^\w\s-]", "", transcript.title).strip()
-                    safe_title = re.sub(r"[-\s]+", "-", safe_title)
-                    
-                    # Use sanitized title for filename, fallback to video ID if empty or placeholder
-                    if (safe_title and len(safe_title) > 0 and 
-                        not safe_title.startswith("YouTube-Video") and 
-                        not transcript.title.startswith("YouTube Video ")):
-                        filename = f"{safe_title}.{output_format}"
-                        thumbnail_filename = f"{safe_title}-Thumbnail.jpg"
-                    else:
-                        filename = f"{transcript.video_id}_transcript.{output_format}"
-                        thumbnail_filename = f"{transcript.video_id}-Thumbnail.jpg"
-
-                    filepath = output_dir / filename
-                    thumbnail_path = thumbnails_dir / thumbnail_filename
-                    
-                    logger.info(f"Creating transcript file: {filepath}")
-                    logger.info(f"File path exists before writing: {filepath.parent.exists()}")
-
-                    # Write transcript in requested format
-                    vault_path_obj = Path(vault_path) if vault_path else None
-                    interjections_file_obj = Path(interjections_file) if interjections_file else None
-                    
-                    if output_format == "md":
-                        content = transcript.to_markdown(
-                            include_timestamps=include_timestamps,
-                            include_analysis=include_analysis,
-                            vault_path=vault_path_obj,
-                            output_dir=output_dir,
-                            strip_interjections=strip_interjections,
-                            interjections_file=interjections_file_obj
-                        )
-                    elif output_format == "srt":
-                        content = transcript.to_srt(
-                            strip_interjections=strip_interjections,
-                            interjections_file=interjections_file_obj
-                        )
-                    else:
-                        content = transcript.transcript_text
-
-                    # Write file with detailed error handling
-                    try:
-                        with open(filepath, "w", encoding="utf-8") as f:
-                            f.write(content)
-                        logger.info(f"Successfully wrote {len(content)} characters to {filepath}")
-                        
-                        # Verify file was written correctly
-                        if filepath.exists():
-                            file_size = filepath.stat().st_size
-                            logger.info(f"File verification successful: {filepath} ({file_size} bytes)")
-                            saved_files.append(str(filepath))
-                        else:
-                            logger.error(f"File was not created: {filepath}")
-                            errors.append(f"Failed to create file: {filepath}")
-                            
-                    except Exception as write_error:
-                        logger.error(f"Failed to write file {filepath}: {write_error}")
-                        errors.append(f"Failed to write file {filepath}: {write_error}")
-                        continue
-                    
-                    # Download thumbnail
-                    try:
-                        logger.info(f"Downloading thumbnail for {transcript.video_id}")
-                        from ..utils.youtube_utils import download_thumbnail
-                        
-                        thumbnail_result = download_thumbnail(transcript.url, thumbnails_dir, use_cookies=False)
-                        if thumbnail_result:
-                            # Rename the downloaded thumbnail to our desired name
-                            downloaded_path = Path(thumbnail_result)
-                            if downloaded_path.exists() and downloaded_path != thumbnail_path:
-                                downloaded_path.rename(thumbnail_path)
-                                logger.info(f"Thumbnail saved as: {thumbnail_path}")
-                            elif downloaded_path == thumbnail_path:
-                                logger.info(f"Thumbnail saved as: {thumbnail_path}")
-                        else:
-                            logger.warning(f"Failed to download thumbnail for {transcript.video_id}")
-                    except Exception as e:
-                        logger.warning(f"Thumbnail download failed for {transcript.video_id}: {e}")
-
+                    index_file.unlink()
+                    logger.debug(f"🗑️  Cleaned up session index file: {index_file.name}")
                 except Exception as e:
-                    error_msg = f"Failed to save transcript for {transcript.video_id}: {str(e)}"
-                    logger.error(error_msg)
-                    errors.append(error_msg)
-
-            # Return results
-            success = len(transcripts) > 0
-            logger.info(f"Transcript processing completed. Success: {success}, Files saved: {len(saved_files)}")
+                    logger.debug(f"Could not delete index file: {e}")
             
             return ProcessorResult(
                 success=success,
                 data={
                     "transcripts": [t.to_dict() for t in transcripts],
                     "saved_files": saved_files,
+                    "skipped_files": skipped_files,
                     "output_format": output_format,
                     "output_directory": str(output_dir),
+                    "skipped_via_index": skipped_via_index if not overwrite_existing else 0,
                 },
                 errors=errors if errors else None,
                 metadata={
@@ -769,6 +1076,9 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     "urls_processed": len(urls),
                     "transcripts_extracted": len(transcripts),
                     "files_saved": len(saved_files),
+                    "files_skipped": len(skipped_files),
+                    "skipped_via_index": skipped_via_index if not overwrite_existing else 0,
+                    "overwrite_enabled": overwrite_existing,
                     "prefer_manual": self.prefer_manual,
                     "fallback_to_auto": self.fallback_to_auto,
                     "cancelled": cancellation_token.is_cancelled if cancellation_token else False,
@@ -777,6 +1087,15 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             
         except CancellationError:
             logger.info("YouTube transcript processing cancelled")
+            
+            # Clean up session index file
+            if 'index_file' in locals() and index_file and index_file.exists():
+                try:
+                    index_file.unlink()
+                    logger.debug(f"🗑️  Cleaned up session index file after cancellation: {index_file.name}")
+                except Exception as e:
+                    logger.debug(f"Could not delete index file: {e}")
+            
             return ProcessorResult(
                 success=False,
                 errors=["Processing cancelled by user"],
@@ -787,6 +1106,15 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             )
         except Exception as e:
             logger.error(f"Unexpected error in YouTube transcript processing: {e}")
+            
+            # Clean up session index file
+            if 'index_file' in locals() and index_file and index_file.exists():
+                try:
+                    index_file.unlink()
+                    logger.debug(f"🗑️  Cleaned up session index file after error: {index_file.name}")
+                except Exception as e_cleanup:
+                    logger.debug(f"Could not delete index file: {e_cleanup}")
+            
             return ProcessorResult(
                 success=False,
                 errors=[f"Unexpected error: {e}"],

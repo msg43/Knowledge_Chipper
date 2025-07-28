@@ -10,6 +10,7 @@ from .youtube_metadata import YouTubeMetadataProcessor
 from .summarizer import SummarizerProcessor
 from .moc import MOCProcessor
 from .pdf import PDFProcessor
+from .html import HTMLProcessor
 from .diarization import SpeakerDiarizationProcessor
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     "SummarizerProcessor",
     "MOCProcessor",
     "PDFProcessor",
+    "HTMLProcessor",
     "SpeakerDiarizationProcessor",
 ]

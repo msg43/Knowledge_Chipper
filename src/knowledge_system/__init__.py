@@ -1,12 +1,12 @@
 """
-Knowledge System - A comprehensive knowledge management system for macOS.
+Knowledge_Chipper - A comprehensive knowledge management system for macOS.
 
-Integrates YouTube data pipelines, Whisper-based transcription, LLM summarization,
-and Maps-of-Content (MOC) generation with belief graphs.
+This package provides AI-powered tools for transcribing, summarizing, and organizing
+videos, audio files, and documents into searchable knowledge.
 """
 
 __version__ = "0.1.0"
-__author__ = "Knowledge System"
+__author__ = "Knowledge_Chipper"
 __email__ = "dev@knowledge-system.local"
 
 # Core imports
@@ -18,6 +18,16 @@ def gui_main():
     """Launch the GUI application from the main package."""
     import sys
     
+    # Smart cache clearing - clear only if needed
+    try:
+        from .utils.cache_management import clear_cache_if_needed
+        was_cleared, message = clear_cache_if_needed()
+        if was_cleared:
+            print(f"🧹 {message}")
+    except Exception as e:
+        # Don't let cache clearing errors prevent startup
+        print(f"⚠️  Cache clearing check failed: {e}")
+    
     try:
         # Import PyQt6 first to check availability
         from PyQt6.QtWidgets import QApplication
@@ -26,8 +36,8 @@ def gui_main():
         app = QApplication(sys.argv)
         
         # Set application properties  
-        app.setApplicationName("Knowledge System")
-        app.setApplicationDisplayName("Knowledge System")
+        app.setApplicationName("Knowledge_Chipper")
+        app.setApplicationDisplayName("Knowledge_Chipper")
         app.setApplicationVersion("1.0")
         
         # Import and create main window (no circular import since we're in the parent package)
@@ -45,7 +55,7 @@ def gui_main():
     except ImportError as e:
         print("\n" + "=" * 60)
         print("ERROR: PyQt6 is not installed!")
-        print("The Knowledge System GUI requires PyQt6.")
+        print("Knowledge_Chipper GUI requires PyQt6.")
         print("Please install it with:")
         print("  pip install PyQt6")
         print("=" * 60 + "\n")

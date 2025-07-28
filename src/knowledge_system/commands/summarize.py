@@ -78,6 +78,11 @@ from .common import CLIContext, pass_context, console, logger
     help="Checkpoint file for resuming operations",
 )
 @click.option("--resume", is_flag=True, help="Resume from checkpoint if available")
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Force re-summarization of all files (ignore modification times)"
+)
 @pass_context
 def summarize(
     ctx: CLIContext,
@@ -96,6 +101,7 @@ def summarize(
     patterns: List[str],
     checkpoint: Optional[Path],
     resume: bool,
+    force: bool,
 ) -> None:
     """
     Summarize transcripts or documents using LLM.
@@ -179,7 +185,8 @@ def summarize(
 
     # Determine output path
     if output is None:
-        output = Path(settings.paths.summaries)
+        console.print("[red]✗ Error: Output directory is required. Use --output to specify where summaries should be saved.[/red]")
+        sys.exit(1)
 
     # Initialize statistics tracking
     start_time = time.time()
@@ -225,6 +232,46 @@ def summarize(
     processor = SummarizerProcessor(
         provider=effective_provider, model=model, max_tokens=max_tokens
     )
+
+    # Build summary index if not forcing re-summarization
+    summary_index = {}
+    index_file = None
+    skipped_via_index = 0
+
+    if not force and output is not None:
+        # Create session-specific index file
+        index_filename = f".summary_index_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        index_file = output / index_filename
+        
+        # Build index from existing summaries
+        if not ctx.quiet:
+            console.print("[yellow]🔎 Checking for existing summaries...[/yellow]")
+        summary_index = processor._build_summary_index(output)
+        
+        if summary_index:
+            processor._save_index_to_file(index_file, summary_index)
+            if not ctx.quiet:
+                console.print(f"[green]📊 Found {len(summary_index)} existing summaries[/green]")
+
+    # Track files that can be skipped
+    files_to_skip = []
+    if not force:
+        for file_path in files_to_process:
+            needs_summary, reason = processor._check_needs_summarization(file_path, summary_index)
+            if not needs_summary:
+                files_to_skip.append((file_path, reason))
+                skipped_via_index += 1
+                session_stats['skipped_files'] += 1
+
+    if files_to_skip and not ctx.quiet:
+        console.print(f"\n[yellow]⏭️  Skipping {len(files_to_skip)} unchanged files:[/yellow]")
+        for skip_file, skip_reason in files_to_skip[:5]:  # Show first 5
+            console.print(f"[dim]  - {skip_file.name}: {skip_reason}[/dim]")
+        if len(files_to_skip) > 5:
+            console.print(f"[dim]  ... and {len(files_to_skip) - 5} more[/dim]")
+        
+        # Update file list
+        files_to_process = [f for f in files_to_process if f not in [skip[0] for skip in files_to_skip]]
 
     try:
         # Process each file
@@ -327,10 +374,12 @@ def summarize(
                             console.print(f"[green]✓ Updated summary in-place[/green]")
                     else:
                         # Create new summary file
+                        # Clean filename by removing hyphens for better readability
+                        clean_filename = file_path.stem.replace("-", "_")
                         if update_md and file_path.suffix.lower() != ".md":
-                            output_file = file_path.parent / f"{file_path.stem}.md"
+                            output_file = file_path.parent / f"{clean_filename}.md"
                         else:
-                            output_file = output / f"{file_path.stem}_summary.md"
+                            output_file = output / f"{clean_filename}_summary.md"
                         
                         output_file.parent.mkdir(parents=True, exist_ok=True)
                         output_path = output_file
@@ -382,6 +431,19 @@ def summarize(
 
                         if not ctx.quiet:
                             console.print(f"[green]✓ Summary saved to: {output_file.name}[/green]")
+                        
+                        # Update index with new summary info
+                        if not force and index_file:
+                            summary_info = {
+                                'summary_file': str(output_path),
+                                'summary_generated': datetime.now().isoformat(),
+                                'summary_size': output_path.stat().st_size,
+                                'source_hash': processor._calculate_file_hash(file_path),  # Optional
+                                'model': model,
+                                'tokens_used': metadata.get('total_tokens', 0)
+                            }
+                            summary_index[str(file_path.absolute())] = summary_info
+                            processor._update_index_file(index_file, str(file_path.absolute()), summary_info)
                     
                     # Show file statistics
                     if progress:
@@ -535,7 +597,31 @@ def summarize(
 
         if not ctx.quiet:
             console.print(f"\n[green]📋 Detailed report saved to: {report_file.name}[/green]")
+            
+            # Report index optimization statistics
+            if not force and skipped_via_index > 0:
+                console.print(f"\n[green]🚀 Performance optimization:[/green]")
+                console.print(f"  - Skipped {skipped_via_index} unchanged files via index")
+                
+                # Estimate savings
+                avg_tokens = session_stats['total_tokens'] / max(session_stats['successful_files'], 1)
+                saved_tokens = skipped_via_index * avg_tokens
+                saved_cost = saved_tokens * 0.002 / 1000  # Rough estimate
+                saved_time = skipped_via_index * 5  # Estimate 5 seconds per summary
+                
+                console.print(f"  - Estimated tokens saved: ~{int(saved_tokens):,}")
+                console.print(f"  - Estimated cost saved: ~${saved_cost:.2f}")
+                console.print(f"  - Estimated time saved: ~{saved_time}s ({saved_time/60:.1f}m)")
+            
             console.print("="*80)
+
+        # Clean up session index file
+        if index_file and index_file.exists():
+            try:
+                index_file.unlink()
+                logger.debug(f"Cleaned up session index file: {index_file.name}")
+            except:
+                pass
 
     except Exception as e:
         console.print(f"[red]✗ Unexpected error during summarization:[/red] {e}")

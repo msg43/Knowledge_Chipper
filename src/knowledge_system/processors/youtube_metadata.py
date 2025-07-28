@@ -292,8 +292,28 @@ class YouTubeMetadataProcessor(BaseProcessor):
                 return ProcessorResult(
                     success=False, errors=["No valid YouTube URLs found in input"]
                 )
+            
+            # Expand any playlist URLs into individual video URLs with metadata
+            from ..utils.youtube_utils import expand_playlist_urls_with_metadata
+            expansion_result = expand_playlist_urls_with_metadata(urls)
+            urls = expansion_result['expanded_urls']
+            playlist_info = expansion_result['playlist_info']
+            
+            if not urls:
+                return ProcessorResult(
+                    success=False, errors=["No valid video URLs found after playlist expansion"]
+                )
 
-            logger.info(f"Processing {len(urls)} YouTube URLs for metadata extraction")
+            # Log playlist information if any playlists were found
+            if playlist_info:
+                total_playlist_videos = sum(p['total_videos'] for p in playlist_info)
+                logger.info(f"Found {len(playlist_info)} playlist(s) with {total_playlist_videos} total videos:")
+                for i, playlist in enumerate(playlist_info, 1):
+                    title = playlist.get('title', 'Unknown Playlist')
+                    video_count = playlist.get('total_videos', 0)
+                    logger.info(f"  {i}. {title} ({video_count} videos)")
+
+            logger.info(f"Processing {len(urls)} YouTube URLs for metadata extraction (after playlist expansion)")
             
             all_metadata = []
             errors = []
@@ -306,7 +326,15 @@ class YouTubeMetadataProcessor(BaseProcessor):
                     errors.append(error_msg)
                     continue
                 
-                logger.info(f"Processing {i}/{len(urls)}: {video_id}")
+                # Determine playlist context for progress display
+                playlist_context = ""
+                for playlist in playlist_info:
+                    if playlist['start_index'] <= (i - 1) <= playlist['end_index']:
+                        playlist_position = (i - 1) - playlist['start_index'] + 1
+                        playlist_context = f" [Playlist: {playlist['title'][:40]}{'...' if len(playlist['title']) > 40 else ''} - Video {playlist_position}/{playlist['total_videos']}]"
+                        break
+                
+                logger.info(f"Processing {i}/{len(urls)}: {video_id}{playlist_context}")
                 
                 if dry_run:
                     logger.info(f"DRY RUN: Would extract metadata for {url}")

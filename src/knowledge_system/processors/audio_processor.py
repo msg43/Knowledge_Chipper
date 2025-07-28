@@ -301,7 +301,13 @@ class AudioProcessor(BaseProcessor):
             else:
                 output_dir = Path(output_dir)
             
-            output_dir.mkdir(parents=True, exist_ok=True)
+            # Ensure output directory exists and is writable
+            try:
+                output_dir.mkdir(parents=True, exist_ok=True)
+                logger.debug(f"Output directory confirmed: {output_dir}")
+            except Exception as e:
+                logger.error(f"Failed to create output directory {output_dir}: {e}")
+                return None
             
             # Create filename
             base_name = audio_path.stem
@@ -309,6 +315,8 @@ class AudioProcessor(BaseProcessor):
             safe_name = safe_name.replace(' ', '_')
             filename = f"{safe_name}_transcript.md"
             output_path = output_dir / filename
+            
+            logger.debug(f"Attempting to save transcript to: {output_path}")
             
             # Get metadata
             audio_metadata = self._get_audio_metadata(audio_path)
@@ -322,15 +330,28 @@ class AudioProcessor(BaseProcessor):
                 include_timestamps=include_timestamps
             )
             
-            # Write file
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(markdown_content)
-            
-            logger.info(f"Transcript saved to: {output_path}")
-            return output_path
+            # Write file with detailed error handling
+            try:
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(markdown_content)
+                
+                # Verify file was written
+                if output_path.exists() and output_path.stat().st_size > 0:
+                    logger.info(f"✅ Transcript saved successfully: {output_path} ({len(markdown_content):,} characters)")
+                    return output_path
+                else:
+                    logger.error(f"❌ File was created but appears empty or missing: {output_path}")
+                    return None
+                    
+            except PermissionError as e:
+                logger.error(f"❌ Permission denied writing to {output_path}: {e}")
+                return None
+            except OSError as e:
+                logger.error(f"❌ OS error writing to {output_path}: {e}")
+                return None
             
         except Exception as e:
-            logger.error(f"Failed to save transcript to markdown: {e}")
+            logger.error(f"❌ Unexpected error saving transcript for {audio_path}: {e}")
             return None
 
     def process(

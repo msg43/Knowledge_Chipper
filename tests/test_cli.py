@@ -87,7 +87,7 @@ class TestMainCommand:
         result = self.runner.invoke(main, ["--help"])
 
         assert result.exit_code == 0
-        assert "Knowledge System" in result.output
+        assert "Knowledge_Chipper" in result.output
         assert "transcribe" in result.output
         assert "summarize" in result.output
         assert "moc" in result.output
@@ -100,7 +100,7 @@ class TestMainCommand:
         result = self.runner.invoke(main, ["--version"])
 
         assert result.exit_code == 0
-        assert "Knowledge System v" in result.output
+        assert "Knowledge_Chipper v" in result.output
 
     def test_no_command_shows_help(self) -> None:
         """Test that no command shows help."""
@@ -272,7 +272,7 @@ class TestStatusCommand:
         result = self.runner.invoke(main, ["status"])
 
         assert result.exit_code == 0
-        assert "Knowledge System Status" in result.output
+        assert "Knowledge_Chipper Status" in result.output
         assert "Processor Statistics" in result.output
         assert "Configured Paths" in result.output
         assert "TestProcessor" in result.output

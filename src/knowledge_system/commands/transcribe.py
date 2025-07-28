@@ -511,7 +511,8 @@ def transcribe(
 
             # Ensure output directory is set
             if output is None:
-                output = Path(settings.paths.transcripts)
+                console.print("[red]✗ Error: Output directory is required. Use --output to specify where transcripts should be saved.[/red]")
+                sys.exit(1)
 
             for i, url in enumerate(urls, 1):
                 if not ctx.quiet:
@@ -605,7 +606,8 @@ def transcribe(
 
     # Determine output path
     if output is None:
-        output = Path(settings.paths.transcripts)
+        console.print("[red]✗ Error: Output directory is required. Use --output to specify where transcripts should be saved.[/red]")
+        sys.exit(1)
 
     # Log transcription start
     log_system_event(

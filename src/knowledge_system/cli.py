@@ -78,7 +78,7 @@ def main(
     ctx: click.Context, version: bool, verbose: bool, quiet: bool, config: Optional[str]
 ) -> None:
     """
-    Knowledge System - Comprehensive knowledge processing and management.
+    Knowledge_Chipper - Comprehensive knowledge processing and management.
 
     A powerful tool for processing YouTube videos, PDFs, and other content
     into structured knowledge with transcription, summarization, and MOC generation.
@@ -107,7 +107,7 @@ def main(
 
     # Handle version flag
     if version:
-        console.print(f"Knowledge System v{__version__}")
+        console.print(f"Knowledge_Chipper v{__version__}")
         return
 
     # Load custom config if provided
@@ -361,7 +361,7 @@ def status(
     """
     settings_obj = ctx.get_settings()
 
-    console.print("[bold blue]Knowledge System Status[/bold blue]\n")
+    console.print("[bold blue]Knowledge_Chipper Status[/bold blue]\n")
 
     # Show processor statistics
     if processors:
@@ -579,6 +579,54 @@ def youtube():
 
 # Add youtube command group to main CLI
 main.add_command(youtube)
+
+
+@main.group()
+def cache():
+    """Cache management commands."""
+    pass
+
+
+@cache.command()
+def clear():
+    """Clear Python bytecode cache files."""
+    from .utils.cache_management import force_clear_cache
+    
+    click.echo("Clearing Python cache...")
+    success, message = force_clear_cache()
+    
+    if success:
+        click.echo(f"✅ {message}")
+    else:
+        click.echo(f"❌ {message}")
+        sys.exit(1)
+
+
+@cache.command()
+def status():
+    """Check if cache clearing is recommended."""
+    from .utils.cache_management import should_clear_cache_on_startup
+    
+    should_clear, reason = should_clear_cache_on_startup()
+    
+    if should_clear:
+        click.echo(f"🧹 Cache clearing recommended: {reason}")
+        click.echo("Run 'knowledge-system cache clear' to clear cache.")
+    else:
+        click.echo(f"✅ Cache is up to date: {reason}")
+
+
+@cache.command()
+def flag():
+    """Create a flag to force cache clearing on next startup."""
+    from .utils.cache_management import create_manual_clear_flag
+    
+    create_manual_clear_flag()
+    click.echo("✅ Created cache clear flag. Cache will be cleared on next app startup.")
+
+
+# Add the cache command group to main CLI
+main.add_command(cache)
 
 
 @youtube.command()
