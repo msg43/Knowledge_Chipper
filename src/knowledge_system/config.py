@@ -15,52 +15,81 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class AppConfig(BaseModel):
     """Application-level configuration."""
 
-    name: str = "Knowledge System"
+    name: str = "Knowledge_Chipper"
     version: str = "0.1.0"
     debug: bool = False
 
 
 class PathsConfig(BaseModel):
-    """File paths configuration."""
-
+    """Configuration for file paths."""
+    
+    # Base data directory (user will need to set this)
     data_dir: str = Field(
-        default="~/Documents/KnowledgeSystem",
-        description="Base directory for data storage",
+        default="",
+        description="Base data directory (must be configured by user)",
     )
+    # Output directory (user will need to set this)
     output_dir: str = Field(
-        default="~/Documents/KnowledgeSystem/output",
-        description="Default output directory",
+        default="",
+        description="Output directory (must be configured by user)",
     )
+    # Cache directory (user will need to set this)
     cache_dir: str = Field(
-        default="~/Documents/KnowledgeSystem/cache",
-        description="Cache directory",
+        default="",
+        description="Cache directory (must be configured by user)",
+    )
+
+    # Input/output paths (user will need to set these)
+    input_dir: str = Field(
+        default="",
+        description="Input directory (must be configured by user)",
+    )
+    output: str = Field(
+        default="",
+        description="Output path (must be configured by user)",
+    )
+    transcripts: str = Field(
+        default="",
+        description="Transcripts directory (must be configured by user)",
+    )
+    summaries: str = Field(
+        default="",
+        description="Summaries directory (must be configured by user)",
+    )
+    mocs: str = Field(
+        default="",
+        description="Maps of Content directory (must be configured by user)",
+    )
+    cache: str = Field(
+        default="",
+        description="Cache directory (must be configured by user)",
     )
     logs_dir: str = Field(default="./logs", description="Logs directory")
     
     # Additional paths for backward compatibility
     input: str = Field(
-        default="~/Documents/KnowledgeSystem/input",
-        description="Input directory",
+        default="",
+        description="Input directory (must be configured by user)",
     )
     output: str = Field(
-        default="~/Documents/KnowledgeSystem/output",
-        description="Output directory (alias for output_dir)",
+        default="",
+        description="Output directory (alias for output_dir) (must be configured by user)",
     )
     transcripts: str = Field(
-        default="~/Documents/KnowledgeSystem/transcripts",
-        description="Transcripts directory",
+        default="",
+        description="Transcripts directory (must be configured by user)",
     )
     summaries: str = Field(
-        default="~/Documents/KnowledgeSystem/summaries",
-        description="Summaries directory",
+        default="",
+        description="Summaries directory (must be configured by user)",
     )
     mocs: str = Field(
-        default="~/Documents/KnowledgeSystem/mocs",
-        description="Maps of Content directory",
+        default="",
+        description="Maps of Content directory (must be configured by user)",
     )
     cache: str = Field(
-        default="~/Documents/KnowledgeSystem/cache",
-        description="Cache directory (alias for cache_dir)",
+        default="",
+        description="Cache directory (must be configured by user)",
     )
     logs: str = Field(default="./logs", description="Logs directory (alias for logs_dir)")
 
@@ -330,33 +359,82 @@ class Settings(BaseSettings):
     def __init__(
         self, config_path: Optional[Union[str, Path]] = None, **kwargs):
         """Initialize settings from YAML file and environment variables."""
+        
+        # Static YAML loading function for use before super().__init__()
+        def load_yaml_static(path: Union[str, Path]) -> Dict[str, Any]:
+            """Load YAML configuration file (static version for init)."""
+            path = Path(path)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return yaml.safe_load(f) or {}
+            except Exception as e:
+                print(f"Failed to load config from {path}: {e}")
+                return {}
+        
         # Load from YAML file if provided
         if config_path:
-            config_data = self._load_yaml(config_path)
+            config_data = load_yaml_static(config_path)
             kwargs.update(config_data)
         else:
             # Try to load from default locations
             default_paths = [
                 Path("config/settings.yaml"),
+                Path("../config/settings.yaml"),  # Handle running from src/ directory
                 Path("settings.yaml"),
                 Path.home() / ".knowledge-system" / "settings.yaml",
             ]
 
             for path in default_paths:
                 if path.exists():
-                    config_data = self._load_yaml(path)
+                    config_data = load_yaml_static(path)
                     kwargs.update(config_data)
                     break
+        
+        # CREDENTIALS: Also load from dedicated credentials file
+        credentials_paths = [
+            Path("config/credentials.yaml"),
+            Path("../config/credentials.yaml"),  # Handle running from src/ directory
+            Path("credentials.yaml"),
+            Path.home() / ".knowledge-system" / "credentials.yaml",
+        ]
+        
+        for cred_path in credentials_paths:
+            if cred_path.exists():
+                try:
+                    cred_data = load_yaml_static(cred_path)
+                    # Merge credentials into kwargs, properly handling api_keys section
+                    if cred_data:
+                        if "api_keys" in cred_data:
+                            # Ensure api_keys section exists in kwargs
+                            if "api_keys" not in kwargs:
+                                kwargs["api_keys"] = {}
+                            # Merge api_keys data, giving priority to credentials file
+                            kwargs["api_keys"].update(cred_data["api_keys"])
+                        
+                        # Merge other sections if they exist
+                        for key, value in cred_data.items():
+                            if key != "api_keys":  # api_keys already handled above
+                                kwargs[key] = value
+                        break
+                except Exception as e:
+                    pass  # Silently continue if credentials file can't be loaded
 
         # Load API keys from environment if not provided
         if "api_keys" not in kwargs:
             kwargs["api_keys"] = {}
 
         api_keys = kwargs["api_keys"]
-        if not api_keys.get("openai_api_key"):
-            api_keys["openai_api_key"] = os.getenv("OPENAI_API_KEY")
-        if not api_keys.get("anthropic_api_key"):
-            api_keys["anthropic_api_key"] = os.getenv("ANTHROPIC_API_KEY")
+        
+        # Only load from environment if not already set in credentials file
+        if not api_keys.get("openai_api_key") and not api_keys.get("openai"):
+            env_openai = os.getenv("OPENAI_API_KEY")
+            if env_openai:
+                api_keys["openai"] = env_openai
+                
+        if not api_keys.get("anthropic_api_key") and not api_keys.get("anthropic"):
+            env_anthropic = os.getenv("ANTHROPIC_API_KEY")
+            if env_anthropic:
+                api_keys["anthropic"] = env_anthropic
 
         if not api_keys.get("webshare_username"):
             api_keys["webshare_username"] = os.getenv("WEBSHARE_USERNAME")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build script for the Knowledge System package."""
+"""Build script for the Knowledge_Chipper package."""
 
 import subprocess
 import sys
@@ -165,7 +165,7 @@ def show_results():
 
 def main():
     """Main build process."""
-    parser = argparse.ArgumentParser(description="Build Knowledge System package")
+    parser = argparse.ArgumentParser(description="Build Knowledge_Chipper package")
     parser.add_argument("--skip-tests", action="store_true", help="Skip running tests")
     parser.add_argument("--skip-slow-tests", action="store_true", help="Skip slow tests")
     parser.add_argument("--test-only", action="store_true", help="Only run tests")
@@ -173,7 +173,7 @@ def main():
     
     args = parser.parse_args()
     
-    print("🚀 Building Knowledge System package...")
+    print("🚀 Building Knowledge_Chipper package...")
     
     check_prerequisites()
     

@@ -3,13 +3,13 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "knowledge-system"
+name = "knowledge-chipper"
 version = "0.1.0"
-description = "Knowledge management system with YouTube transcription, LLM summarization, and MOC generation"
+description = "Knowledge_Chipper - AI-powered knowledge management system for macOS - transcribe, summarize, and organize videos/audio into searchable knowledge"
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [
-    {name = "Knowledge System", email = "dev@knowledge-system.local"}
+    {name = "Knowledge_Chipper", email = "dev@knowledge-chipper.local"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -94,10 +94,9 @@ knowledge-system-gui = "knowledge_system.gui:main"
 ks-gui = "knowledge_system.gui:main"
 
 [project.urls]
-# Update these URLs when you have a public repository
-# "Homepage" = "https://github.com/yourusername/knowledge-system"
-# "Bug Reports" = "https://github.com/yourusername/knowledge-system/issues"
-# "Source" = "https://github.com/yourusername/knowledge-system"
+"Homepage" = "https://github.com/msg43/Knowledge_Chipper"
+"Bug Reports" = "https://github.com/msg43/Knowledge_Chipper/issues"
+"Source" = "https://github.com/msg43/Knowledge_Chipper"
 
 [tool.setuptools.packages.find]
 where = ["src"]

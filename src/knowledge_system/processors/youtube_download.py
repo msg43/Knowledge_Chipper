@@ -132,9 +132,33 @@ class YouTubeDownloadProcessor(BaseProcessor):
             return ProcessorResult(
                 success=False, errors=["No valid YouTube URLs found in input"]
             )
+        
+        # Expand any playlist URLs into individual video URLs with metadata
+        from ..utils.youtube_utils import expand_playlist_urls_with_metadata
+        expansion_result = expand_playlist_urls_with_metadata(urls)
+        urls = expansion_result['expanded_urls']
+        playlist_info = expansion_result['playlist_info']
+        
+        if not urls:
+            return ProcessorResult(
+                success=False, errors=["No valid video URLs found after playlist expansion"]
+            )
+
+        # Log playlist information if any playlists were found
+        if playlist_info:
+            total_playlist_videos = sum(p['total_videos'] for p in playlist_info)
+            logger.info(f"Found {len(playlist_info)} playlist(s) with {total_playlist_videos} total videos:")
+            for i, playlist in enumerate(playlist_info, 1):
+                title = playlist.get('title', 'Unknown Playlist')
+                video_count = playlist.get('total_videos', 0)
+                logger.info(f"  {i}. {title} ({video_count} videos)")
 
         output_dir = Path(output_dir) if output_dir else Path.cwd()
         output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create Thumbnails subdirectory for consistent organization
+        thumbnails_dir = output_dir / "Thumbnails"
+        thumbnails_dir.mkdir(exist_ok=True)
 
         # ENFORCE WebShare proxy ONLY - no fallback authentication strategies
         from ..config import get_settings
@@ -159,10 +183,18 @@ class YouTubeDownloadProcessor(BaseProcessor):
         all_thumbnails = []
         errors = []
 
-        for url in urls:
+        for i, url in enumerate(urls, 1):
             try:
+                # Determine playlist context for progress display
+                playlist_context = ""
+                for playlist in playlist_info:
+                    if playlist['start_index'] <= (i - 1) <= playlist['end_index']:
+                        playlist_position = (i - 1) - playlist['start_index'] + 1
+                        playlist_context = f" [Playlist: {playlist['title'][:40]}{'...' if len(playlist['title']) > 40 else ''} - Video {playlist_position}/{playlist['total_videos']}]"
+                        break
+                
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    logger.info(f"Downloading audio for: {url}")
+                    logger.info(f"Downloading audio for: {url}{playlist_context}")
                     info = ydl.extract_info(url, download=True)
 
                     if info is None:
@@ -181,10 +213,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                 f"{entry['title']}.{output_format}"
                             all_files.append(str(filename))
 
-                            # Thumbnail
+                            # Thumbnail - save to Thumbnails subdirectory
                             if download_thumbnails:
                                 thumbnail_path = self._download_thumbnail_from_url(
-                                    url, output_dir)
+                                    url, thumbnails_dir)
                                 if thumbnail_path:
                                     all_thumbnails.append(thumbnail_path)
 

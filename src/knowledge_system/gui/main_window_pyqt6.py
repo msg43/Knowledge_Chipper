@@ -79,7 +79,7 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self):
         """Set up the streamlined main UI."""
-        self.setWindowTitle("Knowledge System - Comprehensive Content Processing")
+        self.setWindowTitle("Knowledge_Chipper - Comprehensive Content Processing")
         # Make window resizable with reasonable default size and minimum size
         self.resize(1200, 800)  # Default size
         self.setMinimumSize(800, 600)  # Minimum size to ensure usability
@@ -329,8 +329,8 @@ def launch_gui():
         app = QApplication(sys.argv)
         
         # Set application properties
-        app.setApplicationName("Knowledge System")
-        app.setApplicationDisplayName("Knowledge System")
+        app.setApplicationName("Knowledge_Chipper")
+        app.setApplicationDisplayName("Knowledge_Chipper")
         app.setApplicationVersion("1.0")
         
         # Create and show the main window
@@ -347,7 +347,7 @@ def launch_gui():
     except ImportError as e:
         print("\n" + "=" * 60)
         print("ERROR: PyQt6 is not installed!")
-        print("The Knowledge System GUI requires PyQt6.")
+        print("Knowledge_Chipper GUI requires PyQt6.")
         print("Please install it with:")
         print("  pip install PyQt6")
         print("=" * 60 + "\n")

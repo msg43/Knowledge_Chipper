@@ -167,6 +167,18 @@ class LocalLLMProvider(BaseLLMProvider):
     def _call_ollama(self, prompt: str, progress_callback: Optional[Callable] = None) -> LLMResponse:
         """Call Ollama API."""
         try:
+            # Check if Ollama service is running before making the request
+            try:
+                health_url = f"{self.local_config.base_url}/api/version"
+                health_response = requests.get(health_url, timeout=5)
+                if health_response.status_code != 200:
+                    raise ConnectionError("Ollama service health check failed")
+            except requests.exceptions.RequestException:
+                raise ConnectionError(
+                    f"Ollama service is not running at {self.local_config.base_url}. "
+                    f"Please start Ollama service first by running 'ollama serve' or use the Hardware tab to start it."
+                )
+            
             url = f"{self.local_config.base_url}/api/generate"
 
             payload = {
@@ -216,6 +228,18 @@ class LocalLLMProvider(BaseLLMProvider):
                 provider="ollama",
             )
 
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                raise ConnectionError(
+                    f"Model '{self.model}' not found in Ollama. "
+                    f"Please download the model first using 'ollama pull {self.model}' or use the GUI to download it."
+                )
+            else:
+                logger.error(f"Ollama HTTP error: {e}")
+                raise
+        except ConnectionError:
+            # Re-raise connection errors as-is (they have helpful messages)
+            raise
         except Exception as e:
             logger.error(f"Ollama API error: {e}")
             raise

@@ -1,12 +1,8 @@
-"""Utility modules for the knowledge system."""
+"""Utilities package for the Knowledge System."""
 
-from .file_io import *
-from .hardware_detection import *
-from .device_selection import *
-from .progress import *
-from .state import *
-from .text_utils import *
-from .validation import *
-# YouTube API utilities removed - system now uses WebShare + yt-dlp only
-from .youtube_utils import *
-from .ollama_manager import get_ollama_manager, ModelInfo, DownloadProgress, InstallationProgress
+# Import only the cache management for now to avoid circular import issues
+try:
+    from .cache_management import clear_python_cache, should_clear_cache_on_startup
+    __all__ = ["clear_python_cache", "should_clear_cache_on_startup"]
+except ImportError:
+    __all__ = []

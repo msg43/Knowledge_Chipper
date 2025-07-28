@@ -5,7 +5,7 @@ Manages GUI-specific settings and integrates with the session manager
 for persistent storage of user preferences.
 """
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 from pathlib import Path
 
 from .session_manager import get_session_manager, save_session
@@ -25,13 +25,13 @@ class GUISettingsManager:
         """Get the saved output directory for a tab."""
         saved_dir = self.session_manager.get_tab_setting(tab_name, 'output_directory', default)
         if saved_dir:
-            # Ensure the path exists or return a reasonable default
+            # Return the saved directory if it exists
             path = Path(saved_dir)
             if path.exists() or path.parent.exists():
                 return str(path)
         
-        # Return default if no valid saved directory
-        return default or str(Path.cwd())
+        # Return default (which should be empty string to require selection)
+        return default or ""
     
     def set_output_directory(self, tab_name: str, directory: Union[str, Path]) -> None:
         """Save the output directory for a tab."""
@@ -121,6 +121,16 @@ class GUISettingsManager:
         """Clear all GUI settings."""
         self.session_manager.clear()
         logger.info("Cleared all GUI settings")
+
+    def get_list_setting(self, tab_name: str, key: str, default: List[str] = None) -> List[str]:
+        """Get a list setting value."""
+        if default is None:
+            default = []
+        return self.session_manager.get_tab_setting(tab_name, key, default)
+    
+    def set_list_setting(self, tab_name: str, key: str, value: List[str]) -> None:
+        """Set a list setting value."""
+        self.session_manager.set_tab_setting(tab_name, key, value)
 
 
 # Global GUI settings manager instance

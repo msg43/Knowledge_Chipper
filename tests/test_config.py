@@ -30,7 +30,7 @@ class TestAppConfig:
     def test_default_values(self):
         """Test default configuration values."""
         config = AppConfig()
-        assert config.name == "Knowledge System"
+        assert config.name == "Knowledge_Chipper"
         assert config.version == "0.1.0"
         assert config.debug is False
 
@@ -232,7 +232,7 @@ class TestSettings:
         settings = Settings()
 
         # Test valid nested access
-        assert settings.get_nested("app.name") == "Knowledge System"
+        assert settings.get_nested("app.name") == "Knowledge_Chipper"
         assert settings.get_nested("transcription.whisper_model") == "base"
         assert settings.get_nested("llm.max_tokens") == 10000
 

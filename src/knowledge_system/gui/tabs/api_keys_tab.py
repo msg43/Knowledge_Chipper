@@ -24,6 +24,12 @@ class APIKeysTab(BaseTab):
     def __init__(self, parent=None):
         # Initialize _actual_api_keys before calling super().__init__
         self._actual_api_keys = {}
+        
+        # Initialize settings manager for session persistence
+        from ..core.settings_manager import get_gui_settings_manager
+        self.gui_settings = get_gui_settings_manager()
+        self.tab_name = "API Keys"
+        
         super().__init__(parent)
         
     def _setup_ui(self):
@@ -110,6 +116,9 @@ class APIKeysTab(BaseTab):
         # Load existing values and set up change handlers
         self._load_existing_values()
         self._setup_change_handlers()
+        
+        # Load session settings after UI is set up
+        self._load_settings()
 
         # Add the layout to a group and then to main layout
         api_group = QGroupBox("API Keys Configuration") 
@@ -159,18 +168,62 @@ class APIKeysTab(BaseTab):
         self.anthropic_key_edit.textChanged.connect(lambda text: self._handle_key_change('anthropic_api_key', text))
         self.huggingface_token_edit.textChanged.connect(lambda text: self._handle_key_change('huggingface_token', text))
         self.webshare_password_edit.textChanged.connect(lambda text: self._handle_password_change('webshare_password', text))
+        self.webshare_username_edit.textChanged.connect(self._on_setting_changed)
 
     def _handle_key_change(self, key_name: str, new_text: str):
         """Handle changes to API key fields."""
         # If user types new content (not just the obscured dots), update the actual key
         if new_text and not new_text.startswith('••'):
             self._actual_api_keys[key_name] = new_text
+            self._on_setting_changed()
 
     def _handle_password_change(self, key_name: str, new_text: str):
         """Handle changes to password fields."""
         # If user types new content (not just the obscured dots), update the actual password
         if new_text and not new_text.startswith('••'):
             self._actual_api_keys[key_name] = new_text
+            self._on_setting_changed()
+
+    def _on_setting_changed(self):
+        """Called when any setting changes to automatically save to session."""
+        try:
+            # Save to GUI session (for UI state persistence)
+            self.gui_settings.set_line_edit_text(self.tab_name, "webshare_username", self.webshare_username_edit.text())
+            
+            # Save masked indicators for fields that have actual keys stored
+            for key_name in self._actual_api_keys:
+                if key_name == 'webshare_password':
+                    self.gui_settings.set_line_edit_text(self.tab_name, "webshare_password_masked", "••••••••••••••••")
+                elif key_name == 'openai_api_key':
+                    self.gui_settings.set_line_edit_text(self.tab_name, "openai_key_masked", "••••••••••••••••••••••••••••••••••••••••••••••••••••")
+                elif key_name == 'anthropic_api_key':
+                    self.gui_settings.set_line_edit_text(self.tab_name, "anthropic_key_masked", "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••")
+                elif key_name == 'huggingface_token':
+                    self.gui_settings.set_line_edit_text(self.tab_name, "huggingface_token_masked", "••••••••••••••••••••••••••••••••••••••••••••••••••••")
+            
+            # Save the session
+            self.gui_settings.save()
+            
+        except Exception as e:
+            logger.error(f"Failed to save API keys session data: {e}")
+
+    def _load_settings(self):
+        """Load saved settings from session and existing credential files."""
+        try:
+            # First load from the credential files (like the existing _load_existing_values)
+            self._load_existing_values()
+            
+            # Then overlay any session-specific UI state
+            saved_username = self.gui_settings.get_line_edit_text(self.tab_name, "webshare_username", "")
+            if saved_username and not self.webshare_username_edit.text():
+                self.webshare_username_edit.setText(saved_username)
+                
+            # Note: We don't restore actual API keys from session for security,
+            # only restore the masked display indicators to show fields that were previously filled
+            
+            logger.debug(f"Loaded settings for {self.tab_name} tab")
+        except Exception as e:
+            logger.error(f"Failed to load settings for {self.tab_name} tab: {e}")
         
     def _get_start_button_text(self) -> str:
         """Get the text for the start button."""
@@ -183,6 +236,22 @@ class APIKeysTab(BaseTab):
     def _save_settings(self):
         """Save API key settings and update environment variables."""
         try:
+            logger.info("🔧 DEBUG: _save_settings() called")
+            self.append_log("🔧 DEBUG: Save button clicked - starting save process...")
+            
+            # DEBUG: Show current state
+            username_text = self.webshare_username_edit.text().strip()
+            password_text = self.webshare_password_edit.text().strip()
+            actual_password = self._actual_api_keys.get('webshare_password', 'NOT_SET')
+            
+            debug_msg = f"""🔧 DEBUG STATE:
+Username field: '{username_text}'
+Password field: '{password_text}'
+Actual password stored: '{actual_password}'
+_actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
+            
+            self.append_log(debug_msg)
+            logger.info(debug_msg)
             # Update settings object with actual values or form values
             self.settings.api_keys.webshare_username = self.webshare_username_edit.text().strip()
             
@@ -203,6 +272,8 @@ class APIKeysTab(BaseTab):
             if not huggingface_token.startswith('••'):
                 self.settings.api_keys.huggingface_token = huggingface_token
 
+            # PERSISTENT STORAGE: Save credentials to YAML file for persistence across sessions
+            self._save_credentials_to_file()
 
             # Update environment variables immediately
             self._load_api_keys_to_environment()
@@ -225,6 +296,74 @@ class APIKeysTab(BaseTab):
             self.status_label.setText(f"❌ {error_msg}")
             self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
             self.append_log(error_msg)
+            
+    def _save_credentials_to_file(self):
+        """Save API credentials to persistent YAML file."""
+        try:
+            logger.info("🔧 DEBUG: _save_credentials_to_file() called")
+            self.append_log("🔧 DEBUG: Starting credential file save process...")
+            
+            import yaml
+            from pathlib import Path
+            
+            # Debug: Log current settings values
+            logger.info(f"🔧 DEBUG: webshare_username = '{self.settings.api_keys.webshare_username}'")
+            logger.info(f"🔧 DEBUG: webshare_password = {'*' * len(self.settings.api_keys.webshare_password) if self.settings.api_keys.webshare_password else 'None'}")
+            
+            # Create credentials data structure using correct field names (Pydantic aliases)
+            credentials_data = {
+                "api_keys": {
+                    "webshare_username": self.settings.api_keys.webshare_username or "",
+                    "webshare_password": self.settings.api_keys.webshare_password or "",
+                    "openai": self.settings.api_keys.openai_api_key or "",  # Use alias 'openai'
+                    "anthropic": self.settings.api_keys.anthropic_api_key or "",  # Use alias 'anthropic'
+                    "hf_token": self.settings.api_keys.huggingface_token or "",  # Use alias 'hf_token'
+                }
+            }
+            
+            logger.info(f"🔧 DEBUG: credentials_data before filtering = {credentials_data}")
+            
+            # Remove empty credentials to keep file clean
+            credentials_data["api_keys"] = {
+                k: v for k, v in credentials_data["api_keys"].items() 
+                if v and v.strip() and not v.startswith('••')
+            }
+            
+            logger.info(f"🔧 DEBUG: credentials_data after filtering = {credentials_data}")
+            
+            if not credentials_data["api_keys"]:
+                logger.warning("🔧 DEBUG: No credentials to save after filtering!")
+                self.append_log("⚠️ No credentials to save (all were empty or masked)")
+                return
+            
+            # Determine save path - prefer config/credentials.yaml, handle running from src/ directory
+            config_dir = Path("config")
+            if not config_dir.exists():
+                config_dir = Path("../config")
+            
+            config_dir.mkdir(exist_ok=True)
+            credentials_path = config_dir / "credentials.yaml"
+            
+            logger.info(f"🔧 DEBUG: Saving to {credentials_path}")
+            
+            # Save to file with secure permissions
+            with open(credentials_path, 'w', encoding='utf-8') as f:
+                f.write("# API Credentials - Auto-generated by Knowledge Workflow\n")
+                f.write("# This file is excluded from git for security\n\n")
+                yaml.dump(credentials_data, f, default_flow_style=False, indent=2)
+            
+            # Set restrictive file permissions (readable only by owner)
+            import stat
+            credentials_path.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 600 permissions
+            
+            logger.info(f"✅ Credentials saved to {credentials_path}")
+            self.append_log(f"💾 Credentials saved to {credentials_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save credentials file: {e}")
+            self.append_log(f"❌ Failed to save credentials file: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             
     def _load_api_keys_to_environment(self):
         """Load API keys to environment variables - stub method."""

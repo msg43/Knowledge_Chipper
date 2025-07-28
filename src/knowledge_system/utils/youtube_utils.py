@@ -340,6 +340,22 @@ def expand_playlist_urls(urls: List[str]) -> List[str]:
     Returns:
         List of individual video URLs with playlists expanded
     """
+    result = expand_playlist_urls_with_metadata(urls)
+    return result['expanded_urls']
+
+
+def expand_playlist_urls_with_metadata(urls: List[str]) -> Dict[str, Any]:
+    """
+    Expand any playlist URLs in the list to individual video URLs with playlist metadata.
+    
+    Args:
+        urls: List of YouTube URLs that may contain playlists
+        
+    Returns:
+        Dictionary containing:
+        - 'expanded_urls': List of individual video URLs with playlists expanded
+        - 'playlist_info': List of playlist metadata for tracking progress
+    """
     try:
         import yt_dlp
         from ..config import get_settings
@@ -350,9 +366,13 @@ def expand_playlist_urls(urls: List[str]) -> List[str]:
         
         if not username or not password:
             logger.error("WebShare credentials required for playlist expansion")
-            return urls  # Return original URLs if no credentials
+            return {
+                'expanded_urls': urls,
+                'playlist_info': []
+            }
         
         expanded_urls = []
+        playlist_info = []
         proxy_url = f"http://{username}:{password}@p.webshare.io:80/"
         
         for url in urls:
@@ -373,12 +393,26 @@ def expand_playlist_urls(urls: List[str]) -> List[str]:
                         info = ydl.extract_info(url, download=False)
                         
                         if info and 'entries' in info:
+                            playlist_title = info.get('title', 'Unknown Playlist')
+                            playlist_count = len(info['entries'])
+                            playlist_start_index = len(expanded_urls)
+                            
                             for entry in info['entries']:
                                 if entry and 'id' in entry:
                                     video_url = f"https://www.youtube.com/watch?v={entry['id']}"
                                     expanded_urls.append(video_url)
                             
-                            logger.info(f"Expanded playlist to {len(info['entries'])} videos")
+                            # Store playlist metadata for progress tracking
+                            playlist_info.append({
+                                'original_url': url,
+                                'title': playlist_title,
+                                'total_videos': playlist_count,
+                                'start_index': playlist_start_index,
+                                'end_index': len(expanded_urls) - 1,
+                                'video_urls': expanded_urls[playlist_start_index:]
+                            })
+                            
+                            logger.info(f"Expanded playlist '{playlist_title}' to {playlist_count} videos")
                         else:
                             logger.warning(f"No entries found in playlist: {url}")
                             
@@ -388,14 +422,23 @@ def expand_playlist_urls(urls: List[str]) -> List[str]:
             else:
                 expanded_urls.append(url)
         
-        return expanded_urls
+        return {
+            'expanded_urls': expanded_urls,
+            'playlist_info': playlist_info
+        }
         
     except ImportError:
         logger.warning("yt-dlp not available for playlist expansion")
-        return urls
+        return {
+            'expanded_urls': urls,
+            'playlist_info': []
+        }
     except Exception as e:
         logger.error(f"Error during playlist expansion: {e}")
-        return urls
+        return {
+            'expanded_urls': urls,
+            'playlist_info': []
+        }
 
 
 def download_thumbnail_direct(url: str, output_dir: Path, thumbnail_url: Optional[str] = None) -> Optional[str]:
@@ -404,7 +447,7 @@ def download_thumbnail_direct(url: str, output_dir: Path, thumbnail_url: Optiona
     
     Args:
         url: YouTube video URL
-        output_dir: Directory to save thumbnail
+        output_dir: Directory to save thumbnail (should be the exact directory to save to)
         thumbnail_url: Optional specific thumbnail URL from YouTube API
         
     Returns:
@@ -416,11 +459,11 @@ def download_thumbnail_direct(url: str, output_dir: Path, thumbnail_url: Optiona
         
         video_id = extract_video_id(url)
         
-        # Create Thumbnails subdirectory to match markdown expectations
-        thumbnails_dir = output_dir / "Thumbnails"
-        thumbnails_dir.mkdir(parents=True, exist_ok=True)
+        # BUGFIX: Save directly to provided output_dir, don't create additional "Thumbnails" subdirectory
+        # The caller is responsible for ensuring they pass the correct directory
+        output_dir.mkdir(parents=True, exist_ok=True)
         
-        logger.debug(f"Downloading thumbnail directly for: {url}")
+        logger.debug(f"Downloading thumbnail directly for: {url} to {output_dir}")
         
         # Use API-provided thumbnail URL if available, otherwise try different quality levels
         thumbnail_configs = []
@@ -462,7 +505,7 @@ def download_thumbnail_direct(url: str, output_dir: Path, thumbnail_url: Optiona
                     # Check if it's a valid image (not a placeholder)
                     content_length = len(response.content)
                     if content_length > 1000:  # Valid thumbnails are typically larger than 1KB
-                        thumbnail_path = thumbnails_dir / f"{video_id}_thumbnail.jpg"
+                        thumbnail_path = output_dir / f"{video_id}_thumbnail.jpg"
                         with open(thumbnail_path, 'wb') as f:
                             f.write(response.content)
                         logger.info(f"Successfully downloaded {quality} thumbnail ({content_length} bytes): {thumbnail_path}")

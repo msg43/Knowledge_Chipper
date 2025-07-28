@@ -140,12 +140,16 @@ class TranscriptionService:
                     from ..utils.youtube_utils import download_thumbnail
                     output_path = Path(output_dir) if output_dir else Path.cwd()
                     
+                    # Create Thumbnails subdirectory for consistent organization
+                    thumbnails_dir = output_path / "Thumbnails"
+                    thumbnails_dir.mkdir(exist_ok=True)
+                    
                     for transcript in transcripts:
                         video_url = transcript.get('url', url)  # Use video URL if available, fallback to original
                         thumbnail_url = transcript.get('thumbnail_url')  # Use thumbnail URL if available from metadata
                         
                         try:
-                            thumbnail_path = download_thumbnail(video_url, output_path, thumbnail_url=thumbnail_url)
+                            thumbnail_path = download_thumbnail(video_url, thumbnails_dir, thumbnail_url=thumbnail_url)
                             if thumbnail_path:
                                 thumbnails.append(thumbnail_path)
                                 logger.info(f"Downloaded thumbnail for video: {transcript.get('title', 'Unknown')}")

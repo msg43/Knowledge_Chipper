@@ -201,3 +201,17 @@ models/
 cache/
 .cache/
 __pycache__/ *.code-workspace
+
+# User-specific configuration files (contains sensitive data - NEVER commit)
+config/credentials.yaml
+config/api_keys.yaml
+config/settings.yaml
+config/*oauth*.json
+config/client_secret*.json
+config/youtube_oauth2_credentials.json
+credentials.yaml
+api_keys.yaml
+settings.yaml
+
+# User data directories (outside project but documenting for completeness)
+# ~/.knowledge_system/ (automatically safe - in user home directory)
