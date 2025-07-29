@@ -164,6 +164,9 @@ test_icon_integration.py
 debug_*.py
 logs/
 *.log
+**/logs/
+**/logs/**
+**/*.log
 Output/
 ~/Documents/KnowledgeSystem/cache/
 data/cache/
