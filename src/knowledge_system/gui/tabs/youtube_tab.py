@@ -301,24 +301,38 @@ class YouTubeExtractionWorker(QThread):
                             self.url_completed.emit(url, False, failure_msg)
                         
                     else:
-                        # True failure - extraction failed
-                        error_msg = '; '.join(result.errors) if result.errors else 'Unknown error'
-                        logger.error(f"Failed to extract transcript for {url}: {error_msg}")
-                        
-                        # Check for payment required error in result errors
-                        if "402 Payment Required" in error_msg or "payment required" in error_msg.lower():
-                            self.payment_required.emit()
-                        
-                        results['failed'] += 1
-                        results['failed_urls'].append({
-                            'url': url,
-                            'title': display_title,
-                            'error': error_msg
-                        })
-                        
-                        # Failure message
-                        failure_msg = f"❌ Failed to extract: {display_title} - {error_msg}"
-                        self.url_completed.emit(url, False, failure_msg)
+                        # Check if this is actually a successful skip (not a true failure)
+                        skipped_via_index = result.data.get('skipped_via_index', 0) if result.data else 0
+                        if skipped_via_index > 0 and result.data.get('skipped_files'):
+                            # This is actually a successful skip, not a failure
+                            logger.info(f"✅ Video already exists and was skipped: {url}")
+                            results['skipped'] += 1
+                            results['skipped_urls'].append({
+                                'url': url,
+                                'title': display_title,
+                                'reason': 'Already exists (via index)'
+                            })
+                            skip_msg = f"⏭️ Already exists: {display_title}"
+                            self.url_completed.emit(url, True, skip_msg)
+                        else:
+                            # True failure - extraction failed
+                            error_msg = '; '.join(result.errors) if result.errors else 'Unknown error'
+                            logger.error(f"Failed to extract transcript for {url}: {error_msg}")
+                            
+                            # Check for payment required error in result errors
+                            if "402 Payment Required" in error_msg or "payment required" in error_msg.lower():
+                                self.payment_required.emit()
+                            
+                            results['failed'] += 1
+                            results['failed_urls'].append({
+                                'url': url,
+                                'title': display_title,
+                                'error': error_msg
+                            })
+                            
+                            # Failure message
+                            failure_msg = f"❌ Failed to extract: {display_title} - {error_msg}"
+                            self.url_completed.emit(url, False, failure_msg)
                 
                 except Exception as e:
                     error_msg = str(e)

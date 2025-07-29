@@ -1041,8 +1041,9 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     # No output directory specified - success means transcripts were extracted
                     success = transcripts_extracted
             else:
-                # No transcripts extracted - always failure
-                success = False
+                # No transcripts extracted - check if files were skipped via index (which is also success)
+                # If files were skipped because they already exist, that's a successful operation
+                success = skipped_via_index > 0 if not overwrite_existing else False
             
             logger.info(f"Transcript processing completed. Success: {success}, Transcripts extracted: {len(transcripts)}, Files saved: {len(saved_files)}, Files skipped: {len(skipped_files)}")
             
