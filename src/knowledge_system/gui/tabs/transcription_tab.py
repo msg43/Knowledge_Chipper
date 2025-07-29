@@ -429,7 +429,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.timestamps_checkbox.toggled.connect(self._on_setting_changed)
         layout.addWidget(self.timestamps_checkbox, 3, 0, 1, 2)
         
-        self.diarization_checkbox = QCheckBox("Enable speaker diarization (experimental)")
+        self.diarization_checkbox = QCheckBox("Enable speaker diarization")
         self.diarization_checkbox.toggled.connect(self._on_setting_changed)
         layout.addWidget(self.diarization_checkbox, 3, 2, 1, 2)
         
@@ -875,14 +875,22 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         
         # Check speaker diarization requirements
         if self.diarization_checkbox.isChecked():
-            # Check if pyannote.audio is available
+            # Check if diarization is available
             try:
-                from pyannote.audio import Pipeline
+                from knowledge_system.processors.diarization import is_diarization_available, get_diarization_installation_instructions
+                
+                if not is_diarization_available():
+                    self.show_error(
+                        "Missing Diarization Dependencies", 
+                        "Speaker diarization requires additional dependencies.\n\n"
+                        + get_diarization_installation_instructions()
+                    )
+                    return False
             except ImportError:
                 self.show_error(
                     "Missing Dependency", 
                     "Speaker diarization requires 'pyannote.audio' to be installed.\n\n"
-                    "Install it with: pip install pyannote.audio\n\n"
+                    "Install it with: pip install -e '.[diarization]'\n\n"
                     "Please install this dependency or disable speaker diarization."
                 )
                 return False

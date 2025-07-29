@@ -252,7 +252,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         
         # Output section
         output_layout = self._create_output_section()
-        right_layout.addLayout(output_layout)
+        right_layout.addLayout(output_layout, 1)  # Give stretch factor to allow expansion
         
         splitter.addWidget(right_widget)
         

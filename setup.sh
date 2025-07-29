@@ -43,17 +43,17 @@ version_greater_equal() {
 echo -e "${BLUE}📋 Checking Python version...${NC}"
 if ! command_exists python3; then
     echo -e "${RED}❌ Python 3 is required but not installed${NC}"
-    echo "Please install Python 3.9+ first:"
-    echo "  brew install python@3.11"
+    echo "Please install Python 3.13+ first:"
+    echo "  brew install python@3.13"
     exit 1
 fi
 
 PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2)
-REQUIRED_VERSION="3.9.0"
+REQUIRED_VERSION="3.13.0"
 if ! version_greater_equal "$PYTHON_VERSION" "$REQUIRED_VERSION"; then
     echo -e "${RED}❌ Python $PYTHON_VERSION found, but $REQUIRED_VERSION+ required${NC}"
     echo "Please upgrade Python:"
-    echo "  brew install python@3.11"
+    echo "  brew install python@3.13"
     exit 1
 fi
 echo -e "${GREEN}✅ Python $PYTHON_VERSION detected${NC}"

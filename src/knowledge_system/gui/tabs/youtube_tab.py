@@ -476,9 +476,7 @@ class YouTubeTab(BaseTab):
         
         # Output section
         output_layout = self._create_output_section()
-        layout.addLayout(output_layout)
-        
-        layout.addStretch()
+        layout.addLayout(output_layout, 1)  # Give stretch factor of 1 to allow expansion
         
         # Load saved settings after UI is set up
         self._load_settings()
@@ -1054,6 +1052,7 @@ class YouTubeTab(BaseTab):
     def _show_payment_required_dialog(self):
         """Show popup dialog for 402 Payment Required error."""
         from PyQt6.QtWidgets import QMessageBox
+        from ..assets.icons import get_app_icon
         
         payment_dialog = QMessageBox(self)
         payment_dialog.setIcon(QMessageBox.Icon.Warning)
@@ -1065,6 +1064,12 @@ class YouTubeTab(BaseTab):
             "This is not a bug in our application - it's a billing issue with your proxy service."
         )
         payment_dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
+        
+        # Set custom window icon
+        custom_icon = get_app_icon()
+        if custom_icon:
+            payment_dialog.setWindowIcon(custom_icon)
+        
         payment_dialog.exec()
 
     def _handle_playlist_info(self, playlist_data: dict):

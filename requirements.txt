@@ -1,4 +1,4 @@
-# Core framework
+# Core dependencies
 click>=8.1.0
 pydantic>=2.5.0
 pyyaml>=6.0
@@ -10,34 +10,42 @@ PyQt6>=6.6.0
 
 # Web UI
 streamlit>=1.28.0
-streamlit-option-menu>=0.3.0
 
-# File processing
+# File watching
 watchdog>=3.0.0
+
+# PDF processing
 pypdf2>=3.0.0
-pdfplumber>=0.10.0
+pdfplumb>=0.9.0
 
-# YouTube and video
-yt-dlp>=2023.12.0
-youtube-transcript-api>=1.1.1
-requests>=2.31.0
+# Audio/Video processing
+# pydub>=0.25.1  # Removed - replaced with FFmpeg
 
-# ML and transcription
-torch>=2.1.0
+# ML and transcription (core)
 openai-whisper>=20231117
-transformers>=4.35.0
-pydub>=0.25.1
-pyannote.audio>=3.1.0
 
-# LLM APIs
-openai>=1.3.0
-anthropic>=0.7.0
+# YouTube processing
+yt-dlp>=2023.10.13
+pytube>=15.0.0
 
-# Data and storage  
-sqlalchemy>=2.0.0
+# HTTP requests
+requests>=2.31.0
+aiohttp>=3.8.0
+
+# Data processing
 pandas>=2.0.0
+numpy>=1.24.0
 
 # Utilities
-python-dotenv>=1.0.0
-psutil>=5.9.0
-beautifulsoup4>=4.12.0
+python-dotenv>=0.19.0
+tqdm>=4.65.0
+colorama>=0.4.6
+
+# Development
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Optional: Diarization dependencies (install with: pip install -e ".[diarization]")
+# torch>=2.1.0
+# transformers>=4.35.0
+# pyannote.audio>=3.1.0

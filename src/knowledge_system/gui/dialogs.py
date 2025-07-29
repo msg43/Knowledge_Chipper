@@ -15,6 +15,7 @@ from knowledge_system.utils.progress import (
     TranscriptionProgress, SummarizationProgress, ExtractionProgress, MOCProgress,
     CancellationToken, CancellationError
 )
+from .assets.icons import get_app_icon
 
 logger = get_logger(__name__)
 
@@ -28,6 +29,11 @@ class OllamaInstallDialog(QDialog):
         self.setModal(True)
         self.setMinimumWidth(500)
         self.setMinimumHeight(300)
+        
+        # Set custom icon
+        custom_icon = get_app_icon()
+        if custom_icon:
+            self.setWindowIcon(custom_icon)
         
         self.install_worker = None
         self._setup_ui()
@@ -136,11 +142,18 @@ class OllamaInstallDialog(QDialog):
     def closeEvent(self, event):
         """Handle dialog close event."""
         if self.install_worker and self.install_worker.isRunning():
-            reply = QMessageBox.question(
-                self, "Cancel Installation", 
-                "Installation is in progress. Are you sure you want to cancel?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Question)
+            msg_box.setWindowTitle("Cancel Installation")
+            msg_box.setText("Installation is in progress. Are you sure you want to cancel?")
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            
+            # Set custom window icon
+            custom_icon = get_app_icon()
+            if custom_icon:
+                msg_box.setWindowIcon(custom_icon)
+            
+            reply = msg_box.exec()
             if reply == QMessageBox.StandardButton.Yes:
                 self.install_worker.terminate()
                 event.accept()
