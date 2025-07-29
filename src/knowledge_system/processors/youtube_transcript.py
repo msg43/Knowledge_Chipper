@@ -1045,6 +1045,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     errors.append(f"Extracted {len(transcripts)} transcript(s) but failed to save files")
             
             # Enhanced logging to clarify success vs failure
+            logger.info(f"🔧 NEW CODE: Success determination: files_saved={files_actually_saved}, files_skipped={files_skipped}, skipped_via_index={skipped_via_index}, overwrite={overwrite_existing}")
             if success and skipped_via_index > 0 and len(transcripts) == 0:
                 logger.info(f"✅ Transcript processing completed successfully. All {skipped_via_index} video(s) already existed and were skipped.")
             else:
