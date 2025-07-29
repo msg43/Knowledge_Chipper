@@ -46,61 +46,28 @@ def format_timestamp_vtt(seconds: float) -> str:
 
 
 def extract_audio_video_metadata(file_path: Path) -> Dict[str, Any]:
-    """Extract metadata from audio/video files using pydub."""
+    """Extract metadata from audio/video files using FFmpeg."""
     try:
-        from pydub.utils import mediainfo
-
-        info = mediainfo(str(file_path))
-
-        metadata = {
+        from knowledge_system.utils.audio_utils import get_audio_metadata
+        
+        metadata = get_audio_metadata(file_path)
+        
+        # Add additional file info
+        metadata.update({
+            "extracted_at": datetime.now().isoformat(),
+        })
+        
+        return metadata
+        
+    except Exception as e:
+        logger.warning(f"Error extracting metadata from {file_path}: {e}")
+        return {
             "filename": file_path.name,
             "file_path": str(file_path),
             "file_size": file_path.stat().st_size if file_path.exists() else 0,
             "file_extension": file_path.suffix.lower(),
             "extracted_at": datetime.now().isoformat(),
         }
-
-        if info:
-            # Format information
-            if "format" in info:
-                format_info = info["format"]
-                metadata.update(
-                    {
-                        "duration": format_info.get("duration"),
-                        "bit_rate": format_info.get("bit_rate"),
-                        "format_name": format_info.get("format_name"),
-                        "format_long_name": format_info.get("format_long_name"),
-                        "tags": format_info.get("tags", {}),
-                    }
-                )
-
-            # Stream information
-            if "streams" in info:
-                audio_streams = [
-                    s for s in info["streams"] if s.get("codec_type") == "audio"
-                ]
-                video_streams = [
-                    s for s in info["streams"] if s.get("codec_type") == "video"
-                ]
-
-                if audio_streams:
-                    audio = audio_streams[0]  # First audio stream
-                    metadata.update(
-                        {
-                            "audio_codec": audio.get("codec_name"),
-                            "audio_codec_long": audio.get("codec_long_name"),
-                            "sample_rate": audio.get("sample_rate"),
-                            "channels": audio.get("channels"),
-                            "channel_layout": audio.get("channel_layout"),
-                            "bits_per_sample": audio.get("bits_per_sample"),
-                            "audio_bit_rate": audio.get("bit_rate"),
-                        }
-                    )
-
-    except Exception as e:
-        logger.warning(f"Error extracting metadata from {file_path}: {e}")
-
-    return metadata
 
 
 def format_audio_video_metadata_markdown(metadata: Dict[str, Any]) -> str:
@@ -383,7 +350,7 @@ def extract_video_id_from_url(url: str) -> Optional[str]:
 @click.option(
     "--speaker-labels/--no-speaker-labels",
     default=False,
-    help="Enable speaker diarization (experimental)",
+            help="Enable speaker diarization",
 )
 @click.option(
     "--dry-run", is_flag=True, help="Show what would be done without making changes"

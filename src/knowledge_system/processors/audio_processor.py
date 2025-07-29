@@ -6,20 +6,25 @@ import os
 from knowledge_system.processors.base import BaseProcessor, ProcessorResult
 from knowledge_system.processors.whisper_cpp_transcribe import WhisperCppTranscribeProcessor
 from knowledge_system.utils.validation import validate_audio_input, can_process_file
+from knowledge_system.utils.audio_utils import (
+    convert_audio_file, 
+    get_audio_metadata, 
+    get_audio_duration, 
+    normalize_audio_file,
+    ffmpeg_processor
+)
 from knowledge_system.logger import get_logger
 
 logger = get_logger(__name__)
 
 # whisper.cpp processor is now the default and only transcriber
 
-try:
-    from pydub import AudioSegment
-    from pydub.effects import normalize
+# Check if FFmpeg is available for audio processing
+FFMPEG_AVAILABLE = ffmpeg_processor._check_ffmpeg_available()
 
-    PYDUB_AVAILABLE = True
-except ImportError:
-    PYDUB_AVAILABLE = False
-    logger.warning("pydub not available. Audio processing will be limited.")
+if not FFMPEG_AVAILABLE:
+    logger.warning("FFmpeg not available. Audio processing will be limited.")
+    logger.info("To enable full audio processing, install FFmpeg: brew install ffmpeg")
 
 
 class AudioProcessor(BaseProcessor):
@@ -77,25 +82,43 @@ class AudioProcessor(BaseProcessor):
         return False
 
     def _convert_audio(self, input_path: Path, output_path: Path) -> bool:
-        """Convert audio file to target format."""
-        if not PYDUB_AVAILABLE:
-            logger.warning("Audio conversion skipped - pydub not available")
+        """Convert audio file to target format using FFmpeg."""
+        if not FFMPEG_AVAILABLE:
+            logger.warning("Audio conversion skipped - FFmpeg not available")
+            logger.info("To enable audio conversion, install FFmpeg: brew install ffmpeg")
             return input_path.suffix.lower() == f".{self.target_format}"
 
         try:
-            audio = AudioSegment.from_file(input_path)
-            if self.normalize_audio:
-                audio = normalize(audio)
-            audio.export(output_path, format=self.target_format)
-            return True
+            # Convert audio using FFmpeg
+            success = convert_audio_file(
+                input_path=input_path,
+                output_path=output_path,
+                target_format=self.target_format,
+                normalize=self.normalize_audio
+            )
+            
+            if success:
+                logger.info(f"Successfully converted {input_path} to {output_path}")
+                return True
+            else:
+                logger.error(f"Failed to convert {input_path} to {output_path}")
+                return False
+                
         except Exception as e:
-            logger.error(f"Audio conversion failed: {e}")
+            logger.error(f"Audio conversion error: {e}")
             return False
 
     def _perform_diarization(self, audio_path: Path) -> Optional[list]:
         """Run speaker diarization on the audio file."""
         try:
-            from .diarization import SpeakerDiarizationProcessor
+            from .diarization import SpeakerDiarizationProcessor, is_diarization_available, get_diarization_installation_instructions
+            
+            # Check if diarization is available
+            if not is_diarization_available():
+                logger.warning("Diarization not available. Skipping speaker identification.")
+                logger.info(get_diarization_installation_instructions())
+                return None
+            
             logger.info("Running speaker diarization...")
             diarizer = SpeakerDiarizationProcessor(hf_token=self.hf_token)
             result = diarizer.process(audio_path)
@@ -195,12 +218,12 @@ class AudioProcessor(BaseProcessor):
                 "file_format": audio_path.suffix.lower().lstrip('.'),
             }
             
-            # Try to get audio duration if pydub is available
-            if PYDUB_AVAILABLE:
+            # Try to get audio duration if FFmpeg is available
+            if FFMPEG_AVAILABLE:
                 try:
-                    audio = AudioSegment.from_file(audio_path)
-                    metadata["duration_seconds"] = len(audio) / 1000.0
-                    metadata["duration_formatted"] = self._format_duration(metadata["duration_seconds"])
+                    duration_seconds = get_audio_duration(audio_path)
+                    metadata["duration_seconds"] = duration_seconds
+                    metadata["duration_formatted"] = self._format_duration(duration_seconds)
                 except Exception as e:
                     logger.warning(f"Could not extract audio duration: {e}")
                     metadata["duration_seconds"] = None

@@ -20,8 +20,10 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     QStatusBar,
     QMessageBox,
+    QSizePolicy,
 )
 from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QIcon
 
 from ..config import get_settings
 from ..logger import get_logger
@@ -39,6 +41,7 @@ from .components.progress_tracking import EnhancedProgressBar
 # Import core GUI components
 from .core.session_manager import get_session_manager
 from .core.settings_manager import get_gui_settings_manager
+from .assets.icons import get_app_icon, get_icon_path
 
 logger = get_logger(__name__)
 
@@ -69,6 +72,9 @@ class MainWindow(QMainWindow):
         # Setup UI
         self._setup_ui()
         
+        # Set custom icon for the window
+        self._set_window_icon()
+        
         # Start message processor
         self.message_timer = QTimer()
         self.message_timer.timeout.connect(self._process_messages)
@@ -76,6 +82,19 @@ class MainWindow(QMainWindow):
         
         # Load session state after UI is set up
         self._load_session()
+
+    def _set_window_icon(self):
+        """Set the custom window icon."""
+        icon = get_app_icon()
+        if icon:
+            try:
+                self.setWindowIcon(icon)
+                icon_path = get_icon_path()
+                logger.info(f"Window icon set from: {icon_path}")
+            except Exception as e:
+                logger.warning(f"Failed to set window icon: {e}")
+        else:
+            logger.warning("No custom icon found, using default")
 
     def _setup_ui(self):
         """Set up the streamlined main UI."""
@@ -90,8 +109,10 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
-        # Create tab widget
+        # Create tab widget with proper size policies
         self.tabs = QTabWidget()
+        # Ensure tab widget can expand properly
+        self.tabs.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         main_layout.addWidget(self.tabs)
 
         # Create progress widget
@@ -324,6 +345,7 @@ def launch_gui():
     try:
         # Import PyQt6 first to check availability
         from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtGui import QIcon
         
         # Create the QApplication
         app = QApplication(sys.argv)
@@ -332,6 +354,18 @@ def launch_gui():
         app.setApplicationName("Knowledge_Chipper")
         app.setApplicationDisplayName("Knowledge_Chipper")
         app.setApplicationVersion("1.0")
+        
+        # Set custom application icon
+        app_icon = get_app_icon()
+        if app_icon:
+            try:
+                app.setWindowIcon(app_icon)
+                icon_path = get_icon_path()
+                logger.info(f"Application icon set from: {icon_path}")
+            except Exception as e:
+                logger.warning(f"Failed to set application icon: {e}")
+        else:
+            logger.warning("No custom icon found for application")
         
         # Create and show the main window
         window = MainWindow()

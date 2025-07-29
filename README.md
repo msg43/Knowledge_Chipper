@@ -91,37 +91,51 @@ A comprehensive knowledge management system for macOS that transforms videos, au
 ### Prerequisites
 
 - **macOS Sonoma or later** (optimized for Apple Silicon)
-- **Python 3.9+** (check with `python3 --version`)
+- **Python 3.13+** (check with `python3 --version`)
+- **FFmpeg** (for audio/video processing - install with `brew install ffmpeg`)
 - **Git** (for installation)
 - **16GB+ RAM recommended** for large files
 
 ### Automated Installation (Recommended)
 
 **Interactive setup with full options:**
-
 ```bash
-# Clone and run comprehensive setup
 git clone https://github.com/msg43/Knowledge_Chipper.git
 cd Knowledge_Chipper
 bash setup.sh
 ```
 
-**Quick setup (no prompts, minimal configuration):**
-
+**Quick setup (no prompts):**
 ```bash
-# For fastest setup with defaults
 git clone https://github.com/msg43/Knowledge_Chipper.git
 cd Knowledge_Chipper
 bash quick_setup.sh
 ```
 
-**Or run directly from the web:**
-```bash
-# Interactive version
-curl -fsSL https://raw.githubusercontent.com/msg43/Knowledge_Chipper/main/setup.sh | bash
+### Manual Installation
 
-# Quick version
-curl -fsSL https://raw.githubusercontent.com/msg43/Knowledge_Chipper/main/quick_setup.sh | bash
+**Core installation (lightweight, no diarization):**
+```bash
+git clone https://github.com/msg43/Knowledge_Chipper.git
+cd Knowledge_Chipper
+python3 -m venv venv
+source venv/bin/activate
+pip install -e ".[gui]"  # With GUI
+# or
+pip install -e .          # CLI only
+```
+
+**Full installation with diarization:**
+```bash
+pip install -e ".[full]"  # Everything including diarization
+# or
+pip install -e ".[diarization]"  # Just diarization dependencies
+```
+
+**Install diarization later:**
+```bash
+# If you want to add diarization after core installation
+pip install -e ".[diarization]"
 ```
 
 **What the scripts do:**

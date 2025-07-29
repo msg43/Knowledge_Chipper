@@ -584,6 +584,13 @@ class SummarizationTab(BaseTab):
         
         settings_layout.addWidget(model_label, 0, 2)
         settings_layout.addWidget(self.model_combo, 0, 3, 1, 2)  # Span 2 columns to make it wider
+        
+        # Add refresh button for local models
+        self.refresh_models_btn = QPushButton("🔄")
+        self.refresh_models_btn.setToolTip("Refresh available local models")
+        self.refresh_models_btn.setMaximumWidth(40)
+        self.refresh_models_btn.clicked.connect(self._refresh_models)
+        settings_layout.addWidget(self.refresh_models_btn, 0, 5)
 
         # Max tokens
         max_tokens_label = QLabel("Max Tokens:")
@@ -910,6 +917,24 @@ class SummarizationTab(BaseTab):
         logger.info(f"🎯 DEBUG: Total files collected: {len(files)}")
         return files
         
+    def _refresh_models(self):
+        """Refresh the model list, especially useful for local models."""
+        current_model = self.model_combo.currentText()
+        self._update_models()
+        
+        # Try to restore the previously selected model
+        if current_model:
+            index = self.model_combo.findText(current_model)
+            if index >= 0:
+                self.model_combo.setCurrentIndex(index)
+            else:
+                logger.info(f"Previously selected model '{current_model}' no longer available")
+        
+        # Show feedback to user
+        provider = self.provider_combo.currentText()
+        if provider == "local":
+            self.append_log("🔄 Refreshed local model list")
+    
     def _update_models(self):
         """Update the model list based on selected provider."""
         provider = self.provider_combo.currentText()
@@ -936,20 +961,75 @@ class SummarizationTab(BaseTab):
                 "claude-3-5-haiku-20241022"
             ]
         else:  # local
-            models = [
-                "llama2:7b-chat",
-                "llama2:13b-chat", 
-                "llama3.1:8b-instruct",
-                "llama3.2:3b-instruct",
-                "mistral:7b-instruct-v0.2",
-                "codellama:7b-instruct",
-                "codellama:13b-instruct",
-                "phi3:3.8b-mini-instruct",
-                "qwen2.5:7b-instruct",
-                "qwen2.5:14b-instruct",
-                "qwen2.5:32b-instruct",
-                "qwen2.5-coder:7b-instruct"
-            ]
+            # Dynamically fetch available Ollama models
+            try:
+                ollama_manager = get_ollama_manager()
+                if ollama_manager.is_service_running():
+                    available_models = ollama_manager.get_available_models()
+                    models = [model.name for model in available_models]
+                    
+                    # If no models are available locally, provide some popular suggestions
+                    if not models:
+                        models = [
+                            "llama2:7b-chat",
+                            "llama2:13b-chat", 
+                            "llama3.1:8b-instruct",
+                            "llama3.2:3b-instruct",
+                            "mistral:7b-instruct-v0.2",
+                            "codellama:7b-instruct",
+                            "codellama:13b-instruct",
+                            "phi3:3.8b-mini-instruct",
+                            "qwen2.5:7b-instruct",
+                            "qwen2.5:14b-instruct",
+                            "qwen2.5:32b-instruct",
+                            "qwen2.5-coder:7b-instruct",
+                            "phi3:mini-128k",
+                            "llama3.1:8b-instruct",
+                            "mistral:7b-instruct-v0.3"
+                        ]
+                        logger.info("No local models found, showing popular model suggestions")
+                    else:
+                        logger.info(f"Found {len(models)} local models: {', '.join(models[:5])}{'...' if len(models) > 5 else ''}")
+                else:
+                    # Ollama service not running, show popular models
+                    models = [
+                        "llama2:7b-chat",
+                        "llama2:13b-chat", 
+                        "llama3.1:8b-instruct",
+                        "llama3.2:3b-instruct",
+                        "mistral:7b-instruct-v0.2",
+                        "codellama:7b-instruct",
+                        "codellama:13b-instruct",
+                        "phi3:3.8b-mini-instruct",
+                        "qwen2.5:7b-instruct",
+                        "qwen2.5:14b-instruct",
+                        "qwen2.5:32b-instruct",
+                        "qwen2.5-coder:7b-instruct",
+                        "phi3:mini-128k",
+                        "llama3.1:8b-instruct",
+                        "mistral:7b-instruct-v0.3"
+                    ]
+                    logger.info("Ollama service not running, showing popular model suggestions")
+            except Exception as e:
+                logger.error(f"Error fetching Ollama models: {e}")
+                # Fallback to hardcoded list
+                models = [
+                    "llama2:7b-chat",
+                    "llama2:13b-chat", 
+                    "llama3.1:8b-instruct",
+                    "llama3.2:3b-instruct",
+                    "mistral:7b-instruct-v0.2",
+                    "codellama:7b-instruct",
+                    "codellama:13b-instruct",
+                    "phi3:3.8b-mini-instruct",
+                    "qwen2.5:7b-instruct",
+                    "qwen2.5:14b-instruct",
+                    "qwen2.5:32b-instruct",
+                    "qwen2.5-coder:7b-instruct",
+                    "phi3:mini-128k",
+                    "llama3.1:8b-instruct",
+                    "mistral:7b-instruct-v0.3"
+                ]
             
         self.model_combo.addItems(models)
         
@@ -960,7 +1040,15 @@ class SummarizationTab(BaseTab):
             elif provider == "anthropic":
                 self.model_combo.setCurrentText("claude-3-5-sonnet-20241022")
             else:
-                self.model_combo.setCurrentText("qwen2.5-coder:7b-instruct")
+                # Try to set a good default for local models
+                preferred_defaults = ["qwen2.5-coder:7b-instruct", "phi3:mini-128k", "llama3.1:8b-instruct", "mistral:7b-instruct-v0.3"]
+                for default in preferred_defaults:
+                    if default in models:
+                        self.model_combo.setCurrentText(default)
+                        break
+                else:
+                    # If none of the preferred defaults are available, use the first model
+                    self.model_combo.setCurrentIndex(0)
         
     def _select_template(self):
         """Select a template file."""

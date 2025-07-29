@@ -159,6 +159,9 @@ cython_debug/
 #.idea/
 
 # Project-specific ignores
+test_icon_integration.py
+*_test.py
+debug_*.py
 logs/
 *.log
 Output/
@@ -215,3 +218,8 @@ settings.yaml
 
 # User data directories (outside project but documenting for completeness)
 # ~/.knowledge_system/ (automatically safe - in user home directory)
+
+# Cursor/IDE specific files that may contain sensitive data
+.specstory/
+*.md.bak
+.cursor/
