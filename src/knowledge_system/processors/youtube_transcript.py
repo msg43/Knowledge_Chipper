@@ -1021,31 +1021,34 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             files_actually_saved = len(saved_files) > 0
             files_skipped = len(skipped_files) > 0
             
-            # Determine success based on what the user expects:
-            # - If we extracted transcripts and intended to save files, success = files were actually saved OR skipped (both are valid outcomes)
-            # - If we only extracted transcripts (no output_dir), success = transcripts extracted
-            if transcripts_extracted and len(transcripts) > 0:
-                # We extracted transcripts - success depends on whether we intended to save files
-                if output_dir:
-                    # We intended to save files - success means files were actually saved OR skipped due to overwrite=False
-                    success = files_actually_saved or files_skipped
-                    if transcripts_extracted and not files_actually_saved and not files_skipped:
-                        # Special case: transcripts extracted but no files saved and none skipped (likely due to cancellation or errors)
-                        if cancellation_token and cancellation_token.is_cancelled():
-                            errors = errors or []
-                            errors.append(f"Processing was cancelled after extracting {len(transcripts)} transcript(s) but before saving files")
-                        else:
-                            errors = errors or []
-                            errors.append(f"Extracted {len(transcripts)} transcript(s) but failed to save any files to disk")
-                else:
-                    # No output directory specified - success means transcripts were extracted
-                    success = transcripts_extracted
-            else:
-                # No transcripts extracted - check if files were skipped via index (which is also success)
-                # If files were skipped because they already exist, that's a successful operation
-                success = skipped_via_index > 0 if not overwrite_existing else False
+
+            # Simplified success logic: ANY of these counts as success
+            # 1. Files were actually saved (new transcripts created)
+            # 2. Files were skipped (existing files, overwrite disabled) 
+            # 3. Videos were skipped via index (optimization, already exist)
+            # 4. Transcripts extracted successfully (when no output_dir specified)
             
-            logger.info(f"Transcript processing completed. Success: {success}, Transcripts extracted: {len(transcripts)}, Files saved: {len(saved_files)}, Files skipped: {len(skipped_files)}")
+            success = (
+                files_actually_saved or  # New files saved
+                files_skipped or        # Files skipped (already exist)
+                (skipped_via_index > 0 and not overwrite_existing) or  # Skipped via index optimization
+                (transcripts_extracted and not output_dir)  # Transcripts extracted (no file output)
+            )
+            
+            # Add error messages for specific failure cases
+            if not success and output_dir and len(transcripts) > 0:
+                if cancellation_token and cancellation_token.is_cancelled():
+                    errors = errors or []
+                    errors.append(f"Processing was cancelled after extracting {len(transcripts)} transcript(s)")
+                else:
+                    errors = errors or []
+                    errors.append(f"Extracted {len(transcripts)} transcript(s) but failed to save files")
+            
+            # Enhanced logging to clarify success vs failure
+            if success and skipped_via_index > 0 and len(transcripts) == 0:
+                logger.info(f"✅ Transcript processing completed successfully. All {skipped_via_index} video(s) already existed and were skipped.")
+            else:
+                logger.info(f"Transcript processing completed. Success: {success}, Transcripts extracted: {len(transcripts)}, Files saved: {len(saved_files)}, Files skipped: {len(skipped_files)}")
             
             # Report index optimization statistics if applicable
             if not overwrite_existing and skipped_via_index > 0:
