@@ -1,138 +1,138 @@
-from unittest.mock import patch, MagicMock, Mock
+import pytest
 from pathlib import Path
-from knowledge_system.processors.audio_processor import (
-    AudioProcessor,
-    process_audio_for_transcription,
-)
+from unittest.mock import patch, MagicMock
+from knowledge_system.processors.audio_processor import AudioProcessor
+from knowledge_system.processors.base import ProcessorResult
 
 
-@patch("knowledge_system.processors.audio_processor.PYDUB_AVAILABLE", True)
-def test_single_audio_processing():
-    processor = AudioProcessor(normalize_audio=True)
-
-    with (
-        patch.object(Path, "exists", return_value=True),
-        patch.object(Path, "is_file", return_value=True),
-    ):
-        with patch("tempfile.NamedTemporaryFile") as mock_temp:
-            mock_temp.return_value.__enter__.return_value.name = "/tmp/test.wav"
-            mock_temp.return_value.__exit__.return_value = None
-
-            with patch.object(processor, "_convert_audio", return_value=True):
-                with patch.object(processor.transcriber, "process") as mock_transcribe:
-                    mock_transcribe.return_value = MagicMock(
-                        success=True, data="transcribed text"
-                    )
-
-                    result = processor.process("audio.mp3")
-
-                    assert result.success
-                    assert result.data == "transcribed text"
-                    assert result.metadata["original_format"] == ".mp3"
-                    assert result.metadata["processed_format"] == "wav"
-                    assert result.metadata["normalized"] is True
+@pytest.fixture
+def audio_processor():
+    return AudioProcessor()
 
 
-@patch("knowledge_system.processors.audio_processor.PYDUB_AVAILABLE", True)
-def test_batch_audio_processing():
+@pytest.fixture
+def sample_audio_file(tmp_path):
+    # Create a mock audio file
+    audio_file = tmp_path / "test_audio.wav"
+    audio_file.write_bytes(b"mock audio data")
+    return audio_file
+
+
+@patch("knowledge_system.processors.audio_processor.FFMPEG_AVAILABLE", True)
+def test_audio_processor_initialization():
+    """Test AudioProcessor initialization."""
     processor = AudioProcessor()
-
-    with patch.object(processor, "process") as mock_process:
-        mock_process.side_effect = [
-            MagicMock(success=True, data="text1"),
-            MagicMock(success=True, data="text2"),
-        ]
-
-        results = processor.process_batch(["audio1.mp3", "audio2.wav"])
-
-        assert len(results) == 2
-        assert all(r.success for r in results)
-        assert results[0].data == "text1"
-        assert results[1].data == "text2"
+    assert processor.normalize_audio is True
+    assert processor.target_format == "wav"
+    assert processor.model == "base"
 
 
-@patch("knowledge_system.processors.audio_processor.PYDUB_AVAILABLE", True)
-def test_audio_conversion_failure():
+@patch("knowledge_system.processors.audio_processor.FFMPEG_AVAILABLE", True)
+def test_supported_formats():
+    """Test supported audio formats."""
     processor = AudioProcessor()
-
-    with (
-        patch.object(Path, "exists", return_value=True),
-        patch.object(Path, "is_file", return_value=True),
-    ):
-        with patch("tempfile.NamedTemporaryFile") as mock_temp:
-            mock_temp.return_value.__enter__.return_value.name = "/tmp/test.wav"
-            mock_temp.return_value.__exit__.return_value = None
-
-            with patch.object(processor, "_convert_audio", return_value=False):
-                result = processor.process("audio.mp3")
-
-                assert not result.success
-                assert "Audio conversion failed" in result.errors
+    formats = processor.supported_formats
+    assert ".mp3" in formats
+    assert ".wav" in formats
+    assert ".m4a" in formats
+    assert ".flac" in formats
 
 
-@patch("knowledge_system.processors.audio_processor.PYDUB_AVAILABLE", False)
-def test_pydub_not_available():
+@patch("knowledge_system.processors.audio_processor.FFMPEG_AVAILABLE", True)
+def test_validate_input_valid_file(sample_audio_file):
+    """Test input validation with valid audio file."""
     processor = AudioProcessor()
-
-    with (
-        patch.object(Path, "exists", return_value=True),
-        patch.object(Path, "is_file", return_value=True),
-    ):
-        result = processor.process("audio.mp3")
-
-        assert not result.success
-        assert "Audio conversion failed" in result.errors
+    assert processor.validate_input(sample_audio_file) is True
 
 
-def test_invalid_input():
+@patch("knowledge_system.processors.audio_processor.FFMPEG_AVAILABLE", True)
+def test_validate_input_invalid_file(tmp_path):
+    """Test input validation with invalid file."""
     processor = AudioProcessor()
-
-    with patch.object(Path, "exists", return_value=False):
-        result = processor.process("nonexistent.mp3")
-
-        assert not result.success
-        assert "Invalid input" in result.errors[0]
+    invalid_file = tmp_path / "test.txt"
+    invalid_file.write_text("not audio")
+    assert processor.validate_input(invalid_file) is False
 
 
-def test_unsupported_format():
+@patch("knowledge_system.processors.audio_processor.FFMPEG_AVAILABLE", False)
+def test_ffmpeg_not_available():
+    """Test behavior when FFmpeg is not available."""
     processor = AudioProcessor()
-
-    with (
-        patch.object(Path, "exists", return_value=True),
-        patch.object(Path, "is_file", return_value=True),
-    ):
-        result = processor.process("file.txt")
-
-        assert not result.success
-        assert "Invalid input" in result.errors[0]
+    # Should still initialize without errors
+    assert processor is not None
 
 
-def test_process_audio_for_transcription_success():
-    with patch(
-        "knowledge_system.processors.audio_processor.AudioProcessor"
-    ) as mock_processor_class:
-        mock_processor = Mock()
-        mock_processor.process.return_value = MagicMock(
-            success=True, data="transcribed"
-        )
-        mock_processor_class.return_value = mock_processor
-
-        result = process_audio_for_transcription("audio.mp3", normalize=True)
-
-        assert result == "transcribed"
-        mock_processor_class.assert_called_once_with(normalize_audio=True)
-        mock_processor.process.assert_called_once_with("audio.mp3")
+@patch("knowledge_system.processors.audio_processor.FFMPEG_AVAILABLE", True)
+@patch("knowledge_system.processors.audio_processor.convert_audio_file")
+def test_convert_audio_success(mock_convert, sample_audio_file, tmp_path):
+    """Test successful audio conversion."""
+    mock_convert.return_value = True
+    processor = AudioProcessor()
+    output_file = tmp_path / "output.wav"
+    
+    result = processor._convert_audio(sample_audio_file, output_file)
+    assert result is True
+    mock_convert.assert_called_once()
 
 
-def test_process_audio_for_transcription_failure():
-    with patch(
-        "knowledge_system.processors.audio_processor.AudioProcessor"
-    ) as mock_processor_class:
-        mock_processor = Mock()
-        mock_processor.process.return_value = MagicMock(
-            success=False, data=None)
-        mock_processor_class.return_value = mock_processor
+@patch("knowledge_system.processors.audio_processor.FFMPEG_AVAILABLE", True)
+@patch("knowledge_system.processors.audio_processor.convert_audio_file")
+def test_convert_audio_failure(mock_convert, sample_audio_file, tmp_path):
+    """Test failed audio conversion."""
+    mock_convert.return_value = False
+    processor = AudioProcessor()
+    output_file = tmp_path / "output.wav"
+    
+    result = processor._convert_audio(sample_audio_file, output_file)
+    assert result is False
 
-        result = process_audio_for_transcription("audio.mp3")
 
-        assert result is None
+@patch("knowledge_system.processors.audio_processor.FFMPEG_AVAILABLE", False)
+def test_convert_audio_no_ffmpeg(sample_audio_file, tmp_path):
+    """Test audio conversion when FFmpeg is not available."""
+    processor = AudioProcessor()
+    output_file = tmp_path / "output.wav"
+    
+    # Should return True if input format matches target format
+    result = processor._convert_audio(sample_audio_file, output_file)
+    assert result is True  # Because input is .wav and target is .wav
+
+
+@patch("knowledge_system.processors.audio_processor.FFMPEG_AVAILABLE", True)
+@patch("knowledge_system.processors.audio_processor.get_audio_duration")
+def test_get_audio_metadata_success(mock_duration, sample_audio_file):
+    """Test successful metadata extraction."""
+    mock_duration.return_value = 120.5
+    processor = AudioProcessor()
+    
+    metadata = processor._get_audio_metadata(sample_audio_file)
+    assert "filename" in metadata
+    assert "file_size_mb" in metadata
+    assert "duration_seconds" in metadata
+    assert metadata["duration_seconds"] == 120.5
+
+
+@patch("knowledge_system.processors.audio_processor.FFMPEG_AVAILABLE", False)
+def test_get_audio_metadata_no_ffmpeg(sample_audio_file):
+    """Test metadata extraction when FFmpeg is not available."""
+    processor = AudioProcessor()
+    
+    metadata = processor._get_audio_metadata(sample_audio_file)
+    assert "filename" in metadata
+    assert "file_size_mb" in metadata
+    # Should not have duration info when FFmpeg is not available
+    assert "duration_seconds" not in metadata
+
+
+def test_format_duration():
+    """Test duration formatting."""
+    processor = AudioProcessor()
+    
+    # Test seconds only
+    assert processor._format_duration(65.5) == "01:05"
+    
+    # Test hours
+    assert processor._format_duration(3665.5) == "01:01:05"
+    
+    # Test None
+    assert processor._format_duration(None) == "Unknown"

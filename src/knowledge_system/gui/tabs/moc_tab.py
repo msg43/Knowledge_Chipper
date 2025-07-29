@@ -192,9 +192,7 @@ class MOCTab(BaseTab):
 
         # Output section
         output_layout = self._create_output_section()
-        layout.addLayout(output_layout)
-
-        layout.addStretch()
+        layout.addLayout(output_layout, 1)  # Give stretch factor of 1 to allow expansion
         
         # Load saved settings after UI is set up
         self._load_settings()

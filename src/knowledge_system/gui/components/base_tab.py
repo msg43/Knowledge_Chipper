@@ -5,12 +5,16 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QGridLayout,
-    QLabel, QPushButton, QTextEdit, QMessageBox, QCheckBox, QSizePolicy
+    QLabel, QPushButton, QTextEdit, QMessageBox, QCheckBox, QSizePolicy,
+    QProgressBar, QFileDialog, QSpinBox, QComboBox, QLineEdit, 
+    QTextBrowser, QFrame, QScrollArea
 )
-from PyQt6.QtCore import pyqtSignal, QTimer
+from PyQt6.QtCore import pyqtSignal, QTimer, QThread, Qt
+from PyQt6.QtGui import QFont
 
 from ...config import get_settings
 from ...logger import get_logger
+from ..assets.icons import get_app_icon
 
 
 class BaseTab(QWidget):
@@ -87,11 +91,12 @@ class BaseTab(QWidget):
         # Output text area with responsive resizing behavior
         self.output_text = QTextEdit()
         self.output_text.setReadOnly(True)
-        self.output_text.setMinimumHeight(100)  # Allow shrinking to minimal size
+        self.output_text.setMinimumHeight(150)  # Increased minimum height to prevent excessive compression
         # Remove maximum height constraint to allow expansion
         # Use Expanding vertical policy to grow/shrink with window
         self.output_text.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        layout.addWidget(self.output_text)
+        # Set stretch factor to ensure it gets priority in layout distribution
+        layout.addWidget(self.output_text, 1)  # Give stretch factor to ensure proper expansion
         
         return layout
         
@@ -133,16 +138,49 @@ class BaseTab(QWidget):
             self.processing_finished.emit()
             
     def show_error(self, title: str, message: str):
-        """Show an error message box."""
-        QMessageBox.critical(self, title, message)
+        """Show an error message box with custom icon."""
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Critical)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        
+        # Set custom window icon
+        custom_icon = get_app_icon()
+        if custom_icon:
+            msg_box.setWindowIcon(custom_icon)
+        
+        msg_box.exec()
         
     def show_warning(self, title: str, message: str):
-        """Show a warning message box."""
-        QMessageBox.warning(self, title, message)
+        """Show a warning message box with custom icon."""
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        
+        # Set custom window icon
+        custom_icon = get_app_icon()
+        if custom_icon:
+            msg_box.setWindowIcon(custom_icon)
+        
+        msg_box.exec()
         
     def show_info(self, title: str, message: str):
-        """Show an info message box."""
-        QMessageBox.information(self, title, message)
+        """Show an info message box with custom icon."""
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        
+        # Set custom window icon
+        custom_icon = get_app_icon()
+        if custom_icon:
+            msg_box.setWindowIcon(custom_icon)
+        
+        msg_box.exec()
         
     def cleanup_workers(self):
         """Clean up any active worker threads."""

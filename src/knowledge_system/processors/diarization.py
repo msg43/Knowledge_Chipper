@@ -6,14 +6,40 @@ from knowledge_system.logger import get_logger
 
 logger = get_logger(__name__)
 
-try:
-    from pyannote.audio import Pipeline
-except ImportError:
-    Pipeline = None
+# Lazy loading of diarization dependencies
+PIPELINE_AVAILABLE = False
+PIPELINE = None
+
+def _check_diarization_dependencies():
+    """Check if diarization dependencies are available."""
+    global PIPELINE_AVAILABLE, PIPELINE
+    
+    if PIPELINE_AVAILABLE:
+        return True
+    
+    try:
+        from pyannote.audio import Pipeline
+        PIPELINE = Pipeline
+        PIPELINE_AVAILABLE = True
+        logger.info("Diarization dependencies loaded successfully")
+        return True
+    except ImportError as e:
+        PIPELINE_AVAILABLE = False
+        PIPELINE = None
+        logger.warning(
+            "Diarization dependencies not available. "
+            "Install with: pip install -e '.[diarization]' or pip install torch transformers pyannote.audio"
+        )
+        return False
+    except Exception as e:
+        PIPELINE_AVAILABLE = False
+        PIPELINE = None
+        logger.error(f"Error loading diarization dependencies: {e}")
+        return False
 
 
 class SpeakerDiarizationProcessor(BaseProcessor):
-    """Performs speaker diarization using pyannote.audio."""
+    """Performs speaker diarization using pyannote.audio with lazy loading."""
 
     def __init__(
         self,
@@ -25,18 +51,31 @@ class SpeakerDiarizationProcessor(BaseProcessor):
         self.device = device or "cpu"
         self.hf_token = hf_token
         self._pipeline = None
+        self._dependencies_checked = False
 
     @property
     def supported_formats(self) -> list:
         """Audio formats supported by pyannote.audio for diarization."""
         return [".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".webm"]
 
+    def _check_dependencies(self):
+        """Check if diarization dependencies are available."""
+        if not self._dependencies_checked:
+            self._dependencies_checked = True
+            return _check_diarization_dependencies()
+        return PIPELINE_AVAILABLE
+
     def _load_pipeline(self):
+        """Lazy load the diarization pipeline."""
+        if not self._check_dependencies():
+            raise ImportError(
+                "Diarization dependencies not available. "
+                "Install with: pip install -e '.[diarization]' or pip install torch transformers pyannote.audio"
+            )
+        
         if self._pipeline is None:
-            if Pipeline is None:
-                raise ImportError("pyannote.audio is not installed.")
             logger.info(f"Loading pyannote.audio pipeline: {self.model}")
-            self._pipeline = Pipeline.from_pretrained(
+            self._pipeline = PIPELINE.from_pretrained(
                 self.model, use_auth_token=self.hf_token
             )
             logger.info("pyannote.audio pipeline loaded successfully")
@@ -56,34 +95,61 @@ class SpeakerDiarizationProcessor(BaseProcessor):
         # Handle input_data as input_path for backwards compatibility
         input_path = input_data
         
-        if Pipeline is None:
+        # Check dependencies first
+        if not self._check_dependencies():
             return ProcessorResult(
-                success=False, errors=["pyannote.audio is not installed."], dry_run=dry_run
+                success=False, 
+                errors=[
+                    "Diarization dependencies not available. "
+                    "Install with: pip install -e '.[diarization]' or pip install torch transformers pyannote.audio"
+                ], 
+                dry_run=dry_run
             )
+        
         path = Path(input_path)
         if not path.exists() or not path.is_file():
             return ProcessorResult(
                 success=False, errors=[f"File not found: {input_path}"]
             )
+        
         try:
             self._load_pipeline()
             if self._pipeline is None:
                 return ProcessorResult(
                     success=False, errors=["Failed to load diarization pipeline"], dry_run=dry_run
                 )
+            
             diarization = self._pipeline(str(path))
             segments = []
             for turn, _, speaker in diarization.itertracks(yield_label=True):
                 segments.append(
                     {"start": turn.start, "end": turn.end, "speaker": speaker}
                 )
+            
             return ProcessorResult(
                 success=True,
                 data=segments,
                 metadata={
-    "model": self.model,
-     "segments_count": len(segments)},
+                    "model": self.model,
+                    "segments_count": len(segments)
+                },
             )
         except Exception as e:
             logger.error(f"Diarization error: {e}")
             return ProcessorResult(success=False, errors=[str(e)])
+
+
+def is_diarization_available() -> bool:
+    """Check if diarization is available without loading dependencies."""
+    return _check_diarization_dependencies()
+
+
+def get_diarization_installation_instructions() -> str:
+    """Get installation instructions for diarization dependencies."""
+    return (
+        "To enable speaker diarization, install the required dependencies:\n"
+        "  pip install -e '.[diarization]'\n\n"
+        "Or install manually:\n"
+        "  pip install torch transformers pyannote.audio\n\n"
+        "Note: This will add ~377MB to your installation size."
+    )

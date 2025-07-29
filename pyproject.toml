@@ -3,25 +3,29 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "knowledge-chipper"
+name = "knowledge-system"
 version = "0.1.0"
-description = "Knowledge_Chipper - AI-powered knowledge management system for macOS - transcribe, summarize, and organize videos/audio into searchable knowledge"
+description = "A comprehensive knowledge management system for macOS that transforms videos, audio files, and documents into organized, searchable knowledge."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.13"
+license = {text = "MIT"}
 authors = [
-    {name = "Knowledge_Chipper", email = "dev@knowledge-chipper.local"}
+    {name = "Matthew Greer", email = "matthew.greer@example.com"},
 ]
+keywords = ["knowledge-management", "transcription", "summarization", "macos", "ai"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: End Users/Desktop",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
-    "Operating System :: MacOS",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "Topic :: Multimedia :: Video :: Analysis",
 ]
 
 dependencies = [
@@ -46,11 +50,8 @@ dependencies = [
     "yt-dlp>=2023.12.0",
     "requests>=2.31.0",
     
-    # ML and transcription
-    "torch>=2.1.0",
+    # ML and transcription (core)
     "openai-whisper>=20231117",
-    "transformers>=4.35.0",
-    "pydub>=0.25.1",
     
     # LLM APIs
     "openai>=1.3.0",
@@ -61,7 +62,7 @@ dependencies = [
     "pandas>=2.0.0",
     
     # Utilities
-    "python-dotenv>=1.0.0",
+    "python-dotenv>=0.19.0",
     "youtube-transcript-api>=1.1.1",
     "psutil>=5.9.0",
 ]
@@ -85,6 +86,18 @@ gui = [
 
 cuda = [
     "nvidia-ml-py>=12.550.0",  # pynvml for detailed GPU info
+]
+
+# Lazy-loaded diarization dependencies (saves ~377MB initial install)
+diarization = [
+    "torch>=2.1.0",
+    "transformers>=4.35.0",
+    "pyannote.audio>=3.1.0",
+]
+
+# Full installation including all optional features
+full = [
+    "knowledge-system[gui,diarization,cuda]",
 ]
 
 [project.scripts]
@@ -111,7 +124,7 @@ addopts = "-v --cov=knowledge_system --cov-report=html --cov-report=term-missing
 
 [tool.black]
 line-length = 88
-target-version = ['py39']
+target-version = ['py313']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -129,7 +142,7 @@ multi_line_output = 3
 line_length = 88
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

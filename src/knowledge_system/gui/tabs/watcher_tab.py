@@ -51,7 +51,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         
         # Output section
         output_layout = self._create_output_section()
-        layout.addLayout(output_layout)
+        layout.addLayout(output_layout, 1)  # Give stretch factor to allow expansion
         
         # Load saved settings after UI is set up
         self._load_settings()
