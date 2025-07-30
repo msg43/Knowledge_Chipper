@@ -1,0 +1,41 @@
+Analyze the relationships and connections within and across the following documents:
+
+## Inter-Document Relationships
+- Shared topics and themes
+- Contradictory viewpoints
+- Complementary information
+- Chronological connections
+- Causal relationships
+
+## Entity Relationships
+- People connections (collaborations, conflicts, hierarchies)
+- Organization affiliations and partnerships
+- Geographic relationships
+- Temporal relationships (before/after, simultaneous)
+
+## Concept Relationships
+- Hierarchical relationships (parent/child concepts)
+- Causal connections (cause and effect)
+- Similarity and difference patterns
+- Dependency relationships
+- Influence networks
+
+## Information Flow
+- Source and citation patterns
+- Information propagation paths
+- Authority and credibility chains
+- Knowledge gaps and missing links
+
+## Network Analysis
+- Central nodes (most connected entities/concepts)
+- Clustering patterns
+- Bridge connections between clusters
+- Isolated or peripheral elements
+
+## Relationship Strength
+- Strong relationships (high confidence, multiple sources)
+- Weak relationships (tentative, single source)
+- Potential relationships (inferred but not explicit)
+- Conflicting relationships (contradictory evidence)
+
+Present findings as a network analysis with relationship types, strength indicators, and supporting evidence.
