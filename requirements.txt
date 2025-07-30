@@ -16,7 +16,7 @@ watchdog>=3.0.0
 
 # PDF processing
 pypdf2>=3.0.0
-pdfplumb>=0.9.0
+pdfplumber>=0.9.0
 
 # Audio/Video processing
 # pydub>=0.25.1  # Removed - replaced with FFmpeg

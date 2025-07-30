@@ -20,7 +20,6 @@ from knowledge_system.config import (
     MOCConfig,
     MonitoringConfig,
     get_settings,
-    reload_settings,
 )
 
 
