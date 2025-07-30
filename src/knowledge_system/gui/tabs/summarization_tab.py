@@ -1,4 +1,4 @@
-"""Summarization tab for document summarization using AI models."""
+"""Content analysis tab for document analysis using AI models with various analysis types."""
 
 from typing import List, Optional, Dict, Any
 from pathlib import Path
@@ -512,7 +512,7 @@ class SummarizationTab(BaseTab):
     def __init__(self, parent=None):
         self.summarization_worker = None
         self.gui_settings = get_gui_settings_manager()
-        self.tab_name = "Document Summarization"
+        self.tab_name = "Content Analysis"
         super().__init__(parent)
         
     def _setup_ui(self):
@@ -555,6 +555,32 @@ class SummarizationTab(BaseTab):
         # Input section should also maintain its size and not shrink
         input_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(input_group)
+
+        # Analysis Type section
+        analysis_group = QGroupBox("Analysis Type")
+        analysis_layout = QHBoxLayout()
+        
+        analysis_label = QLabel("Analysis Type:")
+        analysis_label.setToolTip("Select the type of analysis to perform on your documents. Each type uses a different prompt template optimized for specific purposes.")
+        
+        self.analysis_type_combo = QComboBox()
+        self.analysis_type_combo.addItems([
+            "Document Summary",
+            "Knowledge Map (MOC Style)", 
+            "Entity Extraction",
+            "Relationship Analysis"
+        ])
+        self.analysis_type_combo.setToolTip("Choose analysis type: Document Summary (comprehensive overview), Knowledge Map (structured knowledge extraction), Entity Extraction (people, places, concepts), or Relationship Analysis (connections and networks)")
+        self.analysis_type_combo.currentTextChanged.connect(self._on_analysis_type_changed)
+        self.analysis_type_combo.setMinimumWidth(200)
+        
+        analysis_layout.addWidget(analysis_label)
+        analysis_layout.addWidget(self.analysis_type_combo)
+        analysis_layout.addStretch()
+        
+        analysis_group.setLayout(analysis_layout)
+        analysis_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        layout.addWidget(analysis_group)
 
         # Settings section
         settings_group = QGroupBox("Settings")
@@ -1410,4 +1436,20 @@ class SummarizationTab(BaseTab):
     def _on_setting_changed(self):
         """Called when any setting changes to automatically save."""
         logger.debug(f"🔄 Setting changed in {self.tab_name} tab, triggering save...")
-        self._save_settings() 
+        self._save_settings()
+    
+    def _on_analysis_type_changed(self, analysis_type: str):
+        """Called when analysis type changes to auto-populate template path."""
+        template_mapping = {
+            "Document Summary": "config/prompts/document_summary.txt",
+            "Knowledge Map (MOC Style)": "config/prompts/knowledge_map_moc.txt", 
+            "Entity Extraction": "config/prompts/entity_extraction.txt",
+            "Relationship Analysis": "config/prompts/relationship_analysis.txt"
+        }
+        
+        if analysis_type in template_mapping:
+            template_path = template_mapping[analysis_type]
+            self.template_path_edit.setText(template_path)
+            logger.debug(f"🔄 Analysis type changed to '{analysis_type}', auto-populated template: {template_path}")
+            # Trigger settings save after template path is updated
+            self._on_setting_changed() 

@@ -32,7 +32,7 @@ from ..logger import get_logger
 from .tabs import (
     ProcessTab, WatcherTab, 
     YouTubeTab, TranscriptionTab, SummarizationTab,
-    MOCTab, APIKeysTab, HardwareTab
+    APIKeysTab, HardwareTab
 )
 
 # Import workers and components
@@ -141,10 +141,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(transcription_tab, "Audio Transcription")
         
         summarization_tab = SummarizationTab(self)
-        self.tabs.addTab(summarization_tab, "Document Summarization")
-        
-        moc_tab = MOCTab(self)
-        self.tabs.addTab(moc_tab, "Maps of Content")
+        self.tabs.addTab(summarization_tab, "Content Analysis")
         
         process_tab = ProcessTab(self)
         self.tabs.addTab(process_tab, "Process Management")
