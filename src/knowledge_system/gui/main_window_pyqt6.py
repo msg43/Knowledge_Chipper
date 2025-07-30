@@ -32,7 +32,7 @@ from ..logger import get_logger
 from .tabs import (
     ProcessTab, WatcherTab, 
     YouTubeTab, TranscriptionTab, SummarizationTab,
-    APIKeysTab, HardwareTab
+    APIKeysTab
 )
 
 # Import workers and components

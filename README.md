@@ -237,7 +237,7 @@ The desktop app has tabs for different operations:
 - **🎬 YouTube Extraction**: Process YouTube videos and playlists
 - **🎵 Audio Transcription**: Process local audio/video files
 - **📝 Summarization**: Create summaries from transcripts
-- **🗺️ Maps of Content**: Generate knowledge maps
+- **📊 Content Analysis**: Generate summaries, knowledge maps, entity extraction, and relationship analysis
 - **👁️ File Watcher**: Automatically process new files
 - **⚙️ Settings**: Configure API keys, hardware performance options, and preferences
 
@@ -280,12 +280,12 @@ knowledge-system --help
 
 1. **🎯 Transcription**: Convert speech to text using AI
 2. **📝 Summarization**: Generate structured summaries
-3. **🗺️ Maps of Content**: Create knowledge organization systems
+3. **📊 Content Analysis**: Create summaries, knowledge maps, entity extraction, and relationship analysis
 4. **👁️ Monitoring**: Watch folders for automatic processing
 
-### Maps of Content (MOC) - Deep Dive
+### Content Analysis - Deep Dive
 
-**What it does:** Transforms your collection of markdown files into a structured, cross-referenced knowledge base with zero manual effort.
+**What it does:** Transforms your documents using AI-powered analysis with multiple specialized approaches: comprehensive summaries, structured knowledge maps, entity extraction, and relationship analysis.
 
 #### **📋 Step-by-Step Process**
 
@@ -389,11 +389,12 @@ Generated: {generated_at} | Files: {source_files_count}
 
 #### **🚀 Usage Examples**
 
-**GUI:** Maps of Content tab
-1. Add markdown files or folders
-2. Set depth and title
-3. Optional: Add custom template
-4. Click "Start MOC Generation"
+**GUI:** Content Analysis tab
+1. Add documents or folders
+2. Choose Analysis Type from dropdown (Document Summary, Knowledge Map, Entity Extraction, or Relationship Analysis)
+3. Template auto-populates based on selection (customize if desired)
+4. Configure provider, model, and other settings
+5. Click "Start Content Analysis"
 
 **CLI:**
 ```bash
