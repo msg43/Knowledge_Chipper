@@ -6,7 +6,6 @@ from .youtube_tab import YouTubeTab
 from .transcription_tab import TranscriptionTab
 from .summarization_tab import SummarizationTab
 from .api_keys_tab import APIKeysTab
-from .hardware_tab import HardwareTab
 
 __all__ = [
     'ProcessTab', 
@@ -14,6 +13,5 @@ __all__ = [
     'YouTubeTab',
     'TranscriptionTab',
     'SummarizationTab',
-    'APIKeysTab',
-    'HardwareTab'
+    'APIKeysTab'
 ] 
