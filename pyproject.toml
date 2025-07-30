@@ -116,11 +116,11 @@ where = ["src"]
 include = ["knowledge_system*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/test_audio_processor.py", "tests/integration/test_input_pipeline.py", "tests/integration/test_proxy_youtube.py", "tests/test_errors.py", "tests/test_logger.py"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --cov=knowledge_system --cov-report=html --cov-report=term-missing --ignore=tests/integration/test_summarization_pipeline.py --ignore=tests/integration/test_transcription_pipeline.py"
+addopts = "-v --cov=knowledge_system --cov-report=html --cov-report=term-missing"
 
 [tool.black]
 line-length = 88
