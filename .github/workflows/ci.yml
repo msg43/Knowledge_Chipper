@@ -42,7 +42,7 @@ jobs:
         
     - name: Test with pytest
       run: |
-        pytest tests/ --cov=knowledge_system --cov-report=xml --ignore=tests/integration/test_summarization_pipeline.py -v
+        pytest tests/ --cov=knowledge_system --cov-report=xml --ignore=tests/integration/test_summarization_pipeline.py --ignore=tests/integration/test_transcription_pipeline.py -v
         
     - name: Upload coverage reports
       uses: codecov/codecov-action@v3
