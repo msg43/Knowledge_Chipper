@@ -464,16 +464,8 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             else:
                 self.summarization_settings_label.setText("openai: gpt-4o-mini-2024-07-18")
                 
-            # Get MOC settings
-            moc_tab = self._find_tab_by_name("Maps of Content")
-            if moc_tab:
-                depth = getattr(moc_tab, 'depth_spin', None)
-                beliefs = getattr(moc_tab, 'beliefs_checkbox', None)
-                depth_text = f"Depth: {depth.value()}" if depth else "Depth: 3"
-                beliefs_text = ", Include beliefs" if beliefs and beliefs.isChecked() else ""
-                self.moc_settings_label.setText(f"{depth_text}{beliefs_text}")
-            else:
-                self.moc_settings_label.setText("Depth: 3, Include beliefs")
+            # MOC settings (using defaults since MOC tab was consolidated into Content Analysis)
+            self.moc_settings_label.setText("Knowledge Map: Enabled (Default settings)")
                 
         except Exception as e:
             logger.error(f"Error refreshing inherited settings: {e}")

@@ -1,0 +1,48 @@
+Analyze the following documents and extract all significant entities with detailed information:
+
+## People
+- Names (full names, nicknames, titles)
+- Roles and affiliations
+- Relationships to other people
+- Key actions or contributions
+- Contact information if available
+
+## Organizations
+- Company/institution names
+- Types and industries
+- Key personnel
+- Relationships to other entities
+- Notable activities or decisions
+
+## Locations
+- Geographic places (cities, countries, regions)
+- Specific addresses or venues
+- Virtual locations (websites, platforms)
+- Significance and context
+
+## Products & Technologies
+- Names and descriptions
+- Versions or specifications
+- Manufacturers or creators
+- Usage contexts
+- Technical details
+
+## Events & Dates
+- Specific events and milestones
+- Dates and timeframes
+- Participants and outcomes
+- Significance and impact
+
+## Financial & Quantitative Data
+- Numbers, metrics, and statistics
+- Monetary amounts and currencies
+- Percentages and ratios
+- Units of measurement
+
+## Documents & References
+- Cited works and sources
+- Internal document references
+- URLs and external links
+- Media files mentioned
+
+Present results in a structured format with entity type, name, context, and relevance score.
