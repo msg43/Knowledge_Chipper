@@ -14,8 +14,6 @@ from knowledge_system.utils.progress import (
     TaskInfo,
     ProgressTracker,
     ProgressDisplay,
-    batch_process_with_progress,
-    resume_from_checkpoint,
 )
 
 

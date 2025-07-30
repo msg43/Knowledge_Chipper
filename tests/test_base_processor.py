@@ -13,9 +13,7 @@ from knowledge_system.processors.base import (
     BaseProcessor,
     ProcessorRegistry,
     ProcessorResult,
-    get_processor,
-    get_processor_for_file,
-    register_processor,
+    get_processor_registry,
 )
 from knowledge_system.processors.registry import (
     get_all_processor_stats,
