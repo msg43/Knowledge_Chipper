@@ -2,6 +2,7 @@ from unittest.mock import patch, MagicMock
 from pathlib import Path
 from knowledge_system.processors.summarizer import SummarizerProcessor, fetch_summary
 from knowledge_system.processors.base import ProcessorResult
+import pytest
 
 
 class TestSummarizationPipeline:
@@ -28,8 +29,13 @@ class TestSummarizationPipeline:
 
             with patch.object(
                 processor,
-                "_call_openai",
-                return_value="AI technology has advanced significantly and will continue evolving rapidly.",
+                "_call_llm_provider",
+                return_value={
+                    "summary": "AI technology has advanced significantly and will continue evolving rapidly.",
+                    "prompt_tokens": 100,
+                    "completion_tokens": 50,
+                    "total_tokens": 150
+                },
             ):
                 result = processor.process(transcription_text, style="general")
 
@@ -38,7 +44,7 @@ class TestSummarizationPipeline:
                 assert result.metadata["provider"] == "openai"
                 assert result.metadata["style"] == "general"
                 assert result.metadata["input_length"] > 0
-                assert result.metadata["summary_length"] > 0
+                assert result.metadata["output_length"] > 0
 
     def test_summarize_with_different_styles(self):
         """Test summarizing with different styles."""
@@ -61,8 +67,13 @@ class TestSummarizationPipeline:
             # Test bullet style
             with patch.object(
                 processor,
-                "_call_openai",
-                return_value="• Large datasets needed\n• Data quality matters\n• Preprocessing essential",
+                "_call_llm_provider",
+                return_value={
+                    "summary": "• Large datasets needed\n• Data quality matters\n• Preprocessing essential",
+                    "prompt_tokens": 80,
+                    "completion_tokens": 30,
+                    "total_tokens": 110
+                },
             ):
                 result = processor.process(text, style="bullet")
                 assert result.success is True
@@ -71,8 +82,13 @@ class TestSummarizationPipeline:
             # Test academic style
             with patch.object(
                 processor,
-                "_call_openai",
-                return_value="Key findings indicate that machine learning requires substantial datasets and quality data preprocessing for optimal performance.",
+                "_call_llm_provider",
+                return_value={
+                    "summary": "Key findings indicate that machine learning requires substantial datasets and quality data preprocessing for optimal performance.",
+                    "prompt_tokens": 90,
+                    "completion_tokens": 40,
+                    "total_tokens": 130
+                },
             ):
                 result = processor.process(text, style="academic")
                 assert result.success is True
@@ -81,8 +97,13 @@ class TestSummarizationPipeline:
             # Test executive style
             with patch.object(
                 processor,
-                "_call_openai",
-                return_value="ML success depends on quality data and proper preprocessing.",
+                "_call_llm_provider",
+                return_value={
+                    "summary": "ML success depends on quality data and proper preprocessing.",
+                    "prompt_tokens": 75,
+                    "completion_tokens": 25,
+                    "total_tokens": 100
+                },
             ):
                 result = processor.process(text, style="executive")
                 assert result.success is True
@@ -105,12 +126,22 @@ class TestSummarizationPipeline:
                     "File content to summarize"
                 )
 
+                # Mock file size for logging
+                mock_stat = MagicMock()
+                mock_stat.st_size = 26  # Length of "File content to summarize"
+
                 with (
                     patch.object(Path, "exists", return_value=True),
                     patch.object(Path, "is_file", return_value=True),
+                    patch.object(Path, "stat", return_value=mock_stat),
                 ):
                     with patch.object(
-                        processor, "_call_openai", return_value="Summarized content"
+                        processor, "_call_llm_provider", return_value={
+                            "summary": "Summarized content",
+                            "prompt_tokens": 50,
+                            "completion_tokens": 20,
+                            "total_tokens": 70
+                        }
                     ):
                         result = processor.process(Path("test.txt"))
 
@@ -165,7 +196,12 @@ class TestSummarizationPipeline:
             processor = SummarizerProcessor(provider="anthropic")
 
             with patch.object(
-                processor, "_call_anthropic", return_value="Anthropic summary"
+                processor, "_call_llm_provider", return_value={
+                    "summary": "Anthropic summary",
+                    "prompt_tokens": 60,
+                    "completion_tokens": 25,
+                    "total_tokens": 85
+                }
             ):
                 result = processor.process(text)
 
@@ -258,11 +294,9 @@ class TestErrorHandling:
             mock_settings = MagicMock()
             mock_get_settings.return_value = mock_settings
 
-            processor = SummarizerProcessor(provider="unsupported")
-            result = processor.process("test text")
-
-            assert result.success is False
-            assert "Unsupported provider" in result.errors[0]
+            # Test that unsupported provider raises ValueError during initialization
+            with pytest.raises(ValueError, match="Unsupported provider: unsupported"):
+                processor = SummarizerProcessor(provider="unsupported")
 
     def test_api_error_handling(self):
         """Test handling of API errors."""
@@ -277,7 +311,7 @@ class TestErrorHandling:
             processor = SummarizerProcessor(provider="openai")
 
             with patch.object(
-                processor, "_call_openai", side_effect=Exception("API Error")
+                processor, "_call_llm_provider", side_effect=Exception("API Error")
             ):
                 result = processor.process("test text")
 

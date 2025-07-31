@@ -801,12 +801,16 @@ class SummarizerProcessor(BaseProcessor):
         input_data: Any,
         dry_run: bool = False,
         progress_callback: Optional[Callable[[SummarizationProgress], None]] = None,
+        cancellation_token: Optional[CancellationToken] = None,
         **kwargs: Any,
     ) -> ProcessorResult:
         """Process input and generate summary using unified LLM client."""
         # Extract parameters from kwargs for backwards compatibility
         style = kwargs.get('style', 'general')
         prompt_template = kwargs.get('prompt_template', None)
+        # Also extract cancellation_token from kwargs if not passed as parameter
+        if cancellation_token is None:
+            cancellation_token = kwargs.get('cancellation_token', None)
         
         start_time = time.time()
 
@@ -899,7 +903,7 @@ class SummarizerProcessor(BaseProcessor):
                     ))
                 
                 result_stats = self._process_with_chunking(
-                    text, style, prompt_template, progress_callback, kwargs.get('cancellation_token'),
+                    text, style, prompt_template, progress_callback, cancellation_token,
                     total_characters, current_file_size
                 )
             else:
