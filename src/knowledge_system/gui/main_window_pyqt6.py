@@ -10,9 +10,10 @@ import os
 import queue
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication,
@@ -70,8 +71,8 @@ class MainWindow(QMainWindow):
         self._load_api_keys_to_environment()
 
         # Initialize other attributes
-        self.message_queue = queue.Queue()
-        self.active_threads = []
+        self.message_queue: queue.Queue[Any] = queue.Queue()
+        self.active_threads: List[Any] = []
 
         # Setup UI
         self._setup_ui()
@@ -87,7 +88,7 @@ class MainWindow(QMainWindow):
         # Load session state after UI is set up
         self._load_session()
 
-    def _set_window_icon(self):
+    def _set_window_icon(self) -> None:
         """Set the custom window icon."""
         icon = get_app_icon()
         if icon:
@@ -100,7 +101,7 @@ class MainWindow(QMainWindow):
         else:
             logger.warning("No custom icon found, using default")
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         """Set up the streamlined main UI."""
         self.setWindowTitle("Knowledge_Chipper - Comprehensive Content Processing")
         # Make window resizable with reasonable default size and minimum size
@@ -139,7 +140,7 @@ class MainWindow(QMainWindow):
         # Apply dark theme
         self._apply_dark_theme()
 
-    def _create_tabs(self):
+    def _create_tabs(self) -> None:
         """Create all modular tabs."""
         # Each tab handles its own business logic
 
@@ -166,14 +167,14 @@ class MainWindow(QMainWindow):
         api_keys_tab = APIKeysTab(self)
         self.tabs.addTab(api_keys_tab, "API Keys")
 
-    def _navigate_to_tab(self, tab_name: str):
+    def _navigate_to_tab(self, tab_name: str) -> None:
         """Navigate to a specific tab by name."""
         for i in range(self.tabs.count()):
             if self.tabs.tabText(i) == tab_name:
                 self.tabs.setCurrentIndex(i)
                 break
 
-    def _apply_dark_theme(self):
+    def _apply_dark_theme(self) -> None:
         """Apply dark theme styling."""
         self.setStyleSheet(
             """
@@ -265,7 +266,7 @@ class MainWindow(QMainWindow):
         """
         )
 
-    def _handle_progress_cancellation(self, reason: str):
+    def _handle_progress_cancellation(self, reason: str) -> None:
         """Handle progress bar cancellation requests."""
         logger.info(f"Progress cancellation requested: {reason}")
 
@@ -283,7 +284,7 @@ class MainWindow(QMainWindow):
 
         self.status_bar.showMessage(f"Operation cancelled: {reason}")
 
-    def _load_api_keys_to_environment(self):
+    def _load_api_keys_to_environment(self) -> None:
         """Load API keys to environment variables for processors to use."""
         try:
             # Set OpenAI API key
@@ -301,7 +302,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Failed to load API keys to environment: {e}")
 
-    def _process_messages(self):
+    def _process_messages(self) -> None:
         """Process messages from the message queue."""
         try:
             while not self.message_queue.empty():
@@ -311,7 +312,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.debug(f"Message processing error: {e}")
 
-    def _load_session(self):
+    def _load_session(self) -> None:
         """Load session state."""
         try:
             # Restore window geometry if available
@@ -325,7 +326,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Could not load session state: {e}")
 
-    def _save_session(self):
+    def _save_session(self) -> None:
         """Save session state."""
         try:
             # Save window geometry
@@ -340,7 +341,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Could not save session state: {e}")
 
-    def closeEvent(self, event: "QEvent"):
+    def closeEvent(self, event: Optional[QCloseEvent]) -> None:
         """Handle window close event."""
         try:
             # Save session before closing
@@ -352,14 +353,16 @@ class MainWindow(QMainWindow):
                     thread.request_cancellation("Application closing")
 
             # Accept the close event
-            event.accept()
+            if event:
+                event.accept()
 
         except Exception as e:
             logger.error(f"Error during close: {e}")
-            event.accept()
+            if event:
+                event.accept()
 
 
-def launch_gui():
+def launch_gui() -> None:
     """Launch the Knowledge System GUI application."""
     import sys
 

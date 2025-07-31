@@ -46,7 +46,7 @@ class YouTubeExtractionWorker(QThread):
     payment_required = pyqtSignal()  # 402 Payment Required error
     playlist_info_updated = pyqtSignal(dict)  # playlist metadata for display
 
-    def __init__(self, urls, config, parent=None) -> None:
+    def __init__(self, urls: Any, config: Any, parent: Any = None) -> None:
         super().__init__(parent)
         self.urls = urls
         self.config = config
@@ -60,7 +60,7 @@ class YouTubeExtractionWorker(QThread):
         else:
             logger.info(f"URLs to process: {urls[:3]}{'...' if len(urls) > 3 else ''}")
 
-    def run(self):
+    def run(self) -> None:
         """Run the YouTube extraction process."""
         logger.info(f"YouTubeExtractionWorker.run() started with {len(self.urls)} URLs")
 
@@ -469,14 +469,14 @@ class YouTubeExtractionWorker(QThread):
             self.extraction_error.emit(error_msg)
             self.progress_updated.emit(0, len(self.urls), f"💥 Fatal error: {error_msg}")
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the extraction process."""
         logger.info("YouTubeExtractionWorker.stop() called")
         self.should_stop = True
         if self.cancellation_token:
             self.cancellation_token.cancel("User requested cancellation")
 
-    def _write_failure_log(self, failed_urls):
+    def _write_failure_log(self, failed_urls: List[str]) -> None:
         """Write failed URL extractions to timestamped log files.
 
         Returns:
@@ -571,13 +571,13 @@ class YouTubeExtractionWorker(QThread):
 class YouTubeTab(BaseTab):
     """Tab for YouTube transcript extraction and processing."""
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: Any = None) -> None:
         self.extraction_worker = None
         self.gui_settings = get_gui_settings_manager()
         self.tab_name = "YouTube"
         super().__init__(parent)
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         """Setup the YouTube extraction UI."""
         layout = QVBoxLayout(self)
 
@@ -696,7 +696,7 @@ class YouTubeTab(BaseTab):
         group.setLayout(layout)
         return group
 
-    def _on_input_method_changed(self):
+    def _on_input_method_changed(self) -> None:
         """Handle radio button changes to enable/disable input sections."""
         if self.url_radio.isChecked():
             # Enable URL input, disable file input
@@ -932,7 +932,7 @@ class YouTubeTab(BaseTab):
 
         return layout
 
-    def _select_url_file(self):
+    def _select_url_file(self) -> None:
         """Select file containing YouTube URLs."""
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Select URL File", "", "Text files (*.txt *.csv);;All files (*.*)"
@@ -940,7 +940,7 @@ class YouTubeTab(BaseTab):
         if file_path:
             self.file_input.setText(file_path)
 
-    def _select_output_directory(self):
+    def _select_output_directory(self) -> None:
         """Select output directory for YouTube transcripts."""
         dir_path = QFileDialog.getExistingDirectory(self, "Select Output Directory")
         if dir_path:
@@ -950,7 +950,7 @@ class YouTubeTab(BaseTab):
         """Get the text for the start button."""
         return "🎬 Extract Transcripts"
 
-    def _start_processing(self):
+    def _start_processing(self) -> None:
         """Start YouTube transcript extraction."""
         # Check WebShare credentials from settings
         webshare_username = self.settings.api_keys.webshare_username
@@ -1414,7 +1414,7 @@ class YouTubeTab(BaseTab):
 
         self.append_log("")  # Add blank line for spacing
 
-    def _load_settings(self):
+    def _load_settings(self) -> None:
         """Load saved settings from session."""
         try:
             # Load output directory
@@ -1457,7 +1457,7 @@ class YouTubeTab(BaseTab):
         except Exception as e:
             logger.error(f"Failed to load settings for {self.tab_name} tab: {e}")
 
-    def _save_settings(self):
+    def _save_settings(self) -> None:
         """Save current settings to session."""
         try:
             # Save output directory
