@@ -1,7 +1,7 @@
 """API Keys configuration tab for managing all API credentials."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from PyQt6.QtCore import QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -27,9 +27,9 @@ class APIKeysTab(BaseTab):
     # Signals for settings changes
     settings_saved = pyqtSignal()
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: Any = None) -> None:
         # Initialize _actual_api_keys before calling super().__init__
-        self._actual_api_keys = {}
+        self._actual_api_keys: Dict[str, str] = {}
 
         # Initialize settings manager for session persistence
         from ..core.settings_manager import get_gui_settings_manager
@@ -39,7 +39,7 @@ class APIKeysTab(BaseTab):
 
         super().__init__(parent)
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         """Setup the API keys UI."""
         main_layout = QVBoxLayout(self)
 
@@ -194,7 +194,7 @@ class APIKeysTab(BaseTab):
 
         main_layout.addStretch()
 
-    def _load_existing_values(self):
+    def _load_existing_values(self) -> None:
         """Load existing API key values from settings."""
         # Load OpenAI key
         if self.settings.api_keys.openai_api_key:
@@ -235,7 +235,7 @@ class APIKeysTab(BaseTab):
             ] = self.settings.api_keys.webshare_password
             self.webshare_password_edit.setText("••••••••••••••••")
 
-    def _setup_change_handlers(self):
+    def _setup_change_handlers(self) -> None:
         """Set up change handlers for password/key fields."""
         self.openai_key_edit.textChanged.connect(
             lambda text: self._handle_key_change("openai_api_key", text)
@@ -251,21 +251,21 @@ class APIKeysTab(BaseTab):
         )
         self.webshare_username_edit.textChanged.connect(self._on_setting_changed)
 
-    def _handle_key_change(self, key_name: str, new_text: str):
+    def _handle_key_change(self, key_name: str, new_text: str) -> None:
         """Handle changes to API key fields."""
         # If user types new content (not just the obscured dots), update the actual key
         if new_text and not new_text.startswith("••"):
             self._actual_api_keys[key_name] = new_text
             self._on_setting_changed()
 
-    def _handle_password_change(self, key_name: str, new_text: str):
+    def _handle_password_change(self, key_name: str, new_text: str) -> None:
         """Handle changes to password fields."""
         # If user types new content (not just the obscured dots), update the actual password
         if new_text and not new_text.startswith("••"):
             self._actual_api_keys[key_name] = new_text
             self._on_setting_changed()
 
-    def _on_setting_changed(self):
+    def _on_setting_changed(self) -> None:
         """Called when any setting changes to automatically save to session."""
         try:
             # Save to GUI session (for UI state persistence)
@@ -304,7 +304,7 @@ class APIKeysTab(BaseTab):
         except Exception as e:
             logger.error(f"Failed to save API keys session data: {e}")
 
-    def _load_settings(self):
+    def _load_settings(self) -> None:
         """Load saved settings from session and existing credential files."""
         try:
             # First load from the credential files (like the existing _load_existing_values)
@@ -328,11 +328,11 @@ class APIKeysTab(BaseTab):
         """Get the text for the start button."""
         return "Save API Keys"
 
-    def _start_processing(self):
+    def _start_processing(self) -> None:
         """Save settings when start button is pressed."""
         self._save_settings()
 
-    def _save_settings(self):
+    def _save_settings(self) -> None:
         """Save API key settings and update environment variables."""
         try:
             logger.info("🔧 DEBUG: _save_settings() called")
@@ -406,7 +406,7 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
             self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
             self.append_log(error_msg)
 
-    def _save_credentials_to_file(self):
+    def _save_credentials_to_file(self) -> None:
         """Save API credentials to persistent YAML file."""
         try:
             logger.info("🔧 DEBUG: _save_credentials_to_file() called")
@@ -414,7 +414,7 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
 
             from pathlib import Path
 
-            import yaml
+            import yaml  # type: ignore
 
             # Debug: Log current settings values
             logger.info(
@@ -489,19 +489,19 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
 
             logger.error(f"Full traceback: {traceback.format_exc()}")
 
-    def _load_api_keys_to_environment(self):
+    def _load_api_keys_to_environment(self) -> None:
         """Load API keys to environment variables - stub method."""
         # This method should be connected to the main window's implementation
         parent = self.parent()
         if parent and hasattr(parent, "_load_api_keys_to_environment"):
-            parent._load_api_keys_to_environment()  # type: ignore
+            parent._load_api_keys_to_environment()
 
-    def _save_session(self):
+    def _save_session(self) -> None:
         """Save session data - stub method."""
         # This method should be connected to the main window's implementation
         parent = self.parent()
         if parent and hasattr(parent, "_save_session"):
-            parent._save_session()  # type: ignore
+            parent._save_session()
 
     def validate_inputs(self) -> bool:
         """Validate API key inputs."""
