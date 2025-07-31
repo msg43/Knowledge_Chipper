@@ -12,7 +12,7 @@ PIPELINE_AVAILABLE = False
 PIPELINE = None
 
 
-def _check_diarization_dependencies():
+def _check_diarization_dependencies() -> bool:
     """Check if diarization dependencies are available."""
     global PIPELINE_AVAILABLE, PIPELINE
 
@@ -61,14 +61,14 @@ class SpeakerDiarizationProcessor(BaseProcessor):
         """Audio formats supported by pyannote.audio for diarization."""
         return [".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".webm"]
 
-    def _check_dependencies(self):
+    def _check_dependencies(self) -> bool:
         """Check if diarization dependencies are available."""
         if not self._dependencies_checked:
             self._dependencies_checked = True
             return _check_diarization_dependencies()
         return PIPELINE_AVAILABLE
 
-    def _load_pipeline(self):
+    def _load_pipeline(self) -> None:
         """Lazy load the diarization pipeline."""
         if not self._check_dependencies():
             raise ImportError(
