@@ -1,5 +1,6 @@
 """GUI tabs package."""
 
+from .introduction_tab import IntroductionTab
 from .process_tab import ProcessTab
 from .watcher_tab import WatcherTab
 from .youtube_tab import YouTubeTab
@@ -8,6 +9,7 @@ from .summarization_tab import SummarizationTab
 from .api_keys_tab import APIKeysTab
 
 __all__ = [
+    'IntroductionTab',
     'ProcessTab', 
     'WatcherTab',
     'YouTubeTab',

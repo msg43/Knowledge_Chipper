@@ -52,6 +52,12 @@ class EnhancedSummarizationWorker(QThread):
             provider = self.gui_settings.get('provider', 'openai')
             model = self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')
             
+            # Strip both "(Installed)" and "(X GB)" suffixes to get clean model name
+            clean_model_name = model.replace(" (Installed)", "")
+            # Remove size suffix pattern like " (4 GB)"
+            import re
+            clean_model_name = re.sub(r' \(\d+ GB\)$', '', clean_model_name)
+            
             # Double-check Ollama service for local provider (in case it stopped between GUI check and worker execution)
             if provider == "local":
                 ollama_manager = get_ollama_manager()
@@ -61,17 +67,17 @@ class EnhancedSummarizationWorker(QThread):
                     )
                     return
                 
-                # Also check if model is available
-                if not ollama_manager.is_model_available(model):
+                # Also check if model is available (use clean name)
+                if not ollama_manager.is_model_available(clean_model_name):
                     self.processing_error.emit(
-                        f"Model '{model}' is not available in Ollama. Please download the model first using the Hardware tab or by running 'ollama pull {model}'."
+                        f"Model '{clean_model_name}' is not available in Ollama. Please download the model first using the Hardware tab or by running 'ollama pull {clean_model_name}'."
                     )
                     return
             
-            # Create processor with GUI settings
+            # Create processor with GUI settings (use clean model name)
             processor = SummarizerProcessor(
                 provider=provider,
-                model=model,
+                model=clean_model_name,
                 max_tokens=self.gui_settings.get('max_tokens', 10000)
             )
             
@@ -572,7 +578,7 @@ class SummarizationTab(BaseTab):
         ])
         self.analysis_type_combo.setToolTip("Choose analysis type: Document Summary (comprehensive overview), Knowledge Map (structured knowledge extraction), Entity Extraction (people, places, concepts), or Relationship Analysis (connections and networks)")
         self.analysis_type_combo.currentTextChanged.connect(self._on_analysis_type_changed)
-        self.analysis_type_combo.setMinimumWidth(200)
+        self.analysis_type_combo.setMinimumWidth(280)
         
         analysis_layout.addWidget(analysis_label)
         analysis_layout.addWidget(self.analysis_type_combo)
@@ -619,7 +625,7 @@ class SummarizationTab(BaseTab):
         settings_layout.addWidget(self.refresh_models_btn, 0, 5)
 
         # Max tokens
-        max_tokens_label = QLabel("Max Tokens:")
+        max_tokens_label = QLabel("Max Response Size (Tokens):")
         max_tokens_label.setToolTip("Maximum length of generated summary in tokens. Higher values create longer summaries but cost more. 1000 tokens ≈ 750 words.")
         self.max_tokens_spin = QSpinBox()
         self.max_tokens_spin.setRange(100, 100000)
@@ -638,7 +644,7 @@ class SummarizationTab(BaseTab):
         prompt_label = QLabel("Prompt File:")
         prompt_label.setToolTip("Path to custom prompt template file for summarization. Leave empty to use default prompts.")
         self.template_path_edit = QLineEdit("")
-        self.template_path_edit.setMinimumWidth(250)
+        self.template_path_edit.setMinimumWidth(180)
         self.template_path_edit.setToolTip("Path to custom prompt template file for summarization. Leave empty to use default prompts.")
         self.template_path_edit.textChanged.connect(self._on_setting_changed)
         
@@ -647,6 +653,12 @@ class SummarizationTab(BaseTab):
         browse_template_btn = QPushButton("Browse")
         browse_template_btn.setFixedWidth(80)
         browse_template_btn.clicked.connect(self._select_template)
+        browse_template_btn.setToolTip(
+            "Browse and select a custom prompt template file.\n"
+            "• Template files define how the AI analyzes your content\n"
+            "• Must be .txt files with specific formatting\n"
+            "• Leave empty to use built-in templates for each analysis type"
+        )
         settings_layout.addWidget(browse_template_btn, 1, 4)
 
         # Options
@@ -660,6 +672,12 @@ class SummarizationTab(BaseTab):
 
         self.progress_checkbox = QCheckBox("Show progress tracking")
         self.progress_checkbox.toggled.connect(self._on_setting_changed)
+        self.progress_checkbox.setToolTip(
+            "Show detailed progress tracking during summarization.\n"
+            "• Displays real-time progress for each file\n"
+            "• Shows token usage and processing statistics\n"
+            "• Useful for monitoring long-running batch jobs"
+        )
         settings_layout.addWidget(self.progress_checkbox, 2, 2, 1, 2)
 
         self.resume_checkbox = QCheckBox("Resume from checkpoint")
@@ -682,10 +700,21 @@ class SummarizationTab(BaseTab):
         self.output_edit = QLineEdit()
         self.output_edit.setPlaceholderText("Click Browse to select output directory (required)")
         self.output_edit.textChanged.connect(self._on_setting_changed)
+        self.output_edit.setToolTip(
+            "Directory where summary files will be saved.\n"
+            "• Only used when 'Update .md files in-place' is unchecked\n"
+            "• Summary files will be organized by analysis type\n"
+            "• Ensure you have write permissions to this directory"
+        )
         settings_layout.addWidget(self.output_edit, 4, 1, 1, 3)
         browse_output_btn = QPushButton("Browse")
         browse_output_btn.setFixedWidth(80)
         browse_output_btn.clicked.connect(self._select_output)
+        browse_output_btn.setToolTip(
+            "Select the directory where summary files will be saved.\n"
+            "• If 'Update .md files in-place' is checked, summaries are saved next to original files.\n"
+            "• If unchecked, summaries are saved to this selected directory."
+        )
         # Store reference so other methods can show/hide it
         self.output_btn = browse_output_btn
         settings_layout.addWidget(browse_output_btn, 4, 4)
@@ -716,7 +745,7 @@ class SummarizationTab(BaseTab):
         
     def _get_start_button_text(self) -> str:
         """Get the text for the start button."""
-        return "📝 Start Enhanced Summarization"
+        return "📝 Start Processing"
         
     def _start_processing(self):
         """Start the summarization process."""
@@ -822,7 +851,17 @@ class SummarizationTab(BaseTab):
     def _check_model_availability(self, model: str) -> bool:
         """Check if the model is available locally and offer to download if not."""
         try:
+            # Strip both "(Installed)" and "(X GB)" suffixes to get clean model name
+            clean_model_name = model.replace(" (Installed)", "")
+            # Remove size suffix pattern like " (4 GB)"
+            import re
+            clean_model_name = re.sub(r' \(\d+ GB\)$', '', clean_model_name)
+            
             ollama_manager = get_ollama_manager()
+            
+            # If model already has "(Installed)" suffix, it's available
+            if model.endswith(" (Installed)"):
+                return True
             
             # First check if Ollama service is running
             if not ollama_manager.is_service_running():
@@ -852,12 +891,12 @@ class SummarizationTab(BaseTab):
                 else:
                     return False  # User cancelled
             
-            # Check if model is available
-            if ollama_manager.is_model_available(model):
+            # Check if model is available using clean name
+            if ollama_manager.is_model_available(clean_model_name):
                 return True
             
             # Model not available - show download dialog
-            dialog = ModelDownloadDialog(model, self)
+            dialog = ModelDownloadDialog(clean_model_name, self)
             
             # Disable the start button while dialog is shown
             if hasattr(self, 'start_btn'):
@@ -962,8 +1001,9 @@ class SummarizationTab(BaseTab):
             self.append_log("🔄 Refreshed local model list")
     
     def _update_models(self):
-        """Update the model list based on selected provider."""
+        """Update the model list based on selected provider with dynamic registry."""
         provider = self.provider_combo.currentText()
+        logger.info(f"🔄 NEW DYNAMIC MODEL SYSTEM ACTIVATED - Provider: {provider}")
         self.model_combo.clear()
         
         if provider == "openai":
@@ -987,74 +1027,41 @@ class SummarizationTab(BaseTab):
                 "claude-3-5-haiku-20241022"
             ]
         else:  # local
-            # Dynamically fetch available Ollama models
+            # Use the new dynamic registry system
             try:
                 ollama_manager = get_ollama_manager()
-                if ollama_manager.is_service_running():
-                    available_models = ollama_manager.get_available_models()
-                    models = [model.name for model in available_models]
-                    
-                    # If no models are available locally, provide some popular suggestions
-                    if not models:
-                        models = [
-                            "llama2:7b-chat",
-                            "llama2:13b-chat", 
-                            "llama3.1:8b-instruct",
-                            "llama3.2:3b-instruct",
-                            "mistral:7b-instruct-v0.2",
-                            "codellama:7b-instruct",
-                            "codellama:13b-instruct",
-                            "phi3:3.8b-mini-instruct",
-                            "qwen2.5:7b-instruct",
-                            "qwen2.5:14b-instruct",
-                            "qwen2.5:32b-instruct",
-                            "qwen2.5-coder:7b-instruct",
-                            "phi3:mini-128k",
-                            "llama3.1:8b-instruct",
-                            "mistral:7b-instruct-v0.3"
-                        ]
-                        logger.info("No local models found, showing popular model suggestions")
+                registry_models = ollama_manager.get_registry_models()
+                
+                models = []
+                for model_info in registry_models:
+                    if "(Installed)" in model_info.name:
+                        models.append(model_info.name)
                     else:
-                        logger.info(f"Found {len(models)} local models: {', '.join(models[:5])}{'...' if len(models) > 5 else ''}")
+                        # Add size information for non-installed models
+                        size_gb = model_info.size_bytes / 1_000_000_000
+                        models.append(f"{model_info.name} ({size_gb:.0f} GB)")
+                
+                if registry_models:
+                    installed_count = len([m for m in registry_models if "(Installed)" in m.name])
+                    available_count = len(registry_models) - installed_count
+                    logger.info(f"Found {installed_count} installed and {available_count} available models from dynamic registry")
                 else:
-                    # Ollama service not running, show popular models
-                    models = [
-                        "llama2:7b-chat",
-                        "llama2:13b-chat", 
-                        "llama3.1:8b-instruct",
-                        "llama3.2:3b-instruct",
-                        "mistral:7b-instruct-v0.2",
-                        "codellama:7b-instruct",
-                        "codellama:13b-instruct",
-                        "phi3:3.8b-mini-instruct",
-                        "qwen2.5:7b-instruct",
-                        "qwen2.5:14b-instruct",
-                        "qwen2.5:32b-instruct",
-                        "qwen2.5-coder:7b-instruct",
-                        "phi3:mini-128k",
-                        "llama3.1:8b-instruct",
-                        "mistral:7b-instruct-v0.3"
-                    ]
-                    logger.info("Ollama service not running, showing popular model suggestions")
+                    logger.warning("No models found in registry")
+                    models = ["No models available - Please install Ollama"]
+                    
             except Exception as e:
-                logger.error(f"Error fetching Ollama models: {e}")
-                # Fallback to hardcoded list
+                logger.error(f"Failed to fetch dynamic model list: {e}")
+                # Fallback to static list with modern models
                 models = [
-                    "llama2:7b-chat",
-                    "llama2:13b-chat", 
-                    "llama3.1:8b-instruct",
-                    "llama3.2:3b-instruct",
-                    "mistral:7b-instruct-v0.2",
-                    "codellama:7b-instruct",
-                    "codellama:13b-instruct",
-                    "phi3:3.8b-mini-instruct",
-                    "qwen2.5:7b-instruct",
-                    "qwen2.5:14b-instruct",
-                    "qwen2.5:32b-instruct",
-                    "qwen2.5-coder:7b-instruct",
-                    "phi3:mini-128k",
-                    "llama3.1:8b-instruct",
-                    "mistral:7b-instruct-v0.3"
+                    "llama3.2:3b (2 GB)",
+                    "llama3.1:8b (5 GB)", 
+                    "qwen2.5:7b (4 GB)",
+                    "mistral:7b (4 GB)",
+                    "codellama:7b (4 GB)",
+                    "phi3:mini (2 GB)",
+                    "qwen2.5:14b (8 GB)",
+                    "mixtral:8x7b (26 GB)",
+                    "llama3.1:70b (40 GB)"
                 ]
             
         self.model_combo.addItems(models)

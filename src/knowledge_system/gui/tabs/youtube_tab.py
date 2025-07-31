@@ -504,6 +504,12 @@ class YouTubeTab(BaseTab):
         self.url_radio = QRadioButton("YouTube URLs")
         self.url_radio.setChecked(True)  # Default selection
         self.url_radio.toggled.connect(self._on_input_method_changed)
+        self.url_radio.setToolTip(
+            "Select this option to enter YouTube URLs directly.\n"
+            "• Supports individual videos and playlists\n"
+            "• Enter one URL per line in the text area below\n"
+            "• Automatically detects and counts total videos"
+        )
         layout.addWidget(self.url_radio)
         
         # URL input
@@ -518,11 +524,26 @@ class YouTubeTab(BaseTab):
         self.url_input.setMaximumHeight(200)  # Prevent it from growing too large
         from PyQt6.QtWidgets import QSizePolicy
         self.url_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.url_input.setToolTip(
+            "Enter YouTube URLs to process (one per line).\n"
+            "• Individual videos: https://www.youtube.com/watch?v=...\n"
+            "• Short URLs: https://youtu.be/...\n"
+            "• Playlists: https://www.youtube.com/playlist?list=...\n"
+            "• Mix any combination of videos and playlists\n"
+            "• Total video count will be calculated automatically\n"
+            "• Private or unavailable videos will be skipped with warnings"
+        )
         layout.addWidget(self.url_input)
         
         # Radio button for file input
         self.file_radio = QRadioButton("Or Select File")
         self.file_radio.toggled.connect(self._on_input_method_changed)
+        self.file_radio.setToolTip(
+            "Select this option to load URLs from a file.\n"
+            "• Supports .TXT, .RTF, and .CSV files\n"
+            "• File should contain one URL per line\n"
+            "• Useful for large collections of URLs"
+        )
         layout.addWidget(self.file_radio)
         
         # File input
@@ -532,11 +553,25 @@ class YouTubeTab(BaseTab):
         self.file_input = QLineEdit()
         self.file_input.setPlaceholderText("Select a file containing URLs...")
         self.file_input.setEnabled(False)  # Start disabled
+        self.file_input.setToolTip(
+            "Path to file containing YouTube URLs.\n"
+            "• Supported formats: .TXT, .RTF, .CSV\n"
+            "• One URL per line in the file\n"
+            "• Comments starting with # are ignored\n"
+            "• Empty lines are skipped\n"
+            "• Click Browse to select a file"
+        )
         file_layout.addWidget(self.file_input)
         
         self.browse_btn = QPushButton("Browse")
         self.browse_btn.clicked.connect(self._select_url_file)
         self.browse_btn.setEnabled(False)  # Start disabled
+        self.browse_btn.setToolTip(
+            "Browse and select a file containing YouTube URLs.\n"
+            "• Choose a .TXT, .RTF, or .CSV file\n"
+            "• File should have one URL per line\n"
+            "• Will automatically count total videos"
+        )
         file_layout.addWidget(self.browse_btn)
         
         layout.addLayout(file_layout)
@@ -578,10 +613,20 @@ class YouTubeTab(BaseTab):
         self.output_dir_input.setPlaceholderText("Click Browse to select output directory (required)")
         # Remove default setting - require user selection
         self.output_dir_input.textChanged.connect(self._on_setting_changed)
+        self.output_dir_input.setToolTip(
+            "Directory where transcript files and thumbnails will be saved.\n"
+            "• Click Browse to select a directory\n"
+            "• Ensure it has write permissions\n"
+            "• Transcripts will be in .md format, thumbnails in a subdirectory"
+        )
         layout.addWidget(self.output_dir_input, 0, 1)
         
         browse_output_btn = QPushButton("Browse")
         browse_output_btn.clicked.connect(self._select_output_directory)
+        browse_output_btn.setToolTip(
+            "Browse and select the output directory for transcript files and thumbnails.\n"
+            "• Choose a directory to save transcript .md files and thumbnail images"
+        )
         layout.addWidget(browse_output_btn, 0, 2)
         
         # Format selection
@@ -590,17 +635,33 @@ class YouTubeTab(BaseTab):
         self.format_combo.addItems(["md", "txt", "json"])
         self.format_combo.setCurrentText("md")
         self.format_combo.currentTextChanged.connect(self._on_setting_changed)
+        self.format_combo.setToolTip(
+            "Select the output format for the transcript.\n"
+            "• md: Markdown format (default)\n"
+            "• txt: Plain text\n"
+            "• json: JSON format (for advanced processing)"
+        )
         layout.addWidget(self.format_combo, 1, 1)
         
         # Options
         self.timestamps_checkbox = QCheckBox("Include timestamps")
         self.timestamps_checkbox.setChecked(True)
         self.timestamps_checkbox.toggled.connect(self._on_setting_changed)
+        self.timestamps_checkbox.setToolTip(
+            "Include timestamps in the transcript.\n"
+            "• Timestamps are useful for navigation and searching\n"
+            "• Only available for YouTube videos with timestamps"
+        )
         layout.addWidget(self.timestamps_checkbox, 2, 0, 1, 2)
         
         self.overwrite_checkbox = QCheckBox("Overwrite existing transcripts")
         self.overwrite_checkbox.setChecked(False)
         self.overwrite_checkbox.toggled.connect(self._on_setting_changed)
+        self.overwrite_checkbox.setToolTip(
+            "If enabled, existing transcript files will be overwritten.\n"
+            "• If disabled, new transcript files will be named with a timestamp\n"
+            "• This prevents accidental overwriting of existing work"
+        )
         layout.addWidget(self.overwrite_checkbox, 2, 2)
         
         group.setLayout(layout)
@@ -616,6 +677,14 @@ class YouTubeTab(BaseTab):
         self.start_btn.setFixedHeight(50)
         from PyQt6.QtWidgets import QSizePolicy
         self.start_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.start_btn.setToolTip(
+            "Start YouTube transcript extraction process.\n"
+            "• Downloads transcripts for all provided URLs\n"
+            "• Downloads thumbnails for each video\n"
+            "• Processes both individual videos and playlists\n"
+            "• Requires WebShare proxy credentials for YouTube access\n"
+            "• Progress will be shown in real-time below"
+        )
         # Make green and take 3/4 of the width
         self.start_btn.setStyleSheet("""
             QPushButton {
@@ -643,6 +712,13 @@ class YouTubeTab(BaseTab):
         # Set fixed height for consistent sizing
         self.stop_btn.setFixedHeight(50)
         self.stop_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.stop_btn.setToolTip(
+            "Stop the current extraction process.\n"
+            "• Safely stops processing after current video completes\n"
+            "• Already processed videos will be saved\n"
+            "• Can resume later with unprocessed videos\n"
+            "• Process will stop gracefully, not immediately"
+        )
         # Make red and take 1/4 of the width
         self.stop_btn.setStyleSheet("""
             QPushButton {
@@ -699,6 +775,13 @@ class YouTubeTab(BaseTab):
         self.report_btn.clicked.connect(self._view_last_report)
         self.report_btn.setEnabled(True)  # Always enabled since we can find reports automatically
         self.report_btn.setStyleSheet("background-color: #1976d2;")
+        self.report_btn.setToolTip(
+            "View detailed report of the last YouTube extraction process.\n"
+            "• Shows which videos were processed successfully\n"
+            "• Lists any errors or skipped videos\n"
+            "• Includes download statistics and timing information\n"
+            "• Opens the report in your default web browser"
+        )
         header_layout.addWidget(self.report_btn)
         
         layout.addLayout(header_layout)

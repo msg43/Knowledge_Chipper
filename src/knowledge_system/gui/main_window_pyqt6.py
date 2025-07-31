@@ -30,7 +30,7 @@ from ..logger import get_logger
 
 # Import modular tabs
 from .tabs import (
-    ProcessTab, WatcherTab, 
+    IntroductionTab, ProcessTab, WatcherTab, 
     YouTubeTab, TranscriptionTab, SummarizationTab,
     APIKeysTab
 )
@@ -134,14 +134,20 @@ class MainWindow(QMainWindow):
     def _create_tabs(self):
         """Create all modular tabs."""
         # Each tab handles its own business logic
+        
+        # Introduction tab - first tab for new users
+        introduction_tab = IntroductionTab(self)
+        introduction_tab.navigate_to_tab.connect(self._navigate_to_tab)
+        self.tabs.addTab(introduction_tab, "Introduction")
+        
         youtube_tab = YouTubeTab(self)
-        self.tabs.addTab(youtube_tab, "YouTube Extraction")
+        self.tabs.addTab(youtube_tab, "YouTube")
         
         transcription_tab = TranscriptionTab(self)
-        self.tabs.addTab(transcription_tab, "Audio Transcription")
+        self.tabs.addTab(transcription_tab, "Transcription")
         
         summarization_tab = SummarizationTab(self)
-        self.tabs.addTab(summarization_tab, "Content Analysis")
+        self.tabs.addTab(summarization_tab, "Summarization")
         
         process_tab = ProcessTab(self)
         self.tabs.addTab(process_tab, "Process Management")
@@ -151,9 +157,13 @@ class MainWindow(QMainWindow):
         
         api_keys_tab = APIKeysTab(self)
         self.tabs.addTab(api_keys_tab, "API Keys")
-        
-        hardware_tab = HardwareTab(self)
-        self.tabs.addTab(hardware_tab, "Hardware")
+
+    def _navigate_to_tab(self, tab_name: str):
+        """Navigate to a specific tab by name."""
+        for i in range(self.tabs.count()):
+            if self.tabs.tabText(i) == tab_name:
+                self.tabs.setCurrentIndex(i)
+                break
 
     def _apply_dark_theme(self):
         """Apply dark theme styling."""
