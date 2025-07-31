@@ -18,7 +18,7 @@ from .cancellation import CancellationToken
 logger = None
 
 
-def get_logger(name: str = "tracking"):
+def get_logger(name: str = "tracking") -> Any:
     global logger
     if logger is None:
         try:
@@ -73,7 +73,7 @@ class TranscriptionProgress:
     # Cancellation support
     cancellation_token: CancellationToken | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Auto-calculate progress percentages and ETAs based on duration data."""
         # Calculate file progress
         if self.current_file_duration and self.current_file_progress is not None:
@@ -172,7 +172,7 @@ class SummarizationProgress:
     # Cancellation support
     cancellation_token: CancellationToken | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Auto-calculate progress percentages and ETAs based on character data."""
         # Calculate file progress
         if self.current_file_size and self.current_file_chars_done is not None:
@@ -251,7 +251,7 @@ class ExtractionProgress:
     # Cancellation support
     cancellation_token: CancellationToken | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Auto-calculate progress percentages and ETAs based on URL processing data."""
         # Calculate batch progress
         if self.total_urls and self.urls_processed is not None:
@@ -308,7 +308,7 @@ class MOCProgress:
     # Cancellation support
     cancellation_token: CancellationToken | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Auto-calculate progress percentages and ETAs based on file processing data."""
         # Calculate batch progress
         if self.total_files and self.files_processed is not None:
@@ -619,7 +619,7 @@ def format_time_remaining(seconds: int | None) -> str:
             return f"{hours}h"
 
 
-def format_progress_message(progress, operation_type: str = "processing") -> str:
+def format_progress_message(progress: Any, operation_type: str = "processing") -> str:
     """
     Format a comprehensive progress message with ETAs.
 
