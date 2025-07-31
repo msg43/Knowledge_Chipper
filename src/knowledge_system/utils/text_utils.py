@@ -336,7 +336,7 @@ def create_intelligent_chunks(
         strategy = "word_boundaries"
     
     # Create TextChunk objects with metadata
-    chunks = []
+    chunks: List[TextChunk] = []
     current_position = 0
     
     for i, chunk_text in enumerate(text_chunks):

@@ -6,7 +6,7 @@ Provides comprehensive CLI commands for all system operations.
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import click
 from rich.console import Console
@@ -45,10 +45,10 @@ class CLIContext:
 pass_context = click.make_pass_decorator(CLIContext, ensure=True)
 
 
-def handle_cli_error(func):
+def handle_cli_error(func: Any) -> Any:
     """Decorator to handle CLI errors gracefully."""
 
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return func(*args, **kwargs)
         except KnowledgeSystemError as e:
@@ -242,7 +242,7 @@ def watch(
 
     try:
         # Define processing callback
-        def process_file(file_path: Path):
+        def process_file(file_path: Path) -> None:
             """Process a new or modified file."""
             settings = ctx.get_settings()
             if not ctx.quiet:
@@ -573,7 +573,7 @@ def gui(ctx: CLIContext) -> None:
 
 
 @click.group()
-def youtube():
+def youtube() -> None:
     """YouTube-specific commands for troubleshooting and authentication."""
     pass
 
@@ -583,13 +583,13 @@ main.add_command(youtube)
 
 
 @main.group()
-def cache():
+def cache() -> None:
     """Cache management commands."""
     pass
 
 
 @cache.command()
-def clear():
+def clear() -> None:
     """Clear Python bytecode cache files."""
     from .utils.cache_management import force_clear_cache
 
@@ -604,7 +604,7 @@ def clear():
 
 
 @cache.command()
-def status():
+def status() -> None:
     """Check if cache clearing is recommended."""
     from .utils.cache_management import should_clear_cache_on_startup
 
@@ -618,7 +618,7 @@ def status():
 
 
 @cache.command()
-def flag():
+def flag() -> None:
     """Create a flag to force cache clearing on next startup."""
     from .utils.cache_management import create_manual_clear_flag
 
@@ -631,7 +631,7 @@ main.add_command(cache)
 
 
 @youtube.command()
-def auth_status():
+def auth_status() -> None:
     """Check YouTube authentication status and diagnostics."""
     from .utils.youtube_utils import get_authentication_status
 
@@ -673,7 +673,7 @@ def auth_status():
 
 
 @youtube.command()
-def clear_cache():
+def clear_cache() -> None:
     """Clear YouTube authentication cache to force re-authentication."""
     from .utils.youtube_utils import clear_authentication_cache
 
