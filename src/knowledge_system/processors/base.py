@@ -142,12 +142,10 @@ class BaseProcessor(ABC):
         Returns:
             True if processor can handle this input
         """
-        if isinstance(input_path, (str, Path)):
-            path = Path(input_path)
-            return path.suffix.lower() in [
-                fmt.lower() for fmt in self.supported_formats
-            ]
-        return False
+        path = Path(input_path)
+        return path.suffix.lower() in [
+            fmt.lower() for fmt in self.supported_formats
+        ]
 
     def check_cancellation(
         self, cancellation_token: CancellationToken | None
