@@ -75,7 +75,7 @@ repos:
       - id: bandit
         args: ['-f', 'json']  # Scan individual files passed by pre-commit
         files: ^src/.*\.py$
-        exclude: ^tests/
+        exclude: ^(tests/|config/credentials\.yaml|config/client_secret.*\.json|config/youtube_oauth2_credentials\.json|.*\.env)
 
   # Docstring style checking
   - repo: https://github.com/pycqa/pydocstyle
