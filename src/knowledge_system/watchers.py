@@ -5,14 +5,17 @@ Monitors directories for new/changed files using watchdog.
 Supports multiple patterns, user callback, and robust error handling.
 """
 
-from pathlib import Path
-from typing import Callable, List, Optional, Union
+import fnmatch
 import threading
 import time
+from pathlib import Path
+from typing import List, Optional, Union
+from collections.abc import Callable
+
+from watchdog.events import FileSystemEvent, PatternMatchingEventHandler
 from watchdog.observers import Observer
-from watchdog.events import PatternMatchingEventHandler, FileSystemEvent
+
 from knowledge_system.logger import get_logger
-import fnmatch
 
 logger = get_logger(__name__)
 
@@ -22,12 +25,12 @@ class FileWatcher:
 
     def __init__(
         self,
-        directory: Union[str, Path],
-        patterns: Optional[List[str]] = None,
-        callback: Optional[Callable[[Path], None]] = None,
+        directory: str | Path,
+        patterns: list[str] | None = None,
+        callback: Callable[[Path], None] | None = None,
         debounce: float = 2.0,
         recursive: bool = False,
-    ):
+    ) -> None:
         self.directory = Path(directory)
         self.patterns = patterns or ["*"]
         self.callback = callback
@@ -38,8 +41,7 @@ class FileWatcher:
         self._stop_event = threading.Event()
 
     def _matches_patterns(self, file_path: Path) -> bool:
-        return any(fnmatch.fnmatch(str(file_path.name), pat)
-                   for pat in self.patterns)
+        return any(fnmatch.fnmatch(str(file_path.name), pat) for pat in self.patterns)
 
     def _on_created(self, event: FileSystemEvent):
         if event.is_directory:
@@ -75,10 +77,12 @@ class FileWatcher:
         event_handler.on_modified = self._on_modified
         self._observer = Observer()
         self._observer.schedule(
-            event_handler, str(self.directory), recursive=self.recursive)
+            event_handler, str(self.directory), recursive=self.recursive
+        )
         self._observer.start()
         logger.info(
-            f"Started watching: {self.directory} (patterns: {self.patterns}, recursive: {self.recursive})")
+            f"Started watching: {self.directory} (patterns: {self.patterns}, recursive: {self.recursive})"
+        )
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
@@ -98,15 +102,19 @@ class FileWatcher:
 
 
 def watch_directory(
-    directory: Union[str, Path],
-    patterns: Optional[List[str]] = None,
-    callback: Optional[Callable[[Path], None]] = None,
+    directory: str | Path,
+    patterns: list[str] | None = None,
+    callback: Callable[[Path], None] | None = None,
     debounce: float = 2.0,
     recursive: bool = False,
 ) -> FileWatcher:
     """Convenience function to start a file watcher."""
     watcher = FileWatcher(
-        directory, patterns=patterns, callback=callback, debounce=debounce, recursive=recursive
+        directory,
+        patterns=patterns,
+        callback=callback,
+        debounce=debounce,
+        recursive=recursive,
     )
     watcher.start()
     return watcher

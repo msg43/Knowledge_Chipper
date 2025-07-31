@@ -20,9 +20,9 @@ logger = get_logger(__name__)
 class CLIContext:
     """Context object for CLI commands."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize CLI context."""
-        self.settings: Optional[Settings] = None
+        self.settings: Settings | None = None
         self.verbose: bool = False
         self.quiet: bool = False
 
@@ -34,4 +34,4 @@ class CLIContext:
 
 
 # Shared pass_context decorator
-pass_context = click.make_pass_decorator(CLIContext, ensure=True) 
+pass_context = click.make_pass_decorator(CLIContext, ensure=True)

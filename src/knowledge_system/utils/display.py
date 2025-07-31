@@ -9,11 +9,11 @@ from typing import List
 
 from rich.console import Console
 from rich.progress import (
+    BarColumn,
     Progress,
     SpinnerColumn,
-    TextColumn,
-    BarColumn,
     TaskProgressColumn,
+    TextColumn,
     TimeElapsedColumn,
 )
 from rich.table import Table
@@ -24,7 +24,7 @@ from .tracking import ProgressTracker, TaskInfo
 class ProgressDisplay:
     """Rich console display for progress tracking."""
 
-    def __init__(self, tracker: ProgressTracker, show_details: bool = True):
+    def __init__(self, tracker: ProgressTracker, show_details: bool = True) -> None:
         self.tracker = tracker
         self.show_details = show_details
         self.progress = Progress(
@@ -71,7 +71,7 @@ class ProgressDisplay:
         if failed_tasks and self.show_details:
             self._show_failed_tasks(failed_tasks)
 
-    def _show_failed_tasks(self, failed_tasks: List[TaskInfo]) -> None:
+    def _show_failed_tasks(self, failed_tasks: list[TaskInfo]) -> None:
         """Display failed tasks in a table."""
         if not failed_tasks:
             return
@@ -120,7 +120,7 @@ class ProgressDisplay:
         table.add_row("Failed", str(summary["failed"]))
         table.add_row("Skipped", str(summary["skipped"]))
         table.add_row("Success Rate", f"{summary['completion_percentage']:.1f}%")
-        
+
         elapsed_minutes = summary["elapsed_seconds"] // 60
         elapsed_seconds = summary["elapsed_seconds"] % 60
         table.add_row("Total Time", f"{elapsed_minutes}m {elapsed_seconds}s")
@@ -131,4 +131,4 @@ class ProgressDisplay:
         if self.show_details:
             failed_tasks = self.tracker.get_failed_tasks()
             if failed_tasks:
-                self._show_failed_tasks(failed_tasks) 
+                self._show_failed_tasks(failed_tasks)

@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Union
 from ..config import get_settings
 from ..errors import ProcessingError, ValidationError
 from ..logger import get_logger, log_performance, log_system_event
-from ..utils.progress import CancellationToken, CancellationError
+from ..utils.progress import CancellationError, CancellationToken
 
 
 class ProcessorResult:
@@ -21,11 +21,11 @@ class ProcessorResult:
         self,
         success: bool,
         data: Any = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        errors: Optional[List[str]] = None,
-        warnings: Optional[List[str]] = None,
+        metadata: dict[str, Any] | None = None,
+        errors: list[str] | None = None,
+        warnings: list[str] | None = None,
         dry_run: bool = False,
-    ):
+    ) -> None:
         """
         Initialize processor result.
 
@@ -74,7 +74,7 @@ class BaseProcessor(ABC):
     processors must implement.
     """
 
-    def __init__(self, name: Optional[str] = None):
+    def __init__(self, name: str | None = None) -> None:
         """
         Initialize the base processor.
 
@@ -129,10 +129,10 @@ class BaseProcessor(ABC):
 
     @property
     @abstractmethod
-    def supported_formats(self) -> List[str]:
+    def supported_formats(self) -> list[str]:
         """Return list of supported input formats."""
 
-    def can_process(self, input_path: Union[str, Path]) -> bool:
+    def can_process(self, input_path: str | Path) -> bool:
         """
         Check if this processor can handle the given input.
 
@@ -149,58 +149,60 @@ class BaseProcessor(ABC):
             ]
         return False
 
-    def check_cancellation(self, cancellation_token: Optional[CancellationToken]) -> None:
+    def check_cancellation(
+        self, cancellation_token: CancellationToken | None
+    ) -> None:
         """
         Check for cancellation and pause requests.
-        
+
         Args:
             cancellation_token: Token to check for cancellation/pause
-            
+
         Raises:
             CancellationError: If operation was cancelled
         """
         if cancellation_token:
             # Check for cancellation first
             cancellation_token.throw_if_cancelled()
-            
+
             # Then wait if paused (with a reasonable timeout)
             if not cancellation_token.wait_if_paused(timeout=1.0):
                 # If wait_if_paused returns False, operation was cancelled while paused
                 cancellation_token.throw_if_cancelled()
 
     def process_with_cancellation(
-        self, 
-        input_data: Any, 
-        cancellation_token: Optional[CancellationToken] = None,
-        dry_run: bool = False, 
-        **kwargs: Any
+        self,
+        input_data: Any,
+        cancellation_token: CancellationToken | None = None,
+        dry_run: bool = False,
+        **kwargs: Any,
     ) -> ProcessorResult:
         """
         Process with cancellation support.
-        
+
         This is a wrapper around process() that adds cancellation checking.
         Processors can override this for more granular cancellation checking.
-        
+
         Args:
             input_data: The data to process
             cancellation_token: Token for cancellation/pause control
             dry_run: If True, do not perform any real processing
             **kwargs: Additional processing parameters
-            
+
         Returns:
             ProcessorResult containing the processing results
         """
         try:
             # Check cancellation before starting
             self.check_cancellation(cancellation_token)
-            
+
             # Add cancellation token to kwargs for processors that support it
             if cancellation_token:
-                kwargs['cancellation_token'] = cancellation_token
-            
+                kwargs["cancellation_token"] = cancellation_token
+
             # Call the main process method
             return self.process(input_data, dry_run=dry_run, **kwargs)
-            
+
         except CancellationError as e:
             self.logger.info(f"Processing cancelled: {e}")
             return ProcessorResult(
@@ -229,7 +231,7 @@ class BaseProcessor(ABC):
             ProcessorResult containing the processing results
         """
         start_time = time.time()
-        cancellation_token = kwargs.get('cancellation_token')
+        cancellation_token = kwargs.get("cancellation_token")
 
         try:
             # Log processing start
@@ -261,7 +263,9 @@ class BaseProcessor(ABC):
             self.check_cancellation(cancellation_token)
 
             # Process the data with cancellation support
-            result = self.process_with_cancellation(input_data, cancellation_token, **kwargs)
+            result = self.process_with_cancellation(
+                input_data, cancellation_token, **kwargs
+            )
 
             # Update result metadata
             duration = time.time() - start_time
@@ -300,10 +304,10 @@ class BaseProcessor(ABC):
         except CancellationError as e:
             duration = time.time() - start_time
             self.logger.info(f"Processing cancelled for {self.name}: {e}")
-            
+
             # Update statistics for cancellation
             self._update_stats(success=False, duration=duration)
-            
+
             log_system_event(
                 event="processing_cancelled",
                 component=self.name,
@@ -311,7 +315,7 @@ class BaseProcessor(ABC):
                 duration=duration,
                 reason=str(e),
             )
-            
+
             return ProcessorResult(
                 success=False,
                 errors=[f"Processing cancelled: {e}"],
@@ -368,7 +372,7 @@ class BaseProcessor(ABC):
         else:
             self._stats["error_count"] += 1
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get processing statistics for this processor.
 
@@ -413,21 +417,21 @@ class BaseProcessor(ABC):
         )
 
     def process_batch(
-        self, 
-        inputs: List[Any], 
-        dry_run: bool = False, 
-        cancellation_token: Optional[CancellationToken] = None,
-        **kwargs: Any
-    ) -> List[ProcessorResult]:
+        self,
+        inputs: list[Any],
+        dry_run: bool = False,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs: Any,
+    ) -> list[ProcessorResult]:
         """
         Process a batch of inputs with cancellation support.
-        
+
         Args:
             inputs: List of input data
             dry_run: If True, do not perform any real processing, just simulate
             cancellation_token: Token for cancellation/pause control
             **kwargs: Additional processing parameters
-            
+
         Returns:
             List of ProcessorResult objects
         """
@@ -436,44 +440,46 @@ class BaseProcessor(ABC):
             try:
                 # Check for cancellation before each item
                 self.check_cancellation(cancellation_token)
-                
+
                 # Process the item
                 result = self.process_with_cancellation(
-                    input_item, 
+                    input_item,
                     cancellation_token=cancellation_token,
-                    dry_run=dry_run, 
-                    **kwargs
+                    dry_run=dry_run,
+                    **kwargs,
                 )
                 results.append(result)
-                
+
             except CancellationError as e:
                 # Add cancellation result for remaining items
                 remaining_count = len(inputs) - i
                 for _ in range(remaining_count):
-                    results.append(ProcessorResult(
-                        success=False,
-                        errors=[f"Batch processing cancelled: {e}"],
-                        metadata={
-                            "processor": self.name,
-                            "cancelled": True,
-                            "cancellation_reason": str(e),
-                        },
-                        dry_run=dry_run,
-                    ))
+                    results.append(
+                        ProcessorResult(
+                            success=False,
+                            errors=[f"Batch processing cancelled: {e}"],
+                            metadata={
+                                "processor": self.name,
+                                "cancelled": True,
+                                "cancellation_reason": str(e),
+                            },
+                            dry_run=dry_run,
+                        )
+                    )
                 break
-                
+
         return results
 
 
 class ProcessorRegistry:
     """Registry for managing processor instances."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the processor registry."""
-        self._processors: Dict[str, BaseProcessor] = {}
+        self._processors: dict[str, BaseProcessor] = {}
         self.logger = get_logger("processor.registry")
 
-    def register(self, processor: BaseProcessor, name: Optional[str] = None) -> None:
+    def register(self, processor: BaseProcessor, name: str | None = None) -> None:
         """
         Register a processor instance.
 
@@ -491,7 +497,7 @@ class ProcessorRegistry:
         self._processors[processor_name] = processor
         self.logger.info(f"Registered processor: {processor_name}")
 
-    def get(self, name: str) -> Optional[BaseProcessor]:
+    def get(self, name: str) -> BaseProcessor | None:
         """
         Get a processor by name.
 
@@ -503,7 +509,7 @@ class ProcessorRegistry:
         """
         return self._processors.get(name)
 
-    def list_processors(self) -> List[str]:
+    def list_processors(self) -> list[str]:
         """
         Get list of registered processor names.
 

@@ -58,7 +58,7 @@ class InstallationProgress:
 class OllamaManager:
     """Manages Ollama service and model operations."""
 
-    def __init__(self, base_url: str = "http://localhost:11434"):
+    def __init__(self, base_url: str = "http://localhost:11434") -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = 30
 

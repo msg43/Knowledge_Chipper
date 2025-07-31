@@ -12,10 +12,10 @@ class KnowledgeSystemError(Exception):
     def __init__(
         self,
         message: str,
-        error_code: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        cause: Optional[Exception] = None,
-    ):
+        error_code: str | None = None,
+        context: dict[str, Any] | None = None,
+        cause: Exception | None = None,
+    ) -> None:
         """
         Initialize base exception.
 
@@ -39,13 +39,12 @@ class KnowledgeSystemError(Exception):
             parts.append(f"[{self.error_code}]")
 
         if self.context:
-            context_str = ", ".join(
-    f"{k}={v}" for k, v in self.context.items())
+            context_str = ", ".join(f"{k}={v}" for k, v in self.context.items())
             parts.append(f"({context_str})")
 
         return " ".join(parts)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert exception to dictionary for serialization."""
         return {
             "error_type": self.__class__.__name__,
@@ -126,12 +125,12 @@ class APIError(NetworkError):
     def __init__(
         self,
         message: str,
-        status_code: Optional[int] = None,
-        response_body: Optional[str] = None,
-        error_code: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        cause: Optional[Exception] = None,
-    ):
+        status_code: int | None = None,
+        response_body: str | None = None,
+        error_code: str | None = None,
+        context: dict[str, Any] | None = None,
+        cause: Exception | None = None,
+    ) -> None:
         """Initialize API error with additional HTTP context."""
         full_context = context.copy() if context else {}
 
@@ -157,10 +156,10 @@ class LLMAPIError(APIError):
     def __init__(
         self,
         message: str,
-        provider: Optional[str] = None,
-        model: Optional[str] = None,
+        provider: str | None = None,
+        model: str | None = None,
         **kwargs,
-    ):
+    ) -> None:
         """Initialize LLM API error with provider context."""
         context = kwargs.get("context", {}).copy()
 
@@ -181,8 +180,9 @@ class LLMAPIError(APIError):
 class RateLimitError(APIError):
     """Raised when API rate limits are exceeded."""
 
-    def __init__(self, message: str,
-                 retry_after: Optional[int] = None, **kwargs):
+    def __init__(
+        self, message: str, retry_after: int | None = None, **kwargs
+    ) -> None:
         """Initialize rate limit error with retry information."""
         context = kwargs.get("context", {}).copy()
 
@@ -237,10 +237,10 @@ class InputValidationError(ValidationError):
     def __init__(
         self,
         message: str,
-        field_name: Optional[str] = None,
+        field_name: str | None = None,
         field_value: Any = None,
         **kwargs,
-    ):
+    ) -> None:
         """Initialize input validation error with field context."""
         context = kwargs.get("context", {}).copy()
 
@@ -278,8 +278,9 @@ class WorkflowError(OperationError):
 class TimeoutError(OperationError):
     """Raised when operations timeout."""
 
-    def __init__(self, message: str,
-                 timeout_seconds: Optional[float] = None, **kwargs):
+    def __init__(
+        self, message: str, timeout_seconds: float | None = None, **kwargs
+    ) -> None:
         """Initialize timeout error with duration context."""
         context = kwargs.get("context", {}).copy()
 
@@ -319,7 +320,7 @@ class PlaylistMonitorError(MonitoringError):
 def wrap_exception(
     func_name: str,
     original_exception: Exception,
-    context: Optional[Dict[str, Any]] = None,
+    context: dict[str, Any] | None = None,
     error_type: type = KnowledgeSystemError,
 ) -> KnowledgeSystemError:
     """
@@ -339,12 +340,11 @@ def wrap_exception(
     if context:
         full_context.update(context)
 
-    return error_type(message=message, context=full_context,
-                      cause=original_exception)
+    return error_type(message=message, context=full_context, cause=original_exception)
 
 
 def handle_api_error(
-    response, provider: str, operation: str, context: Optional[Dict[str, Any]] = None
+    response, provider: str, operation: str, context: dict[str, Any] | None = None
 ) -> APIError:
     """
     Handle API response errors and create appropriate exceptions.

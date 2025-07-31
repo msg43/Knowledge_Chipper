@@ -4,19 +4,19 @@ Backward compatibility launcher for GUI.
 DEPRECATED: Use 'python -m knowledge_system gui' instead.
 """
 
-import sys
 import subprocess
+import sys
 
 
-def main():
+def main() -> None:
     """Redirect to the new command format."""
     print("=" * 60)
-    print("DEPRECATED: python -m knowledge_system.gui")  
+    print("DEPRECATED: python -m knowledge_system.gui")
     print("Use this instead: python -m knowledge_system gui")
     print("=" * 60)
     print()
     print("Launching GUI with new command format...")
-    
+
     # Launch with the new format
     try:
         subprocess.run([sys.executable, "-m", "knowledge_system", "gui"], check=True)
@@ -28,4 +28,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()

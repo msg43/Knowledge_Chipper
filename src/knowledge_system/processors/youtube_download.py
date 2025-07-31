@@ -5,14 +5,15 @@ Downloads audio and thumbnails from YouTube videos or playlists using yt-dlp.
 Supports configurable output format (mp3/wav), error handling, and returns output file paths and metadata.
 """
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional, Union
-from datetime import datetime
+
 import yt_dlp
 
 from ..errors import YouTubeAPIError
 from ..logger import get_logger
-from ..utils.youtube_utils import is_youtube_url, extract_urls
+from ..utils.youtube_utils import extract_urls, is_youtube_url
 from .base import BaseProcessor, ProcessorResult
 
 logger = get_logger(__name__)
@@ -29,10 +30,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
     def __init__(
         self,
-        name: Optional[str] = None,
+        name: str | None = None,
         output_format: str = "mp3",
         download_thumbnails: bool = True,
-    ):
+    ) -> None:
         super().__init__(name or "youtube_download")
         self.output_format = output_format
         self.download_thumbnails = download_thumbnails
@@ -67,7 +68,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
         }
 
     @property
-    def supported_formats(self) -> List[str]:
+    def supported_formats(self) -> list[str]:
         return [".url", ".txt"]
 
     def validate_input(self, input_data: Any) -> bool:
@@ -77,17 +78,17 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 return True
             if Path(input_str).exists():
                 try:
-                    with open(input_str, "r", encoding="utf-8") as f:
+                    with open(input_str, encoding="utf-8") as f:
                         return any(is_youtube_url(line.strip()) for line in f)
                 except Exception:
                     pass
         return False
 
-    def _download_thumbnail_from_url(
-        self, url: str, output_dir: Path) -> Optional[str]:
+    def _download_thumbnail_from_url(self, url: str, output_dir: Path) -> str | None:
         """Download thumbnail using centralized utility function."""
         try:
             from ..utils.youtube_utils import download_thumbnail
+
             return download_thumbnail(url, output_dir, use_cookies=False)
         except Exception as e:
             logger.warning(f"Failed to download thumbnail: {e}")
@@ -115,9 +116,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
     def process(
         self,
         input_data: Any,
-        output_dir: Optional[Union[str, Path]] = None,
-        output_format: Optional[str] = None,
-        download_thumbnails: Optional[bool] = None,
+        output_dir: str | Path | None = None,
+        output_format: str | None = None,
+        download_thumbnails: bool | None = None,
         **kwargs,
     ) -> ProcessorResult:
         output_format = output_format or self.output_format
@@ -132,50 +133,59 @@ class YouTubeDownloadProcessor(BaseProcessor):
             return ProcessorResult(
                 success=False, errors=["No valid YouTube URLs found in input"]
             )
-        
+
         # Expand any playlist URLs into individual video URLs with metadata
         from ..utils.youtube_utils import expand_playlist_urls_with_metadata
+
         expansion_result = expand_playlist_urls_with_metadata(urls)
-        urls = expansion_result['expanded_urls']
-        playlist_info = expansion_result['playlist_info']
-        
+        urls = expansion_result["expanded_urls"]
+        playlist_info = expansion_result["playlist_info"]
+
         if not urls:
             return ProcessorResult(
-                success=False, errors=["No valid video URLs found after playlist expansion"]
+                success=False,
+                errors=["No valid video URLs found after playlist expansion"],
             )
 
         # Log playlist information if any playlists were found
         if playlist_info:
-            total_playlist_videos = sum(p['total_videos'] for p in playlist_info)
-            logger.info(f"Found {len(playlist_info)} playlist(s) with {total_playlist_videos} total videos:")
+            total_playlist_videos = sum(p["total_videos"] for p in playlist_info)
+            logger.info(
+                f"Found {len(playlist_info)} playlist(s) with {total_playlist_videos} total videos:"
+            )
             for i, playlist in enumerate(playlist_info, 1):
-                title = playlist.get('title', 'Unknown Playlist')
-                video_count = playlist.get('total_videos', 0)
+                title = playlist.get("title", "Unknown Playlist")
+                video_count = playlist.get("total_videos", 0)
                 logger.info(f"  {i}. {title} ({video_count} videos)")
 
         output_dir = Path(output_dir) if output_dir else Path.cwd()
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Create Thumbnails subdirectory for consistent organization
         thumbnails_dir = output_dir / "Thumbnails"
         thumbnails_dir.mkdir(exist_ok=True)
 
         # ENFORCE WebShare proxy ONLY - no fallback authentication strategies
         from ..config import get_settings
+
         settings = get_settings()
         webshare_username = settings.api_keys.webshare_username
         webshare_password = settings.api_keys.webshare_password
-        
+
         if not webshare_username or not webshare_password:
             return ProcessorResult(
-                success=False, 
-                errors=["WebShare proxy credentials are required for YouTube processing. Please configure WebShare Username and Password in Settings. This system only uses WebShare rotating residential proxies for YouTube access."]
+                success=False,
+                errors=[
+                    "WebShare proxy credentials are required for YouTube processing. Please configure WebShare Username and Password in Settings. This system only uses WebShare rotating residential proxies for YouTube access."
+                ],
             )
-        
+
         # Configure WebShare proxy only
         proxy_url = f"http://{webshare_username}:{webshare_password}@p.webshare.io:80/"
         ydl_opts = {**self.ydl_opts_base, "proxy": proxy_url}
-        logger.info("Using WebShare rotating residential proxy for YouTube download (no fallback methods)")
+        logger.info(
+            "Using WebShare rotating residential proxy for YouTube download (no fallback methods)"
+        )
         ydl_opts["postprocessors"][0]["preferredcodec"] = output_format
         ydl_opts["outtmpl"] = str(output_dir / "%(title)s.%(ext)s")
 
@@ -188,11 +198,11 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 # Determine playlist context for progress display
                 playlist_context = ""
                 for playlist in playlist_info:
-                    if playlist['start_index'] <= (i - 1) <= playlist['end_index']:
-                        playlist_position = (i - 1) - playlist['start_index'] + 1
+                    if playlist["start_index"] <= (i - 1) <= playlist["end_index"]:
+                        playlist_position = (i - 1) - playlist["start_index"] + 1
                         playlist_context = f" [Playlist: {playlist['title'][:40]}{'...' if len(playlist['title']) > 40 else ''} - Video {playlist_position}/{playlist['total_videos']}]"
                         break
-                
+
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     logger.info(f"Downloading audio for: {url}{playlist_context}")
                     info = ydl.extract_info(url, download=True)
@@ -209,24 +219,26 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     for entry in entries:
                         if entry and "title" in entry:
                             # Audio file
-                            filename = output_dir / \
-                                f"{entry['title']}.{output_format}"
+                            filename = output_dir / f"{entry['title']}.{output_format}"
                             all_files.append(str(filename))
 
                             # Thumbnail - save to Thumbnails subdirectory
                             if download_thumbnails:
                                 thumbnail_path = self._download_thumbnail_from_url(
-                                    url, thumbnails_dir)
+                                    url, thumbnails_dir
+                                )
                                 if thumbnail_path:
                                     all_thumbnails.append(thumbnail_path)
 
             except Exception as e:
                 error_msg = str(e)
                 logger.error(f"Error downloading audio for {url}: {error_msg}")
-                
+
                 # Check for specific payment required error
                 if "402 Payment Required" in error_msg:
-                    errors.append(f"💰 WebShare payment required for {url}: Your WebShare account is out of funds. Please add payment at https://panel.webshare.io/")
+                    errors.append(
+                        f"💰 WebShare payment required for {url}: Your WebShare account is out of funds. Please add payment at https://panel.webshare.io/"
+                    )
                 else:
                     errors.append(f"Failed to download {url}: {error_msg}")
 
@@ -255,7 +267,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
 def fetch_audio(
     url: str,
-    output_dir: Optional[Union[str, Path]] = None,
+    output_dir: str | Path | None = None,
     output_format: str = "mp3",
     download_thumbnails: bool = True,
 ) -> str:
@@ -263,10 +275,7 @@ def fetch_audio(
     processor = YouTubeDownloadProcessor(
         output_format=output_format, download_thumbnails=download_thumbnails
     )
-    result = processor.process(
-    url,
-    output_dir=output_dir,
-     output_format=output_format)
+    result = processor.process(url, output_dir=output_dir, output_format=output_format)
     if not result.success:
         raise YouTubeAPIError(f"Failed to download audio: {result.errors}")
     files = result.data.get("downloaded_files", [])

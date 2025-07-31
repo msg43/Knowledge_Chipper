@@ -1,19 +1,22 @@
-from typing import Any, List, Union, Optional
-from pathlib import Path
+import os
 import tempfile
 from datetime import datetime
-import os
-from knowledge_system.processors.base import BaseProcessor, ProcessorResult
-from knowledge_system.processors.whisper_cpp_transcribe import WhisperCppTranscribeProcessor
-from knowledge_system.utils.validation import validate_audio_input, can_process_file
-from knowledge_system.utils.audio_utils import (
-    convert_audio_file, 
-    get_audio_metadata, 
-    get_audio_duration, 
-    normalize_audio_file,
-    ffmpeg_processor
-)
+from pathlib import Path
+from typing import Any, List, Optional, Union
+
 from knowledge_system.logger import get_logger
+from knowledge_system.processors.base import BaseProcessor, ProcessorResult
+from knowledge_system.processors.whisper_cpp_transcribe import (
+    WhisperCppTranscribeProcessor,
+)
+from knowledge_system.utils.audio_utils import (
+    convert_audio_file,
+    ffmpeg_processor,
+    get_audio_duration,
+    get_audio_metadata,
+    normalize_audio_file,
+)
+from knowledge_system.utils.validation import can_process_file, validate_audio_input
 
 logger = get_logger(__name__)
 
@@ -34,16 +37,16 @@ class AudioProcessor(BaseProcessor):
         self,
         normalize_audio: bool = True,
         target_format: str = "wav",
-        device: Optional[str] = None,
-        temp_dir: Optional[Union[str, Path]] = None,
+        device: str | None = None,
+        temp_dir: str | Path | None = None,
         use_whisper_cpp: bool = False,
         model: str = "base",
         progress_callback=None,
         enable_diarization: bool = False,
-        hf_token: Optional[str] = None,
+        hf_token: str | None = None,
         enable_quality_retry: bool = True,
         max_retry_attempts: int = 1,
-    ):
+    ) -> None:
         self.normalize_audio = normalize_audio
         self.target_format = target_format
         self.device = device
@@ -60,22 +63,21 @@ class AudioProcessor(BaseProcessor):
         self.transcriber = WhisperCppTranscribeProcessor(
             model=model, progress_callback=progress_callback
         )
-        
+
         # Model progression for retries (from smaller to larger for better accuracy)
         self.retry_models = {
             "tiny": "base",
-            "base": "small", 
+            "base": "small",
             "small": "medium",
             "medium": "large",
-            "large": "large"  # No upgrade from large
+            "large": "large",  # No upgrade from large
         }
 
     @property
-    def supported_formats(self) -> List[str]:
-        return [".mp3", ".wav", ".m4a", ".flac",
-            ".ogg", ".aac", ".mp4", ".webm"]
+    def supported_formats(self) -> list[str]:
+        return [".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".webm"]
 
-    def validate_input(self, input_data: Union[str, Path]) -> bool:
+    def validate_input(self, input_data: str | Path) -> bool:
         if isinstance(input_data, (str, Path)):
             path = Path(input_data)
             return path.exists() and path.suffix.lower() in self.supported_formats
@@ -85,7 +87,9 @@ class AudioProcessor(BaseProcessor):
         """Convert audio file to target format using FFmpeg."""
         if not FFMPEG_AVAILABLE:
             logger.warning("Audio conversion skipped - FFmpeg not available")
-            logger.info("To enable audio conversion, install FFmpeg: brew install ffmpeg")
+            logger.info(
+                "To enable audio conversion, install FFmpeg: brew install ffmpeg"
+            )
             return input_path.suffix.lower() == f".{self.target_format}"
 
         try:
@@ -94,36 +98,44 @@ class AudioProcessor(BaseProcessor):
                 input_path=input_path,
                 output_path=output_path,
                 target_format=self.target_format,
-                normalize=self.normalize_audio
+                normalize=self.normalize_audio,
             )
-            
+
             if success:
                 logger.info(f"Successfully converted {input_path} to {output_path}")
                 return True
             else:
                 logger.error(f"Failed to convert {input_path} to {output_path}")
                 return False
-                
+
         except Exception as e:
             logger.error(f"Audio conversion error: {e}")
             return False
 
-    def _perform_diarization(self, audio_path: Path) -> Optional[list]:
+    def _perform_diarization(self, audio_path: Path) -> list | None:
         """Run speaker diarization on the audio file."""
         try:
-            from .diarization import SpeakerDiarizationProcessor, is_diarization_available, get_diarization_installation_instructions
-            
+            from .diarization import (
+                SpeakerDiarizationProcessor,
+                get_diarization_installation_instructions,
+                is_diarization_available,
+            )
+
             # Check if diarization is available
             if not is_diarization_available():
-                logger.warning("Diarization not available. Skipping speaker identification.")
+                logger.warning(
+                    "Diarization not available. Skipping speaker identification."
+                )
                 logger.info(get_diarization_installation_instructions())
                 return None
-            
+
             logger.info("Running speaker diarization...")
             diarizer = SpeakerDiarizationProcessor(hf_token=self.hf_token)
             result = diarizer.process(audio_path)
             if result.success:
-                logger.info(f"Diarization completed with {len(result.data)} speaker segments")
+                logger.info(
+                    f"Diarization completed with {len(result.data)} speaker segments"
+                )
                 return result.data
             else:
                 logger.warning(f"Diarization failed: {result.errors}")
@@ -132,61 +144,77 @@ class AudioProcessor(BaseProcessor):
             logger.warning(f"Diarization failed: {e}")
             return None
 
-    def _merge_diarization(self, transcription_data: dict, diarization_segments: list) -> dict:
+    def _merge_diarization(
+        self, transcription_data: dict, diarization_segments: list
+    ) -> dict:
         """Merge speaker labels into transcription segments."""
         if not diarization_segments or "segments" not in transcription_data:
             return transcription_data
-        
-        logger.info(f"Merging {len(diarization_segments)} speaker segments with {len(transcription_data['segments'])} transcription segments")
-        
+
+        logger.info(
+            f"Merging {len(diarization_segments)} speaker segments with {len(transcription_data['segments'])} transcription segments"
+        )
+
         # For each transcription segment, find overlapping speaker segments
         for transcript_segment in transcription_data["segments"]:
             start = transcript_segment.get("start", 0)
             end = transcript_segment.get("end", 0)
-            
+
             # Find the speaker with the most overlap in this time range
             speaker = self._find_dominant_speaker(start, end, diarization_segments)
             if speaker:
                 transcript_segment["speaker"] = speaker
-        
+
         return transcription_data
 
-    def _find_dominant_speaker(self, start: float, end: float, diarization_segments: list) -> Optional[str]:
+    def _find_dominant_speaker(
+        self, start: float, end: float, diarization_segments: list
+    ) -> str | None:
         """Find the speaker with the most overlap in the given time range."""
         if not diarization_segments:
             return None
-        
+
         speaker_overlaps = {}
         for segment in diarization_segments:
             seg_start = segment.get("start", 0)
             seg_end = segment.get("end", 0)
             speaker = segment.get("speaker", "Unknown")
-            
+
             # Calculate overlap
             overlap_start = max(start, seg_start)
             overlap_end = min(end, seg_end)
             overlap = max(0, overlap_end - overlap_start)
-            
+
             if overlap > 0:
                 speaker_overlaps[speaker] = speaker_overlaps.get(speaker, 0) + overlap
-        
+
         if speaker_overlaps:
             return max(speaker_overlaps, key=speaker_overlaps.get)
         return None
 
-    def _log_transcription_failure(self, file_path: Path, failure_reason: str, model_used: str, audio_duration: Optional[float] = None) -> None:
+    def _log_transcription_failure(
+        self,
+        file_path: Path,
+        failure_reason: str,
+        model_used: str,
+        audio_duration: float | None = None,
+    ) -> None:
         """Log transcription failure to a dedicated failure log file."""
         try:
             # Create logs directory if it doesn't exist
             logs_dir = Path("logs")
             logs_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Failure log file
             failure_log_path = logs_dir / "transcription_failures.log"
-            
+
             timestamp = datetime.now().isoformat()
-            duration_str = f"{audio_duration:.1f}s ({audio_duration/60:.1f}min)" if audio_duration else "unknown"
-            
+            duration_str = (
+                f"{audio_duration:.1f}s ({audio_duration/60:.1f}min)"
+                if audio_duration
+                else "unknown"
+            )
+
             log_entry = (
                 f"[{timestamp}] TRANSCRIPTION FAILURE\n"
                 f"  File: {file_path}\n"
@@ -197,12 +225,12 @@ class AudioProcessor(BaseProcessor):
                 f"  File Format: {file_path.suffix}\n"
                 f"{'='*80}\n"
             )
-            
+
             with open(failure_log_path, "a", encoding="utf-8") as f:
                 f.write(log_entry)
-                
+
             logger.info(f"Transcription failure logged to {failure_log_path}")
-            
+
         except Exception as e:
             logger.error(f"Failed to log transcription failure: {e}")
 
@@ -215,20 +243,22 @@ class AudioProcessor(BaseProcessor):
                 "file_size_mb": round(stat.st_size / (1024 * 1024), 2),
                 "created_date": datetime.fromtimestamp(stat.st_ctime).isoformat(),
                 "modified_date": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                "file_format": audio_path.suffix.lower().lstrip('.'),
+                "file_format": audio_path.suffix.lower().lstrip("."),
             }
-            
+
             # Try to get audio duration if FFmpeg is available
             if FFMPEG_AVAILABLE:
                 try:
                     duration_seconds = get_audio_duration(audio_path)
                     metadata["duration_seconds"] = duration_seconds
-                    metadata["duration_formatted"] = self._format_duration(duration_seconds)
+                    metadata["duration_formatted"] = self._format_duration(
+                        duration_seconds
+                    )
                 except Exception as e:
                     logger.warning(f"Could not extract audio duration: {e}")
                     metadata["duration_seconds"] = None
                     metadata["duration_formatted"] = "Unknown"
-            
+
             return metadata
         except Exception as e:
             logger.warning(f"Could not extract audio metadata: {e}")
@@ -238,23 +268,31 @@ class AudioProcessor(BaseProcessor):
         """Format duration in seconds to MM:SS or HH:MM:SS format."""
         if seconds is None:
             return "Unknown"
-        
+
         hours = int(seconds // 3600)
         minutes = int((seconds % 3600) // 60)
         secs = int(seconds % 60)
-        
+
         if hours > 0:
             return f"{hours:02d}:{minutes:02d}:{secs:02d}"
         else:
             return f"{minutes:02d}:{secs:02d}"
 
-    def _create_markdown(self, transcription_data: dict, audio_metadata: dict, model_metadata: dict, include_timestamps: bool = True) -> str:
+    def _create_markdown(
+        self,
+        transcription_data: dict,
+        audio_metadata: dict,
+        model_metadata: dict,
+        include_timestamps: bool = True,
+    ) -> str:
         """Create markdown content from transcription data and metadata."""
         lines = []
-        
+
         # YAML frontmatter
         lines.append("---")
-        lines.append(f'title: "Audio Transcription - {audio_metadata.get("filename", "Unknown")}"')
+        lines.append(
+            f'title: "Audio Transcription - {audio_metadata.get("filename", "Unknown")}"'
+        )
         lines.append(f'source_file: "{audio_metadata.get("filename", "Unknown")}"')
         lines.append(f'transcription_date: "{datetime.now().isoformat()}"')
         lines.append(f'file_format: "{audio_metadata.get("file_format", "unknown")}"')
@@ -267,15 +305,15 @@ class AudioProcessor(BaseProcessor):
         lines.append(f'text_length: {len(transcription_data.get("text", ""))}')
         lines.append(f'segments_count: {len(transcription_data.get("segments", []))}')
         if model_metadata.get("diarization_enabled"):
-            lines.append(f'diarization_enabled: true')
-        lines.append(f'include_timestamps: {include_timestamps}')
+            lines.append(f"diarization_enabled: true")
+        lines.append(f"include_timestamps: {include_timestamps}")
         lines.append("---")
         lines.append("")
-        
+
         # Full transcript section
         lines.append("## Full Transcript")
         lines.append("")
-        
+
         # Format transcript with segments if available and multiple segments exist
         segments = transcription_data.get("segments", [])
         if len(segments) > 1:
@@ -283,7 +321,7 @@ class AudioProcessor(BaseProcessor):
                 start_time = segment.get("start", 0)
                 text = segment.get("text", "").strip()
                 speaker = segment.get("speaker", "")
-                
+
                 if text:
                     if include_timestamps:
                         timestamp = self._format_duration(start_time)
@@ -302,28 +340,28 @@ class AudioProcessor(BaseProcessor):
             # Single segment or plain text
             text = transcription_data.get("text", "").strip()
             lines.append(text)
-        
+
         return "\n".join(lines)
 
     def save_transcript_to_markdown(
-        self, 
-        transcription_result: ProcessorResult, 
-        audio_path: Path, 
-        output_dir: Optional[Union[str, Path]] = None,
-        include_timestamps: bool = True
-    ) -> Optional[Path]:
+        self,
+        transcription_result: ProcessorResult,
+        audio_path: Path,
+        output_dir: str | Path | None = None,
+        include_timestamps: bool = True,
+    ) -> Path | None:
         """Save transcription result to a markdown file."""
         if not transcription_result.success:
             logger.error("Cannot save transcript - transcription failed")
             return None
-        
+
         try:
             # Determine output directory
             if output_dir is None:
                 output_dir = Path("Output/Transcripts")
             else:
                 output_dir = Path(output_dir)
-            
+
             # Ensure output directory exists and is writable
             try:
                 output_dir.mkdir(parents=True, exist_ok=True)
@@ -331,48 +369,54 @@ class AudioProcessor(BaseProcessor):
             except Exception as e:
                 logger.error(f"Failed to create output directory {output_dir}: {e}")
                 return None
-            
+
             # Create filename
             base_name = audio_path.stem
-            safe_name = "".join(c for c in base_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            safe_name = safe_name.replace(' ', '_')
+            safe_name = "".join(
+                c for c in base_name if c.isalnum() or c in (" ", "-", "_")
+            ).rstrip()
+            safe_name = safe_name.replace(" ", "_")
             filename = f"{safe_name}_transcript.md"
             output_path = output_dir / filename
-            
+
             logger.debug(f"Attempting to save transcript to: {output_path}")
-            
+
             # Get metadata
             audio_metadata = self._get_audio_metadata(audio_path)
             model_metadata = transcription_result.metadata or {}
-            
+
             # Create markdown content with timestamps preference
             markdown_content = self._create_markdown(
-                transcription_result.data, 
-                audio_metadata, 
+                transcription_result.data,
+                audio_metadata,
                 model_metadata,
-                include_timestamps=include_timestamps
+                include_timestamps=include_timestamps,
             )
-            
+
             # Write file with detailed error handling
             try:
-                with open(output_path, 'w', encoding='utf-8') as f:
+                with open(output_path, "w", encoding="utf-8") as f:
                     f.write(markdown_content)
-                
+
                 # Verify file was written
                 if output_path.exists() and output_path.stat().st_size > 0:
-                    logger.info(f"✅ Transcript saved successfully: {output_path} ({len(markdown_content):,} characters)")
+                    logger.info(
+                        f"✅ Transcript saved successfully: {output_path} ({len(markdown_content):,} characters)"
+                    )
                     return output_path
                 else:
-                    logger.error(f"❌ File was created but appears empty or missing: {output_path}")
+                    logger.error(
+                        f"❌ File was created but appears empty or missing: {output_path}"
+                    )
                     return None
-                    
+
             except PermissionError as e:
                 logger.error(f"❌ Permission denied writing to {output_path}: {e}")
                 return None
             except OSError as e:
                 logger.error(f"❌ OS error writing to {output_path}: {e}")
                 return None
-            
+
         except Exception as e:
             logger.error(f"❌ Unexpected error saving transcript for {audio_path}: {e}")
             return None
@@ -382,8 +426,8 @@ class AudioProcessor(BaseProcessor):
     ) -> ProcessorResult:
         """Process audio with automatic retry and failure logging."""
         # Extract parameters from kwargs for backwards compatibility
-        device = kwargs.get('device', self.device)
-        
+        device = kwargs.get("device", self.device)
+
         # Handle input_data as input_path for backwards compatibility
         input_path = input_data
         path = Path(input_path)
@@ -399,14 +443,16 @@ class AudioProcessor(BaseProcessor):
         # Try transcription with retry logic
         return self._transcribe_with_retry(path, audio_metadata, device, **kwargs)
 
-    def _transcribe_with_retry(self, path: Path, audio_metadata: dict, device: Optional[str], **kwargs: Any) -> ProcessorResult:
+    def _transcribe_with_retry(
+        self, path: Path, audio_metadata: dict, device: str | None, **kwargs: Any
+    ) -> ProcessorResult:
         """Attempt transcription with automatic retry using better model if quality validation fails."""
         current_model = self.model
         audio_duration = audio_metadata.get("duration_seconds")
-        
+
         # Determine max attempts based on settings
         max_attempts = self.max_retry_attempts + 1 if self.enable_quality_retry else 1
-        
+
         for attempt in range(max_attempts):
             try:
                 # Update transcriber model for this attempt
@@ -416,12 +462,14 @@ class AudioProcessor(BaseProcessor):
                         # No better model available, don't retry
                         break
                     current_model = retry_model
-                    logger.info(f"Retrying transcription with improved model: {current_model}")
+                    logger.info(
+                        f"Retrying transcription with improved model: {current_model}"
+                    )
                     # Create new transcriber with better model
                     self.transcriber = WhisperCppTranscribeProcessor(
                         model=current_model, progress_callback=self.progress_callback
                     )
-                
+
                 # Create temporary file for processed audio
                 if self.temp_dir:
                     self.temp_dir.mkdir(parents=True, exist_ok=True)
@@ -439,7 +487,9 @@ class AudioProcessor(BaseProcessor):
                 if not self._convert_audio(path, output_path):
                     error_msg = "Audio conversion failed"
                     if attempt == max_attempts - 1:  # Last attempt
-                        self._log_transcription_failure(path, error_msg, current_model, audio_duration)
+                        self._log_transcription_failure(
+                            path, error_msg, current_model, audio_duration
+                        )
                     output_path.unlink(missing_ok=True)
                     return ProcessorResult(success=False, errors=[error_msg])
 
@@ -454,21 +504,37 @@ class AudioProcessor(BaseProcessor):
                 if transcription_result.success:
                     # Quality validation with duration-based analysis
                     quality_passed = True
-                    if transcription_result.data and isinstance(transcription_result.data, dict):
+                    if transcription_result.data and isinstance(
+                        transcription_result.data, dict
+                    ):
                         text = transcription_result.data.get("text", "")
-                        if text and hasattr(self.transcriber, '_validate_transcription_quality'):
-                            validation = self.transcriber._validate_transcription_quality(text, audio_duration)
+                        if text and hasattr(
+                            self.transcriber, "_validate_transcription_quality"
+                        ):
+                            validation = (
+                                self.transcriber._validate_transcription_quality(
+                                    text, audio_duration
+                                )
+                            )
                             if not validation["is_valid"]:
                                 quality_passed = False
-                                failure_reason = validation['issue']
-                                logger.warning(f"Transcription quality issue for {path} (attempt {attempt + 1}): {failure_reason}")
-                                
-                                if attempt == 0 and self.enable_quality_retry:  # First attempt failed, retry enabled
-                                    logger.info("Attempting retry with better model due to quality issues...")
+                                failure_reason = validation["issue"]
+                                logger.warning(
+                                    f"Transcription quality issue for {path} (attempt {attempt + 1}): {failure_reason}"
+                                )
+
+                                if (
+                                    attempt == 0 and self.enable_quality_retry
+                                ):  # First attempt failed, retry enabled
+                                    logger.info(
+                                        "Attempting retry with better model due to quality issues..."
+                                    )
                                     continue
                                 else:  # Last attempt failed OR retries disabled
                                     if not self.enable_quality_retry:
-                                        logger.info("Quality retry disabled - returning failed transcription with warning")
+                                        logger.info(
+                                            "Quality retry disabled - returning failed transcription with warning"
+                                        )
                                         # Still log as failure but return the result with quality warning
                                         enhanced_metadata = {
                                             "original_format": path.suffix,
@@ -482,34 +548,51 @@ class AudioProcessor(BaseProcessor):
                                             success=True,  # Mark as success but with quality warning
                                             data=transcription_result.data,
                                             metadata=enhanced_metadata,
-                                            errors=[f"Quality warning (retry disabled): {failure_reason}"]
+                                            errors=[
+                                                f"Quality warning (retry disabled): {failure_reason}"
+                                            ],
                                         )
                                     else:
-                                        logger.error(f"Final transcription attempt failed quality validation: {failure_reason}")
-                                        self._log_transcription_failure(path, failure_reason, current_model, audio_duration)
-                                        return ProcessorResult(
-                                            success=False, 
-                                            errors=[f"Transcription quality validation failed: {failure_reason}"]
+                                        logger.error(
+                                            f"Final transcription attempt failed quality validation: {failure_reason}"
                                         )
-                    
+                                        self._log_transcription_failure(
+                                            path,
+                                            failure_reason,
+                                            current_model,
+                                            audio_duration,
+                                        )
+                                        return ProcessorResult(
+                                            success=False,
+                                            errors=[
+                                                f"Transcription quality validation failed: {failure_reason}"
+                                            ],
+                                        )
+
                     # Quality validation passed, proceed with result processing
                     if quality_passed:
                         if attempt > 0:
-                            logger.info(f"Retry successful! Quality validation passed with model: {current_model}")
-                        
+                            logger.info(
+                                f"Retry successful! Quality validation passed with model: {current_model}"
+                            )
+
                         # Get model name
-                        model_name = getattr(self.transcriber, "model", None) or getattr(
-                            self.transcriber, "model_name", current_model
-                        )
+                        model_name = getattr(
+                            self.transcriber, "model", None
+                        ) or getattr(self.transcriber, "model_name", current_model)
 
                         # Add diarization if enabled
-                        diarization_enabled = kwargs.get('diarization', self.enable_diarization)
+                        diarization_enabled = kwargs.get(
+                            "diarization", self.enable_diarization
+                        )
                         final_data = transcription_result.data
-                        
+
                         if diarization_enabled:
                             diarization_result = self._perform_diarization(path)
                             if diarization_result:
-                                final_data = self._merge_diarization(transcription_result.data, diarization_result)
+                                final_data = self._merge_diarization(
+                                    transcription_result.data, diarization_result
+                                )
 
                         # Enhanced metadata
                         enhanced_metadata = {
@@ -526,20 +609,25 @@ class AudioProcessor(BaseProcessor):
                         }
 
                         # Save to markdown if output directory is specified
-                        output_dir = kwargs.get('output_dir')
-                        include_timestamps = kwargs.get('timestamps', True)
+                        output_dir = kwargs.get("output_dir")
+                        include_timestamps = kwargs.get("timestamps", True)
                         saved_file = None
                         if output_dir:
                             temp_result = ProcessorResult(
                                 success=True,
                                 data=final_data,
-                                metadata=enhanced_metadata
+                                metadata=enhanced_metadata,
                             )
                             saved_file = self.save_transcript_to_markdown(
-                                temp_result, path, output_dir, include_timestamps=include_timestamps
+                                temp_result,
+                                path,
+                                output_dir,
+                                include_timestamps=include_timestamps,
                             )
                             if saved_file:
-                                enhanced_metadata["saved_markdown_file"] = str(saved_file)
+                                enhanced_metadata["saved_markdown_file"] = str(
+                                    saved_file
+                                )
 
                         return ProcessorResult(
                             success=True,
@@ -548,15 +636,26 @@ class AudioProcessor(BaseProcessor):
                         )
                 else:
                     # Transcription process failed
-                    error_msg = '; '.join(transcription_result.errors) if transcription_result.errors else 'Unknown transcription error'
-                    logger.error(f"Transcription failed for {path} (attempt {attempt + 1}): {error_msg}")
-                    
+                    error_msg = (
+                        "; ".join(transcription_result.errors)
+                        if transcription_result.errors
+                        else "Unknown transcription error"
+                    )
+                    logger.error(
+                        f"Transcription failed for {path} (attempt {attempt + 1}): {error_msg}"
+                    )
+
                     if attempt == max_attempts - 1:  # Last attempt
-                        self._log_transcription_failure(path, error_msg, current_model, audio_duration)
+                        self._log_transcription_failure(
+                            path, error_msg, current_model, audio_duration
+                        )
                         return ProcessorResult(
                             success=False,
                             errors=transcription_result.errors,
-                            metadata={"original_format": path.suffix, "retry_count": attempt}
+                            metadata={
+                                "original_format": path.suffix,
+                                "retry_count": attempt,
+                            },
                         )
                     else:
                         # Try retry with better model
@@ -564,36 +663,45 @@ class AudioProcessor(BaseProcessor):
 
             except Exception as e:
                 error_msg = f"Audio processing error: {e}"
-                logger.error(f"Exception during transcription (attempt {attempt + 1}): {error_msg}")
-                
+                logger.error(
+                    f"Exception during transcription (attempt {attempt + 1}): {error_msg}"
+                )
+
                 if attempt == max_attempts - 1:  # Last attempt
-                    self._log_transcription_failure(path, error_msg, current_model, audio_duration)
+                    self._log_transcription_failure(
+                        path, error_msg, current_model, audio_duration
+                    )
                     return ProcessorResult(success=False, errors=[str(e)])
                 else:
                     # Try retry
                     continue
-        
+
         # If we get here, all attempts failed
         final_error = f"All transcription attempts failed for {path}"
-        self._log_transcription_failure(path, final_error, current_model, audio_duration)
+        self._log_transcription_failure(
+            path, final_error, current_model, audio_duration
+        )
         return ProcessorResult(success=False, errors=[final_error])
 
     def process_batch(
-        self, inputs: List[Any], dry_run: bool = False, **kwargs: Any
-    ) -> List[ProcessorResult]:
+        self, inputs: list[Any], dry_run: bool = False, **kwargs: Any
+    ) -> list[ProcessorResult]:
         # Extract device from kwargs
-        device = kwargs.get('device', None)
-        return [self.process(input_item, dry_run=dry_run, device=device) for input_item in inputs]
+        device = kwargs.get("device", None)
+        return [
+            self.process(input_item, dry_run=dry_run, device=device)
+            for input_item in inputs
+        ]
 
 
 def process_audio_for_transcription(
-    audio_path: Union[str, Path],
+    audio_path: str | Path,
     normalize: bool = True,
-    device: Optional[str] = None,
-    temp_dir: Optional[Union[str, Path]] = None,
+    device: str | None = None,
+    temp_dir: str | Path | None = None,
     model: str = "base",
     use_whisper_cpp: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """Convenience function to process audio and get transcription."""
     processor = AudioProcessor(
         normalize_audio=normalize,

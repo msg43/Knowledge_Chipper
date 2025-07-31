@@ -1,16 +1,18 @@
 """
 Shared LLM Provider Utilities
 
-Centralizes API calls to different LLM providers (OpenAI, Anthropic, Local) to eliminate 
+Centralizes API calls to different LLM providers (OpenAI, Anthropic, Local) to eliminate
 duplicate code across processors and provide consistent error handling and response parsing.
 """
 
 import time
-import requests
-from typing import Dict, Any, Optional, Callable, Union
-from pathlib import Path
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Optional, Union
+from collections.abc import Callable
+
+import requests
 
 from ..config import get_settings
 from ..logger import get_logger
@@ -21,13 +23,14 @@ logger = get_logger(__name__)
 @dataclass
 class LLMResponse:
     """Standardized response from LLM providers."""
+
     content: str
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
     model: str
     provider: str
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
     def __post_init__(self):
         if self.metadata is None:
@@ -37,14 +40,21 @@ class LLMResponse:
 class BaseLLMProvider(ABC):
     """Base class for LLM providers."""
 
-    def __init__(self, model: Optional[str] = None, max_tokens: int = 1000, temperature: float = 0.3):
+    def __init__(
+        self,
+        model: str | None = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.3,
+    ) -> None:
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.settings = get_settings()
 
     @abstractmethod
-    def call(self, prompt: str, progress_callback: Optional[Callable] = None) -> LLMResponse:
+    def call(
+        self, prompt: str, progress_callback: Callable | None = None
+    ) -> LLMResponse:
         """Make API call to the LLM provider."""
         pass
 
@@ -57,11 +67,18 @@ class BaseLLMProvider(ABC):
 class OpenAIProvider(BaseLLMProvider):
     """OpenAI API provider."""
 
-    def __init__(self, model: Optional[str] = None, max_tokens: int = 1000, temperature: float = 0.3):
+    def __init__(
+        self,
+        model: str | None = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.3,
+    ) -> None:
         super().__init__(model, max_tokens, temperature)
         self.model = model or self.settings.llm.model or "gpt-3.5-turbo"
 
-    def call(self, prompt: str, progress_callback: Optional[Callable] = None) -> LLMResponse:
+    def call(
+        self, prompt: str, progress_callback: Callable | None = None
+    ) -> LLMResponse:
         """Call OpenAI API."""
         try:
             import openai
@@ -100,16 +117,25 @@ class OpenAIProvider(BaseLLMProvider):
 class AnthropicProvider(BaseLLMProvider):
     """Anthropic API provider."""
 
-    def __init__(self, model: Optional[str] = None, max_tokens: int = 1000, temperature: float = 0.3):
+    def __init__(
+        self,
+        model: str | None = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.3,
+    ) -> None:
         super().__init__(model, max_tokens, temperature)
         self.model = model or self.settings.llm.model or "claude-3-haiku-20240307"
 
-    def call(self, prompt: str, progress_callback: Optional[Callable] = None) -> LLMResponse:
+    def call(
+        self, prompt: str, progress_callback: Callable | None = None
+    ) -> LLMResponse:
         """Call Anthropic API."""
         try:
             import anthropic
 
-            client = anthropic.Anthropic(api_key=self.settings.api_keys.anthropic_api_key)
+            client = anthropic.Anthropic(
+                api_key=self.settings.api_keys.anthropic_api_key
+            )
 
             response = client.messages.create(
                 model=self.model,
@@ -120,16 +146,22 @@ class AnthropicProvider(BaseLLMProvider):
 
             # Extract usage statistics
             usage = response.usage
-            
+
             # Get the first text content block - use safe attribute access
             summary_text = ""
             for content in response.content:
                 # Check if this is a text block and has text content
-                if hasattr(content, "type") and getattr(content, "type", None) == "text":
+                if (
+                    hasattr(content, "type")
+                    and getattr(content, "type", None) == "text"
+                ):
                     summary_text = getattr(content, "text", "")
                     break
                 # Fallback for older anthropic versions
-                elif hasattr(content, "text") and getattr(content, "text", None) is not None:
+                elif (
+                    hasattr(content, "text")
+                    and getattr(content, "text", None) is not None
+                ):
                     summary_text = getattr(content, "text", "")
                     break
 
@@ -150,12 +182,21 @@ class AnthropicProvider(BaseLLMProvider):
 class LocalLLMProvider(BaseLLMProvider):
     """Local LLM provider (Ollama/LM Studio)."""
 
-    def __init__(self, model: Optional[str] = None, max_tokens: int = 1000, temperature: float = 0.3):
+    def __init__(
+        self,
+        model: str | None = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.3,
+    ) -> None:
         super().__init__(model, max_tokens, temperature)
-        self.model = model or self.settings.llm.local_model or "qwen2.5-coder:7b-instruct"
+        self.model = (
+            model or self.settings.llm.local_model or "qwen2.5-coder:7b-instruct"
+        )
         self.local_config = self.settings.local_config
 
-    def call(self, prompt: str, progress_callback: Optional[Callable] = None) -> LLMResponse:
+    def call(
+        self, prompt: str, progress_callback: Callable | None = None
+    ) -> LLMResponse:
         """Call local LLM provider."""
         if self.local_config.backend == "ollama":
             return self._call_ollama(prompt, progress_callback)
@@ -164,7 +205,9 @@ class LocalLLMProvider(BaseLLMProvider):
         else:
             raise ValueError(f"Unsupported local backend: {self.local_config.backend}")
 
-    def _call_ollama(self, prompt: str, progress_callback: Optional[Callable] = None) -> LLMResponse:
+    def _call_ollama(
+        self, prompt: str, progress_callback: Callable | None = None
+    ) -> LLMResponse:
         """Call Ollama API."""
         try:
             # Check if Ollama service is running before making the request
@@ -178,7 +221,7 @@ class LocalLLMProvider(BaseLLMProvider):
                     f"Ollama service is not running at {self.local_config.base_url}. "
                     f"Please start Ollama service first by running 'ollama serve' or use the Hardware tab to start it."
                 )
-            
+
             url = f"{self.local_config.base_url}/api/generate"
 
             payload = {
@@ -195,11 +238,13 @@ class LocalLLMProvider(BaseLLMProvider):
             }
 
             start_time = time.time()
-            response = requests.post(url, json=payload, timeout=self.local_config.timeout)
+            response = requests.post(
+                url, json=payload, timeout=self.local_config.timeout
+            )
             response.raise_for_status()
 
             result = response.json()
-            
+
             # Estimate tokens for local models
             prompt_tokens = self._estimate_tokens(prompt)
             completion_tokens = self._estimate_tokens(result.get("response", ""))
@@ -209,15 +254,17 @@ class LocalLLMProvider(BaseLLMProvider):
             if progress_callback:
                 elapsed_time = time.time() - start_time
                 speed = completion_tokens / elapsed_time if elapsed_time > 0 else 0
-                progress_callback({
-                    "status": "post_processing",
-                    "current_step": "Processing response...",
-                    "percent": 90.0,
-                    "tokens_generated": completion_tokens,
-                    "speed_tokens_per_sec": speed,
-                    "model_name": self.model,
-                    "provider": "local"
-                })
+                progress_callback(
+                    {
+                        "status": "post_processing",
+                        "current_step": "Processing response...",
+                        "percent": 90.0,
+                        "tokens_generated": completion_tokens,
+                        "speed_tokens_per_sec": speed,
+                        "model_name": self.model,
+                        "provider": "local",
+                    }
+                )
 
             return LLMResponse(
                 content=content,
@@ -244,7 +291,9 @@ class LocalLLMProvider(BaseLLMProvider):
             logger.error(f"Ollama API error: {e}")
             raise
 
-    def _call_lmstudio(self, prompt: str, progress_callback: Optional[Callable] = None) -> LLMResponse:
+    def _call_lmstudio(
+        self, prompt: str, progress_callback: Callable | None = None
+    ) -> LLMResponse:
         """Call LM Studio API."""
         try:
             url = f"{self.local_config.base_url}/v1/chat/completions"
@@ -299,10 +348,10 @@ class LLMProviderFactory:
 
     @staticmethod
     def create_provider(
-        provider: str, 
-        model: Optional[str] = None, 
-        max_tokens: int = 1000, 
-        temperature: float = 0.3
+        provider: str,
+        model: str | None = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.3,
     ) -> BaseLLMProvider:
         """Create an LLM provider instance."""
         if provider == "openai":
@@ -319,20 +368,26 @@ class UnifiedLLMClient:
     """Unified client for all LLM providers with simplified interface."""
 
     def __init__(
-        self, 
-        provider: str = "openai", 
-        model: Optional[str] = None, 
-        max_tokens: int = 1000, 
-        temperature: float = 0.3
-    ):
+        self,
+        provider: str = "openai",
+        model: str | None = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.3,
+    ) -> None:
         self.provider_name = provider
-        self.provider = LLMProviderFactory.create_provider(provider, model, max_tokens, temperature)
+        self.provider = LLMProviderFactory.create_provider(
+            provider, model, max_tokens, temperature
+        )
 
-    def generate(self, prompt: str, progress_callback: Optional[Callable] = None) -> LLMResponse:
+    def generate(
+        self, prompt: str, progress_callback: Callable | None = None
+    ) -> LLMResponse:
         """Generate text using the configured provider."""
         return self.provider.call(prompt, progress_callback)
 
-    def generate_dict(self, prompt: str, progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
+    def generate_dict(
+        self, prompt: str, progress_callback: Callable | None = None
+    ) -> dict[str, Any]:
         """Generate text and return as dictionary (for backward compatibility)."""
         response = self.generate(prompt, progress_callback)
         return {
@@ -343,7 +398,7 @@ class UnifiedLLMClient:
             "total_tokens": response.total_tokens,
             "model": response.model,
             "provider": response.provider,
-            **response.metadata
+            **response.metadata,
         }
 
     @property
@@ -364,12 +419,12 @@ class UnifiedLLMClient:
 
 # Convenience functions for easy migration
 def call_llm(
-    prompt: str, 
-    provider: str = "openai", 
-    model: Optional[str] = None, 
+    prompt: str,
+    provider: str = "openai",
+    model: str | None = None,
     max_tokens: int = 1000,
     temperature: float = 0.3,
-    progress_callback: Optional[Callable] = None
+    progress_callback: Callable | None = None,
 ) -> LLMResponse:
     """Convenience function to call any LLM provider."""
     client = UnifiedLLMClient(provider, model, max_tokens, temperature)
@@ -377,13 +432,13 @@ def call_llm(
 
 
 def call_llm_dict(
-    prompt: str, 
-    provider: str = "openai", 
-    model: Optional[str] = None, 
+    prompt: str,
+    provider: str = "openai",
+    model: str | None = None,
     max_tokens: int = 1000,
     temperature: float = 0.3,
-    progress_callback: Optional[Callable] = None
-) -> Dict[str, Any]:
+    progress_callback: Callable | None = None,
+) -> dict[str, Any]:
     """Convenience function to call any LLM provider and return dictionary."""
     client = UnifiedLLMClient(provider, model, max_tokens, temperature)
-    return client.generate_dict(prompt, progress_callback) 
+    return client.generate_dict(prompt, progress_callback)
