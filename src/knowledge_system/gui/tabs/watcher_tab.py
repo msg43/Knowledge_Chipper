@@ -64,19 +64,37 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         # Watch directory
         layout.addWidget(QLabel("Watch Directory:"), 0, 0)
         self.watch_directory = QLineEdit()
-        self.watch_directory.setPlaceholderText("Select directory to monitor...")
+        self.watch_directory.setPlaceholderText("Select a directory to watch for new files...")
         self.watch_directory.textChanged.connect(self._on_setting_changed)
+        self.watch_directory.setToolTip(
+            "Directory to monitor for new files.\n"
+            "• New files matching the patterns will be detected automatically\n"
+            "• Ensure you have read permissions to this directory\n"
+            "• Can watch subdirectories if recursive option is enabled\n"
+            "• Click Browse to select a directory"
+        )
         layout.addWidget(self.watch_directory, 0, 1, 1, 2)
         
         browse_btn = QPushButton("Browse")
         browse_btn.clicked.connect(self._select_watch_directory)
+        browse_btn.setToolTip(
+            "Browse and select a directory to watch for new files.\n"
+            "• Choose a directory where new files will be added\n"
+            "• The watcher will monitor this location continuously"
+        )
         layout.addWidget(browse_btn, 0, 3)
         
         # File patterns
         layout.addWidget(QLabel("File Patterns:"), 1, 0)
         self.file_patterns = QLineEdit()
         self.file_patterns.setText("*.mp4,*.mp3,*.wav,*.pdf,*.txt,*.md")
-        self.file_patterns.setToolTip("Comma-separated file patterns to watch for")
+        self.file_patterns.setToolTip(
+            "Comma-separated file patterns to watch for (supports wildcards).\n"
+            "• Examples: *.mp4, *.mp3, *.wav (audio/video files)\n"
+            "• Examples: *.pdf, *.txt, *.md (document files)\n"
+            "• Use * as wildcard for any characters\n"
+            "• Separate multiple patterns with commas"
+        )
         self.file_patterns.textChanged.connect(self._on_setting_changed)
         layout.addWidget(self.file_patterns, 1, 1, 1, 3)
         
@@ -84,6 +102,12 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         self.recursive_checkbox = QCheckBox("Watch subdirectories recursively")
         self.recursive_checkbox.setChecked(True)
         self.recursive_checkbox.toggled.connect(self._on_setting_changed)
+        self.recursive_checkbox.setToolTip(
+            "Monitor subdirectories within the watch directory.\n"
+            "• When enabled, watches all subdirectories for matching files\n"
+            "• When disabled, only watches the root directory\n"
+            "• Useful for monitoring nested folder structures"
+        )
         layout.addWidget(self.recursive_checkbox, 2, 0, 1, 4)
         
         # Debounce delay
@@ -111,24 +135,49 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         self.start_btn = QPushButton("▶️ Start Watching")
         self.start_btn.clicked.connect(self._start_watching)
         self.start_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; padding: 8px;")
+        self.start_btn.setToolTip(
+            "Start monitoring the watch directory for new files.\n"
+            "• Continuously monitors for files matching the specified patterns\n"
+            "• Automatically processes new files if auto-process is enabled\n"
+            "• Runs in the background until stopped\n"
+            "• Shows detected files in the Recent Files list"
+        )
         button_layout.addWidget(self.start_btn)
         
         self.stop_btn = QPushButton("⏹️ Stop Watching")
         self.stop_btn.clicked.connect(self._stop_watching)
         self.stop_btn.setEnabled(False)
         self.stop_btn.setStyleSheet("background-color: #f44336; color: white; font-weight: bold; padding: 8px;")
+        self.stop_btn.setToolTip(
+            "Stop monitoring the watch directory.\n"
+            "• Stops the file watching service\n"
+            "• Already detected files remain in the list\n"
+            "• No new files will be detected until watching is restarted"
+        )
         button_layout.addWidget(self.stop_btn)
         
         # Auto-process toggle (simplified)
         self.auto_process_checkbox = QCheckBox("Auto-process new files (uses settings from other tabs)")
         self.auto_process_checkbox.setChecked(True)
-        self.auto_process_checkbox.setToolTip("Automatically process files using current settings from Audio Transcription and Document Summarization tabs")
+        self.auto_process_checkbox.setToolTip(
+            "Automatically process new files as they are detected.\n"
+            "• Uses current settings from Audio Transcription and Document Summarization tabs\n"
+            "• Processes files immediately when they appear in the watch directory\n"
+            "• When disabled, files are only detected but not processed\n"
+            "• Requires valid API keys for processing"
+        )
         self.auto_process_checkbox.toggled.connect(self._on_setting_changed)
         
         # Dry run option
         self.dry_run_checkbox = QCheckBox("Dry run (detect files but don't process)")
         self.dry_run_checkbox.toggled.connect(self._on_setting_changed)
-        
+        self.dry_run_checkbox.setToolTip(
+            "Detect and list new files without actually processing them.\n"
+            "• Shows what files would be processed\n"
+            "• No API credits are consumed\n"
+            "• Useful for testing file detection patterns\n"
+            "• Files appear in the Recent Files list but are not processed"
+        )
         layout.addLayout(button_layout)
         layout.addWidget(self.auto_process_checkbox)
         layout.addWidget(self.dry_run_checkbox)
@@ -159,6 +208,12 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         # Clear recent files
         clear_btn = QPushButton("Clear Recent Files")
         clear_btn.clicked.connect(self._clear_recent_files)
+        clear_btn.setToolTip(
+            "Clear the list of recently detected files.\n"
+            "• Removes all files from the Recent Files list\n"
+            "• Does not affect the file watcher or processing\n"
+            "• Useful for starting with a clean list"
+        )
         layout.addWidget(clear_btn)
         
         group.setLayout(layout)
