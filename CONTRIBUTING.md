@@ -25,7 +25,25 @@ pip install -e .
 pytest
 ```
 
+4. **Set up pre-commit hooks:**
+```bash
+./setup_precommit.sh
+```
+
 ## 🔧 Development Workflow
+
+### Pre-commit Hooks
+
+This project uses pre-commit hooks to maintain code quality automatically. After running the setup script above, the following will happen before each commit:
+
+- **Code formatting**: Black and isort automatically format your code
+- **Linting**: flake8 catches potential issues and style violations  
+- **Type checking**: mypy validates type annotations
+- **Security scanning**: bandit checks for security vulnerabilities
+- **File hygiene**: trailing whitespace, file endings, etc. are cleaned up
+- **Commit message validation**: ensures conventional commit format
+
+If any hook fails, the commit will be blocked until you fix the issues.
 
 ### Branch Strategy
 

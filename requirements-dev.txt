@@ -10,6 +10,18 @@ pytest-asyncio>=0.21.0
 black>=23.0.0
 isort>=5.12.0
 mypy>=1.5.0
+flake8>=7.0.0
+flake8-docstrings>=1.7.0
+flake8-bugbear>=23.12.0
+flake8-comprehensions>=3.14.0
+
+# Security and code quality
+bandit>=1.7.5
+pydocstyle>=6.3.0
+pyupgrade>=3.15.0
 
 # Git hooks
-pre-commit>=3.4.0 
+pre-commit>=3.4.0
+
+# Commit message linting
+commitizen>=3.13.0
