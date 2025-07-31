@@ -308,7 +308,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         )
         main_layout.addWidget(self.use_recommended_btn)
         
-        # Right side: Info box with same height as button
+        # Right side: Info box with expandable height
         self.recommendations_label = QLabel("Click 'Get & Apply Recommended Settings' to automatically detect and configure optimal settings for your hardware.")
         self.recommendations_label.setWordWrap(True)
         self.recommendations_label.setStyleSheet("""
@@ -319,10 +319,10 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             font-size: 11px;
         """)
         self.recommendations_label.setMinimumHeight(35)
-        self.recommendations_label.setMaximumHeight(35)
-        # Set size policy to allow horizontal expansion
+        # Remove max height limit to allow expansion for recommendations
+        # Set size policy to allow both horizontal and vertical expansion
         from PyQt6.QtWidgets import QSizePolicy
-        self.recommendations_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.recommendations_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         main_layout.addWidget(self.recommendations_label, 1)  # Give it more space
         
         group.setLayout(main_layout)
@@ -705,7 +705,17 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             spec_text.append(f"📦 Batch Size: {specs.optimal_batch_size}")
             spec_text.append(f"🔄 Max Concurrent: {specs.max_concurrent_transcriptions}")
             
-            self.recommendations_label.setText("\n".join(spec_text))
+            # Combine specifications and performance notes into single display
+            display_text = []
+            display_text.extend(spec_text)
+            
+            if recommendations['performance_notes']:
+                display_text.append("")  # Empty line separator
+                display_text.append("💡 Performance Notes:")
+                for note in recommendations['performance_notes']:
+                    display_text.append(f"• {note}")
+            
+            self.recommendations_label.setText("\n".join(display_text))
             self.recommendations_label.setStyleSheet("""
                 background-color: #e8f5e8; 
                 padding: 10px; 
@@ -713,29 +723,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 border-radius: 5px;
                 font-size: 11px;
             """)
-            
-            # Display performance notes in middle column
-            if recommendations['performance_notes']:
-                notes_text = ["💡 Performance Notes:"]
-                for note in recommendations['performance_notes']:
-                    notes_text.append(f"• {note}")
-                self.performance_notes_label.setText("\n".join(notes_text))
-                self.performance_notes_label.setStyleSheet("""
-                    background-color: #fff8e1; 
-                    padding: 10px; 
-                    border: 1px solid #ffc107; 
-                    border-radius: 5px;
-                    font-size: 11px;
-                """)
-            else:
-                self.performance_notes_label.setText("💡 No specific performance notes available.")
-                self.performance_notes_label.setStyleSheet("""
-                    background-color: #f5f5f5; 
-                    padding: 10px; 
-                    border: 1px solid #ddd; 
-                    border-radius: 5px;
-                    font-size: 11px;
-                """)
             
             # Enable the "Use Recommended Settings" button
             self.use_recommended_btn.setEnabled(True)
@@ -752,16 +739,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 border-radius: 5px;
                 font-size: 11px;
             """)
-            # Clear performance notes on error
-            self.performance_notes_label.setText("")
-            self.performance_notes_label.setStyleSheet("""
-                background-color: #f5f5f5; 
-                padding: 10px; 
-                border: 1px solid #ddd; 
-                border-radius: 5px;
-                font-size: 11px;
-            """)
-            self.append_log(error_msg)
     
     def _apply_recommended_settings(self):
         """Get hardware recommendations if needed, then apply them to the UI controls."""
