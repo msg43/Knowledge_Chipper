@@ -42,7 +42,7 @@ class EnhancedSummarizationWorker(QThread):
     )  # success_count, failure_count, total_count
     processing_error = pyqtSignal(str)
 
-    def __init__(self, files, settings, gui_settings, parent=None) -> None:
+    def __init__(self, files: Any, settings: Any, gui_settings: Any, parent: Any = None) -> None:
         super().__init__(parent)
         self.files = files
         self.settings = settings
@@ -54,7 +54,7 @@ class EnhancedSummarizationWorker(QThread):
 
         self.cancellation_token = CancellationToken()
 
-    def run(self):
+    def run(self) -> None:
         """Run the summarization process."""
         try:
             from datetime import datetime
@@ -223,7 +223,7 @@ class EnhancedSummarizationWorker(QThread):
                         template_path = None
 
                 # Create enhanced progress callback with character-based tracking
-                def enhanced_progress_callback(p):
+                def enhanced_progress_callback(p: Any) -> None:
                     """Enhanced progress callback with character-based batch tracking."""
                     # Add batch progress context to the progress object
                     if hasattr(p, "__dict__"):
@@ -495,7 +495,7 @@ class EnhancedSummarizationWorker(QThread):
                 logger.error(f"Summarization error: {e}")
                 self.processing_error.emit(str(e))
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the summarization process."""
         logger.info("EnhancedSummarizationWorker.stop() called")
         self.should_stop = True
@@ -625,13 +625,13 @@ class EnhancedSummarizationWorker(QThread):
 class SummarizationTab(BaseTab):
     """Tab for document summarization using AI models."""
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: Any = None) -> None:
         self.summarization_worker = None
         self.gui_settings = get_gui_settings_manager()
         self.tab_name = "Content Analysis"
         super().__init__(parent)
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         """Setup the summarization UI."""
         layout = QVBoxLayout(self)
 
@@ -895,7 +895,7 @@ class SummarizationTab(BaseTab):
 
         # Remove addStretch() to allow output section to properly expand
 
-    def _connect_signals(self):
+    def _connect_signals(self) -> None:
         """Connect internal signals."""
         # Load settings after UI is fully set up and signals are connected
         # Use a timer to ensure this happens after the widget is fully initialized
@@ -905,7 +905,7 @@ class SummarizationTab(BaseTab):
         """Get the text for the start button."""
         return "📝 Start Processing"
 
-    def _start_processing(self):
+    def _start_processing(self) -> None:
         """Start the summarization process."""
         if not self.validate_inputs():
             return
@@ -1057,7 +1057,7 @@ class SummarizationTab(BaseTab):
                     self.start_btn.setText("⏳ Starting Ollama Service...")
 
                 # Connect dialog completion to re-enable button
-                def on_service_dialog_finished():
+                def on_service_dialog_finished() -> None:
                     if hasattr(self, "start_btn"):
                         self.start_btn.setEnabled(True)
                         self.start_btn.setText(self._get_start_button_text())
@@ -1087,7 +1087,7 @@ class SummarizationTab(BaseTab):
                 self.start_btn.setText("⏳ Model Download Required")
 
             # Connect to download progress to update button text
-            def on_download_progress(progress):
+            def on_download_progress(progress: Any) -> None:
                 if hasattr(self, "start_btn") and hasattr(progress, "percent"):
                     if progress.percent > 0:
                         self.start_btn.setText(
@@ -1122,7 +1122,7 @@ class SummarizationTab(BaseTab):
             )
             return False
 
-    def _add_files(self):
+    def _add_files(self) -> None:
         """Add files to the summarization list."""
         files, _ = QFileDialog.getOpenFileNames(
             self,
@@ -1134,7 +1134,7 @@ class SummarizationTab(BaseTab):
         for file_path in files:
             self.file_list.addItem(file_path)
 
-    def _add_folder(self):
+    def _add_folder(self) -> None:
         """Add all compatible files from a folder."""
         folder_path = QFileDialog.getExistingDirectory(self, "Select Folder")
         if folder_path:
@@ -1145,7 +1145,7 @@ class SummarizationTab(BaseTab):
                 if file_path.suffix.lower() in extensions:
                     self.file_list.addItem(str(file_path))
 
-    def _clear_files(self):
+    def _clear_files(self) -> None:
         """Clear all files from the list."""
         self.file_list.clear()
 
@@ -1527,7 +1527,7 @@ class SummarizationTab(BaseTab):
 
     def _on_processing_finished(
         self, success_count: int, failure_count: int, total_count: int
-    ):
+    ) -> None:
         """Handle processing completion with success summary."""
         import time
 
@@ -1572,7 +1572,7 @@ class SummarizationTab(BaseTab):
         if hasattr(self, "report_btn"):
             self.report_btn.setEnabled(True)
 
-    def _on_processing_error(self, error: str):
+    def _on_processing_error(self, error: str) -> None:
         """Handle processing errors."""
         self.set_processing_state(False)
         self.append_log(f"Error: {error}")
@@ -1592,7 +1592,7 @@ class SummarizationTab(BaseTab):
             self.summarization_worker.wait(3000)
         super().cleanup_workers()
 
-    def _load_settings(self):
+    def _load_settings(self) -> None:
         """Load saved settings from session."""
         logger.info(f"🔧 Loading settings for {self.tab_name} tab...")
         try:
@@ -1684,7 +1684,7 @@ class SummarizationTab(BaseTab):
         except Exception as e:
             logger.error(f"Failed to load settings for {self.tab_name} tab: {e}")
 
-    def _save_settings(self):
+    def _save_settings(self) -> None:
         """Save current settings to session."""
         logger.debug(f"💾 Saving settings for {self.tab_name} tab...")
         try:
@@ -1736,7 +1736,7 @@ class SummarizationTab(BaseTab):
         logger.debug(f"🔄 Setting changed in {self.tab_name} tab, triggering save...")
         self._save_settings()
 
-    def _on_analysis_type_changed(self, analysis_type: str):
+    def _on_analysis_type_changed(self, analysis_type: str) -> None:
         """Called when analysis type changes to auto-populate template path."""
         template_mapping = {
             "Document Summary": "config/prompts/document_summary.txt",
