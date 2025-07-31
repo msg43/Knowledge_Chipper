@@ -368,6 +368,184 @@ def create_intelligent_chunks(
     return chunks
 
 
+def create_structural_chunks(
+    text: str,
+    config: ChunkingConfig,
+    model: str = "default",
+    preserve_headers: bool = True
+) -> List[TextChunk]:
+    """
+    Enhanced chunking that preserves document structure and context.
+    
+    Args:
+        text: Text to chunk
+        config: Chunking configuration
+        model: Model name for token estimation
+        preserve_headers: Whether to preserve section headers in each chunk
+        
+    Returns:
+        List of TextChunk objects with preserved structure
+    """
+    if not text.strip():
+        return []
+    
+    # Detect document structure
+    lines = text.split('\n')
+    
+    # Pattern matching for headers (Markdown style)
+    header_pattern = re.compile(r'^(#{1,6})\s+(.+)$')
+    
+    # Build document structure
+    sections = []
+    current_section = {
+        'level': 0,
+        'title': 'Document Start',
+        'content': [],
+        'start_line': 0
+    }
+    
+    for i, line in enumerate(lines):
+        header_match = header_pattern.match(line)
+        if header_match:
+            # Save current section if it has content
+            if current_section['content']:
+                current_section['content'] = '\n'.join(current_section['content'])
+                sections.append(current_section)
+            
+            # Start new section
+            level = len(header_match.group(1))
+            title = header_match.group(2)
+            current_section = {
+                'level': level,
+                'title': title,
+                'content': [line],  # Include the header
+                'start_line': i
+            }
+        else:
+            current_section['content'].append(line)
+    
+    # Don't forget the last section
+    if current_section['content']:
+        current_section['content'] = '\n'.join(current_section['content'])
+        sections.append(current_section)
+    
+    # Now create chunks that respect section boundaries
+    chunks = []
+    current_chunk_tokens = 0
+    current_chunk_content = []
+    current_chunk_headers = []
+    
+    for section in sections:
+        section_tokens = estimate_tokens_improved(section['content'], model)
+        
+        # If this section alone exceeds max tokens, we need to split it
+        if section_tokens > config.max_chunk_tokens:
+            # First, finish current chunk if it has content
+            if current_chunk_content:
+                chunk_text = '\n\n'.join(current_chunk_content)
+                if preserve_headers and current_chunk_headers:
+                    # Prepend relevant headers for context
+                    header_context = '\n'.join(current_chunk_headers[-3:])  # Last 3 headers max
+                    chunk_text = f"{header_context}\n\n{chunk_text}"
+                
+                chunks.append(TextChunk(
+                    content=chunk_text,
+                    chunk_id=len(chunks),
+                    start_position=0,  # Will be updated
+                    end_position=0,    # Will be updated
+                    token_count=estimate_tokens_improved(chunk_text, model),
+                    has_sentence_boundary=True,
+                    has_paragraph_boundary=True
+                ))
+                current_chunk_content = []
+                current_chunk_tokens = 0
+            
+            # Split the large section
+            sub_chunks = create_intelligent_chunks(
+                section['content'],
+                ChunkingConfig(
+                    max_chunk_tokens=config.max_chunk_tokens - 200,  # Reserve space for headers
+                    overlap_tokens=config.overlap_tokens,
+                    min_chunk_tokens=config.min_chunk_tokens
+                ),
+                model
+            )
+            
+            for sub_chunk in sub_chunks:
+                chunk_text = sub_chunk.content
+                if preserve_headers:
+                    # Add section context
+                    header_context = f"{'#' * section['level']} {section['title']}"
+                    chunk_text = f"{header_context}\n\n{chunk_text}"
+                
+                chunks.append(TextChunk(
+                    content=chunk_text,
+                    chunk_id=len(chunks),
+                    start_position=0,
+                    end_position=0,
+                    token_count=estimate_tokens_improved(chunk_text, model),
+                    has_sentence_boundary=sub_chunk.has_sentence_boundary,
+                    has_paragraph_boundary=sub_chunk.has_paragraph_boundary
+                ))
+        
+        # Section fits - decide whether to add to current chunk or start new
+        elif current_chunk_tokens + section_tokens > config.max_chunk_tokens:
+            # Finish current chunk
+            if current_chunk_content:
+                chunk_text = '\n\n'.join(current_chunk_content)
+                if preserve_headers and current_chunk_headers:
+                    header_context = '\n'.join(current_chunk_headers[-3:])
+                    chunk_text = f"{header_context}\n\n{chunk_text}"
+                
+                chunks.append(TextChunk(
+                    content=chunk_text,
+                    chunk_id=len(chunks),
+                    start_position=0,
+                    end_position=0,
+                    token_count=estimate_tokens_improved(chunk_text, model),
+                    has_sentence_boundary=True,
+                    has_paragraph_boundary=True
+                ))
+            
+            # Start new chunk with this section
+            current_chunk_content = [section['content']]
+            current_chunk_tokens = section_tokens
+            current_chunk_headers = [f"{'#' * section['level']} {section['title']}"]
+        else:
+            # Add to current chunk
+            current_chunk_content.append(section['content'])
+            current_chunk_tokens += section_tokens
+            if section['level'] <= 3:  # Only track major headers
+                current_chunk_headers.append(f"{'#' * section['level']} {section['title']}")
+    
+    # Don't forget the last chunk
+    if current_chunk_content:
+        chunk_text = '\n\n'.join(current_chunk_content)
+        if preserve_headers and current_chunk_headers:
+            header_context = '\n'.join(current_chunk_headers[-3:])
+            chunk_text = f"{header_context}\n\n{chunk_text}"
+        
+        chunks.append(TextChunk(
+            content=chunk_text,
+            chunk_id=len(chunks),
+            start_position=0,
+            end_position=0,
+            token_count=estimate_tokens_improved(chunk_text, model),
+            has_sentence_boundary=True,
+            has_paragraph_boundary=True
+        ))
+    
+    # Update positions
+    current_pos = 0
+    for chunk in chunks:
+        chunk.start_position = current_pos
+        chunk.end_position = current_pos + len(chunk.content)
+        current_pos = chunk.end_position
+    
+    logger.info(f"Created {len(chunks)} structural chunks preserving document hierarchy")
+    return chunks
+
+
 def generate_chunk_summary_prompt(
     chunk: TextChunk,
     original_prompt_template: str,
@@ -467,6 +645,105 @@ Please create a final summary that:
 
 Final Summary:"""
 
+    return reassembly_prompt
+
+
+def reassemble_structured_summaries(
+    chunk_summaries: List[str],
+    original_template: str,
+    model: str,
+    max_output_tokens: int,
+    merge_strategy: str = "hierarchical"
+) -> str:
+    """
+    Enhanced reassembly that preserves template structure.
+    
+    Args:
+        chunk_summaries: List of chunk summaries following the template
+        original_template: Original template used
+        model: Model name
+        max_output_tokens: Maximum output tokens
+        merge_strategy: How to merge sections ("hierarchical" or "flat")
+        
+    Returns:
+        Reassembled summary preserving template structure
+    """
+    if not chunk_summaries:
+        return ""
+    
+    if len(chunk_summaries) == 1:
+        return chunk_summaries[0]
+    
+    # Parse template sections
+    template_sections = []
+    current_section = None
+    
+    for line in original_template.split('\n'):
+        if line.startswith('##'):
+            if current_section:
+                template_sections.append(current_section)
+            current_section = {
+                'header': line.strip(),
+                'content': []
+            }
+        elif current_section:
+            current_section['content'].append(line)
+    
+    if current_section:
+        template_sections.append(current_section)
+    
+    # Extract sections from each chunk summary
+    parsed_summaries = []
+    for summary in chunk_summaries:
+        sections = {}
+        current_header = None
+        current_content = []
+        
+        for line in summary.split('\n'):
+            if line.startswith('##'):
+                if current_header:
+                    sections[current_header] = '\n'.join(current_content).strip()
+                current_header = line.strip()
+                current_content = []
+            elif current_header:
+                current_content.append(line)
+        
+        if current_header:
+            sections[current_header] = '\n'.join(current_content).strip()
+        
+        parsed_summaries.append(sections)
+    
+    # Merge sections intelligently
+    if merge_strategy == "hierarchical":
+        # Create detailed reassembly prompt
+        reassembly_prompt = f"""I have {len(chunk_summaries)} partial summaries of a large document, each following this template structure:
+
+{original_template}
+
+Please merge these partial summaries into a single, comprehensive summary that:
+1. Preserves the exact template structure and section headers
+2. Combines information from all chunks under each section
+3. Eliminates redundancy while preserving unique details
+4. Maintains coherent flow within each section
+5. Ensures no important information is lost
+
+Chunk summaries to merge:
+"""
+        
+        for i, summary in enumerate(chunk_summaries):
+            reassembly_prompt += f"\n\n--- Chunk {i+1} ---\n{summary}"
+        
+        reassembly_prompt += "\n\nMerged Summary following the original template:"
+        
+    else:  # flat strategy
+        # Simple concatenation with deduplication prompt
+        reassembly_prompt = f"""Merge these {len(chunk_summaries)} summaries into one comprehensive summary.
+Preserve the template structure while eliminating redundancy:
+
+{'\n\n---\n\n'.join(chunk_summaries)}
+
+Final merged summary:"""
+    
     return reassembly_prompt
 
 
