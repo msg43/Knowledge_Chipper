@@ -73,9 +73,9 @@ repos:
     rev: 1.7.5
     hooks:
       - id: bandit
-        args: ['-r', 'src/', '-f', 'json']
-        exclude: ^tests/
+        args: ['-f', 'json']  # Scan individual files passed by pre-commit
         files: ^src/.*\.py$
+        exclude: ^tests/
 
   # Docstring style checking
   - repo: https://github.com/pycqa/pydocstyle
