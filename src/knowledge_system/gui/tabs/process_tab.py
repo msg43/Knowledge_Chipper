@@ -41,16 +41,16 @@ class ProcessPipelineWorker(QThread):
     processing_finished = pyqtSignal(dict)  # final results
     processing_error = pyqtSignal(str)
 
-    def __init__(self, files, config, parent=None) -> None:
+    def __init__(self, files: Any, config: Any, parent: Any = None) -> None:
         super().__init__(parent)
         self.files = files
         self.config = config
         self.should_stop = False
 
-    def run(self):
+    def run(self) -> None:
         """Run the complete processing pipeline."""
         try:
-            results = {
+            results: Dict[str, Any] = {
                 "transcribed": [],
                 "summarized": [],
                 "moc_generated": [],
@@ -274,7 +274,7 @@ class ProcessPipelineWorker(QThread):
 class ProcessTab(BaseTab, FileOperationsMixin):
     """Tab for comprehensive file processing pipeline."""
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: Any = None) -> None:
         # Initialize attributes before calling super() to prevent AttributeError
         self.processing_worker = None
         self.gui_settings = get_gui_settings_manager()
@@ -283,7 +283,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         # Now call super() which will call _setup_ui()
         super().__init__(parent)
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         """Setup the process pipeline UI."""
         # Create splitter for main layout
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -710,7 +710,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
 
     # _update_summarization_models removed - settings now inherited from other tabs
 
-    def _select_output_directory(self):
+    def _select_output_directory(self) -> None:
         """Select output directory."""
         directory = QFileDialog.getExistingDirectory(
             self, "Select Output Directory", "", QFileDialog.Option.ShowDirsOnly
@@ -761,7 +761,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
     def _get_start_button_text(self) -> str:
         return "Start Processing Pipeline"
 
-    def _start_processing(self):
+    def _start_processing(self) -> None:
         """Start the processing pipeline."""
         # Validate inputs
         if not self.validate_file_selection("process_files", 1):
@@ -902,7 +902,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         """Validate inputs before processing."""
         return self.validate_file_selection("process_files", 1)
 
-    def _load_settings(self):
+    def _load_settings(self) -> None:
         """Load saved settings from session."""
         try:
             # Block signals during loading to prevent redundant saves
@@ -954,7 +954,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         except Exception as e:
             logger.error(f"Failed to load settings for {self.tab_name} tab: {e}")
 
-    def _save_settings(self):
+    def _save_settings(self) -> None:
         """Save current settings to session."""
         try:
             # Save output directory

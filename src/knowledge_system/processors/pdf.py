@@ -162,4 +162,5 @@ def fetch_pdf_text(pdf_path: str | Path) -> str:
     results = result.data.get("results", [])
     if not results:
         raise ProcessingError("No text extracted from PDF")
-    return results[0]["text"]
+    text_result = results[0]["text"]
+    return str(text_result) if text_result is not None else ""
