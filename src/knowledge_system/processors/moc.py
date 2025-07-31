@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-import yaml
+import yaml  # type: ignore
 from pydantic import BaseModel, Field
 
 from ..errors import MOCGenerationError
