@@ -71,9 +71,8 @@ class SummarizerProcessor(BaseProcessor):
     def validate_input(self, input_data: str | Path) -> bool:
         if isinstance(input_data, str):
             return len(input_data.strip()) > 0
-        elif isinstance(input_data, Path):
+        else:  # Must be Path due to type annotation
             return input_data.exists() and input_data.is_file()
-        return False
 
     def _read_text_from_file(self, file_path: Path) -> str:
         """Read text content from file."""
@@ -115,7 +114,7 @@ class SummarizerProcessor(BaseProcessor):
 
     def _build_summary_index(self, output_dir: Path) -> dict[str, dict[str, Any]]:
         """Build index of existing summaries in output directory."""
-        summary_index = {}
+        summary_index: Dict[str, Dict[str, Any]] = {}
         files_scanned = 0
         files_failed = 0
 
@@ -123,7 +122,7 @@ class SummarizerProcessor(BaseProcessor):
 
         # Get all summary files
         summary_patterns = ["*_summary.md", "*_summary.txt"]
-        all_summary_files = []
+        all_summary_files: List[Path] = []
         for pattern in summary_patterns:
             all_summary_files.extend(output_dir.glob(pattern))
 
@@ -434,10 +433,10 @@ class SummarizerProcessor(BaseProcessor):
         heartbeat_active = True
         prompt_chars = len(prompt)
 
-        def heartbeat_worker():
+        def heartbeat_worker() -> None:
             """Send character-based progress updates during LLM calls with cancellation support."""
             nonlocal heartbeat_active
-            last_update = 0
+            last_update = 0.0
             while heartbeat_active:
                 # Check for cancellation more frequently (every 2 seconds instead of 10)
                 for _ in range(
@@ -509,7 +508,7 @@ class SummarizerProcessor(BaseProcessor):
             heartbeat_thread = threading.Thread(target=heartbeat_worker, daemon=True)
             heartbeat_thread.start()
 
-        def llm_progress_callback(progress_data):
+        def llm_progress_callback(progress_data: Any) -> None:
             """Adapt generic progress to SummarizationProgress."""
             if progress_callback and isinstance(progress_data, dict):
                 progress_callback(
