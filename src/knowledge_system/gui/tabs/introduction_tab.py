@@ -3,7 +3,7 @@
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from PyQt6.QtCore import Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices, QFont, QPixmap
@@ -33,11 +33,11 @@ class IntroductionTab(BaseTab):
     # Signal for tab navigation
     navigate_to_tab = pyqtSignal(str)  # tab_name
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: Any = None) -> None:
         self.tab_name = "Introduction"
         super().__init__(parent)
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         """Setup the introduction UI."""
         main_layout = QVBoxLayout(self)
 
@@ -75,7 +75,7 @@ class IntroductionTab(BaseTab):
         scroll_area.setWidget(content_widget)
         main_layout.addWidget(scroll_area)
 
-    def _create_welcome_section(self, parent_layout):
+    def _create_welcome_section(self, parent_layout: Any) -> None:
         """Create the welcome header section."""
         # Title
         title_label = QLabel("🎉 Welcome to Knowledge Chipper!")
@@ -96,7 +96,7 @@ class IntroductionTab(BaseTab):
         subtitle_label.setStyleSheet("color: #666; margin-bottom: 20px;")
         parent_layout.addWidget(subtitle_label)
 
-    def _create_overview_section(self, parent_layout):
+    def _create_overview_section(self, parent_layout: Any) -> None:
         """Create the app overview section."""
         # Section header
         header_label = QLabel("📚 What is Knowledge Chipper?")
@@ -137,7 +137,7 @@ class IntroductionTab(BaseTab):
         overview_text.setTextFormat(Qt.TextFormat.RichText)
         parent_layout.addWidget(overview_text)
 
-    def _create_quick_start_section(self, parent_layout):
+    def _create_quick_start_section(self, parent_layout: Any) -> None:
         """Create the quick start guide section."""
         # Section header
         header_label = QLabel("🚀 Quick Start Guide")
@@ -177,7 +177,7 @@ class IntroductionTab(BaseTab):
         quickstart_text.setTextFormat(Qt.TextFormat.RichText)
         parent_layout.addWidget(quickstart_text)
 
-    def _create_tab_guide_section(self, parent_layout):
+    def _create_tab_guide_section(self, parent_layout: Any) -> None:
         """Create the tab navigation guide section."""
         # Section header
         header_label = QLabel("🧭 Tab Navigation Guide")
@@ -229,7 +229,7 @@ class IntroductionTab(BaseTab):
         tabs_text.setTextFormat(Qt.TextFormat.RichText)
         parent_layout.addWidget(tabs_text)
 
-    def _create_tips_section(self, parent_layout):
+    def _create_tips_section(self, parent_layout: Any) -> None:
         """Create the tips and best practices section."""
         # Section header
         header_label = QLabel("💡 Tips & Best Practices")
@@ -277,7 +277,7 @@ class IntroductionTab(BaseTab):
         tips_text.setTextFormat(Qt.TextFormat.RichText)
         parent_layout.addWidget(tips_text)
 
-    def _create_documentation_section(self, parent_layout):
+    def _create_documentation_section(self, parent_layout: Any) -> None:
         """Create the documentation section."""
         # Section header
         header_label = QLabel("📚 Documentation & Resources")
@@ -334,7 +334,7 @@ class IntroductionTab(BaseTab):
         doc_group.setLayout(doc_layout)
         parent_layout.addWidget(doc_group)
 
-    def _handle_documentation_link(self, link: str):
+    def _handle_documentation_link(self, link: str) -> None:
         """Handle clicks on documentation links."""
         try:
             project_root = Path(__file__).parents[4]  # Go up to Knowledge_Chipper root
@@ -448,7 +448,7 @@ class IntroductionTab(BaseTab):
             logger.error(f"Error opening documentation: {e}")
             self.show_error("Error", f"Could not open documentation: {str(e)}")
 
-    def _create_navigation_buttons(self, parent_layout):
+    def _create_navigation_buttons(self, parent_layout: Any) -> None:
         """Create quick navigation buttons."""
         nav_group = QGroupBox("🚀 Quick Actions")
         nav_layout = QHBoxLayout()
@@ -523,7 +523,7 @@ class IntroductionTab(BaseTab):
         """Return start button text."""
         return "Get Started"
 
-    def _start_processing(self):
+    def _start_processing(self) -> None:
         """Navigate to the process tab when start is clicked."""
         self.show_info(
             "Welcome!",
@@ -531,7 +531,7 @@ class IntroductionTab(BaseTab):
         )
         self.navigate_to_tab.emit("API Keys")
 
-    def _create_action_layout(self):
+    def _create_action_layout(self) -> QHBoxLayout:
         """Override to provide custom action layout for intro tab."""
         layout = QHBoxLayout()
 
@@ -559,7 +559,7 @@ class IntroductionTab(BaseTab):
         layout.addStretch()
         return layout
 
-    def _create_output_section(self):
+    def _create_output_section(self) -> Any:
         """Override to provide custom output section."""
         layout = QVBoxLayout()
 
