@@ -289,15 +289,27 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         return group
         
     def _create_recommendations_section(self) -> QGroupBox:
-        """Create the hardware recommendations section with three columns: specs, performance notes, and buttons."""
+        """Create the hardware recommendations section."""
         group = QGroupBox("Hardware Recommendations")
         
-        # Use horizontal layout with three columns
+        # Use horizontal layout
         main_layout = QHBoxLayout()
         main_layout.setSpacing(10)
         
-        # Left column: Hardware specs (device, model, batch size, etc.)
-        self.recommendations_label = QLabel("")
+        # Left side: Use Recommended Settings button
+        self.use_recommended_btn = QPushButton("⚡ Get & Apply Recommended Settings")
+        self.use_recommended_btn.setMinimumHeight(35)
+        self.use_recommended_btn.setMaximumHeight(35)
+        self.use_recommended_btn.clicked.connect(self._apply_recommended_settings)
+        self.use_recommended_btn.setStyleSheet("background-color: #4caf50; color: white; font-weight: bold; padding: 8px;")
+        self.use_recommended_btn.setToolTip(
+            "Automatically detects your hardware capabilities and applies optimal transcription settings. "
+            "This will configure the best model, device, batch size, and thread count for your system."
+        )
+        main_layout.addWidget(self.use_recommended_btn)
+        
+        # Right side: Info box with same height as button
+        self.recommendations_label = QLabel("Click 'Get & Apply Recommended Settings' to automatically detect and configure optimal settings for your hardware.")
         self.recommendations_label.setWordWrap(True)
         self.recommendations_label.setStyleSheet("""
             background-color: #f5f5f5; 
@@ -306,48 +318,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             border-radius: 5px;
             font-size: 11px;
         """)
-        self.recommendations_label.setMinimumHeight(80)
-        self.recommendations_label.setMaximumHeight(120)
+        self.recommendations_label.setMinimumHeight(35)
+        self.recommendations_label.setMaximumHeight(35)
         # Set size policy to allow horizontal expansion
         from PyQt6.QtWidgets import QSizePolicy
         self.recommendations_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        main_layout.addWidget(self.recommendations_label, 2)  # Hardware specs column
-        
-        # Middle column: Performance notes
-        self.performance_notes_label = QLabel("")
-        self.performance_notes_label.setWordWrap(True)
-        self.performance_notes_label.setStyleSheet("""
-            background-color: #fff8e1; 
-            padding: 10px; 
-            border: 1px solid #ffc107; 
-            border-radius: 5px;
-            font-size: 11px;
-        """)
-        self.performance_notes_label.setMinimumHeight(80)
-        self.performance_notes_label.setMaximumHeight(120)
-        self.performance_notes_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        main_layout.addWidget(self.performance_notes_label, 2)  # Performance notes column
-        
-        # Right column: Buttons arranged vertically
-        button_widget = QWidget()
-        button_layout = QVBoxLayout(button_widget)
-        button_layout.setSpacing(8)
-        
-        self.get_recommendations_btn = QPushButton("🔍 Get Recommendations")
-        self.get_recommendations_btn.setMinimumHeight(35)
-        self.get_recommendations_btn.clicked.connect(self._get_hardware_recommendations)
-        self.get_recommendations_btn.setStyleSheet("background-color: #2196f3; color: white; font-weight: bold; padding: 8px;")
-        button_layout.addWidget(self.get_recommendations_btn)
-        
-        self.use_recommended_btn = QPushButton("⚡ Use Recommended Settings")
-        self.use_recommended_btn.setMinimumHeight(35)
-        self.use_recommended_btn.clicked.connect(self._apply_recommended_settings)
-        self.use_recommended_btn.setStyleSheet("background-color: #4caf50; color: white; font-weight: bold; padding: 8px;")
-        self.use_recommended_btn.setEnabled(False)  # Disabled until recommendations are available
-        button_layout.addWidget(self.use_recommended_btn)
-        
-        button_layout.addStretch()  # Push buttons to top
-        main_layout.addWidget(button_widget, 1)  # Buttons column
+        main_layout.addWidget(self.recommendations_label, 1)  # Give it more space
         
         group.setLayout(main_layout)
         return group
@@ -788,10 +764,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.append_log(error_msg)
     
     def _apply_recommended_settings(self):
-        """Apply the recommended hardware settings to the UI controls."""
+        """Get hardware recommendations if needed, then apply them to the UI controls."""
+        # First, check if we have recommendations - if not, get them
         if not hasattr(self, '_current_recommendations'):
-            self.append_log("No recommendations available. Please get recommendations first.")
-            return
+            self.append_log("🔍 Getting hardware recommendations...")
+            self._get_hardware_recommendations()
+            
+            # Check if we successfully got recommendations
+            if not hasattr(self, '_current_recommendations'):
+                self.append_log("❌ Failed to get recommendations. Please check hardware detection.")
+                return
             
         try:
             specs = self._current_recommendations['specs']

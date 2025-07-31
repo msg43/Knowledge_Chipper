@@ -282,16 +282,37 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         self.transcribe_checkbox = QCheckBox("Transcribe audio/video files")
         self.transcribe_checkbox.setChecked(True)
         self.transcribe_checkbox.toggled.connect(self._on_setting_changed)
+        self.transcribe_checkbox.setToolTip(
+            "Enable transcription of audio and video files.\n"
+            "• Uses Whisper AI for high-quality speech-to-text conversion\n"
+            "• Supports multiple audio/video formats (MP3, MP4, WAV, M4A, etc.)\n"
+            "• Settings are configured in the Audio Transcription tab\n"
+            "• Outputs .txt files with transcribed text"
+        )
         layout.addWidget(self.transcribe_checkbox, 0, 1)
         
         self.summarize_checkbox = QCheckBox("Summarize documents")
         self.summarize_checkbox.setChecked(True)
         self.summarize_checkbox.toggled.connect(self._on_setting_changed)
+        self.summarize_checkbox.setToolTip(
+            "Enable AI-powered summarization of documents and transcripts.\n"
+            "• Works with .txt, .md, .pdf, and other text files\n"
+            "• Uses OpenAI GPT or Anthropic Claude models\n"
+            "• Settings are configured in the Document Summarization tab\n"
+            "• Outputs .md files with intelligent summaries"
+        )
         layout.addWidget(self.summarize_checkbox, 0, 2)
         
         self.moc_checkbox = QCheckBox("Generate Maps of Content")
         self.moc_checkbox.setChecked(True)
         self.moc_checkbox.toggled.connect(self._on_setting_changed)
+        self.moc_checkbox.setToolTip(
+            "Generate Maps of Content (MOCs) to organize knowledge.\n"
+            "• Creates structured knowledge maps from processed content\n"
+            "• Links related concepts and documents together\n"
+            "• Useful for building comprehensive knowledge bases\n"
+            "• Settings are configured in the Maps of Content tab"
+        )
         layout.addWidget(self.moc_checkbox, 0, 3)
         
         # Settings inherited from other tabs (read-only display)
@@ -309,6 +330,11 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         transcription_btn = QPushButton("Change")
         transcription_btn.clicked.connect(lambda: self._switch_to_tab("Audio Transcription"))
         transcription_btn.setMaximumWidth(80)
+        transcription_btn.setToolTip(
+            "Switch to Audio Transcription tab to modify transcription settings.\n"
+            "• Configure Whisper model, device, and performance options\n"
+            "• Set language, format, and quality retry settings"
+        )
         layout.addWidget(transcription_btn, 2, 3)
         
         # Summarization settings
@@ -323,6 +349,11 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         summarization_btn = QPushButton("Change")
         summarization_btn.clicked.connect(lambda: self._switch_to_tab("Document Summarization"))
         summarization_btn.setMaximumWidth(80)
+        summarization_btn.setToolTip(
+            "Switch to Document Summarization tab to modify AI summarization settings.\n"
+            "• Choose AI provider (OpenAI, Anthropic, or Local)\n"
+            "• Select model, max tokens, and custom prompts"
+        )
         layout.addWidget(summarization_btn, 3, 3)
         
         # MOC settings
@@ -337,12 +368,23 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         moc_btn = QPushButton("Change")
         moc_btn.clicked.connect(lambda: self._switch_to_tab("Maps of Content"))
         moc_btn.setMaximumWidth(80)
+        moc_btn.setToolTip(
+            "Switch to Maps of Content tab to modify MOC generation settings.\n"
+            "• Configure knowledge mapping and linking options\n"
+            "• Set templates and organization preferences"
+        )
         layout.addWidget(moc_btn, 4, 3)
         
         # Refresh button
         refresh_btn = QPushButton("🔄 Refresh Settings")
         refresh_btn.clicked.connect(self._refresh_inherited_settings)
         refresh_btn.setStyleSheet("background-color: #1976d2;")
+        refresh_btn.setToolTip(
+            "Refresh settings from other tabs.\n"
+            "• Updates the displayed settings summary\n"
+            "• Use this if you've changed settings in other tabs\n"
+            "• Ensures you see the current configuration"
+        )
         layout.addWidget(refresh_btn, 5, 0, 1, 2)
         
         # Output directory
@@ -350,10 +392,22 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         self.output_directory = QLineEdit()
         self.output_directory.setPlaceholderText("Click Browse to select output directory (required)")
         self.output_directory.textChanged.connect(self._on_setting_changed)
+        self.output_directory.setToolTip(
+            "Directory where all processed files will be saved.\n"
+            "• Transcripts, summaries, and MOCs will be saved here\n"
+            "• Organized in subdirectories by file type\n"
+            "• Ensure you have write permissions to this location\n"
+            "• Required before starting processing"
+        )
         layout.addWidget(self.output_directory, 6, 1, 1, 2)
         
         browse_output_btn = QPushButton("Browse")
         browse_output_btn.clicked.connect(self._select_output_directory)
+        browse_output_btn.setToolTip(
+            "Browse and select the output directory for processed files.\n"
+            "• Choose a directory with sufficient space\n"
+            "• All output files will be organized in subdirectories"
+        )
         layout.addWidget(browse_output_btn, 6, 3)
         
         # Load initial settings
@@ -372,11 +426,25 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         self.start_btn = QPushButton(self._get_start_button_text())
         self.start_btn.clicked.connect(self._start_processing)
         self.start_btn.setStyleSheet("background-color: #4caf50; font-weight: bold;")
+        self.start_btn.setToolTip(
+            "Start the batch processing of all selected files.\n"
+            "• Processes files according to selected operations (transcribe, summarize, MOC)\n"
+            "• Uses settings from individual tabs\n"
+            "• Shows real-time progress for each file\n"
+            "• Can be paused or stopped at any time"
+        )
         layout.addWidget(self.start_btn)
         
         # Dry run checkbox
         self.dry_run_checkbox = QCheckBox("Dry run (test without processing)")
         self.dry_run_checkbox.toggled.connect(self._on_setting_changed)
+        self.dry_run_checkbox.setToolTip(
+            "Test the processing pipeline without actually processing files.\n"
+            "• Validates all settings and file accessibility\n"
+            "• Shows what would be processed without consuming API credits\n"
+            "• Useful for testing configurations before real processing\n"
+            "• No output files will be created in dry run mode"
+        )
         layout.addWidget(self.dry_run_checkbox)
         
         layout.addStretch()
@@ -403,12 +471,26 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         self.pause_btn.clicked.connect(self._toggle_pause)
         self.pause_btn.setStyleSheet("background-color: #ff9800; font-weight: bold;")
         self.pause_btn.setEnabled(False)
+        self.pause_btn.setToolTip(
+            "Pause or resume the processing pipeline.\n"
+            "• Pauses after the current file finishes processing\n"
+            "• No progress is lost when paused\n"
+            "• Click again to resume processing\n"
+            "• Useful for managing system resources"
+        )
         control_layout.addWidget(self.pause_btn)
         
         self.stop_btn = QPushButton("⏹ Stop")
         self.stop_btn.clicked.connect(self._stop_processing)
         self.stop_btn.setStyleSheet("background-color: #d32f2f; color: white; font-weight: bold;")
         self.stop_btn.setEnabled(False)
+        self.stop_btn.setToolTip(
+            "Stop the processing pipeline completely.\n"
+            "• Stops after the current file finishes processing\n"
+            "• All completed files will be saved\n"
+            "• Unprocessed files remain in the list for later\n"
+            "• Use this to cancel processing permanently"
+        )
         control_layout.addWidget(self.stop_btn)
         
         control_layout.addStretch()

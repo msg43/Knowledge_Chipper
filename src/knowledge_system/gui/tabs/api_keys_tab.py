@@ -81,6 +81,13 @@ class APIKeysTab(BaseTab):
         self.openai_key_edit = QLineEdit()
         self.openai_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.openai_key_edit.setPlaceholderText("sk-...")
+        self.openai_key_edit.setToolTip(
+            "Your OpenAI API key for GPT models (required for AI summarization).\n"
+            "• Get your key at: https://platform.openai.com/api-keys\n"
+            "• Format: sk-proj-... or sk-...\n"
+            "• Used for: Document summarization, knowledge extraction, and analysis\n"
+            "• Cost: Pay-per-token usage based on model and content length"
+        )
         layout.addWidget(self.openai_key_edit, 2, 1)
 
         # Anthropic API Key
@@ -88,6 +95,13 @@ class APIKeysTab(BaseTab):
         self.anthropic_key_edit = QLineEdit()
         self.anthropic_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.anthropic_key_edit.setPlaceholderText("sk-ant-api03-...")
+        self.anthropic_key_edit.setToolTip(
+            "Your Anthropic API key for Claude models (alternative to OpenAI).\n"
+            "• Get your key at: https://console.anthropic.com/\n"
+            "• Format: sk-ant-api03-...\n"
+            "• Used for: Document analysis with Claude's excellent reasoning capabilities\n"
+            "• Cost: Competitive pricing with different token limits per model"
+        )
         layout.addWidget(self.anthropic_key_edit, 3, 1)
 
         # HuggingFace Token
@@ -95,6 +109,14 @@ class APIKeysTab(BaseTab):
         self.huggingface_token_edit = QLineEdit()
         self.huggingface_token_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.huggingface_token_edit.setPlaceholderText("hf_...")
+        self.huggingface_token_edit.setToolTip(
+            "Your HuggingFace access token (optional, for speaker diarization).\n"
+            "• Get your token at: https://huggingface.co/settings/tokens\n"
+            "• Format: hf_...\n"
+            "• Used for: Speaker diarization (identifying different speakers in audio)\n"
+            "• Cost: Free for most models, some premium models may require subscription\n"
+            "• Note: Only needed if you want to identify different speakers in transcriptions"
+        )
         layout.addWidget(self.huggingface_token_edit, 4, 1)
 
         # WebShare Proxy Credentials
@@ -104,6 +126,14 @@ class APIKeysTab(BaseTab):
         layout.addWidget(QLabel("WebShare Username:"), 6, 0)
         self.webshare_username_edit = QLineEdit()
         self.webshare_username_edit.setPlaceholderText("username")
+        self.webshare_username_edit.setToolTip(
+            "Your WebShare proxy service username (required for YouTube access).\n"
+            "• Sign up at: https://www.webshare.io/\n"
+            "• Used for: Downloading YouTube videos and playlists\n"
+            "• Why needed: Helps avoid rate limiting and access restrictions\n"
+            "• Cost: Various plans available, free tier available for testing\n"
+            "• Note: Only required if you plan to process YouTube content"
+        )
         layout.addWidget(self.webshare_username_edit, 6, 1)
 
         # WebShare Password
@@ -111,6 +141,13 @@ class APIKeysTab(BaseTab):
         self.webshare_password_edit = QLineEdit()
         self.webshare_password_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.webshare_password_edit.setPlaceholderText("password")
+        self.webshare_password_edit.setToolTip(
+            "Your WebShare proxy service password.\n"
+            "• Use the password from your WebShare account\n"
+            "• Keep this secure - it provides access to your proxy quota\n"
+            "• Required along with username for YouTube video processing\n"
+            "• Tip: Use a dedicated password for API services"
+        )
         layout.addWidget(self.webshare_password_edit, 7, 1)
 
         # Load existing values and set up change handlers
@@ -129,6 +166,13 @@ class APIKeysTab(BaseTab):
         save_btn = QPushButton("💾 Save API Keys")
         save_btn.clicked.connect(self._save_settings)
         save_btn.setStyleSheet("background-color: #4caf50; font-weight: bold; padding: 10px; font-size: 14px;")
+        save_btn.setToolTip(
+            "Save all API keys and credentials securely.\n"
+            "• Keys are encrypted and stored locally\n"
+            "• Required before using AI features\n"
+            "• You can save partial configurations (some keys can be empty)\n"
+            "• Changes take effect immediately after saving"
+        )
         main_layout.addWidget(save_btn)
 
         # Status label
