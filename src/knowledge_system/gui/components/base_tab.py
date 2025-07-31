@@ -42,22 +42,22 @@ class BaseTab(QWidget):
     processing_finished = pyqtSignal()
     report_generated = pyqtSignal(str, str)  # report_type, report_path
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: Any = None) -> None:
         super().__init__(parent)
         self.settings = get_settings()
         self.logger = get_logger(self.__class__.__name__)
-        self.active_workers = []
+        self.active_workers: list[Any] = []
         self.current_report = None
 
         # Initialize UI
         self._setup_ui()
         self._connect_signals()
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         """Setup the UI for this tab. Must be implemented by subclasses."""
         raise NotImplementedError("Subclasses must implement _setup_ui()")
 
-    def _connect_signals(self):
+    def _connect_signals(self) -> None:
         """Connect internal signals. Can be overridden by subclasses."""
         pass
 
@@ -129,11 +129,11 @@ class BaseTab(QWidget):
         self,
         layout: QGridLayout,
         label_text: str,
-        widget,
+        widget: Any,
         tooltip: str,
         row: int,
         col: int,
-    ):
+    ) -> None:
         """Add a field with label and tooltip to a grid layout."""
         label = QLabel(label_text)
         label.setToolTip(tooltip)
@@ -142,19 +142,19 @@ class BaseTab(QWidget):
         layout.addWidget(label, row, col)
         layout.addWidget(widget, row, col + 1)
 
-    def append_log(self, message: str):
+    def append_log(self, message: str) -> None:
         """Append a message to the output log."""
         if hasattr(self, "output_text"):
             self.output_text.append(message)
             self.output_text.repaint()
         self.log_message.emit(message)
 
-    def clear_log(self):
+    def clear_log(self) -> None:
         """Clear the output log."""
         if hasattr(self, "output_text"):
             self.output_text.clear()
 
-    def set_processing_state(self, processing: bool):
+    def set_processing_state(self, processing: bool) -> None:
         """Set the processing state (enable/disable controls)."""
         if hasattr(self, "start_btn"):
             self.start_btn.setEnabled(not processing)
@@ -169,7 +169,7 @@ class BaseTab(QWidget):
         else:
             self.processing_finished.emit()
 
-    def show_error(self, title: str, message: str):
+    def show_error(self, title: str, message: str) -> None:
         """Show an error message box with custom icon."""
         msg_box = QMessageBox(self)
         msg_box.setIcon(QMessageBox.Icon.Critical)
@@ -184,7 +184,7 @@ class BaseTab(QWidget):
 
         msg_box.exec()
 
-    def show_warning(self, title: str, message: str):
+    def show_warning(self, title: str, message: str) -> None:
         """Show a warning message box with custom icon."""
         msg_box = QMessageBox(self)
         msg_box.setIcon(QMessageBox.Icon.Warning)
@@ -199,7 +199,7 @@ class BaseTab(QWidget):
 
         msg_box.exec()
 
-    def show_info(self, title: str, message: str):
+    def show_info(self, title: str, message: str) -> None:
         """Show an info message box with custom icon."""
         msg_box = QMessageBox(self)
         msg_box.setIcon(QMessageBox.Icon.Information)
@@ -214,7 +214,7 @@ class BaseTab(QWidget):
 
         msg_box.exec()
 
-    def cleanup_workers(self):
+    def cleanup_workers(self) -> None:
         """Clean up any active worker threads."""
         for worker in self.active_workers:
             if worker.isRunning():
@@ -226,11 +226,11 @@ class BaseTab(QWidget):
         """Get the text for the start button. Must be implemented by subclasses."""
         raise NotImplementedError("Subclasses must implement _get_start_button_text()")
 
-    def _start_processing(self):
+    def _start_processing(self) -> None:
         """Start the main processing operation. Must be implemented by subclasses."""
         raise NotImplementedError("Subclasses must implement _start_processing()")
 
-    def _stop_processing(self):
+    def _stop_processing(self) -> None:
         """Stop the current processing operation. Can be overridden by subclasses."""
         # Default implementation - stop all active workers
         for worker in self.active_workers:
@@ -248,7 +248,7 @@ class BaseTab(QWidget):
         # Reset UI state
         self.set_processing_state(False)
 
-    def _view_last_report(self):
+    def _view_last_report(self) -> None:
         """View the last generated report."""
         # First try current_report if set
         report_path = self.current_report
@@ -294,7 +294,7 @@ class BaseTab(QWidget):
             ]
 
             latest_report = None
-            latest_time = 0
+            latest_time = 0.0
 
             for report_dir in report_dirs:
                 if not report_dir.exists():
