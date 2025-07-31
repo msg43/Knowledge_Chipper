@@ -158,7 +158,7 @@ class LLMAPIError(APIError):
         message: str,
         provider: str | None = None,
         model: str | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Initialize LLM API error with provider context."""
         context = kwargs.get("context", {}).copy()
@@ -181,7 +181,7 @@ class RateLimitError(APIError):
     """Raised when API rate limits are exceeded."""
 
     def __init__(
-        self, message: str, retry_after: int | None = None, **kwargs
+        self, message: str, retry_after: int | None = None, **kwargs: Any
     ) -> None:
         """Initialize rate limit error with retry information."""
         context = kwargs.get("context", {}).copy()
@@ -239,7 +239,7 @@ class InputValidationError(ValidationError):
         message: str,
         field_name: str | None = None,
         field_value: Any = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Initialize input validation error with field context."""
         context = kwargs.get("context", {}).copy()
@@ -279,7 +279,7 @@ class TimeoutError(OperationError):
     """Raised when operations timeout."""
 
     def __init__(
-        self, message: str, timeout_seconds: float | None = None, **kwargs
+        self, message: str, timeout_seconds: float | None = None, **kwargs: Any
     ) -> None:
         """Initialize timeout error with duration context."""
         context = kwargs.get("context", {}).copy()
@@ -321,7 +321,7 @@ def wrap_exception(
     func_name: str,
     original_exception: Exception,
     context: dict[str, Any] | None = None,
-    error_type: type = KnowledgeSystemError,
+    error_type: type[KnowledgeSystemError] = KnowledgeSystemError,
 ) -> KnowledgeSystemError:
     """
     Wrap a generic exception in a Knowledge System exception.
@@ -344,7 +344,7 @@ def wrap_exception(
 
 
 def handle_api_error(
-    response, provider: str, operation: str, context: dict[str, Any] | None = None
+    response: Any, provider: str, operation: str, context: dict[str, Any] | None = None
 ) -> APIError:
     """
     Handle API response errors and create appropriate exceptions.

@@ -111,11 +111,9 @@ def can_process_file(
     Returns:
         True if file can be processed, False otherwise
     """
-    if isinstance(input_path, (str, Path)):
-        path = Path(input_path)
-        return path.suffix.lower() in [fmt.lower()
-                                 for fmt in supported_formats]
-    return False
+    path = Path(input_path)
+    return path.suffix.lower() in [fmt.lower()
+                             for fmt in supported_formats]
 
 
 def validate_string_input(input_data: Union[str, Path]) -> bool:
@@ -130,12 +128,11 @@ def validate_string_input(input_data: Union[str, Path]) -> bool:
     """
     if isinstance(input_data, str):
         return len(input_data.strip()) > 0
-    elif isinstance(input_data, Path):
+    else:  # Path
         return input_data.exists() and input_data.is_file()
-    return False
 
 
-def validate_url_or_file_input(input_data: Any, url_validator=None) -> bool:
+def validate_url_or_file_input(input_data: Any, url_validator: Any = None) -> bool:
     """
     Validate input that can be either a URL or a file containing URLs.
     
