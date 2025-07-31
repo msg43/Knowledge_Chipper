@@ -24,29 +24,24 @@ class ProcessingState(BaseModel):
     operation_type: str  # 'transcribe', 'summarize', 'moc', 'watch'
     status: str  # 'pending', 'running', 'completed', 'failed', 'cancelled'
     input_path: str
-    output_path: Optional[str] = None
+    output_path: str | None = None
     progress: float = 0.0  # 0.0 to 1.0
     started_at: float
-    completed_at: Optional[float] = None
-    error_message: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    completed_at: float | None = None
+    error_message: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @validator("progress")
-    def validate_progress(cls, v):
+    def validate_progress(cls, v) -> bool:
         """Ensure progress is between 0 and 1."""
         if not 0.0 <= v <= 1.0:
             raise ValueError("Progress must be between 0.0 and 1.0")
         return v
 
     @validator("status")
-    def validate_status(cls, v):
+    def validate_status(cls, v) -> bool:
         """Ensure status is valid."""
-        valid_statuses = {
-    "pending",
-    "running",
-    "completed",
-    "failed",
-     "cancelled"}
+        valid_statuses = {"pending", "running", "completed", "failed", "cancelled"}
         if v not in valid_statuses:
             raise ValueError(f"Status must be one of {valid_statuses}")
         return v
@@ -59,7 +54,7 @@ class ProcessingState(BaseModel):
         """Check if operation completed successfully."""
         return self.status == "completed"
 
-    def duration(self) -> Optional[float]:
+    def duration(self) -> float | None:
         """Get operation duration in seconds."""
         if self.completed_at:
             return self.completed_at - self.started_at
@@ -99,14 +94,14 @@ class UserPreferences(BaseModel):
     enable_notifications: bool = True
 
     @validator("temperature")
-    def validate_temperature(cls, v):
+    def validate_temperature(cls, v) -> bool:
         """Ensure temperature is valid."""
         if not 0.0 <= v <= 2.0:
             raise ValueError("Temperature must be between 0.0 and 2.0")
         return v
 
     @validator("max_tokens")
-    def validate_max_tokens(cls, v):
+    def validate_max_tokens(cls, v) -> bool:
         """Ensure max_tokens is positive."""
         if v <= 0:
             raise ValueError("max_tokens must be positive")
@@ -119,7 +114,7 @@ class SessionInfo(BaseModel):
     session_id: str
     started_at: float
     last_activity: float
-    user_agent: Optional[str] = None
+    user_agent: str | None = None
     version: str
 
     # Session statistics
@@ -143,14 +138,14 @@ class SessionInfo(BaseModel):
 class RecentFiles(BaseModel):
     """Recently accessed files tracking."""
 
-    files: List[Dict[str, Any]] = Field(default_factory=list)
+    files: list[dict[str, Any]] = Field(default_factory=list)
     max_files: int = 50
 
     def add_file(
         self,
-        file_path: Union[str, Path],
+        file_path: str | Path,
         operation: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Add a file to recent files list."""
         file_entry = {
@@ -170,12 +165,11 @@ class RecentFiles(BaseModel):
         if len(self.files) > self.max_files:
             self.files = self.files[: self.max_files]
 
-    def get_recent(self, count: int = 10) -> List[Dict[str, Any]]:
+    def get_recent(self, count: int = 10) -> list[dict[str, Any]]:
         """Get most recent files."""
         return self.files[:count]
 
-    def get_by_operation(self, operation: str,
-                         count: int = 10) -> List[Dict[str, Any]]:
+    def get_by_operation(self, operation: str, count: int = 10) -> list[dict[str, Any]]:
         """Get recent files by operation type."""
         filtered = [f for f in self.files if f["operation"] == operation]
         return filtered[:count]
@@ -195,10 +189,10 @@ class ApplicationState(BaseModel):
     recent_files: RecentFiles = Field(default_factory=RecentFiles)
 
     # Processing state
-    active_operations: Dict[str, ProcessingState] = Field(default_factory=dict)
+    active_operations: dict[str, ProcessingState] = Field(default_factory=dict)
 
     # Cache and temporary data
-    cache: Dict[str, Any] = Field(default_factory=dict)
+    cache: dict[str, Any] = Field(default_factory=dict)
 
     # Metadata
     last_saved: float = Field(default_factory=time.time)
@@ -238,7 +232,7 @@ class ApplicationState(BaseModel):
             return True
         return False
 
-    def get_active_operations(self) -> List[ProcessingState]:
+    def get_active_operations(self) -> list[ProcessingState]:
         """Get all active operations."""
         return [op for op in self.active_operations.values() if op.is_active()]
 
@@ -262,7 +256,7 @@ class ApplicationState(BaseModel):
 class StateManager:
     """Manages application state persistence and operations."""
 
-    def __init__(self, state_file: Optional[Path] = None):
+    def __init__(self, state_file: Path | None = None) -> None:
         """Initialize state manager."""
         self.settings = get_settings()
 
@@ -273,7 +267,7 @@ class StateManager:
         else:
             self.state_file = state_file
 
-        self._state: Optional[ApplicationState] = None
+        self._state: ApplicationState | None = None
         self._auto_save = True
         self._save_interval = 30  # seconds
         self._last_save = 0.0
@@ -298,7 +292,7 @@ class StateManager:
 
         try:
             if self.state_file.exists():
-                with open(self.state_file, "r") as f:
+                with open(self.state_file) as f:
                     data = json.load(f)
 
                 # Validate and create state
@@ -326,8 +320,7 @@ class StateManager:
 
         # Check if we need to save
         current_time = time.time()
-        if not force and (
-            current_time - self._last_save) < self._save_interval:
+        if not force and (current_time - self._last_save) < self._save_interval:
             return False
 
         try:
@@ -374,9 +367,9 @@ class StateManager:
 
     def add_recent_file(
         self,
-        file_path: Union[str, Path],
+        file_path: str | Path,
         operation: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Add a file to recent files."""
         state = self.get_state()
@@ -388,9 +381,9 @@ class StateManager:
     def start_operation(
         self,
         operation_type: str,
-        input_path: Union[str, Path],
-        output_path: Optional[Union[str, Path]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        input_path: str | Path,
+        output_path: str | Path | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """Start a new operation and return operation ID."""
         import uuid
@@ -421,8 +414,8 @@ class StateManager:
         self,
         operation_id: str,
         progress: float,
-        status: Optional[str] = None,
-        error_message: Optional[str] = None,
+        status: str | None = None,
+        error_message: str | None = None,
     ) -> bool:
         """Update operation progress."""
         updates = {"progress": progress}
@@ -443,27 +436,26 @@ class StateManager:
         self,
         operation_id: str,
         success: bool = True,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> bool:
         """Mark operation as completed."""
         status = "completed" if success else "failed"
-        return self.update_operation_progress(
-            operation_id, 1.0, status, error_message)
+        return self.update_operation_progress(operation_id, 1.0, status, error_message)
 
     def cancel_operation(self, operation_id: str) -> bool:
         """Cancel an operation."""
         return self.update_operation_progress(operation_id, 0.0, "cancelled")
 
     def get_recent_files(
-        self, operation: Optional[str] = None, count: int = 10
-    ) -> List[Dict[str, Any]]:
+        self, operation: str | None = None, count: int = 10
+    ) -> list[dict[str, Any]]:
         """Get recent files, optionally filtered by operation."""
         state = self.get_state()
         if operation:
             return state.recent_files.get_by_operation(operation, count)
         return state.recent_files.get_recent(count)
 
-    def get_active_operations(self) -> List[ProcessingState]:
+    def get_active_operations(self) -> list[ProcessingState]:
         """Get all active operations."""
         state = self.get_state()
         return state.get_active_operations()
@@ -504,7 +496,7 @@ class StateManager:
 
 
 # Global state manager instance
-_state_manager: Optional[StateManager] = None
+_state_manager: StateManager | None = None
 
 
 def get_state_manager() -> StateManager:

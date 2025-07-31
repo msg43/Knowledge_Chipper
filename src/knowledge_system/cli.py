@@ -3,22 +3,21 @@ Command Line Interface for Knowledge System.
 Provides comprehensive CLI commands for all system operations.
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
 import click
 from rich.console import Console
 
+# Import modular commands
+from .commands import moc, process, summarize, transcribe
 from .config import Settings, get_settings
 from .errors import KnowledgeSystemError
 from .logger import get_logger, log_system_event
-from .processors.registry import list_processors, get_all_processor_stats
+from .processors.registry import get_all_processor_stats, list_processors
 from .utils.file_io import get_file_info
-
-# Import modular commands
-from .commands import transcribe, summarize, moc, process
 
 console = Console()
 logger = get_logger("cli")
@@ -30,9 +29,9 @@ __version__ = "0.1.0"
 class CLIContext:
     """Context object for CLI commands."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize CLI context."""
-        self.settings: Optional[Settings] = None
+        self.settings: Settings | None = None
         self.verbose: bool = False
         self.quiet: bool = False
 
@@ -75,7 +74,7 @@ def handle_cli_error(func):
 )
 @click.pass_context
 def main(
-    ctx: click.Context, version: bool, verbose: bool, quiet: bool, config: Optional[str]
+    ctx: click.Context, version: bool, verbose: bool, quiet: bool, config: str | None
 ) -> None:
     """
     Knowledge_Chipper - Comprehensive knowledge processing and management.
@@ -84,19 +83,21 @@ def main(
     into structured knowledge with transcription, summarization, and MOC generation.
     """
     # Configure threading and resource management based on user settings
-    
+
     # Ensure context object exists
     if ctx.obj is None:
         ctx.obj = CLIContext()
-    
+
     # Get settings for thread management
     settings = ctx.obj.get_settings()
     thread_config = settings.thread_management
-    
+
     # Set environment variables based on configuration
     os.environ["OMP_NUM_THREADS"] = str(thread_config.omp_num_threads)
-    os.environ["TOKENIZERS_PARALLELISM"] = "true" if thread_config.tokenizers_parallelism else "false"
-    
+    os.environ["TOKENIZERS_PARALLELISM"] = (
+        "true" if thread_config.tokenizers_parallelism else "false"
+    )
+
     # Keep MPS fallback setting
     if thread_config.pytorch_enable_mps_fallback:
         os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -188,7 +189,7 @@ def watch(
     ctx: CLIContext,
     watch_path: Path,
     recursive: bool,
-    patterns: List[str],
+    patterns: list[str],
     auto_process: bool,
     transcribe: bool,
     summarize: bool,
@@ -213,15 +214,13 @@ def watch(
         console.print(
             f"[dim]Patterns: {', '.join(patterns)}, Recursive: {recursive}[/dim]"
         )
-        console.print(
-            f"[dim]Auto-process: {auto_process}, Debounce: {debounce}s[/dim]")
+        console.print(f"[dim]Auto-process: {auto_process}, Debounce: {debounce}s[/dim]")
 
     if dry_run:
         console.print(
             "[yellow][DRY RUN] Would start file watcher with the above settings.[/yellow]"
         )
-        console.print(
-            f"[dim]Would watch for patterns: {', '.join(patterns)}[/dim]")
+        console.print(f"[dim]Would watch for patterns: {', '.join(patterns)}[/dim]")
         if auto_process:
             console.print("[dim]Would auto-process new files[/dim]")
             if transcribe:
@@ -257,11 +256,11 @@ def watch(
                     ".webm",
                 ]:
                     from .processors.audio_processor import AudioProcessor
+
                     processor = AudioProcessor(device=device)
                     result = processor.process(file_path, device=device)
                     if result.success:
-                        console.print(
-                            f"[green]✓ Transcribed: {file_path}[/green]")
+                        console.print(f"[green]✓ Transcribed: {file_path}[/green]")
                     else:
                         console.print(
                             f"[red]✗ Transcription failed for {file_path}: {'; '.join(result.errors)}[/red]"
@@ -269,6 +268,7 @@ def watch(
                 # Summarization for markdown/text
                 if summarize and file_path.suffix.lower() in [".md", ".txt"]:
                     from .processors.summarizer import SummarizerProcessor
+
                     # Use SummarizerProcessor
                     summarizer = SummarizerProcessor(
                         provider=settings.summarization.provider,
@@ -277,8 +277,7 @@ def watch(
                     )
                     result = summarizer.process(file_path, dry_run=False)
                     if result.success:
-                        console.print(
-                            f"[green]✓ Summarized: {file_path}[/green]")
+                        console.print(f"[green]✓ Summarized: {file_path}[/green]")
                     else:
                         console.print(
                             f"[red]✗ Summarization failed for {file_path}: {'; '.join(result.errors)}[/red]"
@@ -294,12 +293,11 @@ def watch(
             except Exception as e:
                 logger.error(f"Error processing file {file_path}: {e}")
                 if not ctx.quiet:
-                    console.print(
-                        f"[red]Error processing {file_path}:[/red] {e}")
+                    console.print(f"[red]Error processing {file_path}:[/red] {e}")
 
         # Start the file watcher
         from .watchers import FileWatcher
-        
+
         watcher = FileWatcher(
             directory=watch_path,
             patterns=list(patterns),
@@ -319,6 +317,7 @@ def watch(
         try:
             while True:
                 import time
+
                 time.sleep(1)
         except KeyboardInterrupt:
             if not ctx.quiet:
@@ -331,6 +330,7 @@ def watch(
         console.print(f"[red]✗ Error starting file watcher:[/red] {e}")
         if ctx.verbose:
             import traceback
+
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)
 
@@ -340,10 +340,8 @@ def watch(
     "--processors/--no-processors", default=True, help="Show processor statistics"
 )
 @click.option("--paths/--no-paths", default=True, help="Show configured paths")
-@click.option("--settings/--no-settings",
-              default=False, help="Show all settings")
-@click.option("--logs/--no-logs", default=False,
-              help="Show recent log entries")
+@click.option("--settings/--no-settings", default=False, help="Show all settings")
+@click.option("--logs/--no-logs", default=False, help="Show recent log entries")
 @pass_context
 def status(
     ctx: CLIContext, processors: bool, paths: bool, settings: bool, logs: bool
@@ -370,6 +368,7 @@ def status(
 
         if processor_stats:
             from rich.table import Table
+
             table = Table()
             table.add_column("Processor", style="cyan")
             table.add_column("Processed", justify="right")
@@ -402,6 +401,7 @@ def status(
     if paths:
         console.print("[bold]Configured Paths:[/bold]")
         from rich.table import Table
+
         paths_table = Table()
         paths_table.add_column("Path Type", style="cyan")
         paths_table.add_column("Location", style="green")
@@ -442,7 +442,7 @@ def status(
 
         if log_file.exists():
             try:
-                with open(log_file, "r") as f:
+                with open(log_file) as f:
                     lines = f.readlines()
                     recent_lines = lines[-10:] if len(lines) > 10 else lines
 
@@ -468,8 +468,7 @@ def info(ctx: CLIContext, file_path: Path) -> None:
         knowledge-system info transcript.md
     """
     if not ctx.quiet:
-        console.print(
-            f"[bold blue]File Information:[/bold blue] {file_path}\n")
+        console.print(f"[bold blue]File Information:[/bold blue] {file_path}\n")
 
     try:
         # Get file information
@@ -477,6 +476,7 @@ def info(ctx: CLIContext, file_path: Path) -> None:
 
         # Display basic info
         from rich.table import Table
+
         info_table = Table()
         info_table.add_column("Property", style="cyan")
         info_table.add_column("Value", style="green")
@@ -498,9 +498,9 @@ def info(ctx: CLIContext, file_path: Path) -> None:
 
             # Import processors to check compatibility
             from .processors.audio_processor import AudioProcessor
-            from .processors.summarizer import SummarizerProcessor
             from .processors.moc import MOCProcessor
             from .processors.pdf import PDFProcessor
+            from .processors.summarizer import SummarizerProcessor
 
             compatibility_table = Table()
             compatibility_table.add_column("Processor", style="cyan")
@@ -559,6 +559,7 @@ def gui(ctx: CLIContext) -> None:
     """Launch the graphical user interface."""
     try:
         from .gui import main as gui_main
+
         gui_main()
     except ImportError as e:
         console.print(f"[red]Error: GUI dependencies not available: {e}")
@@ -591,10 +592,10 @@ def cache():
 def clear():
     """Clear Python bytecode cache files."""
     from .utils.cache_management import force_clear_cache
-    
+
     click.echo("Clearing Python cache...")
     success, message = force_clear_cache()
-    
+
     if success:
         click.echo(f"✅ {message}")
     else:
@@ -606,9 +607,9 @@ def clear():
 def status():
     """Check if cache clearing is recommended."""
     from .utils.cache_management import should_clear_cache_on_startup
-    
+
     should_clear, reason = should_clear_cache_on_startup()
-    
+
     if should_clear:
         click.echo(f"🧹 Cache clearing recommended: {reason}")
         click.echo("Run 'knowledge-system cache clear' to clear cache.")
@@ -620,7 +621,7 @@ def status():
 def flag():
     """Create a flag to force cache clearing on next startup."""
     from .utils.cache_management import create_manual_clear_flag
-    
+
     create_manual_clear_flag()
     click.echo("✅ Created cache clear flag. Cache will be cleared on next app startup.")
 
@@ -633,12 +634,12 @@ main.add_command(cache)
 def auth_status():
     """Check YouTube authentication status and diagnostics."""
     from .utils.youtube_utils import get_authentication_status
-    
+
     status = get_authentication_status()
-    
+
     click.echo("YouTube Authentication Status:")
     click.echo("=" * 40)
-    
+
     if status["has_cached_strategy"]:
         click.echo("✓ Cached authentication strategy found")
         if status["strategy_age"]:
@@ -648,7 +649,7 @@ def auth_status():
             click.echo(f"  Strategy: {status['strategy_details']}")
     else:
         click.echo("✗ No cached authentication strategy")
-    
+
     if status["has_cached_cookies"]:
         click.echo("✓ Cached cookies found")
         if status["cookie_age"]:
@@ -656,15 +657,17 @@ def auth_status():
             click.echo(f"  Age: {age_minutes:.1f} minutes")
     else:
         click.echo("✗ No cached cookies")
-    
+
     if status["manual_cookie_file"]:
         click.echo(f"✓ Manual cookie file found: {status['manual_cookie_file']}")
     else:
         click.echo("✗ No manual cookie file found")
-    
+
     click.echo("\nRecommendations:")
     if not status["has_cached_strategy"] and not status["manual_cookie_file"]:
-        click.echo("- Create a manual cookie file (run 'knowledge-system youtube cookie-instructions')")
+        click.echo(
+            "- Create a manual cookie file (run 'knowledge-system youtube cookie-instructions')"
+        )
         click.echo("- Visit YouTube videos in your browser first")
         click.echo("- Try a different network connection")
 
@@ -673,7 +676,7 @@ def auth_status():
 def clear_cache():
     """Clear YouTube authentication cache to force re-authentication."""
     from .utils.youtube_utils import clear_authentication_cache
-    
+
     clear_authentication_cache()
     click.echo("YouTube authentication cache cleared.")
     click.echo("Next YouTube operation will attempt fresh authentication.")
@@ -683,30 +686,32 @@ def clear_cache():
 def cookie_instructions():
     """Show instructions for creating a manual cookie file."""
     from .utils.youtube_utils import create_cookie_instructions
-    
+
     instructions = create_cookie_instructions()
     click.echo(instructions)
 
 
 @youtube.command()
-@click.argument('url')
+@click.argument("url")
 def test_auth(url):
     """Test YouTube authentication with a specific URL."""
     from .utils.youtube_utils import get_single_working_strategy
-    
+
     click.echo(f"Testing authentication with: {url}")
-    
+
     try:
         strategy = get_single_working_strategy()
         click.echo(f"Using strategy: {strategy}")
-        
+
         # Simple authentication test - just check if strategy is available
         if strategy:
             click.echo("✓ Authentication strategy found!")
         else:
             click.echo("✗ No authentication strategy available!")
-            click.echo("Consider creating a manual cookie file or visiting YouTube in your browser first.")
-            
+            click.echo(
+                "Consider creating a manual cookie file or visiting YouTube in your browser first."
+            )
+
     except Exception as e:
         click.echo(f"✗ Authentication test failed with error: {e}")
 

@@ -10,11 +10,11 @@ Generates structured Maps of Content from markdown files, including:
 """
 
 import re
-import yaml
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+import yaml
 from pydantic import BaseModel, Field
 
 from ..errors import MOCGenerationError
@@ -28,23 +28,20 @@ class Person(BaseModel):
     """Represents a person mentioned in documents."""
 
     name: str = Field(..., description="Person's name")
-    mentions: List[str] = Field(
+    mentions: list[str] = Field(
         default_factory=list, description="Files where person is mentioned"
     )
-    first_mention: Optional[str] = Field(
+    first_mention: str | None = Field(
         default=None, description="First file where person appears"
     )
-    mention_count: int = Field(
-    default=0, description="Total number of mentions")
+    mention_count: int = Field(default=0, description="Total number of mentions")
 
 
 class Tag(BaseModel):
     """Represents a tag used in documents."""
 
     name: str = Field(..., description="Tag name")
-    files: List[str] = Field(
-    default_factory=list,
-     description="Files using this tag")
+    files: list[str] = Field(default_factory=list, description="Files using this tag")
     usage_count: int = Field(default=0, description="Total usage count")
 
 
@@ -52,13 +49,13 @@ class MentalModel(BaseModel):
     """Represents a mental model mentioned in documents."""
 
     name: str = Field(..., description="Mental model name")
-    definition: Optional[str] = Field(
+    definition: str | None = Field(
         default=None, description="Definition or explanation"
     )
-    files: List[str] = Field(
+    files: list[str] = Field(
         default_factory=list, description="Files mentioning this model"
     )
-    sources: List[str] = Field(
+    sources: list[str] = Field(
         default_factory=list, description="Sources for this model"
     )
 
@@ -67,33 +64,29 @@ class JargonTerm(BaseModel):
     """Represents a jargon term found in documents."""
 
     term: str = Field(..., description="Jargon term")
-    definition: Optional[str] = Field(
+    definition: str | None = Field(
         default=None, description="Definition or explanation"
     )
-    files: List[str] = Field(
+    files: list[str] = Field(
         default_factory=list, description="Files containing this term"
     )
-    context: List[str] = Field(
-    default_factory=list,
-     description="Context sentences")
+    context: list[str] = Field(default_factory=list, description="Context sentences")
 
 
 class Belief(BaseModel):
     """Represents a belief with epistemic weight and sources."""
 
     claim: str = Field(..., description="The belief or claim")
-    sources: List[str] = Field(
+    sources: list[str] = Field(
         default_factory=list, description="Sources supporting this claim"
     )
-    counterclaims: List[str] = Field(
+    counterclaims: list[str] = Field(
         default_factory=list, description="Counterclaims or opposing views"
     )
     epistemic_weight: float = Field(
         default=0.5, ge=0.0, le=1.0, description="Confidence level (0-1)"
     )
-    evidence_quality: str = Field(
-    default="medium",
-     description="Quality of evidence")
+    evidence_quality: str = Field(default="medium", description="Quality of evidence")
     last_updated: datetime = Field(
         default_factory=datetime.now, description="When belief was last updated"
     )
@@ -102,19 +95,19 @@ class Belief(BaseModel):
 class MOCData(BaseModel):
     """Complete MOC data structure."""
 
-    people: List[Person] = Field(default_factory=list)
-    tags: List[Tag] = Field(default_factory=list)
-    mental_models: List[MentalModel] = Field(default_factory=list)
-    jargon: List[JargonTerm] = Field(default_factory=list)
-    beliefs: List[Belief] = Field(default_factory=list)
+    people: list[Person] = Field(default_factory=list)
+    tags: list[Tag] = Field(default_factory=list)
+    mental_models: list[MentalModel] = Field(default_factory=list)
+    jargon: list[JargonTerm] = Field(default_factory=list)
+    beliefs: list[Belief] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=datetime.now)
-    source_files: List[str] = Field(default_factory=list)
+    source_files: list[str] = Field(default_factory=list)
 
 
 class MOCProcessor(BaseProcessor):
     """Processor for generating Maps of Content from markdown files."""
 
-    def __init__(self, name: Optional[str] = None):
+    def __init__(self, name: str | None = None) -> None:
         """Initialize the MOC processor."""
         super().__init__(name or "moc")
 
@@ -159,7 +152,7 @@ class MOCProcessor(BaseProcessor):
         ]
 
     @property
-    def supported_formats(self) -> List[str]:
+    def supported_formats(self) -> list[str]:
         """Return list of supported input formats."""
         return [".md", ".txt"]
 
@@ -176,7 +169,7 @@ class MOCProcessor(BaseProcessor):
             return all(self.validate_input(item) for item in input_data)
         return False
 
-    def can_process(self, input_path: Union[str, Path]) -> bool:
+    def can_process(self, input_path: str | Path) -> bool:
         """Check if this processor can handle the given input."""
         path = Path(input_path)
         return path.suffix.lower() in self.supported_formats
@@ -185,7 +178,7 @@ class MOCProcessor(BaseProcessor):
         self,
         input_data: Any,
         dry_run: bool = False,
-        template: Optional[Union[str, Path]] = None,
+        template: str | Path | None = None,
         **kwargs: Any,
     ) -> ProcessorResult:
         """Process input and generate MOC."""
@@ -231,27 +224,24 @@ class MOCProcessor(BaseProcessor):
                     continue
 
                 try:
-                    with open(file_path, "r", encoding="utf-8") as f:
+                    with open(file_path, encoding="utf-8") as f:
                         content = f.read()
 
                     # Extract different types of content
                     self._extract_people(content, str(file_path), moc_data)
                     self._extract_tags(content, str(file_path), moc_data)
-                    self._extract_mental_models(
-                        content, str(file_path), moc_data)
+                    self._extract_mental_models(content, str(file_path), moc_data)
                     self._extract_jargon(content, str(file_path), moc_data)
 
                     if include_beliefs:
-                        self._extract_beliefs(
-    content, str(file_path), moc_data)
+                        self._extract_beliefs(content, str(file_path), moc_data)
 
                 except Exception as e:
                     logger.error(f"Error processing file {file_path}: {e}")
                     continue
 
             # Generate MOC files
-            moc_files = self._generate_moc_files(
-                moc_data, theme, depth, template)
+            moc_files = self._generate_moc_files(moc_data, theme, depth, template)
 
             return ProcessorResult(
                 success=True,
@@ -277,8 +267,7 @@ class MOCProcessor(BaseProcessor):
                 success=False, errors=[f"MOC generation failed: {e}"], dry_run=dry_run
             )
 
-    def _extract_people(self, content: str, filename: str,
-                        moc_data: MOCData) -> None:
+    def _extract_people(self, content: str, filename: str, moc_data: MOCData) -> None:
         """Extract people mentioned in content."""
         for pattern in self.person_patterns:
             matches = re.finditer(pattern, content)
@@ -289,8 +278,7 @@ class MOCProcessor(BaseProcessor):
                     continue
 
                 # Find or create person
-                person = next(
-    (p for p in moc_data.people if p.name == name), None)
+                person = next((p for p in moc_data.people if p.name == name), None)
                 if not person:
                     person = Person(name=name)
                     moc_data.people.append(person)
@@ -304,8 +292,7 @@ class MOCProcessor(BaseProcessor):
                     if not person.first_mention:
                         person.first_mention = filename
 
-    def _extract_tags(self, content: str, filename: str,
-                      moc_data: MOCData) -> None:
+    def _extract_tags(self, content: str, filename: str, moc_data: MOCData) -> None:
         """Extract tags from content."""
         for pattern in self.tag_patterns:
             matches = re.finditer(pattern, content)
@@ -313,8 +300,7 @@ class MOCProcessor(BaseProcessor):
                 tag_name = match.group(1)
 
                 # Find or create tag
-                tag = next(
-    (t for t in moc_data.tags if t.name == tag_name), None)
+                tag = next((t for t in moc_data.tags if t.name == tag_name), None)
                 if not tag:
                     tag = Tag(name=tag_name)
                     moc_data.tags.append(tag)
@@ -349,15 +335,13 @@ class MOCProcessor(BaseProcessor):
                     model.files.append(filename)
                     model.sources.append(filename)
 
-    def _extract_jargon(self, content: str, filename: str,
-                        moc_data: MOCData) -> None:
+    def _extract_jargon(self, content: str, filename: str, moc_data: MOCData) -> None:
         """Extract jargon terms from content."""
         for pattern in self.jargon_patterns:
             matches = re.finditer(pattern, content)
             for match in matches:
                 term = match.group(1)
-                definition = match.group(2) if len(
-                    match.groups()) > 1 else None
+                definition = match.group(2) if len(match.groups()) > 1 else None
 
                 # Find or create jargon term
                 jargon = next(
@@ -373,8 +357,7 @@ class MOCProcessor(BaseProcessor):
                         jargon.context.append(definition)
                         jargon.definition = definition
 
-    def _extract_beliefs(self, content: str, filename: str,
-                         moc_data: MOCData) -> None:
+    def _extract_beliefs(self, content: str, filename: str, moc_data: MOCData) -> None:
         """Extract beliefs and claims from content."""
         # Look for belief-like statements
         belief_patterns = [
@@ -406,8 +389,8 @@ class MOCProcessor(BaseProcessor):
         moc_data: MOCData,
         theme: str,
         depth: int,
-        template: Optional[Union[str, Path]] = None,
-    ) -> Dict[str, Any]:
+        template: str | Path | None = None,
+    ) -> dict[str, Any]:
         """Generate MOC files from extracted data."""
         files = {}
 
@@ -423,8 +406,7 @@ class MOCProcessor(BaseProcessor):
 
         # Generate Mental Models.md
         if moc_data.mental_models:
-            models_content = self._generate_mental_models_page(
-                moc_data.mental_models)
+            models_content = self._generate_mental_models_page(moc_data.mental_models)
             files["Mental Models.md"] = models_content
 
         # Generate Jargon.md
@@ -443,15 +425,12 @@ class MOCProcessor(BaseProcessor):
 
         return files
 
-    def _generate_people_page(self, people: List[Person]) -> str:
+    def _generate_people_page(self, people: list[Person]) -> str:
         """Generate People.md content."""
         lines = ["# People", ""]
 
         # Sort by mention count
-        sorted_people = sorted(
-    people,
-    key=lambda p: p.mention_count,
-     reverse=True)
+        sorted_people = sorted(people, key=lambda p: p.mention_count, reverse=True)
 
         for person in sorted_people:
             lines.append(f"## {person.name}")
@@ -462,7 +441,7 @@ class MOCProcessor(BaseProcessor):
 
         return "\n".join(lines)
 
-    def _generate_tags_page(self, tags: List[Tag]) -> str:
+    def _generate_tags_page(self, tags: list[Tag]) -> str:
         """Generate Tags.md content."""
         lines = ["# Tags", ""]
 
@@ -478,7 +457,7 @@ class MOCProcessor(BaseProcessor):
 
         return "\n".join(lines)
 
-    def _generate_mental_models_page(self, models: List[MentalModel]) -> str:
+    def _generate_mental_models_page(self, models: list[MentalModel]) -> str:
         """Generate Mental Models.md content."""
         lines = ["# Mental Models", ""]
 
@@ -493,7 +472,7 @@ class MOCProcessor(BaseProcessor):
 
         return "\n".join(lines)
 
-    def _generate_jargon_page(self, jargon_terms: List[JargonTerm]) -> str:
+    def _generate_jargon_page(self, jargon_terms: list[JargonTerm]) -> str:
         """Generate Jargon.md content."""
         lines = ["# Jargon", ""]
 
@@ -508,7 +487,7 @@ class MOCProcessor(BaseProcessor):
 
         return "\n".join(lines)
 
-    def _generate_beliefs_yaml(self, beliefs: List[Belief]) -> str:
+    def _generate_beliefs_yaml(self, beliefs: list[Belief]) -> str:
         """Generate beliefs.yaml content."""
         beliefs_data = []
         for belief in beliefs:
@@ -516,12 +495,11 @@ class MOCProcessor(BaseProcessor):
             belief_dict["last_updated"] = belief_dict["last_updated"].isoformat()
             beliefs_data.append(belief_dict)
 
-        return yaml.dump(
-            beliefs_data, default_flow_style=False, sort_keys=False)
+        return yaml.dump(beliefs_data, default_flow_style=False, sort_keys=False)
 
     def _load_template(
-        self, template_path: Optional[Union[str, Path]]
-    ) -> Optional[str]:
+        self, template_path: str | Path | None
+    ) -> str | None:
         """Load and process MOC template with placeholder replacement."""
         if not template_path:
             return None
@@ -532,7 +510,7 @@ class MOCProcessor(BaseProcessor):
                 logger.warning(f"Template file not found: {template_path}")
                 return None
 
-            with open(template_file, "r", encoding="utf-8") as f:
+            with open(template_file, encoding="utf-8") as f:
                 template = f.read().strip()
 
             return template
@@ -590,20 +568,18 @@ class MOCProcessor(BaseProcessor):
 
         return result
 
-    def _format_people_list(self, people: List[Person]) -> str:
+    def _format_people_list(self, people: list[Person]) -> str:
         """Format people list for template."""
         if not people:
             return "None found"
 
         lines = []
-        for person in sorted(
-            people, key=lambda p: p.mention_count, reverse=True):
-            lines.append(
-                f"- {person.name} (mentioned in {person.mention_count} files)")
+        for person in sorted(people, key=lambda p: p.mention_count, reverse=True):
+            lines.append(f"- {person.name} (mentioned in {person.mention_count} files)")
 
         return "\n".join(lines)
 
-    def _format_tags_list(self, tags: List[Tag]) -> str:
+    def _format_tags_list(self, tags: list[Tag]) -> str:
         """Format tags list for template."""
         if not tags:
             return "None found"
@@ -614,19 +590,18 @@ class MOCProcessor(BaseProcessor):
 
         return "\n".join(lines)
 
-    def _format_mental_models_list(self, models: List[MentalModel]) -> str:
+    def _format_mental_models_list(self, models: list[MentalModel]) -> str:
         """Format mental models list for template."""
         if not models:
             return "None found"
 
         lines = []
         for model in models:
-            lines.append(
-                f"- {model.name} (mentioned in {len(model.files)} files)")
+            lines.append(f"- {model.name} (mentioned in {len(model.files)} files)")
 
         return "\n".join(lines)
 
-    def _format_jargon_list(self, jargon_terms: List[JargonTerm]) -> str:
+    def _format_jargon_list(self, jargon_terms: list[JargonTerm]) -> str:
         """Format jargon list for template."""
         if not jargon_terms:
             return "None found"
@@ -637,7 +612,7 @@ class MOCProcessor(BaseProcessor):
 
         return "\n".join(lines)
 
-    def _format_beliefs_list(self, beliefs: List[Belief]) -> str:
+    def _format_beliefs_list(self, beliefs: list[Belief]) -> str:
         """Format beliefs list for template."""
         if not beliefs:
             return "None found"
@@ -650,7 +625,7 @@ class MOCProcessor(BaseProcessor):
 
         return "\n".join(lines)
 
-    def _format_source_files_list(self, source_files: List[str]) -> str:
+    def _format_source_files_list(self, source_files: list[str]) -> str:
         """Format source files list for template."""
         if not source_files:
             return "None"
@@ -666,7 +641,7 @@ class MOCProcessor(BaseProcessor):
         moc_data: MOCData,
         theme: str,
         depth: int,
-        template: Optional[Union[str, Path]] = None,
+        template: str | Path | None = None,
     ) -> str:
         """Generate main MOC.md content."""
         # Try to load and use custom template
@@ -731,12 +706,12 @@ class MOCProcessor(BaseProcessor):
 
 
 def generate_moc(
-    input_files: List[Union[str, Path]],
+    input_files: list[str | Path],
     theme: str = "topical",
     depth: int = 3,
     include_beliefs: bool = True,
-    template: Optional[Union[str, Path]] = None,
-) -> Dict[str, Any]:
+    template: str | Path | None = None,
+) -> dict[str, Any]:
     """Convenience function to generate MOC from files."""
     processor = MOCProcessor()
     result = processor.process(

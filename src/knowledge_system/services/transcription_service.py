@@ -8,10 +8,10 @@ Supports batch processing, multiple output formats, and configurable settings.
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from ..logger import get_logger
 from ..processors.audio_processor import AudioProcessor
 from ..processors.youtube_download import YouTubeDownloadProcessor
 from ..processors.youtube_transcript import YouTubeTranscriptProcessor
-from ..logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -25,9 +25,9 @@ class TranscriptionService:
         normalize_audio: bool = True,
         download_thumbnails: bool = True,
         prefer_transcripts: bool = True,
-        temp_dir: Optional[Union[str, Path]] = None,
+        temp_dir: str | Path | None = None,
         use_whisper_cpp: bool = False,
-    ):
+    ) -> None:
         """Initialize the transcription service.
 
         Args:
@@ -62,8 +62,7 @@ class TranscriptionService:
         ):
             self.audio_processor.transcriber.progress_callback = callback
 
-    def transcribe_audio_file(
-        self, audio_file: Union[str, Path]) -> Dict[str, Any]:
+    def transcribe_audio_file(self, audio_file: str | Path) -> dict[str, Any]:
         """Transcribe an audio file using Whisper."""
         logger.info(f"Starting transcription of audio file: {audio_file}")
 
@@ -90,27 +89,31 @@ class TranscriptionService:
 
         except Exception as e:
             logger.error(f"Audio transcription failed for {audio_file}: {e}")
-            return {"success": False, "error": str(
-                e), "source": str(audio_file)}
+            return {"success": False, "error": str(e), "source": str(audio_file)}
 
     def transcribe_youtube_url(
-        self, url: str, download_thumbnails: Optional[bool] = None, output_dir: Optional[Union[str, Path]] = None, include_timestamps: bool = True
-    ) -> Dict[str, Any]:
+        self,
+        url: str,
+        download_thumbnails: bool | None = None,
+        output_dir: str | Path | None = None,
+        include_timestamps: bool = True,
+    ) -> dict[str, Any]:
         """Extract transcript from a YouTube URL."""
         logger.info(f"Starting transcript extraction from YouTube URL: {url}")
 
         try:
             # Check for WebShare credentials first - REQUIRED for YouTube operations
             from ..config import get_settings
+
             settings = get_settings()
             webshare_username = settings.api_keys.webshare_username
             webshare_password = settings.api_keys.webshare_password
-            
+
             if not webshare_username or not webshare_password:
                 return {
                     "success": False,
                     "error": "WebShare proxy credentials are required for YouTube processing. Please configure WebShare Username and Password in Settings. This system only uses WebShare rotating residential proxies for YouTube access.",
-                    "source": url
+                    "source": url,
                 }
 
             # Primary method: Try transcript processor with WebShare proxy
@@ -138,27 +141,42 @@ class TranscriptionService:
                 # Handle thumbnail download if requested - download for each video individually
                 if download_thumbnails and transcripts:
                     from ..utils.youtube_utils import download_thumbnail
+
                     output_path = Path(output_dir) if output_dir else Path.cwd()
-                    
+
                     # Create Thumbnails subdirectory for consistent organization
                     thumbnails_dir = output_path / "Thumbnails"
                     thumbnails_dir.mkdir(exist_ok=True)
-                    
+
                     for transcript in transcripts:
-                        video_url = transcript.get('url', url)  # Use video URL if available, fallback to original
-                        thumbnail_url = transcript.get('thumbnail_url')  # Use thumbnail URL if available from metadata
-                        
+                        video_url = transcript.get(
+                            "url", url
+                        )  # Use video URL if available, fallback to original
+                        thumbnail_url = transcript.get(
+                            "thumbnail_url"
+                        )  # Use thumbnail URL if available from metadata
+
                         try:
-                            thumbnail_path = download_thumbnail(video_url, thumbnails_dir, thumbnail_url=thumbnail_url)
+                            thumbnail_path = download_thumbnail(
+                                video_url, thumbnails_dir, thumbnail_url=thumbnail_url
+                            )
                             if thumbnail_path:
                                 thumbnails.append(thumbnail_path)
-                                logger.info(f"Downloaded thumbnail for video: {transcript.get('title', 'Unknown')}")
+                                logger.info(
+                                    f"Downloaded thumbnail for video: {transcript.get('title', 'Unknown')}"
+                                )
                             else:
-                                logger.warning(f"Failed to download thumbnail for video: {transcript.get('title', 'Unknown')}")
+                                logger.warning(
+                                    f"Failed to download thumbnail for video: {transcript.get('title', 'Unknown')}"
+                                )
                         except Exception as e:
-                            logger.warning(f"Error downloading thumbnail for {video_url}: {e}")
-                    
-                    logger.info(f"Downloaded {len(thumbnails)} thumbnails out of {len(transcripts)} videos")
+                            logger.warning(
+                                f"Error downloading thumbnail for {video_url}: {e}"
+                            )
+
+                    logger.info(
+                        f"Downloaded {len(thumbnails)} thumbnails out of {len(transcripts)} videos"
+                    )
 
                 if transcripts:
                     transcript = transcripts[0]  # Use first transcript
@@ -176,44 +194,55 @@ class TranscriptionService:
                     }
 
             # If we get here, transcript extraction failed
-            errors = transcript_result.errors if transcript_result.errors else ["Unknown transcript extraction error"]
+            errors = (
+                transcript_result.errors
+                if transcript_result.errors
+                else ["Unknown transcript extraction error"]
+            )
             error_msg = "; ".join(errors)
-            
+
             return {
                 "success": False,
                 "error": f"YouTube transcript extraction failed with WebShare proxy: {error_msg}. This system only uses WebShare rotating residential proxies for YouTube access.",
-                "source": url
+                "source": url,
             }
 
         except Exception as e:
             logger.error(f"YouTube transcript extraction failed for {url}: {e}")
             return {
-                "success": False, 
+                "success": False,
                 "error": f"YouTube processing error with WebShare proxy: {str(e)}. This system only uses WebShare rotating residential proxies for YouTube access.",
-                "source": url
+                "source": url,
             }
 
     def transcribe_input(
         self,
-        input_path_or_url: Union[str, Path],
-        download_thumbnails: Optional[bool] = None,
-        output_dir: Optional[Union[str, Path]] = None,
+        input_path_or_url: str | Path,
+        download_thumbnails: bool | None = None,
+        output_dir: str | Path | None = None,
         include_timestamps: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Transcribe any supported input (audio file or YouTube URL)."""
         input_str = str(input_path_or_url)
 
         # Check if it's a YouTube URL
         if "youtube.com" in input_str or "youtu.be" in input_str:
             return self.transcribe_youtube_url(
-                input_str, download_thumbnails=download_thumbnails, output_dir=output_dir, include_timestamps=include_timestamps
+                input_str,
+                download_thumbnails=download_thumbnails,
+                output_dir=output_dir,
+                include_timestamps=include_timestamps,
             )
         else:
             return self.transcribe_audio_file(input_str)
 
     def transcribe_batch(
-        self, inputs: List[Union[str, Path]], download_thumbnails: Optional[bool] = None, output_dir: Optional[Union[str, Path]] = None, include_timestamps: bool = True
-    ) -> List[Dict[str, Any]]:
+        self,
+        inputs: list[str | Path],
+        download_thumbnails: bool | None = None,
+        output_dir: str | Path | None = None,
+        include_timestamps: bool = True,
+    ) -> list[dict[str, Any]]:
         """Transcribe multiple inputs in batch."""
         logger.info(f"Starting batch transcription of {len(inputs)} items")
 
@@ -221,7 +250,10 @@ class TranscriptionService:
         for i, input_item in enumerate(inputs, 1):
             logger.info(f"Processing item {i}/{len(inputs)}: {input_item}")
             result = self.transcribe_input(
-                input_item, download_thumbnails=download_thumbnails, output_dir=output_dir, include_timestamps=include_timestamps
+                input_item,
+                download_thumbnails=download_thumbnails,
+                output_dir=output_dir,
+                include_timestamps=include_timestamps,
             )
             result["index"] = i
             result["total"] = len(inputs)
@@ -229,7 +261,7 @@ class TranscriptionService:
 
         return results
 
-    def get_supported_formats(self) -> Dict[str, Union[List[str], str]]:
+    def get_supported_formats(self) -> dict[str, list[str] | str]:
         """Get information about supported input formats."""
         return {
             "audio_formats": self.audio_processor.supported_formats,
@@ -239,11 +271,11 @@ class TranscriptionService:
 
 
 def transcribe_audio(
-    audio_file: Union[str, Path],
+    audio_file: str | Path,
     model: str = "base",
     normalize: bool = True,
-    temp_dir: Optional[Union[str, Path]] = None,
-) -> Optional[str]:
+    temp_dir: str | Path | None = None,
+) -> str | None:
     """Convenience function to transcribe an audio file."""
     service = TranscriptionService(
         whisper_model=model, normalize_audio=normalize, temp_dir=temp_dir
@@ -257,10 +289,10 @@ def transcribe_youtube(
     normalize: bool = True,
     download_thumbnails: bool = True,
     prefer_transcripts: bool = True,
-    temp_dir: Optional[Union[str, Path]] = None,
-    output_dir: Optional[Union[str, Path]] = None,
+    temp_dir: str | Path | None = None,
+    output_dir: str | Path | None = None,
     include_timestamps: bool = True,
-) -> Optional[str]:
+) -> str | None:
     """Convenience function to extract transcript from a YouTube URL."""
     service = TranscriptionService(
         normalize_audio=normalize,
@@ -268,5 +300,7 @@ def transcribe_youtube(
         prefer_transcripts=prefer_transcripts,
         temp_dir=temp_dir,
     )
-    result = service.transcribe_youtube_url(url, output_dir=output_dir, include_timestamps=include_timestamps)
+    result = service.transcribe_youtube_url(
+        url, output_dir=output_dir, include_timestamps=include_timestamps
+    )
     return result.get("transcript") if result["success"] else None

@@ -5,35 +5,29 @@ Streamlined main window that focuses on window setup and coordination.
 All business logic has been moved to modular tab classes.
 """
 
-import sys
-from pathlib import Path
-from typing import Optional, Dict, Any
-import queue
 import json
 import os
+import queue
+import sys
+from pathlib import Path
+from typing import Any, Dict, Optional
 
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QTabWidget,
-    QStatusBar,
     QMessageBox,
     QSizePolicy,
+    QStatusBar,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QIcon
 
 from ..config import get_settings
 from ..logger import get_logger
-
-# Import modular tabs
-from .tabs import (
-    IntroductionTab, ProcessTab, WatcherTab, 
-    YouTubeTab, TranscriptionTab, SummarizationTab,
-    APIKeysTab
-)
+from .assets.icons import get_app_icon, get_icon_path
 
 # Import workers and components
 from .components.progress_tracking import EnhancedProgressBar
@@ -41,7 +35,17 @@ from .components.progress_tracking import EnhancedProgressBar
 # Import core GUI components
 from .core.session_manager import get_session_manager
 from .core.settings_manager import get_gui_settings_manager
-from .assets.icons import get_app_icon, get_icon_path
+
+# Import modular tabs
+from .tabs import (
+    APIKeysTab,
+    IntroductionTab,
+    ProcessTab,
+    SummarizationTab,
+    TranscriptionTab,
+    WatcherTab,
+    YouTubeTab,
+)
 
 logger = get_logger(__name__)
 
@@ -49,37 +53,37 @@ logger = get_logger(__name__)
 class MainWindow(QMainWindow):
     """Streamlined main application window for Knowledge System using PyQt6."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        
+
         # Force window to be active
         self.setWindowState(Qt.WindowState.WindowActive)
 
         # Initialize settings FIRST before any UI creation
         self.settings = get_settings()
-        
+
         # Initialize session and GUI settings managers
         self.session_manager = get_session_manager()
         self.gui_settings = get_gui_settings_manager()
-        
+
         # Load API keys into environment variables immediately
         self._load_api_keys_to_environment()
-        
+
         # Initialize other attributes
         self.message_queue = queue.Queue()
         self.active_threads = []
-        
+
         # Setup UI
         self._setup_ui()
-        
+
         # Set custom icon for the window
         self._set_window_icon()
-        
+
         # Start message processor
         self.message_timer = QTimer()
         self.message_timer.timeout.connect(self._process_messages)
         self.message_timer.start(100)  # Check every 100ms
-        
+
         # Load session state after UI is set up
         self._load_session()
 
@@ -112,12 +116,16 @@ class MainWindow(QMainWindow):
         # Create tab widget with proper size policies
         self.tabs = QTabWidget()
         # Ensure tab widget can expand properly
-        self.tabs.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.tabs.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         main_layout.addWidget(self.tabs)
 
         # Create progress widget
         self.progress_widget = EnhancedProgressBar()
-        self.progress_widget.cancellation_requested.connect(self._handle_progress_cancellation)
+        self.progress_widget.cancellation_requested.connect(
+            self._handle_progress_cancellation
+        )
         main_layout.addWidget(self.progress_widget)
 
         # Create status bar
@@ -134,27 +142,27 @@ class MainWindow(QMainWindow):
     def _create_tabs(self):
         """Create all modular tabs."""
         # Each tab handles its own business logic
-        
+
         # Introduction tab - first tab for new users
         introduction_tab = IntroductionTab(self)
         introduction_tab.navigate_to_tab.connect(self._navigate_to_tab)
         self.tabs.addTab(introduction_tab, "Introduction")
-        
+
         youtube_tab = YouTubeTab(self)
         self.tabs.addTab(youtube_tab, "YouTube")
-        
+
         transcription_tab = TranscriptionTab(self)
         self.tabs.addTab(transcription_tab, "Transcription")
-        
+
         summarization_tab = SummarizationTab(self)
         self.tabs.addTab(summarization_tab, "Summarization")
-        
+
         process_tab = ProcessTab(self)
         self.tabs.addTab(process_tab, "Process Management")
-        
+
         watcher_tab = WatcherTab(self)
         self.tabs.addTab(watcher_tab, "File Watcher")
-        
+
         api_keys_tab = APIKeysTab(self)
         self.tabs.addTab(api_keys_tab, "API Keys")
 
@@ -167,7 +175,8 @@ class MainWindow(QMainWindow):
 
     def _apply_dark_theme(self):
         """Apply dark theme styling."""
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QMainWindow {
                 background-color: #1e1e1e;
             }
@@ -253,24 +262,25 @@ class MainWindow(QMainWindow):
                 background-color: #007acc;
                 border-radius: 2px;
             }
-        """)
+        """
+        )
 
     def _handle_progress_cancellation(self, reason: str):
         """Handle progress bar cancellation requests."""
         logger.info(f"Progress cancellation requested: {reason}")
-        
+
         # Cancel any active threads
         for thread in self.active_threads:
-            if hasattr(thread, 'request_cancellation'):
+            if hasattr(thread, "request_cancellation"):
                 thread.request_cancellation(reason)
-        
+
         # Reset progress widget if it has reset capability
         try:
-            if hasattr(self.progress_widget, 'reset'):
+            if hasattr(self.progress_widget, "reset"):
                 self.progress_widget.reset()
         except AttributeError:
             pass
-        
+
         self.status_bar.showMessage(f"Operation cancelled: {reason}")
 
     def _load_api_keys_to_environment(self):
@@ -279,15 +289,15 @@ class MainWindow(QMainWindow):
             # Set OpenAI API key
             if self.settings.api_keys.openai_api_key:
                 os.environ["OPENAI_API_KEY"] = self.settings.api_keys.openai_api_key
-            
-            # Set Anthropic API key  
-            if self.settings.api_keys.anthropic_api_key:
-                os.environ["ANTHROPIC_API_KEY"] = self.settings.api_keys.anthropic_api_key
-            
 
-                
+            # Set Anthropic API key
+            if self.settings.api_keys.anthropic_api_key:
+                os.environ[
+                    "ANTHROPIC_API_KEY"
+                ] = self.settings.api_keys.anthropic_api_key
+
             logger.debug("API keys loaded to environment variables")
-            
+
         except Exception as e:
             logger.error(f"Failed to load API keys to environment: {e}")
 
@@ -307,8 +317,10 @@ class MainWindow(QMainWindow):
             # Restore window geometry if available
             geometry = self.gui_settings.get_window_geometry()
             if geometry:
-                self.setGeometry(geometry['x'], geometry['y'], geometry['width'], geometry['height'])
-                
+                self.setGeometry(
+                    geometry["x"], geometry["y"], geometry["width"], geometry["height"]
+                )
+
             logger.debug("Session state loaded successfully")
         except Exception as e:
             logger.error(f"Could not load session state: {e}")
@@ -317,29 +329,31 @@ class MainWindow(QMainWindow):
         """Save session state."""
         try:
             # Save window geometry
-            self.gui_settings.set_window_geometry(self.x(), self.y(), self.width(), self.height())
-            
+            self.gui_settings.set_window_geometry(
+                self.x(), self.y(), self.width(), self.height()
+            )
+
             # Save all settings
             self.gui_settings.save()
-                
+
             logger.debug("Session state saved successfully")
         except Exception as e:
             logger.error(f"Could not save session state: {e}")
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: "QEvent"):
         """Handle window close event."""
         try:
             # Save session before closing
             self._save_session()
-            
+
             # Cancel any active threads
             for thread in self.active_threads:
-                if hasattr(thread, 'request_cancellation'):
+                if hasattr(thread, "request_cancellation"):
                     thread.request_cancellation("Application closing")
-            
+
             # Accept the close event
             event.accept()
-            
+
         except Exception as e:
             logger.error(f"Error during close: {e}")
             event.accept()
@@ -348,20 +362,20 @@ class MainWindow(QMainWindow):
 def launch_gui():
     """Launch the Knowledge System GUI application."""
     import sys
-    
+
     try:
         # Import PyQt6 first to check availability
-        from PyQt6.QtWidgets import QApplication
         from PyQt6.QtGui import QIcon
-        
+        from PyQt6.QtWidgets import QApplication
+
         # Create the QApplication
         app = QApplication(sys.argv)
-        
+
         # Set application properties
         app.setApplicationName("Knowledge_Chipper")
         app.setApplicationDisplayName("Knowledge_Chipper")
         app.setApplicationVersion("1.0")
-        
+
         # Set custom application icon
         app_icon = get_app_icon()
         if app_icon:
@@ -373,18 +387,18 @@ def launch_gui():
                 logger.warning(f"Failed to set application icon: {e}")
         else:
             logger.warning("No custom icon found for application")
-        
+
         # Create and show the main window
         window = MainWindow()
         window.show()
-        
+
         # Ensure the window is raised and gets focus
         window.raise_()
         window.activateWindow()
-        
+
         # Start the event loop
         sys.exit(app.exec())
-        
+
     except ImportError as e:
         print("\n" + "=" * 60)
         print("ERROR: PyQt6 is not installed!")

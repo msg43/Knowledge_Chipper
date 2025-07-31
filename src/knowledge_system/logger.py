@@ -37,8 +37,8 @@ class InterceptHandler(logging.Handler):
 
 def setup_logging(
     log_level: str = "INFO",
-    log_file: Optional[Union[str, Path]] = None,
-    log_format: Optional[str] = None,
+    log_file: str | Path | None = None,
+    log_format: str | None = None,
     rotation: str = "10 MB",
     retention: str = "1 week",
     enable_console: bool = True,
@@ -140,8 +140,7 @@ def log_exception(
         level: Log level
         **kwargs: Additional context to include
     """
-    logger.bind(**kwargs).opt(exception=True).log(level,
-                f"{message}: {exception}")
+    logger.bind(**kwargs).opt(exception=True).log(level, f"{message}: {exception}")
 
 
 def log_performance(operation: str, duration: float, **kwargs: Any) -> None:
@@ -158,8 +157,7 @@ def log_performance(operation: str, duration: float, **kwargs: Any) -> None:
     )
 
 
-def log_user_action(
-    action: str, user_id: Optional[str] = None, **kwargs: Any) -> None:
+def log_user_action(action: str, user_id: str | None = None, **kwargs: Any) -> None:
     """
     Log user actions for audit trail.
 
@@ -184,11 +182,7 @@ def log_system_event(
         status: Event status (info, warning, error, critical)
         **kwargs: Additional context
     """
-    context = {
-    "event": event,
-    "component": component,
-    "status": status,
-     **kwargs}
+    context = {"event": event, "component": component, "status": status, **kwargs}
 
     level_map = {
         "info": "INFO",
@@ -225,12 +219,12 @@ def configure_third_party_logging() -> None:
 class LogContext:
     """Context manager for adding structured context to logs."""
 
-    def __init__(self, **context: Any):
+    def __init__(self, **context: Any) -> None:
         """Initialize context manager with key-value pairs."""
         self.context = context
         self._token = None
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         """Enter context and bind logger."""
         self._token = logger.contextualize(**self.context)
         return self._token
