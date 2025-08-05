@@ -7,18 +7,18 @@ operations from hanging indefinitely.
 
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, Optional
-from collections.abc import Callable
 
 from .cancellation import CancellationToken
 
 logger = None
 
 
-def get_logger(name: str = "batch_processing"):
+def get_logger(name: str = "batch_processing") -> Any:
     global logger
     if logger is None:
         try:
@@ -97,7 +97,7 @@ class HangDetectionConfig:
         multiplier = self.level_multipliers.get(self.level, 2.0)
         return int(base_timeout * multiplier)
 
-    def set_custom_timeout(self, operation_type: OperationType, timeout: int):
+    def set_custom_timeout(self, operation_type: OperationType, timeout: int) -> None:
         """Set custom timeout for an operation type."""
         self.timeouts[operation_type] = timeout
 
@@ -136,7 +136,7 @@ class HangDetector:
         self.monitor_thread: threading.Thread | None = None
         self._lock = threading.Lock()
 
-    def start_monitoring(self):
+    def start_monitoring(self) -> None:
         """Start the hang detection monitoring thread."""
         if self.config.level == HangDetectionLevel.DISABLED:
             get_logger().info("Hang detection is disabled")
@@ -165,7 +165,7 @@ class HangDetector:
         operation_type: OperationType,
         cancellation_token: CancellationToken | None = None,
         recovery_callback: Callable[[str], None] | None = None,
-    ):
+    ) -> None:
         """Register an operation for hang detection."""
         with self._lock:
             now = datetime.now()
@@ -179,7 +179,7 @@ class HangDetector:
             )
         get_logger().debug(f"Registered operation for hang detection: {operation_id}")
 
-    def unregister_operation(self, operation_id: str):
+    def unregister_operation(self, operation_id: str) -> None:
         """Unregister an operation from hang detection."""
         with self._lock:
             if operation_id in self.operations:
@@ -190,7 +190,7 @@ class HangDetector:
 
     def update_operation(
         self, operation_id: str, metadata: dict[str, Any] | None = None
-    ):
+    ) -> None:
         """Update an operation's last activity time."""
         with self._lock:
             if operation_id in self.operations:
@@ -198,7 +198,7 @@ class HangDetector:
                 if metadata:
                     self.operations[operation_id].metadata.update(metadata)
 
-    def _monitor_loop(self):
+    def _monitor_loop(self) -> None:
         """Main monitoring loop that checks for hung operations."""
         while self.monitoring:
             try:
@@ -208,7 +208,7 @@ class HangDetector:
                 get_logger().error(f"Error in hang detection loop: {e}")
                 time.sleep(5)  # Brief pause before retrying
 
-    def _check_for_hangs(self):
+    def _check_for_hangs(self) -> None:
         """Check all registered operations for potential hangs."""
         with self._lock:
             hung_operations = []
@@ -222,7 +222,7 @@ class HangDetector:
             for op in hung_operations:
                 self._handle_hung_operation(op)
 
-    def _handle_hung_operation(self, operation: TrackedOperation):
+    def _handle_hung_operation(self, operation: TrackedOperation) -> None:
         """Handle a detected hung operation."""
         runtime = operation.total_runtime()
         timeout = self.config.get_timeout(operation.operation_type)
@@ -298,7 +298,7 @@ def get_hang_detector() -> HangDetector:
     return _hang_detector
 
 
-def configure_hang_detection(level: HangDetectionLevel):
+def configure_hang_detection(level: HangDetectionLevel) -> None:
     """Configure global hang detection level."""
     global _hang_detector
 
@@ -330,7 +330,7 @@ class HangDetectionContext:
         self.custom_timeout = custom_timeout
         self.detector = get_hang_detector()
 
-    def __enter__(self):
+    def __enter__(self) -> Any:
         """Register operation for hang detection."""
         if self.custom_timeout:
             self.detector.config.set_custom_timeout(
@@ -345,10 +345,10 @@ class HangDetectionContext:
         )
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Unregister operation from hang detection."""
         self.detector.unregister_operation(self.operation_id)
 
-    def update(self, metadata: dict[str, Any] | None = None):
+    def update(self, metadata: dict[str, Any] | None = None) -> None:
         """Update operation status."""
         self.detector.update_operation(self.operation_id, metadata)

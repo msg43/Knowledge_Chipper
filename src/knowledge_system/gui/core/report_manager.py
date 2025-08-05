@@ -92,9 +92,7 @@ class ReportManager:
         reports = self.get_reports(report_type)
         return reports[-1] if reports else None
 
-    def save_report(
-        self, report: ProcessingReport, output_dir: str | Path
-    ) -> Path:
+    def save_report(self, report: ProcessingReport, output_dir: str | Path) -> Path:
         """Save a report to file."""
         return report.save_to_file(output_dir)
 

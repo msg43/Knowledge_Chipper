@@ -8,10 +8,10 @@ import hashlib
 import json
 import os
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
-from collections.abc import Callable
 
 from knowledge_system.config import get_settings
 from knowledge_system.logger import get_logger
@@ -60,11 +60,10 @@ class SummarizerProcessor(BaseProcessor):
             else:
                 self.model = "gpt-4o-mini-2024-07-18"  # fallback
 
-        # Create unified LLM client
+        # Create unified LLM client (no max_tokens - rely on prompt instructions)
         self.llm_client = UnifiedLLMClient(
             provider=self.provider,
             model=self.model,
-            max_tokens=self.max_tokens,
             temperature=0.3,
         )
 
@@ -114,7 +113,7 @@ class SummarizerProcessor(BaseProcessor):
 
     def _build_summary_index(self, output_dir: Path) -> dict[str, dict[str, Any]]:
         """Build index of existing summaries in output directory."""
-        summary_index: Dict[str, Dict[str, Any]] = {}
+        summary_index: dict[str, dict[str, Any]] = {}
         files_scanned = 0
         files_failed = 0
 
@@ -122,7 +121,7 @@ class SummarizerProcessor(BaseProcessor):
 
         # Get all summary files
         summary_patterns = ["*_summary.md", "*_summary.txt"]
-        all_summary_files: List[Path] = []
+        all_summary_files: list[Path] = []
         for pattern in summary_patterns:
             all_summary_files.extend(output_dir.glob(pattern))
 
@@ -150,7 +149,8 @@ class SummarizerProcessor(BaseProcessor):
                         generated_str = line.replace("**Generated:**", "").strip()
                         try:
                             summary_generated = datetime.fromisoformat(generated_str)
-                        except:
+                        except (ValueError, TypeError):
+                            # Skip invalid date formats
                             pass
 
                 if source_path:
@@ -208,9 +208,9 @@ class SummarizerProcessor(BaseProcessor):
             summary_generated = datetime.fromisoformat(
                 summary_info["summary_generated"]
             )
-        except:
+        except (OSError, ValueError, TypeError) as e:
             # If we can't parse the generation time, summarize to be safe
-            return True, "Cannot determine summary generation time"
+            return True, f"Cannot determine summary generation time: {e}"
 
         # Check if source was modified after summary was generated
         if source_mtime > summary_generated:
@@ -275,52 +275,87 @@ class SummarizerProcessor(BaseProcessor):
     def _generate_prompt(
         self,
         text: str,
-        style: str = "general",
         template: str | Path | None = None,
     ) -> str:
         """Generate summarization prompt."""
 
         logger.info(
-            f"🔧 _generate_prompt called with text length: {len(text)} chars, style: {style}, template: {template}"
+            f"🔧 _generate_prompt called with text length: {len(text)} chars, template: {template}"
         )
+        logger.info(f"🔧 Template type: {type(template)}, template value: '{template}'")
 
         # Debug log first 200 chars of input text
         text_preview = text[:200].replace("\n", "\\n").replace("\r", "\\r")
         logger.debug(f"🔧 Input text preview: {text_preview}...")
 
-        # Style-specific prompts
-        style_prompts = {
-            "bullet": "Create a concise bullet-point summary of the following text:",
-            "paragraph": "Write a clear paragraph summary of the following text:",
-            "structured": "Create a well-structured summary with key points organized by topics:",
-            "academic": "Provide an academic-style summary with methodology, findings, and conclusions:",
-            "executive": "Create an executive summary highlighting key business insights and recommendations:",
-            "general": "Summarize the following text, capturing the main ideas and important details:",
-        }
+        # Default fallback prompt
+        default_prompt = "Summarize the following text, capturing the main ideas and important details:"
 
         final_prompt = ""
 
         if template:
+            logger.info(f"🔧 Template provided, checking if it's a file path...")
             # Use custom template
-            if isinstance(template, Path):
+            if isinstance(template, Path) or (
+                isinstance(template, str) and template.endswith(".txt")
+            ):
+                # Convert string path to Path object if needed
+                template_path = (
+                    Path(template) if isinstance(template, str) else template
+                )
+                logger.info(f"🔧 Attempting to load template from path: {template_path}")
+                logger.info(f"🔧 Template path exists: {template_path.exists()}")
+                logger.info(f"🔧 Template path absolute: {template_path.absolute()}")
                 try:
-                    with open(template, encoding="utf-8") as f:
+                    with open(template_path, encoding="utf-8") as f:
                         prompt_template = f.read()
-                    logger.info(f"🔧 Using custom template from file: {template}")
-                    final_prompt = prompt_template.replace("{text}", text)
+                    logger.info(
+                        f"🔧 Successfully loaded custom template from file: {template_path}"
+                    )
+                    logger.info(
+                        f"🔧 Template content length: {len(prompt_template)} chars"
+                    )
+                    logger.info(
+                        f"🔧 Template preview (first 100 chars): {prompt_template[:100]}..."
+                    )
+                    # Replace template placeholders
+                    final_prompt = prompt_template
+                    final_prompt = final_prompt.replace("{text}", text)
+                    final_prompt = final_prompt.replace(
+                        "{TEXT}", text
+                    )  # Support uppercase variant
+                    final_prompt = final_prompt.replace(
+                        "{MAX_TOKENS}", str(self.max_tokens)
+                    )
+                    final_prompt = final_prompt.replace(
+                        "{max_tokens}", str(self.max_tokens)
+                    )  # Support lowercase variant
                 except Exception as e:
-                    logger.warning(f"Could not load template {template}: {e}")
-                    # Fall back to style-based prompt
-                    style_prompt = style_prompts.get(style, style_prompts["general"])
-                    final_prompt = f"{style_prompt}\n\nText:\n{text}\n\nSummary:"
+                    logger.error(f"❌ Could not load template {template_path}: {e}")
+                    logger.error(
+                        f"❌ Template file must exist and be readable for custom summarization"
+                    )
+                    raise ValueError(
+                        f"Failed to load required template file: {template_path}. Error: {e}"
+                    )
             else:
                 logger.info(f"🔧 Using custom template string: {str(template)[:100]}...")
-                final_prompt = str(template).replace("{text}", text)
+                # Replace template placeholders
+                final_prompt = str(template)
+                final_prompt = final_prompt.replace("{text}", text)
+                final_prompt = final_prompt.replace(
+                    "{TEXT}", text
+                )  # Support uppercase variant
+                final_prompt = final_prompt.replace(
+                    "{MAX_TOKENS}", str(self.max_tokens)
+                )
+                final_prompt = final_prompt.replace(
+                    "{max_tokens}", str(self.max_tokens)
+                )  # Support lowercase variant
         else:
-            # Use style-based prompt
-            logger.info(f"🔧 Using style-based prompt for style: {style}")
-            style_prompt = style_prompts.get(style, style_prompts["general"])
-            final_prompt = f"{style_prompt}\n\nText:\n{text}\n\nSummary:"
+            # Use default prompt
+            logger.info(f"🔧 Using default prompt")
+            final_prompt = f"{default_prompt}\n\nText:\n{text}\n\nSummary:"
 
         logger.info(f"🔧 Generated prompt length: {len(final_prompt)} chars")
 
@@ -336,7 +371,7 @@ class SummarizerProcessor(BaseProcessor):
         return len(text) // 4
 
     def _calculate_smart_chunking_threshold(
-        self, text: str, style: str, prompt_template: str | Path | None
+        self, text: str, prompt_template: str | Path | None
     ) -> int:
         """
         Calculate the intelligent chunking threshold based on model capabilities and user settings.
@@ -346,7 +381,6 @@ class SummarizerProcessor(BaseProcessor):
 
         Args:
             text: Input text to analyze
-            style: Summary style
             prompt_template: Custom prompt template
 
         Returns:
@@ -362,21 +396,10 @@ class SummarizerProcessor(BaseProcessor):
         context_window = get_model_context_window(model)
 
         # Generate a sample prompt to estimate prompt overhead
-        sample_prompt = self._generate_prompt(
-            "PLACEHOLDER_TEXT", style, prompt_template
-        )
+        sample_prompt = self._generate_prompt("PLACEHOLDER_TEXT", prompt_template)
         prompt_tokens = estimate_tokens_improved(
             sample_prompt.replace("PLACEHOLDER_TEXT", ""), model
         )
-
-        # Add style-specific prompt overhead
-        style_overhead = {
-            "bullet": 50,  # "Provide as bullet points"
-            "academic": 100,  # "Provide academic-style summary with key findings"
-            "executive": 80,  # "Provide executive summary suitable for business context"
-            "general": 30,  # Basic prompt additions
-        }
-        prompt_tokens += style_overhead.get(style, 30)
 
         # Use user's max_tokens setting for response reservation
         max_output_tokens = self.max_tokens
@@ -493,7 +516,7 @@ class SummarizerProcessor(BaseProcessor):
                     progress_callback(
                         SummarizationProgress(
                             status="generating_llm",
-                            current_step=f"🤖 {self.provider} {self.model} generating response... ({time_desc}) ({eta_desc})",
+                            current_step=f"🤖 {self.provider} {self.model} generating response... ({time_desc})",
                             percent=estimated_progress,  # Dynamic progress instead of fixed 75%
                             elapsed_seconds=elapsed,
                             model_name=self.model,
@@ -547,7 +570,6 @@ class SummarizerProcessor(BaseProcessor):
     def _setup_chunking_config(
         self,
         text: str,
-        style: str,
         prompt_template: str | Path | None,
         cancellation_token: CancellationToken | None = None,
     ) -> tuple[list[Any], str, Any]:
@@ -565,7 +587,7 @@ class SummarizerProcessor(BaseProcessor):
             cancellation_token.wait_if_paused()
 
         # Generate base prompt for chunking calculation (but don't return it)
-        base_prompt = self._generate_prompt("PLACEHOLDER_TEXT", style, prompt_template)
+        base_prompt = self._generate_prompt("PLACEHOLDER_TEXT", prompt_template)
 
         # Get the original prompt template content for chunk processing
         if prompt_template:
@@ -574,14 +596,17 @@ class SummarizerProcessor(BaseProcessor):
                     with open(prompt_template, encoding="utf-8") as f:
                         original_template = f.read()
                 except Exception as e:
-                    logger.warning(f"Could not load template {prompt_template}: {e}")
-                    # Fall back to style-based template
-                    original_template = self._get_style_template(style)
+                    logger.error(f"Could not load template {prompt_template}: {e}")
+                    raise ValueError(
+                        f"Failed to load required template file: {prompt_template}"
+                    )
             else:
                 original_template = str(prompt_template)
         else:
-            # Use style-based template
-            original_template = self._get_style_template(style)
+            logger.error(
+                "No prompt template provided for chunking - this should not happen"
+            )
+            raise ValueError("Prompt template is required for chunking operation")
 
         # Ensure model is not None
         model = self.model or "gpt-4o-mini-2024-07-18"
@@ -592,7 +617,6 @@ class SummarizerProcessor(BaseProcessor):
             model=model,
             prompt_template=base_prompt,
             max_output_tokens=self.max_tokens,
-            style=style,
         )
 
         # Override with user preferences if provided
@@ -638,7 +662,6 @@ class SummarizerProcessor(BaseProcessor):
         self,
         chunks: list[Any],
         original_prompt_template: str,
-        style: str,
         progress_callback: Callable[[SummarizationProgress], None] | None = None,
         cancellation_token: CancellationToken | None = None,
         total_characters: int | None = None,
@@ -650,7 +673,6 @@ class SummarizerProcessor(BaseProcessor):
         Args:
             chunks: List of text chunks to process
             original_prompt_template: The original prompt template with {text} placeholders
-            style: Summary style
             progress_callback: Optional progress callback
             cancellation_token: Optional cancellation token
 
@@ -695,7 +717,6 @@ class SummarizerProcessor(BaseProcessor):
             chunk_prompt = generate_chunk_summary_prompt(
                 chunk=chunk,
                 original_prompt_template=original_prompt_template,
-                style=style,
                 chunk_context=f"Chunk {i+1} of {len(chunks)}",
                 is_final_chunk=(i == len(chunks) - 1),
             )
@@ -746,7 +767,6 @@ class SummarizerProcessor(BaseProcessor):
     def _reassemble_summaries(
         self,
         chunk_summaries: list[str],
-        style: str,
         original_prompt_template: str,
         progress_callback: Callable[[SummarizationProgress], None] | None = None,
         cancellation_token: CancellationToken | None = None,
@@ -758,7 +778,6 @@ class SummarizerProcessor(BaseProcessor):
 
         Args:
             chunk_summaries: List of individual chunk summaries
-            style: Summary style
             original_prompt_template: The original prompt template with {text} placeholders
             progress_callback: Optional progress callback
             cancellation_token: Optional cancellation token
@@ -798,7 +817,6 @@ class SummarizerProcessor(BaseProcessor):
                 # Generate reassembly prompt
                 reassembly_prompt = reassemble_chunk_summaries(
                     chunk_summaries=chunk_summaries,
-                    original_style=style,
                     original_prompt_template=original_prompt_template,
                     model=model,
                     max_output_tokens=self.max_tokens,
@@ -838,7 +856,6 @@ class SummarizerProcessor(BaseProcessor):
     def _process_with_chunking(
         self,
         text: str,
-        style: str = "general",
         prompt_template: str | Path | None = None,
         progress_callback: Callable[[SummarizationProgress], None] | None = None,
         cancellation_token: CancellationToken | None = None,
@@ -862,14 +879,13 @@ class SummarizerProcessor(BaseProcessor):
 
         # Step 1: Setup chunking configuration and create chunks
         chunks, original_prompt_template, chunking_config = self._setup_chunking_config(
-            text, style, prompt_template, cancellation_token
+            text, prompt_template, cancellation_token
         )
 
         # Step 2: Process all chunks
         chunk_summaries, processing_stats = self._process_chunks_batch(
             chunks,
             original_prompt_template,
-            style,
             progress_callback,
             cancellation_token,
             total_characters,
@@ -879,7 +895,6 @@ class SummarizerProcessor(BaseProcessor):
         # Step 3: Reassemble summaries
         final_summary, reassembly_stats = self._reassemble_summaries(
             chunk_summaries,
-            style,
             original_prompt_template,
             progress_callback,
             cancellation_token,
@@ -918,13 +933,15 @@ class SummarizerProcessor(BaseProcessor):
     ) -> ProcessorResult:
         """Process input and generate summary using unified LLM client."""
         # Extract parameters from kwargs for backwards compatibility
-        style = kwargs.get("style", "general")
         prompt_template = kwargs.get("prompt_template", None)
         # Also extract cancellation_token from kwargs if not passed as parameter
         if cancellation_token is None:
             cancellation_token = kwargs.get("cancellation_token", None)
 
         start_time = time.time()
+        # Initialize tracking variables early to avoid UnboundLocalError in exception handlers
+        total_characters = 0
+        current_file_size = 0
 
         try:
             # Get text content first to set up character tracking
@@ -1008,7 +1025,7 @@ class SummarizerProcessor(BaseProcessor):
             # Check if we need chunking for large texts
             estimated_tokens = self._estimate_tokens(text)
             chunking_threshold = self._calculate_smart_chunking_threshold(
-                text, style, prompt_template
+                text, prompt_template
             )
 
             if (
@@ -1032,7 +1049,6 @@ class SummarizerProcessor(BaseProcessor):
 
                 result_stats = self._process_with_chunking(
                     text,
-                    style,
                     prompt_template,
                     progress_callback,
                     cancellation_token,
@@ -1063,7 +1079,7 @@ class SummarizerProcessor(BaseProcessor):
                     )
 
                 # Generate prompt for small texts
-                prompt = self._generate_prompt(text, style, prompt_template)
+                prompt = self._generate_prompt(text, prompt_template)
 
                 if dry_run:
                     return ProcessorResult(
@@ -1072,7 +1088,6 @@ class SummarizerProcessor(BaseProcessor):
                         metadata={
                             "provider": self.provider,
                             "model": self.model,
-                            "style": style,
                             "estimated_tokens": estimated_tokens,
                             "dry_run": True,
                         },
@@ -1114,10 +1129,11 @@ class SummarizerProcessor(BaseProcessor):
                         percent=100.0,
                         tokens_processed=result_stats.get("prompt_tokens", 0),
                         tokens_generated=result_stats.get("completion_tokens", 0),
-                        speed_tokens_per_sec=result_stats.get("total_tokens", 0)
-                        / processing_time
-                        if processing_time > 0
-                        else 0,
+                        speed_tokens_per_sec=(
+                            result_stats.get("total_tokens", 0) / processing_time
+                            if processing_time > 0
+                            else 0
+                        ),
                         model_name=self.model,
                         provider=self.provider,
                         total_characters=total_characters,
@@ -1141,7 +1157,6 @@ class SummarizerProcessor(BaseProcessor):
             metadata = {
                 "provider": self.provider,
                 "model": self.model,
-                "style": style,
                 "input_length": len(text),
                 "output_length": len(result_stats["summary"]),
                 "compression_ratio": compression_ratio,
@@ -1201,7 +1216,6 @@ class SummarizerProcessor(BaseProcessor):
                 metadata={
                     "provider": self.provider,
                     "model": self.model,
-                    "style": style,
                     "processing_time": processing_time,
                     "cancelled": True,
                 },
@@ -1233,7 +1247,6 @@ class SummarizerProcessor(BaseProcessor):
                 metadata={
                     "provider": self.provider,
                     "model": self.model,
-                    "style": style,
                     "processing_time": processing_time,
                 },
                 dry_run=dry_run,

@@ -1,41 +1,151 @@
-Analyze the relationships and connections within and across the following documents:
+You are an expert relationship analyst tasked with mapping connections, influences, and interdependencies within a document or transcript.
 
-## Inter-Document Relationships
-- Shared topics and themes
-- Contradictory viewpoints
-- Complementary information
-- Chronological connections
-- Causal relationships
+CRITICAL: You must base your analysis ONLY on the actual content provided below. Do not add information, names, or details that are not explicitly present in the source text. If you're unsure about any detail, state that explicitly rather than making assumptions.
 
-## Entity Relationships
-- People connections (collaborations, conflicts, hierarchies)
-- Organization affiliations and partnerships
-- Geographic relationships
-- Temporal relationships (before/after, simultaneous)
+Your goal is to identify and analyze all types of relationships between people, ideas, organizations, events, and concepts mentioned in the content, revealing networks of influence, causation, and interdependence.
 
-## Concept Relationships
-- Hierarchical relationships (parent/child concepts)
-- Causal connections (cause and effect)
-- Similarity and difference patterns
-- Dependency relationships
-- Influence networks
+Analyze the transcript at the bottom of this prompt and output a response of no more than {MAX_TOKENS} structured as follows:
 
-## Information Flow
-- Source and citation patterns
-- Information propagation paths
-- Authority and credibility chains
-- Knowledge gaps and missing links
+## RELATIONSHIP ANALYSIS
 
-## Network Analysis
-- Central nodes (most connected entities/concepts)
-- Clustering patterns
-- Bridge connections between clusters
-- Isolated or peripheral elements
+### 🤝 People & Social Networks
 
-## Relationship Strength
-- Strong relationships (high confidence, multiple sources)
-- Weak relationships (tentative, single source)
-- Potential relationships (inferred but not explicit)
-- Conflicting relationships (contradictory evidence)
+#### 👥 Direct Relationships
+- **[Person A] ↔ [Person B]**
+  - Type of relationship (colleague, mentor, critic, etc.)
+  - Nature of interaction described
+  - Context and significance
+  - Direction of influence (mutual, one-way, unclear)
 
-Present findings as a network analysis with relationship types, strength indicators, and supporting evidence.
+#### 🏢 Professional Networks
+- **Institutional Affiliations**
+  - Who works where or is associated with what organization
+  - Roles and hierarchies described
+  - Collaborative or competitive relationships
+
+#### 🎭 Influence Patterns
+- **Intellectual Influences**: Who influences whom in terms of ideas
+- **Authority Relationships**: Power dynamics and decision-making chains
+- **Mentorship/Teaching**: Knowledge transfer relationships
+
+### 💡 Concept & Idea Relationships
+
+#### 🔗 Conceptual Dependencies
+- **Prerequisites**: Concepts that must be understood before others
+- **Foundations**: Base ideas that support multiple other concepts
+- **Derived Ideas**: Concepts that emerge from combining others
+
+#### ⚡ Causal Relationships
+- **Direct Causation**: A directly causes B
+- **Indirect Causation**: A influences B through intermediary C
+- **Correlation**: A and B appear together but causation unclear
+- **Feedback Loops**: Circular or reinforcing relationships
+
+#### 🔄 Conceptual Tensions
+- **Contradictions**: Ideas that directly oppose each other
+- **Trade-offs**: Situations where choosing A precludes B
+- **Paradoxes**: Seemingly contradictory ideas that both appear true
+- **Unresolved Conflicts**: Tensions without clear resolution
+
+### 🏛️ Organizational & Institutional Relationships
+
+#### 🤝 Inter-organizational Dynamics
+- **Partnerships**: Collaborative relationships between organizations
+- **Competition**: Competitive or adversarial relationships
+- **Dependencies**: One organization relies on another
+- **Supply Chains**: Resource or service provision relationships
+
+#### 📊 Hierarchical Structures
+- **Reporting Lines**: Who reports to whom
+- **Decision Authority**: Who has power over what decisions
+- **Resource Control**: Who controls what resources
+
+### ⏰ Temporal Relationships
+
+#### 📅 Sequential Relationships
+- **Chronological Order**: Events or ideas in time sequence
+- **Prerequisite Timing**: What must happen before what
+- **Simultaneous Events**: Things happening at the same time
+
+#### 🔄 Cyclical Patterns
+- **Recurring Themes**: Ideas that appear repeatedly
+- **Seasonal or Periodic**: Relationships that vary over time
+- **Evolutionary**: How relationships change over time
+
+### 🌍 Geographic & Spatial Relationships
+
+#### 📍 Location-based Connections
+- **Regional Influences**: How geography affects relationships
+- **Proximity Effects**: Impact of physical closeness
+- **Cross-border Relationships**: International or cross-regional connections
+
+### 💰 Economic & Resource Relationships
+
+#### 💸 Financial Dependencies
+- **Funding Relationships**: Who funds whom
+- **Economic Incentives**: How money influences behavior
+- **Resource Sharing**: How resources are distributed or shared
+
+#### 📈 Market Relationships
+- **Competitive Dynamics**: Market-based relationships
+- **Value Chains**: How value flows between entities
+- **Economic Ecosystems**: Broader economic interdependencies
+
+### 🔬 Evidential Relationships
+
+#### 📊 Supporting Evidence
+- **Data to Conclusions**: How evidence supports claims
+- **Example to Principle**: How specific cases illustrate general rules
+- **Theory to Application**: How abstract ideas connect to practical use
+
+#### ❓ Evidence Gaps
+- **Unsupported Claims**: Assertions without clear evidence
+- **Weak Connections**: Tenuous relationships between evidence and conclusions
+- **Missing Links**: Logical gaps in argument chains
+
+### 🕸️ Network Analysis
+
+#### 🎯 Central Nodes
+- **Key People**: Individuals with many connections
+- **Hub Concepts**: Ideas that connect to many others
+- **Critical Organizations**: Institutions central to multiple relationships
+
+#### 🔗 Connection Patterns
+- **Dense Clusters**: Groups with many internal connections
+- **Bridge Connections**: Relationships that connect different clusters
+- **Isolated Entities**: People or ideas with few connections
+
+#### 📊 Relationship Strength
+- **Strong Ties**: Frequent, important, or influential relationships
+- **Weak Ties**: Occasional or minor connections
+- **Potential Relationships**: Suggested but not explicit connections
+
+### 🧭 Relationship Implications
+
+#### ⚡ Power Dynamics
+- **Influence Flows**: How power moves through the network
+- **Gatekeepers**: Who controls access to what
+- **Power Imbalances**: Asymmetric relationships
+
+#### 🎯 Strategic Considerations
+- **Key Relationships**: Most important connections for understanding
+- **Vulnerable Dependencies**: Relationships that create risks
+- **Opportunity Connections**: Relationships that could be leveraged
+
+### 🔍 Analytical Insights
+
+#### 📈 Relationship Trends
+- **Strengthening Bonds**: Relationships growing stronger
+- **Weakening Connections**: Relationships under strain
+- **Emerging Relationships**: New connections forming
+
+#### 🧩 Missing Relationships
+- **Expected but Absent**: Relationships you'd expect to see
+- **Potential Synergies**: Connections that could be valuable
+- **Unexplored Dependencies**: Relationships that aren't fully examined
+
+REMINDER: Base your entire relationship analysis strictly on the content provided below. Do not introduce external information, assume relationships not present, or reference connections not explicitly mentioned in the source material.
+
+Here is the text of the file:
+
+{TEXT}

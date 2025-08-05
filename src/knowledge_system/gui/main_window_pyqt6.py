@@ -13,8 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QCloseEvent
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QCloseEvent, QIcon
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -72,7 +71,7 @@ class MainWindow(QMainWindow):
 
         # Initialize other attributes
         self.message_queue: queue.Queue[Any] = queue.Queue()
-        self.active_threads: List[Any] = []
+        self.active_threads: list[Any] = []
 
         # Setup UI
         self._setup_ui()
@@ -341,7 +340,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Could not save session state: {e}")
 
-    def closeEvent(self, event: Optional[QCloseEvent]) -> None:
+    def closeEvent(self, event: QCloseEvent | None) -> None:
         """Handle window close event."""
         try:
             # Save session before closing
@@ -378,6 +377,8 @@ def launch_gui() -> None:
         app.setApplicationName("Knowledge_Chipper")
         app.setApplicationDisplayName("Knowledge_Chipper")
         app.setApplicationVersion("1.0")
+        app.setOrganizationName("Knowledge_Chipper")
+        app.setOrganizationDomain("knowledge-chipper.local")
 
         # Set custom application icon
         app_icon = get_app_icon()

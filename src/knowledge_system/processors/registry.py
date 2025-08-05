@@ -1,21 +1,22 @@
-from typing import Dict, List, Optional, Type, Union
-from pathlib import Path
 import re
+from pathlib import Path
+from typing import Dict, List, Optional, Type, Union
+
 from knowledge_system.processors.base import BaseProcessor
-from knowledge_system.processors.youtube_metadata import YouTubeMetadataProcessor
-from knowledge_system.processors.youtube_download import YouTubeDownloadProcessor
-from knowledge_system.processors.pdf import PDFProcessor
 from knowledge_system.processors.html import HTMLProcessor
+from knowledge_system.processors.pdf import PDFProcessor
+from knowledge_system.processors.youtube_download import YouTubeDownloadProcessor
+from knowledge_system.processors.youtube_metadata import YouTubeMetadataProcessor
 
 # Registry maps extension or pattern to processor class
-_PROCESSOR_REGISTRY: List[Dict] = []
+_PROCESSOR_REGISTRY: list[dict] = []
 
 
 def register_processor(
-    processor_cls: Type[BaseProcessor],
-    extensions: Optional[List[str]] = None,
-    url_patterns: Optional[List[str]] = None,
-    name: Optional[str] = None,
+    processor_cls: type[BaseProcessor],
+    extensions: list[str] | None = None,
+    url_patterns: list[str] | None = None,
+    name: str | None = None,
 ):
     """Register a processor for file extensions and/or URL patterns."""
     _PROCESSOR_REGISTRY.append(
@@ -29,8 +30,8 @@ def register_processor(
 
 
 def get_processor_for_input(
-    input_path_or_url: Union[str, Path],
-) -> Optional[Type[BaseProcessor]]:
+    input_path_or_url: str | Path,
+) -> type[BaseProcessor] | None:
     """Return the processor class for a given file path or URL."""
     s = str(input_path_or_url)
     # Check URL patterns first
@@ -46,22 +47,22 @@ def get_processor_for_input(
     return None
 
 
-def list_processors() -> List[str]:
+def list_processors() -> list[str]:
     return [entry["name"] for entry in _PROCESSOR_REGISTRY]
 
 
-def get_all_processor_stats() -> Dict[str, Dict]:
+def get_all_processor_stats() -> dict[str, dict]:
     """Get statistics from all registered processor instances."""
     from knowledge_system.processors.base import get_processor_registry
-    
+
     registry = get_processor_registry()
     all_stats = {}
-    
+
     for name in registry.list_processors():
         processor = registry.get(name)
         if processor:
             all_stats[name] = processor.get_stats()
-    
+
     return all_stats
 
 

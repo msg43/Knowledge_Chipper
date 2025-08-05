@@ -116,6 +116,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
     def process(
         self,
         input_data: Any,
+        dry_run: bool = False,
         output_dir: str | Path | None = None,
         output_format: str | None = None,
         download_thumbnails: bool | None = None,

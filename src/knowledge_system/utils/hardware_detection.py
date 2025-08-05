@@ -533,9 +533,7 @@ class HardwareDetector:
 
         return max_concurrent, optimal_batch, recommended_model, recommended_device
 
-    def _recommend_device(
-        self, gpu_type: GPUType, cuda_specs: CUDASpecs | None
-    ) -> str:
+    def _recommend_device(self, gpu_type: GPUType, cuda_specs: CUDASpecs | None) -> str:
         """Recommend the best device for processing."""
         if gpu_type == GPUType.APPLE_SILICON:
             return "mps"
@@ -580,9 +578,11 @@ class HardwareDetector:
                 "sequential_processing": False,
                 "whisper_model": "base",
                 "batch_size": specs.optimal_batch_size // 2,
-                "device": specs.recommended_device
-                if specs.recommended_device != "cpu"
-                else "auto",
+                "device": (
+                    specs.recommended_device
+                    if specs.recommended_device != "cpu"
+                    else "auto"
+                ),
                 "use_coreml": specs.supports_coreml,
                 "pytorch_enable_mps_fallback": True,
                 "tokenizers_parallelism": False,

@@ -4,7 +4,7 @@ import os
 from typing import Any, Optional
 
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QPixmap
+from PyQt6.QtGui import QCloseEvent, QFont, QPixmap
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -52,7 +52,7 @@ class OllamaInstallDialog(QDialog):
         if custom_icon:
             self.setWindowIcon(custom_icon)
 
-        self.install_worker = None
+        self.install_worker: OllamaInstallWorker | None = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -158,7 +158,7 @@ class OllamaInstallDialog(QDialog):
         self.install_btn.setEnabled(True)
         self.cancel_btn.setText("Close")
 
-    def closeEvent(self, event: "QEvent"):
+    def closeEvent(self, event: QCloseEvent) -> None:
         """Handle dialog close event."""
         if self.install_worker and self.install_worker.isRunning():
             msg_box = QMessageBox(self)
@@ -220,7 +220,7 @@ class ModelDownloadDialog(QDialog):
         super().__init__(parent)
         self.model_name = model_name
         self.model_info = model_info
-        self.download_worker = None
+        self.download_worker: ModelDownloadWorker | None = None
 
         self.setWindowTitle("Download AI Model")
         self.setModal(True)
@@ -350,7 +350,7 @@ and available for future use.</i></p>
         self.download_btn.setEnabled(True)
         self.cancel_btn.setText("Close")
 
-    def closeEvent(self, event: "QEvent"):
+    def closeEvent(self, event: QCloseEvent) -> None:
         """Handle dialog close event."""
         if self.download_worker and self.download_worker.isRunning():
             reply = QMessageBox.question(
@@ -381,7 +381,7 @@ class OllamaServiceDialog(QDialog):
         self.setMinimumHeight(200)
 
         self.ollama_manager = get_ollama_manager()
-        self.start_worker = None
+        self.start_worker: OllamaStartWorker | None = None
 
         self._setup_ui()
 
@@ -686,7 +686,7 @@ class ProcessingProgressDialog(QDialog):
             self.processing_worker.wait(2000)  # Wait up to 2 seconds
         self.reject()
 
-    def closeEvent(self, event: "QEvent"):
+    def closeEvent(self, event: QCloseEvent) -> None:
         """Handle dialog close event with improved UX."""
         if self.processing_worker and self.processing_worker.isRunning():
             reply = QMessageBox.question(
@@ -918,7 +918,7 @@ class ModelDownloadDialog(QDialog):
     def __init__(self, model_name: str, parent=None) -> None:
         super().__init__(parent)
         self.model_name = model_name
-        self.download_worker = None
+        self.download_worker: ModelDownloadWorker | None = None
         self.setWindowTitle("Download Model")
         self.setModal(True)
         self.setMinimumWidth(500)

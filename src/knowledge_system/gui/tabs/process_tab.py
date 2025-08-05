@@ -50,7 +50,7 @@ class ProcessPipelineWorker(QThread):
     def run(self) -> None:
         """Run the complete processing pipeline."""
         try:
-            results: Dict[str, Any] = {
+            results: dict[str, Any] = {
                 "transcribed": [],
                 "summarized": [],
                 "moc_generated": [],
@@ -276,7 +276,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
 
     def __init__(self, parent: Any = None) -> None:
         # Initialize attributes before calling super() to prevent AttributeError
-        self.processing_worker = None
+        self.processing_worker: ProcessPipelineWorker | None = None
         self.gui_settings = get_gui_settings_manager()
         self.tab_name = "Process Pipeline"
 
@@ -530,6 +530,16 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         group = QGroupBox("Processing Progress")
         layout = QVBoxLayout()
 
+        # Overall progress bar
+        self.overall_progress = QProgressBar()
+        self.overall_progress.setVisible(False)
+        layout.addWidget(self.overall_progress)
+
+        # Status label
+        self.status_label = QLabel("Ready to process")
+        self.status_label.setStyleSheet("font-weight: bold; color: #333;")
+        layout.addWidget(self.status_label)
+
         # File progress list with improved size policy
         self.file_progress_list = QListWidget()
         self.file_progress_list.setMinimumHeight(150)
@@ -718,13 +728,13 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         if directory:
             self.output_directory.setText(directory)
 
-    def _clear_progress(self):
+    def _clear_progress(self) -> None:
         """Clear the progress display."""
         self.file_progress_list.clear()
         self.overall_progress.setVisible(False)
         self.status_label.setText("Ready to process")
 
-    def _toggle_pause(self):
+    def _toggle_pause(self) -> None:
         """Toggle pause/resume processing."""
         if self.processing_worker and self.processing_worker.isRunning():
             # Toggle pause state (implementation would depend on worker)
@@ -745,7 +755,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             else:
                 self.append_log("⚠ Pause/resume not supported by current worker")
 
-    def _stop_processing(self):
+    def _stop_processing(self) -> None:
         """Stop the current processing operation."""
         if self.processing_worker:
             self.processing_worker.should_stop = True
@@ -844,7 +854,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
                 f"  Summarization: {config['summarization_provider']} {config['summarization_model']}"
             )
 
-    def _update_progress(self, current: int, total: int, status: str):
+    def _update_progress(self, current: int, total: int, status: str) -> None:
         """Update progress display."""
         self.overall_progress.setValue(current)
         self.overall_progress.setMaximum(total)
@@ -857,7 +867,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         self.file_progress_list.scrollToBottom()
         self.append_log(message)
 
-    def _processing_finished(self, results: dict[str, Any]):
+    def _processing_finished(self, results: dict[str, Any]) -> None:
         """Handle processing completion."""
         self.set_processing_state(False)
         self.stop_btn.setEnabled(False)
@@ -890,7 +900,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
                 f"Successfully processed all {results['total_files']} files!",
             )
 
-    def _processing_error(self, error: str):
+    def _processing_error(self, error: str) -> None:
         """Handle processing error."""
         self.set_processing_state(False)
         self.stop_btn.setEnabled(False)
@@ -980,6 +990,6 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         except Exception as e:
             logger.error(f"Failed to save settings for {self.tab_name} tab: {e}")
 
-    def _on_setting_changed(self):
+    def _on_setting_changed(self) -> None:
         """Called when any setting changes to automatically save."""
         self._save_settings()

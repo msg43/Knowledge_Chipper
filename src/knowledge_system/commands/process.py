@@ -6,13 +6,13 @@ Handles comprehensive file processing with transcription, summarization, and MOC
 
 import sys
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 import click
 
 from ..logger import log_system_event
-from .transcribe import format_transcript_content
-from .common import CLIContext, pass_context, console, logger
+from .common import CLIContext, console, logger, pass_context
+from .transcribe import _generate_obsidian_link, format_transcript_content
 
 
 @click.command()
@@ -79,12 +79,12 @@ from .common import CLIContext, pass_context, console, logger
 def process(
     ctx: CLIContext,
     input_path: Path,
-    output: Optional[Path],
+    output: Path | None,
     transcribe: bool,
     summarize: bool,
     moc: bool,
     recursive: bool,
-    patterns: List[str],
+    patterns: list[str],
     transcription_model: str,
     summarization_model: str,
     device: str,
@@ -128,7 +128,9 @@ def process(
 
     # Determine output path
     if output is None:
-        console.print("[red]✗ Error: Output directory is required. Use --output to specify where processed files should be saved.[/red]")
+        console.print(
+            "[red]✗ Error: Output directory is required. Use --output to specify where processed files should be saved.[/red]"
+        )
         sys.exit(1)
 
     # Get list of files to process
@@ -158,8 +160,7 @@ def process(
         return
 
     if not ctx.quiet:
-        console.print(
-            f"[dim]Found {len(files_to_process)} files to process[/dim]")
+        console.print(f"[dim]Found {len(files_to_process)} files to process[/dim]")
 
     # Log processing start
     log_system_event(
@@ -176,21 +177,21 @@ def process(
     )
 
     # Track processing results
-    results = {
+    results: dict[str, list[Any]] = {
         "transcribed": [],
         "summarized": [],
         "moc_generated": [],
-        "errors": []
+        "errors": [],
     }
 
     # Track files for MOC generation
-    moc_input_files = []
+    moc_input_files: list[Path] = []
 
     try:
         # Import processors
         from ..processors.audio_processor import AudioProcessor
-        from ..processors.summarizer import SummarizerProcessor
         from ..processors.moc import MOCProcessor
+        from ..processors.summarizer import SummarizerProcessor
 
         # Create processors
         audio_processor = AudioProcessor(device=device)
@@ -221,8 +222,7 @@ def process(
                     ".mkv",
                 ]:
                     if not ctx.quiet:
-                        console.print(
-                            f"[blue]Transcribing: {file_path.name}[/blue]")
+                        console.print(f"[blue]Transcribing: {file_path.name}[/blue]")
 
                     result = audio_processor.process(file_path, device=device)
                     if result.success:
@@ -239,6 +239,7 @@ def process(
                             "md",
                             file_path,
                             timestamps=True,
+                            output_dir=output,
                         )
 
                         with open(transcript_file, "w", encoding="utf-8") as f:
@@ -264,7 +265,9 @@ def process(
                 summary_path = None
                 if summarize:
                     # Determine what to summarize
-                    input_for_summary = transcript_path if transcript_path else file_path
+                    input_for_summary = (
+                        transcript_path if transcript_path else file_path
+                    )
 
                     if not ctx.quiet:
                         console.print(
@@ -277,7 +280,16 @@ def process(
                     if result.success:
                         # Save summary
                         # Clean filename by removing hyphens for better readability
-                        clean_filename_for_file = input_for_summary.stem.replace("-", "_")
+                        clean_filename_for_file = input_for_summary.stem.replace(
+                            "-", "_"
+                        )
+
+                        # If input file is a transcript, remove _transcript suffix for proper naming
+                        if clean_filename_for_file.endswith("_transcript"):
+                            clean_filename_for_file = clean_filename_for_file[
+                                :-11
+                            ]  # Remove "_transcript"
+
                         summary_file = output / f"{clean_filename_for_file}_summary.md"
                         summary_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -289,6 +301,18 @@ def process(
                         content += f"**Provider:** {result.metadata.get('provider', 'unknown')}\n"
                         content += f"**Generated:** {result.metadata.get('timestamp', 'unknown')}\n\n"
                         content += "---\n\n"
+
+                        # Add link to corresponding transcript
+                        base_filename = input_for_summary.stem
+                        # If filename ends with _transcript, remove it to get base name
+                        if base_filename.endswith("_transcript"):
+                            base_filename = base_filename[:-11]  # Remove "_transcript"
+                        transcript_link = _generate_obsidian_link(
+                            base_filename, "transcript", output
+                        )
+                        if transcript_link:
+                            content += f"## Related Documents\n\n{transcript_link}\n\n"
+
                         content += result.data
 
                         with open(summary_file, "w", encoding="utf-8") as f:
@@ -354,8 +378,7 @@ def process(
                             f"[green]✓ Map of Content generated from {len(moc_input_files)} files[/green]"
                         )
                 else:
-                    results["errors"].append(
-                        f"MOC generation failed: {result.errors}")
+                    results["errors"].append(f"MOC generation failed: {result.errors}")
                     if not ctx.quiet:
                         console.print(
                             f"[red]✗ MOC generation failed: {result.errors}[/red]"
@@ -372,8 +395,7 @@ def process(
             console.print(
                 f"[dim]Files transcribed: {len(results['transcribed'])}[/dim]"
             )
-            console.print(
-                f"[dim]Files summarized: {len(results['summarized'])}[/dim]")
+            console.print(f"[dim]Files summarized: {len(results['summarized'])}[/dim]")
             if results["moc_generated"]:
                 console.print(
                     f"[dim]MOC generated from: {len(results['moc_generated'])} files[/dim]"
@@ -402,5 +424,6 @@ def process(
         console.print(f"[red]✗ Unexpected error during processing:[/red] {e}")
         if ctx.verbose:
             import traceback
+
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
-        sys.exit(1) 
+        sys.exit(1)

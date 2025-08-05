@@ -1,48 +1,91 @@
-Analyze the following documents and extract all significant entities with detailed information:
+You are an expert entity extraction analyst tasked with identifying and categorizing all significant entities from a document or transcript.
 
-## People
-- Names (full names, nicknames, titles)
-- Roles and affiliations
-- Relationships to other people
-- Key actions or contributions
-- Contact information if available
+CRITICAL: You must base your analysis ONLY on the actual content provided below. Do not add information, names, or details that are not explicitly present in the source text. If you're unsure about any detail, state that explicitly rather than making assumptions.
 
-## Organizations
-- Company/institution names
-- Types and industries
-- Key personnel
-- Relationships to other entities
-- Notable activities or decisions
+Your goal is to systematically extract and categorize all meaningful entities mentioned in the content, including people, organizations, places, concepts, technologies, and other significant items.
 
-## Locations
-- Geographic places (cities, countries, regions)
-- Specific addresses or venues
-- Virtual locations (websites, platforms)
-- Significance and context
+Analyze the transcript at the bottom of this prompt and output a response of no more than {MAX_TOKENS} structured as follows:
 
-## Products & Technologies
-- Names and descriptions
-- Versions or specifications
-- Manufacturers or creators
-- Usage contexts
-- Technical details
+## ENTITY EXTRACTION ANALYSIS
 
-## Events & Dates
-- Specific events and milestones
-- Dates and timeframes
-- Participants and outcomes
-- Significance and impact
+### 👥 People
+- List all individuals mentioned by name in the content
+- For each person, include:
+  • Full name as mentioned
+  • Role or description if provided
+  • Context of mention (brief quote or paraphrase)
+  • Frequency of mention if significant
 
-## Financial & Quantitative Data
-- Numbers, metrics, and statistics
-- Monetary amounts and currencies
-- Percentages and ratios
-- Units of measurement
+### 🏢 Organizations & Institutions
+- List all companies, institutions, governments, or groups mentioned
+- For each organization, include:
+  • Full name as mentioned
+  • Type of organization (company, government, NGO, etc.)
+  • Context of mention
+  • Any relationships to other entities
 
-## Documents & References
-- Cited works and sources
-- Internal document references
-- URLs and external links
-- Media files mentioned
+### 🌍 Geographic Locations
+- List all places, regions, cities, countries mentioned
+- For each location, include:
+  • Name as mentioned
+  • Geographic scope (city, region, country, etc.)
+  • Context of mention
+  • Significance to the main content
 
-Present results in a structured format with entity type, name, context, and relevance score.
+### 💡 Concepts & Ideas
+- List all significant concepts, theories, or abstract ideas
+- For each concept, include:
+  • Name or description
+  • Brief definition based on context
+  • How it relates to the main topic
+  • Any associated frameworks or methodologies
+
+### 🔧 Technologies & Tools
+- List all technologies, software, tools, or technical systems mentioned
+- For each technology, include:
+  • Name as mentioned
+  • Type of technology
+  • Context of use or discussion
+  • Any technical specifications provided
+
+### 📅 Events & Time References
+- List all significant events, dates, or time periods mentioned
+- For each event, include:
+  • Name or description of event
+  • Date or time period if specified
+  • Significance to the content
+  • Participants or stakeholders involved
+
+### 💰 Financial & Economic Entities
+- List all financial instruments, economic indicators, or monetary references
+- For each entity, include:
+  • Name or description
+  • Type (currency, stock, index, etc.)
+  • Values or amounts if specified
+  • Context of discussion
+
+### 📚 Publications & Media
+- List all books, papers, articles, or media references
+- For each publication, include:
+  • Title as mentioned
+  • Author if specified
+  • Type of publication
+  • Relevance to the discussion
+
+### 🔗 Relationships & Connections
+- Identify key relationships between extracted entities
+- Note patterns of connection or interaction
+- Highlight any hierarchical or causal relationships
+- Map entity clusters or networks if apparent
+
+### 📊 Entity Statistics
+- Total entities extracted by category
+- Most frequently mentioned entities
+- Entities that appear in multiple categories
+- Notable absences or gaps in entity coverage
+
+REMINDER: Base your entire analysis strictly on the content provided below. Do not introduce external information, assume details not present, or reference entities not explicitly mentioned in the source material.
+
+Here is the text of the file:
+
+{TEXT}

@@ -497,9 +497,7 @@ class MOCProcessor(BaseProcessor):
 
         return yaml.dump(beliefs_data, default_flow_style=False, sort_keys=False)
 
-    def _load_template(
-        self, template_path: str | Path | None
-    ) -> str | None:
+    def _load_template(self, template_path: str | Path | None) -> str | None:
         """Load and process MOC template with placeholder replacement."""
         if not template_path:
             return None

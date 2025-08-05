@@ -1,45 +1,117 @@
-Analyze the following documents and create a comprehensive Maps of Content (MOC) style knowledge map:
+You are an expert knowledge architect tasked with creating a comprehensive knowledge map (Map of Content/MOC style) from a document or transcript.
 
-## People Mentioned
-For each person, include:
-- Name and role/context
-- Relevance score (1-10) 
-- Key contributions or quotes
-- Files where mentioned
+CRITICAL: You must base your analysis ONLY on the actual content provided below. Do not add information, names, or details that are not explicitly present in the source text. If you're unsure about any detail, state that explicitly rather than making assumptions.
 
-## Core Concepts & Themes
-Extract main ideas with:
-- Clear definitions
-- Importance ranking
-- Cross-document connections
-- Related concepts
+Your goal is to create a structured knowledge map that organizes the content hierarchically, showing relationships between concepts, themes, and ideas in a way that facilitates knowledge navigation and discovery.
 
-## Mental Models & Frameworks
-Identify theoretical concepts:
-- Model/framework name
-- Brief explanation
-- Application context
-- Supporting evidence
+Analyze the transcript at the bottom of this prompt and output a response of no more than {MAX_TOKENS} structured as follows:
 
-## Key Terms & Jargon
-List important terminology:
-- Term and definition
-- Context of usage
-- Frequency across documents
-- Related terms
+## KNOWLEDGE MAP (MOC STYLE)
 
-## Relationships & Connections
-Map how concepts connect:
-- Direct relationships
-- Causal connections
-- Contradictions or tensions
-- Cross-reference patterns
+### 🗺️ Content Overview
+- **Main Topic**: [Central theme or subject matter]
+- **Scope**: [Breadth and depth of coverage]
+- **Perspective**: [Author's viewpoint or approach]
+- **Content Type**: [Format: interview, lecture, article, etc.]
 
-## Actionable Insights
-Extract practical takeaways:
-- Key recommendations
-- Decision frameworks
-- Implementation guidance
-- Success metrics
+### 🌳 Hierarchical Knowledge Structure
 
-Format the output as a structured knowledge map with clear sections and cross-references between related items.
+#### 🎯 Level 1: Core Themes
+List the 3-5 main themes or topic areas covered:
+1. **[Theme Name]**
+   - Brief description of theme
+   - Key concepts within this theme
+   - Percentage of content devoted to this theme
+
+#### 🔍 Level 2: Sub-Topics
+For each core theme, break down into sub-topics:
+- **[Sub-topic Name]**
+  - Main points covered
+  - Supporting details or examples
+  - Cross-references to other sections
+
+#### 📝 Level 3: Specific Concepts
+For each sub-topic, list specific concepts, facts, or ideas:
+- **[Concept Name]**
+  - Definition or explanation as provided
+  - Context of discussion
+  - Related concepts or dependencies
+
+### 🧭 Knowledge Navigation
+
+#### 🔗 Concept Relationships
+- **Prerequisite Knowledge**: What you need to know first
+- **Complementary Concepts**: Ideas that work together
+- **Opposing Views**: Contrasting or conflicting ideas
+- **Sequential Learning**: Logical order for understanding
+
+#### 🏷️ Tag System
+Assign tags to help categorize and find related content:
+- **#fundamental** - Core concepts essential to understanding
+- **#practical** - Actionable ideas or applications
+- **#theoretical** - Abstract concepts or frameworks
+- **#controversial** - Disputed or debated topics
+- **#evidence** - Data, studies, or empirical support
+
+### 🎨 Mental Models & Frameworks
+Extract thinking frameworks that can be applied elsewhere:
+- **[Framework Name]**
+  - Core principle or rule
+  - When to apply it
+  - Examples from the content
+  - Potential applications beyond this context
+
+### 🧠 Key Insights Hub
+Central insights that connect multiple themes:
+- **Cross-cutting Insights**: Ideas that span multiple sections
+- **Meta-insights**: Insights about how to think about the topic
+- **Actionable Takeaways**: Practical applications or next steps
+- **Open Questions**: Areas requiring further exploration
+
+### 👥 Knowledge Contributors
+People whose ideas or work are referenced:
+- **[Person Name]**: Role, contribution, or perspective shared
+- **[Person Name]**: Specific ideas or quotes attributed
+
+### 📚 Knowledge Sources & References
+Information sources mentioned or implied:
+- **Primary Sources**: Direct research, data, or firsthand accounts
+- **Secondary Sources**: Books, articles, or other referenced materials
+- **Experiential Knowledge**: Personal experiences or case studies
+
+### 🗂️ Knowledge Organization
+
+#### 📁 By Importance
+- **Critical**: Must-know concepts for basic understanding
+- **Important**: Enhances understanding significantly
+- **Supplementary**: Provides additional context or depth
+
+#### 📁 By Application
+- **Immediately Actionable**: Can be applied right away
+- **Requires Setup**: Needs preparation or resources
+- **Long-term Thinking**: Strategic or philosophical concepts
+
+#### 📁 By Certainty
+- **Well-established**: Widely accepted or proven concepts
+- **Emerging**: New or evolving ideas
+- **Speculative**: Hypotheses or uncertain claims
+
+### 🔄 Knowledge Connections
+Map how different sections relate to each other:
+- **Forward References**: "This will be important later for..."
+- **Backward References**: "This builds on the earlier concept of..."
+- **Parallel Concepts**: "This is similar to the idea of..."
+- **Contrasting Ideas**: "This differs from the previous point because..."
+
+### 📈 Learning Pathways
+Suggested routes through the knowledge:
+1. **Beginner Path**: Start with fundamentals, build gradually
+2. **Expert Path**: Focus on advanced concepts and nuances
+3. **Practical Path**: Emphasize actionable insights and applications
+4. **Theoretical Path**: Deep dive into frameworks and models
+
+REMINDER: Base your entire knowledge map strictly on the content provided below. Do not introduce external information, assume details not present, or reference concepts not explicitly mentioned in the source material.
+
+Here is the text of the file:
+
+{TEXT}

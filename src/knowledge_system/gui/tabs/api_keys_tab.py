@@ -29,7 +29,7 @@ class APIKeysTab(BaseTab):
 
     def __init__(self, parent: Any = None) -> None:
         # Initialize _actual_api_keys before calling super().__init__
-        self._actual_api_keys: Dict[str, str] = {}
+        self._actual_api_keys: dict[str, str] = {}
 
         # Initialize settings manager for session persistence
         from ..core.settings_manager import get_gui_settings_manager

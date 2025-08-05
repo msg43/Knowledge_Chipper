@@ -7,10 +7,10 @@ duplicate code across processors and provide consistent error handling and respo
 
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
-from collections.abc import Callable
 
 import requests
 
@@ -43,11 +43,9 @@ class BaseLLMProvider(ABC):
     def __init__(
         self,
         model: str | None = None,
-        max_tokens: int = 1000,
         temperature: float = 0.3,
     ) -> None:
         self.model = model
-        self.max_tokens = max_tokens
         self.temperature = temperature
         self.settings = get_settings()
 
@@ -70,10 +68,9 @@ class OpenAIProvider(BaseLLMProvider):
     def __init__(
         self,
         model: str | None = None,
-        max_tokens: int = 1000,
         temperature: float = 0.3,
     ) -> None:
-        super().__init__(model, max_tokens, temperature)
+        super().__init__(model, temperature)
         self.model = model or self.settings.llm.model or "gpt-3.5-turbo"
 
     def call(
@@ -88,7 +85,6 @@ class OpenAIProvider(BaseLLMProvider):
             response = client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=self.max_tokens,
                 temperature=self.temperature,
             )
 
@@ -120,10 +116,9 @@ class AnthropicProvider(BaseLLMProvider):
     def __init__(
         self,
         model: str | None = None,
-        max_tokens: int = 1000,
         temperature: float = 0.3,
     ) -> None:
-        super().__init__(model, max_tokens, temperature)
+        super().__init__(model, temperature)
         self.model = model or self.settings.llm.model or "claude-3-haiku-20240307"
 
     def call(
@@ -139,7 +134,7 @@ class AnthropicProvider(BaseLLMProvider):
 
             response = client.messages.create(
                 model=self.model,
-                max_tokens=self.max_tokens,
+                max_tokens=4000,  # Set a reasonable default for Anthropic since it's required
                 temperature=self.temperature,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -185,10 +180,9 @@ class LocalLLMProvider(BaseLLMProvider):
     def __init__(
         self,
         model: str | None = None,
-        max_tokens: int = 1000,
         temperature: float = 0.3,
     ) -> None:
-        super().__init__(model, max_tokens, temperature)
+        super().__init__(model, temperature)
         self.model = (
             model or self.settings.llm.local_model or "qwen2.5-coder:7b-instruct"
         )
@@ -230,7 +224,6 @@ class LocalLLMProvider(BaseLLMProvider):
                 "stream": False,
                 "options": {
                     "temperature": self.temperature,
-                    "num_predict": self.max_tokens,
                     "top_k": 40,
                     "top_p": 0.9,
                     "repeat_penalty": 1.1,
@@ -301,7 +294,7 @@ class LocalLLMProvider(BaseLLMProvider):
             payload = {
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": self.max_tokens,
+                # max_tokens removed - rely on prompt instructions
                 "temperature": self.temperature,
                 "stream": False,
             }
@@ -350,16 +343,15 @@ class LLMProviderFactory:
     def create_provider(
         provider: str,
         model: str | None = None,
-        max_tokens: int = 1000,
         temperature: float = 0.3,
     ) -> BaseLLMProvider:
         """Create an LLM provider instance."""
         if provider == "openai":
-            return OpenAIProvider(model, max_tokens, temperature)
+            return OpenAIProvider(model, temperature)
         elif provider == "anthropic":
-            return AnthropicProvider(model, max_tokens, temperature)
+            return AnthropicProvider(model, temperature)
         elif provider == "local":
-            return LocalLLMProvider(model, max_tokens, temperature)
+            return LocalLLMProvider(model, temperature)
         else:
             raise ValueError(f"Unsupported provider: {provider}")
 
@@ -371,13 +363,10 @@ class UnifiedLLMClient:
         self,
         provider: str = "openai",
         model: str | None = None,
-        max_tokens: int = 1000,
         temperature: float = 0.3,
     ) -> None:
         self.provider_name = provider
-        self.provider = LLMProviderFactory.create_provider(
-            provider, model, max_tokens, temperature
-        )
+        self.provider = LLMProviderFactory.create_provider(provider, model, temperature)
 
     def generate(
         self, prompt: str, progress_callback: Callable | None = None
@@ -406,10 +395,7 @@ class UnifiedLLMClient:
         """Get the current model name."""
         return self.provider.model or "unknown"
 
-    @property
-    def max_tokens(self) -> int:
-        """Get the current max tokens setting."""
-        return self.provider.max_tokens
+    # max_tokens property removed - no longer used for API constraints
 
     @property
     def temperature(self) -> float:
@@ -422,12 +408,11 @@ def call_llm(
     prompt: str,
     provider: str = "openai",
     model: str | None = None,
-    max_tokens: int = 1000,
     temperature: float = 0.3,
     progress_callback: Callable | None = None,
 ) -> LLMResponse:
     """Convenience function to call any LLM provider."""
-    client = UnifiedLLMClient(provider, model, max_tokens, temperature)
+    client = UnifiedLLMClient(provider, model, temperature)
     return client.generate(prompt, progress_callback)
 
 
@@ -435,10 +420,9 @@ def call_llm_dict(
     prompt: str,
     provider: str = "openai",
     model: str | None = None,
-    max_tokens: int = 1000,
     temperature: float = 0.3,
     progress_callback: Callable | None = None,
 ) -> dict[str, Any]:
     """Convenience function to call any LLM provider and return dictionary."""
-    client = UnifiedLLMClient(provider, model, max_tokens, temperature)
+    client = UnifiedLLMClient(provider, model, temperature)
     return client.generate_dict(prompt, progress_callback)

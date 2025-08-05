@@ -5,15 +5,15 @@ from .processing_workers import (
     EnhancedTranscriptionWorker,
     ProcessingReport,
     WorkerThread,
+    get_youtube_logger,
     setup_youtube_logger,
-    get_youtube_logger
 )
 
 __all__ = [
-    'EnhancedSummarizationWorker',
-    'EnhancedTranscriptionWorker', 
-    'ProcessingReport',
-    'WorkerThread',
-    'setup_youtube_logger',
-    'get_youtube_logger'
-] 
+    "EnhancedSummarizationWorker",
+    "EnhancedTranscriptionWorker",
+    "ProcessingReport",
+    "WorkerThread",
+    "setup_youtube_logger",
+    "get_youtube_logger",
+]

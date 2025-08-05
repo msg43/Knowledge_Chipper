@@ -322,9 +322,9 @@ class ProcessingReport:
         file_detail = {
             "input_file": filename,
             "output_file": output_file or "Unknown",
-            "output_type": metadata.get("output_type", "new_file")
-            if metadata
-            else "new_file",
+            "output_type": (
+                metadata.get("output_type", "new_file") if metadata else "new_file"
+            ),
             "status": "success",
         }
         self.file_details.append(file_detail)
