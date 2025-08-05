@@ -226,3 +226,7 @@ settings.yaml
 .specstory/
 *.md.bak
 .cursor/
+
+# Editor backup/recovery files
+*.rslsd
+logs/
