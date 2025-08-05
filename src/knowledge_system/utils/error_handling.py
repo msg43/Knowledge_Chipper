@@ -6,10 +6,10 @@ duplicate error processing code and ensure consistent error reporting.
 """
 
 import time
+from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
-from collections.abc import Callable
 
 from ..errors import ProcessingError, ValidationError
 from ..logger import get_logger

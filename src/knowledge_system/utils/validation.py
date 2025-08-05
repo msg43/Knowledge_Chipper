@@ -90,9 +90,7 @@ def validate_document_input(input_path: str | Path) -> bool:
     return validate_file_input(input_path, document_formats)
 
 
-def can_process_file(
-    input_path: str | Path, supported_formats: list[str]
-) -> bool:
+def can_process_file(input_path: str | Path, supported_formats: list[str]) -> bool:
     """
     Check if a file can be processed based on its extension.
 
