@@ -2,8 +2,8 @@
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import yaml
 
+import yaml
 from PyQt6.QtCore import QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -35,7 +35,13 @@ logger = get_logger(__name__)
 
 def _analysis_type_to_filename(analysis_type: str) -> str:
     """Convert analysis type to template filename."""
-    return analysis_type.lower().replace('(', '').replace(')', '').replace(' ', '_').strip()
+    return (
+        analysis_type.lower()
+        .replace("(", "")
+        .replace(")", "")
+        .replace(" ", "_")
+        .strip()
+    )
 
 
 class EnhancedSummarizationWorker(QThread):
@@ -225,21 +231,31 @@ class EnhancedSummarizationWorker(QThread):
 
                 # Process the file
                 template_path = self.gui_settings.get("template_path", None)
-                logger.info(f"🔧 DEBUG: template_path from gui_settings: '{template_path}' (type: {type(template_path)})")
-                
+                logger.info(
+                    f"🔧 DEBUG: template_path from gui_settings: '{template_path}' (type: {type(template_path)})"
+                )
+
                 # If no custom template provided, determine template based on analysis type
                 if not template_path or not template_path.strip():
-                    analysis_type = self.gui_settings.get("analysis_type", "Document Summary")
-                    
+                    analysis_type = self.gui_settings.get(
+                        "analysis_type", "Document Summary"
+                    )
+
                     # Convert analysis type to template filename dynamically
                     filename = _analysis_type_to_filename(analysis_type)
                     template_path = f"config/prompts/{filename}.txt"
-                    logger.info(f"🔧 Auto-determined template for '{analysis_type}': {template_path}")
-                
-                if template_path and template_path.strip():  # Check for empty/whitespace strings
+                    logger.info(
+                        f"🔧 Auto-determined template for '{analysis_type}': {template_path}"
+                    )
+
+                if (
+                    template_path and template_path.strip()
+                ):  # Check for empty/whitespace strings
                     template_path = Path(template_path)
                     logger.info(f"🔧 DEBUG: template_path as Path: '{template_path}'")
-                    logger.info(f"🔧 DEBUG: template_path absolute: '{template_path.absolute()}'")
+                    logger.info(
+                        f"🔧 DEBUG: template_path absolute: '{template_path.absolute()}'"
+                    )
                     if not template_path.exists():
                         logger.error(f"❌ Template path does not exist: {template_path}")
                         template_path = None
@@ -320,7 +336,7 @@ class EnhancedSummarizationWorker(QThread):
                     # Save the summary to file(s) based on user selection
                     try:
                         actions_completed = []
-                        
+
                         # Handle in-place update if selected
                         if (
                             self.gui_settings.get("update_in_place", False)
@@ -328,43 +344,61 @@ class EnhancedSummarizationWorker(QThread):
                         ):
                             # Generate unified YAML metadata for in-place updates
                             from ...utils.file_io import generate_unified_yaml_metadata
-                            template_path = Path(self.gui_settings.get("template_path")) if self.gui_settings.get("template_path") else None
-                            additional_yaml_fields = generate_unified_yaml_metadata(
-                                file_path_obj, result.data, 
-                                self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18'), 
-                                metadata.get('provider', self.gui_settings.get('provider', 'unknown')), 
-                                metadata, template_path, 
-                                self.gui_settings.get("analysis_type", "document summary")
+
+                            template_path = (
+                                Path(self.gui_settings.get("template_path"))
+                                if self.gui_settings.get("template_path")
+                                else None
                             )
-                            
+                            additional_yaml_fields = generate_unified_yaml_metadata(
+                                file_path_obj,
+                                result.data,
+                                self.gui_settings.get(
+                                    "model", "gpt-4o-mini-2024-07-18"
+                                ),
+                                metadata.get(
+                                    "provider",
+                                    self.gui_settings.get("provider", "unknown"),
+                                ),
+                                metadata,
+                                template_path,
+                                self.gui_settings.get(
+                                    "analysis_type", "document summary"
+                                ),
+                            )
+
                             # Update existing .md file in-place with YAML fields
                             overwrite_or_insert_summary_section(
                                 file_path_obj, result.data, additional_yaml_fields
                             )
-                            actions_completed.append(f"Updated in-place: {file_path_obj.name}")
-                        
+                            actions_completed.append(
+                                f"Updated in-place: {file_path_obj.name}"
+                            )
+
                         # Handle separate file creation if selected
                         if self.gui_settings.get("create_separate_file", False):
                             # Create new summary file
                             # Clean filename for filesystem compatibility
                             from ...utils.file_io import safe_filename
-                            clean_display_name = file_path_obj.stem.replace("-", " ").replace("_", " ")
-                            clean_filename = safe_filename(f"{clean_display_name}_summary")
-                            
+
+                            clean_display_name = file_path_obj.stem.replace(
+                                "-", " "
+                            ).replace("_", " ")
+                            clean_filename = safe_filename(
+                                f"{clean_display_name}_summary"
+                            )
+
                             # Get output directory and ensure it's a Path object
                             output_dir_setting = self.gui_settings.get("output_dir")
                             if not output_dir_setting:
                                 # Fallback: create summary next to original file
                                 output_file = (
-                                    file_path_obj.parent
-                                    / f"{clean_filename}.md"
+                                    file_path_obj.parent / f"{clean_filename}.md"
                                 )
                             else:
                                 # Convert string path to Path object
                                 output_dir_path = Path(output_dir_setting)
-                                output_file = (
-                                    output_dir_path / f"{clean_filename}.md"
-                                )
+                                output_file = output_dir_path / f"{clean_filename}.md"
 
                             # Ensure output directory exists
                             output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -387,33 +421,55 @@ class EnhancedSummarizationWorker(QThread):
 
                             # Generate unified YAML metadata for separate file
                             from ...utils.file_io import generate_unified_yaml_metadata
-                            template_path = Path(self.gui_settings.get("template_path")) if self.gui_settings.get("template_path") else None
-                            yaml_fields = generate_unified_yaml_metadata(
-                                file_path_obj, result.data, 
-                                self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18'), 
-                                metadata.get('provider', self.gui_settings.get('provider', 'unknown')), 
-                                metadata, template_path, 
-                                self.gui_settings.get("analysis_type", "document summary")
+
+                            template_path = (
+                                Path(self.gui_settings.get("template_path"))
+                                if self.gui_settings.get("template_path")
+                                else None
                             )
-                            
+                            yaml_fields = generate_unified_yaml_metadata(
+                                file_path_obj,
+                                result.data,
+                                self.gui_settings.get(
+                                    "model", "gpt-4o-mini-2024-07-18"
+                                ),
+                                metadata.get(
+                                    "provider",
+                                    self.gui_settings.get("provider", "unknown"),
+                                ),
+                                metadata,
+                                template_path,
+                                self.gui_settings.get(
+                                    "analysis_type", "document summary"
+                                ),
+                            )
+
                             with open(output_file, "w", encoding="utf-8") as f:
                                 # Write YAML frontmatter using unified metadata
                                 f.write("---\n")
                                 for field_name, field_value in yaml_fields.items():
                                     # Handle boolean values properly (don't quote them)
                                     if field_value.lower() in ["true", "false"]:
-                                        f.write(f'{field_name}: {field_value}\n')
+                                        f.write(f"{field_name}: {field_value}\n")
                                     else:
                                         # Escape quotes and other special characters in field values for strings
-                                        escaped_value = str(field_value).replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+                                        escaped_value = (
+                                            str(field_value)
+                                            .replace('"', '\\"')
+                                            .replace("\n", "\\n")
+                                            .replace("\r", "\\r")
+                                        )
                                         # Prevent extremely long field values that could break YAML
                                         if len(escaped_value) > 1000:
                                             escaped_value = escaped_value[:997] + "..."
-                                            logger.warning(f"Truncated long field value for {field_name}")
+                                            logger.warning(
+                                                f"Truncated long field value for {field_name}"
+                                            )
                                         f.write(f'{field_name}: "{escaped_value}"\n')
-                                
+
                                 # Add generation timestamp
                                 from datetime import datetime
+
                                 f.write(f'generated: "{datetime.now().isoformat()}"\n')
                                 f.write("---\n\n")
 
@@ -422,16 +478,22 @@ class EnhancedSummarizationWorker(QThread):
                                     f.write(thumbnail_content + "\n\n")
 
                                 # Add YouTube watch link if this is YouTube content
-                                youtube_url = self._extract_youtube_url_from_file(file_path_obj)
+                                youtube_url = self._extract_youtube_url_from_file(
+                                    file_path_obj
+                                )
                                 if youtube_url:
-                                    f.write(f"**🎥 [Watch on YouTube]({youtube_url})**\n\n")
+                                    f.write(
+                                        f"**🎥 [Watch on YouTube]({youtube_url})**\n\n"
+                                    )
 
                                 # Write the actual summary content
                                 # Use the same clean display name for the content title
                                 f.write(f"# Summary of {clean_display_name}\n\n")
                                 f.write(result.data)
 
-                            actions_completed.append(f"Created separate file: {output_file.name}")
+                            actions_completed.append(
+                                f"Created separate file: {output_file.name}"
+                            )
 
                         # Emit combined progress message
                         if actions_completed:
@@ -511,26 +573,26 @@ class EnhancedSummarizationWorker(QThread):
         if hasattr(self, "cancellation_token") and self.cancellation_token:
             self.cancellation_token.cancel("User requested cancellation")
 
-    def _extract_youtube_url_from_file(self, file_path: Path) -> Optional[str]:
+    def _extract_youtube_url_from_file(self, file_path: Path) -> str | None:
         """
         Extract YouTube URL from a processed file's YAML frontmatter or content.
-        
+
         Looks for YouTube URLs in multiple locations:
         1. 'source' field in YAML frontmatter (for transcript files)
         2. 'url' field in YAML frontmatter
         3. YouTube URLs in the content body
         4. Links in the content (e.g., "Watch on YouTube" links)
-        
+
         Args:
             file_path: Path to the markdown file to check
-            
+
         Returns:
             YouTube URL if found, None otherwise
         """
         try:
             with open(file_path, encoding="utf-8") as f:
                 content = f.read()
-                
+
             # Look for YAML frontmatter first
             if content.startswith("---"):
                 # Find the end of YAML frontmatter
@@ -540,41 +602,46 @@ class EnhancedSummarizationWorker(QThread):
                     if line.strip() == "---":
                         yaml_end_idx = i
                         break
-                        
+
                 if yaml_end_idx != -1:
                     # Extract YAML content
                     yaml_content = "\n".join(lines[1:yaml_end_idx])
-                    
+
                     try:
                         metadata = yaml.safe_load(yaml_content)
                         if isinstance(metadata, dict):
                             # Check common fields that might contain YouTube URLs
-                            for field in ['source', 'url', 'source_url', 'video_url']:
+                            for field in ["source", "url", "source_url", "video_url"]:
                                 source = metadata.get(field, "")
-                                if source and ("youtube.com" in source or "youtu.be" in source):
-                                    logger.debug(f"Found YouTube URL in YAML field '{field}': {source}")
+                                if source and (
+                                    "youtube.com" in source or "youtu.be" in source
+                                ):
+                                    logger.debug(
+                                        f"Found YouTube URL in YAML field '{field}': {source}"
+                                    )
                                     return source
                     except yaml.YAMLError as e:
                         logger.debug(f"YAML parsing failed, trying regex fallback: {e}")
-                
+
             # Fallback: search for YouTube URLs in the content
             import re
+
             youtube_patterns = [
                 r"https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+",
                 r"https?://(?:www\.)?youtu\.be/[\w-]+",
                 r"https?://youtube\.com/watch\?v=[\w-]+",
                 r"https?://youtu\.be/[\w-]+",
             ]
-            
+
             for pattern in youtube_patterns:
                 match = re.search(pattern, content)
                 if match:
                     logger.debug(f"Found YouTube URL in content: {match.group(0)}")
                     return match.group(0)
-                    
+
         except Exception as e:
             logger.debug(f"Could not extract YouTube URL from {file_path}: {e}")
-            
+
         logger.debug(f"No YouTube URL found in {file_path}")
         return None
 
@@ -706,23 +773,25 @@ class SummarizationTab(BaseTab):
         self.gui_settings = get_gui_settings_manager()
         self.tab_name = "Content Analysis"
         super().__init__(parent)
-        
+
     def _load_analysis_types(self) -> list[str]:
         """Load analysis types from config file."""
         from pathlib import Path
-        
+
         config_file = Path("config/dropdown_options.txt")
         try:
             if config_file.exists():
-                with open(config_file, 'r', encoding='utf-8') as f:
+                with open(config_file, encoding="utf-8") as f:
                     content = f.read().strip()
                     if content:
-                        options = [opt.strip() for opt in content.split(',') if opt.strip()]
+                        options = [
+                            opt.strip() for opt in content.split(",") if opt.strip()
+                        ]
                         if options:
                             return options
         except Exception as e:
             logger.warning(f"Failed to load dropdown options from {config_file}: {e}")
-        
+
         # Fallback to default options
         return [
             "Document Summary",
@@ -1048,7 +1117,9 @@ class SummarizationTab(BaseTab):
             "model": model,
             "max_tokens": self.max_tokens_spin.value(),
             "template_path": self.template_path_edit.text(),
-            "output_dir": self.output_edit.text() if self.separate_file_checkbox.isChecked() else None,
+            "output_dir": self.output_edit.text()
+            if self.separate_file_checkbox.isChecked()
+            else None,
             "update_in_place": self.update_md_checkbox.isChecked(),
             "create_separate_file": self.separate_file_checkbox.isChecked(),
             "force_regenerate": self.force_regenerate_checkbox.isChecked(),
@@ -1108,7 +1179,7 @@ class SummarizationTab(BaseTab):
         # Check that at least one output option is selected
         append_selected = self.update_md_checkbox.isChecked()
         separate_file_selected = self.separate_file_checkbox.isChecked()
-        
+
         if not append_selected and not separate_file_selected:
             self.show_warning(
                 "No Output Option Selected",
@@ -1128,7 +1199,7 @@ class SummarizationTab(BaseTab):
                     "Please select an output directory when creating separate summary files.",
                 )
                 return False
-            
+
             if not Path(output_dir).exists():
                 self.show_warning(
                     "Invalid Output Directory",
@@ -1452,18 +1523,24 @@ class SummarizationTab(BaseTab):
         completed_files = getattr(progress, "completed_files", 0)
 
         # Calculate File ETA - use adaptive estimation that learns from actual performance
-        if hasattr(progress, "eta_seconds") and progress.eta_seconds is not None and progress.eta_seconds > 0:
+        if (
+            hasattr(progress, "eta_seconds")
+            and progress.eta_seconds is not None
+            and progress.eta_seconds > 0
+        ):
             # Use the calculated ETA from progress tracking (most accurate)
             file_remaining = progress.eta_seconds
         elif hasattr(progress, "percent") and progress.percent and progress.percent > 1:
             # Use adaptive ETA calculation that accounts for LLM generation patterns
-            file_elapsed = current_time - getattr(self, "_file_start_time", current_time)
-            
+            file_elapsed = current_time - getattr(
+                self, "_file_start_time", current_time
+            )
+
             # Only calculate ETA if we have meaningful elapsed time and progress
             if file_elapsed > 10 and progress.percent > 5:
                 # For LLM generation, use a more conservative approach
                 # The progress often stalls during actual generation, so we need to account for this
-                
+
                 if progress.percent < 75:
                     # Early stages: use linear extrapolation but be conservative
                     estimated_total = (file_elapsed / progress.percent) * 100
@@ -1472,24 +1549,30 @@ class SummarizationTab(BaseTab):
                     # LLM generation phase (75%+): much more conservative
                     # Progress slows down significantly during actual token generation
                     remaining_progress = 100 - progress.percent
-                    
+
                     # Estimate based on current rate but apply a slowdown factor
                     # The closer to 100%, the slower progress typically becomes
-                    slowdown_factor = 1.5 + (progress.percent - 75) * 0.1  # 1.5x to 4.0x slower
-                    
+                    slowdown_factor = (
+                        1.5 + (progress.percent - 75) * 0.1
+                    )  # 1.5x to 4.0x slower
+
                     # Calculate time per percent at current rate
                     time_per_percent = file_elapsed / progress.percent
-                    
+
                     # Apply slowdown for remaining progress
-                    file_remaining = remaining_progress * time_per_percent * slowdown_factor
-                    
+                    file_remaining = (
+                        remaining_progress * time_per_percent * slowdown_factor
+                    )
+
                     # Cap the maximum ETA to avoid ridiculous estimates
-                    file_remaining = min(file_remaining, file_elapsed * 2)  # Max 2x current elapsed time
+                    file_remaining = min(
+                        file_remaining, file_elapsed * 2
+                    )  # Max 2x current elapsed time
             else:
                 file_remaining = 0
         else:
             file_remaining = 0
-            
+
         # Format file ETA
         if file_remaining > 0:
             if file_remaining < 60:
@@ -1498,22 +1581,32 @@ class SummarizationTab(BaseTab):
                 file_eta = f" (ETA: {file_remaining/60:.1f}m)"
             else:
                 file_eta = f" (ETA: {file_remaining/3600:.1f}h)"
-        
+
         # Calculate Batch ETA
         if total_files == 1:
             # Single file: don't show redundant batch ETA
             batch_eta = ""
         else:
             # Multiple files: estimate time for remaining files
-            batch_elapsed = current_time - getattr(self, "_batch_start_time", current_time)
+            batch_elapsed = current_time - getattr(
+                self, "_batch_start_time", current_time
+            )
             if completed_files > 0:
                 # Estimate based on completed files
-                avg_time_per_file = batch_elapsed / (completed_files + (getattr(progress, "percent", 0) / 100.0))
-                remaining_files = total_files - completed_files - (getattr(progress, "percent", 0) / 100.0)
+                avg_time_per_file = batch_elapsed / (
+                    completed_files + (getattr(progress, "percent", 0) / 100.0)
+                )
+                remaining_files = (
+                    total_files
+                    - completed_files
+                    - (getattr(progress, "percent", 0) / 100.0)
+                )
                 batch_remaining = max(0, remaining_files * avg_time_per_file)
             elif file_remaining > 0:
                 # First file: estimate based on current file progress
-                remaining_files = total_files - (getattr(progress, "percent", 0) / 100.0)
+                remaining_files = total_files - (
+                    getattr(progress, "percent", 0) / 100.0
+                )
                 batch_remaining = max(0, remaining_files * file_remaining)
             else:
                 batch_remaining = 0
@@ -1897,7 +1990,7 @@ class SummarizationTab(BaseTab):
         # Convert analysis type to template filename dynamically
         filename = _analysis_type_to_filename(analysis_type)
         template_path = f"config/prompts/{filename}.txt"
-        
+
         # Check if the template file exists
         if Path(template_path).exists():
             self.template_path_edit.setText(template_path)
@@ -1910,7 +2003,7 @@ class SummarizationTab(BaseTab):
             )
             # Clear template path if file doesn't exist
             self.template_path_edit.setText("")
-            
+
             # Show user-friendly warning message
             self.show_warning(
                 "Template File Missing",
@@ -1920,8 +2013,8 @@ class SummarizationTab(BaseTab):
                 f"1. Create the file '{template_path}'\n"
                 f"2. Add your custom prompt template\n"
                 f"3. Include {{text}} placeholder where content should go\n\n"
-                f"The template path has been cleared. You can manually specify a different template file or create the missing one."
+                f"The template path has been cleared. You can manually specify a different template file or create the missing one.",
             )
-            
+
         # Trigger settings save after template path is updated
         self._on_setting_changed()

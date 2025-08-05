@@ -4,20 +4,20 @@ Transcribe command for the Knowledge System CLI.
 Handles transcription of audio/video files and YouTube URLs using OpenAI Whisper.
 """
 
-import sys
-import re
 import csv
-from pathlib import Path
-from typing import List, Optional, Dict, Any
+import re
+import sys
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import click
 from rich.table import Table
 
 from ..logger import log_system_event
-from .common import CLIContext, pass_context, console, logger
-from ..utils.youtube_utils import extract_video_id
 from ..utils.text_utils import strip_bracketed_content
+from ..utils.youtube_utils import extract_video_id
+from .common import CLIContext, console, logger, pass_context
 
 
 def format_timestamp(seconds: float) -> str:
@@ -45,20 +45,22 @@ def format_timestamp_vtt(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millisecs:03d}"
 
 
-def extract_audio_video_metadata(file_path: Path) -> Dict[str, Any]:
+def extract_audio_video_metadata(file_path: Path) -> dict[str, Any]:
     """Extract metadata from audio/video files using FFmpeg."""
     try:
         from knowledge_system.utils.audio_utils import get_audio_metadata
-        
+
         metadata = get_audio_metadata(file_path)
-        
+
         # Add additional file info
-        metadata.update({
-            "extracted_at": datetime.now().isoformat(),
-        })
-        
+        metadata.update(
+            {
+                "extracted_at": datetime.now().isoformat(),
+            }
+        )
+
         return metadata
-        
+
     except Exception as e:
         logger.warning(f"Error extracting metadata from {file_path}: {e}")
         return {
@@ -70,7 +72,7 @@ def extract_audio_video_metadata(file_path: Path) -> Dict[str, Any]:
         }
 
 
-def format_audio_video_metadata_markdown(metadata: Dict[str, Any]) -> str:
+def format_audio_video_metadata_markdown(metadata: dict[str, Any]) -> str:
     """Format audio/video metadata as markdown section."""
     lines = ["## Metadata"]
     lines.append("")
@@ -122,10 +124,50 @@ def format_audio_video_metadata_markdown(metadata: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _add_analysis_sections(text: str, vault_path: Optional[Path] = None) -> str:
+def _add_analysis_sections(text: str, vault_path: Path | None = None) -> str:
     """Add analysis sections to transcript (currently disabled)."""
     # Analysis sections disabled per user request
     return ""
+
+
+def _generate_obsidian_link(
+    source_file_stem: str, link_type: str, output_dir: Path | None = None
+) -> str:
+    """
+    Generate Obsidian link to the corresponding file.
+
+    Args:
+        source_file_stem: The base filename without extension (e.g., 'video_123')
+        link_type: Either 'summary' or 'transcript' to determine target file
+        output_dir: Directory where files are stored (for validation)
+
+    Returns:
+        Formatted Obsidian link or empty string if target doesn't exist
+    """
+    if link_type == "summary":
+        target_filename = f"{source_file_stem}_summary"
+        link_text = "View Summary"
+    elif link_type == "transcript":
+        target_filename = f"{source_file_stem}_transcript"
+        link_text = "View Transcript"
+    else:
+        return ""
+
+    # Check if target file exists (optional validation)
+    if output_dir:
+        # Check for common extensions
+        target_exists = False
+        for ext in [".md", ".txt"]:
+            target_path = output_dir / f"{target_filename}{ext}"
+            if target_path.exists():
+                target_exists = True
+                break
+
+        # If we're creating the transcript, the summary might not exist yet
+        # If we're creating the summary, the transcript should exist
+        # For now, we'll create the link regardless to support both scenarios
+
+    return f"[[{target_filename}|{link_text}]]"
 
 
 def format_transcript_content(
@@ -134,17 +176,18 @@ def format_transcript_content(
     model: str,
     device: str,
     format: str,
-    file_path: Optional[Path] = None,
-    video_id: Optional[str] = None,
-    vault_path: Optional[Path] = None,
+    file_path: Path | None = None,
+    video_id: str | None = None,
+    vault_path: Path | None = None,
     timestamps: bool = True,
+    output_dir: Path | None = None,
 ) -> str:
     """Format transcript content based on output format."""
     if format == "md":
         # Add YAML frontmatter with title instead of level 1 header
         # Escape quotes in source name for YAML safety
         safe_source_name = source_name.replace('"', '\\"')
-        content = f"---\ntitle: \"Transcript of {safe_source_name}\"\n---\n\n"
+        content = f'---\ntitle: "Transcript of {safe_source_name}"\n---\n\n'
 
         # Add thumbnail reference for YouTube videos
         if video_id:
@@ -169,8 +212,9 @@ def format_transcript_content(
 
         # Extract text for analysis
         if isinstance(transcript_data, dict) and "segments" in transcript_data:
-            full_text = " ".join(segment.get("text", "")
-                                 for segment in transcript_data["segments"])
+            full_text = " ".join(
+                segment.get("text", "") for segment in transcript_data["segments"]
+            )
         elif isinstance(transcript_data, str):
             full_text = transcript_data
         else:
@@ -179,6 +223,21 @@ def format_transcript_content(
         # Add analysis sections for audio transcripts
         if full_text.strip():
             content += _add_analysis_sections(full_text, vault_path)
+
+        # Add link to corresponding summary if we can determine the base filename
+        base_filename = None
+        if video_id:
+            base_filename = video_id
+        elif file_path:
+            base_filename = file_path.stem
+            # If filename ends with _transcript, remove it to get base name
+            if base_filename.endswith("_transcript"):
+                base_filename = base_filename[:-11]  # Remove "_transcript"
+
+        if base_filename:
+            summary_link = _generate_obsidian_link(base_filename, "summary", output_dir)
+            if summary_link:
+                content += f"## Related Documents\n\n{summary_link}\n\n"
 
         # Add Full Transcript section
         content += "## Full Transcript\n\n"
@@ -305,7 +364,7 @@ def is_transcript_too_short(transcript_text: Any, min_words: int = 50) -> bool:
     return word_count < min_words
 
 
-def extract_video_id_from_url(url: str) -> Optional[str]:
+def extract_video_id_from_url(url: str) -> str | None:
     """Extract YouTube video ID from URL."""
     video_id_match = re.search(
         r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]+)", url
@@ -350,7 +409,7 @@ def extract_video_id_from_url(url: str) -> Optional[str]:
 @click.option(
     "--speaker-labels/--no-speaker-labels",
     default=False,
-            help="Enable speaker diarization",
+    help="Enable speaker diarization",
 )
 @click.option(
     "--dry-run", is_flag=True, help="Show what would be done without making changes"
@@ -372,26 +431,26 @@ def extract_video_id_from_url(url: str) -> Optional[str]:
 @click.option(
     "--vault-path",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
-    help="Path to Obsidian vault for intelligent linking"
+    help="Path to Obsidian vault for intelligent linking",
 )
 @pass_context
 def transcribe(
     ctx: CLIContext,
-    input: Optional[str],
-    output: Optional[Path],
+    input: str | None,
+    output: Path | None,
     model: str,
-    language: Optional[str],
+    language: str | None,
     device: str,
     batch_size: int,
     format: str,
     timestamps: bool,
     speaker_labels: bool,
     dry_run: bool,
-    batch_urls: Optional[Path],
+    batch_urls: Path | None,
     download_thumbnails: bool,
     overwrite: bool,
     use_whisper_cpp: bool,
-    vault_path: Optional[Path],
+    vault_path: Path | None,
 ) -> None:
     """
     Transcribe audio/video files or YouTube URLs using OpenAI Whisper.
@@ -418,31 +477,35 @@ def transcribe(
         try:
             # Read URLs from CSV file - handle both plain CSV and RTF files
             urls = []
-            with open(batch_urls, "r", encoding="utf-8") as f:
+            with open(batch_urls, encoding="utf-8") as f:
                 content = f.read()
 
-            if content.startswith('{\\rtf'):
+            if content.startswith("{\\rtf"):
                 # RTF file detected - extract URLs from RTF content
                 if not ctx.quiet:
                     console.print("[dim]RTF file detected, extracting URLs...[/dim]")
 
                 # Extract URLs from RTF content using regex
-                url_pattern = r'https?://[^\s\\,}]+'
+                url_pattern = r"https?://[^\s\\,}]+"
                 found_urls = re.findall(url_pattern, content)
 
                 for url in found_urls:
                     # Clean up any RTF artifacts
-                    url = url.rstrip('\\,}')
-                    if 'youtube.com' in url or 'youtu.be' in url:
+                    url = url.rstrip("\\,}")
+                    if "youtube.com" in url or "youtu.be" in url:
                         urls.append(url)
 
                 if urls and not ctx.quiet:
-                    console.print(f"[dim]Extracted {len(urls)} YouTube URLs from RTF file[/dim]")
+                    console.print(
+                        f"[dim]Extracted {len(urls)} YouTube URLs from RTF file[/dim]"
+                    )
             else:
                 # Plain CSV file - read line by line
-                for line in content.split('\n'):
+                for line in content.split("\n"):
                     line = line.strip()
-                    if line and not line.startswith("#"):  # Skip empty lines and comments
+                    if line and not line.startswith(
+                        "#"
+                    ):  # Skip empty lines and comments
                         # Handle comma-separated URLs on the same line
                         for url in line.split(","):
                             url = url.strip()
@@ -450,7 +513,9 @@ def transcribe(
                                 urls.append(url)
 
             if not urls:
-                console.print("[red]✗ No valid YouTube URLs found in the CSV file[/red]")
+                console.print(
+                    "[red]✗ No valid YouTube URLs found in the CSV file[/red]"
+                )
                 sys.exit(1)
 
             if not ctx.quiet:
@@ -478,12 +543,16 @@ def transcribe(
 
             # Ensure output directory is set
             if output is None:
-                console.print("[red]✗ Error: Output directory is required. Use --output to specify where transcripts should be saved.[/red]")
+                console.print(
+                    "[red]✗ Error: Output directory is required. Use --output to specify where transcripts should be saved.[/red]"
+                )
                 sys.exit(1)
 
             for i, url in enumerate(urls, 1):
                 if not ctx.quiet:
-                    console.print(f"[bold blue]Processing {i}/{len(urls)}:[/bold blue] {url}")
+                    console.print(
+                        f"[bold blue]Processing {i}/{len(urls)}:[/bold blue] {url}"
+                    )
 
                 # Extract video ID
                 video_id = extract_video_id_from_url(url)
@@ -500,15 +569,22 @@ def transcribe(
                     continue
 
                 result = service.transcribe_youtube_url(
-                    url, download_thumbnails=download_thumbnails, output_dir=output, include_timestamps=timestamps
+                    url,
+                    download_thumbnails=download_thumbnails,
+                    output_dir=output,
+                    include_timestamps=timestamps,
                 )
 
                 if result["success"]:
                     # Check if transcript is too short
                     if is_transcript_too_short(result["transcript"]):
                         if not ctx.quiet:
-                            console.print(f"[yellow]⚠ Transcript too short (< 50 words) for {url}[/yellow]")
-                        track_failed_transcript(url, "Transcript too short (< 50 words)", output)
+                            console.print(
+                                f"[yellow]⚠ Transcript too short (< 50 words) for {url}[/yellow]"
+                            )
+                        track_failed_transcript(
+                            url, "Transcript too short (< 50 words)", output
+                        )
                         failed_urls.append((url, "Too short"))
                         continue
 
@@ -525,18 +601,25 @@ def transcribe(
                         format,
                         video_id=video_id,
                         timestamps=timestamps,
+                        output_dir=output,
                     )
 
                     with open(output_file, "w", encoding="utf-8") as f:
                         f.write(content)
 
                     if not ctx.quiet:
-                        console.print(f"[green]✓ Transcript saved to: {output_file}[/green]")
+                        console.print(
+                            f"[green]✓ Transcript saved to: {output_file}[/green]"
+                        )
                         if result.get("thumbnails"):
                             for thumbnail in result["thumbnails"]:
-                                console.print(f"[green]✓ Thumbnail saved to: {thumbnail}[/green]")
+                                console.print(
+                                    f"[green]✓ Thumbnail saved to: {thumbnail}[/green]"
+                                )
                 else:
-                    console.print(f"[red]✗ Failed to transcribe {url}: {result['error']}[/red]")
+                    console.print(
+                        f"[red]✗ Failed to transcribe {url}: {result['error']}[/red]"
+                    )
                     track_failed_transcript(url, f"Error: {result['error']}", output)
                     failed_urls.append((url, result["error"]))
 
@@ -547,10 +630,14 @@ def transcribe(
                     f"[green]✓ Successfully processed: {len(urls) - len(failed_urls) - len(skipped_urls)} URLs[/green]"
                 )
                 if skipped_urls:
-                    console.print(f"[yellow]⚠ Skipped (already exists): {len(skipped_urls)} URLs[/yellow]")
+                    console.print(
+                        f"[yellow]⚠ Skipped (already exists): {len(skipped_urls)} URLs[/yellow]"
+                    )
                 if failed_urls:
                     console.print(f"[red]✗ Failed: {len(failed_urls)} URLs[/red]")
-                    console.print(f"[dim]Failed URLs saved to: {output / 'failed_transcripts.csv'}[/dim]")
+                    console.print(
+                        f"[dim]Failed URLs saved to: {output / 'failed_transcripts.csv'}[/dim]"
+                    )
 
             return
 
@@ -564,16 +651,22 @@ def transcribe(
         sys.exit(1)
 
     if not ctx.quiet:
-        console.print(f"[bold blue]{'[DRY RUN] ' if dry_run else ''}Transcribing:[/bold blue] {input}")
+        console.print(
+            f"[bold blue]{'[DRY RUN] ' if dry_run else ''}Transcribing:[/bold blue] {input}"
+        )
         console.print(f"[dim]Model: {model}, Device: {device}, Format: {format}[/dim]")
 
     if dry_run:
-        console.print("[yellow][DRY RUN] Would transcribe input with the above settings.[/yellow]")
+        console.print(
+            "[yellow][DRY RUN] Would transcribe input with the above settings.[/yellow]"
+        )
         return
 
     # Determine output path
     if output is None:
-        console.print("[red]✗ Error: Output directory is required. Use --output to specify where transcripts should be saved.[/red]")
+        console.print(
+            "[red]✗ Error: Output directory is required. Use --output to specify where transcripts should be saved.[/red]"
+        )
         sys.exit(1)
 
     # Log transcription start
@@ -612,31 +705,46 @@ def transcribe(
                 use_whisper_cpp=use_whisper_cpp,
             )
             result = service.transcribe_youtube_url(
-                input, download_thumbnails=download_thumbnails, output_dir=output, include_timestamps=timestamps
+                input,
+                download_thumbnails=download_thumbnails,
+                output_dir=output,
+                include_timestamps=timestamps,
             )
 
             if result["success"]:
                 # Check if transcript is too short
                 if is_transcript_too_short(result["transcript"]):
                     if not ctx.quiet:
-                        console.print(f"[yellow]⚠ Transcript too short (< 50 words) for {input}[/yellow]")
-                    track_failed_transcript(input, "Transcript too short (< 50 words)", output)
+                        console.print(
+                            f"[yellow]⚠ Transcript too short (< 50 words) for {input}[/yellow]"
+                        )
+                    track_failed_transcript(
+                        input, "Transcript too short (< 50 words)", output
+                    )
                     sys.exit(1)
 
                 if not ctx.quiet:
-                    console.print("[green]✓ Transcription completed successfully[/green]")
-                    console.print(f"[dim]Transcript length: {len(result['transcript'])} characters[/dim]")
+                    console.print(
+                        "[green]✓ Transcription completed successfully[/green]"
+                    )
+                    console.print(
+                        f"[dim]Transcript length: {len(result['transcript'])} characters[/dim]"
+                    )
                     if result.get("thumbnails"):
-                        console.print(f"[dim]Thumbnails downloaded: {len(result['thumbnails'])}[/dim]")
+                        console.print(
+                            f"[dim]Thumbnails downloaded: {len(result['thumbnails'])}[/dim]"
+                        )
 
                 # Check if transcript processor already created output files
                 existing_output_files = result.get("output_files", [])
-                
+
                 if existing_output_files:
                     # Use the files created by the transcript processor (with proper titles)
                     if not ctx.quiet:
                         for output_file in existing_output_files:
-                            console.print(f"[green]✓ Transcript saved to: {output_file}[/green]")
+                            console.print(
+                                f"[green]✓ Transcript saved to: {output_file}[/green]"
+                            )
                 else:
                     # Fallback: create file with video ID format (for backward compatibility)
                     output_file = output / f"{video_id}_transcript.{format}"
@@ -652,16 +760,21 @@ def transcribe(
                         video_id=video_id,
                         vault_path=vault_path,
                         timestamps=timestamps,
+                        output_dir=output,
                     )
 
                     with open(output_file, "w", encoding="utf-8") as f:
                         f.write(content)
 
                     if not ctx.quiet:
-                        console.print(f"[green]✓ Transcript saved to: {output_file}[/green]")
+                        console.print(
+                            f"[green]✓ Transcript saved to: {output_file}[/green]"
+                        )
                     if result.get("thumbnails"):
                         for thumbnail in result["thumbnails"]:
-                            console.print(f"[green]✓ Thumbnail saved to: {thumbnail}[/green]")
+                            console.print(
+                                f"[green]✓ Thumbnail saved to: {thumbnail}[/green]"
+                            )
             else:
                 console.print(f"[red]✗ Transcription failed:[/red] {result['error']}")
                 track_failed_transcript(input, f"Error: {result['error']}", output)
@@ -691,14 +804,24 @@ def transcribe(
             )
 
             # Process the input
-            result = processor.process(input_path_obj, device=device)
+            from ..processors.base import ProcessorResult
+
+            result: ProcessorResult = processor.process(input_path_obj, device=device)
 
             if result.success:
                 if not ctx.quiet:
-                    console.print("[green]✓ Transcription completed successfully[/green]")
+                    console.print(
+                        "[green]✓ Transcription completed successfully[/green]"
+                    )
                     # Extract text from the transcription result
-                    transcript_text = result.data.get("text", "") if isinstance(result.data, dict) else str(result.data)
-                    console.print(f"[dim]Transcript length: {len(transcript_text)} characters[/dim]")
+                    transcript_text = (
+                        result.data.get("text", "")
+                        if isinstance(result.data, dict)
+                        else str(result.data)
+                    )
+                    console.print(
+                        f"[dim]Transcript length: {len(transcript_text)} characters[/dim]"
+                    )
 
                 # Save transcript to output file
                 output_file = output / f"{input_path_obj.stem}_transcript.{format}"
@@ -714,20 +837,26 @@ def transcribe(
                     input_path_obj,
                     vault_path=vault_path,
                     timestamps=timestamps,
+                    output_dir=output,
                 )
 
                 with open(output_file, "w", encoding="utf-8") as f:
                     f.write(content)
 
                 if not ctx.quiet:
-                    console.print(f"[green]✓ Transcript saved to: {output_file}[/green]")
+                    console.print(
+                        f"[green]✓ Transcript saved to: {output_file}[/green]"
+                    )
             else:
-                console.print(f"[red]✗ Transcription failed:[/red] {'; '.join(result.errors)}")
+                console.print(
+                    f"[red]✗ Transcription failed:[/red] {'; '.join(result.errors)}"
+                )
                 sys.exit(1)
 
     except Exception as e:
         console.print(f"[red]✗ Unexpected error during transcription:[/red] {e}")
         if ctx.verbose:
             import traceback
+
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
-        sys.exit(1) 
+        sys.exit(1)

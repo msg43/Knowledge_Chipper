@@ -1,0 +1,47 @@
+Create a meta-analysis by synthesizing multiple Maps of Content (MOCs) into a higher-level organizational structure:
+
+## Meta-Themes Analysis
+Identify overarching themes that span across multiple MOCs:
+- Cross-cutting concepts that appear in multiple maps
+- Higher-level patterns and organizing principles
+- Thematic clusters and their relationships
+- Knowledge domains and their boundaries
+
+## People Network Analysis
+Synthesize people mentions across all MOCs:
+- Key figures who appear in multiple contexts
+- Relationship networks and collaboration patterns
+- Influence networks and thought leadership
+- Cross-domain expertise and knowledge bridges
+
+## Concept Hierarchy Mapping
+Build hierarchical relationships between concepts:
+- Top-level organizing principles
+- Mid-level conceptual frameworks
+- Specific implementations and examples
+- Cross-references and knowledge bridges
+
+## Knowledge Gaps & Opportunities
+Identify areas for further exploration:
+- Concepts mentioned but not fully explored
+- Missing connections between related ideas
+- Potential synthesis opportunities
+- Areas requiring deeper investigation
+
+## Integration Recommendations
+Suggest ways to better connect and organize the knowledge:
+- Optimal knowledge organization structure
+- Priority areas for further development
+- Connection opportunities between disparate concepts
+- Framework for ongoing knowledge management
+
+## Meta-Insights
+Extract insights about the knowledge collection itself:
+- Quality and depth of coverage across domains
+- Bias patterns in source material
+- Completeness assessment
+- Recommendations for knowledge collection strategy
+
+Provide a synthesized view that reveals higher-order patterns and organizational principles across the entire knowledge base.
+
+{text}

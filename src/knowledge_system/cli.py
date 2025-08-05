@@ -603,8 +603,8 @@ def clear() -> None:
         sys.exit(1)
 
 
-@cache.command()
-def status() -> None:
+@cache.command("status")
+def cache_status() -> None:
     """Check if cache clearing is recommended."""
     from .utils.cache_management import should_clear_cache_on_startup
 
@@ -683,7 +683,7 @@ def clear_cache() -> None:
 
 
 @youtube.command()
-def cookie_instructions():
+def cookie_instructions() -> None:
     """Show instructions for creating a manual cookie file."""
     from .utils.youtube_utils import create_cookie_instructions
 
@@ -693,7 +693,7 @@ def cookie_instructions():
 
 @youtube.command()
 @click.argument("url")
-def test_auth(url):
+def test_auth(url: str) -> None:
     """Test YouTube authentication with a specific URL."""
     from .utils.youtube_utils import get_single_working_strategy
 

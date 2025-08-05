@@ -711,7 +711,6 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
         def monitor_progress():
             """Monitor progress in a separate thread."""
-            nonlocal stdout_lines, stderr_lines
 
             # Monitor both stdout and stderr for progress indicators
             while process.poll() is None:
@@ -737,8 +736,9 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                             if self.progress_callback:
                                 self._parse_whisper_output_for_progress(line, elapsed)
 
-                except:
+                except (OSError, UnicodeDecodeError) as e:
                     # Handle any read errors gracefully
+                    logger.debug(f"Error reading stderr: {e}")
                     pass
 
                 # Estimate progress based on elapsed time (fallback)
@@ -763,8 +763,9 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                     )
                     if probe_result.returncode == 0 and probe_result.stdout.strip():
                         estimated_duration = float(probe_result.stdout.strip())
-                except:
+                except (subprocess.SubprocessError, ValueError, OSError) as e:
                     # Fallback to default if ffprobe fails
+                    logger.debug(f"Failed to get audio duration with ffprobe: {e}")
                     pass
 
                 # Estimate progress: assume processing takes 0.2x real-time on average

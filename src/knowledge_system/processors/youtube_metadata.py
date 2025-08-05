@@ -45,9 +45,7 @@ class YouTubeMetadata(BaseModel):
     # Creator information
     uploader: str = Field(default="", description="Channel name")
     uploader_id: str = Field(default="", description="Channel ID")
-    upload_date: str | None = Field(
-        default=None, description="Upload date (YYYYMMDD)"
-    )
+    upload_date: str | None = Field(default=None, description="Upload date (YYYYMMDD)")
 
     # Additional metadata
     tags: list[str] = Field(default_factory=list, description="Video tags")

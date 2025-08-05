@@ -18,26 +18,27 @@ from .common import CLIContext, console, logger, pass_context
 from .transcribe import _generate_obsidian_link
 
 
-def _extract_youtube_url_from_file(file_path: Path) -> Optional[str]:
+def _extract_youtube_url_from_file(file_path: Path) -> str | None:
     """
     Extract YouTube URL from a processed file's YAML frontmatter.
-    
+
     Looks for the 'source' field in the YAML frontmatter which typically
     contains the original YouTube URL for transcript and summary files.
-    
+
     Args:
         file_path: Path to the markdown file to check
-        
+
     Returns:
         YouTube URL if found, None otherwise
     """
-    import yaml
     import re
-    
+
+    import yaml
+
     try:
         with open(file_path, encoding="utf-8") as f:
             content = f.read()
-            
+
         # Look for YAML frontmatter first
         if content.startswith("---"):
             # Find the end of YAML frontmatter
@@ -47,11 +48,11 @@ def _extract_youtube_url_from_file(file_path: Path) -> Optional[str]:
                 if line.strip() == "---":
                     yaml_end_idx = i
                     break
-                    
+
             if yaml_end_idx != -1:
                 # Extract YAML content
                 yaml_content = "\n".join(lines[1:yaml_end_idx])
-                
+
                 try:
                     metadata = yaml.safe_load(yaml_content)
                     if isinstance(metadata, dict):
@@ -62,7 +63,7 @@ def _extract_youtube_url_from_file(file_path: Path) -> Optional[str]:
                 except yaml.YAMLError:
                     # If YAML parsing fails, fall back to regex search
                     pass
-            
+
         # Fallback: search for YouTube URLs in the content
         youtube_patterns = [
             r"https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+",
@@ -70,15 +71,15 @@ def _extract_youtube_url_from_file(file_path: Path) -> Optional[str]:
             r"https?://youtube\.com/watch\?v=[\w-]+",
             r"https?://youtu\.be/[\w-]+",
         ]
-        
+
         for pattern in youtube_patterns:
             match = re.search(pattern, content)
             if match:
                 return match.group(0)
-                
+
     except Exception as e:
         logger.debug(f"Could not extract YouTube URL from {file_path}: {e}")
-        
+
     return None
 
 
@@ -104,7 +105,6 @@ def _extract_youtube_url_from_file(file_path: Path) -> Optional[str]:
 @click.option(
     "--max-tokens", "-t", type=int, default=1000, help="Maximum tokens in summary"
 )
-
 @click.option("--focus", "-f", help="Focus area for summarization")
 @click.option(
     "--template",
@@ -147,18 +147,18 @@ def _extract_youtube_url_from_file(file_path: Path) -> Optional[str]:
 def summarize(
     ctx: CLIContext,
     input_path: Path,
-    output: Optional[Path],
+    output: Path | None,
     model: str,
     provider: str,
     max_tokens: int,
-    focus: Optional[str],
-    template: Optional[Path],
+    focus: str | None,
+    template: Path | None,
     dry_run: bool,
     update_md: bool,
     progress: bool,
     recursive: bool,
-    patterns: List[str],
-    checkpoint: Optional[Path],
+    patterns: list[str],
+    checkpoint: Path | None,
     resume: bool,
     force: bool,
 ) -> None:
@@ -224,9 +224,7 @@ def summarize(
                 )
                 console.print(f"[dim]Patterns: {', '.join(patterns)}[/dim]")
 
-        console.print(
-            f"[dim]Model: {model}, Max tokens: {max_tokens}[/dim]"
-        )
+        console.print(f"[dim]Model: {model}, Max tokens: {max_tokens}[/dim]")
         if template:
             console.print(f"[dim]Using custom template: {template}[/dim]")
         if update_md:
@@ -297,7 +295,7 @@ def summarize(
     processor = SummarizerProcessor(
         provider=effective_provider, model=model, max_tokens=max_tokens
     )
-    
+
     # If no template provided, default to document summary template
     if not template:
         default_template_path = Path("config/prompts/document summary.txt")
@@ -307,11 +305,13 @@ def summarize(
                 console.print(f"[dim]Using default template: {template}[/dim]")
         else:
             if not ctx.quiet:
-                console.print("[yellow]⚠️  Default template 'config/prompts/document summary.txt' not found, using generic prompt[/yellow]")
+                console.print(
+                    "[yellow]⚠️  Default template 'config/prompts/document summary.txt' not found, using generic prompt[/yellow]"
+                )
 
     # Build summary index if not forcing re-summarization
-    summary_index: Dict[str, Any] = {}
-    index_file: Optional[Path] = None
+    summary_index: dict[str, Any] = {}
+    index_file: Path | None = None
     skipped_via_index: int = 0
 
     if not force and output is not None:
@@ -334,7 +334,7 @@ def summarize(
                 )
 
     # Track files that can be skipped
-    files_to_skip: List[Tuple[Path, str]] = []
+    files_to_skip: list[tuple[Path, str]] = []
     if not force:
         for file_path in files_to_process:
             needs_summary, reason = processor._check_needs_summarization(
@@ -489,14 +489,21 @@ def summarize(
                     if update_md and file_path.suffix.lower() == ".md":
                         # Generate unified YAML metadata
                         from ..utils.file_io import generate_unified_yaml_metadata
+
                         additional_yaml_fields = generate_unified_yaml_metadata(
-                            file_path, result.data, model, 
-                            metadata.get('provider', 'unknown'), metadata, 
-                            template, "document summary"
+                            file_path,
+                            result.data,
+                            model,
+                            metadata.get("provider", "unknown"),
+                            metadata,
+                            template,
+                            "document summary",
                         )
-                        
+
                         # Update existing .md file in-place with YAML fields
-                        overwrite_or_insert_summary_section(file_path, result.data, additional_yaml_fields)
+                        overwrite_or_insert_summary_section(
+                            file_path, result.data, additional_yaml_fields
+                        )
                         output_path = file_path
                         if not ctx.quiet:
                             console.print(f"[green]✓ Updated summary in-place[/green]")
@@ -504,11 +511,13 @@ def summarize(
                         # Create new summary file
                         # Clean filename by removing hyphens for better readability
                         clean_filename = file_path.stem.replace("-", "_")
-                        
+
                         # If input file is a transcript, remove _transcript suffix for proper naming
                         if clean_filename.endswith("_transcript"):
-                            clean_filename = clean_filename[:-11]  # Remove "_transcript"
-                        
+                            clean_filename = clean_filename[
+                                :-11
+                            ]  # Remove "_transcript"
+
                         if update_md and file_path.suffix.lower() != ".md":
                             output_file = file_path.parent / f"{clean_filename}.md"
                         else:
@@ -578,7 +587,7 @@ def summarize(
 
                             f.write(f"**Generated:** {datetime.now().isoformat()}\n\n")
                             f.write("---\n\n")
-                            
+
                             # Add YouTube watch link if this is YouTube content
                             youtube_url = _extract_youtube_url_from_file(file_path)
                             if youtube_url:
@@ -588,11 +597,17 @@ def summarize(
                             base_filename = file_path.stem
                             # If filename ends with _transcript, remove it to get base name
                             if base_filename.endswith("_transcript"):
-                                base_filename = base_filename[:-11]  # Remove "_transcript"
-                            transcript_link = _generate_obsidian_link(base_filename, "transcript", output)
+                                base_filename = base_filename[
+                                    :-11
+                                ]  # Remove "_transcript"
+                            transcript_link = _generate_obsidian_link(
+                                base_filename, "transcript", output
+                            )
                             if transcript_link:
-                                f.write(f"## Related Documents\n\n{transcript_link}\n\n")
-                            
+                                f.write(
+                                    f"## Related Documents\n\n{transcript_link}\n\n"
+                                )
+
                             f.write(result.data)
 
                         if not ctx.quiet:
@@ -700,9 +715,7 @@ def summarize(
             console.print(
                 f"💰 Total cost: [yellow]${session_stats['total_cost']:.4f} USD[/yellow]"
             )
-            console.print(
-                f"⚡ Average speed: {avg_tokens_per_second:.1f} tokens/second"
-            )
+            console.print(f"⚡ Average speed: {avg_tokens_per_second:.1f} tokens/second")
 
             # Content statistics
             console.print(f"\n[bold]Content Analysis:[/bold]")

@@ -143,13 +143,9 @@ class BaseProcessor(ABC):
             True if processor can handle this input
         """
         path = Path(input_path)
-        return path.suffix.lower() in [
-            fmt.lower() for fmt in self.supported_formats
-        ]
+        return path.suffix.lower() in [fmt.lower() for fmt in self.supported_formats]
 
-    def check_cancellation(
-        self, cancellation_token: CancellationToken | None
-    ) -> None:
+    def check_cancellation(self, cancellation_token: CancellationToken | None) -> None:
         """
         Check for cancellation and pause requests.
 

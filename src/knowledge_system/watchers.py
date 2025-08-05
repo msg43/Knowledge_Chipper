@@ -8,9 +8,9 @@ Supports multiple patterns, user callback, and robust error handling.
 import fnmatch
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import List, Optional, Union
-from collections.abc import Callable
 
 from watchdog.events import FileSystemEvent, PatternMatchingEventHandler
 from watchdog.observers import Observer

@@ -142,9 +142,7 @@ class SummarizationProgress:
     total_characters: int | None = None  # Total characters in entire batch
     characters_completed: int | None = None  # Characters completed across all files
     current_file_size: int | None = None  # Size of current file being processed
-    current_file_chars_done: None | (
-        int
-    ) = None  # Characters processed in current file
+    current_file_chars_done: None | (int) = None  # Characters processed in current file
 
     # Progress calculations (automatically computed)
     file_percent: float | None = None  # Current file progress (0.0-100.0)
@@ -499,9 +497,11 @@ class ProgressTracker:
             "pending": len(self.get_pending_tasks()),
             "elapsed_seconds": int(elapsed.total_seconds()),
             "eta_seconds": eta_seconds,
-            "completion_percentage": (completed_tasks / self.total_tasks * 100)
-            if self.total_tasks > 0
-            else 0,
+            "completion_percentage": (
+                (completed_tasks / self.total_tasks * 100)
+                if self.total_tasks > 0
+                else 0
+            ),
         }
 
     def is_complete(self) -> bool:
@@ -808,11 +808,15 @@ def update_progress_with_character_tracking(
         "chars_per_second": chars_per_second,
         "file_eta_seconds": file_eta_seconds,
         "batch_eta_seconds": batch_eta_seconds,
-        "current_file_size": progress_tracker["file_sizes"][current_file_index]
-        if current_file_index < len(progress_tracker["file_sizes"])
-        else 0,
-        "current_file_chars_done": (current_file_progress_percent / 100.0)
-        * progress_tracker["file_sizes"][current_file_index]
-        if current_file_index < len(progress_tracker["file_sizes"])
-        else 0,
+        "current_file_size": (
+            progress_tracker["file_sizes"][current_file_index]
+            if current_file_index < len(progress_tracker["file_sizes"])
+            else 0
+        ),
+        "current_file_chars_done": (
+            (current_file_progress_percent / 100.0)
+            * progress_tracker["file_sizes"][current_file_index]
+            if current_file_index < len(progress_tracker["file_sizes"])
+            else 0
+        ),
     }

@@ -476,7 +476,7 @@ class YouTubeExtractionWorker(QThread):
         if self.cancellation_token:
             self.cancellation_token.cancel("User requested cancellation")
 
-    def _write_failure_log(self, failed_urls: List[str]) -> None:
+    def _write_failure_log(self, failed_urls: list[str]) -> None:
         """Write failed URL extractions to timestamped log files.
 
         Returns:

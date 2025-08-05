@@ -209,9 +209,7 @@ class FFmpegAudioProcessor:
             logger.warning(f"Failed to get audio duration: {e}")
             return None
 
-    def normalize_audio(
-        self, input_path: str | Path, output_path: str | Path
-    ) -> bool:
+    def normalize_audio(self, input_path: str | Path, output_path: str | Path) -> bool:
         """
         Normalize audio levels using FFmpeg.
 
@@ -284,8 +282,6 @@ def get_audio_duration(file_path: str | Path) -> float | None:
     return ffmpeg_processor.get_audio_duration(file_path)
 
 
-def normalize_audio_file(
-    input_path: str | Path, output_path: str | Path
-) -> bool:
+def normalize_audio_file(input_path: str | Path, output_path: str | Path) -> bool:
     """Convenience function for audio normalization."""
     return ffmpeg_processor.normalize_audio(input_path, output_path)

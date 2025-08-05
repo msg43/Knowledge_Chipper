@@ -25,6 +25,56 @@ from .base import BaseProcessor, ProcessorResult
 
 logger = get_logger(__name__)
 
+
+def sanitize_tag(tag: str) -> str:
+    """
+    Sanitize YouTube tags by replacing spaces with underscores and removing/converting non-alphanumeric characters.
+
+    Args:
+        tag: Original tag string
+
+    Returns:
+        Sanitized tag string suitable for YAML and general use
+    """
+    if not tag or not isinstance(tag, str):
+        return ""
+
+    # Replace spaces with underscores
+    sanitized = tag.replace(" ", "_")
+
+    # Keep only alphanumeric characters and underscores
+    # This removes special characters like punctuation, emojis, etc.
+    sanitized = re.sub(r"[^a-zA-Z0-9_]", "", sanitized)
+
+    # Remove leading/trailing underscores and collapse multiple underscores
+    sanitized = re.sub(r"_+", "_", sanitized).strip("_")
+
+    # Return empty string if nothing valid remains
+    return sanitized if sanitized else ""
+
+
+def sanitize_tags(tags: list[str]) -> list[str]:
+    """
+    Sanitize a list of YouTube tags.
+
+    Args:
+        tags: List of original tag strings
+
+    Returns:
+        List of sanitized tag strings with empty strings filtered out
+    """
+    if not tags:
+        return []
+
+    sanitized_tags = []
+    for tag in tags:
+        sanitized = sanitize_tag(tag)
+        if sanitized:  # Only add non-empty sanitized tags
+            sanitized_tags.append(sanitized)
+
+    return sanitized_tags
+
+
 try:
     from youtube_transcript_api import YouTubeTranscriptApi
     from youtube_transcript_api.proxies import WebshareProxyConfig
@@ -54,13 +104,9 @@ class YouTubeTranscript(BaseModel):
     transcript_data: list[dict[str, Any]] = Field(
         default_factory=list, description="Raw transcript data with timestamps"
     )
-    duration: int | None = Field(
-        default=None, description="Video duration in seconds"
-    )
+    duration: int | None = Field(default=None, description="Video duration in seconds")
     uploader: str = Field(default="", description="Channel name")
-    upload_date: str | None = Field(
-        default=None, description="Upload date (YYYYMMDD)"
-    )
+    upload_date: str | None = Field(default=None, description="Upload date (YYYYMMDD)")
     description: str = Field(default="", description="Video description")
     view_count: int | None = Field(default=None, description="Video view count")
     tags: list[str] = Field(default_factory=list, description="Video tags")
@@ -123,13 +169,18 @@ class YouTubeTranscript(BaseModel):
 
         # Add tags if available (limit to first 10 to keep YAML manageable)
         if self.tags:
-            tags_subset = self.tags[:10]
-            # Format tags as a YAML array, escaping quotes in tag names
-            safe_tags = [tag.replace('"', '\\"') for tag in tags_subset]
-            tags_yaml = "[" + ", ".join(f'"{tag}"' for tag in safe_tags) + "]"
-            lines.append(f"tags: {tags_yaml}")
-            if len(self.tags) > 10:
-                lines.append(f"# ... and {len(self.tags) - 10} more tags")
+            # Sanitize tags before processing
+            sanitized_tags = sanitize_tags(self.tags)
+            if sanitized_tags:
+                tags_subset = sanitized_tags[:10]
+                # Format tags as a YAML array, escaping quotes in tag names
+                safe_tags = [tag.replace('"', '\\"') for tag in tags_subset]
+                tags_yaml = "[" + ", ".join(f'"{tag}"' for tag in safe_tags) + "]"
+                lines.append(f"tags: {tags_yaml}")
+                if len(sanitized_tags) > 10:
+                    lines.append(
+                        f"# ... and {len(sanitized_tags) - 10} more sanitized tags"
+                    )
 
         # Add transcript processing metadata
         lines.append(f'model: "YouTube Transcript"')
@@ -141,19 +192,17 @@ class YouTubeTranscript(BaseModel):
         lines.append("---")
         lines.append("")
 
-        # Create sanitized title for thumbnail reference
+        # Create sanitized title for thumbnail reference (user-friendly naming)
         safe_title_for_filename = re.sub(r"[^\w\s-]", "", self.title).strip()
         safe_title_for_filename = re.sub(r"[-\s]+", "-", safe_title_for_filename)
 
-        # Add thumbnail reference for YouTube videos using sanitized title
-        if safe_title_for_filename:
-            lines.append(
-                f"![Video Thumbnail](Thumbnails/{safe_title_for_filename}-Thumbnail.jpg)"
-            )
-        else:
-            lines.append(
-                f"![Video Thumbnail](Thumbnails/{self.video_id}-Thumbnail.jpg)"
-            )
+        # Add thumbnail reference for YouTube videos using video ID (matches actual saved filename)
+        # Thumbnails are always saved as {video_id}_thumbnail.jpg by the download function
+        lines.append(f"![Video Thumbnail](Thumbnails/{self.video_id}_thumbnail.jpg)")
+        lines.append("")
+
+        # Add clickable link to the YouTube video
+        lines.append(f"**🎥 [Watch on YouTube]({self.url})**")
         lines.append("")
 
         # Add Full Transcript section
@@ -771,6 +820,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
     def process(
         self,
         input_data: Any,
+        dry_run: bool = False,
         output_dir: str | Path | None = None,
         output_format: str | None = None,
         vault_path: str | Path | None = None,
@@ -941,18 +991,22 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                             )
 
                             # Create sanitized filename from title with improved error handling
+                            # Preserve more characters for better filename readability (keep commas, periods, parentheses)
                             safe_title = re.sub(
-                                r"[^\w\s-]", "", transcript.title
+                                r"[<>:\"/\\|?*]", "", transcript.title
                             ).strip()
-                            safe_title = re.sub(r"[-\s]+", "-", safe_title)
+                            # Convert dashes to spaces for consistent naming (matching YAML title behavior)
+                            safe_title = safe_title.replace("-", " ")
+                            # Collapse multiple spaces into single spaces
+                            safe_title = re.sub(r"\s+", " ", safe_title)
 
                             # Additional filename safety checks for macOS
                             if safe_title:
-                                # Remove leading/trailing hyphens
-                                safe_title = safe_title.strip("-")
+                                # Remove leading/trailing spaces (previously handled hyphens)
+                                safe_title = safe_title.strip()
                                 # Limit length to avoid filesystem issues
                                 if len(safe_title) > 100:
-                                    safe_title = safe_title[:100].rstrip("-")
+                                    safe_title = safe_title[:100].rstrip()
 
                             logger.debug(
                                 f"Sanitized title: '{safe_title}' (length: {len(safe_title) if safe_title else 0})"
@@ -966,7 +1020,6 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                                 and not transcript.title.startswith("YouTube Video ")
                             ):
                                 filename = f"{safe_title}.{output_format}"
-                                thumbnail_filename = f"{safe_title}-Thumbnail.jpg"
                                 logger.debug(
                                     f"Using title-based filename: '{filename}'"
                                 )
@@ -976,10 +1029,12 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                                 # Sanitize video ID as well (though it should be safe)
                                 video_id = re.sub(r"[^\w-]", "", video_id)
                                 filename = f"{video_id}_transcript.{output_format}"
-                                thumbnail_filename = f"{video_id}-Thumbnail.jpg"
                                 logger.debug(
                                     f"Using video_id-based filename: '{filename}' (video_id: '{video_id}')"
                                 )
+
+                            # Always use video_id for thumbnail naming to match how thumbnails are actually saved
+                            thumbnail_filename = f"{transcript.video_id}_thumbnail.jpg"
 
                             # Validate filename isn't empty or invalid
                             if (
@@ -1150,35 +1205,11 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                                     if thumbnail_result:
                                         downloaded_path = Path(thumbnail_result)
 
-                                        # Check if we need to rename to match expected filename pattern
+                                        # Thumbnail naming is now consistent - no renaming needed
                                         if downloaded_path.exists():
-                                            # The download function saves as {video_id}_thumbnail.jpg
-                                            # But our markdown expects {safe_title}-Thumbnail.jpg
-                                            expected_path = (
-                                                thumbnails_dir / thumbnail_filename
+                                            logger.info(
+                                                f"Thumbnail saved as: {downloaded_path}"
                                             )
-
-                                            if downloaded_path != expected_path:
-                                                # Move/rename to expected location for consistent naming
-                                                try:
-                                                    downloaded_path.rename(
-                                                        expected_path
-                                                    )
-                                                    logger.info(
-                                                        f"Thumbnail renamed to match title: {expected_path}"
-                                                    )
-                                                except Exception as rename_error:
-                                                    logger.warning(
-                                                        f"Failed to rename thumbnail from {downloaded_path} to {expected_path}: {rename_error}"
-                                                    )
-                                                    # Keep the original if rename fails
-                                                    logger.info(
-                                                        f"Thumbnail kept at: {downloaded_path}"
-                                                    )
-                                            else:
-                                                logger.info(
-                                                    f"Thumbnail saved as: {downloaded_path}"
-                                                )
                                     else:
                                         logger.warning(
                                             f"Failed to download thumbnail for {transcript.video_id}"
@@ -1319,9 +1350,9 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     "skipped_files": skipped_files,
                     "output_format": output_format,
                     "output_directory": str(output_dir),
-                    "skipped_via_index": skipped_via_index
-                    if not overwrite_existing
-                    else 0,
+                    "skipped_via_index": (
+                        skipped_via_index if not overwrite_existing else 0
+                    ),
                 },
                 errors=errors if errors else None,
                 metadata={
@@ -1330,15 +1361,15 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     "transcripts_extracted": len(transcripts),
                     "files_saved": len(saved_files),
                     "files_skipped": len(skipped_files),
-                    "skipped_via_index": skipped_via_index
-                    if not overwrite_existing
-                    else 0,
+                    "skipped_via_index": (
+                        skipped_via_index if not overwrite_existing else 0
+                    ),
                     "overwrite_enabled": overwrite_existing,
                     "prefer_manual": self.prefer_manual,
                     "fallback_to_auto": self.fallback_to_auto,
-                    "cancelled": cancellation_token.is_cancelled
-                    if cancellation_token
-                    else False,
+                    "cancelled": (
+                        cancellation_token.is_cancelled if cancellation_token else False
+                    ),
                 },
             )
 

@@ -49,9 +49,7 @@ class YouTubeMetadata(BaseModel):
     # Creator information
     uploader: str = Field(default="", description="Channel name")
     uploader_id: str = Field(default="", description="Channel ID")
-    upload_date: str | None = Field(
-        default=None, description="Upload date (YYYYMMDD)"
-    )
+    upload_date: str | None = Field(default=None, description="Upload date (YYYYMMDD)")
 
     # Categorization
     tags: list[str] = Field(default_factory=list, description="Video tags")
@@ -160,9 +158,7 @@ class FailedVideo(BaseModel):
     video_id: str = Field(..., description="YouTube video ID")
     url: str = Field(..., description="Full YouTube URL")
     title: str | None = Field(default=None, description="Video title if available")
-    uploader: str | None = Field(
-        default=None, description="Channel name if available"
-    )
+    uploader: str | None = Field(default=None, description="Channel name if available")
     failure_reason: str = Field(default="Unknown", description="Reason for failure")
     ytdlp_failed: bool = Field(
         default=True, description="Whether YT-DLP extraction failed"
@@ -569,15 +565,21 @@ class YouTubeMetadataProcessor(BaseProcessor):
                             url=f"https://www.youtube.com/watch?v={video_id}",
                             description=snippet.get("description", ""),
                             duration=duration_seconds,
-                            view_count=int(statistics.get("viewCount", 0))
-                            if statistics.get("viewCount")
-                            else None,
-                            like_count=int(statistics.get("likeCount", 0))
-                            if statistics.get("likeCount")
-                            else None,
-                            comment_count=int(statistics.get("commentCount", 0))
-                            if statistics.get("commentCount")
-                            else None,
+                            view_count=(
+                                int(statistics.get("viewCount", 0))
+                                if statistics.get("viewCount")
+                                else None
+                            ),
+                            like_count=(
+                                int(statistics.get("likeCount", 0))
+                                if statistics.get("likeCount")
+                                else None
+                            ),
+                            comment_count=(
+                                int(statistics.get("commentCount", 0))
+                                if statistics.get("commentCount")
+                                else None
+                            ),
                             uploader=snippet.get("channelTitle", ""),
                             uploader_id=snippet.get("channelId", ""),
                             upload_date=upload_date,

@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-import yaml
+import yaml  # type: ignore
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -71,26 +71,6 @@ class PathsConfig(BaseModel):
         default="",
         description="Input directory (must be configured by user)",
     )
-    output: str = Field(
-        default="",
-        description="Output directory (alias for output_dir) (must be configured by user)",
-    )
-    transcripts: str = Field(
-        default="",
-        description="Transcripts directory (must be configured by user)",
-    )
-    summaries: str = Field(
-        default="",
-        description="Summaries directory (must be configured by user)",
-    )
-    mocs: str = Field(
-        default="",
-        description="Maps of Content directory (must be configured by user)",
-    )
-    cache: str = Field(
-        default="",
-        description="Cache directory (must be configured by user)",
-    )
     logs: str = Field(
         default="./logs", description="Logs directory (alias for logs_dir)"
     )
@@ -108,7 +88,7 @@ class PathsConfig(BaseModel):
         "cache",
         "logs",
     )
-    def expand_paths(cls, v):
+    def expand_paths(cls, v: Any) -> str:
         """Expand user paths."""
         return str(Path(v).expanduser()) if v else v
 
@@ -377,9 +357,7 @@ class Settings(BaseSettings):
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
     summarization: LLMConfig = Field(default_factory=LLMConfig)
 
-    def __init__(
-        self, config_path: str | Path | None = None, **kwargs
-    ) -> None:
+    def __init__(self, config_path: str | Path | None = None, **kwargs) -> None:
         """Initialize settings from YAML file and environment variables."""
 
         # Static YAML loading function for use before super().__init__()

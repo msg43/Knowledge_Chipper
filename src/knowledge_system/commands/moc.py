@@ -12,7 +12,7 @@ import click
 
 from ..logger import log_system_event
 from ..processors.moc import MOCProcessor
-from .common import CLIContext, pass_context, console, logger
+from .common import CLIContext, console, logger, pass_context
 
 
 @click.command()
@@ -53,13 +53,13 @@ from .common import CLIContext, pass_context, console, logger
 @pass_context
 def moc(
     ctx: CLIContext,
-    input_paths: List[Path],
-    output: Optional[Path],
-    title: Optional[str],
+    input_paths: list[Path],
+    output: Path | None,
+    title: str | None,
     theme: str,
     depth: int,
     include_beliefs: bool,
-    template: Optional[Path],
+    template: Path | None,
     dry_run: bool,
 ) -> None:
     """
@@ -97,7 +97,9 @@ def moc(
 
     # Determine output path
     if output is None:
-        console.print("[red]✗ Error: Output directory is required. Use --output to specify where MOC files should be saved.[/red]")
+        console.print(
+            "[red]✗ Error: Output directory is required. Use --output to specify where MOC files should be saved.[/red]"
+        )
         sys.exit(1)
 
     # Log MOC generation start
@@ -158,7 +160,9 @@ def moc(
                         f.write(content)
 
                     if not ctx.quiet:
-                        console.print(f"[green]✓ Saved {filename} to {file_path}[/green]")
+                        console.print(
+                            f"[green]✓ Saved {filename} to {file_path}[/green]"
+                        )
         else:
             console.print(
                 f"[red]✗ MOC generation failed:[/red] {'; '.join(result.errors)}"
@@ -169,5 +173,6 @@ def moc(
         console.print(f"[red]✗ Unexpected error during MOC generation:[/red] {e}")
         if ctx.verbose:
             import traceback
+
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
-        sys.exit(1) 
+        sys.exit(1)

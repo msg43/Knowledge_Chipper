@@ -229,4 +229,7 @@ settings.yaml
 
 # Editor backup/recovery files
 *.rslsd
-logs/
+
+# Temporary debug files
+*.rsls
+*.rslsc
