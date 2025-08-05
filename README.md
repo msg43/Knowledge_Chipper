@@ -31,6 +31,12 @@ A comprehensive knowledge management system for macOS that transforms videos, au
 - **Model Context Detection**: Automatically detects and uses each model's full capabilities
 - **Future-Proof Design**: Automatically adapts to new models (Qwen2.5-1M gets 950K+ thresholds!)
 
+### 🆕 Smart Knowledge Extraction
+- **Header-to-YAML Auto-Extraction**: Document summaries automatically extract structured data to YAML frontmatter
+- **Intelligent Field Generation**: Converts bullet points under headers (Mental Models, Jargon, People) to numbered YAML fields
+- **MOC Classification**: Automatically adds `Is_MOC` field based on analysis type for better organization
+- **Zero Configuration**: Works automatically with Document Summary analysis type
+
 ## Table of Contents
 
 - [🚀 Quick Start](#-quick-start)
@@ -48,6 +54,7 @@ A comprehensive knowledge management system for macOS that transforms videos, au
 - [⭐ Core Features](#-core-features)
   - [What Can It Process?](#what-can-it-process)
   - [Main Operations](#main-operations)
+  - [Document Summary Header-to-YAML Extraction](#-document-summary-special-feature-header-to-yaml-extraction)
   - [Output Types](#output-types)
   - [Intelligent Text Chunking](#-intelligent-text-chunking)
   - [Intelligent Quality Detection & Automatic Retry](#-intelligent-quality-detection--automatic-retry)
@@ -409,6 +416,78 @@ knowledge-system moc files/*.md --no-include-beliefs
 ```
 
 **Perfect for:** Research notes, meeting transcripts, knowledge bases, documentation collections, academic papers, interview transcripts.
+
+#### **📋 Document Summary Special Feature: Header-to-YAML Extraction**
+
+**Smart Automatic YAML Field Generation from Summary Content**
+
+When using "Document Summary" analysis type, the system automatically extracts structured information and adds it to YAML frontmatter:
+
+**🎯 How It Works:**
+1. System analyzes the generated summary content
+2. Looks for specific header sections (configurable in `config/Headers_to_YAML.txt`)
+3. Extracts bullet points under those headers
+4. Automatically creates numbered YAML fields
+
+**📝 Default Header Detection:**
+```
+Mental Models; Jargon; People
+```
+
+**🔄 Automatic Processing Example:**
+
+**Summary Content Generated:**
+```markdown
+### Mental Models
+- Systems thinking approach to complex problems
+- First principles reasoning for better decisions
+- Opportunity cost evaluation framework
+
+### Jargon
+- API: Application Programming Interface
+- MVP: Minimum Viable Product
+
+### People
+- Elon Musk: CEO of Tesla and SpaceX
+```
+
+**YAML Frontmatter Automatically Added:**
+```yaml
+---
+title: "Summary of podcast_episode"
+source_file: "episode.md"
+model: "gpt-4o-mini-2024-07-18"
+Is_MOC: false
+Mental_Models_01: "Systems thinking approach to complex problems"
+Mental_Models_02: "First principles reasoning for better decisions"
+Mental_Models_03: "Opportunity cost evaluation framework"
+Jargon_01: "API: Application Programming Interface"
+Jargon_02: "MVP: Minimum Viable Product"
+People_01: "Elon Musk: CEO of Tesla and SpaceX"
+generated: "2025-01-02T16:30:00Z"
+---
+```
+
+**⚙️ Configuration:**
+- **Header List**: Edit `config/Headers_to_YAML.txt` to customize which headers trigger extraction
+- **Analysis Type Detection**: Only works with "Document Summary" analysis type
+- **Is_MOC Field**: Automatically adds `Is_MOC: false` for Document Summary, `Is_MOC: true` for MOC types
+
+**🔧 Field Name Consistency:**
+- **Exact Header Matching**: H3 headers from your prompt become YAML fields exactly (spaces → underscores)
+  - `### Mental Models` → `Mental_Models_01`, `Mental_Models_02`, etc.
+  - `### People` → `People_01`, `People_02`, etc.
+  - `### Jargon` → `Jargon_01`, `Jargon_02`, etc.
+- **Title Consistency**: Both file titles and YAML titles display without dashes (e.g., "my document" instead of "my-document")
+
+**💡 Benefits:**
+- **Zero Manual Work**: Automatic structured data extraction
+- **Obsidian Compatible**: Perfect YAML frontmatter for knowledge management
+- **Searchable**: Query by specific mental models, people, or jargon
+- **Scalable**: Works across hundreds of summary files
+- **Customizable**: Configure which headers to extract
+
+**🎯 Perfect For:** Building searchable knowledge bases, research databases, podcast analysis, interview insights, and academic paper organization.
 
 ### Output Types
 
@@ -886,9 +965,146 @@ The Settings tab displays detailed hardware information:
 ### Customization Options
 
 - **Transcription Models**: Choose quality vs. speed
-- **Summary Styles**: Bullet points, academic, executive
 - **Output Formats**: Markdown, plain text, SRT subtitles
 - **Processing Options**: Auto-processing, file patterns
+
+#### **🎨 Custom Analysis Types & Prompts**
+
+**✨ FULLY DYNAMIC SYSTEM**: The analysis types and prompt templates are completely customizable through simple configuration files - no code changes required!
+
+### **How the Dynamic System Works**
+
+**🔄 Automatic Template Detection:**
+1. **Analysis Types**: Defined in `config/dropdown_options.txt` (comma-separated)
+2. **Template Files**: System automatically looks for `config/prompts/{analysis_type}.txt`
+3. **Smart Conversion**: Analysis type names are converted to filenames automatically
+4. **No Hardcoding**: Add any analysis type without touching code
+
+**📁 File Naming Convention:**
+```
+Analysis Type → Template File
+"Document Summary" → config/prompts/document summary.txt
+"Custom Research" → config/prompts/custom research.txt  
+"Meeting Notes (Beta)" → config/prompts/meeting notes beta.txt
+```
+
+**Conversion Rules:**
+- Spaces: Preserved as spaces (not underscores)
+- Parentheses: Removed completely  
+- Case: Converted to lowercase
+- Example: `"My Analysis (Beta)"` → `my analysis beta.txt`
+
+### **Adding New Analysis Types**
+
+**Step 1: Add to Dropdown Options**
+```bash
+# Edit config/dropdown_options.txt
+Document Summary,Create MOC,Create MOC of MOCs,Research Analysis,Meeting Minutes,Interview Insights
+```
+
+**Step 2: Create Template File**
+```bash
+# Create config/prompts/research analysis.txt
+Analyze the following research content and extract:
+
+## Key Findings
+- Extract the main research findings
+- Note methodology used
+
+## Data Sources  
+- Identify all data sources mentioned
+- Assess credibility and reliability
+
+## Conclusions
+- Summarize author conclusions
+- Note limitations mentioned
+
+{TEXT}
+```
+
+**Step 3: That's It!**
+- New option appears immediately in GUI dropdown
+- Template auto-loads when selected
+- Users can still customize template path if needed
+
+### **Configuration Files**
+
+**Dropdown Options** (`config/dropdown_options.txt`):
+```
+Document Summary,Knowledge Map (MOC Style),Entity Extraction,Relationship Analysis,Meeting Minutes,Research Paper Analysis,Interview Insights,Code Review,Financial Analysis
+```
+
+**Template Requirements:**
+- Must include `{TEXT}` placeholder for content insertion
+- Can include `{MAX_TOKENS}` for token limit
+- Standard markdown formatting supported
+- Can include custom instructions and sections
+
+### **Real-World Examples**
+
+**Academic Research Setup:**
+```bash
+# config/dropdown_options.txt
+Document Summary,Literature Review,Research Paper Analysis,Methodology Extraction,Data Analysis
+
+# Then create:
+# config/prompts/literature review.txt
+# config/prompts/research paper analysis.txt  
+# config/prompts/methodology extraction.txt
+# config/prompts/data analysis.txt
+```
+
+**Business Meeting Setup:**
+```bash
+# config/dropdown_options.txt  
+Document Summary,Meeting Minutes,Action Items,Decision Log,Strategic Planning
+
+# Then create corresponding .txt files in config/prompts/
+```
+
+**Content Creator Setup:**
+```bash
+# config/dropdown_options.txt
+Document Summary,Video Script Analysis,Content Ideas,Audience Insights,Performance Review
+```
+
+### **Benefits of Dynamic System**
+
+**✅ Zero Code Changes**: Add unlimited analysis types via text files
+**✅ Instant Updates**: Changes appear immediately in GUI
+**✅ User Customizable**: End users can add their own analysis types
+**✅ Template Flexibility**: Each analysis type uses its own specialized prompt
+**✅ Professional Workflows**: Customize for specific industries or use cases
+**✅ Team Consistency**: Share config files to standardize analysis across teams
+
+### **Advanced Customization**
+
+**Custom Template Variables:**
+```markdown
+# config/prompts/financial analysis.txt
+Analyze the following financial content focusing on:
+
+## Revenue Analysis
+- Extract revenue figures and growth rates
+- Note seasonal patterns
+
+## Risk Assessment  
+- Identify financial risks mentioned
+- Assess management discussion of risks
+
+Maximum response length: {MAX_TOKENS} tokens
+
+Content to analyze:
+{TEXT}
+```
+
+**Template Best Practices:**
+- Use clear section headers for consistent output structure
+- Include specific instructions for desired analysis depth
+- Consider your intended output format (YAML fields, bullet points, etc.)
+- Test templates with sample content before deploying
+
+**💡 Pro Tip**: The system automatically generates YAML metadata from section headers when using "Document Summary" analysis type, so structure your templates accordingly!
 
 ## 🔧 Troubleshooting
 
@@ -914,6 +1130,11 @@ The Settings tab displays detailed hardware information:
 - **Explanation**: Automatic quality detection found potential issues (low word density, repetitive text)
 - **Solution**: Enable quality retry for automatic improvement, or manually try a larger model
 - **Details**: Not an error - transcript was generated but may need improvement
+
+**⚠️ "Template File Missing"**
+- **Explanation**: Selected analysis type doesn't have a corresponding prompt template file
+- **Solution**: Create the missing template file at the specified path, or edit `config/dropdown_options.txt` to remove unused options
+- **Details**: System expects prompt files to match dropdown options exactly (lowercase with spaces preserved)
 
 **🔄 "Retrying transcription with improved model"**
 - **Explanation**: Quality retry automatically upgrading from smaller to larger model
