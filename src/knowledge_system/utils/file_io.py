@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Union
 
 from ..errors import (
-    FileSystemError,
+    DirectoryError,
     FileNotFoundError,
     FilePermissionError,
-    DirectoryError,
+    FileSystemError,
 )
 from ..logger import get_logger
 
@@ -346,9 +346,7 @@ def get_file_hash(
     path = Path(path)
 
     if not path.exists():
-        raise FileNotFoundError(
-    f"File not found: {path}", context={
-        "path": str(path)})
+        raise FileNotFoundError(f"File not found: {path}", context={"path": str(path)})
 
     try:
         hasher = hashlib.new(algorithm)
@@ -386,9 +384,7 @@ def get_file_info(path: Union[str, Path]) -> Dict[str, Any]:
     path = Path(path)
 
     if not path.exists():
-        raise FileNotFoundError(
-    f"File not found: {path}", context={
-        "path": str(path)})
+        raise FileNotFoundError(f"File not found: {path}", context={"path": str(path)})
 
     try:
         stat = path.stat()
@@ -555,9 +551,7 @@ def atomic_write(
 
         raise FileSystemError(
             f"Failed to write file atomically: {path}",
-            context={
-    "path": str(path),
-     "content_type": type(content).__name__},
+            context={"path": str(path), "content_type": type(content).__name__},
             cause=e,
         )
 
@@ -645,9 +639,7 @@ def read_file_chunks(
     path = Path(path)
 
     if not path.exists():
-        raise FileNotFoundError(
-    f"File not found: {path}", context={
-        "path": str(path)})
+        raise FileNotFoundError(f"File not found: {path}", context={"path": str(path)})
 
     try:
         with open(path, "rb") as f:
@@ -661,15 +653,195 @@ def read_file_chunks(
         )
 
 
-def overwrite_or_insert_summary_section(
-    md_path: Path, new_summary: str) -> None:
+def _update_yaml_frontmatter(lines: list[str], additional_fields: dict[str, str]) -> list[str]:
+    """
+    Update YAML frontmatter in markdown file lines with additional fields.
+    
+    Args:
+        lines: List of file lines
+        additional_fields: Dict of YAML fields to add/update
+        
+    Returns:
+        Updated list of lines with modified YAML frontmatter
+    """
+    from ..logger import get_logger
+    logger = get_logger(__name__)
+    
+    if not lines or not additional_fields:
+        return lines
+    
+    # Check if file starts with YAML frontmatter
+    if not (lines[0].strip() == "---"):
+        logger.debug("No YAML frontmatter found, skipping YAML field updates")
+        return lines
+    
+    # Find the end of YAML frontmatter
+    yaml_end = None
+    for i, line in enumerate(lines[1:], 1):
+        if line.strip() == "---":
+            yaml_end = i
+            break
+    
+    if yaml_end is None:
+        logger.debug("Incomplete YAML frontmatter found, skipping YAML field updates")
+        return lines
+    
+    # Extract existing YAML content (excluding the --- delimiters)
+    yaml_lines = lines[1:yaml_end]
+    
+    # Parse existing YAML to check for duplicates
+    import yaml as yaml_parser
+    existing_fields = set()
+    
+    # Try to parse existing YAML to identify existing field names
+    try:
+        existing_yaml_content = "".join(yaml_lines)
+        existing_data = yaml_parser.safe_load(existing_yaml_content)
+        if isinstance(existing_data, dict):
+            existing_fields = set(existing_data.keys())
+    except Exception:
+        # If parsing fails, use regex to find existing field names
+        import re
+        for line in yaml_lines:
+            match = re.match(r'^(\w+):', line.strip())
+            if match:
+                existing_fields.add(match.group(1))
+    
+    # Add new fields to the end of YAML section, but only if they don't already exist
+    new_yaml_lines = yaml_lines.copy()
+    for key, value in additional_fields.items():
+        if key in existing_fields:
+            logger.warning(f"YAML field '{key}' already exists, skipping to prevent duplication")
+            continue
+        
+        # Format the YAML field with proper quoting for boolean and string values
+        if value.lower() in ["true", "false"]:
+            yaml_field = f'{key}: {value}\n'
+        else:
+            # Escape quotes in the value
+            escaped_value = str(value).replace('"', '\\"')
+            yaml_field = f'{key}: "{escaped_value}"\n'
+        
+        new_yaml_lines.append(yaml_field)
+        existing_fields.add(key)  # Track that we've added this field
+        logger.debug(f"Added YAML field: {key} = {value}")
+    
+    # Reconstruct the file with updated YAML
+    updated_lines = (
+        ["---\n"] + 
+        new_yaml_lines + 
+        ["---\n"] + 
+        lines[yaml_end + 1:]
+    )
+    
+    return updated_lines
+
+
+def generate_unified_yaml_metadata(
+    file_path: Path,
+    summary_content: str,
+    model: str,
+    provider: str,
+    metadata: dict,
+    template_path: Optional[Path] = None,
+    analysis_type: str = "document summary"
+) -> dict[str, str]:
+    """
+    Generate unified YAML metadata for summary files.
+    This consolidates all YAML field generation into one place to prevent duplication.
+    
+    Args:
+        file_path: Source file path
+        summary_content: The generated summary content
+        model: LLM model used
+        provider: LLM provider used
+        metadata: Processing metadata from the summarizer
+        template_path: Optional template file path
+        analysis_type: Type of analysis performed
+        
+    Returns:
+        Dictionary of YAML fields ready for frontmatter
+    """
+    from ..logger import get_logger
+    from .header_to_yaml import process_summary_for_yaml_headers
+    
+    logger = get_logger(__name__)
+    
+    yaml_fields = {}
+    
+    # Basic metadata
+    clean_display_name = file_path.stem.replace("-", " ").replace("_", " ")
+    yaml_fields["title"] = f"Summary of {clean_display_name}"
+    yaml_fields["source_file"] = file_path.name
+    yaml_fields["source_path"] = str(file_path.absolute())
+    yaml_fields["model"] = model
+    yaml_fields["provider"] = provider
+    
+    if template_path:
+        yaml_fields["template"] = str(template_path)
+    
+    # Performance metadata
+    processing_time = metadata.get("processing_time", 0)
+    yaml_fields["processing_time"] = f"{processing_time:.1f}"
+    
+    prompt_tokens = metadata.get("prompt_tokens", 0)
+    completion_tokens = metadata.get("completion_tokens", 0)
+    total_tokens = metadata.get("total_tokens", 0)
+    yaml_fields["prompt_tokens"] = str(prompt_tokens)
+    yaml_fields["completion_tokens"] = str(completion_tokens)
+    yaml_fields["total_tokens"] = str(total_tokens)
+    
+    tokens_per_second = metadata.get("tokens_per_second", 0)
+    yaml_fields["speed_tokens_per_second"] = f"{tokens_per_second:.1f}"
+    
+    # Content analysis metadata
+    input_length = metadata.get("input_length", 0)
+    summary_length = len(summary_content) if summary_content else 0
+    yaml_fields["input_length"] = str(input_length)
+    yaml_fields["summary_length"] = str(summary_length)
+    
+    compression_ratio = metadata.get("compression_ratio", 0)
+    reduction_percent = (1 - compression_ratio) * 100 if compression_ratio > 0 else 0
+    yaml_fields["compression_reduction_percent"] = f"{reduction_percent:.1f}"
+    
+    # Add chunking info if available
+    if metadata.get("chunks_processed"):
+        yaml_fields["chunks_processed"] = str(metadata.get("chunks_processed"))
+        if metadata.get("chunking_summary"):
+            yaml_fields["chunking_strategy"] = metadata.get("chunking_summary")
+    
+    # Process header-to-YAML conversion and add Is_MOC field for all analysis types
+    header_yaml_fields = process_summary_for_yaml_headers(summary_content, analysis_type)
+    
+    # Merge header-derived YAML fields, avoiding duplicates
+    existing_fields = set(yaml_fields.keys())
+    for field_name, field_value in header_yaml_fields.items():
+        if field_name not in existing_fields:
+            yaml_fields[field_name] = field_value
+        else:
+            logger.warning(f"YAML field '{field_name}' already exists in metadata, skipping duplicate from header processing")
+    
+    logger.info(f"Generated {len(yaml_fields)} unified YAML metadata fields")
+    return yaml_fields
+
+
+def overwrite_or_insert_summary_section(md_path: Path, new_summary: str, additional_yaml_fields: dict[str, str] | None = None) -> None:
     """
     Overwrite the ## Summary section in a markdown file with new_summary.
     If the section does not exist, insert it before ## Full Transcript, or at the end if not found.
+    
+    Args:
+        md_path: Path to the markdown file
+        new_summary: The new summary content to insert
+        additional_yaml_fields: Optional dict of additional YAML fields to append to frontmatter
     """
     md_path = Path(md_path)
     with open(md_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
+
+    # Handle YAML frontmatter updates if additional fields are provided
+    if additional_yaml_fields:
+        lines = _update_yaml_frontmatter(lines, additional_yaml_fields)
 
     summary_header = "## Summary"
     transcript_header = "## Full Transcript"
@@ -697,27 +869,16 @@ def overwrite_or_insert_summary_section(
                 summary_end = transcript_start
             else:
                 summary_end = len(lines)
-        new_section = [
-    summary_header +
-    "\n",
-    "\n",
-    new_summary.strip() +
-    "\n",
-     "\n"]
+        new_section = [summary_header + "\n", "\n", new_summary.strip() + "\n", "\n"]
         new_lines = lines[:summary_start] + new_section + lines[summary_end:]
     else:
         # Insert new summary section
-        new_section = [
-    summary_header +
-    "\n",
-    "\n",
-    new_summary.strip() +
-    "\n",
-     "\n"]
+        new_section = [summary_header + "\n", "\n", new_summary.strip() + "\n", "\n"]
         if transcript_start is not None:
             # Insert before transcript section
-            new_lines = lines[:transcript_start] + \
-                new_section + lines[transcript_start:]
+            new_lines = (
+                lines[:transcript_start] + new_section + lines[transcript_start:]
+            )
         else:
             # Insert at end if no transcript section found
             if len(lines) == 0:
