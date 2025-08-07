@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -27,21 +28,27 @@ class UpdateWorker(QThread):
 
     def _find_update_script(self) -> Optional[Path]:
         """Find the build_macos_app.sh script."""
-        # Check in the app bundle first
-        app_dir = Path(os.path.dirname(os.path.realpath(__file__))).parents[4]
-        script_path = app_dir / "build_macos_app.sh"
-        
-        if script_path.exists():
-            return script_path
-        
-        # Check in the project directory
-        project_dir = Path(os.path.dirname(os.path.realpath(__file__))).parents[3]
-        script_path = project_dir / "build_macos_app.sh"
-        
-        if script_path.exists():
-            return script_path
+        try:
+            # Get the MacOS directory path
+            if getattr(sys, 'frozen', False):
+                # Running in a bundle
+                macos_dir = Path(sys.executable).parent
+            else:
+                # Running from source
+                macos_dir = Path(os.path.dirname(os.path.realpath(__file__))).parents[3]
             
-        return None
+            # Look for the script in the MacOS directory
+            script_path = macos_dir / "build_macos_app.sh"
+            if script_path.exists():
+                logger.info(f"Found update script at: {script_path}")
+                return script_path
+            
+            logger.warning(f"Update script not found at: {script_path}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error finding update script: {e}")
+            return None
 
     def run(self) -> None:
         """Run the update process."""
