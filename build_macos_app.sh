@@ -64,14 +64,18 @@ authors = [
 ]
 description = "Knowledge Chipper - Your Personal Knowledge Assistant"
 requires-python = ">=3.13"
+
+[tool.setuptools]
+packages = ["knowledge_system"]
+package-dir = {"" = "src"}
 EOF
 
-# Move pyproject.toml to src directory
-sudo mv "/tmp/pyproject.toml" "$MACOS_PATH/src/pyproject.toml"
-sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/src/pyproject.toml"
+# Move pyproject.toml to MacOS directory
+sudo mv "/tmp/pyproject.toml" "$MACOS_PATH/pyproject.toml"
+sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/pyproject.toml"
 
 # Install the package in editable mode
-sudo "$MACOS_PATH/venv/bin/pip" install -e "$MACOS_PATH/src/"
+sudo "$MACOS_PATH/venv/bin/pip" install -e "$MACOS_PATH/"
 
 # Create logs directory
 echo "📝 Creating logs directory..."
