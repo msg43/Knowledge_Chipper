@@ -1,7 +1,7 @@
 """File operations mixin for common file handling functionality."""
 
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List, Optional, Callable
 
 from PyQt6.QtWidgets import (
     QFileDialog,
@@ -64,8 +64,8 @@ class FileOperationsMixin:
         return group
 
     def create_output_directory_field(
-        self, label: str, field_attr: str, browse_callback: callable | None = None
-    ) -> tuple:  # type: ignore
+        self, label: str, field_attr: str, browse_callback: Callable[[], None] | None = None
+    ) -> tuple[QLineEdit, QPushButton]:
         """Create output directory field with browse button."""
         field = QLineEdit()
         setattr(self, field_attr, field)
