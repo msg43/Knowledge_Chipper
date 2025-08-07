@@ -49,6 +49,24 @@ echo "🐍 Setting up Python virtual environment..."
 sudo python3 -m venv "$MACOS_PATH/venv"
 sudo "$MACOS_PATH/venv/bin/pip" install --upgrade pip
 sudo "$MACOS_PATH/venv/bin/pip" install -r "$MACOS_PATH/requirements.txt"
+
+# Create pyproject.toml for editable install
+cat > "$MACOS_PATH/src/pyproject.toml" << EOF
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "knowledge_system"
+version = "1.0.0"
+authors = [
+  { name="Matthew Greer" },
+]
+description = "Knowledge Chipper - Your Personal Knowledge Assistant"
+requires-python = ">=3.13"
+EOF
+
+# Install the package in editable mode
 sudo "$MACOS_PATH/venv/bin/pip" install -e "$MACOS_PATH/src/"
 
 # Create logs directory
