@@ -16,6 +16,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QCloseEvent, QIcon
 from PyQt6.QtWidgets import (
     QApplication,
+    QLabel,
     QMainWindow,
     QMessageBox,
     QSizePolicy,
@@ -27,6 +28,7 @@ from PyQt6.QtWidgets import (
 
 from ..config import get_settings
 from ..logger import get_logger
+from ..version import VERSION, BRANCH, BUILD_DATE
 from .assets.icons import get_app_icon, get_icon_path
 
 # Import workers and components
@@ -135,9 +137,18 @@ class MainWindow(QMainWindow):
         )
         main_layout.addWidget(self.progress_widget)
 
-        # Create status bar
+        # Create status bar with version info
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
+        
+        # Add version label to the right side
+        version_msg = f"Version: {VERSION} ({BRANCH}) - Built: {BUILD_DATE}"
+        
+        version_label = QLabel(version_msg)
+        version_label.setStyleSheet("color: #666;")
+        self.status_bar.addPermanentWidget(version_label)
+        
+        # Show ready message on the left side
         self.status_bar.showMessage("Ready")
 
         # Create modular tabs - all business logic is in the tab classes
