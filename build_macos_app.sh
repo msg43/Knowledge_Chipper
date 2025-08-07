@@ -183,6 +183,10 @@ echo "📝 Adding version information..."
 sudo cp -r .git "$MACOS_PATH/"
 sudo chmod -R 755 "$MACOS_PATH/.git"
 
+# Add the directory to Git's safe.directory config
+echo "🔐 Configuring Git safe directory..."
+git config --global --add safe.directory "$MACOS_PATH"
+
 # Get current version
 CURRENT_VERSION=$(git describe --tags --always)
 echo "✨ App bundle created successfully! Version: $CURRENT_VERSION"
