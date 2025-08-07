@@ -43,6 +43,7 @@ sudo cp -r src "$MACOS_PATH/"
 sudo cp -r venv "$MACOS_PATH/"
 sudo cp -r config "$MACOS_PATH/"
 sudo cp requirements.txt "$MACOS_PATH/"
+sudo cp build_macos_app.sh "$MACOS_PATH/"
 
 # Create logs directory
 echo "📝 Creating logs directory..."
