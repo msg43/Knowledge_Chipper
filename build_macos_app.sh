@@ -122,9 +122,21 @@ rm -rf icon.iconset
 
 # Set permissions
 echo "🔒 Setting permissions..."
-sudo chown -R root:wheel "$APP_PATH"
-sudo chmod -R 755 "$APP_PATH"
+# Set ownership to current user for the MacOS directory
+CURRENT_USER=$(whoami)
+sudo chown -R "$CURRENT_USER:staff" "$MACOS_PATH"
+sudo chmod -R 755 "$MACOS_PATH"
 sudo chmod 777 "$MACOS_PATH/logs"
+
+# Keep root ownership for the rest of the app bundle
+sudo chown -R root:wheel "$APP_PATH"
+sudo chown -R root:wheel "$RESOURCES_PATH"
+sudo chown -R root:wheel "$FRAMEWORKS_PATH"
+sudo chown root:wheel "$CONTENTS_PATH"
+sudo chown root:wheel "$APP_PATH"
+
+# Ensure the build script is executable
+sudo chmod +x "$MACOS_PATH/build_macos_app.sh"
 
 # Copy git info for version tracking
 echo "📝 Adding version information..."
