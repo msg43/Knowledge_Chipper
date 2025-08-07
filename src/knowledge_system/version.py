@@ -1,4 +1,4 @@
 # Auto-generated version info
-VERSION = "a3636fd"
+VERSION = "1b2ea37"
 BRANCH = "main"
 BUILD_DATE = "2025-08-07"
