@@ -87,6 +87,9 @@ class MainWindow(QMainWindow):
         # Load session state after UI is set up
         self._load_session()
 
+        # Check for updates if enabled
+        self._check_for_updates_on_launch()
+
     def _set_window_icon(self) -> None:
         """Set the custom window icon."""
         icon = get_app_icon()
@@ -120,6 +123,10 @@ class MainWindow(QMainWindow):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         main_layout.addWidget(self.tabs)
+
+        # Create API Keys tab first (needed for update checks)
+        self.api_keys_tab = APIKeysTab(self)
+        self.tabs.addTab(self.api_keys_tab, "⚙️ Settings")
 
         # Create progress widget
         self.progress_widget = EnhancedProgressBar()
@@ -339,6 +346,11 @@ class MainWindow(QMainWindow):
             logger.debug("Session state saved successfully")
         except Exception as e:
             logger.error(f"Could not save session state: {e}")
+
+    def _check_for_updates_on_launch(self) -> None:
+        """Check for updates on application launch if enabled."""
+        if hasattr(self, "api_keys_tab"):
+            self.api_keys_tab.check_for_updates_on_launch()
 
     def closeEvent(self, event: QCloseEvent | None) -> None:
         """Handle window close event."""
