@@ -12,15 +12,21 @@ cd "$SCRIPT_DIR"
 # Store current branch name
 CURRENT_BRANCH=$(git branch --show-current)
 
-# Check if there are uncommitted changes
+# Stash any changes
 if [[ -n $(git status -s) ]]; then
-    echo "⚠️  You have uncommitted changes. Please commit or stash them first."
-    exit 1
+    echo "📦 Stashing local changes..."
+    git stash
 fi
 
 # Pull latest code
 echo "⬇️ Pulling latest code from GitHub..."
 git pull origin $CURRENT_BRANCH
+
+# Pop stashed changes if any
+if [[ -n $(git stash list) ]]; then
+    echo "📦 Restoring local changes..."
+    git stash pop
+fi
 
 echo "🏗️ Building Knowledge_Chipper.app..."
 
@@ -49,6 +55,7 @@ echo "🐍 Setting up Python virtual environment..."
 sudo python3 -m venv "$MACOS_PATH/venv"
 sudo "$MACOS_PATH/venv/bin/pip" install --upgrade pip
 sudo "$MACOS_PATH/venv/bin/pip" install -r "$MACOS_PATH/requirements.txt"
+sudo "$MACOS_PATH/venv/bin/pip" install beautifulsoup4 youtube-transcript-api
 
 # Create pyproject.toml for editable install
 cat > "/tmp/pyproject.toml" << EOF
