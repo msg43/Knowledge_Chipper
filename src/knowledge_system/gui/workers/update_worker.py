@@ -3,6 +3,7 @@
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -61,30 +62,54 @@ class UpdateWorker(QThread):
 
             # Run the update script
             self.update_progress.emit("🔄 Checking for updates...")
-            
-            process = subprocess.Popen(
-                [str(self.script_path)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
 
-            # Read output in real-time
-            while True:
-                output = process.stdout.readline() if process.stdout else ""
-                if output == "" and process.poll() is not None:
-                    break
-                if output:
-                    self.update_progress.emit(output.strip())
+            # Create a temporary file for combined output
+            with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp_file:
+                process = subprocess.Popen(
+                    [str(self.script_path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,  # Combine stdout and stderr
+                    text=True,
+                    bufsize=1,
+                    universal_newlines=True
+                )
 
-            # Get the final status
-            if process.returncode == 0:
-                self.update_finished.emit(True, "✅ Update completed successfully!")
-            else:
-                error = process.stderr.read() if process.stderr else "Unknown error"
-                self.update_finished.emit(False, f"❌ Update failed: {error}")
+                # Read output in real-time
+                while True:
+                    output = process.stdout.readline() if process.stdout else ""
+                    if output == "" and process.poll() is not None:
+                        break
+                    if output:
+                        temp_file.write(output)
+                        self.update_progress.emit(output.strip())
+
+                # Get the final status
+                if process.returncode == 0:
+                    self.update_finished.emit(True, "✅ Update completed successfully!")
+                else:
+                    # Read the entire output
+                    temp_file.seek(0)
+                    full_output = temp_file.read()
+                    
+                    # Look for specific error patterns
+                    if "fatal: detected dubious ownership" in full_output:
+                        error = "Git ownership error. Please run the app from the terminal for more details."
+                    elif "Permission denied" in full_output:
+                        error = "Permission error. Please check file permissions."
+                    else:
+                        error = "Update failed. Please check the logs for details."
+                    
+                    logger.error(f"Update failed with output:\n{full_output}")
+                    self.update_finished.emit(False, f"❌ {error}")
+
+                # Clean up
+                temp_file_path = temp_file.name
+
+            # Delete the temporary file
+            try:
+                os.unlink(temp_file_path)
+            except Exception as e:
+                logger.warning(f"Failed to delete temporary file: {e}")
 
         except Exception as e:
             logger.error(f"Update error: {e}")
