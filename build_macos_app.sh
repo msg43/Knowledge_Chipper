@@ -3,6 +3,25 @@
 # Exit on any error
 set -e
 
+echo "🔄 Checking for updates..."
+
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+cd "$SCRIPT_DIR"
+
+# Store current branch name
+CURRENT_BRANCH=$(git branch --show-current)
+
+# Check if there are uncommitted changes
+if [[ -n $(git status -s) ]]; then
+    echo "⚠️  You have uncommitted changes. Please commit or stash them first."
+    exit 1
+fi
+
+# Pull latest code
+echo "⬇️ Pulling latest code from GitHub..."
+git pull origin $CURRENT_BRANCH
+
 echo "🏗️ Building Knowledge_Chipper.app..."
 
 # Define paths
@@ -72,6 +91,10 @@ mkdir -p "\$APP_DIR/logs"
 touch "\$LOG_FILE"
 chmod 666 "\$LOG_FILE"
 
+# Log the git version being launched
+echo "Launching Knowledge Chipper version:" >> "\$LOG_FILE"
+git -C "\$APP_DIR" rev-parse HEAD >> "\$LOG_FILE"
+
 # Activate virtual environment
 source "\$APP_DIR/venv/bin/activate"
 
@@ -102,5 +125,12 @@ sudo chown -R root:wheel "$APP_PATH"
 sudo chmod -R 755 "$APP_PATH"
 sudo chmod 777 "$MACOS_PATH/logs"
 
-echo "✨ App bundle created successfully!"
+# Copy git info for version tracking
+echo "📝 Adding version information..."
+sudo cp -r .git "$MACOS_PATH/"
+sudo chmod -R 755 "$MACOS_PATH/.git"
+
+# Get current version
+CURRENT_VERSION=$(git describe --tags --always)
+echo "✨ App bundle created successfully! Version: $CURRENT_VERSION"
 echo "🚀 You can now launch Knowledge Chipper from your Applications folder"
