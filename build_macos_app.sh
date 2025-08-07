@@ -52,14 +52,14 @@ sudo cp build_macos_app.sh "$MACOS_PATH/"
 
 # Set up virtual environment
 echo "🐍 Setting up Python virtual environment..."
-# Create venv without sudo first
-python3 -m venv "$MACOS_PATH/venv"
-# Then set ownership
-sudo chown -R root:wheel "$MACOS_PATH/venv"
-# Install packages as current user to avoid permission issues
-"$MACOS_PATH/venv/bin/pip" install --upgrade pip
-"$MACOS_PATH/venv/bin/pip" install -r "$MACOS_PATH/requirements.txt"
-"$MACOS_PATH/venv/bin/pip" install beautifulsoup4 youtube-transcript-api
+# Create venv in temp location first
+TEMP_VENV="/tmp/knowledge_chipper_venv"
+rm -rf "$TEMP_VENV"
+python3 -m venv "$TEMP_VENV"
+# Install packages in temp venv
+"$TEMP_VENV/bin/pip" install --upgrade pip
+"$TEMP_VENV/bin/pip" install -r "$MACOS_PATH/requirements.txt"
+"$TEMP_VENV/bin/pip" install beautifulsoup4 youtube-transcript-api pydantic-settings
 
 # Create pyproject.toml for editable install
 cat > "/tmp/pyproject.toml" << EOF
@@ -85,11 +85,12 @@ EOF
 sudo mv "/tmp/pyproject.toml" "$MACOS_PATH/pyproject.toml"
 sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/pyproject.toml"
 
-# Install additional dependencies
-"$MACOS_PATH/venv/bin/pip" install pydantic-settings
-
 # Install the package in editable mode
-"$MACOS_PATH/venv/bin/pip" install -e "$MACOS_PATH/"
+"$TEMP_VENV/bin/pip" install -e "$MACOS_PATH/"
+
+# Now move venv to final location with sudo
+sudo mv "$TEMP_VENV" "$MACOS_PATH/venv"
+sudo chown -R root:wheel "$MACOS_PATH/venv"
 
 # Create logs directory
 echo "📝 Creating logs directory..."
