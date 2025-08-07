@@ -30,21 +30,26 @@ class UpdateWorker(QThread):
     def _find_update_script(self) -> Optional[Path]:
         """Find the build_macos_app.sh script."""
         try:
-            # Get the MacOS directory path
-            if getattr(sys, 'frozen', False):
-                # Running in a bundle
-                macos_dir = Path(sys.executable).parent
-            else:
-                # Running from source
-                macos_dir = Path(os.path.dirname(os.path.realpath(__file__))).parents[3]
+            # Always use the main repository path for updates
+            # This avoids permission issues with the app bundle
+            main_repo_path = Path.home() / "Projects" / "Knowledge_Chipper"
             
-            # Look for the script in the MacOS directory
-            script_path = macos_dir / "build_macos_app.sh"
+            # Look for the script in the main repository
+            script_path = main_repo_path / "build_macos_app.sh"
             if script_path.exists():
                 logger.info(f"Found update script at: {script_path}")
                 return script_path
             
-            logger.warning(f"Update script not found at: {script_path}")
+            # Fallback to checking relative to current file location
+            if not getattr(sys, 'frozen', False):
+                # Running from source
+                fallback_dir = Path(os.path.dirname(os.path.realpath(__file__))).parents[3]
+                script_path = fallback_dir / "build_macos_app.sh"
+                if script_path.exists():
+                    logger.info(f"Found update script at: {script_path}")
+                    return script_path
+            
+            logger.warning(f"Update script not found")
             return None
             
         except Exception as e:
@@ -65,13 +70,16 @@ class UpdateWorker(QThread):
 
             # Create a temporary file for combined output
             with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp_file:
+                # Change to the script directory before running
+                script_dir = self.script_path.parent
                 process = subprocess.Popen(
                     [str(self.script_path)],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,  # Combine stdout and stderr
                     text=True,
                     bufsize=1,
-                    universal_newlines=True
+                    universal_newlines=True,
+                    cwd=str(script_dir)  # Run from the repository directory
                 )
 
                 # Read output in real-time
