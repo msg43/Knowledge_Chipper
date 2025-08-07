@@ -115,6 +115,8 @@ cat > "/tmp/Info.plist" << EOF
     <string>10.12</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>LSRequiresNativeExecution</key>
+    <true/>
 </dict>
 </plist>
 EOF
@@ -152,8 +154,11 @@ echo "Current directory: \$(pwd)" >> "\$LOG_FILE"
 echo "PYTHONPATH: \$PYTHONPATH" >> "\$LOG_FILE"
 echo "Python version: \$(python3 --version)" >> "\$LOG_FILE"
 echo "Virtual env: \$VIRTUAL_ENV" >> "\$LOG_FILE"
+echo "Architecture: \$(arch)" >> "\$LOG_FILE"
 echo "Launching GUI..." >> "\$LOG_FILE"
-exec python3 -m knowledge_system.gui.__main__ 2>&1 | tee -a "\$LOG_FILE"
+
+# Force native ARM64 execution
+exec arch -arm64 python3 -m knowledge_system.gui.__main__ 2>&1 | tee -a "\$LOG_FILE"
 EOF
 sudo mv "/tmp/launch" "$MACOS_PATH/launch"
 sudo chmod +x "$MACOS_PATH/launch"
