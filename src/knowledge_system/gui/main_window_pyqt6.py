@@ -107,7 +107,7 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self) -> None:
         """Set up the streamlined main UI."""
-        self.setWindowTitle(f"Knowledge Chipper v{VERSION} - Comprehensive Content Processing")
+        self.setWindowTitle(f"Knowledge Chipper v{VERSION} - Your Personal Knowledge Assistant")
         # Make window resizable with reasonable default size and minimum size
         self.resize(1200, 800)  # Default size
         self.setMinimumSize(800, 600)  # Minimum size to ensure usability
