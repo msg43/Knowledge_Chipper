@@ -107,7 +107,7 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self) -> None:
         """Set up the streamlined main UI."""
-        self.setWindowTitle("Knowledge_Chipper - Comprehensive Content Processing")
+        self.setWindowTitle(f"Knowledge Chipper v{VERSION} - Comprehensive Content Processing")
         # Make window resizable with reasonable default size and minimum size
         self.resize(1200, 800)  # Default size
         self.setMinimumSize(800, 600)  # Minimum size to ensure usability
@@ -142,7 +142,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
         
         # Add version label to the right side
-        version_msg = f"Version: {VERSION} ({BRANCH}) - Built: {BUILD_DATE}"
+        version_msg = f"Knowledge Chipper v{VERSION} ({BRANCH}) • Built: {BUILD_DATE}"
         
         version_label = QLabel(version_msg)
         version_label.setStyleSheet("color: #666;")
