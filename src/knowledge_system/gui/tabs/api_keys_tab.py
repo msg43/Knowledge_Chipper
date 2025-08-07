@@ -1,7 +1,7 @@
 """API Keys configuration tab for managing all API credentials."""
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from PyQt6.QtCore import QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -11,12 +11,14 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
 )
 
 from ...logger import get_logger
 from ..components.base_tab import BaseTab
+from ..workers.update_worker import UpdateWorker
 
 logger = get_logger(__name__)
 
@@ -30,6 +32,7 @@ class APIKeysTab(BaseTab):
     def __init__(self, parent: Any = None) -> None:
         # Initialize _actual_api_keys before calling super().__init__
         self._actual_api_keys: dict[str, str] = {}
+        self.update_worker: Optional[UpdateWorker] = None
 
         # Initialize settings manager for session persistence
         from ..core.settings_manager import get_gui_settings_manager
@@ -173,6 +176,9 @@ class APIKeysTab(BaseTab):
         api_group.setLayout(layout)
         main_layout.addWidget(api_group)
 
+        # Button layout
+        button_layout = QHBoxLayout()
+
         # Save button
         save_btn = QPushButton("💾 Save API Keys")
         save_btn.clicked.connect(self._save_settings)
@@ -186,7 +192,40 @@ class APIKeysTab(BaseTab):
             "• You can save partial configurations (some keys can be empty)\n"
             "• Changes take effect immediately after saving"
         )
-        main_layout.addWidget(save_btn)
+        button_layout.addWidget(save_btn)
+
+        # Add spacer
+        button_layout.addStretch()
+
+        # Update button
+        update_btn = QPushButton("🔄 Check for Updates")
+        update_btn.clicked.connect(self._check_for_updates)
+        update_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                font-size: 14px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #0D47A1;
+            }
+        """)
+        update_btn.setToolTip(
+            "Check for and install the latest version.\n"
+            "• Pulls latest code from GitHub\n"
+            "• Updates the app bundle\n"
+            "• Preserves your settings and configuration\n"
+            "• Requires an active internet connection"
+        )
+        button_layout.addWidget(update_btn)
+
+        main_layout.addLayout(button_layout)
 
         # Status label
         self.status_label = QLabel("")
@@ -507,3 +546,56 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
         """Validate API key inputs."""
         # All API keys are optional, so always valid
         return True
+
+    def _check_for_updates(self) -> None:
+        """Check for and install updates."""
+        try:
+            # Create update worker if not exists
+            if not self.update_worker:
+                self.update_worker = UpdateWorker()
+                self.update_worker.update_progress.connect(self._handle_update_progress)
+                self.update_worker.update_finished.connect(self._handle_update_finished)
+                self.update_worker.update_error.connect(self._handle_update_error)
+
+            # Show update in progress
+            self.status_label.setText("🔄 Checking for updates...")
+            self.status_label.setStyleSheet("color: #2196F3; font-weight: bold;")
+
+            # Start update process
+            self.update_worker.start()
+
+        except Exception as e:
+            self._handle_update_error(str(e))
+
+    def _handle_update_progress(self, message: str) -> None:
+        """Handle update progress messages."""
+        self.status_label.setText(message)
+        self.status_label.setStyleSheet("color: #2196F3; font-weight: bold;")
+        self.append_log(message)
+
+    def _handle_update_finished(self, success: bool, message: str) -> None:
+        """Handle update completion."""
+        if success:
+            self.status_label.setText("✨ Update completed! Please restart the app.")
+            self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
+            
+            # Show restart dialog
+            QMessageBox.information(
+                self,
+                "Update Complete",
+                "The app has been updated successfully!\n\nPlease restart Knowledge Chipper to use the new version.",
+                QMessageBox.StandardButton.Ok
+            )
+        else:
+            self.status_label.setText(f"❌ Update failed: {message}")
+            self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+        
+        self.append_log(message)
+        self.update_worker = None
+
+    def _handle_update_error(self, error: str) -> None:
+        """Handle update errors."""
+        self.status_label.setText(f"❌ Update error: {error}")
+        self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+        self.append_log(f"Update error: {error}")
+        self.update_worker = None
