@@ -74,6 +74,9 @@ EOF
 sudo mv "/tmp/pyproject.toml" "$MACOS_PATH/pyproject.toml"
 sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/pyproject.toml"
 
+# Install additional dependencies
+sudo "$MACOS_PATH/venv/bin/pip" install pydantic-settings
+
 # Install the package in editable mode
 sudo "$MACOS_PATH/venv/bin/pip" install -e "$MACOS_PATH/"
 
