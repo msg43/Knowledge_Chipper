@@ -152,6 +152,14 @@ class GUISettingsManager:
         """Set a list setting value."""
         self.session_manager.set_tab_setting(tab_name, key, value)
 
+    def get_value(self, tab_name: str, key: str, default: Any = None) -> Any:
+        """Get a setting value."""
+        return self.session_manager.get_tab_setting(tab_name, key, default)
+
+    def set_value(self, tab_name: str, key: str, value: Any) -> None:
+        """Set a setting value."""
+        self.session_manager.set_tab_setting(tab_name, key, value)
+
 
 # Global GUI settings manager instance
 _gui_settings_manager: GUISettingsManager | None = None
