@@ -40,10 +40,16 @@ sudo mkdir -p "$MACOS_PATH" "$RESOURCES_PATH" "$FRAMEWORKS_PATH"
 # Copy project files
 echo "📦 Copying project files..."
 sudo cp -r src "$MACOS_PATH/"
-sudo cp -r venv "$MACOS_PATH/"
 sudo cp -r config "$MACOS_PATH/"
 sudo cp requirements.txt "$MACOS_PATH/"
 sudo cp build_macos_app.sh "$MACOS_PATH/"
+
+# Set up virtual environment
+echo "🐍 Setting up Python virtual environment..."
+sudo python3 -m venv "$MACOS_PATH/venv"
+sudo "$MACOS_PATH/venv/bin/pip" install --upgrade pip
+sudo "$MACOS_PATH/venv/bin/pip" install -r "$MACOS_PATH/requirements.txt"
+sudo "$MACOS_PATH/venv/bin/pip" install -e "$MACOS_PATH/"
 
 # Create logs directory
 echo "📝 Creating logs directory..."
@@ -102,8 +108,13 @@ source "\$APP_DIR/venv/bin/activate"
 # Set PYTHONPATH to include src directory
 export PYTHONPATH="\$APP_DIR/src:\$PYTHONPATH"
 
-# Launch the GUI
+# Launch the GUI with debug output
 cd "\$APP_DIR"
+echo "Current directory: \$(pwd)" >> "\$LOG_FILE"
+echo "PYTHONPATH: \$PYTHONPATH" >> "\$LOG_FILE"
+echo "Python version: \$(python3 --version)" >> "\$LOG_FILE"
+echo "Virtual env: \$VIRTUAL_ENV" >> "\$LOG_FILE"
+echo "Launching GUI..." >> "\$LOG_FILE"
 exec python3 -m knowledge_system.gui.__main__ 2>&1 | tee -a "\$LOG_FILE"
 EOF
 sudo mv "/tmp/launch" "$MACOS_PATH/launch"
