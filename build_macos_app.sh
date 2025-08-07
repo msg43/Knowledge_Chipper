@@ -85,8 +85,7 @@ EOF
 sudo mv "/tmp/pyproject.toml" "$MACOS_PATH/pyproject.toml"
 sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/pyproject.toml"
 
-# Install the package in editable mode
-"$TEMP_VENV/bin/pip" install -e "$MACOS_PATH/"
+# Skip editable install - just ensure PYTHONPATH is set in launch script
 
 # Now move venv to final location with sudo
 sudo mv "$TEMP_VENV" "$MACOS_PATH/venv"
