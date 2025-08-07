@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional, cast
 
 from PyQt6.QtCore import QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QFrame,
     QGridLayout,
     QGroupBox,
@@ -12,6 +13,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QVBoxLayout,
 )
@@ -33,6 +35,7 @@ class APIKeysTab(BaseTab):
         # Initialize _actual_api_keys before calling super().__init__
         self._actual_api_keys: dict[str, str] = {}
         self.update_worker: Optional[UpdateWorker] = None
+        self.update_progress_dialog: Optional[QProgressDialog] = None
 
         # Initialize settings manager for session persistence
         from ..core.settings_manager import get_gui_settings_manager
@@ -197,6 +200,9 @@ class APIKeysTab(BaseTab):
         # Add spacer
         button_layout.addStretch()
 
+        # Update section layout
+        update_section = QVBoxLayout()
+
         # Update button
         update_btn = QPushButton("🔄 Check for Updates")
         update_btn.clicked.connect(self._check_for_updates)
@@ -223,7 +229,31 @@ class APIKeysTab(BaseTab):
             "• Preserves your settings and configuration\n"
             "• Requires an active internet connection"
         )
-        button_layout.addWidget(update_btn)
+        update_section.addWidget(update_btn)
+
+        # Auto-update checkbox
+        self.auto_update_checkbox = QCheckBox("Check for New Updates Upon Launch")
+        self.auto_update_checkbox.setToolTip(
+            "When enabled, Knowledge Chipper will automatically check for\n"
+            "updates each time you launch the application."
+        )
+        self.auto_update_checkbox.setStyleSheet("""
+            QCheckBox {
+                font-size: 12px;
+                color: #666;
+            }
+            QCheckBox:hover {
+                color: #2196F3;
+            }
+        """)
+        # Load saved preference
+        self.auto_update_checkbox.setChecked(
+            self.gui_settings.get_value(self.tab_name, "auto_update_enabled", False)
+        )
+        self.auto_update_checkbox.stateChanged.connect(self._on_auto_update_changed)
+        update_section.addWidget(self.auto_update_checkbox)
+
+        button_layout.addLayout(update_section)
 
         main_layout.addLayout(button_layout)
 
@@ -547,7 +577,21 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
         # All API keys are optional, so always valid
         return True
 
-    def _check_for_updates(self) -> None:
+    def _on_auto_update_changed(self, state: int) -> None:
+        """Handle auto-update checkbox state change."""
+        is_enabled = bool(state)
+        self.gui_settings.set_value(self.tab_name, "auto_update_enabled", is_enabled)
+        self.gui_settings.save()
+        self.append_log(
+            f"{'Enabled' if is_enabled else 'Disabled'} automatic update checking on launch"
+        )
+
+    def check_for_updates_on_launch(self) -> None:
+        """Check for updates if auto-update is enabled."""
+        if self.gui_settings.get_value(self.tab_name, "auto_update_enabled", False):
+            self._check_for_updates(is_auto=True)
+
+    def _check_for_updates(self, is_auto: bool = False) -> None:
         """Check for and install updates."""
         try:
             # Create update worker if not exists
@@ -557,9 +601,16 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
                 self.update_worker.update_finished.connect(self._handle_update_finished)
                 self.update_worker.update_error.connect(self._handle_update_error)
 
-            # Show update in progress
-            self.status_label.setText("🔄 Checking for updates...")
-            self.status_label.setStyleSheet("color: #2196F3; font-weight: bold;")
+            # Create and show progress dialog
+            self.update_progress_dialog = QProgressDialog(
+                "Checking for updates...", "Cancel", 0, 0, self
+            )
+            self.update_progress_dialog.setWindowTitle("Knowledge Chipper Update")
+            self.update_progress_dialog.setModal(True)
+            self.update_progress_dialog.setMinimumDuration(0 if is_auto else 500)  # Show immediately for auto-updates
+            self.update_progress_dialog.canceled.connect(self._cancel_update)
+            self.update_progress_dialog.setAutoClose(False)
+            self.update_progress_dialog.show()
 
             # Start update process
             self.update_worker.start()
@@ -567,14 +618,33 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
         except Exception as e:
             self._handle_update_error(str(e))
 
+    def _cancel_update(self) -> None:
+        """Cancel the update process."""
+        if self.update_worker:
+            self.update_worker.terminate()
+            self.update_worker = None
+        if self.update_progress_dialog:
+            self.update_progress_dialog.close()
+            self.update_progress_dialog = None
+        self.status_label.setText("Update cancelled")
+        self.status_label.setStyleSheet("color: #666; font-weight: bold;")
+        self.append_log("Update cancelled by user")
+
     def _handle_update_progress(self, message: str) -> None:
         """Handle update progress messages."""
+        if self.update_progress_dialog:
+            self.update_progress_dialog.setLabelText(message)
         self.status_label.setText(message)
         self.status_label.setStyleSheet("color: #2196F3; font-weight: bold;")
         self.append_log(message)
 
     def _handle_update_finished(self, success: bool, message: str) -> None:
         """Handle update completion."""
+        # Close progress dialog
+        if self.update_progress_dialog:
+            self.update_progress_dialog.close()
+            self.update_progress_dialog = None
+
         if success:
             self.status_label.setText("✨ Update completed! Please restart the app.")
             self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
@@ -589,13 +659,35 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
         else:
             self.status_label.setText(f"❌ Update failed: {message}")
             self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+            
+            # Show error dialog
+            QMessageBox.warning(
+                self,
+                "Update Failed",
+                f"Failed to update Knowledge Chipper:\n\n{message}",
+                QMessageBox.StandardButton.Ok
+            )
         
         self.append_log(message)
         self.update_worker = None
 
     def _handle_update_error(self, error: str) -> None:
         """Handle update errors."""
+        # Close progress dialog
+        if self.update_progress_dialog:
+            self.update_progress_dialog.close()
+            self.update_progress_dialog = None
+
         self.status_label.setText(f"❌ Update error: {error}")
         self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
         self.append_log(f"Update error: {error}")
+        
+        # Show error dialog
+        QMessageBox.critical(
+            self,
+            "Update Error",
+            f"An error occurred while updating Knowledge Chipper:\n\n{error}",
+            QMessageBox.StandardButton.Ok
+        )
+        
         self.update_worker = None
