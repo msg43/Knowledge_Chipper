@@ -134,9 +134,11 @@ mkdir -p "\$APP_DIR/logs"
 touch "\$LOG_FILE"
 chmod 666 "\$LOG_FILE"
 
-# Log the git version being launched
-echo "Launching Knowledge Chipper version:" >> "\$LOG_FILE"
-git -C "\$APP_DIR" rev-parse HEAD >> "\$LOG_FILE"
+# Log the version being launched
+if [ -f "\$APP_DIR/version.txt" ]; then
+    echo "Launching Knowledge Chipper:" >> "\$LOG_FILE"
+    cat "\$APP_DIR/version.txt" >> "\$LOG_FILE"
+fi
 
 # Activate virtual environment
 source "\$APP_DIR/venv/bin/activate"
@@ -185,14 +187,17 @@ sudo chmod 777 "$MACOS_PATH/logs"
 sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/build_macos_app.sh"
 sudo chmod 755 "$MACOS_PATH/build_macos_app.sh"
 
-# Copy git info for version tracking
+# Create version file instead of copying git repository
 echo "📝 Adding version information..."
-sudo cp -r .git "$MACOS_PATH/"
-sudo chmod -R 755 "$MACOS_PATH/.git"
-
-# Add the directory to Git's safe.directory config
-echo "🔐 Configuring Git safe directory..."
-git config --global --add safe.directory "$MACOS_PATH"
+CURRENT_VERSION=$(git describe --tags --always)
+CURRENT_BRANCH=$(git branch --show-current)
+CURRENT_DATE=$(date +"%Y-%m-%d")
+cat > "/tmp/version.txt" << EOF
+VERSION=$CURRENT_VERSION
+BRANCH=$CURRENT_BRANCH
+BUILD_DATE=$CURRENT_DATE
+EOF
+sudo mv "/tmp/version.txt" "$MACOS_PATH/version.txt"
 
 # Get current version
 CURRENT_VERSION=$(git describe --tags --always)
