@@ -51,7 +51,7 @@ sudo "$MACOS_PATH/venv/bin/pip" install --upgrade pip
 sudo "$MACOS_PATH/venv/bin/pip" install -r "$MACOS_PATH/requirements.txt"
 
 # Create pyproject.toml for editable install
-cat > "$MACOS_PATH/src/pyproject.toml" << EOF
+cat > "/tmp/pyproject.toml" << EOF
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
@@ -65,6 +65,10 @@ authors = [
 description = "Knowledge Chipper - Your Personal Knowledge Assistant"
 requires-python = ">=3.13"
 EOF
+
+# Move pyproject.toml to src directory
+sudo mv "/tmp/pyproject.toml" "$MACOS_PATH/src/pyproject.toml"
+sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/src/pyproject.toml"
 
 # Install the package in editable mode
 sudo "$MACOS_PATH/venv/bin/pip" install -e "$MACOS_PATH/src/"
