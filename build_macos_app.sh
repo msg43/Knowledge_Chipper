@@ -49,7 +49,7 @@ echo "🐍 Setting up Python virtual environment..."
 sudo python3 -m venv "$MACOS_PATH/venv"
 sudo "$MACOS_PATH/venv/bin/pip" install --upgrade pip
 sudo "$MACOS_PATH/venv/bin/pip" install -r "$MACOS_PATH/requirements.txt"
-sudo "$MACOS_PATH/venv/bin/pip" install -e "$MACOS_PATH/"
+sudo "$MACOS_PATH/venv/bin/pip" install -e "$MACOS_PATH/src/"
 
 # Create logs directory
 echo "📝 Creating logs directory..."
