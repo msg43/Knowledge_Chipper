@@ -1,4 +1,5 @@
-"""
+""" Command Line Interface for Knowledge System.
+
 Command Line Interface for Knowledge System.
 Provides comprehensive CLI commands for all system operations.
 """
@@ -27,16 +28,16 @@ __version__ = "0.1.0"
 
 
 class CLIContext:
-    """Context object for CLI commands."""
+    """ Context object for CLI commands.""".
 
     def __init__(self) -> None:
-        """Initialize CLI context."""
+        """ Initialize CLI context.""".
         self.settings: Settings | None = None
         self.verbose: bool = False
         self.quiet: bool = False
 
     def get_settings(self) -> Settings:
-        """Get or initialize settings."""
+        """ Get or initialize settings.""".
         if self.settings is None:
             self.settings = get_settings()
         return self.settings
@@ -46,7 +47,7 @@ pass_context = click.make_pass_decorator(CLIContext, ensure=True)
 
 
 def handle_cli_error(func: Any) -> Any:
-    """Decorator to handle CLI errors gracefully."""
+    """ Decorator to handle CLI errors gracefully.""".
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
@@ -76,12 +77,12 @@ def handle_cli_error(func: Any) -> Any:
 def main(
     ctx: click.Context, version: bool, verbose: bool, quiet: bool, config: str | None
 ) -> None:
-    """
+    """ Knowledge_Chipper - Comprehensive knowledge processing and management.
     Knowledge_Chipper - Comprehensive knowledge processing and management.
 
     A powerful tool for processing YouTube videos, PDFs, and other content
     into structured knowledge with transcription, summarization, and MOC generation.
-    """
+    """ # Configure threading and resource management based on user settings.
     # Configure threading and resource management based on user settings
 
     # Ensure context object exists
@@ -197,7 +198,7 @@ def watch(
     dry_run: bool,
     device: str,
 ) -> None:
-    """
+    """ Watch directory for new files and auto-process them.
     Watch directory for new files and auto-process them.
 
     Monitors a directory for new audio, video, or document files and
@@ -208,7 +209,8 @@ def watch(
         knowledge-system watch ./input/
         knowledge-system watch ~/Downloads --patterns "*.mp4" "*.pdf"
         knowledge-system watch ./videos --no-summarize --debounce 10
-    """
+    """ if not ctx.quiet:.
+    
     if not ctx.quiet:
         console.print(f"[bold cyan]Watching:[/bold cyan] {watch_path}")
         console.print(
@@ -243,7 +245,7 @@ def watch(
     try:
         # Define processing callback
         def process_file(file_path: Path) -> None:
-            """Process a new or modified file."""
+            """ Process a new or modified file.""".
             settings = ctx.get_settings()
             if not ctx.quiet:
                 console.print(f"[cyan]Processing:[/cyan] {file_path}")
@@ -346,7 +348,7 @@ def watch(
 def status(
     ctx: CLIContext, processors: bool, paths: bool, settings: bool, logs: bool
 ) -> None:
-    """
+    """ Show system status and statistics.
     Show system status and statistics.
 
     Displays information about processor performance, configured paths,
@@ -356,7 +358,7 @@ def status(
         knowledge-system status
         knowledge-system status --settings
         knowledge-system status --logs --no-processors
-    """
+    """ settings_obj = ctx.get_settings().
     settings_obj = ctx.get_settings()
 
     console.print("[bold blue]Knowledge_Chipper Status[/bold blue]\n")
@@ -458,7 +460,7 @@ def status(
 @click.argument("file_path", type=click.Path(exists=True, path_type=Path))
 @pass_context
 def info(ctx: CLIContext, file_path: Path) -> None:
-    """
+    """ Show detailed information about a file.
     Show detailed information about a file.
 
     Displays file metadata, processing history, and compatibility information.
@@ -466,7 +468,8 @@ def info(ctx: CLIContext, file_path: Path) -> None:
     Examples:
         knowledge-system info video.mp4
         knowledge-system info transcript.md
-    """
+    """ if not ctx.quiet:.
+    
     if not ctx.quiet:
         console.print(f"[bold blue]File Information:[/bold blue] {file_path}\n")
 
@@ -556,7 +559,7 @@ def info(ctx: CLIContext, file_path: Path) -> None:
 @main.command()
 @pass_context
 def gui(ctx: CLIContext) -> None:
-    """Launch the graphical user interface."""
+    """ Launch the graphical user interface.""".
     try:
         from .gui import main as gui_main
 
@@ -574,7 +577,7 @@ def gui(ctx: CLIContext) -> None:
 
 @click.group()
 def youtube() -> None:
-    """YouTube-specific commands for troubleshooting and authentication."""
+    """ YouTube-specific commands for troubleshooting and authentication.""".
     pass
 
 
@@ -584,13 +587,13 @@ main.add_command(youtube)
 
 @main.group()
 def cache() -> None:
-    """Cache management commands."""
+    """ Cache management commands.""".
     pass
 
 
 @cache.command()
 def clear() -> None:
-    """Clear Python bytecode cache files."""
+    """ Clear Python bytecode cache files.""".
     from .utils.cache_management import force_clear_cache
 
     click.echo("Clearing Python cache...")
@@ -605,7 +608,7 @@ def clear() -> None:
 
 @cache.command("status")
 def cache_status() -> None:
-    """Check if cache clearing is recommended."""
+    """ Check if cache clearing is recommended.""".
     from .utils.cache_management import should_clear_cache_on_startup
 
     should_clear, reason = should_clear_cache_on_startup()
@@ -619,7 +622,7 @@ def cache_status() -> None:
 
 @cache.command()
 def flag() -> None:
-    """Create a flag to force cache clearing on next startup."""
+    """ Create a flag to force cache clearing on next startup.""".
     from .utils.cache_management import create_manual_clear_flag
 
     create_manual_clear_flag()
@@ -632,7 +635,7 @@ main.add_command(cache)
 
 @youtube.command()
 def auth_status() -> None:
-    """Check YouTube authentication status and diagnostics."""
+    """ Check YouTube authentication status and diagnostics.""".
     from .utils.youtube_utils import get_authentication_status
 
     status = get_authentication_status()
@@ -674,7 +677,7 @@ def auth_status() -> None:
 
 @youtube.command()
 def clear_cache() -> None:
-    """Clear YouTube authentication cache to force re-authentication."""
+    """ Clear YouTube authentication cache to force re-authentication.""".
     from .utils.youtube_utils import clear_authentication_cache
 
     clear_authentication_cache()
@@ -684,7 +687,7 @@ def clear_cache() -> None:
 
 @youtube.command()
 def cookie_instructions() -> None:
-    """Show instructions for creating a manual cookie file."""
+    """ Show instructions for creating a manual cookie file.""".
     from .utils.youtube_utils import create_cookie_instructions
 
     instructions = create_cookie_instructions()
@@ -694,7 +697,7 @@ def cookie_instructions() -> None:
 @youtube.command()
 @click.argument("url")
 def test_auth(url: str) -> None:
-    """Test YouTube authentication with a specific URL."""
+    """ Test YouTube authentication with a specific URL.""".
     from .utils.youtube_utils import get_single_working_strategy
 
     click.echo(f"Testing authentication with: {url}")

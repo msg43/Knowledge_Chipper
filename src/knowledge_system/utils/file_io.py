@@ -1,4 +1,5 @@
-"""
+""" File I/O utilities for Knowledge System.
+
 File I/O utilities for Knowledge System.
 Provides safe file operations, naming conventions, and error handling.
 """
@@ -28,7 +29,7 @@ def safe_filename(
     replacement_char: str = "_",
     preserve_extension: bool = True,
 ) -> str:
-    """
+    """ Create a safe filename by removing or replacing problematic characters.
     Create a safe filename by removing or replacing problematic characters.
 
     Args:
@@ -39,7 +40,8 @@ def safe_filename(
 
     Returns:
         Safe filename string
-    """
+    """ if not filename:.
+    
     if not filename:
         return "unnamed_file"
 
@@ -115,7 +117,7 @@ def safe_filename(
 
 
 def ensure_directory(path: str | Path) -> Path:
-    """
+    """ Ensure a directory exists, creating it if necessary.
     Ensure a directory exists, creating it if necessary.
 
     Args:
@@ -126,7 +128,7 @@ def ensure_directory(path: str | Path) -> Path:
 
     Raises:
         DirectoryError: If directory cannot be created
-    """
+    """ path = Path(path).
     path = Path(path)
 
     try:
@@ -153,7 +155,7 @@ def safe_copy(
     overwrite: bool = False,
     create_dirs: bool = True,
 ) -> Path:
-    """
+    """ Safely copy a file with error handling and validation.
     Safely copy a file with error handling and validation.
 
     Args:
@@ -169,7 +171,8 @@ def safe_copy(
         FileNotFoundError: If source file doesn't exist
         FilePermissionError: If permission denied
         FileSystemError: For other file operation errors
-    """
+    """ src_path = Path(src).
+    
     src_path = Path(src)
     dst_path = Path(dst)
 
@@ -220,7 +223,7 @@ def safe_move(
     overwrite: bool = False,
     create_dirs: bool = True,
 ) -> Path:
-    """
+    """ Safely move a file with error handling and validation.
     Safely move a file with error handling and validation.
 
     Args:
@@ -236,7 +239,8 @@ def safe_move(
         FileNotFoundError: If source file doesn't exist
         FilePermissionError: If permission denied
         FileSystemError: For other file operation errors
-    """
+    """ src_path = Path(src).
+    
     src_path = Path(src)
     dst_path = Path(dst)
 
@@ -276,7 +280,7 @@ def safe_move(
 
 
 def safe_delete(path: str | Path, missing_ok: bool = True) -> bool:
-    """
+    """ Safely delete a file or directory.
     Safely delete a file or directory.
 
     Args:
@@ -290,7 +294,7 @@ def safe_delete(path: str | Path, missing_ok: bool = True) -> bool:
         FileNotFoundError: If file doesn't exist and missing_ok=False
         FilePermissionError: If permission denied
         FileSystemError: For other file operation errors
-    """
+    """ path = Path(path).
     path = Path(path)
 
     if not path.exists():
@@ -329,7 +333,7 @@ def get_file_hash(
     algorithm: str = "md5",
     chunk_size: int = 8192,
 ) -> str:
-    """
+    """ Calculate hash of a file.
     Calculate hash of a file.
 
     Args:
@@ -343,7 +347,7 @@ def get_file_hash(
     Raises:
         FileNotFoundError: If file doesn't exist
         FileSystemError: For other file operation errors
-    """
+    """ path = Path(path).
     path = Path(path)
 
     if not path.exists():
@@ -370,7 +374,7 @@ def get_file_hash(
 
 
 def get_file_info(path: str | Path) -> dict[str, Any]:
-    """
+    """ Get comprehensive information about a file.
     Get comprehensive information about a file.
 
     Args:
@@ -381,7 +385,7 @@ def get_file_info(path: str | Path) -> dict[str, Any]:
 
     Raises:
         FileNotFoundError: If file doesn't exist
-    """
+    """ path = Path(path).
     path = Path(path)
 
     if not path.exists():
@@ -423,7 +427,7 @@ def get_file_info(path: str | Path) -> dict[str, Any]:
 
 
 def format_file_size(size_bytes: int) -> str:
-    """
+    """ Format file size in human-readable format.
     Format file size in human-readable format.
 
     Args:
@@ -431,7 +435,8 @@ def format_file_size(size_bytes: int) -> str:
 
     Returns:
         Formatted size string
-    """
+    """ if size_bytes == 0:.
+    
     if size_bytes == 0:
         return "0 B"
 
@@ -452,7 +457,7 @@ def find_files(
     recursive: bool = True,
     include_dirs: bool = False,
 ) -> list[Path]:
-    """
+    """ Find files matching a pattern.
     Find files matching a pattern.
 
     Args:
@@ -466,7 +471,7 @@ def find_files(
 
     Raises:
         DirectoryError: If directory doesn't exist or can't be accessed
-    """
+    """ directory = Path(directory).
     directory = Path(directory)
 
     if not directory.exists():
@@ -504,7 +509,7 @@ def atomic_write(
     encoding: str = "utf-8",
     create_dirs: bool = True,
 ) -> Path:
-    """
+    """ Atomically write content to a file.
     Atomically write content to a file.
 
     Args:
@@ -518,7 +523,7 @@ def atomic_write(
 
     Raises:
         FileSystemError: If write operation fails
-    """
+    """ path = Path(path).
     path = Path(path)
 
     if create_dirs:
@@ -562,7 +567,7 @@ def backup_file(
     backup_dir: str | Path | None = None,
     max_backups: int = 5,
 ) -> Path | None:
-    """
+    """ Create a backup of a file.
     Create a backup of a file.
 
     Args:
@@ -575,7 +580,7 @@ def backup_file(
 
     Raises:
         FileSystemError: If backup operation fails
-    """
+    """ path = Path(path).
     path = Path(path)
 
     if not path.exists():
@@ -607,7 +612,7 @@ def cleanup_old_backups(
     original_name: str,
     max_backups: int,
 ) -> None:
-    """Clean up old backup files, keeping only the most recent ones."""
+    """ Clean up old backup files, keeping only the most recent ones.""".
     pattern = f"{Path(original_name).stem}.backup.*{Path(original_name).suffix}"
     backups = find_files(backup_dir, pattern, recursive=False)
 
@@ -623,7 +628,7 @@ def read_file_chunks(
     path: str | Path,
     chunk_size: int = 8192,
 ) -> Generator[bytes, None, None]:
-    """
+    """ Read a file in chunks for memory-efficient processing.
     Read a file in chunks for memory-efficient processing.
 
     Args:
@@ -636,7 +641,7 @@ def read_file_chunks(
     Raises:
         FileNotFoundError: If file doesn't exist
         FileSystemError: For read errors
-    """
+    """ path = Path(path).
     path = Path(path)
 
     if not path.exists():
@@ -657,7 +662,7 @@ def read_file_chunks(
 def _update_yaml_frontmatter(
     lines: list[str], additional_fields: dict[str, str]
 ) -> list[str]:
-    """
+    """ Update YAML frontmatter in markdown file lines with additional fields.
     Update YAML frontmatter in markdown file lines with additional fields.
 
     Args:
@@ -666,7 +671,7 @@ def _update_yaml_frontmatter(
 
     Returns:
         Updated list of lines with modified YAML frontmatter
-    """
+    """ from ..logger import get_logger.
     from ..logger import get_logger
 
     logger = get_logger(__name__)
@@ -749,7 +754,8 @@ def generate_unified_yaml_metadata(
     template_path: Path | None = None,
     analysis_type: str = "document summary",
 ) -> dict[str, str]:
-    """
+    """ Generate unified YAML metadata for summary files.
+    
     Generate unified YAML metadata for summary files.
     This consolidates all YAML field generation into one place to prevent duplication.
 
@@ -764,7 +770,8 @@ def generate_unified_yaml_metadata(
 
     Returns:
         Dictionary of YAML fields ready for frontmatter
-    """
+    """ from ..logger import get_logger.
+    
     from ..logger import get_logger
     from .header_to_yaml import process_summary_for_yaml_headers
 
@@ -837,7 +844,8 @@ def overwrite_or_insert_summary_section(
     new_summary: str,
     additional_yaml_fields: dict[str, str] | None = None,
 ) -> None:
-    """
+    """ Overwrite the ## Summary section in a markdown file with new_summary.
+    
     Overwrite the ## Summary section in a markdown file with new_summary.
     If the section does not exist, insert it before ## Full Transcript, or at the end if not found.
 
@@ -845,7 +853,8 @@ def overwrite_or_insert_summary_section(
         md_path: Path to the markdown file
         new_summary: The new summary content to insert
         additional_yaml_fields: Optional dict of additional YAML fields to append to frontmatter
-    """
+    """ md_path = Path(md_path).
+    
     md_path = Path(md_path)
     with open(md_path, encoding="utf-8") as f:
         lines = f.readlines()

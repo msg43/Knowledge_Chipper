@@ -2,59 +2,49 @@
 Tests for error handling system.
 """
 
-from knowledge_system.errors import (
-    # Base exceptions
-    KnowledgeSystemError,
-    # Configuration errors
-    ConfigurationError,
-    SettingsValidationError,
+from knowledge_system.errors import (  # Base exceptions; Configuration errors; File system errors; Processing errors; Network and API errors; Resource errors; Validation errors; Operation errors; Monitoring errors; Utility functions
+    APIError,
+    AuthenticationError,
+    CancellationError,
     ConfigFileError,
-    # File system errors
-    FileSystemError,
+    ConfigurationError,
+    DatabaseError,
+    DependencyError,
+    DirectoryError,
+    DiskSpaceError,
+    FileFormatError,
     FileNotFoundError,
     FilePermissionError,
-    DirectoryError,
-    FileFormatError,
-    # Processing errors
-    ProcessingError,
-    TranscriptionError,
-    SummarizationError,
-    MOCGenerationError,
-    PDFProcessingError,
-    VideoProcessingError,
-    # Network and API errors
-    NetworkError,
-    APIError,
-    YouTubeAPIError,
-    LLMAPIError,
-    RateLimitError,
-    AuthenticationError,
-    # Resource errors
-    ResourceError,
-    MemoryError,
-    DiskSpaceError,
-    GPUError,
-    StateError,
-    DatabaseError,
-    # Validation errors
-    ValidationError,
-    InputValidationError,
-    URLValidationError,
-    ModelValidationError,
-    # Operation errors
-    OperationError,
-    WorkflowError,
-    TimeoutError,
-    CancellationError,
-    DependencyError,
-    # Monitoring errors
-    MonitoringError,
+    FileSystemError,
     FileWatchError,
+    GPUError,
+    InputValidationError,
+    KnowledgeSystemError,
+    LLMAPIError,
+    MemoryError,
+    MOCGenerationError,
+    ModelValidationError,
+    MonitoringError,
+    NetworkError,
+    OperationError,
+    PDFProcessingError,
     PlaylistMonitorError,
-    # Utility functions
-    wrap_exception,
-    handle_api_error,
+    ProcessingError,
+    RateLimitError,
+    ResourceError,
+    SettingsValidationError,
+    StateError,
+    SummarizationError,
+    TimeoutError,
+    TranscriptionError,
+    URLValidationError,
+    ValidationError,
+    VideoProcessingError,
+    WorkflowError,
+    YouTubeAPIError,
     format_error_message,
+    handle_api_error,
+    wrap_exception,
 )
 
 
@@ -265,10 +255,7 @@ class TestAPIErrors:
 
     def test_rate_limit_error(self):
         """Test RateLimitError with retry information."""
-        error = RateLimitError(
-    "Rate limit exceeded",
-    retry_after=60,
-     status_code=429)
+        error = RateLimitError("Rate limit exceeded", retry_after=60, status_code=429)
 
         assert isinstance(error, APIError)
         assert error.retry_after == 60
@@ -303,9 +290,7 @@ class TestResourceErrors:
 
     def test_gpu_error(self):
         """Test GPUError."""
-        error = GPUError(
-    "CUDA out of memory", context={
-        "gpu_id": 0, "required_gb": 8})
+        error = GPUError("CUDA out of memory", context={"gpu_id": 0, "required_gb": 8})
         assert isinstance(error, ResourceError)
         assert error.context["gpu_id"] == 0
 
@@ -335,9 +320,7 @@ class TestValidationErrors:
 
     def test_url_validation_error(self):
         """Test URLValidationError."""
-        error = URLValidationError(
-    "Invalid YouTube URL", context={
-        "url": "not-a-url"})
+        error = URLValidationError("Invalid YouTube URL", context={"url": "not-a-url"})
         assert isinstance(error, ValidationError)
 
     def test_model_validation_error(self):
@@ -389,9 +372,7 @@ class TestMonitoringErrors:
 
     def test_file_watch_error(self):
         """Test FileWatchError."""
-        error = FileWatchError(
-    "Cannot watch directory", context={
-        "path": "/watch/me"})
+        error = FileWatchError("Cannot watch directory", context={"path": "/watch/me"})
         assert isinstance(error, MonitoringError)
 
     def test_playlist_monitor_error(self):
@@ -493,8 +474,7 @@ class TestUtilityFunctions:
         )
 
         # With context and cause
-        message = format_error_message(
-    error, include_context=True, include_cause=True)
+        message = format_error_message(error, include_context=True, include_cause=True)
         assert "Test error" in message
         assert "key=value" in message
         assert "Caused by: Original cause" in message
@@ -559,8 +539,6 @@ class TestSpecificErrors:
 
     def test_file_watch_error(self):
         """Test FileWatchError."""
-        error = FileWatchError(
-    "Cannot watch directory", context={
-        "path": "/watch/me"})
+        error = FileWatchError("Cannot watch directory", context={"path": "/watch/me"})
         assert isinstance(error, MonitoringError)
         assert error.context["path"] == "/watch/me"

@@ -1,4 +1,4 @@
-"""
+""" Progress Tracking and Resume-from-Failure Utilities.
 Progress Tracking and Resume-from-Failure Utilities
 
 This module now serves as a compatibility layer, importing from the new

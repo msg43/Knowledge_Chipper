@@ -68,4 +68,4 @@ if python -m knowledge_system --help > /dev/null 2>&1; then
 else
     echo "❌ Setup failed - check errors above"
     exit 1
-fi 
+fi

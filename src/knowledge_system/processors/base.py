@@ -1,4 +1,5 @@
-"""
+""" Base processor class for Knowledge System.
+
 Base processor class for Knowledge System.
 Provides abstract interface and common functionality for all processors.
 """
@@ -15,7 +16,7 @@ from ..utils.progress import CancellationError, CancellationToken
 
 
 class ProcessorResult:
-    """Container for processor execution results."""
+    """ Container for processor execution results.""".
 
     def __init__(
         self,
@@ -26,7 +27,7 @@ class ProcessorResult:
         warnings: list[str] | None = None,
         dry_run: bool = False,
     ) -> None:
-        """
+        """ Initialize processor result.
         Initialize processor result.
 
         Args:
@@ -36,7 +37,8 @@ class ProcessorResult:
             errors: List of error messages
             warnings: List of warning messages
             dry_run: If True, do not perform any real processing, just simulate
-        """
+        """ self.success = success.
+        
         self.success = success
         self.data = data
         self.metadata = metadata or {}
@@ -46,28 +48,28 @@ class ProcessorResult:
         self.timestamp = time.time()
 
     def __bool__(self) -> bool:
-        """Return success status when used in boolean context."""
+        """ Return success status when used in boolean context.""".
         return self.success
 
     def __str__(self) -> str:
-        """String representation of the result."""
+        """ String representation of the result.""".
         status = "SUCCESS" if self.success else "FAILED"
         error_info = f" ({len(self.errors)} errors)" if self.errors else ""
         warning_info = f" ({len(self.warnings)} warnings)" if self.warnings else ""
         return f"ProcessorResult[{status}{error_info}{warning_info}]"
 
     def add_error(self, error: str) -> None:
-        """Add an error message."""
+        """ Add an error message.""".
         self.errors.append(error)
         self.success = False
 
     def add_warning(self, warning: str) -> None:
-        """Add a warning message."""
+        """ Add a warning message.""".
         self.warnings.append(warning)
 
 
 class BaseProcessor(ABC):
-    """
+    """ Abstract base class for all processors in the Knowledge System.
     Abstract base class for all processors in the Knowledge System.
 
     Provides common functionality and defines the interface that all
@@ -75,12 +77,13 @@ class BaseProcessor(ABC):
     """
 
     def __init__(self, name: str | None = None) -> None:
-        """
+        """ Initialize the base processor.
         Initialize the base processor.
 
         Args:
             name: Optional name for the processor (defaults to class name)
-        """
+        """ self.name = name or self.__class__.__name__.
+        
         self.name = name or self.__class__.__name__
         self.logger = get_logger(f"processor.{self.name.lower()}")
         self.settings = get_settings()
@@ -95,7 +98,7 @@ class BaseProcessor(ABC):
     def process(
         self, input_data: Any, dry_run: bool = False, **kwargs: Any
     ) -> ProcessorResult:
-        """
+        """ Process the input data and return results.
         Process the input data and return results.
 
         This is the main method that subclasses must implement.
@@ -114,7 +117,7 @@ class BaseProcessor(ABC):
 
     @abstractmethod
     def validate_input(self, input_data: Any) -> bool:
-        """
+        """ Validate that the input data is suitable for processing.
         Validate that the input data is suitable for processing.
 
         Args:
@@ -130,10 +133,10 @@ class BaseProcessor(ABC):
     @property
     @abstractmethod
     def supported_formats(self) -> list[str]:
-        """Return list of supported input formats."""
+        """ Return list of supported input formats.""".
 
     def can_process(self, input_path: str | Path) -> bool:
-        """
+        """ Check if this processor can handle the given input.
         Check if this processor can handle the given input.
 
         Args:
@@ -141,12 +144,13 @@ class BaseProcessor(ABC):
 
         Returns:
             True if processor can handle this input
-        """
+        """ path = Path(input_path).
+        
         path = Path(input_path)
         return path.suffix.lower() in [fmt.lower() for fmt in self.supported_formats]
 
     def check_cancellation(self, cancellation_token: CancellationToken | None) -> None:
-        """
+        """ Check for cancellation and pause requests.
         Check for cancellation and pause requests.
 
         Args:
@@ -154,7 +158,8 @@ class BaseProcessor(ABC):
 
         Raises:
             CancellationError: If operation was cancelled
-        """
+        """ if cancellation_token:.
+        
         if cancellation_token:
             # Check for cancellation first
             cancellation_token.throw_if_cancelled()
@@ -171,7 +176,7 @@ class BaseProcessor(ABC):
         dry_run: bool = False,
         **kwargs: Any,
     ) -> ProcessorResult:
-        """
+        """ Process with cancellation support.
         Process with cancellation support.
 
         This is a wrapper around process() that adds cancellation checking.
@@ -185,7 +190,8 @@ class BaseProcessor(ABC):
 
         Returns:
             ProcessorResult containing the processing results
-        """
+        """ try:.
+        
         try:
             # Check cancellation before starting
             self.check_cancellation(cancellation_token)
@@ -211,7 +217,7 @@ class BaseProcessor(ABC):
             )
 
     def process_safe(self, input_data: Any, **kwargs: Any) -> ProcessorResult:
-        """
+        """ Safely process input data with error handling and logging.
         Safely process input data with error handling and logging.
 
         This method wraps the abstract process() method with common
@@ -223,7 +229,8 @@ class BaseProcessor(ABC):
 
         Returns:
             ProcessorResult containing the processing results
-        """
+        """ start_time = time.time().
+        
         start_time = time.time()
         cancellation_token = kwargs.get("cancellation_token")
 
@@ -357,7 +364,7 @@ class BaseProcessor(ABC):
                 )
 
     def _update_stats(self, success: bool, duration: float) -> None:
-        """Update internal statistics."""
+        """ Update internal statistics.""".
         self._stats["processed_count"] += 1
         self._stats["total_processing_time"] += duration
 
@@ -367,12 +374,12 @@ class BaseProcessor(ABC):
             self._stats["error_count"] += 1
 
     def get_stats(self) -> dict[str, Any]:
-        """
+        """ Get processing statistics for this processor.
         Get processing statistics for this processor.
 
         Returns:
             Dictionary containing processing statistics
-        """
+        """ stats = self._stats.copy().
         stats = self._stats.copy()
 
         if stats["processed_count"] > 0:
@@ -387,7 +394,7 @@ class BaseProcessor(ABC):
         return stats
 
     def reset_stats(self) -> None:
-        """Reset processing statistics."""
+        """ Reset processing statistics.""".
         self._stats = {
             "processed_count": 0,
             "success_count": 0,
@@ -397,11 +404,11 @@ class BaseProcessor(ABC):
         self.logger.info(f"Statistics reset for {self.name}")
 
     def __str__(self) -> str:
-        """String representation of the processor."""
+        """ String representation of the processor.""".
         return f"{self.__class__.__name__}(name={self.name})"
 
     def __repr__(self) -> str:
-        """Detailed string representation of the processor."""
+        """ Detailed string representation of the processor.""".
         stats = self.get_stats()
         return (
             f"{self.__class__.__name__}("
@@ -417,7 +424,7 @@ class BaseProcessor(ABC):
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
     ) -> list[ProcessorResult]:
-        """
+        """ Process a batch of inputs with cancellation support.
         Process a batch of inputs with cancellation support.
 
         Args:
@@ -428,7 +435,8 @@ class BaseProcessor(ABC):
 
         Returns:
             List of ProcessorResult objects
-        """
+        """ results = [].
+        
         results = []
         for i, input_item in enumerate(inputs):
             try:
@@ -466,21 +474,21 @@ class BaseProcessor(ABC):
 
 
 class ProcessorRegistry:
-    """Registry for managing processor instances."""
+    """ Registry for managing processor instances.""".
 
     def __init__(self) -> None:
-        """Initialize the processor registry."""
+        """ Initialize the processor registry.""".
         self._processors: dict[str, BaseProcessor] = {}
         self.logger = get_logger("processor.registry")
 
     def register(self, processor: BaseProcessor, name: str | None = None) -> None:
-        """
+        """ Register a processor instance.
         Register a processor instance.
 
         Args:
             processor: The processor instance to register
             name: Optional name override (defaults to processor.name)
-        """
+        """ processor_name = name or processor.name.
         processor_name = name or processor.name
 
         if processor_name in self._processors:
@@ -492,7 +500,7 @@ class ProcessorRegistry:
         self.logger.info(f"Registered processor: {processor_name}")
 
     def get(self, name: str) -> BaseProcessor | None:
-        """
+        """ Get a processor by name.
         Get a processor by name.
 
         Args:
@@ -500,20 +508,20 @@ class ProcessorRegistry:
 
         Returns:
             Processor instance or None if not found
-        """
+        """ return self._processors.get(name).
         return self._processors.get(name)
 
     def list_processors(self) -> list[str]:
-        """
+        """ Get list of registered processor names.
         Get list of registered processor names.
 
         Returns:
             List of processor names
-        """
+        """ return list(self._processors.keys()).
         return list(self._processors.keys())
 
     def unregister(self, name: str) -> bool:
-        """
+        """ Unregister a processor.
         Unregister a processor.
 
         Args:
@@ -521,7 +529,8 @@ class ProcessorRegistry:
 
         Returns:
             True if processor was found and removed, False otherwise
-        """
+        """ if name in self._processors:.
+        
         if name in self._processors:
             del self._processors[name]
             self.logger.info(f"Unregistered processor: {name}")
@@ -529,7 +538,7 @@ class ProcessorRegistry:
         return False
 
     def clear(self) -> None:
-        """Clear all registered processors."""
+        """ Clear all registered processors.""".
         count = len(self._processors)
         self._processors.clear()
         self.logger.info(f"Cleared {count} registered processors")
@@ -540,5 +549,5 @@ _registry = ProcessorRegistry()
 
 
 def get_processor_registry() -> ProcessorRegistry:
-    """Get the global processor registry."""
+    """ Get the global processor registry.""".
     return _registry

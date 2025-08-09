@@ -6,4 +6,4 @@ cd "$(dirname "$0")"
 
 # Activate virtual environment and launch
 source venv/bin/activate
-python -m knowledge_system gui 
+python -m knowledge_system gui

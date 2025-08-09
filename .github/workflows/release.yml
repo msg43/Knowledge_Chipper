@@ -8,24 +8,24 @@ on:
 jobs:
   release:
     runs-on: macos-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: 3.9
-        
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install build
-        
+
     - name: Build package
       run: |
         python -m build
-        
+
     - name: Create Release
       uses: actions/create-release@v1
       env:
@@ -35,7 +35,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         draft: false
         prerelease: false
-        
+
     - name: Upload Release Assets
       uses: actions/upload-release-asset@v1
       env:
@@ -44,4 +44,4 @@ jobs:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./dist/
         asset_name: knowledge-system-dist
-        asset_content_type: application/zip 
+        asset_content_type: application/zip

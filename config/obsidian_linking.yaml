@@ -16,7 +16,7 @@ topic_mappings:
   business: "Business Analysis MOC"
   interview: "Interviews MOC"
   analysis: "Analysis Framework MOC"
-  
+
 # Entity-based MOC mappings
 # When these types of entities are found, suggest these MOCs
 entity_mappings:
@@ -30,7 +30,7 @@ entity_mappings:
 # Map specific people/organizations to dedicated notes
 people_mappings:
   "Jerome Powell": "Jerome Powell - Fed Chair"
-  "Xi Jinping": "Xi Jinping - China President" 
+  "Xi Jinping": "Xi Jinping - China President"
   "Elon Musk": "Elon Musk - Tesla SpaceX"
   "Warren Buffett": "Warren Buffett - Berkshire"
 
@@ -52,19 +52,19 @@ vault_scanning:
   enabled: true
   min_title_length: 4
   skip_hidden_files: true
-  
+
   # File patterns to ignore when scanning
   ignore_patterns:
     - "*.template.*"
     - ".*"  # Hidden files
     - "Archive/*"
     - "Templates/*"
-    
+
   # Include these directories for scanning
   include_directories:
     - "MOCs"
     - "People"
-    - "Organizations" 
+    - "Organizations"
     - "Analysis"
     - "Economics"
     - "Technology"
@@ -74,9 +74,9 @@ content_matching:
   fuzzy_matching: true
   case_sensitive: false
   minimum_match_score: 0.7
-  
+
   # Boost scores for matches in these sections
   boost_sections:
     title: 2.0
     headings: 1.5
-    tags: 1.3 
+    tags: 1.3

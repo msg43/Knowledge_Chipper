@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 
 from knowledge_system.utils.progress import (
-    TaskStatus,
-    TaskInfo,
-    ProgressTracker,
     ProgressDisplay,
+    ProgressTracker,
+    TaskInfo,
+    TaskStatus,
 )
 
 

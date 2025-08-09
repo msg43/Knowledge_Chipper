@@ -5,7 +5,6 @@ Basic tests for project structure and CLI.
 import subprocess
 import sys
 
-
 from knowledge_system import Settings, __version__, get_logger
 
 

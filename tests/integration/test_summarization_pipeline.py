@@ -1,8 +1,10 @@
-from unittest.mock import patch, MagicMock
 from pathlib import Path
-from knowledge_system.processors.summarizer import SummarizerProcessor, fetch_summary
-from knowledge_system.processors.base import ProcessorResult
+from unittest.mock import MagicMock, patch
+
 import pytest
+
+from knowledge_system.processors.base import ProcessorResult
+from knowledge_system.processors.summarizer import SummarizerProcessor, fetch_summary
 
 
 class TestSummarizationPipeline:
@@ -34,7 +36,7 @@ class TestSummarizationPipeline:
                     "summary": "AI technology has advanced significantly and will continue evolving rapidly.",
                     "prompt_tokens": 100,
                     "completion_tokens": 50,
-                    "total_tokens": 150
+                    "total_tokens": 150,
                 },
             ):
                 result = processor.process(transcription_text, style="general")
@@ -72,7 +74,7 @@ class TestSummarizationPipeline:
                     "summary": "• Large datasets needed\n• Data quality matters\n• Preprocessing essential",
                     "prompt_tokens": 80,
                     "completion_tokens": 30,
-                    "total_tokens": 110
+                    "total_tokens": 110,
                 },
             ):
                 result = processor.process(text, style="bullet")
@@ -87,7 +89,7 @@ class TestSummarizationPipeline:
                     "summary": "Key findings indicate that machine learning requires substantial datasets and quality data preprocessing for optimal performance.",
                     "prompt_tokens": 90,
                     "completion_tokens": 40,
-                    "total_tokens": 130
+                    "total_tokens": 130,
                 },
             ):
                 result = processor.process(text, style="academic")
@@ -102,7 +104,7 @@ class TestSummarizationPipeline:
                     "summary": "ML success depends on quality data and proper preprocessing.",
                     "prompt_tokens": 75,
                     "completion_tokens": 25,
-                    "total_tokens": 100
+                    "total_tokens": 100,
                 },
             ):
                 result = processor.process(text, style="executive")
@@ -136,12 +138,14 @@ class TestSummarizationPipeline:
                     patch.object(Path, "stat", return_value=mock_stat),
                 ):
                     with patch.object(
-                        processor, "_call_llm_provider", return_value={
+                        processor,
+                        "_call_llm_provider",
+                        return_value={
                             "summary": "Summarized content",
                             "prompt_tokens": 50,
                             "completion_tokens": 20,
-                            "total_tokens": 70
-                        }
+                            "total_tokens": 70,
+                        },
                     ):
                         result = processor.process(Path("test.txt"))
 
@@ -196,12 +200,14 @@ class TestSummarizationPipeline:
             processor = SummarizerProcessor(provider="anthropic")
 
             with patch.object(
-                processor, "_call_llm_provider", return_value={
+                processor,
+                "_call_llm_provider",
+                return_value={
                     "summary": "Anthropic summary",
                     "prompt_tokens": 60,
                     "completion_tokens": 25,
-                    "total_tokens": 85
-                }
+                    "total_tokens": 85,
+                },
             ):
                 result = processor.process(text)
 
@@ -232,8 +238,7 @@ class TestConvenienceFunctions:
             mock_processor_class.assert_called_once_with(
                 provider="openai", max_tokens=1000
             )
-            mock_processor.process.assert_called_once_with(
-                "test text", style="bullet")
+            mock_processor.process.assert_called_once_with("test text", style="bullet")
 
     def test_fetch_summary_failure(self):
         """Test fetch_summary when processing fails."""

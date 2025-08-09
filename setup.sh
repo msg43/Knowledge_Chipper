@@ -64,7 +64,7 @@ if ! command_exists brew; then
     echo -e "${YELLOW}📦 Installing Homebrew...${NC}"
     echo "This may take a few minutes..."
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    
+
     # Add Homebrew to PATH for current session
     if [[ -f "/opt/homebrew/bin/brew" ]]; then
         eval "$(/opt/homebrew/bin/brew shellenv)"
@@ -188,7 +188,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     if ! command_exists ollama; then
         echo -e "${BLUE}📦 Installing Ollama...${NC}"
         brew install ollama
-        
+
         echo -e "${BLUE}🤖 Would you like to download a recommended model?${NC}"
         echo "Recommended: qwen2.5:7b-instruct (4.7GB) - Good balance of speed and quality"
         read -p "Download qwen2.5:7b-instruct? (y/N): " -n 1 -r
@@ -302,4 +302,4 @@ fi
 
 echo
 echo -e "${GREEN}Setup script completed successfully!${NC}"
-echo "Welcome to Knowledge_Chipper! 🎉" 
+echo "Welcome to Knowledge_Chipper! 🎉"

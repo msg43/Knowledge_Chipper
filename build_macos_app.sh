@@ -9,57 +9,74 @@ echo "🔄 Checking for updates..."
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cd "$SCRIPT_DIR"
 
-# Store current branch name
-CURRENT_BRANCH=$(git branch --show-current)
+# Determine current user early for ownership adjustments
+CURRENT_USER=$(whoami)
 
-# Stash any changes
-if [[ -n $(git status -s) ]]; then
-    echo "📦 Stashing local changes..."
-    git stash
-fi
+# Store current branch name (fallback to main)
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
 
-# Pull latest code
-echo "⬇️ Pulling latest code from GitHub..."
-git pull origin $CURRENT_BRANCH
+# Pull latest code safely without corrupting local state (avoids stash/autostash)
+echo "⬇️ Checking for updates (Git)..."
+git fetch origin || true
 
-# Pop stashed changes if any
-if [[ -n $(git stash list) ]]; then
-    echo "📦 Restoring local changes..."
-    git stash pop
+# If the working tree is clean, try a rebase pull without autostash
+if git diff-index --quiet HEAD --; then
+  if git pull --rebase origin "$CURRENT_BRANCH"; then
+    echo "✅ Repository up to date."
+  else
+    echo "ℹ️  Git pull failed; using local version for this build."
+  fi
+else
+  echo "ℹ️  Local changes detected; skipping pull. Using local version for this build."
 fi
 
 echo "🏗️ Building Knowledge_Chipper.app..."
 
 # Define paths
 APP_NAME="Knowledge_Chipper.app"
-APP_PATH="/Applications/$APP_NAME"
+APP_PATH="/Applications/$APP_NAME"               # Final destination
 CONTENTS_PATH="$APP_PATH/Contents"
 MACOS_PATH="$CONTENTS_PATH/MacOS"
 RESOURCES_PATH="$CONTENTS_PATH/Resources"
 FRAMEWORKS_PATH="$CONTENTS_PATH/Frameworks"
 
+# Build in a user-writable staging directory, then move to /Applications at the end
+BUILD_ROOT="$SCRIPT_DIR/.app_build"
+BUILD_APP_PATH="$BUILD_ROOT/$APP_NAME"
+BUILD_CONTENTS_PATH="$BUILD_APP_PATH/Contents"
+BUILD_MACOS_PATH="$BUILD_CONTENTS_PATH/MacOS"
+BUILD_RESOURCES_PATH="$BUILD_CONTENTS_PATH/Resources"
+BUILD_FRAMEWORKS_PATH="$BUILD_CONTENTS_PATH/Frameworks"
+
 # Create directory structure
-echo "📁 Creating app bundle structure..."
-sudo rm -rf "$APP_PATH"
-sudo mkdir -p "$MACOS_PATH" "$RESOURCES_PATH" "$FRAMEWORKS_PATH"
+echo "📁 Creating app bundle structure (staging)..."
+rm -rf "$BUILD_ROOT"
+mkdir -p "$BUILD_MACOS_PATH" "$BUILD_RESOURCES_PATH" "$BUILD_FRAMEWORKS_PATH"
 
 # Copy project files
 echo "📦 Copying project files..."
-sudo cp -r src "$MACOS_PATH/"
-sudo cp -r config "$MACOS_PATH/"
-sudo cp requirements.txt "$MACOS_PATH/"
-sudo cp build_macos_app.sh "$MACOS_PATH/"
+cp -r src "$BUILD_MACOS_PATH/"
+cp -r config "$BUILD_MACOS_PATH/"
+cp requirements.txt "$BUILD_MACOS_PATH/"
+cp build_macos_app.sh "$BUILD_MACOS_PATH/"
 
 # Set up virtual environment
 echo "🐍 Setting up Python virtual environment..."
-# Create venv in temp location first
-TEMP_VENV="/tmp/knowledge_chipper_venv"
-rm -rf "$TEMP_VENV"
-python3 -m venv "$TEMP_VENV"
-# Install packages in temp venv
-"$TEMP_VENV/bin/pip" install --upgrade pip
-"$TEMP_VENV/bin/pip" install -r "$MACOS_PATH/requirements.txt"
-"$TEMP_VENV/bin/pip" install beautifulsoup4 youtube-transcript-api pydantic-settings
+# Prefer Python 3.13 from Homebrew
+PYTHON_BIN="$(command -v python3.13 || command -v /opt/homebrew/bin/python3.13 || true)"
+if [ -z "$PYTHON_BIN" ]; then
+    echo "❌ Python 3.13 not found. Please install with: brew install python@3.13"
+    exit 1
+fi
+
+# Create venv directly inside the staging app bundle
+rm -rf "$BUILD_MACOS_PATH/venv"
+"$PYTHON_BIN" -m venv "$BUILD_MACOS_PATH/venv"
+
+# Install packages in the venv
+"$BUILD_MACOS_PATH/venv/bin/python" -m pip install --upgrade pip
+"$BUILD_MACOS_PATH/venv/bin/python" -m pip install -r "$BUILD_MACOS_PATH/requirements.txt"
+"$BUILD_MACOS_PATH/venv/bin/python" -m pip install beautifulsoup4 youtube-transcript-api pydantic-settings
 
 # Create pyproject.toml for editable install
 cat > "/tmp/pyproject.toml" << EOF
@@ -82,14 +99,16 @@ package-dir = {"" = "src"}
 EOF
 
 # Move pyproject.toml to MacOS directory
-sudo mv "/tmp/pyproject.toml" "$MACOS_PATH/pyproject.toml"
-sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/pyproject.toml"
+mv "/tmp/pyproject.toml" "$BUILD_MACOS_PATH/pyproject.toml"
+chown "$CURRENT_USER:staff" "$BUILD_MACOS_PATH/pyproject.toml" 2>/dev/null || true
 
 # Skip editable install - just ensure PYTHONPATH is set in launch script
 
-# Now move venv to final location with sudo
-sudo mv "$TEMP_VENV" "$MACOS_PATH/venv"
-sudo chown -R root:wheel "$MACOS_PATH/venv"
+# Ensure venv ownership (should already be current user in staging)
+chown -R "$CURRENT_USER:staff" "$BUILD_MACOS_PATH/venv" 2>/dev/null || true
+
+# Create logs directory in staging so permissions can be applied post-install
+mkdir -p "$BUILD_MACOS_PATH/logs"
 
 # Create logs directory
 echo "📝 Creating logs directory..."
@@ -124,7 +143,7 @@ cat > "/tmp/Info.plist" << EOF
 </dict>
 </plist>
 EOF
-sudo mv "/tmp/Info.plist" "$CONTENTS_PATH/Info.plist"
+mv "/tmp/Info.plist" "$BUILD_CONTENTS_PATH/Info.plist"
 
 # Create launch script
 echo "📜 Creating launch script..."
@@ -156,16 +175,16 @@ export PYTHONPATH="\$APP_DIR/src:\$PYTHONPATH"
 cd "\$APP_DIR"
 echo "Current directory: \$(pwd)" >> "\$LOG_FILE"
 echo "PYTHONPATH: \$PYTHONPATH" >> "\$LOG_FILE"
-echo "Python version: \$(python3 --version)" >> "\$LOG_FILE"
+echo "Python version: \$("\$APP_DIR/venv/bin/python" --version)" >> "\$LOG_FILE"
 echo "Virtual env: \$VIRTUAL_ENV" >> "\$LOG_FILE"
 echo "Architecture: \$(arch)" >> "\$LOG_FILE"
 echo "Launching GUI..." >> "\$LOG_FILE"
 
-# Force native ARM64 execution
-exec arch -arm64 python3 -m knowledge_system.gui.__main__ 2>&1 | tee -a "\$LOG_FILE"
+# Force native ARM64 execution using the venv python explicitly
+exec arch -arm64 "\$APP_DIR/venv/bin/python" -m knowledge_system.gui.__main__ 2>&1 | tee -a "\$LOG_FILE"
 EOF
-sudo mv "/tmp/launch" "$MACOS_PATH/launch"
-sudo chmod +x "$MACOS_PATH/launch"
+mv "/tmp/launch" "$BUILD_MACOS_PATH/launch"
+chmod +x "$BUILD_MACOS_PATH/launch"
 
 # Create icon set
 echo "🎨 Creating app icon..."
@@ -175,32 +194,36 @@ for size in 16 32 128 256 512; do
     sips -z $((size*2)) $((size*2)) chipper.png --out icon.iconset/icon_${size}x${size}@2x.png
 done
 iconutil -c icns icon.iconset -o "/tmp/AppIcon.icns"
-sudo mv "/tmp/AppIcon.icns" "$RESOURCES_PATH/AppIcon.icns"
+mv "/tmp/AppIcon.icns" "$BUILD_RESOURCES_PATH/AppIcon.icns"
 rm -rf icon.iconset
 
-# Set permissions
-echo "🔒 Setting permissions..."
-# Get current user
-CURRENT_USER=$(whoami)
+# Move staged app into /Applications and set permissions
+echo "📦 Installing app to /Applications..."
+sudo rm -rf "$APP_PATH"
+sudo mv "$BUILD_APP_PATH" "$APP_PATH"
 
-# First set root ownership for the app bundle structure
+echo "🔒 Setting permissions..."
 sudo chown -R root:wheel "$APP_PATH"
 sudo chmod -R 755 "$APP_PATH"
-
-# Then set user ownership for the MacOS directory and its contents
-sudo chown -R "$CURRENT_USER:staff" "$MACOS_PATH"
-sudo chmod -R 755 "$MACOS_PATH"
+# Ensure logs directory exists and is writable
+sudo mkdir -p "$MACOS_PATH/logs"
 sudo chmod 777 "$MACOS_PATH/logs"
-
-# Ensure the build script is owned by the user and executable
 sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/build_macos_app.sh"
 sudo chmod 755 "$MACOS_PATH/build_macos_app.sh"
 
-# Create version file instead of copying git repository
+# Create version file from src/knowledge_system/version.py for user-facing display
 echo "📝 Adding version information..."
-CURRENT_VERSION=$(git describe --tags --always)
-CURRENT_BRANCH=$(git branch --show-current)
-CURRENT_DATE=$(date +"%Y-%m-%d")
+PY_VER_FILE="$SCRIPT_DIR/src/knowledge_system/version.py"
+if [ -f "$PY_VER_FILE" ]; then
+  CURRENT_VERSION=$(grep '^VERSION\s*=\s*"' "$PY_VER_FILE" | sed -E 's/.*"([^"]+)".*/\1/')
+  CURRENT_BRANCH=$(git branch --show-current)
+  CURRENT_DATE=$(grep '^BUILD_DATE\s*=\s*"' "$PY_VER_FILE" | sed -E 's/.*"([^"]+)".*/\1/')
+else
+  # Fallback to git if the file is missing
+  CURRENT_VERSION=$(git describe --tags --always)
+  CURRENT_BRANCH=$(git branch --show-current)
+  CURRENT_DATE=$(date +"%Y-%m-%d")
+fi
 cat > "/tmp/version.txt" << EOF
 VERSION=$CURRENT_VERSION
 BRANCH=$CURRENT_BRANCH
@@ -208,7 +231,6 @@ BUILD_DATE=$CURRENT_DATE
 EOF
 sudo mv "/tmp/version.txt" "$MACOS_PATH/version.txt"
 
-# Get current version
-CURRENT_VERSION=$(git describe --tags --always)
+# Get current version for final echo
 echo "✨ App bundle created successfully! Version: $CURRENT_VERSION"
 echo "🚀 You can now launch Knowledge Chipper from your Applications folder"

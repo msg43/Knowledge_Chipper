@@ -1,4 +1,4 @@
-"""
+""" Intelligent device selection for optimal performance.
 Intelligent device selection for optimal performance.
 
 This module provides smart device selection that considers hardware capabilities,
@@ -21,7 +21,7 @@ def select_optimal_device(
     batch_size: int = 16,
     force_device: str | None = None,
 ) -> str:
-    """
+    """ Select the optimal device for processing based on hardware and workload.
     Select the optimal device for processing based on hardware and workload.
 
     Args:
@@ -33,7 +33,8 @@ def select_optimal_device(
 
     Returns:
         Device string for PyTorch/Whisper
-    """
+    """ if force_device:.
+    
     if force_device:
         logger.info(f"Device selection forced to: {force_device}")
         return force_device
@@ -86,7 +87,7 @@ def select_optimal_device(
 
 
 def _validate_device_capability(device: str, model_size: str, batch_size: int) -> bool:
-    """Validate that a device can handle the specified workload."""
+    """ Validate that a device can handle the specified workload.""".
     detector = get_hardware_detector()
     specs = detector.detect_hardware()
 
@@ -121,7 +122,7 @@ def _validate_device_capability(device: str, model_size: str, batch_size: int) -
 def _evaluate_cuda_suitability(
     cuda_specs: CUDASpecs, model_size: str, batch_size: int, workload_type: str
 ) -> str | None:
-    """Evaluate if CUDA is suitable for the workload and return device string."""
+    """ Evaluate if CUDA is suitable for the workload and return device string.""".
 
     # Estimate VRAM requirements (rough estimates)
     vram_requirements = {
@@ -177,7 +178,7 @@ def _evaluate_cuda_suitability(
 def _evaluate_mps_suitability(
     specs, model_size: str, batch_size: int, workload_type: str
 ) -> bool:
-    """Evaluate if MPS is suitable for the workload."""
+    """ Evaluate if MPS is suitable for the workload.""".
 
     # MPS is generally good for Apple Silicon
     if not specs.is_apple_silicon:
@@ -210,12 +211,13 @@ def _evaluate_mps_suitability(
 
 
 def get_device_recommendations(workload_type: str = "transcription") -> dict[str, Any]:
-    """
+    """ Get device recommendations and capability information.
     Get device recommendations and capability information.
 
     Returns detailed information about available devices and their suitability
     for different workloads.
-    """
+    """ detector = get_hardware_detector().
+    
     detector = get_hardware_detector()
     specs = detector.detect_hardware()
 
@@ -310,7 +312,7 @@ def get_device_recommendations(workload_type: str = "transcription") -> dict[str
 
 
 def set_device_environment(device: str) -> None:
-    """Set environment variables for optimal device performance."""
+    """ Set environment variables for optimal device performance.""".
 
     if device == "cuda":
         # CUDA optimizations

@@ -1,8 +1,8 @@
 # Knowledge Map - {theme} Organization
 
-**Generated:** {generated_at}  
-**Theme:** {theme}  
-**Depth:** {depth}  
+**Generated:** {generated_at}
+**Theme:** {theme}
+**Depth:** {depth}
 **Source Files:** {source_files_count}
 
 ## Executive Summary
@@ -35,4 +35,4 @@ This knowledge map was generated from {source_files_count} source files, reveali
 
 ---
 
-*This map was automatically generated using the Knowledge System MOC processor with {theme} organization at depth {depth}.* 
+*This map was automatically generated using the Knowledge System MOC processor with {theme} organization at depth {depth}.*

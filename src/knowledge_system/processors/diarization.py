@@ -13,7 +13,7 @@ PIPELINE = None
 
 
 def _check_diarization_dependencies() -> bool:
-    """Check if diarization dependencies are available."""
+    """ Check if diarization dependencies are available.""".
     global PIPELINE_AVAILABLE, PIPELINE
 
     if PIPELINE_AVAILABLE:
@@ -42,7 +42,7 @@ def _check_diarization_dependencies() -> bool:
 
 
 class SpeakerDiarizationProcessor(BaseProcessor):
-    """Performs speaker diarization using pyannote.audio with lazy loading."""
+    """ Performs speaker diarization using pyannote.audio with lazy loading.""".
 
     def __init__(
         self,
@@ -58,18 +58,18 @@ class SpeakerDiarizationProcessor(BaseProcessor):
 
     @property
     def supported_formats(self) -> list:
-        """Audio formats supported by pyannote.audio for diarization."""
+        """ Audio formats supported by pyannote.audio for diarization.""".
         return [".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".webm"]
 
     def _check_dependencies(self) -> bool:
-        """Check if diarization dependencies are available."""
+        """ Check if diarization dependencies are available.""".
         if not self._dependencies_checked:
             self._dependencies_checked = True
             return _check_diarization_dependencies()
         return PIPELINE_AVAILABLE
 
     def _load_pipeline(self) -> None:
-        """Lazy load the diarization pipeline."""
+        """ Lazy load the diarization pipeline.""".
         if not self._check_dependencies():
             raise ImportError(
                 "Diarization dependencies not available. "
@@ -142,12 +142,12 @@ class SpeakerDiarizationProcessor(BaseProcessor):
 
 
 def is_diarization_available() -> bool:
-    """Check if diarization is available without loading dependencies."""
+    """ Check if diarization is available without loading dependencies.""".
     return _check_diarization_dependencies()
 
 
 def get_diarization_installation_instructions() -> str:
-    """Get installation instructions for diarization dependencies."""
+    """ Get installation instructions for diarization dependencies.""".
     return (
         "To enable speaker diarization, install the required dependencies:\n"
         "  pip install -e '.[diarization]'\n\n"

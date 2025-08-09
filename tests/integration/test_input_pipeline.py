@@ -1,4 +1,5 @@
 from unittest.mock import patch
+
 from knowledge_system.processors import registry
 
 
@@ -27,9 +28,7 @@ def test_youtube_download_routing_and_processing():
     url = "https://youtu.be/xyz456"
     # Should match YouTubeDownloadProcessor (last registered for this pattern)
     proc_cls = registry.get_processor_for_input(url)
-    assert proc_cls.__name__ in (
-    "YouTubeMetadataProcessor",
-     "YouTubeDownloadProcessor")
+    assert proc_cls.__name__ in ("YouTubeMetadataProcessor", "YouTubeDownloadProcessor")
     with patch.object(
         proc_cls, "process", return_value=DummyResult("audio-ok")
     ) as mock_proc:
@@ -54,5 +53,4 @@ def test_pdf_routing_and_processing():
 
 def test_unknown_input_returns_none():
     assert registry.get_processor_for_input("file.unknown") is None
-    assert registry.get_processor_for_input(
-        "https://notyoutube.com/abc") is None
+    assert registry.get_processor_for_input("https://notyoutube.com/abc") is None

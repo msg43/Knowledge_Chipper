@@ -1,4 +1,4 @@
-"""
+""" Cache Management Utilities.
 Cache Management Utilities
 
 Provides smart Python cache clearing functionality to prevent import issues
@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 def clear_python_cache(
     target_dir: Path | None = None, force: bool = False
 ) -> tuple[bool, str]:
-    """
+    """ Clear Python bytecode cache files (.pyc) and __pycache__ directories.
     Clear Python bytecode cache files (.pyc) and __pycache__ directories.
 
     Args:
@@ -31,7 +31,8 @@ def clear_python_cache(
 
     Returns:
         Tuple of (success, message)
-    """
+    """ if target_dir is None:.
+    
     if target_dir is None:
         # Default to current project directory
         target_dir = Path(__file__).parent.parent.parent.parent
@@ -72,7 +73,7 @@ def clear_python_cache(
 
 
 def should_clear_cache_on_startup() -> tuple[bool, str]:
-    """
+    """ Determine if Python cache should be cleared on startup.
     Determine if Python cache should be cleared on startup.
 
     Uses smart heuristics to avoid unnecessary cache clearing:
@@ -83,7 +84,8 @@ def should_clear_cache_on_startup() -> tuple[bool, str]:
 
     Returns:
         Tuple of (should_clear, reason)
-    """
+    """ try:.
+    
     try:
         project_root = Path(__file__).parent.parent.parent.parent
         cache_state_file = project_root / ".cache_state.json"
@@ -144,7 +146,7 @@ def should_clear_cache_on_startup() -> tuple[bool, str]:
 
 
 def _get_cache_state(project_root: Path) -> dict:
-    """Get current state for cache invalidation decisions."""
+    """ Get current state for cache invalidation decisions.""".
     state = {
         "timestamp": time.time(),
         "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
@@ -196,7 +198,7 @@ def _get_cache_state(project_root: Path) -> dict:
 
 
 def _has_recent_import_errors() -> bool:
-    """Check if there were import errors in recent logs."""
+    """ Check if there were import errors in recent logs.""".
     try:
         from ..config import get_settings
 
@@ -236,12 +238,12 @@ def _has_recent_import_errors() -> bool:
 
 
 def clear_cache_if_needed() -> tuple[bool, str]:
-    """
+    """ Clear Python cache if smart heuristics determine it's needed.
     Clear Python cache if smart heuristics determine it's needed.
 
     Returns:
         Tuple of (was_cleared, message)
-    """
+    """ should_clear, reason = should_clear_cache_on_startup().
     should_clear, reason = should_clear_cache_on_startup()
 
     if should_clear:
@@ -255,17 +257,17 @@ def clear_cache_if_needed() -> tuple[bool, str]:
 
 
 def force_clear_cache() -> tuple[bool, str]:
-    """
+    """ Force clear Python cache regardless of heuristics.
     Force clear Python cache regardless of heuristics.
 
     Returns:
         Tuple of (success, message)
-    """
+    """ return clear_python_cache(force=True).
     return clear_python_cache(force=True)
 
 
 def create_manual_clear_flag() -> None:
-    """Create a flag file to force cache clearing on next startup."""
+    """ Create a flag file to force cache clearing on next startup.""".
     try:
         project_root = Path(__file__).parent.parent.parent.parent
         flag_file = project_root / ".clear_cache"

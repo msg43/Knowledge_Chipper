@@ -1,4 +1,4 @@
-"""
+""" PDF Processor.
 PDF Processor
 
 Extracts text from PDF files using PyPDF2 and pdfplumber.
@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 
 
 class PDFProcessor(BaseProcessor):
-    """Processor for extracting text from PDF files or folders."""
+    """ Processor for extracting text from PDF files or folders.""".
 
     def __init__(self, name: str | None = None) -> None:
         super().__init__(name or "pdf_processor")
@@ -154,7 +154,7 @@ class PDFProcessor(BaseProcessor):
 
 
 def fetch_pdf_text(pdf_path: str | Path) -> str:
-    """Convenience function to extract text from a single PDF file."""
+    """ Convenience function to extract text from a single PDF file.""".
     processor = PDFProcessor()
     result = processor.process(pdf_path)
     if not result.success:

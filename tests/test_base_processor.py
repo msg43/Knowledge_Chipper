@@ -66,8 +66,7 @@ class TestProcessorResult:
         failure_result = ProcessorResult(
             success=False, errors=["error1"], warnings=["warning1"]
         )
-        assert str(
-            failure_result) == "ProcessorResult[FAILED (1 errors) (1 warnings)]"
+        assert str(failure_result) == "ProcessorResult[FAILED (1 errors) (1 warnings)]"
 
     def test_to_dict(self) -> None:
         """Test dictionary conversion."""
@@ -103,8 +102,7 @@ class MockProcessor(BaseProcessor):
         self.process_calls.append((input_data, kwargs))
 
         if self.should_fail:
-            return ProcessorResult(success=False, errors=[
-                                   "Mock processing failed"])
+            return ProcessorResult(success=False, errors=["Mock processing failed"])
 
         return ProcessorResult(
             success=True, data=f"processed: {input_data}", metadata={"mock": True}
@@ -116,7 +114,7 @@ class MockProcessor(BaseProcessor):
         return input_data != "invalid"
 
     @property
-    def supported_formats(self) -> List[str]:
+    def supported_formats(self) -> list[str]:
         """Mock supported formats."""
         return [".txt", ".md"]
 
@@ -441,10 +439,7 @@ def test_processor_registry():
         pass
 
     # Register dummy
-    registry.register_processor(
-    DummyProcessor,
-    extensions=[".dummy"],
-     name="Dummy")
+    registry.register_processor(DummyProcessor, extensions=[".dummy"], name="Dummy")
     # Lookup by extension
     assert registry.get_processor_for_input("file.dummy") == DummyProcessor
 
@@ -456,8 +451,7 @@ def test_processor_registry():
         DummyURLProcessor, url_patterns=[r"https://dummy.com/.*"], name="DummyURL"
     )
     assert (
-        registry.get_processor_for_input(
-            "https://dummy.com/abc") == DummyURLProcessor
+        registry.get_processor_for_input("https://dummy.com/abc") == DummyURLProcessor
     )
     # List processors
     names = registry.list_processors()

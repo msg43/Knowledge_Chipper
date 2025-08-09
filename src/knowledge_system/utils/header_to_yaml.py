@@ -1,4 +1,4 @@
-"""
+""" Header-to-YAML conversion utilities for document summaries.
 Header-to-YAML conversion utilities for document summaries.
 
 This module provides functionality to parse summary content and extract
@@ -15,12 +15,13 @@ logger = get_logger(__name__)
 
 
 def load_yaml_headers() -> list[str]:
-    """
+    """ Load header phrases from the Headers_to_YAML.txt config file.
     Load header phrases from the Headers_to_YAML.txt config file.
 
     Returns:
         List of header phrases to look for in summary content
-    """
+    """ config_file = Path("config/Headers_to_YAML.txt").
+    
     config_file = Path("config/Headers_to_YAML.txt")
     try:
         if config_file.exists():
@@ -45,7 +46,7 @@ def load_yaml_headers() -> list[str]:
 
 
 def extract_bullet_points_under_header(content: str, header: str) -> list[str]:
-    """
+    """ Extract bullet points that appear under a specific header in the content.
     Extract bullet points that appear under a specific header in the content.
 
     For Mental Models and Jargon headers, extracts only the clean term/concept name
@@ -57,7 +58,7 @@ def extract_bullet_points_under_header(content: str, header: str) -> list[str]:
 
     Returns:
         List of clean terms/names extracted from bullet points
-    """
+    """ bullet_points = [].
     bullet_points = []
 
     try:
@@ -156,7 +157,7 @@ def extract_bullet_points_under_header(content: str, header: str) -> list[str]:
 
 
 def sanitize_yaml_field_name(header: str) -> str:
-    """
+    """ Sanitize header name for use as YAML field name in Obsidian.
     Sanitize header name for use as YAML field name in Obsidian.
 
     Preserves the exact header name from the prompt template, only converting
@@ -168,7 +169,7 @@ def sanitize_yaml_field_name(header: str) -> str:
 
     Returns:
         YAML field name that exactly matches the header pattern
-    """
+    """ import re.
     import re
 
     # First normalize multiple spaces to single spaces, then replace with underscores
@@ -198,7 +199,7 @@ def sanitize_yaml_field_name(header: str) -> str:
 
 
 def generate_yaml_fields(header: str, bullet_points: list[str]) -> dict[str, str]:
-    """
+    """ Generate YAML fields from bullet points with numbered suffixes.
     Generate YAML fields from bullet points with numbered suffixes.
 
     Args:
@@ -207,7 +208,7 @@ def generate_yaml_fields(header: str, bullet_points: list[str]) -> dict[str, str
 
     Returns:
         Dictionary of YAML field names to values
-    """
+    """ yaml_fields = {}.
     yaml_fields = {}
 
     try:
@@ -232,7 +233,7 @@ def generate_yaml_fields(header: str, bullet_points: list[str]) -> dict[str, str
 def process_summary_for_yaml_headers(
     content: str, analysis_type: str
 ) -> dict[str, str]:
-    """
+    """ Process summary content to extract header-based YAML fields and add Is_MOC field.
     Process summary content to extract header-based YAML fields and add Is_MOC field.
 
     Args:
@@ -241,7 +242,7 @@ def process_summary_for_yaml_headers(
 
     Returns:
         Dictionary of additional YAML fields to include in metadata
-    """
+    """ additional_yaml_fields = {}.
     additional_yaml_fields = {}
 
     # Add Is_MOC field based on analysis type

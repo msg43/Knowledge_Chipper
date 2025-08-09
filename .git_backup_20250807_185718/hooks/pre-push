@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Get the current version info
+CURRENT_COMMIT=$(git rev-parse --short HEAD)
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+DATE=$(date +"%Y-%m-%d")
+
+# Create version info file
+VERSION_FILE="src/knowledge_system/version.py"
+echo "# Auto-generated version info" > "$VERSION_FILE"
+echo "VERSION = \"$CURRENT_COMMIT\"" >> "$VERSION_FILE"
+echo "BRANCH = \"$CURRENT_BRANCH\"" >> "$VERSION_FILE"
+echo "BUILD_DATE = \"$DATE\"" >> "$VERSION_FILE"
+
+# Add and commit version file
+git add "$VERSION_FILE"
+git commit --no-verify -m "chore: update version info to $CURRENT_COMMIT"
+
+# Exit successfully
+exit 0

@@ -1,4 +1,4 @@
-"""
+""" Cancellation Support for Long-Running Operations.
 Cancellation Support for Long-Running Operations
 
 Provides thread-safe cancellation tokens for graceful operation cancellation.
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class CancellationToken:
-    """Thread-safe cancellation token for graceful operation cancellation."""
+    """ Thread-safe cancellation token for graceful operation cancellation.""".
 
     def __init__(self) -> None:
         self._cancelled = threading.Event()
@@ -28,7 +28,7 @@ class CancellationToken:
         )
 
     def cancel(self, reason: str = "User requested cancellation") -> None:
-        """Cancel the operation with optional reason."""
+        """ Cancel the operation with optional reason.""".
         logger.info(f"CancellationToken.cancel() called with reason: {reason}")
         self._reason = reason
         self._cancelled.set()
@@ -36,17 +36,17 @@ class CancellationToken:
         self._paused.set()
 
     def pause(self) -> None:
-        """Pause the operation."""
+        """ Pause the operation.""".
         logger.debug("CancellationToken.pause() called")
         self._paused.clear()
 
     def resume(self) -> None:
-        """Resume the operation."""
+        """ Resume the operation.""".
         logger.debug("CancellationToken.resume() called")
         self._paused.set()
 
     def wait_if_paused(self, timeout: float | None = None) -> bool:
-        """Wait if paused. Returns True if not paused/resumed, False if cancelled."""
+        """ Wait if paused. Returns True if not paused/resumed, False if cancelled.""".
         if self.is_cancelled():
             return False
         if not self._paused.is_set():
@@ -55,7 +55,7 @@ class CancellationToken:
         return True
 
     def is_cancelled(self) -> bool:
-        """Check if cancellation was requested."""
+        """ Check if cancellation was requested.""".
         result = self._cancelled.is_set()
         if result:
             logger.debug(
@@ -64,21 +64,21 @@ class CancellationToken:
         return result
 
     def is_paused(self) -> bool:
-        """Check if operation is paused."""
+        """ Check if operation is paused.""".
         return not self._paused.is_set()
 
     def throw_if_cancelled(self) -> None:
-        """Raise CancellationError if cancelled."""
+        """ Raise CancellationError if cancelled.""".
         if self.is_cancelled():
             raise CancellationError(self._reason or "Operation was cancelled")
 
     @property
     def cancellation_reason(self) -> str | None:
-        """Get the cancellation reason."""
+        """ Get the cancellation reason.""".
         return self._reason
 
 
 class CancellationError(Exception):
-    """Exception raised when an operation is cancelled."""
+    """ Exception raised when an operation is cancelled.""".
 
     pass

@@ -33,4 +33,4 @@ pip install -e ".[dev]"
 python --version
 pip list
 
-echo "\n✅ venv reset complete. You are now using Python 3.13 with all dependencies installed." 
+echo "\n✅ venv reset complete. You are now using Python 3.13 with all dependencies installed."

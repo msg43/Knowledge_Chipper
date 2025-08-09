@@ -10,4 +10,4 @@ Requirements:
 - Maintain academic rigor while being accessible
 - Include any technical details that would be valuable for future reference
 
-Please provide your analysis in a clear, structured format. 
+Please provide your analysis in a clear, structured format.

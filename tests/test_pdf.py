@@ -7,13 +7,11 @@ Covers text extraction, error handling, batch/folder processing, and fetch_pdf_t
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
+
 import pytest
 
 from knowledge_system.errors import ProcessingError
-from knowledge_system.processors.pdf import (
-    PDFProcessor,
-    fetch_pdf_text,
-)
+from knowledge_system.processors.pdf import PDFProcessor, fetch_pdf_text
 
 
 class TestPDFProcessor:
@@ -102,8 +100,7 @@ class TestPDFProcessor:
 
     @patch("PyPDF2.PdfReader")
     @patch("pdfplumber.open")
-    def test_process_single_pdf_success(
-        self, mock_pdfplumber_open, mock_pypdf2_reader):
+    def test_process_single_pdf_success(self, mock_pdfplumber_open, mock_pypdf2_reader):
         # PyPDF2 fails, pdfplumber succeeds
         mock_pypdf2_reader.return_value.pages = []
         mock_pypdf2_reader.return_value.is_encrypted = False
@@ -130,8 +127,7 @@ class TestPDFProcessor:
 
     @patch("PyPDF2.PdfReader")
     @patch("pdfplumber.open")
-    def test_process_batch_folder(
-        self, mock_pdfplumber_open, mock_pypdf2_reader):
+    def test_process_batch_folder(self, mock_pdfplumber_open, mock_pypdf2_reader):
         # Both extractors succeed
         mock_pypdf2_reader.return_value.pages = []
         mock_pypdf2_reader.return_value.is_encrypted = False

@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thanks for taking the time to fill out this bug report!
-        
+
   - type: checkboxes
     id: terms
     attributes:
@@ -17,7 +17,7 @@ body:
           required: true
         - label: I have read the troubleshooting section in README.md
           required: true
-          
+
   - type: textarea
     id: what-happened
     attributes:
@@ -26,7 +26,7 @@ body:
       placeholder: Describe the issue you encountered
     validations:
       required: true
-      
+
   - type: textarea
     id: steps
     attributes:
@@ -39,7 +39,7 @@ body:
         4. See error
     validations:
       required: true
-      
+
   - type: textarea
     id: expected
     attributes:
@@ -47,7 +47,7 @@ body:
       description: What you expected to happen
     validations:
       required: true
-      
+
   - type: dropdown
     id: os
     attributes:
@@ -59,7 +59,7 @@ body:
         - Other (please specify in additional context)
     validations:
       required: true
-      
+
   - type: input
     id: python-version
     attributes:
@@ -67,16 +67,16 @@ body:
       placeholder: "3.9.1"
     validations:
       required: true
-      
+
   - type: textarea
     id: logs
     attributes:
       label: Relevant Log Output
       description: Please copy and paste any relevant log output (from GUI console or logs/ directory)
       render: shell
-      
+
   - type: textarea
     id: context
     attributes:
       label: Additional Context
-      description: Add any other context about the problem here 
+      description: Add any other context about the problem here

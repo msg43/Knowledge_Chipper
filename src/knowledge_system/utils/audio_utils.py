@@ -1,9 +1,12 @@
-"""
+""" FFmpeg-based audio processing utilities to replace pydub functionality.
+
 FFmpeg-based audio processing utilities to replace pydub functionality.
 Compatible with Python 3.13+ and provides the same core functionality.
 """
 
 import json
+import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -15,19 +18,54 @@ logger = get_logger(__name__)
 
 
 class FFmpegAudioProcessor:
-    """FFmpeg-based audio processor to replace pydub functionality."""
+    """ FFmpeg-based audio processor to replace pydub functionality.""".
 
     def __init__(self) -> None:
+        self._ffmpeg_path: str | None = None
+        self._ffprobe_path: str | None = None
         self._check_ffmpeg_available()
 
+    def _resolve_binary(self, name: str) -> str | None:
+        """ Resolve absolute path to ffmpeg/ffprobe.
+
+        Resolution order:
+        1) Environment variable FFMPEG_PATH/FFPROBE_PATH (absolute path)
+        2) PATH lookup via shutil.which
+        """ # 1) Environment override.
+        
+        # 1) Environment override
+        env_key = "FFMPEG_PATH" if name == "ffmpeg" else "FFPROBE_PATH"
+        env_path = os.environ.get(env_key)
+        if env_path:
+            candidate = Path(env_path).expanduser()
+            if candidate.exists() and os.access(candidate, os.X_OK):
+                return str(candidate)
+
+        # 2) PATH search
+        which_path = shutil.which(name)
+        if which_path:
+            return which_path
+
+        return None
+
     def _check_ffmpeg_available(self) -> bool:
-        """Check if FFmpeg is available on the system."""
-        try:
-            subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
-            return True
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            logger.error("FFmpeg not found. Please install FFmpeg: brew install ffmpeg")
-            return False
+        """ Check if FFmpeg is available on the system.""".
+        self._ffmpeg_path = self._resolve_binary("ffmpeg")
+        self._ffprobe_path = self._resolve_binary("ffprobe")
+
+        if self._ffmpeg_path and self._ffprobe_path:
+            try:
+                subprocess.run(
+                    [self._ffmpeg_path, "-version"], capture_output=True, check=True
+                )
+                return True
+            except Exception:
+                pass
+
+        logger.info(
+            "FFmpeg not found. You can install it via Homebrew (brew install ffmpeg) or use Settings → FFmpeg to choose/install a binary."
+        )
+        return False
 
     def convert_audio(
         self,
@@ -38,7 +76,7 @@ class FFmpegAudioProcessor:
         sample_rate: int | None = None,
         channels: int | None = None,
     ) -> bool:
-        """
+        """ Convert audio file to target format using FFmpeg.
         Convert audio file to target format using FFmpeg.
 
         Args:
@@ -51,13 +89,15 @@ class FFmpegAudioProcessor:
 
         Returns:
             True if conversion successful, False otherwise
-        """
+        """ try:.
+        
         try:
             input_path = Path(input_path)
             output_path = Path(output_path)
 
             # Build FFmpeg command
-            cmd = ["ffmpeg", "-i", str(input_path)]
+            ffmpeg = self._ffmpeg_path or self._resolve_binary("ffmpeg") or "ffmpeg"
+            cmd = [ffmpeg, "-i", str(input_path)]
 
             # Add audio filters for normalization
             if normalize:
@@ -95,7 +135,7 @@ class FFmpegAudioProcessor:
             return False
 
     def get_audio_metadata(self, file_path: str | Path) -> dict[str, Any]:
-        """
+        """ Extract audio metadata using ffprobe.
         Extract audio metadata using ffprobe.
 
         Args:
@@ -103,13 +143,15 @@ class FFmpegAudioProcessor:
 
         Returns:
             Dictionary containing audio metadata
-        """
+        """ try:.
+        
         try:
             file_path = Path(file_path)
 
             # Get format information
+            ffprobe = self._ffprobe_path or self._resolve_binary("ffprobe") or "ffprobe"
             format_cmd = [
-                "ffprobe",
+                ffprobe,
                 "-v",
                 "quiet",
                 "-print_format",
@@ -174,7 +216,7 @@ class FFmpegAudioProcessor:
             return {}
 
     def get_audio_duration(self, file_path: str | Path) -> float | None:
-        """
+        """ Get audio duration in seconds using ffprobe.
         Get audio duration in seconds using ffprobe.
 
         Args:
@@ -182,12 +224,14 @@ class FFmpegAudioProcessor:
 
         Returns:
             Duration in seconds, or None if extraction failed
-        """
+        """ try:.
+        
         try:
             file_path = Path(file_path)
 
+            ffprobe = self._ffprobe_path or self._resolve_binary("ffprobe") or "ffprobe"
             cmd = [
-                "ffprobe",
+                ffprobe,
                 "-v",
                 "quiet",
                 "-show_entries",
@@ -210,7 +254,7 @@ class FFmpegAudioProcessor:
             return None
 
     def normalize_audio(self, input_path: str | Path, output_path: str | Path) -> bool:
-        """
+        """ Normalize audio levels using FFmpeg.
         Normalize audio levels using FFmpeg.
 
         Args:
@@ -219,14 +263,16 @@ class FFmpegAudioProcessor:
 
         Returns:
             True if normalization successful, False otherwise
-        """
+        """ try:.
+        
         try:
             input_path = Path(input_path)
             output_path = Path(output_path)
 
             # Use FFmpeg's loudnorm filter for audio normalization
+            ffmpeg = self._ffmpeg_path or self._resolve_binary("ffmpeg") or "ffmpeg"
             cmd = [
-                "ffmpeg",
+                ffmpeg,
                 "-i",
                 str(input_path),
                 "-af",
@@ -266,22 +312,22 @@ def convert_audio_file(
     sample_rate: int | None = None,
     channels: int | None = None,
 ) -> bool:
-    """Convenience function for audio conversion."""
+    """ Convenience function for audio conversion.""".
     return ffmpeg_processor.convert_audio(
         input_path, output_path, target_format, normalize, sample_rate, channels
     )
 
 
 def get_audio_metadata(file_path: str | Path) -> dict[str, Any]:
-    """Convenience function for getting audio metadata."""
+    """ Convenience function for getting audio metadata.""".
     return ffmpeg_processor.get_audio_metadata(file_path)
 
 
 def get_audio_duration(file_path: str | Path) -> float | None:
-    """Convenience function for getting audio duration."""
+    """ Convenience function for getting audio duration.""".
     return ffmpeg_processor.get_audio_duration(file_path)
 
 
 def normalize_audio_file(input_path: str | Path, output_path: str | Path) -> bool:
-    """Convenience function for audio normalization."""
+    """ Convenience function for audio normalization.""".
     return ffmpeg_processor.normalize_audio(input_path, output_path)

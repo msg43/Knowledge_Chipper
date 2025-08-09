@@ -10,4 +10,4 @@ Key Topics Covered:
 - Document processing
 - AI-powered summarization
 
-This file serves as test data for our PDF processing pipeline. 
+This file serves as test data for our PDF processing pipeline.
