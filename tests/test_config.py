@@ -30,7 +30,7 @@ class TestAppConfig:
         """Test default configuration values."""
         config = AppConfig()
         assert config.name == "Knowledge_Chipper"
-        assert config.version == "0.1.0"
+        assert config.version == "0.1.1"
         assert config.debug is False
 
     def test_custom_values(self):

@@ -1,4 +1,4 @@
-""" Worker to download, verify, and install a user-space FFmpeg for macOS.""".
+""" Worker to download, verify, and install a user-space FFmpeg for macOS."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class FFmpegRelease:
 
 
 class FFmpegInstaller(QThread):
-    """ Background worker to install FFmpeg into user-space without sudo.""".
+    """ Background worker to install FFmpeg into user-space without sudo."""
 
     progress = pyqtSignal(str)
     finished = pyqtSignal(bool, str, str)  # success, message, installed_path
@@ -127,5 +127,3 @@ class FFmpegInstaller(QThread):
         except Exception as e:
             logger.error(f"FFmpeg installation failed: {e}")
             self.finished.emit(False, str(e), "")
-
-

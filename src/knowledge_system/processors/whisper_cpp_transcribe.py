@@ -11,7 +11,7 @@ logger = get_logger(__name__)
 
 
 class WhisperCppTranscribeProcessor(BaseProcessor):
-    """ Transcribes audio files using whisper.cpp with Core ML support on macOS.""".
+    """ Transcribes audio files using whisper.cpp with Core ML support on macOS."""
 
     def __init__(
         self,
@@ -56,7 +56,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         return Path(input_path).suffix.lower() in self.supported_formats
 
     def _download_model(self, model_name: str, progress_callback=None) -> Path:
-        """ Download the whisper.cpp model if not already present.""".
+        """ Download the whisper.cpp model if not already present."""
         # First check local models directory
         local_models_dir = Path("models")
         if local_models_dir.exists():
@@ -95,12 +95,12 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
             def download_with_progress(url, dest_path, callback=None):
 
-                """ Download with progress.""".
+                """ Download with progress."""
                 start_time = time.time()
 
                 def report_progress(block_num, block_size, total_size):
 
-                    """ Report progress.""".
+                    """ Report progress."""
                     downloaded = block_num * block_size
                     percent = (
                         min(100, (downloaded / total_size) * 100)
@@ -157,7 +157,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
     def _validate_transcription_quality(
         self, text: str, audio_duration_seconds: float | None = None
     ) -> dict:
-        """ Validate transcription quality and detect common failure patterns.""".
+        """ Validate transcription quality and detect common failure patterns."""
         if not text or len(text.strip()) < 10:
             return {"is_valid": False, "issue": "Transcription too short or empty"}
 
@@ -307,7 +307,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         return {"is_valid": True, "issue": None}
 
     def _load_model(self):
-        """ Download whisper.cpp model if needed (for subprocess usage).""".
+        """ Download whisper.cpp model if needed (for subprocess usage)."""
         # We're using subprocess approach, so just ensure model is downloaded
         if self._model_path is None:
             self._model_path = self._download_model(
@@ -315,7 +315,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             )
 
     def _convert_to_wav(self, input_path: Path) -> Path:
-        """ Convert audio to 16kHz WAV format required by whisper.cpp.""".
+        """ Convert audio to 16kHz WAV format required by whisper.cpp."""
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
             output_path = Path(tmp_file.name)
 
@@ -343,7 +343,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             raise
 
     def _get_audio_duration(self, input_path: Path) -> float | None:
-        """ Get audio duration in seconds using ffprobe.""".
+        """ Get audio duration in seconds using ffprobe."""
         try:
             import subprocess
 
@@ -389,7 +389,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         return self._process_audio(path, **kwargs)
 
     def _process_audio(self, input_path: Path, **kwargs: Any) -> ProcessorResult:
-        """ Process audio using native whisper.cpp CLI.""".
+        """ Process audio using native whisper.cpp CLI."""
         logger.info("Processing audio with native whisper.cpp")
 
         # Emit initial progress
@@ -685,7 +685,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 temp_wav.unlink(missing_ok=True)
 
     def _run_whisper_with_progress(self, cmd) -> subprocess.CompletedProcess:
-        """ Run whisper.cpp with real-time progress monitoring.""".
+        """ Run whisper.cpp with real-time progress monitoring."""
         import threading
         import time
         from collections import namedtuple
@@ -714,7 +714,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         stderr_lines = []
 
         def monitor_progress():
-            """ Monitor progress in a separate thread.""".
+            """ Monitor progress in a separate thread."""
 
             # Monitor both stdout and stderr for progress indicators
             while process.poll() is None:
@@ -820,7 +820,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         return CompletedProcess(full_stdout, full_stderr, process.returncode)
 
     def _parse_whisper_output_for_progress(self, line: str, elapsed_time: float):
-        """ Parse whisper.cpp output for progress indicators.""".
+        """ Parse whisper.cpp output for progress indicators."""
         line = line.strip().lower()
 
         # Look for common progress indicators in whisper.cpp output
@@ -854,7 +854,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 def fetch_transcript(
     audio_path: str | Path, model: str = "base", use_coreml: bool | None = None
 ) -> str | None:
-    """ Convenience function to transcribe an audio file using whisper.cpp.""".
+    """ Convenience function to transcribe an audio file using whisper.cpp."""
     proc = WhisperCppTranscribeProcessor(model=model, use_coreml=use_coreml)
     result = proc.process(audio_path)
     return result.data.get("text") if result.success else None

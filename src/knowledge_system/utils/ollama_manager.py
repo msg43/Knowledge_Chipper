@@ -1,4 +1,4 @@
-""" Ollama service and model management utilities.""".
+""" Ollama service and model management utilities."""
 
 import json
 import os
@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 
 @dataclass
 class ModelInfo:
-    """ Information about an Ollama model.""".
+    """ Information about an Ollama model."""
 
     name: str
     size_bytes: int
@@ -34,7 +34,7 @@ class ModelInfo:
 
 @dataclass
 class DownloadProgress:
-    """ Download progress information.""".
+    """ Download progress information."""
 
     status: str
     completed: int = 0
@@ -46,7 +46,7 @@ class DownloadProgress:
 
 @dataclass
 class InstallationProgress:
-    """ Installation progress information.""".
+    """ Installation progress information."""
 
     status: str
     completed: int = 0
@@ -56,14 +56,14 @@ class InstallationProgress:
 
 
 class OllamaManager:
-    """ Manages Ollama service and model operations.""".
+    """ Manages Ollama service and model operations."""
 
     def __init__(self, base_url: str = "http://localhost:11434") -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = 30
 
     def is_installed(self) -> tuple[bool, str | None]:
-        """ Check if Ollama is installed and return the path if found.""".
+        """ Check if Ollama is installed and return the path if found."""
         ollama_paths = [
             "/usr/local/bin/ollama",
             "/opt/homebrew/bin/ollama",
@@ -82,7 +82,7 @@ class OllamaManager:
         return False, None
 
     def is_service_running(self) -> bool:
-        """ Check if Ollama service is running.""".
+        """ Check if Ollama service is running."""
         try:
             response = requests.get(f"{self.base_url}/api/version", timeout=5)
             return response.status_code == 200
@@ -90,7 +90,7 @@ class OllamaManager:
             return False
 
     def install_ollama_macos(self, progress_callback=None) -> tuple[bool, str]:
-        """ Install Ollama on macOS by downloading and running the installer.""".
+        """ Install Ollama on macOS by downloading and running the installer."""
         try:
             if progress_callback:
                 progress_callback(
@@ -212,7 +212,7 @@ class OllamaManager:
             return False, f"Installation failed: {str(e)}"
 
     def start_service(self) -> tuple[bool, str]:
-        """ Start Ollama service.""".
+        """ Start Ollama service."""
         if self.is_service_running():
             return True, "Ollama service is already running"
 
@@ -242,7 +242,7 @@ class OllamaManager:
             return False, f"Failed to start Ollama: {str(e)}"
 
     def get_available_models(self) -> list[ModelInfo]:
-        """ Get list of models available in Ollama.""".
+        """ Get list of models available in Ollama."""
         try:
             response = requests.get(f"{self.base_url}/api/tags", timeout=self.timeout)
             response.raise_for_status()
@@ -276,12 +276,12 @@ class OllamaManager:
             return []
 
     def is_model_available(self, model_name: str) -> bool:
-        """ Check if a specific model is available locally.""".
+        """ Check if a specific model is available locally."""
         models = self.get_available_models()
         return any(model.name == model_name for model in models)
 
     def get_model_info_from_registry(self, model_name: str) -> ModelInfo | None:
-        """ Get model information from Ollama registry (before download).""".
+        """ Get model information from Ollama registry (before download)."""
         try:
             # Use the comprehensive model database
             popular_models = self._get_popular_models_database()
@@ -316,7 +316,7 @@ class OllamaManager:
             return None
 
     def get_registry_models(self, use_cache: bool = True) -> list[ModelInfo]:
-        """ Get comprehensive list of available models from multiple sources.""".
+        """ Get comprehensive list of available models from multiple sources."""
         try:
             models = []
 
@@ -359,7 +359,7 @@ class OllamaManager:
             return []
 
     def _get_popular_models_database(self) -> list[ModelInfo]:
-        """ Enhanced database of popular models with accurate metadata.""".
+        """ Enhanced database of popular models with accurate metadata."""
         models = []
 
         # Define model categories with accurate size information
@@ -413,7 +413,7 @@ class OllamaManager:
         return models
 
     def download_model(self, model_name: str, progress_callback=None) -> bool:
-        """ Download a model with progress tracking.""".
+        """ Download a model with progress tracking."""
         try:
             url = f"{self.base_url}/api/pull"
             payload = {"name": model_name, "stream": True}
@@ -489,7 +489,7 @@ class OllamaManager:
             return False
 
     def _format_size(self, size_bytes: int) -> str:
-        """ Format size in bytes to human readable format.""".
+        """ Format size in bytes to human readable format."""
         size = float(size_bytes)
         for unit in ["B", "KB", "MB", "GB", "TB"]:
             if size < 1024.0:
@@ -498,7 +498,7 @@ class OllamaManager:
         return f"{size:.1f} PB"
 
     def _extract_quantization(self, model_name: str) -> str:
-        """ Extract quantization info from model name.""".
+        """ Extract quantization info from model name."""
         if "q8" in model_name.lower():
             return "Q8"
         elif "q6_k" in model_name.lower():
@@ -517,7 +517,7 @@ _ollama_manager = None
 
 
 def get_ollama_manager() -> OllamaManager:
-    """ Get global Ollama manager instance.""".
+    """ Get global Ollama manager instance."""
     global _ollama_manager
     if _ollama_manager is None:
         from knowledge_system.config import get_settings

@@ -21,7 +21,7 @@ def load_yaml_headers() -> list[str]:
     Returns:
         List of header phrases to look for in summary content
     """ config_file = Path("config/Headers_to_YAML.txt").
-    
+
     config_file = Path("config/Headers_to_YAML.txt")
     try:
         if config_file.exists():

@@ -1,4 +1,4 @@
-""" Shared GUI components and utilities.""".
+""" Shared GUI components and utilities."""
 
 from .base_tab import BaseTab
 from .file_operations import FileOperationsMixin

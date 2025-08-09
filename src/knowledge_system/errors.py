@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 
 class KnowledgeSystemError(Exception):
-    """ Base exception for all Knowledge System errors.""".
+    """ Base exception for all Knowledge System errors."""
 
     def __init__(
         self,
@@ -26,7 +26,7 @@ class KnowledgeSystemError(Exception):
             context: Additional context information
             cause: Original exception that caused this error
         """ super().__init__(message).
-        
+
         super().__init__(message)
         self.message = message
         self.error_code = error_code or self.__class__.__name__
@@ -34,7 +34,7 @@ class KnowledgeSystemError(Exception):
         self.cause = cause
 
     def __str__(self) -> str:
-        """ Return formatted error message.""".
+        """ Return formatted error message."""
         parts = [self.message]
 
         if self.error_code:
@@ -47,7 +47,7 @@ class KnowledgeSystemError(Exception):
         return " ".join(parts)
 
     def to_dict(self) -> dict[str, Any]:
-        """ Convert exception to dictionary for serialization.""".
+        """ Convert exception to dictionary for serialization."""
         return {
             "error_type": self.__class__.__name__,
             "message": self.message,
@@ -59,70 +59,70 @@ class KnowledgeSystemError(Exception):
 
 # Configuration and Settings Errors
 class ConfigurationError(KnowledgeSystemError):
-    """ Raised when configuration is invalid or missing.""".
+    """ Raised when configuration is invalid or missing."""
 
 
 class SettingsValidationError(ConfigurationError):
-    """ Raised when settings fail validation.""".
+    """ Raised when settings fail validation."""
 
 
 class ConfigFileError(ConfigurationError):
-    """ Raised when configuration file cannot be loaded or parsed.""".
+    """ Raised when configuration file cannot be loaded or parsed."""
 
 
 # File System Errors
 class FileSystemError(KnowledgeSystemError):
-    """ Base class for file system related errors.""".
+    """ Base class for file system related errors."""
 
 
 class FileNotFoundError(FileSystemError):
-    """ Raised when a required file is not found.""".
+    """ Raised when a required file is not found."""
 
 
 class FilePermissionError(FileSystemError):
-    """ Raised when file permissions prevent access.""".
+    """ Raised when file permissions prevent access."""
 
 
 class DirectoryError(FileSystemError):
-    """ Raised when directory operations fail.""".
+    """ Raised when directory operations fail."""
 
 
 class FileFormatError(FileSystemError):
-    """ Raised when file format is invalid or unsupported.""".
+    """ Raised when file format is invalid or unsupported."""
 
 
 # Processing Errors
 class ProcessingError(KnowledgeSystemError):
-    """ Base class for data processing errors.""".
+    """ Base class for data processing errors."""
 
 
 class TranscriptionError(ProcessingError):
-    """ Raised when audio transcription fails.""".
+    """ Raised when audio transcription fails."""
 
 
 class SummarizationError(ProcessingError):
-    """ Raised when text summarization fails.""".
+    """ Raised when text summarization fails."""
 
 
 class MOCGenerationError(ProcessingError):
-    """ Raised when Maps-of-Content generation fails.""".
+    """ Raised when Maps-of-Content generation fails."""
 
 
 class PDFProcessingError(ProcessingError):
-    """ Raised when PDF processing fails.""".
+    """ Raised when PDF processing fails."""
 
 
 class VideoProcessingError(ProcessingError):
-    """ Raised when video processing fails.""".
+    """ Raised when video processing fails."""
 
 
 # Network and API Errors
 class NetworkError(KnowledgeSystemError):
-    """ Base class for network-related errors.""".
+    """ Base class for network-related errors."""
 
 
 class APIError(NetworkError):
-    """ Raised when API calls fail.""".
+    """ Raised when API calls fail."""
 
     def __init__(
         self,
@@ -133,7 +133,7 @@ class APIError(NetworkError):
         context: dict[str, Any] | None = None,
         cause: Exception | None = None,
     ) -> None:
-        """ Initialize API error with additional HTTP context.""".
+        """ Initialize API error with additional HTTP context."""
         full_context = context.copy() if context else {}
 
         if status_code:
@@ -149,11 +149,11 @@ class APIError(NetworkError):
 
 
 class YouTubeAPIError(APIError):
-    """ Raised when YouTube API operations fail.""".
+    """ Raised when YouTube API operations fail."""
 
 
 class LLMAPIError(APIError):
-    """ Raised when LLM API calls fail.""".
+    """ Raised when LLM API calls fail."""
 
     def __init__(
         self,
@@ -162,7 +162,7 @@ class LLMAPIError(APIError):
         model: str | None = None,
         **kwargs: Any,
     ) -> None:
-        """ Initialize LLM API error with provider context.""".
+        """ Initialize LLM API error with provider context."""
         context = kwargs.get("context", {}).copy()
 
         if provider:
@@ -180,12 +180,12 @@ class LLMAPIError(APIError):
 
 
 class RateLimitError(APIError):
-    """ Raised when API rate limits are exceeded.""".
+    """ Raised when API rate limits are exceeded."""
 
     def __init__(
         self, message: str, retry_after: int | None = None, **kwargs: Any
     ) -> None:
-        """ Initialize rate limit error with retry information.""".
+        """ Initialize rate limit error with retry information."""
         context = kwargs.get("context", {}).copy()
 
         if retry_after:
@@ -200,41 +200,41 @@ class RateLimitError(APIError):
 
 
 class AuthenticationError(APIError):
-    """ Raised when API authentication fails.""".
+    """ Raised when API authentication fails."""
 
 
 # Resource and State Errors
 class ResourceError(KnowledgeSystemError):
-    """ Base class for resource-related errors.""".
+    """ Base class for resource-related errors."""
 
 
 class MemoryError(ResourceError):
-    """ Raised when memory allocation fails.""".
+    """ Raised when memory allocation fails."""
 
 
 class DiskSpaceError(ResourceError):
-    """ Raised when disk space is insufficient.""".
+    """ Raised when disk space is insufficient."""
 
 
 class GPUError(ResourceError):
-    """ Raised when GPU operations fail.""".
+    """ Raised when GPU operations fail."""
 
 
 class StateError(KnowledgeSystemError):
-    """ Raised when application state is invalid.""".
+    """ Raised when application state is invalid."""
 
 
 class DatabaseError(StateError):
-    """ Raised when database operations fail.""".
+    """ Raised when database operations fail."""
 
 
 # Validation and Input Errors
 class ValidationError(KnowledgeSystemError):
-    """ Base class for validation errors.""".
+    """ Base class for validation errors."""
 
 
 class InputValidationError(ValidationError):
-    """ Raised when user input is invalid.""".
+    """ Raised when user input is invalid."""
 
     def __init__(
         self,
@@ -243,7 +243,7 @@ class InputValidationError(ValidationError):
         field_value: Any = None,
         **kwargs: Any,
     ) -> None:
-        """ Initialize input validation error with field context.""".
+        """ Initialize input validation error with field context."""
         context = kwargs.get("context", {}).copy()
 
         if field_name:
@@ -261,29 +261,29 @@ class InputValidationError(ValidationError):
 
 
 class URLValidationError(ValidationError):
-    """ Raised when URL format is invalid.""".
+    """ Raised when URL format is invalid."""
 
 
 class ModelValidationError(ValidationError):
-    """ Raised when data model validation fails.""".
+    """ Raised when data model validation fails."""
 
 
 # Operation and Workflow Errors
 class OperationError(KnowledgeSystemError):
-    """ Base class for operation errors.""".
+    """ Base class for operation errors."""
 
 
 class WorkflowError(OperationError):
-    """ Raised when workflow execution fails.""".
+    """ Raised when workflow execution fails."""
 
 
 class TimeoutError(OperationError):
-    """ Raised when operations timeout.""".
+    """ Raised when operations timeout."""
 
     def __init__(
         self, message: str, timeout_seconds: float | None = None, **kwargs: Any
     ) -> None:
-        """ Initialize timeout error with duration context.""".
+        """ Initialize timeout error with duration context."""
         context = kwargs.get("context", {}).copy()
 
         if timeout_seconds:
@@ -298,24 +298,24 @@ class TimeoutError(OperationError):
 
 
 class CancellationError(OperationError):
-    """ Raised when operations are cancelled.""".
+    """ Raised when operations are cancelled."""
 
 
 class DependencyError(OperationError):
-    """ Raised when required dependencies are missing or incompatible.""".
+    """ Raised when required dependencies are missing or incompatible."""
 
 
 # Monitoring and Watch Errors
 class MonitoringError(KnowledgeSystemError):
-    """ Base class for monitoring-related errors.""".
+    """ Base class for monitoring-related errors."""
 
 
 class FileWatchError(MonitoringError):
-    """ Raised when file watching fails.""".
+    """ Raised when file watching fails."""
 
 
 class PlaylistMonitorError(MonitoringError):
-    """ Raised when playlist monitoring fails.""".
+    """ Raised when playlist monitoring fails."""
 
 
 # Utility Functions for Error Handling
@@ -337,7 +337,7 @@ def wrap_exception(
     Returns:
         Wrapped Knowledge System exception
     """ message = f"Error in {func_name}: {str(original_exception)}".
-    
+
     message = f"Error in {func_name}: {str(original_exception)}"
     full_context = {"function": func_name}
     if context:
@@ -361,7 +361,7 @@ def handle_api_error(
     Returns:
         Appropriate API error exception
     """ status_code = getattr(response, "status_code", None).
-    
+
     status_code = getattr(response, "status_code", None)
     response_text = getattr(response, "text", "No response body")
 
@@ -411,7 +411,7 @@ def format_error_message(
     Returns:
         Formatted error message
     """ if isinstance(error, KnowledgeSystemError):.
-    
+
     if isinstance(error, KnowledgeSystemError):
         message = str(error)
 

@@ -43,7 +43,7 @@ def is_youtube_url(text: str) -> bool:
 
 def extract_urls(input_data: Any) -> list[str]:
     """ Extract YouTube URLs from input data.
-    
+
     Extract YouTube URLs from input data.
     Handles both direct URLs and files containing URLs.
 
@@ -57,7 +57,7 @@ def extract_urls(input_data: Any) -> list[str]:
         FileNotFoundError: If input appears to be a file path but file doesn't exist
         IOError: If file cannot be read
     """ input_str = str(input_data).
-    
+
     input_str = str(input_data)
     urls = []
 
@@ -92,7 +92,7 @@ def get_manual_cookie_file() -> Path | None:
     Returns:
         Path to cookie file if found, None otherwise
     """ possible_paths = [.
-    
+
     possible_paths = [
         Path.home() / ".config" / "knowledge_system" / "cookies.txt",
         Path.home() / ".knowledge_system" / "cookies.txt",
@@ -112,7 +112,7 @@ def _show_cookie_help_dialog(error_message: str | None = None):
     """ Shows a helpful dialog box when cookies are stale or authentication fails.
     Shows a helpful dialog box when cookies are stale or authentication fails.
     """ try:.
-    
+
     try:
         # Try to import GUI components
         from PyQt6.QtWidgets import QApplication, QMessageBox
@@ -149,7 +149,7 @@ This will allow the app to access YouTube without being blocked.
 
 Would you like to see detailed instructions?
             """ else:.
-            
+
         else:
             title = "YouTube Authentication Failed"
             message = """
@@ -279,8 +279,8 @@ def create_cookie_instructions() -> str:
 
     Returns:
         String with detailed instructions
-    """ return """.
-    
+    """ return """
+
     return """
 To fix YouTube authentication issues, you can create a manual cookie file:
 
@@ -312,7 +312,7 @@ def extract_video_id(url: str) -> str:
     Returns:
         Video ID string
     """ patterns = [.
-    
+
     patterns = [
         r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]+)",
         r"youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)",
@@ -352,7 +352,7 @@ def expand_playlist_urls(urls: list[str]) -> list[str]:
     Returns:
         List of individual video URLs with playlists expanded
     """ result = expand_playlist_urls_with_metadata(urls).
-    
+
     result = expand_playlist_urls_with_metadata(urls)
     return result["expanded_urls"]
 
@@ -369,7 +369,7 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
         - 'expanded_urls': List of individual video URLs with playlists expanded
         - 'playlist_info': List of playlist metadata for tracking progress
     """ try:.
-    
+
     try:
         import yt_dlp
 
@@ -464,7 +464,7 @@ def download_thumbnail_direct(
     Returns:
         Path to downloaded thumbnail file, or None if failed
     """ try:.
-    
+
     try:
         import time
 
@@ -574,7 +574,7 @@ def download_thumbnail(
     Returns:
         Path to downloaded thumbnail file, or None if failed
     """ # Always use direct download method - no yt-dlp fallback to avoid bot detection.
-    
+
     # Always use direct download method - no yt-dlp fallback to avoid bot detection
     return download_thumbnail_direct(url, output_dir, thumbnail_url)
 
@@ -586,7 +586,7 @@ def get_no_cookie_strategy() -> dict[str, Any]:
     Returns:
         A dictionary of yt-dlp options for cookie-free authentication.
     """ logger.info("Using no-cookie authentication strategy.").
-    
+
     logger.info("Using no-cookie authentication strategy.")
     return {
         "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -630,7 +630,7 @@ def download_thumbnails_batch(
 
 
 def clear_authentication_cache():
-    """ Clear the authentication cache to force re-authentication.""".
+    """ Clear the authentication cache to force re-authentication."""
     global _cookie_jar_cache, _cookie_jar_timestamp
 
     _cookie_jar_cache = None
@@ -663,14 +663,14 @@ def get_authentication_status() -> dict[str, Any]:
 
 def initiate_browser_authentication() -> bool:
     """ Initiate a browser-based authentication flow for YouTube.
-    
+
     Initiate a browser-based authentication flow for YouTube.
     This opens the user's browser to authenticate with YouTube without storing passwords.
 
     Returns:
         True if authentication was initiated successfully, False otherwise
     """ try:.
-    
+
     try:
         import platform
         import subprocess
@@ -717,8 +717,8 @@ def get_authentication_help() -> str:
 
     Returns:
         String with detailed authentication help
-    """ return """.
-    
+    """ return """
+
     return """
 🔐 YouTube Authentication Help
 

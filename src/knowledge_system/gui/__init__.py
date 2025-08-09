@@ -1,4 +1,4 @@
-""" GUI components for the knowledge system.""".
+""" GUI components for the knowledge system."""
 
 from .dialogs import (
     ExtractionProgressDialog,

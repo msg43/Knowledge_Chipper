@@ -1,4 +1,4 @@
-""" YouTube extraction tab for downloading and processing YouTube transcripts.""".
+""" YouTube extraction tab for downloading and processing YouTube transcripts."""
 
 import json
 import os  # Added for os.access
@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 
 
 class YouTubeExtractionWorker(QThread):
-    """ Worker thread for YouTube transcript extraction.""".
+    """ Worker thread for YouTube transcript extraction."""
 
     progress_updated = pyqtSignal(int, int, str)  # current, total, status
     url_completed = pyqtSignal(str, bool, str)  # url, success, message
@@ -61,7 +61,7 @@ class YouTubeExtractionWorker(QThread):
             logger.info(f"URLs to process: {urls[:3]}{'...' if len(urls) > 3 else ''}")
 
     def run(self) -> None:
-        """ Run the YouTube extraction process.""".
+        """ Run the YouTube extraction process."""
         logger.info(f"YouTubeExtractionWorker.run() started with {len(self.urls)} URLs")
 
         # Early check for empty URL list
@@ -470,7 +470,7 @@ class YouTubeExtractionWorker(QThread):
             self.progress_updated.emit(0, len(self.urls), f"💥 Fatal error: {error_msg}")
 
     def stop(self) -> None:
-        """ Stop the extraction process.""".
+        """ Stop the extraction process."""
         logger.info("YouTubeExtractionWorker.stop() called")
         self.should_stop = True
         if self.cancellation_token:
@@ -482,7 +482,7 @@ class YouTubeExtractionWorker(QThread):
         Returns:
             tuple: (log_file_path, csv_file_path) or (None, None) if failed
         """ try:.
-        
+
         try:
             import csv
             import json
@@ -570,7 +570,7 @@ class YouTubeExtractionWorker(QThread):
 
 
 class YouTubeTab(BaseTab):
-    """ Tab for YouTube transcript extraction and processing.""".
+    """ Tab for YouTube transcript extraction and processing."""
 
     def __init__(self, parent: Any = None) -> None:
         self.extraction_worker = None
@@ -579,7 +579,7 @@ class YouTubeTab(BaseTab):
         super().__init__(parent)
 
     def _setup_ui(self) -> None:
-        """ Setup the YouTube extraction UI.""".
+        """ Setup the YouTube extraction UI."""
         layout = QVBoxLayout(self)
 
         # Input section
@@ -608,7 +608,7 @@ class YouTubeTab(BaseTab):
         self._load_settings()
 
     def _create_input_section(self) -> QGroupBox:
-        """ Create the URL input section.""".
+        """ Create the URL input section."""
         group = QGroupBox("YouTube URLs")
         layout = QVBoxLayout()
 
@@ -698,7 +698,7 @@ class YouTubeTab(BaseTab):
         return group
 
     def _on_input_method_changed(self) -> None:
-        """ Handle radio button changes to enable/disable input sections.""".
+        """ Handle radio button changes to enable/disable input sections."""
         if self.url_radio.isChecked():
             # Enable URL input, disable file input
             self.url_input.setEnabled(True)
@@ -722,7 +722,7 @@ class YouTubeTab(BaseTab):
         self._save_settings()
 
     def _create_settings_section(self) -> QGroupBox:
-        """ Create the extraction settings section.""".
+        """ Create the extraction settings section."""
         group = QGroupBox("Extraction Settings")
         layout = QGridLayout()
 
@@ -789,7 +789,7 @@ class YouTubeTab(BaseTab):
         return group
 
     def _create_action_layout(self) -> QHBoxLayout:
-        """ Create the action buttons layout.""".
+        """ Create the action buttons layout."""
         layout = QHBoxLayout()
 
         self.start_btn = QPushButton(self._get_start_button_text())
@@ -812,7 +812,7 @@ class YouTubeTab(BaseTab):
         # Make green and take 3/4 of the width
         self.start_btn.setStyleSheet(
             """ QPushButton {.
-            
+
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
@@ -830,7 +830,7 @@ class YouTubeTab(BaseTab):
                 color: #666666;
             }
         """ ).
-        
+
         )
         layout.addWidget(self.start_btn, 3)  # 3/4 stretch factor
 
@@ -852,7 +852,7 @@ class YouTubeTab(BaseTab):
         # Make red and take 1/4 of the width
         self.stop_btn.setStyleSheet(
             """ QPushButton {.
-            
+
             QPushButton {
                 background-color: #f44336;
                 color: white;
@@ -871,14 +871,14 @@ class YouTubeTab(BaseTab):
                 opacity: 0.7;
             }
         """ ).
-        
+
         )
         layout.addWidget(self.stop_btn, 1)  # 1/4 stretch factor
 
         return layout
 
     def _create_progress_section(self) -> QVBoxLayout:
-        """ Create the progress tracking section.""".
+        """ Create the progress tracking section."""
         layout = QVBoxLayout()
 
         # Progress label
@@ -896,7 +896,7 @@ class YouTubeTab(BaseTab):
         return layout
 
     def _create_output_section(self) -> QVBoxLayout:
-        """ Create the output section with improved resizing behavior.""".
+        """ Create the output section with improved resizing behavior."""
         layout = QVBoxLayout()
 
         # Header with report button
@@ -938,7 +938,7 @@ class YouTubeTab(BaseTab):
         return layout
 
     def _select_url_file(self) -> None:
-        """ Select file containing YouTube URLs.""".
+        """ Select file containing YouTube URLs."""
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Select URL File", "", "Text files (*.txt *.csv);;All files (*.*)"
         )
@@ -946,17 +946,17 @@ class YouTubeTab(BaseTab):
             self.file_input.setText(file_path)
 
     def _select_output_directory(self) -> None:
-        """ Select output directory for YouTube transcripts.""".
+        """ Select output directory for YouTube transcripts."""
         dir_path = QFileDialog.getExistingDirectory(self, "Select Output Directory")
         if dir_path:
             self.output_dir_input.setText(dir_path)
 
     def _get_start_button_text(self) -> str:
-        """ Get the text for the start button.""".
+        """ Get the text for the start button."""
         return "🎬 Extract Transcripts"
 
     def _start_processing(self) -> None:
-        """ Start YouTube transcript extraction.""".
+        """ Start YouTube transcript extraction."""
         # Check WebShare credentials from settings
         webshare_username = self.settings.api_keys.webshare_username
         webshare_password = self.settings.api_keys.webshare_password
@@ -1086,7 +1086,7 @@ class YouTubeTab(BaseTab):
         self.status_updated.emit("YouTube extraction in progress...")
 
     def _stop_processing(self):
-        """ Stop the currently running extraction process.""".
+        """ Stop the currently running extraction process."""
         if self.extraction_worker and self.extraction_worker.isRunning():
             self.extraction_worker.stop()
             self.stop_btn.setEnabled(False)
@@ -1101,7 +1101,7 @@ class YouTubeTab(BaseTab):
             )
 
     def _collect_urls(self) -> list[str]:
-        """ Collect URLs from input fields based on selected input method.""".
+        """ Collect URLs from input fields based on selected input method."""
         urls = []
 
         # BUGFIX: Only collect URLs from the selected source, not both
@@ -1178,7 +1178,7 @@ class YouTubeTab(BaseTab):
         return unique_urls
 
     def _update_extraction_progress(self, current: int, total: int, status: str):
-        """ Update extraction progress.""".
+        """ Update extraction progress."""
         if total > 0:
             percent = (current / total) * 100
             # Display the full enhanced status message
@@ -1212,11 +1212,11 @@ class YouTubeTab(BaseTab):
             self.progress_label.setText(status)
 
     def _url_extraction_completed(self, url: str, success: bool, message: str):
-        """ Handle completion of single URL extraction.""".
+        """ Handle completion of single URL extraction."""
         self.append_log(f"  → {message}")
 
     def _extraction_finished(self, results: dict[str, Any]):
-        """ Handle completion of all extractions.""".
+        """ Handle completion of all extractions."""
         self.append_log("\n" + "=" * 50)
         self.append_log("🎬 YouTube extraction completed!")
         self.append_log(
@@ -1346,7 +1346,7 @@ class YouTubeTab(BaseTab):
         self.processing_finished.emit()
 
     def _extraction_error(self, error_msg: str):
-        """ Handle extraction error.""".
+        """ Handle extraction error."""
         self.append_log(f"❌ Error: {error_msg}")
         self.show_error("Extraction Error", f"YouTube extraction failed: {error_msg}")
 
@@ -1361,7 +1361,7 @@ class YouTubeTab(BaseTab):
         self.status_updated.emit("Ready")
 
     def _show_payment_required_dialog(self):
-        """ Show popup dialog for 402 Payment Required error.""".
+        """ Show popup dialog for 402 Payment Required error."""
         from PyQt6.QtWidgets import QMessageBox
 
         from ..assets.icons import get_app_icon
@@ -1385,7 +1385,7 @@ class YouTubeTab(BaseTab):
         payment_dialog.exec()
 
     def _handle_playlist_info(self, playlist_data: dict):
-        """ Handle enhanced playlist and video information from worker.""".
+        """ Handle enhanced playlist and video information from worker."""
         playlists = playlist_data.get("playlists", [])
         total_playlists = playlist_data.get("total_playlists", 0)
         total_videos = playlist_data.get("total_videos", 0)
@@ -1420,7 +1420,7 @@ class YouTubeTab(BaseTab):
         self.append_log("")  # Add blank line for spacing
 
     def _load_settings(self) -> None:
-        """ Load saved settings from session.""".
+        """ Load saved settings from session."""
         try:
             # Load output directory
             saved_output_dir = self.gui_settings.get_output_directory(
@@ -1463,7 +1463,7 @@ class YouTubeTab(BaseTab):
             logger.error(f"Failed to load settings for {self.tab_name} tab: {e}")
 
     def _save_settings(self) -> None:
-        """ Save current settings to session.""".
+        """ Save current settings to session."""
         try:
             # Save output directory
             self.gui_settings.set_output_directory(
@@ -1498,11 +1498,11 @@ class YouTubeTab(BaseTab):
             logger.error(f"Failed to save settings for {self.tab_name} tab: {e}")
 
     def _on_setting_changed(self):
-        """ Called when any setting changes to automatically save.""".
+        """ Called when any setting changes to automatically save."""
         self._save_settings()
 
     def validate_inputs(self) -> bool:
-        """ Validate inputs before processing.""".
+        """ Validate inputs before processing."""
         # Check output directory
         output_dir = self.output_dir_input.text().strip()
         if not output_dir:
@@ -1544,14 +1544,14 @@ class YouTubeTab(BaseTab):
         return True
 
     def cleanup_workers(self):
-        """ Clean up any active workers.""".
+        """ Clean up any active workers."""
         if self.extraction_worker and self.extraction_worker.isRunning():
             self.extraction_worker.stop()
             self.extraction_worker.wait(3000)
         super().cleanup_workers()
 
     def _reset_ui_state(self):
-        """ Reset UI to initial state.""".
+        """ Reset UI to initial state."""
         self.start_btn.setEnabled(True)
         self.start_btn.setText(self._get_start_button_text())
         self.stop_btn.setEnabled(False)

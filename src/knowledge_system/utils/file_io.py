@@ -41,7 +41,7 @@ def safe_filename(
     Returns:
         Safe filename string
     """ if not filename:.
-    
+
     if not filename:
         return "unnamed_file"
 
@@ -172,7 +172,7 @@ def safe_copy(
         FilePermissionError: If permission denied
         FileSystemError: For other file operation errors
     """ src_path = Path(src).
-    
+
     src_path = Path(src)
     dst_path = Path(dst)
 
@@ -240,7 +240,7 @@ def safe_move(
         FilePermissionError: If permission denied
         FileSystemError: For other file operation errors
     """ src_path = Path(src).
-    
+
     src_path = Path(src)
     dst_path = Path(dst)
 
@@ -436,7 +436,7 @@ def format_file_size(size_bytes: int) -> str:
     Returns:
         Formatted size string
     """ if size_bytes == 0:.
-    
+
     if size_bytes == 0:
         return "0 B"
 
@@ -612,7 +612,7 @@ def cleanup_old_backups(
     original_name: str,
     max_backups: int,
 ) -> None:
-    """ Clean up old backup files, keeping only the most recent ones.""".
+    """ Clean up old backup files, keeping only the most recent ones."""
     pattern = f"{Path(original_name).stem}.backup.*{Path(original_name).suffix}"
     backups = find_files(backup_dir, pattern, recursive=False)
 
@@ -755,7 +755,7 @@ def generate_unified_yaml_metadata(
     analysis_type: str = "document summary",
 ) -> dict[str, str]:
     """ Generate unified YAML metadata for summary files.
-    
+
     Generate unified YAML metadata for summary files.
     This consolidates all YAML field generation into one place to prevent duplication.
 
@@ -771,7 +771,7 @@ def generate_unified_yaml_metadata(
     Returns:
         Dictionary of YAML fields ready for frontmatter
     """ from ..logger import get_logger.
-    
+
     from ..logger import get_logger
     from .header_to_yaml import process_summary_for_yaml_headers
 
@@ -845,7 +845,7 @@ def overwrite_or_insert_summary_section(
     additional_yaml_fields: dict[str, str] | None = None,
 ) -> None:
     """ Overwrite the ## Summary section in a markdown file with new_summary.
-    
+
     Overwrite the ## Summary section in a markdown file with new_summary.
     If the section does not exist, insert it before ## Full Transcript, or at the end if not found.
 
@@ -854,7 +854,7 @@ def overwrite_or_insert_summary_section(
         new_summary: The new summary content to insert
         additional_yaml_fields: Optional dict of additional YAML fields to append to frontmatter
     """ md_path = Path(md_path).
-    
+
     md_path = Path(md_path)
     with open(md_path, encoding="utf-8") as f:
         lines = f.readlines()

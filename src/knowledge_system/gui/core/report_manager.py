@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 
 class ProcessingReport:
-    """ Represents a processing report.""".
+    """ Represents a processing report."""
 
     def __init__(
         self,
@@ -30,7 +30,7 @@ class ProcessingReport:
         self.file_path: Path | None = None
 
     def save_to_file(self, output_dir: str | Path) -> Path:
-        """ Save the report to a file.""".
+        """ Save the report to a file."""
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
@@ -48,7 +48,7 @@ class ProcessingReport:
         return file_path
 
     def to_dict(self) -> dict[str, Any]:
-        """ Convert report to dictionary.""".
+        """ Convert report to dictionary."""
         return {
             "type": self.type,
             "title": self.title,
@@ -59,7 +59,7 @@ class ProcessingReport:
 
 
 class ReportManager:
-    """ Manages processing reports and results.""".
+    """ Manages processing reports and results."""
 
     def __init__(self) -> None:
         self.reports: list[ProcessingReport] = []
@@ -68,7 +68,7 @@ class ReportManager:
     def add_report(
         self, report_type: str, title: str, content: str
     ) -> ProcessingReport:
-        """ Add a new report.""".
+        """ Add a new report."""
         report = ProcessingReport(report_type, title, content)
         self.reports.append(report)
 
@@ -80,7 +80,7 @@ class ReportManager:
         return report
 
     def get_reports(self, report_type: str | None = None) -> list[ProcessingReport]:
-        """ Get reports, optionally filtered by type.""".
+        """ Get reports, optionally filtered by type."""
         if report_type:
             return [r for r in self.reports if r.type == report_type]
         return self.reports.copy()
@@ -88,16 +88,16 @@ class ReportManager:
     def get_latest_report(
         self, report_type: str | None = None
     ) -> ProcessingReport | None:
-        """ Get the most recent report, optionally filtered by type.""".
+        """ Get the most recent report, optionally filtered by type."""
         reports = self.get_reports(report_type)
         return reports[-1] if reports else None
 
     def save_report(self, report: ProcessingReport, output_dir: str | Path) -> Path:
-        """ Save a report to file.""".
+        """ Save a report to file."""
         return report.save_to_file(output_dir)
 
     def clear_reports(self, report_type: str | None = None):
-        """ Clear reports, optionally filtered by type.""".
+        """ Clear reports, optionally filtered by type."""
         if report_type:
             self.reports = [r for r in self.reports if r.type != report_type]
             logger.info(f"Cleared {report_type} reports")
@@ -108,7 +108,7 @@ class ReportManager:
     def generate_summary_report(
         self, include_types: list[str] | None = None
     ) -> ProcessingReport:
-        """ Generate a summary report of all processing activities.""".
+        """ Generate a summary report of all processing activities."""
         if include_types:
             reports = [r for r in self.reports if r.type in include_types]
         else:
@@ -150,7 +150,7 @@ _report_manager: ReportManager | None = None
 
 
 def get_report_manager() -> ReportManager:
-    """ Get the global report manager instance.""".
+    """ Get the global report manager instance."""
     global _report_manager
     if _report_manager is None:
         _report_manager = ReportManager()

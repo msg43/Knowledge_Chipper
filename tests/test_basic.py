@@ -10,17 +10,17 @@ from knowledge_system import Settings, __version__, get_logger
 
 def test_version():
     """Test that version is accessible."""
-    assert __version__ == "0.1.0"
+    assert __version__ == "0.1.1"
 
 
 def test_settings_basic():
     """Test basic Settings functionality."""
     settings = Settings()
-    assert settings.app.version == "0.1.0"
+    assert settings.app.version == "0.1.1"
     assert settings.app.debug is False
 
     # Test nested access
-    assert settings.get_nested("app.version") == "0.1.0"
+    assert settings.get_nested("app.version") == "0.1.1"
     assert settings.get_nested("transcription.whisper_model") == "base"
 
     # Test nested setting
@@ -47,7 +47,7 @@ def test_cli_version():
         text=True,
     )
     assert result.returncode == 0
-    assert "0.1.0" in result.stdout
+    assert "0.1.1" in result.stdout
 
 
 def test_cli_help():

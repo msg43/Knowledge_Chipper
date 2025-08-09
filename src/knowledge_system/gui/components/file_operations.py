@@ -1,4 +1,4 @@
-""" File operations mixin for common file handling functionality.""".
+""" File operations mixin for common file handling functionality."""
 
 from collections.abc import Callable
 from pathlib import Path
@@ -20,12 +20,12 @@ if TYPE_CHECKING:
 
 
 class FileOperationsMixin:
-    """ Mixin class providing common file operations for GUI tabs.""".
+    """ Mixin class providing common file operations for GUI tabs."""
 
     def create_file_input_section(
         self, title: str, file_list_attr: str, file_patterns: str = "All files (*.*)"
     ) -> QGroupBox:
-        """ Create a standard file input section with list and buttons.""".
+        """ Create a standard file input section with list and buttons."""
         group = QGroupBox(title)
         layout = QVBoxLayout()
 
@@ -70,7 +70,7 @@ class FileOperationsMixin:
         field_attr: str,
         browse_callback: Callable[[], None] | None = None,
     ) -> tuple[QLineEdit, QPushButton]:
-        """ Create output directory field with browse button.""".
+        """ Create output directory field with browse button."""
         field = QLineEdit()
         setattr(self, field_attr, field)
 
@@ -85,7 +85,7 @@ class FileOperationsMixin:
         return field, browse_btn
 
     def _add_files(self, file_list_attr: str, file_patterns: str):
-        """ Add files to the specified file list.""".
+        """ Add files to the specified file list."""
         file_list = getattr(self, file_list_attr)
         files, _ = QFileDialog.getOpenFileNames(
             self, "Select Files", "", file_patterns  # type: ignore
@@ -95,7 +95,7 @@ class FileOperationsMixin:
                 file_list.addItem(file)
 
     def _add_folder(self, file_list_attr: str, file_patterns: str):
-        """ Add all matching files from a folder to the file list.""".
+        """ Add all matching files from a folder to the file list."""
         file_list = getattr(self, file_list_attr)
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")  # type: ignore
         if folder:
@@ -113,19 +113,19 @@ class FileOperationsMixin:
                         file_list.addItem(file_str)
 
     def _clear_files(self, file_list_attr: str):
-        """ Clear the specified file list.""".
+        """ Clear the specified file list."""
         file_list = getattr(self, file_list_attr)
         file_list.clear()
 
     def _select_output_directory(self, field_attr: str):
-        """ Select output directory for the specified field.""".
+        """ Select output directory for the specified field."""
         field = getattr(self, field_attr)
         folder = QFileDialog.getExistingDirectory(self, "Select Output Directory")  # type: ignore
         if folder:
             field.setText(folder)
 
     def _get_file_list_items(self, file_list: QListWidget) -> list[str]:
-        """ Get all items from a file list widget.""".
+        """ Get all items from a file list widget."""
         items = []
         for i in range(file_list.count()):
             item = file_list.item(i)
@@ -134,7 +134,7 @@ class FileOperationsMixin:
         return items
 
     def _extract_extensions_from_patterns(self, file_patterns: str) -> list[str]:
-        """ Extract file extensions from Qt file patterns string.""".
+        """ Extract file extensions from Qt file patterns string."""
         extensions = []
         # Handle patterns like "Audio files (*.mp3 *.wav);;All files (*.*)"
         parts = file_patterns.split(";;")
@@ -154,12 +154,12 @@ class FileOperationsMixin:
         return extensions
 
     def get_selected_files(self, file_list_attr: str) -> list[str]:
-        """ Get all files from the specified file list.""".
+        """ Get all files from the specified file list."""
         file_list = getattr(self, file_list_attr)
         return self._get_file_list_items(file_list)
 
     def validate_file_selection(self, file_list_attr: str, min_files: int = 1) -> bool:
-        """ Validate that enough files are selected.""".
+        """ Validate that enough files are selected."""
         files = self.get_selected_files(file_list_attr)
         if len(files) < min_files:
             self.show_warning(  # type: ignore
@@ -170,7 +170,7 @@ class FileOperationsMixin:
         return True
 
     def add_files_from_list(self, file_list_attr: str, file_paths: list[str]):
-        """ Add files from a list to the file list widget.""".
+        """ Add files from a list to the file list widget."""
         file_list = getattr(self, file_list_attr)
         existing_items = self._get_file_list_items(file_list)
 

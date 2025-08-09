@@ -14,15 +14,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AppConfig(BaseModel):
-    """ Application-level configuration.""".
+    """ Application-level configuration."""
 
     name: str = "Knowledge_Chipper"
-    version: str = "0.1.0"
+    version: str = "0.1.1"
     debug: bool = False
 
 
 class PathsConfig(BaseModel):
-    """ Configuration for file paths.""".
+    """ Configuration for file paths."""
 
     # Base data directory (user will need to set this)
     data_dir: str = Field(
@@ -90,12 +90,12 @@ class PathsConfig(BaseModel):
         "logs",
     )
     def expand_paths(cls, v: Any) -> str:
-        """ Expand user paths.""".
+        """ Expand user paths."""
         return str(Path(v).expanduser()) if v else v
 
 
 class PerformanceConfig(BaseModel):
-    """ Performance and hardware optimization settings.""".
+    """ Performance and hardware optimization settings."""
 
     # Performance profile selection
     profile: str = Field(
@@ -144,7 +144,7 @@ class PerformanceConfig(BaseModel):
 
 
 class ThreadManagementConfig(BaseModel):
-    """ Thread management and resource allocation settings.""".
+    """ Thread management and resource allocation settings."""
 
     # OpenMP thread count - optimized for system
     omp_num_threads: int = Field(
@@ -192,7 +192,7 @@ class ThreadManagementConfig(BaseModel):
 
 
 class TranscriptionConfig(BaseModel):
-    """ Transcription settings.""".
+    """ Transcription settings."""
 
     whisper_model: str = Field(
         default="base", pattern="^(tiny|base|small|medium|large|large-v2|large-v3)$"
@@ -204,7 +204,7 @@ class TranscriptionConfig(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    """ LLM configuration.""".
+    """ LLM configuration."""
 
     provider: str = Field(default="openai", pattern="^(openai|claude|local)$")
     model: str = "gpt-4o-mini-2024-07-18"
@@ -217,7 +217,7 @@ class LLMConfig(BaseModel):
 
 
 class LocalLLMConfig(BaseModel):
-    """ Local LLM configuration.""".
+    """ Local LLM configuration."""
 
     base_url: str = "http://localhost:11434"
     model: str = "qwen2.5-coder:7b-instruct"
@@ -232,7 +232,7 @@ class LocalLLMConfig(BaseModel):
 
 
 class APIKeysConfig(BaseModel):
-    """ API keys configuration.""".
+    """ API keys configuration."""
 
     # LLM Provider Keys
     openai_api_key: str | None = Field(default=None, alias="openai")
@@ -246,24 +246,24 @@ class APIKeysConfig(BaseModel):
     huggingface_token: str | None = Field(default=None, alias="hf_token")
 
     class Config:
-        """ Pydantic model configuration.""".
+        """ Pydantic model configuration."""
 
         extra = "allow"  # Allow extra fields for backward compatibility
 
     # Backward compatibility properties
     @property
     def openai(self) -> str | None:
-        """ Backward compatibility property for openai_api_key.""".
+        """ Backward compatibility property for openai_api_key."""
         return self.openai_api_key
 
     @property
     def anthropic(self) -> str | None:
-        """ Backward compatibility property for anthropic_api_key.""".
+        """ Backward compatibility property for anthropic_api_key."""
         return self.anthropic_api_key
 
 
 class ProcessingConfig(BaseModel):
-    """ Processing settings.""".
+    """ Processing settings."""
 
     batch_size: int = Field(default=10, ge=1, le=100)
     concurrent_jobs: int = Field(default=2, ge=1, le=10)
@@ -272,7 +272,7 @@ class ProcessingConfig(BaseModel):
 
 
 class YouTubeProcessingConfig(BaseModel):
-    """ YouTube processing configuration.""".
+    """ YouTube processing configuration."""
 
     # Delay settings for rate limiting
     disable_delays_with_proxy: bool = Field(
@@ -295,7 +295,7 @@ class YouTubeProcessingConfig(BaseModel):
 
 
 class MOCConfig(BaseModel):
-    """ MOC (Maps of Content) configuration.""".
+    """ MOC (Maps of Content) configuration."""
 
     # MOC generation settings
     default_theme: str = Field(
@@ -317,7 +317,7 @@ class MOCConfig(BaseModel):
 
 
 class MonitoringConfig(BaseModel):
-    """ Monitoring and logging configuration.""".
+    """ Monitoring and logging configuration."""
 
     # Logging settings
     log_level: str = Field(
@@ -333,7 +333,7 @@ class MonitoringConfig(BaseModel):
 
 
 class Settings(BaseSettings):
-    """ Main settings class with YAML support and validation.""".
+    """ Main settings class with YAML support and validation."""
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="forbid"
@@ -359,11 +359,11 @@ class Settings(BaseSettings):
     summarization: LLMConfig = Field(default_factory=LLMConfig)
 
     def __init__(self, config_path: str | Path | None = None, **kwargs) -> None:
-        """ Initialize settings from YAML file and environment variables.""".
+        """ Initialize settings from YAML file and environment variables."""
 
         # Static YAML loading function for use before super().__init__()
         def load_yaml_static(path: str | Path) -> dict[str, Any]:
-            """ Load YAML configuration file (static version for init).""".
+            """ Load YAML configuration file (static version for init)."""
             path = Path(path)
             try:
                 with open(path, encoding="utf-8") as f:
@@ -445,7 +445,7 @@ class Settings(BaseSettings):
         super().__init__(**kwargs)
 
     def _load_yaml(self, path: str | Path) -> dict[str, Any]:
-        """ Load YAML configuration file.""".
+        """ Load YAML configuration file."""
         path = Path(path)
         try:
             with open(path, encoding="utf-8") as f:
@@ -454,7 +454,7 @@ class Settings(BaseSettings):
             raise ValueError(f"Failed to load config from {path}: {e}")
 
     def to_yaml(self, path: str | Path) -> None:
-        """ Save settings to YAML file.""".
+        """ Save settings to YAML file."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -466,11 +466,11 @@ class Settings(BaseSettings):
 
     @classmethod
     def from_file(cls, path: str | Path) -> "Settings":
-        """ Load settings from file.""".
+        """ Load settings from file."""
         return cls(config_path=path)
 
     def get_effective_config(self) -> dict[str, Any]:
-        """ Get effective configuration with performance profile applied.""".
+        """ Get effective configuration with performance profile applied."""
         from .utils.hardware_detection import PerformanceProfile, get_hardware_detector
 
         # Get hardware detector
@@ -531,7 +531,7 @@ _settings: Settings | None = None
 def get_settings(
     config_path: str | Path | None = None, reload: bool = False
 ) -> Settings:
-    """ Get or create the global settings instance.""".
+    """ Get or create the global settings instance."""
     global _settings
 
     if _settings is None or reload:
@@ -541,12 +541,12 @@ def get_settings(
 
 
 def apply_performance_profile(settings: Settings) -> dict[str, Any]:
-    """ Apply performance profile to settings and return effective configuration.""".
+    """ Apply performance profile to settings and return effective configuration."""
     return settings.get_effective_config()
 
 
 def get_hardware_optimized_settings() -> dict[str, Any]:
-    """ Get hardware-optimized settings for the current system.""".
+    """ Get hardware-optimized settings for the current system."""
     from .utils.hardware_detection import get_hardware_detector
 
     detector = get_hardware_detector()
