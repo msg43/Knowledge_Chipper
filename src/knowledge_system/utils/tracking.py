@@ -1,4 +1,4 @@
-"""
+""" Progress Tracking for Batch Operations.
 Progress Tracking for Batch Operations
 
 Provides progress tracking classes for various operation types and
@@ -39,7 +39,7 @@ def get_logger(name: str = "tracking") -> Any:
 
 @dataclass
 class TranscriptionProgress:
-    """Progress tracking for transcription operations with duration-based progress."""
+    """ Progress tracking for transcription operations with duration-based progress.""".
 
     current_file: str | None = None
     total_files: int | None = None
@@ -74,7 +74,7 @@ class TranscriptionProgress:
     cancellation_token: CancellationToken | None = None
 
     def __post_init__(self) -> None:
-        """Auto-calculate progress percentages and ETAs based on duration data."""
+        """ Auto-calculate progress percentages and ETAs based on duration data.""".
         # Calculate file progress
         if self.current_file_duration and self.current_file_progress is not None:
             self.file_percent = min(
@@ -123,7 +123,7 @@ class TranscriptionProgress:
 
 @dataclass
 class SummarizationProgress:
-    """Progress tracking for summarization operations with character-based progress."""
+    """ Progress tracking for summarization operations with character-based progress.""".
 
     current_file: str | None = None
     total_files: int | None = None
@@ -171,7 +171,7 @@ class SummarizationProgress:
     cancellation_token: CancellationToken | None = None
 
     def __post_init__(self) -> None:
-        """Auto-calculate progress percentages and ETAs based on character data."""
+        """ Auto-calculate progress percentages and ETAs based on character data.""".
         # Calculate file progress
         if self.current_file_size and self.current_file_chars_done is not None:
             self.file_percent = min(
@@ -218,7 +218,7 @@ class SummarizationProgress:
 
 @dataclass
 class ExtractionProgress:
-    """Progress tracking for YouTube extraction operations with URL-based progress."""
+    """ Progress tracking for YouTube extraction operations with URL-based progress.""".
 
     current_url: str | None = None
     total_urls: int | None = None
@@ -250,7 +250,7 @@ class ExtractionProgress:
     cancellation_token: CancellationToken | None = None
 
     def __post_init__(self) -> None:
-        """Auto-calculate progress percentages and ETAs based on URL processing data."""
+        """ Auto-calculate progress percentages and ETAs based on URL processing data.""".
         # Calculate batch progress
         if self.total_urls and self.urls_processed is not None:
             self.batch_percent = min(
@@ -274,7 +274,7 @@ class ExtractionProgress:
 
 @dataclass
 class MOCProgress:
-    """Progress tracking for Map of Content generation operations with file-based progress."""
+    """ Progress tracking for Map of Content generation operations with file-based progress.""".
 
     current_file: str | None = None
     total_files: int | None = None
@@ -307,7 +307,7 @@ class MOCProgress:
     cancellation_token: CancellationToken | None = None
 
     def __post_init__(self) -> None:
-        """Auto-calculate progress percentages and ETAs based on file processing data."""
+        """ Auto-calculate progress percentages and ETAs based on file processing data.""".
         # Calculate batch progress
         if self.total_files and self.files_processed is not None:
             self.batch_percent = min(
@@ -332,7 +332,7 @@ class MOCProgress:
 
 
 class TaskStatus(Enum):
-    """Status of a processing task."""
+    """ Status of a processing task.""".
 
     PENDING = "pending"
     RUNNING = "running"
@@ -343,7 +343,7 @@ class TaskStatus(Enum):
 
 @dataclass
 class TaskInfo:
-    """Information about a processing task."""
+    """ Information about a processing task.""".
 
     id: str
     input_path: str
@@ -364,7 +364,7 @@ class TaskInfo:
 
 
 class ProgressTracker:
-    """Tracks progress of batch operations with resume capabilities."""
+    """ Tracks progress of batch operations with resume capabilities.""".
 
     def __init__(
         self,
@@ -387,7 +387,7 @@ class ProgressTracker:
         self._load_checkpoint()
 
     def add_task(self, task_id: str, input_path: str, task_type: str) -> None:
-        """Add a new task to track."""
+        """ Add a new task to track.""".
         if task_id not in self.tasks:
             self.tasks[task_id] = TaskInfo(
                 id=task_id,
@@ -397,7 +397,7 @@ class ProgressTracker:
             )
 
     def start_task(self, task_id: str) -> None:
-        """Mark a task as started."""
+        """ Mark a task as started.""".
         if task_id in self.tasks:
             self.tasks[task_id].status = TaskStatus.RUNNING
             self.tasks[task_id].start_time = datetime.now()
@@ -406,7 +406,7 @@ class ProgressTracker:
     def complete_task(
         self, task_id: str, result_data: dict[str, Any] | None = None
     ) -> None:
-        """Mark a task as completed."""
+        """ Mark a task as completed.""".
         if task_id in self.tasks:
             task = self.tasks[task_id]
             task.status = TaskStatus.COMPLETED
@@ -421,7 +421,7 @@ class ProgressTracker:
             self._save_checkpoint()
 
     def fail_task(self, task_id: str, error_message: str) -> None:
-        """Mark a task as failed."""
+        """ Mark a task as failed.""".
         if task_id in self.tasks:
             task = self.tasks[task_id]
             task.status = TaskStatus.FAILED
@@ -449,7 +449,7 @@ class ProgressTracker:
             self._save_checkpoint()
 
     def skip_task(self, task_id: str, reason: str) -> None:
-        """Mark a task as skipped."""
+        """ Mark a task as skipped.""".
         if task_id in self.tasks:
             task = self.tasks[task_id]
             task.status = TaskStatus.SKIPPED
@@ -459,25 +459,25 @@ class ProgressTracker:
             self._save_checkpoint()
 
     def get_pending_tasks(self) -> list[TaskInfo]:
-        """Get all pending tasks."""
+        """ Get all pending tasks.""".
         return [
             task for task in self.tasks.values() if task.status == TaskStatus.PENDING
         ]
 
     def get_failed_tasks(self) -> list[TaskInfo]:
-        """Get all failed tasks."""
+        """ Get all failed tasks.""".
         return [
             task for task in self.tasks.values() if task.status == TaskStatus.FAILED
         ]
 
     def get_completed_tasks(self) -> list[TaskInfo]:
-        """Get all completed tasks."""
+        """ Get all completed tasks.""".
         return [
             task for task in self.tasks.values() if task.status == TaskStatus.COMPLETED
         ]
 
     def get_progress_summary(self) -> dict[str, Any]:
-        """Get a summary of current progress."""
+        """ Get a summary of current progress.""".
         elapsed = datetime.now() - self.start_time
         completed_tasks = len(self.get_completed_tasks())
 
@@ -505,12 +505,12 @@ class ProgressTracker:
         }
 
     def is_complete(self) -> bool:
-        """Check if all tasks are complete (or failed/skipped)."""
+        """ Check if all tasks are complete (or failed/skipped).""".
         pending_tasks = self.get_pending_tasks()
         return len(pending_tasks) == 0
 
     def _save_checkpoint(self) -> None:
-        """Save current progress to checkpoint file."""
+        """ Save current progress to checkpoint file.""".
         try:
             checkpoint_data = {
                 "operation_name": self.operation_name,
@@ -541,7 +541,7 @@ class ProgressTracker:
             get_logger().error(f"Failed to save checkpoint: {e}")
 
     def _load_checkpoint(self) -> None:
-        """Load progress from checkpoint file if it exists."""
+        """ Load progress from checkpoint file if it exists.""".
         if not self.checkpoint_file.exists():
             return
 
@@ -597,7 +597,7 @@ class ProgressTracker:
 
 
 def format_time_remaining(seconds: int | None) -> str:
-    """Format time remaining in a human-readable format."""
+    """ Format time remaining in a human-readable format.""".
     if seconds is None or seconds <= 0:
         return "Unknown"
 
@@ -620,7 +620,7 @@ def format_time_remaining(seconds: int | None) -> str:
 
 
 def format_progress_message(progress: Any, operation_type: str = "processing") -> str:
-    """
+    """ Format a comprehensive progress message with ETAs.
     Format a comprehensive progress message with ETAs.
 
     Args:
@@ -629,7 +629,7 @@ def format_progress_message(progress: Any, operation_type: str = "processing") -
 
     Returns:
         Formatted progress string with current status and ETAs
-    """
+    """ parts = [].
     parts = []
 
     # Current operation status
@@ -674,7 +674,7 @@ def format_progress_message(progress: Any, operation_type: str = "processing") -
 def create_character_progress_tracker(
     file_paths: list[str], start_time: float
 ) -> dict[str, Any]:
-    """
+    """ Create a character-based progress tracker for a batch of files.
     Create a character-based progress tracker for a batch of files.
 
     Args:
@@ -683,7 +683,7 @@ def create_character_progress_tracker(
 
     Returns:
         Dictionary with tracking information
-    """
+    """ from pathlib import Path.
     from pathlib import Path
 
     file_sizes = []
@@ -714,7 +714,7 @@ def create_character_progress_tracker(
 def create_duration_progress_tracker(
     audio_files: list[str], start_time: float
 ) -> dict[str, Any]:
-    """
+    """ Create a duration-based progress tracker for audio/video files.
     Create a duration-based progress tracker for audio/video files.
 
     Args:
@@ -723,7 +723,8 @@ def create_duration_progress_tracker(
 
     Returns:
         Dictionary with tracking information
-    """
+    """ # This would need to integrate with audio duration detection.
+    
     # This would need to integrate with audio duration detection
     # For now, use file size as a proxy
     return create_character_progress_tracker(audio_files, start_time)
@@ -735,7 +736,7 @@ def update_progress_with_character_tracking(
     current_file_progress_percent: float,
     elapsed_time: float,
 ) -> dict[str, Any]:
-    """
+    """ Update progress tracking with current file progress.
     Update progress tracking with current file progress.
 
     Args:
@@ -746,7 +747,7 @@ def update_progress_with_character_tracking(
 
     Returns:
         Updated progress information with ETAs
-    """
+    """ import time.
     import time
 
     # Calculate characters completed

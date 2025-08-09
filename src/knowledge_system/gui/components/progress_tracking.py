@@ -1,4 +1,4 @@
-"""Progress tracking components for GUI operations."""
+""" Progress tracking components for GUI operations.""".
 
 from typing import Any, Dict, Optional
 
@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 
 
 class ProgressTracker(QWidget):
-    """Widget for tracking operation progress with detailed information."""
+    """ Widget for tracking operation progress with detailed information.""".
 
     cancellation_requested = pyqtSignal()
 
@@ -27,7 +27,7 @@ class ProgressTracker(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup the progress tracking UI."""
+        """ Setup the progress tracking UI.""".
         self.setFixedHeight(100)
 
         # Main layout
@@ -71,7 +71,7 @@ class ProgressTracker(QWidget):
     def set_progress(
         self, current: int, total: int, status: str = "", details: str = ""
     ):
-        """Update progress information."""
+        """ Update progress information.""".
         if not self.is_visible:
             self.show()
             self.is_visible = True
@@ -104,7 +104,7 @@ class ProgressTracker(QWidget):
         self.cancel_btn.setVisible(True)
 
     def set_indeterminate(self, status: str = "Processing...", details: str = ""):
-        """Set indeterminate progress (unknown total)."""
+        """ Set indeterminate progress (unknown total).""".
         if not self.is_visible:
             self.show()
             self.is_visible = True
@@ -122,7 +122,7 @@ class ProgressTracker(QWidget):
         self.cancel_btn.setVisible(True)
 
     def finish(self, status: str = "Completed", show_for_seconds: int = 3):
-        """Finish progress and optionally hide after delay."""
+        """ Finish progress and optionally hide after delay.""".
         self.status_label.setText(status)
         self.progress_bar.setVisible(False)
         self.details_label.setVisible(False)
@@ -132,7 +132,7 @@ class ProgressTracker(QWidget):
             QTimer.singleShot(show_for_seconds * 1000, self.reset)
 
     def reset(self):
-        """Reset and hide the progress tracker."""
+        """ Reset and hide the progress tracker.""".
         self.hide()
         self.is_visible = False
         self.status_label.setText("Ready")
@@ -142,7 +142,7 @@ class ProgressTracker(QWidget):
         self.progress_bar.setValue(0)
 
     def set_error(self, error_message: str, show_for_seconds: int = 5):
-        """Show error state."""
+        """ Show error state.""".
         self.status_label.setText("Error")
         self.status_label.setStyleSheet("color: #d32f2f;")
         self.details_label.setText(error_message)
@@ -155,14 +155,14 @@ class ProgressTracker(QWidget):
             QTimer.singleShot(show_for_seconds * 1000, self._reset_styles)
 
     def _reset_styles(self):
-        """Reset label styles and hide."""
+        """ Reset label styles and hide.""".
         self.status_label.setStyleSheet("")
         self.details_label.setStyleSheet("color: #888;")
         self.reset()
 
 
 class EnhancedProgressBar(QFrame):
-    """Enhanced progress bar widget with cancellation support."""
+    """ Enhanced progress bar widget with cancellation support.""".
 
     cancellation_requested = pyqtSignal()
 
@@ -171,14 +171,15 @@ class EnhancedProgressBar(QFrame):
         self.setFixedHeight(80)
         self.setFrameStyle(QFrame.Shape.Box)
         self.setStyleSheet(
-            """
+            """ QFrame {.
+            
             QFrame {
                 background-color: #2d2d2d;
                 border: 1px solid #3c3c3c;
                 border-radius: 5px;
                 margin: 5px;
             }
-        """
+        """ ).
         )
 
         # Initially hide
@@ -188,7 +189,7 @@ class EnhancedProgressBar(QFrame):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup the enhanced progress bar UI."""
+        """ Setup the enhanced progress bar UI.""".
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
 
@@ -204,7 +205,8 @@ class EnhancedProgressBar(QFrame):
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.clicked.connect(self.cancellation_requested.emit)
         self.cancel_btn.setStyleSheet(
-            """
+            """ QPushButton {.
+            
             QPushButton {
                 background-color: #d32f2f;
                 color: white;
@@ -215,7 +217,8 @@ class EnhancedProgressBar(QFrame):
             QPushButton:hover {
                 background-color: #b71c1c;
             }
-        """
+        """ ).
+        
         )
         self.cancel_btn.hide()
         top_layout.addWidget(self.cancel_btn)
@@ -225,7 +228,8 @@ class EnhancedProgressBar(QFrame):
         # Progress bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setStyleSheet(
-            """
+            """ QProgressBar {.
+            
             QProgressBar {
                 background-color: #3c3c3c;
                 border: 1px solid #4c4c4c;
@@ -237,7 +241,8 @@ class EnhancedProgressBar(QFrame):
                 background-color: #007acc;
                 border-radius: 3px;
             }
-        """
+        """ ).
+        
         )
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
@@ -251,7 +256,7 @@ class EnhancedProgressBar(QFrame):
     def set_progress(
         self, current: int, total: int, status: str = "", details: str = ""
     ):
-        """Set progress with specific values."""
+        """ Set progress with specific values.""".
         self.show()
 
         if total > 0:
@@ -278,7 +283,7 @@ class EnhancedProgressBar(QFrame):
         self.cancel_btn.show()
 
     def set_indeterminate(self, status: str = "Processing...", details: str = ""):
-        """Set indeterminate progress."""
+        """ Set indeterminate progress.""".
         self.show()
         self.progress_bar.setMaximum(0)
         self.progress_bar.show()
@@ -293,7 +298,7 @@ class EnhancedProgressBar(QFrame):
         self.cancel_btn.show()
 
     def finish(self, message: str = "Completed"):
-        """Finish progress display."""
+        """ Finish progress display.""".
         self.status_label.setText(message)
         self.progress_bar.hide()
         self.details_label.hide()
@@ -303,7 +308,7 @@ class EnhancedProgressBar(QFrame):
         QTimer.singleShot(3000, self.hide)
 
     def set_error(self, error_message: str):
-        """Show error state."""
+        """ Show error state.""".
         self.show()
         self.status_label.setText("Error occurred")
         self.status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
@@ -317,13 +322,13 @@ class EnhancedProgressBar(QFrame):
         QTimer.singleShot(5000, self._reset_error_state)
 
     def _reset_error_state(self):
-        """Reset error state styles and hide."""
+        """ Reset error state styles and hide.""".
         self.status_label.setStyleSheet("color: #ffffff; font-weight: bold;")
         self.details_label.setStyleSheet("color: #cccccc; font-size: 11px;")
         self.hide()
 
     def reset(self):
-        """Reset the progress bar to initial state."""
+        """ Reset the progress bar to initial state.""".
         self.status_label.setText("Ready")
         self.status_label.setStyleSheet("color: #ffffff; font-weight: bold;")
         self.details_label.setText("")

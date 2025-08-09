@@ -1,4 +1,4 @@
-"""
+""" Summarizer Processor using Unified LLM Providers.
 Summarizer Processor using Unified LLM Providers
 
 Refactored to use shared LLM provider utilities, eliminating duplicate API calling code.
@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 
 
 class SummarizerProcessor(BaseProcessor):
-    """Summarizes text using various LLM providers via unified client."""
+    """ Summarizes text using various LLM providers via unified client.""".
 
     @property
     def supported_formats(self) -> list[str]:
@@ -74,7 +74,7 @@ class SummarizerProcessor(BaseProcessor):
             return input_data.exists() and input_data.is_file()
 
     def _read_text_from_file(self, file_path: Path) -> str:
-        """Read text content from file."""
+        """ Read text content from file.""".
         try:
             suffix = file_path.suffix.lower()
 
@@ -112,7 +112,7 @@ class SummarizerProcessor(BaseProcessor):
             raise
 
     def _build_summary_index(self, output_dir: Path) -> dict[str, dict[str, Any]]:
-        """Build index of existing summaries in output directory."""
+        """ Build index of existing summaries in output directory.""".
         summary_index: dict[str, dict[str, Any]] = {}
         files_scanned = 0
         files_failed = 0
@@ -187,7 +187,7 @@ class SummarizerProcessor(BaseProcessor):
     def _check_needs_summarization(
         self, source_file: Path, summary_index: dict[str, dict[str, Any]]
     ) -> tuple[bool, str]:
-        """Check if a source file needs summarization."""
+        """ Check if a source file needs summarization.""".
         source_path_str = str(source_file.absolute())
 
         # Check if summary exists in index
@@ -228,7 +228,7 @@ class SummarizerProcessor(BaseProcessor):
         )
 
     def _calculate_file_hash(self, file_path: Path, chunk_size: int = 8192) -> str:
-        """Calculate SHA-256 hash of file content."""
+        """ Calculate SHA-256 hash of file content.""".
         sha256_hash = hashlib.sha256()
         try:
             with open(file_path, "rb") as f:
@@ -242,7 +242,7 @@ class SummarizerProcessor(BaseProcessor):
     def _save_index_to_file(
         self, index_file: Path, summary_index: dict[str, dict[str, Any]]
     ) -> None:
-        """Save summary index to JSON file."""
+        """ Save summary index to JSON file.""".
         try:
             with open(index_file, "w", encoding="utf-8") as f:
                 json.dump(summary_index, f, indent=2, ensure_ascii=False)
@@ -255,7 +255,7 @@ class SummarizerProcessor(BaseProcessor):
     def _update_index_file(
         self, index_file: Path, source_path: str, summary_info: dict[str, Any]
     ) -> None:
-        """Update the index file with new summary information."""
+        """ Update the index file with new summary information.""".
         try:
             # Read existing index
             summary_index = {}
@@ -277,7 +277,7 @@ class SummarizerProcessor(BaseProcessor):
         text: str,
         template: str | Path | None = None,
     ) -> str:
-        """Generate summarization prompt."""
+        """ Generate summarization prompt.""".
 
         logger.info(
             f"🔧 _generate_prompt called with text length: {len(text)} chars, template: {template}"
@@ -366,14 +366,14 @@ class SummarizerProcessor(BaseProcessor):
         return final_prompt
 
     def _estimate_tokens(self, text: str) -> int:
-        """Estimate token count for text (rough approximation)."""
+        """ Estimate token count for text (rough approximation).""".
         # Rough approximation: 1 token ≈ 4 characters for English text
         return len(text) // 4
 
     def _calculate_smart_chunking_threshold(
         self, text: str, prompt_template: str | Path | None
     ) -> int:
-        """
+        """ Calculate the intelligent chunking threshold based on model capabilities and user settings.
         Calculate the intelligent chunking threshold based on model capabilities and user settings.
 
         Uses the same logic as calculate_chunking_config but returns just the threshold
@@ -385,7 +385,8 @@ class SummarizerProcessor(BaseProcessor):
 
         Returns:
             Maximum tokens that can be processed without chunking
-        """
+        """ from ..utils.text_utils import (.
+        
         from ..utils.text_utils import (
             estimate_tokens_improved,
             get_model_context_window,
@@ -435,7 +436,7 @@ class SummarizerProcessor(BaseProcessor):
         progress_callback: Callable[[SummarizationProgress], None] | None = None,
         cancellation_token: CancellationToken | None = None,
     ) -> dict[str, Any]:
-        """Call the LLM provider using unified client with character-based progress tracking."""
+        """ Call the LLM provider using unified client with character-based progress tracking.""".
         import threading
         import time
 
@@ -457,7 +458,7 @@ class SummarizerProcessor(BaseProcessor):
         prompt_chars = len(prompt)
 
         def heartbeat_worker() -> None:
-            """Send character-based progress updates during LLM calls with cancellation support."""
+            """ Send character-based progress updates during LLM calls with cancellation support.""".
             nonlocal heartbeat_active
             last_update = 0.0
             while heartbeat_active:
@@ -532,7 +533,7 @@ class SummarizerProcessor(BaseProcessor):
             heartbeat_thread.start()
 
         def llm_progress_callback(progress_data: Any) -> None:
-            """Adapt generic progress to SummarizationProgress."""
+            """ Adapt generic progress to SummarizationProgress.""".
             if progress_callback and isinstance(progress_data, dict):
                 progress_callback(
                     SummarizationProgress(
@@ -573,12 +574,12 @@ class SummarizerProcessor(BaseProcessor):
         prompt_template: str | Path | None,
         cancellation_token: CancellationToken | None = None,
     ) -> tuple[list[Any], str, Any]:
-        """
+        """ Set up chunking configuration and create chunks.
         Set up chunking configuration and create chunks.
 
         Returns:
             Tuple of (chunks, original_prompt_template, chunking_config)
-        """
+        """ logger.info(f"Setting up chunking configuration (model: {self.model})").
         logger.info(f"Setting up chunking configuration (model: {self.model})")
 
         # Check for cancellation
@@ -647,7 +648,7 @@ class SummarizerProcessor(BaseProcessor):
         return chunks, original_template, chunking_config
 
     def _get_style_template(self, style: str) -> str:
-        """Get default template for a given style."""
+        """ Get default template for a given style.""".
         style_templates = {
             "bullet": "Create a concise bullet-point summary of the following text:\n\n{text}\n\nSummary:",
             "paragraph": "Write a clear paragraph summary of the following text:\n\n{text}\n\nSummary:",
@@ -667,7 +668,7 @@ class SummarizerProcessor(BaseProcessor):
         total_characters: int | None = None,
         current_file_size: int | None = None,
     ) -> tuple[list[str], dict[str, int]]:
-        """
+        """ Process all chunks and return summaries with statistics.
         Process all chunks and return summaries with statistics.
 
         Args:
@@ -678,7 +679,8 @@ class SummarizerProcessor(BaseProcessor):
 
         Returns:
             Tuple of (chunk_summaries, processing_stats)
-        """
+        """ chunk_summaries = [].
+        
         chunk_summaries = []
         total_prompt_tokens = 0
         total_completion_tokens = 0
@@ -773,7 +775,7 @@ class SummarizerProcessor(BaseProcessor):
         total_characters: int | None = None,
         current_file_size: int | None = None,
     ) -> tuple[str, dict[str, int]]:
-        """
+        """ Reassemble chunk summaries into final summary.
         Reassemble chunk summaries into final summary.
 
         Args:
@@ -784,7 +786,8 @@ class SummarizerProcessor(BaseProcessor):
 
         Returns:
             Tuple of (final_summary, additional_stats)
-        """
+        """ # Update progress for reassembly phase with character tracking.
+        
         # Update progress for reassembly phase with character tracking
         if progress_callback:
             chars_completed = int((total_characters or 0) * 0.85)
@@ -862,7 +865,7 @@ class SummarizerProcessor(BaseProcessor):
         total_characters: int | None = None,
         current_file_size: int | None = None,
     ) -> dict[str, Any]:
-        """
+        """ Process text using intelligent chunking.
         Process text using intelligent chunking.
 
         Args:
@@ -874,7 +877,7 @@ class SummarizerProcessor(BaseProcessor):
 
         Returns:
             Dictionary with summary and metadata
-        """
+        """ logger.info(f"Processing with intelligent chunking (model: {self.model})").
         logger.info(f"Processing with intelligent chunking (model: {self.model})")
 
         # Step 1: Setup chunking configuration and create chunks
@@ -931,7 +934,7 @@ class SummarizerProcessor(BaseProcessor):
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
     ) -> ProcessorResult:
-        """Process input and generate summary using unified LLM client."""
+        """ Process input and generate summary using unified LLM client.""".
         # Extract parameters from kwargs for backwards compatibility
         prompt_template = kwargs.get("prompt_template", None)
         # Also extract cancellation_token from kwargs if not passed as parameter
@@ -1259,7 +1262,7 @@ def fetch_summary(
     style: str = "general",
     max_tokens: int = 500,
 ) -> str | None:
-    """Convenience function to get a summary using unified LLM providers."""
+    """ Convenience function to get a summary using unified LLM providers.""".
     processor = SummarizerProcessor(provider=provider, max_tokens=max_tokens)
     result = processor.process(text, style=style)
     return result.data if result.success else None

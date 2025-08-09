@@ -1,4 +1,4 @@
-"""
+""" Transcribe command for the Knowledge System CLI.
 Transcribe command for the Knowledge System CLI.
 
 Handles transcription of audio/video files and YouTube URLs using OpenAI Whisper.
@@ -21,14 +21,14 @@ from .common import CLIContext, console, logger, pass_context
 
 
 def format_timestamp(seconds: float) -> str:
-    """Format seconds to MM:SS format."""
+    """ Format seconds to MM:SS format.""".
     minutes = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{minutes:02d}:{secs:02d}"
 
 
 def format_timestamp_srt(seconds: float) -> str:
-    """Format seconds to SRT timestamp format (HH:MM:SS,mmm)."""
+    """ Format seconds to SRT timestamp format (HH:MM:SS,mmm).""".
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
@@ -37,7 +37,7 @@ def format_timestamp_srt(seconds: float) -> str:
 
 
 def format_timestamp_vtt(seconds: float) -> str:
-    """Format seconds to VTT timestamp format (HH:MM:SS.mmm)."""
+    """ Format seconds to VTT timestamp format (HH:MM:SS.mmm).""".
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
@@ -46,7 +46,7 @@ def format_timestamp_vtt(seconds: float) -> str:
 
 
 def extract_audio_video_metadata(file_path: Path) -> dict[str, Any]:
-    """Extract metadata from audio/video files using FFmpeg."""
+    """ Extract metadata from audio/video files using FFmpeg.""".
     try:
         from knowledge_system.utils.audio_utils import get_audio_metadata
 
@@ -73,7 +73,7 @@ def extract_audio_video_metadata(file_path: Path) -> dict[str, Any]:
 
 
 def format_audio_video_metadata_markdown(metadata: dict[str, Any]) -> str:
-    """Format audio/video metadata as markdown section."""
+    """ Format audio/video metadata as markdown section.""".
     lines = ["## Metadata"]
     lines.append("")
 
@@ -125,7 +125,7 @@ def format_audio_video_metadata_markdown(metadata: dict[str, Any]) -> str:
 
 
 def _add_analysis_sections(text: str, vault_path: Path | None = None) -> str:
-    """Add analysis sections to transcript (currently disabled)."""
+    """ Add analysis sections to transcript (currently disabled).""".
     # Analysis sections disabled per user request
     return ""
 
@@ -133,7 +133,7 @@ def _add_analysis_sections(text: str, vault_path: Path | None = None) -> str:
 def _generate_obsidian_link(
     source_file_stem: str, link_type: str, output_dir: Path | None = None
 ) -> str:
-    """
+    """ Generate Obsidian link to the corresponding file.
     Generate Obsidian link to the corresponding file.
 
     Args:
@@ -143,7 +143,8 @@ def _generate_obsidian_link(
 
     Returns:
         Formatted Obsidian link or empty string if target doesn't exist
-    """
+    """ if link_type == "summary":.
+    
     if link_type == "summary":
         target_filename = f"{source_file_stem}_summary"
         link_text = "View Summary"
@@ -182,7 +183,7 @@ def format_transcript_content(
     timestamps: bool = True,
     output_dir: Path | None = None,
 ) -> str:
-    """Format transcript content based on output format."""
+    """ Format transcript content based on output format.""".
     if format == "md":
         # Add YAML frontmatter with title instead of level 1 header
         # Escape quotes in source name for YAML safety
@@ -330,7 +331,7 @@ def format_transcript_content(
 
 
 def track_failed_transcript(url: str, reason: str, output_dir: Path) -> None:
-    """Track URLs that failed to transcribe or had very short transcripts."""
+    """ Track URLs that failed to transcribe or had very short transcripts.""".
     failed_file = output_dir / "failed_transcripts.csv"
     file_exists = failed_file.exists()
 
@@ -342,13 +343,13 @@ def track_failed_transcript(url: str, reason: str, output_dir: Path) -> None:
 
 
 def check_transcript_exists(video_id: str, output_dir: Path, format: str) -> bool:
-    """Check if a transcript already exists for the given video ID."""
+    """ Check if a transcript already exists for the given video ID.""".
     output_file = output_dir / f"{video_id}_transcript.{format}"
     return output_file.exists()
 
 
 def is_transcript_too_short(transcript_text: Any, min_words: int = 50) -> bool:
-    """Check if transcript is too short (less than minimum words)."""
+    """ Check if transcript is too short (less than minimum words).""".
     if isinstance(transcript_text, dict):
         if "segments" in transcript_text:
             # Extract text from segments
@@ -365,7 +366,7 @@ def is_transcript_too_short(transcript_text: Any, min_words: int = 50) -> bool:
 
 
 def extract_video_id_from_url(url: str) -> str | None:
-    """Extract YouTube video ID from URL."""
+    """ Extract YouTube video ID from URL.""".
     video_id_match = re.search(
         r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]+)", url
     )
@@ -452,7 +453,7 @@ def transcribe(
     use_whisper_cpp: bool,
     vault_path: Path | None,
 ) -> None:
-    """
+    """ Transcribe audio/video files or YouTube URLs using OpenAI Whisper.
     Transcribe audio/video files or YouTube URLs using OpenAI Whisper.
 
     Supports local audio/video files and YouTube URLs. Uses OpenAI's Whisper model
@@ -464,7 +465,7 @@ def transcribe(
         knowledge-system transcribe video.mp4 --model large --device mps
         knowledge-system transcribe audio.wav --format srt --no-timestamps
         knowledge-system transcribe --batch-urls urls.csv --output ./transcripts/
-    """
+    """ settings = ctx.get_settings().
     settings = ctx.get_settings()
 
     # Handle batch URL processing

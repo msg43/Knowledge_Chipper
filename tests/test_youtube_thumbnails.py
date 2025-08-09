@@ -2,11 +2,12 @@
 Tests for YouTube thumbnail downloading functionality.
 """
 
-import pytest
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from knowledge_system.processors.youtube_download import YouTubeDownloadProcessor
 from knowledge_system.services.transcription_service import TranscriptionService
@@ -24,8 +25,7 @@ class TestYouTubeThumbnails:
 
     @patch("knowledge_system.processors.youtube_download.yt_dlp.YoutubeDL")
     @patch("knowledge_system.processors.youtube_download.requests.get")
-    def test_download_thumbnails_enabled(
-        self, mock_requests, mock_ydl, temp_dir):
+    def test_download_thumbnails_enabled(self, mock_requests, mock_ydl, temp_dir):
         """Test that thumbnails are downloaded when enabled."""
         # Mock yt-dlp response
         mock_ydl_instance = MagicMock()

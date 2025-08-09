@@ -86,4 +86,4 @@ if [ $? -eq 0 ]; then
 else
     echo "✗ Failed to download model"
     exit 1
-fi 
+fi

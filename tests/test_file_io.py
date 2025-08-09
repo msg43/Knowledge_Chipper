@@ -9,21 +9,17 @@ from pathlib import Path
 
 import pytest
 
+from knowledge_system.errors import DirectoryError, FileNotFoundError, FileSystemError
 from knowledge_system.utils.file_io import (
-    safe_filename,
+    atomic_write,
     ensure_directory,
-    safe_copy,
+    find_files,
+    format_file_size,
     get_file_hash,
     get_file_info,
-    format_file_size,
-    find_files,
-    atomic_write,
     overwrite_or_insert_summary_section,
-)
-from knowledge_system.errors import (
-    FileSystemError,
-    FileNotFoundError,
-    DirectoryError,
+    safe_copy,
+    safe_filename,
 )
 
 
@@ -63,17 +59,12 @@ class TestSafeFilename:
     def test_extension_preservation(self):
         """Test extension preservation."""
         assert (
-            safe_filename(
-    "test:file.mp4",
-     preserve_extension=True) == "test_file.mp4"
+            safe_filename("test:file.mp4", preserve_extension=True) == "test_file.mp4"
         )
         assert (
-            safe_filename(
-    "test:file.mp4",
-     preserve_extension=False) == "test_file.mp4"
+            safe_filename("test:file.mp4", preserve_extension=False) == "test_file.mp4"
         )
-        assert safe_filename("test:file",
-     preserve_extension=True) == "test_file"
+        assert safe_filename("test:file", preserve_extension=True) == "test_file"
 
     def test_reserved_names(self):
         """Test handling of reserved Windows names."""
@@ -99,10 +90,8 @@ class TestSafeFilename:
 
     def test_custom_replacement_char(self):
         """Test custom replacement character."""
-        assert safe_filename("test:file.txt",
-     replacement_char="-") == "test-file.txt"
-        assert safe_filename("test<>file.txt",
-     replacement_char="X") == "testXXfile.txt"
+        assert safe_filename("test:file.txt", replacement_char="-") == "test-file.txt"
+        assert safe_filename("test<>file.txt", replacement_char="X") == "testXXfile.txt"
 
 
 class TestEnsureDirectory:
@@ -263,8 +252,7 @@ class TestGetFileHash:
             algorithms = ["md5", "sha1", "sha256"]
             for algorithm in algorithms:
                 file_hash = get_file_hash(test_file, algorithm)
-                expected_hash = hashlib.new(
-    algorithm, content.encode()).hexdigest()
+                expected_hash = hashlib.new(algorithm, content.encode()).hexdigest()
                 assert file_hash == expected_hash
 
     def test_hash_nonexistent_file(self):

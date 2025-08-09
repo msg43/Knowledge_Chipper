@@ -1,4 +1,5 @@
-"""
+""" Logging setup for Knowledge System.
+
 Logging setup for Knowledge System.
 Provides structured logging with rotation, multiple outputs, and proper formatting.
 """
@@ -14,10 +15,10 @@ from .config import get_settings
 
 
 class InterceptHandler(logging.Handler):
-    """Intercept standard logging records and send them to loguru."""
+    """ Intercept standard logging records and send them to loguru.""".
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Emit a log record to loguru."""
+        """ Emit a log record to loguru.""".
         # Get corresponding loguru level if it exists
         try:
             level = logger.level(record.levelname).name
@@ -47,7 +48,7 @@ def setup_logging(
     enable_file: bool = True,
     intercept_stdlib: bool = True,
 ) -> None:
-    """
+    """ Set up comprehensive logging configuration.
     Set up comprehensive logging configuration.
 
     Args:
@@ -59,7 +60,8 @@ def setup_logging(
         enable_console: Whether to log to console
         enable_file: Whether to log to file
         intercept_stdlib: Whether to intercept standard library logging
-    """
+    """ # Remove default handler.
+    
     # Remove default handler
     logger.remove()
 
@@ -115,7 +117,7 @@ def setup_logging(
 
 
 def get_logger(name: str = "knowledge_system") -> Any:
-    """
+    """ Get a logger instance.
     Get a logger instance.
 
     Args:
@@ -123,7 +125,7 @@ def get_logger(name: str = "knowledge_system") -> Any:
 
     Returns:
         Loguru logger instance bound to the specified name
-    """
+    """ return logger.bind(name=name).
     return logger.bind(name=name)
 
 
@@ -133,7 +135,7 @@ def log_exception(
     level: str = "ERROR",
     **kwargs: Any,
 ) -> None:
-    """
+    """ Log an exception with context.
     Log an exception with context.
 
     Args:
@@ -141,33 +143,35 @@ def log_exception(
         message: Custom message
         level: Log level
         **kwargs: Additional context to include
-    """
+    """ logger.bind(**kwargs).opt(exception=True).log(level, f"{message}: {exception}").
     logger.bind(**kwargs).opt(exception=True).log(level, f"{message}: {exception}")
 
 
 def log_performance(operation: str, duration: float, **kwargs: Any) -> None:
-    """
+    """ Log performance metrics.
     Log performance metrics.
 
     Args:
         operation: Name of the operation
         duration: Duration in seconds
         **kwargs: Additional context
-    """
+    """ logger.bind(operation=operation, duration=duration, **kwargs).info(.
+    
     logger.bind(operation=operation, duration=duration, **kwargs).info(
         f"Performance: {operation} took {duration:.3f}s"
     )
 
 
 def log_user_action(action: str, user_id: str | None = None, **kwargs: Any) -> None:
-    """
+    """ Log user actions for audit trail.
     Log user actions for audit trail.
 
     Args:
         action: Description of the action
         user_id: User identifier (if available)
         **kwargs: Additional context
-    """
+    """ context = {"action": action, "user_id": user_id, **kwargs}.
+    
     context = {"action": action, "user_id": user_id, **kwargs}
     logger.bind(**context).info(f"User action: {action}")
 
@@ -175,7 +179,7 @@ def log_user_action(action: str, user_id: str | None = None, **kwargs: Any) -> N
 def log_system_event(
     event: str, component: str, status: str = "info", **kwargs: Any
 ) -> None:
-    """
+    """ Log system events.
     Log system events.
 
     Args:
@@ -183,7 +187,7 @@ def log_system_event(
         component: System component that generated the event
         status: Event status (info, warning, error, critical)
         **kwargs: Additional context
-    """
+    """ context = {"event": event, "component": component, "status": status, **kwargs}.
     context = {"event": event, "component": component, "status": status, **kwargs}
 
     level_map = {
@@ -199,7 +203,7 @@ def log_system_event(
 
 
 def configure_third_party_logging() -> None:
-    """Configure logging for third-party libraries."""
+    """ Configure logging for third-party libraries.""".
     # Set specific levels for noisy libraries
     third_party_loggers = {
         "urllib3.connectionpool": "WARNING",
@@ -219,27 +223,27 @@ def configure_third_party_logging() -> None:
 
 
 class LogContext:
-    """Context manager for adding structured context to logs."""
+    """ Context manager for adding structured context to logs.""".
 
     def __init__(self, **context: Any) -> None:
-        """Initialize context manager with key-value pairs."""
+        """ Initialize context manager with key-value pairs.""".
         self.context = context
         self._token = None
 
     def __enter__(self) -> None:
-        """Enter context and bind logger."""
+        """ Enter context and bind logger.""".
         self._token = logger.contextualize(**self.context)
         return self._token
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Exit context."""
+        """ Exit context.""".
         if self._token:
             self._token.__exit__(exc_type, exc_val, exc_tb)
 
 
 # Initialize logging on module import
 def initialize_logging() -> None:
-    """Initialize logging with default configuration."""
+    """ Initialize logging with default configuration.""".
     try:
         setup_logging()
         configure_third_party_logging()
@@ -259,25 +263,25 @@ initialize_logging()
 
 # Convenience functions for common log levels
 def debug(message: str, **kwargs: Any) -> None:
-    """Log a debug message."""
+    """ Log a debug message.""".
     logger.bind(**kwargs).debug(message)
 
 
 def info(message: str, **kwargs: Any) -> None:
-    """Log an info message."""
+    """ Log an info message.""".
     logger.bind(**kwargs).info(message)
 
 
 def warning(message: str, **kwargs: Any) -> None:
-    """Log a warning message."""
+    """ Log a warning message.""".
     logger.bind(**kwargs).warning(message)
 
 
 def error(message: str, **kwargs: Any) -> None:
-    """Log an error message."""
+    """ Log an error message.""".
     logger.bind(**kwargs).error(message)
 
 
 def critical(message: str, **kwargs: Any) -> None:
-    """Log a critical message."""
+    """ Log a critical message.""".
     logger.bind(**kwargs).critical(message)

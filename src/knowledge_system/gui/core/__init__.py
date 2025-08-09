@@ -1,4 +1,4 @@
-"""Core GUI functionality and shared logic."""
+""" Core GUI functionality and shared logic.""".
 
 from .message_queue import MessageQueueProcessor
 from .report_manager import ReportManager

@@ -7,6 +7,7 @@ Covers detection of new/modified files, pattern filtering, callback invocation, 
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
+
 import pytest
 
 from knowledge_system.watchers import FileWatcher, watch_directory
@@ -67,11 +68,7 @@ class TestFileWatcher:
             def cb(path):
                 called.append(str(path))
 
-            watcher = FileWatcher(
-    tmpdir,
-    patterns=["*.pdf"],
-    callback=cb,
-     debounce=0)
+            watcher = FileWatcher(tmpdir, patterns=["*.pdf"], callback=cb, debounce=0)
             watcher.start()
             # Create a matching file
             file1 = Path(tmpdir) / "a.pdf"
@@ -106,11 +103,7 @@ class TestWatchDirectory:
     def test_watch_directory_convenience(self, mock_fw):
         watcher = Mock()
         mock_fw.return_value = watcher
-        out = watch_directory(
-    "/tmp",
-    patterns=["*.md"],
-    callback=None,
-     debounce=1.0)
+        out = watch_directory("/tmp", patterns=["*.md"], callback=None, debounce=1.0)
         mock_fw.assert_called_once_with(
             "/tmp", patterns=["*.md"], callback=None, debounce=1.0
         )

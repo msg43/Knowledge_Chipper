@@ -1,4 +1,4 @@
-"""
+""" Knowledge_Chipper - A comprehensive knowledge management system for macOS.
 Knowledge_Chipper - A comprehensive knowledge management system for macOS.
 
 This package provides AI-powered tools for transcribing, summarizing, and organizing
@@ -15,7 +15,7 @@ from .logger import get_logger
 
 
 def gui_main() -> None:
-    """Launch the GUI application from the main package."""
+    """ Launch the GUI application from the main package.""".
     import sys
 
     # Smart cache clearing - clear only if needed

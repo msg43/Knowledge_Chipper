@@ -35,7 +35,7 @@ echo "  🐍 Removing Python cache files..."
 find . -name "__pycache__" -type d -not -path "./venv/*" -not -path "./.git/*" -print0 | xargs -0 rm -rf
 find . -name "*.pyc" -type f -not -path "./venv/*" -not -path "./.git/*" -delete
 
-# Remove development tool caches  
+# Remove development tool caches
 echo "  🔧 Removing development tool caches..."
 rm -rf ./.mypy_cache
 rm -rf ./htmlcov
@@ -63,7 +63,7 @@ echo "✅ Cleanup completed!"
 echo ""
 echo "📈 Space freed up:"
 echo "  - Python cache files: ~2-5MB"
-echo "  - MyPy cache: ~110MB" 
+echo "  - MyPy cache: ~110MB"
 echo "  - HTML coverage: ~5.7MB"
 echo "  - Pytest cache: ~64KB"
 echo "  - .DS_Store files: ~few KB"
@@ -71,4 +71,4 @@ echo "  - Build artifacts: ~48KB"
 echo ""
 echo "🚀 Total space freed: ~120MB+"
 echo ""
-echo "ℹ️  Note: These files will be regenerated when you run the code again." 
+echo "ℹ️  Note: These files will be regenerated when you run the code again."

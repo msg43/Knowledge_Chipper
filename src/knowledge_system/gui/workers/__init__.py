@@ -1,4 +1,4 @@
-"""GUI worker threads for background processing."""
+""" GUI worker threads for background processing.""".
 
 from .processing_workers import (
     EnhancedSummarizationWorker,

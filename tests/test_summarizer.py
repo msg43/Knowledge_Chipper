@@ -1,8 +1,10 @@
-import pytest
-from unittest.mock import patch, MagicMock
 from pathlib import Path
-from knowledge_system.processors.summarizer import SummarizerProcessor, fetch_summary
+from unittest.mock import MagicMock, patch
+
+import pytest
 import requests
+
+from knowledge_system.processors.summarizer import SummarizerProcessor, fetch_summary
 
 
 class TestSummarizerProcessor:
@@ -86,8 +88,7 @@ class TestSummarizerProcessor:
                 assert processor.validate_input(Path("test.txt")) is True
 
             with patch.object(Path, "exists", return_value=False):
-                assert processor.validate_input(
-                    Path("nonexistent.txt")) is False
+                assert processor.validate_input(Path("nonexistent.txt")) is False
 
     def test_can_process_string(self):
         with patch(
@@ -181,8 +182,7 @@ class TestSummarizerProcessor:
             processor = SummarizerProcessor(provider="local")
 
             with patch.object(processor, "_call_ollama", return_value="Ollama summary"):
-                result = processor.process(
-    "Text to summarize", style="general")
+                result = processor.process("Text to summarize", style="general")
 
                 assert result.success is True
                 assert result.data == "Ollama summary"
@@ -205,8 +205,7 @@ class TestSummarizerProcessor:
             with patch.object(
                 processor, "_call_lmstudio", return_value="LM Studio summary"
             ):
-                result = processor.process(
-    "Text to summarize", style="academic")
+                result = processor.process("Text to summarize", style="academic")
 
                 assert result.success is True
                 assert result.data == "LM Studio summary"
@@ -280,8 +279,7 @@ class TestSummarizerProcessor:
                     MagicMock(success=True, data="summary2"),
                 ]
 
-                results = processor.process_batch(
-                    ["text1", "text2"], style="academic")
+                results = processor.process_batch(["text1", "text2"], style="academic")
 
                 assert len(results) == 2
                 assert all(r.success for r in results)
@@ -319,8 +317,7 @@ class TestSummarizerProcessor:
             with patch.object(
                 processor,
                 "_call_local",
-                side_effect=ValueError(
-                    "Unsupported local backend: unsupported"),
+                side_effect=ValueError("Unsupported local backend: unsupported"),
             ):
                 result = processor.process("test text")
 
@@ -336,8 +333,7 @@ class TestSummarizerProcessor:
             mock_settings.local_config.timeout = 60
             mock_get_settings.return_value = mock_settings
 
-            processor = SummarizerProcessor(
-    provider="local", model="llama3.2:3b")
+            processor = SummarizerProcessor(provider="local", model="llama3.2:3b")
 
             with patch(
                 "knowledge_system.processors.summarizer.requests.post"
@@ -366,7 +362,8 @@ class TestSummarizerProcessor:
             mock_get_settings.return_value = mock_settings
 
             processor = SummarizerProcessor(
-                    provider="local", model="qwen2.5:72b-instruct-q6_K")
+                provider="local", model="qwen2.5:72b-instruct-q6_K"
+            )
 
             with patch(
                 "knowledge_system.processors.summarizer.requests.post"
@@ -404,8 +401,7 @@ class TestSummarizerProcessor:
                 )
 
                 with pytest.raises(requests.exceptions.RequestException):
-                    processor._call_ollama(
-    "Test prompt", mock_settings.local_config)
+                    processor._call_ollama("Test prompt", mock_settings.local_config)
 
     def test_call_lmstudio_api_error(self):
         with patch(
@@ -426,8 +422,7 @@ class TestSummarizerProcessor:
                 )
 
                 with pytest.raises(requests.exceptions.RequestException):
-                    processor._call_lmstudio(
-    "Test prompt", mock_settings.local_config)
+                    processor._call_lmstudio("Test prompt", mock_settings.local_config)
 
     def test_process_with_custom_prompt_template(self, tmp_path):
         """Test processing with custom prompt template."""
@@ -480,8 +475,7 @@ class TestSummarizerProcessor:
             # invalid
             assert result.success is True
             assert "custom template 'non_existent_file.txt'" in result.data
-            assert result.metadata.get(
-                "prompt_template") == "non_existent_file.txt"
+            assert result.metadata.get("prompt_template") == "non_existent_file.txt"
             assert result.dry_run is True
 
     def test_generate_prompt_with_template_placeholders(self, tmp_path):
@@ -532,16 +526,14 @@ class TestFetchSummary:
             mock_processor_class.assert_called_once_with(
                 provider="anthropic", max_tokens=1000
             )
-            mock_processor.process.assert_called_once_with(
-                "test text", style="bullet")
+            mock_processor.process.assert_called_once_with("test text", style="bullet")
 
     def test_fetch_summary_failure(self):
         with patch(
             "knowledge_system.processors.summarizer.SummarizerProcessor"
         ) as mock_processor_class:
             mock_processor = MagicMock()
-            mock_processor.process.return_value = MagicMock(
-                success=False, data=None)
+            mock_processor.process.return_value = MagicMock(success=False, data=None)
             mock_processor_class.return_value = mock_processor
 
             result = fetch_summary("test text")

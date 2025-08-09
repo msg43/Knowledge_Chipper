@@ -51,7 +51,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     # Push to main branch
     git branch -M main
     git push -u origin main
-    
+
     echo "🎉 Successfully pushed to GitHub!"
     echo ""
     echo "📍 Your repository is now available at:"
@@ -77,4 +77,4 @@ echo ""
 echo "Current branch:"
 git branch -v
 echo ""
-echo "✅ Setup complete!" 
+echo "✅ Setup complete!"

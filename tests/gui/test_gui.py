@@ -3,17 +3,18 @@
 Simple test script to check GUI rendering on macOS
 """
 
-import sys
 import platform
+import sys
+
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
     QApplication,
+    QLabel,
     QMainWindow,
+    QPushButton,
     QVBoxLayout,
     QWidget,
-    QLabel,
-    QPushButton,
 )
-from PyQt6.QtCore import Qt, QTimer
 
 
 class TestWindow(QMainWindow):
@@ -52,10 +53,11 @@ class TestWindow(QMainWindow):
 def main():
     # Bus error prevention - set environment variables early
     import os
+
     os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
     os.environ["OMP_NUM_THREADS"] = "1"
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    
+
     app = QApplication(sys.argv)
 
     # macOS-specific fixes

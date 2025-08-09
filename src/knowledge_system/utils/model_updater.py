@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+""" Model context window updater utility.
 Model context window updater utility.
 
 This utility helps keep model context windows up to date by:
@@ -24,12 +24,13 @@ logger = get_logger(__name__)
 
 
 def scan_and_update_models() -> dict[str, int]:
-    """
+    """ Scan Ollama for available models and update context window cache.
     Scan Ollama for available models and update context window cache.
 
     Returns:
         Dictionary of model names to detected context windows
-    """
+    """ try:.
+    
     try:
         from .ollama_manager import get_ollama_manager
 
@@ -75,9 +76,9 @@ def scan_and_update_models() -> dict[str, int]:
 
 
 def list_model_context_windows() -> None:
-    """
+    """ List all known model context windows (static + cached).
     List all known model context windows (static + cached).
-    """
+    """ from .text_utils import MODEL_CONTEXT_WINDOWS.
     from .text_utils import MODEL_CONTEXT_WINDOWS
 
     print("\n📋 Known Model Context Windows:")
@@ -102,13 +103,14 @@ def list_model_context_windows() -> None:
 
 
 def add_model_override(model_name: str, context_window: int) -> None:
-    """
+    """ Add a manual override for a specific model's context window.
     Add a manual override for a specific model's context window.
 
     Args:
         model_name: Name of the model
         context_window: Context window size in tokens
-    """
+    """ add_custom_model_context(model_name, context_window).
+    
     add_custom_model_context(model_name, context_window)
     print(
         f"✅ Added custom context window for '{model_name}': {context_window:,} tokens"
@@ -116,7 +118,7 @@ def add_model_override(model_name: str, context_window: int) -> None:
 
 
 def main():
-    """Main CLI interface for model updater."""
+    """ Main CLI interface for model updater.""".
     import sys
 
     if len(sys.argv) < 2:

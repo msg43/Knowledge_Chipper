@@ -70,8 +70,7 @@ class TestProcessingState:
     def test_status_validation(self) -> None:
         """Test status validation."""
         # Valid status
-        for status in ["pending", "running",
-            "completed", "failed", "cancelled"]:
+        for status in ["pending", "running", "completed", "failed", "cancelled"]:
             state = ProcessingState(
                 operation_id="test",
                 operation_type="transcribe",

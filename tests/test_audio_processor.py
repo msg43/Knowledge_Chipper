@@ -1,6 +1,8 @@
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from knowledge_system.processors.audio_processor import AudioProcessor
 from knowledge_system.processors.base import ProcessorResult
 
@@ -69,7 +71,7 @@ def test_convert_audio_success(mock_convert, sample_audio_file, tmp_path):
     mock_convert.return_value = True
     processor = AudioProcessor()
     output_file = tmp_path / "output.wav"
-    
+
     result = processor._convert_audio(sample_audio_file, output_file)
     assert result is True
     mock_convert.assert_called_once()
@@ -82,7 +84,7 @@ def test_convert_audio_failure(mock_convert, sample_audio_file, tmp_path):
     mock_convert.return_value = False
     processor = AudioProcessor()
     output_file = tmp_path / "output.wav"
-    
+
     result = processor._convert_audio(sample_audio_file, output_file)
     assert result is False
 
@@ -92,7 +94,7 @@ def test_convert_audio_no_ffmpeg(sample_audio_file, tmp_path):
     """Test audio conversion when FFmpeg is not available."""
     processor = AudioProcessor()
     output_file = tmp_path / "output.wav"
-    
+
     # Should return True if input format matches target format
     result = processor._convert_audio(sample_audio_file, output_file)
     assert result is True  # Because input is .wav and target is .wav
@@ -104,7 +106,7 @@ def test_get_audio_metadata_success(mock_duration, sample_audio_file):
     """Test successful metadata extraction."""
     mock_duration.return_value = 120.5
     processor = AudioProcessor()
-    
+
     metadata = processor._get_audio_metadata(sample_audio_file)
     assert "filename" in metadata
     assert "file_size_mb" in metadata
@@ -116,7 +118,7 @@ def test_get_audio_metadata_success(mock_duration, sample_audio_file):
 def test_get_audio_metadata_no_ffmpeg(sample_audio_file):
     """Test metadata extraction when FFmpeg is not available."""
     processor = AudioProcessor()
-    
+
     metadata = processor._get_audio_metadata(sample_audio_file)
     assert "filename" in metadata
     assert "file_size_mb" in metadata
@@ -127,12 +129,12 @@ def test_get_audio_metadata_no_ffmpeg(sample_audio_file):
 def test_format_duration():
     """Test duration formatting."""
     processor = AudioProcessor()
-    
+
     # Test seconds only
     assert processor._format_duration(65.5) == "01:05"
-    
+
     # Test hours
     assert processor._format_duration(3665.5) == "01:01:05"
-    
+
     # Test None
     assert processor._format_duration(None) == "Unknown"

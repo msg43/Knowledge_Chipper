@@ -57,4 +57,4 @@ echo "🚀 Launching GUI..."
 
 # Activate virtual environment and launch GUI
 source venv/bin/activate
-python -m knowledge_system gui 
+python -m knowledge_system gui

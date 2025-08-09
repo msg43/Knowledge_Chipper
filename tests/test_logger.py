@@ -6,20 +6,19 @@ import logging
 import tempfile
 from pathlib import Path
 
-
 from knowledge_system.logger import (
+    LogContext,
+    critical,
+    debug,
+    error,
     get_logger,
-    setup_logging,
+    info,
     log_exception,
     log_performance,
-    log_user_action,
     log_system_event,
-    LogContext,
-    debug,
-    info,
+    log_user_action,
+    setup_logging,
     warning,
-    error,
-    critical,
 )
 
 
@@ -262,7 +261,7 @@ class TestLoggingLevels:
             logger.error("Error message")
 
             # Read log file content
-            with open(log_file, "r") as f:
+            with open(log_file) as f:
                 content = f.read()
 
             # Should contain warning/error but not debug/info
@@ -330,11 +329,7 @@ class TestLoggingPerformance:
         logger = get_logger("structured_test")
 
         # Test that we can add structured data
-        logger.info(
-    "Structured message",
-    user_id="123",
-    operation="test",
-     count=42)
+        logger.info("Structured message", user_id="123", operation="test", count=42)
 
         # Should not raise exceptions
         assert True

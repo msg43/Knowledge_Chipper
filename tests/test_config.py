@@ -10,15 +10,15 @@ import pytest
 import yaml
 
 from knowledge_system.config import (
-    Settings,
-    AppConfig,
-    PathsConfig,
-    TranscriptionConfig,
-    LLMConfig,
     APIKeysConfig,
-    ProcessingConfig,
+    AppConfig,
+    LLMConfig,
     MOCConfig,
     MonitoringConfig,
+    PathsConfig,
+    ProcessingConfig,
+    Settings,
+    TranscriptionConfig,
     get_settings,
 )
 
@@ -217,7 +217,7 @@ class TestSettings:
             # Verify file was created and contains correct data
             assert Path(temp_path).exists()
 
-            with open(temp_path, "r") as f:
+            with open(temp_path) as f:
                 data = yaml.safe_load(f)
 
             assert data["app"]["name"] == "Modified App"
@@ -341,7 +341,7 @@ class TestSettings:
             assert Path(temp_path).exists()
 
             # Verify file contains expected structure
-            with open(temp_path, "r") as f:
+            with open(temp_path) as f:
                 data = yaml.safe_load(f)
 
             assert "app" in data

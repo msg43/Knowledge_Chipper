@@ -4,7 +4,7 @@
 youtube_processing:
   # Disable all delays when using proxies
   disable_delays_with_proxy: true
-  
+
   # Alternatively, set delays to 0 to disable them completely
   metadata_delay_min: 0.0
   metadata_delay_max: 0.0
@@ -12,11 +12,11 @@ youtube_processing:
   transcript_delay_max: 0.0
   api_batch_delay_min: 0.0
   api_batch_delay_max: 0.0
-  
+
   # Don't use delays even when proxies are configured
   use_proxy_delays: false
 
 # Make sure your proxy credentials are configured
 api_keys:
   webshare_username: "${WEBSHARE_USERNAME}"
-  webshare_password: "${WEBSHARE_PASSWORD}" 
+  webshare_password: "${WEBSHARE_PASSWORD}"

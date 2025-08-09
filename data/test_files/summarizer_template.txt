@@ -35,4 +35,3 @@ Highlight areas ripe for further exploration or debate.
 High-Utility Nuggets
 
 Extract any actionable frameworks, mental models, memorable metaphors, or decision-making heuristics the speaker uses.
-

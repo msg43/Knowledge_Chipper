@@ -81,3 +81,50 @@ echo "  pre-commit autoupdate         # Update hook versions"
 echo "  git commit --no-verify        # Skip hooks (emergency only)"
 echo ""
 echo "📖 For more info: https://pre-commit.com/"
+
+# Offer to install a simple pre-commit hook that bumps version and date in version.py
+HOOK_PATH=".git/hooks/pre-commit"
+if [ -d .git ]; then
+  echo ""
+  read -p "Install simple version bump pre-commit hook to update src/knowledge_system/version.py automatically? (y/N): " -n 1 -r
+  echo
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    cat > "$HOOK_PATH" << 'EOF'
+#!/bin/bash
+# Auto-bump version (patch) and update BUILD_DATE in src/knowledge_system/version.py
+
+VP="src/knowledge_system/version.py"
+if [ ! -f "$VP" ]; then
+  exit 0
+fi
+
+current_version=$(grep '^VERSION\s*=\s*"' "$VP" | sed -E 's/.*"([^"]+)".*/\1/')
+current_date=$(date +"%Y-%m-%d")
+
+# If VERSION isn't semantic, default to 1.0.0
+if [[ ! "$current_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  new_version="1.0.0"
+else
+  IFS='.' read -r major minor patch <<< "$current_version"
+  patch=$((patch + 1))
+  new_version="$major.$minor.$patch"
+fi
+
+# Update VERSION and BUILD_DATE
+tmpfile=$(mktemp)
+awk -v ver="$new_version" -v today="$current_date" '
+  /^VERSION\s*=/{ sub(/"[^"]+"/,"\"" ver "\"",$0) }
+  /^BUILD_DATE\s*=/{ sub(/"[^"]+"/,"\"" today "\"",$0) }
+  { print }
+' "$VP" > "$tmpfile" && mv "$tmpfile" "$VP"
+
+git add "$VP"
+echo "Bumped version to $new_version (date $current_date)"
+exit 0
+EOF
+    chmod +x "$HOOK_PATH"
+    echo "✅ Installed version-bump pre-commit hook."
+  else
+    echo "ℹ️  Skipped installing version-bump hook."
+  fi
+fi

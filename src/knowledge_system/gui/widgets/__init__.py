@@ -1,4 +1,4 @@
-"""Reusable GUI widgets and components."""
+""" Reusable GUI widgets and components.""".
 
 from .file_list_widget import FileListWidget
 from .progress_widget import EnhancedProgressBar

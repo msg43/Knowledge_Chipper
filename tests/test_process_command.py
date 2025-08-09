@@ -2,11 +2,12 @@
 Tests for the process command functionality.
 """
 
-import pytest
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 from click.testing import CliRunner
 
 from knowledge_system.cli import main
@@ -145,8 +146,7 @@ class TestProcessCommand:
 
     def test_process_nonexistent_file(self, runner):
         """Test processing a nonexistent file."""
-        result = runner.invoke(
-            main, ["process", "nonexistent.txt", "--dry-run"])
+        result = runner.invoke(main, ["process", "nonexistent.txt", "--dry-run"])
 
         assert result.exit_code != 0
         assert "Error" in result.output
@@ -166,15 +166,13 @@ class TestProcessCommand:
         mock_audio_instance = MagicMock()
         mock_audio_instance.process.return_value.success = True
         mock_audio_instance.process.return_value.data = "Mock transcript"
-        mock_audio_instance.process.return_value.metadata = {
-            "timestamp": "2023-01-01"}
+        mock_audio_instance.process.return_value.metadata = {"timestamp": "2023-01-01"}
         mock_audio.return_value = mock_audio_instance
 
         mock_summarizer_instance = MagicMock()
         mock_summarizer_instance.process.return_value.success = True
         mock_summarizer_instance.process.return_value.data = "Mock summary"
-        mock_summarizer_instance.process.return_value.metadata = {
-            "provider": "test"}
+        mock_summarizer_instance.process.return_value.metadata = {"provider": "test"}
         mock_summarizer.return_value = mock_summarizer_instance
 
         mock_moc_instance = MagicMock()
@@ -183,8 +181,7 @@ class TestProcessCommand:
         mock_moc.return_value = mock_moc_instance
 
         result = runner.invoke(
-            main, ["process", str(test_file),
-                                  "--no-transcribe", "--summarize", "--moc"]
+            main, ["process", str(test_file), "--no-transcribe", "--summarize", "--moc"]
         )
 
         assert result.exit_code == 0

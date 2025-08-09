@@ -7,6 +7,7 @@ Covers audio download, error handling, output format, and fetch_audio convenienc
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
+
 import pytest
 
 from knowledge_system.errors import YouTubeAPIError
@@ -75,8 +76,7 @@ class TestYouTubeDownloadProcessor:
             )
             assert result.success is True
             assert result.data["count"] == 1
-            assert result.data["downloaded_files"][0].endswith(
-                "Test Video.mp3")
+            assert result.data["downloaded_files"][0].endswith("Test Video.mp3")
 
     @patch("yt_dlp.YoutubeDL")
     def test_process_playlist_success(self, mock_ydl_class):
@@ -95,10 +95,8 @@ class TestYouTubeDownloadProcessor:
             )
             assert result.success is True
             assert result.data["count"] == 2
-            assert any(
-    "Video1.mp3" in f for f in result.data["downloaded_files"])
-            assert any(
-    "Video2.mp3" in f for f in result.data["downloaded_files"])
+            assert any("Video1.mp3" in f for f in result.data["downloaded_files"])
+            assert any("Video2.mp3" in f for f in result.data["downloaded_files"])
 
     @patch("yt_dlp.YoutubeDL")
     def test_process_download_error(self, mock_ydl_class):
@@ -130,8 +128,7 @@ class TestYouTubeDownloadProcessor:
                 output_format="wav",
             )
             assert result.success is True
-            assert result.data["downloaded_files"][0].endswith(
-                "Test Video.wav")
+            assert result.data["downloaded_files"][0].endswith("Test Video.wav")
             assert result.data["output_format"] == "wav"
 
 

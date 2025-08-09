@@ -1,4 +1,4 @@
-"""
+""" Hardware Detection and Performance Profiling for Knowledge System.
 Hardware Detection and Performance Profiling for Knowledge System
 
 Automatically detects Apple Silicon hardware specifications and provides
@@ -35,7 +35,7 @@ except ImportError:
 
 
 class ChipType(Enum):
-    """Apple Silicon chip types."""
+    """ Apple Silicon chip types.""".
 
     M1 = "M1"
     M1_PRO = "M1 Pro"
@@ -56,7 +56,7 @@ class ChipType(Enum):
 
 
 class GPUType(Enum):
-    """GPU types for acceleration."""
+    """ GPU types for acceleration.""".
 
     APPLE_SILICON = "Apple Silicon"
     NVIDIA_CUDA = "NVIDIA CUDA"
@@ -67,7 +67,7 @@ class GPUType(Enum):
 
 @dataclass
 class CUDASpecs:
-    """CUDA-specific hardware specifications."""
+    """ CUDA-specific hardware specifications.""".
 
     gpu_count: int
     gpu_names: list[str]
@@ -80,7 +80,7 @@ class CUDASpecs:
 
 
 class PerformanceProfile(Enum):
-    """Performance profiles for different use cases."""
+    """ Performance profiles for different use cases.""".
 
     BATTERY_SAVER = "battery_saver"
     BALANCED = "balanced"
@@ -90,7 +90,7 @@ class PerformanceProfile(Enum):
 
 @dataclass
 class HardwareSpecs:
-    """Hardware specifications for performance optimization."""
+    """ Hardware specifications for performance optimization.""".
 
     chip_type: ChipType
     cpu_cores: int
@@ -121,14 +121,14 @@ class HardwareSpecs:
 
 
 class HardwareDetector:
-    """Detects hardware specifications and creates performance profiles."""
+    """ Detects hardware specifications and creates performance profiles.""".
 
     def __init__(self) -> None:
         self.specs: HardwareSpecs | None = None
         self._detection_cache: dict[str, Any] = {}
 
     def detect_hardware(self) -> HardwareSpecs:
-        """Detect current hardware specifications."""
+        """ Detect current hardware specifications.""".
         if self.specs is not None:
             return self.specs
 
@@ -212,7 +212,7 @@ class HardwareDetector:
         return self.specs
 
     def _detect_apple_silicon(self) -> tuple[ChipType, int, int, int, str]:
-        """Detect specific Apple Silicon chip and specifications."""
+        """ Detect specific Apple Silicon chip and specifications.""".
         try:
             # Get system info using system_profiler
             result = subprocess.run(
@@ -261,7 +261,7 @@ class HardwareDetector:
     def _parse_chip_specs(
         self, chip_name: str, machine_name: str
     ) -> tuple[ChipType, int, int, int, str]:
-        """Parse chip specifications from system info."""
+        """ Parse chip specifications from system info.""".
 
         # M3 Series
         if "m3" in chip_name:
@@ -302,7 +302,7 @@ class HardwareDetector:
             return ChipType.UNKNOWN, 10, 16, 100, "mobile"
 
     def _fallback_apple_silicon_detection(self) -> tuple[ChipType, int, int, int, str]:
-        """Fallback detection for Apple Silicon when system_profiler fails."""
+        """ Fallback detection for Apple Silicon when system_profiler fails.""".
         cpu_cores = os.cpu_count() or 8
 
         # Estimate based on CPU cores (rough approximation)
@@ -316,7 +316,7 @@ class HardwareDetector:
             return ChipType.M3, 10, 16, 100, "mobile"
 
     def _detect_gpu_acceleration(self) -> tuple[ChipType, GPUType, CUDASpecs | None]:
-        """Detect GPU acceleration capabilities (CUDA, ROCm, etc.)."""
+        """ Detect GPU acceleration capabilities (CUDA, ROCm, etc.).""".
 
         # First try CUDA detection
         cuda_specs = self._detect_cuda()
@@ -335,7 +335,7 @@ class HardwareDetector:
         return ChipType.INTEL, GPUType.NONE, None
 
     def _detect_cuda(self) -> CUDASpecs | None:
-        """Detect CUDA-capable NVIDIA GPUs."""
+        """ Detect CUDA-capable NVIDIA GPUs.""".
         if not TORCH_AVAILABLE:
             logger.debug("PyTorch not available, skipping CUDA detection")
             return None
@@ -423,7 +423,7 @@ class HardwareDetector:
             return None
 
     def _detect_rocm(self) -> bool:
-        """Detect AMD ROCm support."""
+        """ Detect AMD ROCm support.""".
         if not TORCH_AVAILABLE:
             return False
 
@@ -439,7 +439,7 @@ class HardwareDetector:
             return False
 
     def _detect_intel_gpu(self) -> bool:
-        """Detect Intel GPU support."""
+        """ Detect Intel GPU support.""".
         # This is a basic detection - can be enhanced with Intel GPU libraries
         try:
             # Check for Intel GPU on Linux/Windows
@@ -466,7 +466,7 @@ class HardwareDetector:
         gpu_type: GPUType,
         cuda_specs: CUDASpecs | None,
     ) -> tuple[int, int, str, str]:
-        """Calculate optimal performance characteristics based on hardware."""
+        """ Calculate optimal performance characteristics based on hardware.""".
 
         # Base calculations
         base_concurrent = max(1, cpu_cores // 2)
@@ -534,7 +534,7 @@ class HardwareDetector:
         return max_concurrent, optimal_batch, recommended_model, recommended_device
 
     def _recommend_device(self, gpu_type: GPUType, cuda_specs: CUDASpecs | None) -> str:
-        """Recommend the best device for processing."""
+        """ Recommend the best device for processing.""".
         if gpu_type == GPUType.APPLE_SILICON:
             return "mps"
         elif gpu_type == GPUType.NVIDIA_CUDA and cuda_specs:
@@ -549,7 +549,7 @@ class HardwareDetector:
             return "cpu"
 
     def get_performance_profile(self, profile: PerformanceProfile) -> dict[str, Any]:
-        """Get performance configuration for a specific profile."""
+        """ Get performance configuration for a specific profile.""".
         specs = self.detect_hardware()
 
         if profile == PerformanceProfile.BATTERY_SAVER:
@@ -622,7 +622,7 @@ class HardwareDetector:
             raise ValueError(f"Unknown performance profile: {profile}")
 
     def get_hardware_report(self) -> dict[str, Any]:
-        """Get comprehensive hardware report."""
+        """ Get comprehensive hardware report.""".
         specs = self.detect_hardware()
 
         report = {
@@ -665,7 +665,7 @@ class HardwareDetector:
         return report
 
     def recommend_profile(self, use_case: str = "general") -> PerformanceProfile:
-        """Recommend optimal performance profile based on hardware and use case."""
+        """ Recommend optimal performance profile based on hardware and use case.""".
         specs = self.detect_hardware()
 
         # For large batch processing, prioritize maximum performance on high-end hardware
@@ -703,7 +703,7 @@ _hardware_detector: HardwareDetector | None = None
 
 
 def get_hardware_detector() -> HardwareDetector:
-    """Get or create global hardware detector instance."""
+    """ Get or create global hardware detector instance.""".
     global _hardware_detector
     if _hardware_detector is None:
         _hardware_detector = HardwareDetector()
@@ -711,20 +711,20 @@ def get_hardware_detector() -> HardwareDetector:
 
 
 def detect_hardware() -> HardwareSpecs:
-    """Convenience function to detect hardware."""
+    """ Convenience function to detect hardware.""".
     return get_hardware_detector().detect_hardware()
 
 
 def get_performance_profile(profile: PerformanceProfile) -> dict[str, Any]:
-    """Convenience function to get performance profile."""
+    """ Convenience function to get performance profile.""".
     return get_hardware_detector().get_performance_profile(profile)
 
 
 def get_hardware_report() -> dict[str, Any]:
-    """Convenience function to get hardware report."""
+    """ Convenience function to get hardware report.""".
     return get_hardware_detector().get_hardware_report()
 
 
 def recommend_profile(use_case: str = "general") -> PerformanceProfile:
-    """Convenience function to recommend performance profile."""
+    """ Convenience function to recommend performance profile.""".
     return get_hardware_detector().recommend_profile(use_case)

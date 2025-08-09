@@ -149,8 +149,7 @@ class TestTranscribeCommand:
             test_file.touch()
 
             with patch("knowledge_system.cli.log_system_event"):
-                result = self.runner.invoke(
-                    main, ["transcribe", str(test_file)])
+                result = self.runner.invoke(main, ["transcribe", str(test_file)])
 
             assert result.exit_code == 0
             assert "Transcribing:" in result.output
@@ -187,8 +186,7 @@ class TestSummarizeCommand:
             test_file.touch()
 
             with patch("knowledge_system.cli.log_system_event"):
-                result = self.runner.invoke(
-                    main, ["summarize", str(test_file)])
+                result = self.runner.invoke(main, ["summarize", str(test_file)])
 
             assert result.exit_code == 0
             assert "Summarizing:" in result.output

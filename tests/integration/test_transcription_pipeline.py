@@ -1,8 +1,7 @@
-from unittest.mock import patch, MagicMock
 from pathlib import Path
-from knowledge_system.services.transcription_service import (
-    TranscriptionService,
-)
+from unittest.mock import MagicMock, patch
+
+from knowledge_system.services.transcription_service import TranscriptionService
 
 
 class TestTranscriptionService:
@@ -13,9 +12,7 @@ class TestTranscriptionService:
             mock_process.return_value = MagicMock(
                 success=True,
                 data="This is a test transcript",
-                metadata={
-    "original_format": ".mp3",
-     "processed_format": "wav"},
+                metadata={"original_format": ".mp3", "processed_format": "wav"},
             )
 
             result = service.transcribe_audio_file("test.mp3")
@@ -70,8 +67,7 @@ class TestTranscriptionService:
                 success=False, errors=["Download failed"]
             )
 
-            result = service.transcribe_youtube_url(
-                "https://youtube.com/watch?v=test")
+            result = service.transcribe_youtube_url("https://youtube.com/watch?v=test")
 
             assert result["success"] is False
             assert result["error"] == "Download failed"
@@ -80,8 +76,7 @@ class TestTranscriptionService:
         service = TranscriptionService()
 
         with patch.object(service, "transcribe_audio_file") as mock_transcribe:
-            mock_transcribe.return_value = {
-    "success": True, "transcript": "audio"}
+            mock_transcribe.return_value = {"success": True, "transcript": "audio"}
 
             result = service.transcribe_input("audio.mp3")
 
@@ -92,14 +87,11 @@ class TestTranscriptionService:
         service = TranscriptionService()
 
         with patch.object(service, "transcribe_youtube_url") as mock_transcribe:
-            mock_transcribe.return_value = {
-    "success": True, "transcript": "youtube"}
+            mock_transcribe.return_value = {"success": True, "transcript": "youtube"}
 
-            result = service.transcribe_input(
-                "https://youtube.com/watch?v=test")
+            result = service.transcribe_input("https://youtube.com/watch?v=test")
 
-            mock_transcribe.assert_called_once_with(
-                "https://youtube.com/watch?v=test")
+            mock_transcribe.assert_called_once_with("https://youtube.com/watch?v=test")
             assert result["success"] is True
 
     def test_transcribe_batch(self):

@@ -1,4 +1,4 @@
-"""
+""" Backward compatibility launcher for GUI.
 Backward compatibility launcher for GUI.
 
 DEPRECATED: Use 'python -m knowledge_system gui' instead.
@@ -9,7 +9,7 @@ import sys
 
 
 def main() -> None:
-    """Redirect to the new command format."""
+    """ Redirect to the new command format.""".
     print("=" * 60)
     print("DEPRECATED: python -m knowledge_system.gui")
     print("Use this instead: python -m knowledge_system gui")

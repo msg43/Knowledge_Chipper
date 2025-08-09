@@ -299,8 +299,7 @@ class TestYouTubeMetadataProcessor:
         assert metadata.transcript_languages == []
 
     @patch("yt_dlp.YoutubeDL")
-    def test_fetch_video_metadata_automatic_captions(
-        self, mock_ydl_class) -> None:
+    def test_fetch_video_metadata_automatic_captions(self, mock_ydl_class) -> None:
         """Test video metadata with automatic captions."""
         mock_info = {
             "id": "test123",
@@ -333,8 +332,7 @@ class TestYouTubeMetadataProcessor:
         mock_ydl_class.return_value.__enter__.return_value = mock_ydl
 
         with pytest.raises(YouTubeAPIError, match="Could not extract info"):
-            self.processor._fetch_video_metadata(
-                "https://youtube.com/watch?v=test123")
+            self.processor._fetch_video_metadata("https://youtube.com/watch?v=test123")
 
     @patch("yt_dlp.YoutubeDL")
     def test_fetch_playlist_metadata_success(self, mock_ydl_class) -> None:
@@ -377,8 +375,7 @@ class TestYouTubeMetadataProcessor:
         assert metadata_list[1].video_id == "test456"
 
     @patch("yt_dlp.YoutubeDL")
-    def test_fetch_playlist_metadata_with_failures(
-        self, mock_ydl_class) -> None:
+    def test_fetch_playlist_metadata_with_failures(self, mock_ydl_class) -> None:
         """Test playlist metadata fetching with some failed entries."""
         mock_info = {
             "entries": [
@@ -465,8 +462,7 @@ class TestYouTubeMetadataProcessor:
         ]
         mock_fetch_playlist.return_value = mock_metadata_list
 
-        result = self.processor.process(
-            "https://youtube.com/playlist?list=test")
+        result = self.processor.process("https://youtube.com/playlist?list=test")
 
         assert result.success is True
         assert result.data["count"] == 2

@@ -1,4 +1,4 @@
-"""Custom dialog components for the knowledge system GUI."""
+""" Custom dialog components for the knowledge system GUI.""".
 
 import os
 from typing import Any, Optional
@@ -38,7 +38,7 @@ logger = get_logger(__name__)
 
 
 class OllamaInstallDialog(QDialog):
-    """Dialog for installing Ollama with progress tracking."""
+    """ Dialog for installing Ollama with progress tracking.""".
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -108,7 +108,7 @@ class OllamaInstallDialog(QDialog):
         layout.addLayout(self.button_layout)
 
     def _start_installation(self):
-        """Start the Ollama installation process."""
+        """ Start the Ollama installation process.""".
         self.install_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.step_label.setVisible(True)
@@ -121,7 +121,7 @@ class OllamaInstallDialog(QDialog):
         self.install_worker.start()
 
     def _update_progress(self, progress: InstallationProgress):
-        """Update the installation progress display."""
+        """ Update the installation progress display.""".
         self.progress_bar.setValue(int(progress.percent))
         self.step_label.setText(progress.current_step)
 
@@ -139,7 +139,7 @@ class OllamaInstallDialog(QDialog):
             self.progress_label.setText("✅ Installation completed!")
 
     def _install_finished(self):
-        """Handle successful installation completion."""
+        """ Handle successful installation completion.""".
         self.progress_bar.setValue(100)
         self.progress_label.setText("✅ Ollama installed successfully!")
         self.step_label.setText("You can now use local AI models.")
@@ -151,7 +151,7 @@ class OllamaInstallDialog(QDialog):
         QTimer.singleShot(3000, self.accept)
 
     def _install_error(self, error_msg: str):
-        """Handle installation error."""
+        """ Handle installation error.""".
         self.progress_label.setText(f"❌ Installation failed: {error_msg}")
         self.step_label.setText("You can try again or install manually from ollama.com")
         self.install_btn.setText("Retry Installation")
@@ -159,7 +159,7 @@ class OllamaInstallDialog(QDialog):
         self.cancel_btn.setText("Close")
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Handle dialog close event."""
+        """ Handle dialog close event.""".
         if self.install_worker and self.install_worker.isRunning():
             msg_box = QMessageBox(self)
             msg_box.setIcon(QMessageBox.Icon.Question)
@@ -187,18 +187,20 @@ class OllamaInstallDialog(QDialog):
 
 
 class OllamaInstallWorker(QThread):
-    """Worker thread for installing Ollama."""
+    """ Worker thread for installing Ollama.""".
 
     progress_updated = pyqtSignal(object)  # InstallationProgress
     install_finished = pyqtSignal()
     install_error = pyqtSignal(str)
 
     def run(self):
-        """Run the installation process."""
+        """ Run the installation process.""".
         try:
             manager = get_ollama_manager()
 
             def progress_callback(progress: InstallationProgress):
+
+                """ Progress callback.""".
                 self.progress_updated.emit(progress)
 
             success, message = manager.install_ollama_macos(progress_callback)
@@ -214,7 +216,7 @@ class OllamaInstallWorker(QThread):
 
 
 class ModelDownloadDialog(QDialog):
-    """Dialog for downloading Ollama models with progress tracking."""
+    """ Dialog for downloading Ollama models with progress tracking.""".
 
     def __init__(self, model_name: str, model_info, parent=None) -> None:
         super().__init__(parent)
@@ -296,13 +298,13 @@ and available for future use.</i></p>
         layout.addLayout(button_layout)
 
     def _set_progress_visible(self, visible: bool):
-        """Show/hide progress widgets."""
+        """ Show/hide progress widgets.""".
         self.progress_label.setVisible(visible)
         self.progress_bar.setVisible(visible)
         self.speed_label.setVisible(visible)
 
     def _start_download(self):
-        """Start the model download process."""
+        """ Start the model download process.""".
         self.download_btn.setText("Downloading...")
         self.download_btn.setEnabled(False)
         self.cancel_btn.setText("Cancel Download")
@@ -317,7 +319,7 @@ and available for future use.</i></p>
         self.download_worker.start()
 
     def _update_progress(self, progress: DownloadProgress):
-        """Update progress display."""
+        """ Update progress display.""".
         self.progress_label.setText(f"Status: {progress.status}")
 
         if progress.total > 0:
@@ -332,7 +334,7 @@ and available for future use.</i></p>
                 self.speed_label.setText(speed_text)
 
     def _download_finished(self):
-        """Handle successful download completion."""
+        """ Handle successful download completion.""".
         self.progress_bar.setValue(100)
         self.progress_label.setText("✅ Download completed successfully!")
         self.speed_label.setText("")
@@ -344,14 +346,14 @@ and available for future use.</i></p>
         QTimer.singleShot(2000, self.accept)
 
     def _download_error(self, error_msg: str):
-        """Handle download error."""
+        """ Handle download error.""".
         self.progress_label.setText(f"❌ Download failed: {error_msg}")
         self.download_btn.setText("Retry Download")
         self.download_btn.setEnabled(True)
         self.cancel_btn.setText("Close")
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Handle dialog close event."""
+        """ Handle dialog close event.""".
         if self.download_worker and self.download_worker.isRunning():
             reply = QMessageBox.question(
                 self,
@@ -369,7 +371,7 @@ and available for future use.</i></p>
 
 
 class OllamaServiceDialog(QDialog):
-    """Dialog for starting Ollama service with progress tracking."""
+    """ Dialog for starting Ollama service with progress tracking.""".
 
     service_started = pyqtSignal(bool, str)  # success, message
 
@@ -425,7 +427,7 @@ class OllamaServiceDialog(QDialog):
         layout.addWidget(self.buttons)
 
     def _start_ollama(self):
-        """Start the Ollama service in a separate thread."""
+        """ Start the Ollama service in a separate thread.""".
         # Update UI to show progress
         self.message_label.setText("Starting Ollama service, please wait...")
         self.progress_label.show()
@@ -441,7 +443,7 @@ class OllamaServiceDialog(QDialog):
         self.start_worker.start()
 
     def _on_service_started(self, success: bool, message: str):
-        """Handle service start completion."""
+        """ Handle service start completion.""".
         self.progress_bar.hide()
 
         if success:
@@ -473,7 +475,7 @@ class OllamaServiceDialog(QDialog):
 
 
 class OllamaStartWorker(QThread):
-    """Worker thread for starting Ollama service."""
+    """ Worker thread for starting Ollama service.""".
 
     service_started = pyqtSignal(bool, str)  # success, message
 
@@ -482,7 +484,7 @@ class OllamaStartWorker(QThread):
         self.ollama_manager = ollama_manager
 
     def run(self):
-        """Start the Ollama service."""
+        """ Start the Ollama service.""".
         try:
             success, message = self.ollama_manager.start_service()
             self.service_started.emit(success, message)
@@ -496,7 +498,7 @@ class OllamaStartWorker(QThread):
 
 
 class ProcessingProgressDialog(QDialog):
-    """Base class for processing progress dialogs with real-time updates."""
+    """ Base class for processing progress dialogs with real-time updates.""".
 
     def __init__(self, operation_name: str, file_count: int, parent=None) -> None:
         super().__init__(parent)
@@ -613,12 +615,12 @@ class ProcessingProgressDialog(QDialog):
         layout.addLayout(button_layout)
 
     def _enable_pause_button(self):
-        """Enable the pause button once processing starts."""
+        """ Enable the pause button once processing starts.""".
         if self.processing_worker and self.processing_worker.isRunning():
             self.pause_btn.setEnabled(True)
 
     def _toggle_pause(self):
-        """Toggle pause/resume processing."""
+        """ Toggle pause/resume processing.""".
         if not self.cancellation_token:
             return
 
@@ -642,7 +644,7 @@ class ProcessingProgressDialog(QDialog):
             logger.info(f"{self.operation_name} paused by user")
 
     def _cancel_processing(self):
-        """Cancel the processing operation gracefully."""
+        """ Cancel the processing operation gracefully.""".
         if self.processing_worker and self.processing_worker.isRunning():
             reply = QMessageBox.question(
                 self,
@@ -679,7 +681,7 @@ class ProcessingProgressDialog(QDialog):
             self.reject()
 
     def _force_stop(self):
-        """Force stop the processing if graceful cancellation fails."""
+        """ Force stop the processing if graceful cancellation fails.""".
         if self.processing_worker and self.processing_worker.isRunning():
             logger.warning(f"Force stopping {self.operation_name} worker thread")
             self.processing_worker.terminate()
@@ -687,7 +689,7 @@ class ProcessingProgressDialog(QDialog):
         self.reject()
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Handle dialog close event with improved UX."""
+        """ Handle dialog close event with improved UX.""".
         if self.processing_worker and self.processing_worker.isRunning():
             reply = QMessageBox.question(
                 self,
@@ -706,7 +708,7 @@ class ProcessingProgressDialog(QDialog):
             event.accept()
 
     def update_overall_progress(self, completed: int, total: int):
-        """Update overall progress across all files."""
+        """ Update overall progress across all files.""".
         self.overall_progress.setValue(completed)
         self.overall_label.setText(f"Processing {completed}/{total} files...")
 
@@ -723,13 +725,13 @@ class ProcessingProgressDialog(QDialog):
 
 
 class TranscriptionProgressDialog(ProcessingProgressDialog):
-    """Enhanced progress dialog for transcription operations."""
+    """ Enhanced progress dialog for transcription operations.""".
 
     def __init__(self, file_count: int, parent=None) -> None:
         super().__init__("Transcription", file_count, parent)
 
     def update_transcription_progress(self, progress: TranscriptionProgress):
-        """Update transcription-specific progress."""
+        """ Update transcription-specific progress.""".
         self.file_progress.setValue(int(progress.percent))
 
         # Update status
@@ -763,13 +765,13 @@ class TranscriptionProgressDialog(ProcessingProgressDialog):
 
 
 class SummarizationProgressDialog(ProcessingProgressDialog):
-    """Enhanced progress dialog for summarization operations."""
+    """ Enhanced progress dialog for summarization operations.""".
 
     def __init__(self, file_count: int, parent=None) -> None:
         super().__init__("Summarization", file_count, parent)
 
     def update_summarization_progress(self, progress: SummarizationProgress):
-        """Update summarization-specific progress."""
+        """ Update summarization-specific progress.""".
         self.file_progress.setValue(int(progress.percent))
 
         # Update status
@@ -803,13 +805,13 @@ class SummarizationProgressDialog(ProcessingProgressDialog):
 
 
 class ExtractionProgressDialog(ProcessingProgressDialog):
-    """Enhanced progress dialog for extraction operations."""
+    """ Enhanced progress dialog for extraction operations.""".
 
     def __init__(self, file_count: int, parent=None) -> None:
         super().__init__("Extraction", file_count, parent)
 
     def update_extraction_progress(self, progress: ExtractionProgress):
-        """Update extraction-specific progress."""
+        """ Update extraction-specific progress.""".
         self.file_progress.setValue(int(progress.percent))
 
         # Update status
@@ -843,13 +845,13 @@ class ExtractionProgressDialog(ProcessingProgressDialog):
 
 
 class MOCProgressDialog(ProcessingProgressDialog):
-    """Enhanced progress dialog for MOC generation operations."""
+    """ Enhanced progress dialog for MOC generation operations.""".
 
     def __init__(self, file_count: int, parent=None) -> None:
         super().__init__("MOC Generation", file_count, parent)
 
     def update_moc_progress(self, progress: MOCProgress):
-        """Update MOC generation-specific progress."""
+        """ Update MOC generation-specific progress.""".
         self.file_progress.setValue(int(progress.percent))
 
         # Update status
@@ -879,7 +881,7 @@ class MOCProgressDialog(ProcessingProgressDialog):
 
 
 class ModelDownloadWorker(QThread):
-    """Worker thread for downloading models."""
+    """ Worker thread for downloading models.""".
 
     progress_updated = pyqtSignal(object)  # DownloadProgress
     download_finished = pyqtSignal(bool, str)  # success, message
@@ -890,7 +892,7 @@ class ModelDownloadWorker(QThread):
         self.ollama_manager = get_ollama_manager()
 
     def run(self):
-        """Download the model."""
+        """ Download the model.""".
         try:
             success = self.ollama_manager.download_model(
                 self.model_name, progress_callback=self.progress_updated.emit
@@ -908,7 +910,7 @@ class ModelDownloadWorker(QThread):
 
 
 class ModelDownloadDialog(QDialog):
-    """Dialog for downloading missing models with progress tracking."""
+    """ Dialog for downloading missing models with progress tracking.""".
 
     download_completed = pyqtSignal(bool)  # success
     download_progress = pyqtSignal(
@@ -994,7 +996,7 @@ class ModelDownloadDialog(QDialog):
         layout.addLayout(button_layout)
 
     def _start_download(self):
-        """Start the model download."""
+        """ Start the model download.""".
         # Hide description and show progress
         self.download_btn.hide()
         self.cancel_btn.setText("Cancel Download")
@@ -1017,7 +1019,7 @@ class ModelDownloadDialog(QDialog):
         self.download_worker.start()
 
     def _update_progress(self, progress: DownloadProgress):
-        """Update the progress display."""
+        """ Update the progress display.""".
         self.status_label.setText(progress.status or "Downloading...")
 
         if progress.percent > 0:
@@ -1041,14 +1043,14 @@ class ModelDownloadDialog(QDialog):
         self.details_label.setText(" | ".join(details))
 
     def _cancel_download(self):
-        """Cancel the download."""
+        """ Cancel the download.""".
         if self.download_worker and self.download_worker.isRunning():
             self.download_worker.terminate()
             self.download_worker.wait()
         self.reject()
 
     def _on_download_finished(self, success: bool, message: str):
-        """Handle download completion."""
+        """ Handle download completion.""".
         if success:
             self.status_label.setText("✅ Download completed!")
             self.progress_bar.setValue(100)

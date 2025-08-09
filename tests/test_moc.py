@@ -3,13 +3,13 @@ Tests for MOC (Maps of Content) processor.
 """
 
 from knowledge_system.processors.moc import (
+    Belief,
+    JargonTerm,
+    MentalModel,
+    MOCData,
     MOCProcessor,
     Person,
     Tag,
-    MentalModel,
-    JargonTerm,
-    Belief,
-    MOCData,
     generate_moc,
 )
 
@@ -126,9 +126,7 @@ class TestMOCProcessor:
         processor._extract_mental_models(content, "test.md", moc_data)
 
         assert len(moc_data.mental_models) >= 1
-        pareto = next(
-    (m for m in moc_data.mental_models if "Pareto" in m.name),
-     None)
+        pareto = next((m for m in moc_data.mental_models if "Pareto" in m.name), None)
         assert pareto is not None
         assert "test.md" in pareto.files
 
@@ -147,9 +145,7 @@ class TestMOCProcessor:
 
         assert len(moc_data.jargon) >= 2
         api = next((j for j in moc_data.jargon if j.term == "API"), None)
-        ml = next(
-    (j for j in moc_data.jargon if "Machine Learning" in j.term),
-     None)
+        ml = next((j for j in moc_data.jargon if "Machine Learning" in j.term), None)
 
         assert api is not None
         assert ml is not None
@@ -169,8 +165,7 @@ class TestMOCProcessor:
         processor._extract_beliefs(content, "test.md", moc_data)
 
         assert len(moc_data.beliefs) >= 2
-        ai_belief = next(
-    (b for b in moc_data.beliefs if "AI" in b.claim), None)
+        ai_belief = next((b for b in moc_data.beliefs if "AI" in b.claim), None)
         climate_belief = next(
             (b for b in moc_data.beliefs if "climate" in b.claim.lower()), None
         )
@@ -185,12 +180,7 @@ class TestMOCProcessor:
         processor = MOCProcessor()
 
         people = [
-            Person(
-    name="John Doe",
-    mentions=[
-        "file1.md",
-        "file2.md"],
-         mention_count=2),
+            Person(name="John Doe", mentions=["file1.md", "file2.md"], mention_count=2),
             Person(name="Jane Smith", mentions=["file1.md"], mention_count=1),
         ]
 
@@ -371,8 +361,7 @@ class TestMOCProcessor:
         template_file.write_text(template_content)
 
         # Test with template in dry run mode
-        result = processor.process(
-    test_file, template=template_file, dry_run=True)
+        result = processor.process(test_file, template=template_file, dry_run=True)
 
         assert result.success is True
         assert "template" in result.metadata
@@ -380,10 +369,7 @@ class TestMOCProcessor:
         assert "template" in result.data  # Should mention template in dry run message
 
         # Test actual processing with template
-        result = processor.process(
-    test_file,
-    template=template_file,
-     dry_run=False)
+        result = processor.process(test_file, template=template_file, dry_run=False)
 
         assert result.success is True
         assert "template" in result.metadata
@@ -497,10 +483,7 @@ class TestMOCProcessor:
         template_file = tmp_path / "template.txt"
         template_file.write_text("Custom template: {theme}")
 
-        result = generate_moc(
-    [test_file],
-    theme="topical",
-     template=template_file)
+        result = generate_moc([test_file], theme="topical", template=template_file)
 
         assert "MOC.md" in result
         assert "Custom template: topical" in result["MOC.md"]

@@ -36,31 +36,31 @@ dependencies = [
     "pyyaml>=6.0",
     "loguru>=0.7.0",
     "rich>=13.0.0",
-    
+
     # Web UI
     "streamlit>=1.28.0",
     "streamlit-option-menu>=0.3.0",
-    
+
     # File processing
     "watchdog>=3.0.0",
     "pypdf2>=3.0.0",
     "pdfplumber>=0.10.0",
-    
+
     # YouTube and video
     "yt-dlp>=2023.12.0",
     "requests>=2.31.0",
-    
+
     # ML and transcription (core)
     "openai-whisper>=20231117",
-    
+
     # LLM APIs
     "openai>=1.3.0",
     "anthropic>=0.7.0",
-    
+
     # Data and storage
     "sqlalchemy>=2.0.0",
     "pandas>=2.0.0",
-    
+
     # Utilities
     "python-dotenv>=0.19.0",
     "youtube-transcript-api>=1.1.1",
@@ -162,4 +162,4 @@ module = [
     "yt_dlp.*",
     "streamlit.*",
 ]
-ignore_missing_imports = true 
+ignore_missing_imports = true

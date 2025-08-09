@@ -1,4 +1,4 @@
-"""Process pipeline tab for comprehensive file processing with transcription, summarization, and MOC generation."""
+""" Process pipeline tab for comprehensive file processing with transcription, summarization, and MOC generation.""".
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 
 
 class ProcessPipelineWorker(QThread):
-    """Worker thread for running the complete processing pipeline."""
+    """ Worker thread for running the complete processing pipeline.""".
 
     progress_updated = pyqtSignal(int, int, str)  # current, total, status
     file_completed = pyqtSignal(str, bool, str)  # file_path, success, message
@@ -48,7 +48,7 @@ class ProcessPipelineWorker(QThread):
         self.should_stop = False
 
     def run(self) -> None:
-        """Run the complete processing pipeline."""
+        """ Run the complete processing pipeline.""".
         try:
             results: dict[str, Any] = {
                 "transcribed": [],
@@ -267,12 +267,12 @@ class ProcessPipelineWorker(QThread):
             self.processing_error.emit(str(e))
 
     def stop(self) -> None:
-        """Stop processing."""
+        """ Stop processing.""".
         self.should_stop = True
 
 
 class ProcessTab(BaseTab, FileOperationsMixin):
-    """Tab for comprehensive file processing pipeline."""
+    """ Tab for comprehensive file processing pipeline.""".
 
     def __init__(self, parent: Any = None) -> None:
         # Initialize attributes before calling super() to prevent AttributeError
@@ -284,7 +284,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         super().__init__(parent)
 
     def _setup_ui(self) -> None:
-        """Setup the process pipeline UI."""
+        """ Setup the process pipeline UI.""".
         # Create splitter for main layout
         splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout = QVBoxLayout(self)
@@ -332,7 +332,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         self._load_settings()
 
     def _create_input_section(self) -> QGroupBox:
-        """Create the input files section."""
+        """ Create the input files section.""".
         input_group = self.create_file_input_section(
             "Input Files and Folders",
             "process_files",
@@ -341,7 +341,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         return input_group
 
     def _create_processing_options_section(self) -> QGroupBox:
-        """Create the processing options section with inherited settings."""
+        """ Create the processing options section with inherited settings.""".
         group = QGroupBox("Processing Options")
         layout = QGridLayout()
 
@@ -492,7 +492,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         return group
 
     def _create_action_layout_without_stop(self) -> QHBoxLayout:
-        """Create action layout without stop button (ProcessTab has its own stop button)."""
+        """ Create action layout without stop button (ProcessTab has its own stop button).""".
         from PyQt6.QtWidgets import QCheckBox, QHBoxLayout, QPushButton
 
         layout = QHBoxLayout()
@@ -526,7 +526,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         return layout
 
     def _create_progress_section(self) -> QGroupBox:
-        """Create the progress tracking section."""
+        """ Create the progress tracking section.""".
         group = QGroupBox("Processing Progress")
         layout = QVBoxLayout()
 
@@ -590,7 +590,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         return group
 
     def _switch_to_tab(self, tab_name: str):
-        """Switch to the specified tab for changing settings."""
+        """ Switch to the specified tab for changing settings.""".
         # Get the parent tab widget and switch to the named tab
         parent = self.parent()
         if parent and hasattr(parent, "tabs"):
@@ -600,7 +600,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
                     break
 
     def _refresh_inherited_settings(self):
-        """Refresh the display of inherited settings from other tabs."""
+        """ Refresh the display of inherited settings from other tabs.""".
         try:
             parent = self.parent()
             if not parent or not hasattr(parent, "tabs"):
@@ -649,7 +649,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             logger.error(f"Error refreshing inherited settings: {e}")
 
     def _find_tab_by_name(self, tab_name: str):
-        """Find a tab by its name."""
+        """ Find a tab by its name.""".
         try:
             parent = self.parent()
             if not parent or not hasattr(parent, "tabs"):
@@ -663,7 +663,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             return None
 
     def _get_inherited_config(self):
-        """Get configuration from other tabs."""
+        """ Get configuration from other tabs.""".
         config = {}
 
         # Get transcription settings
@@ -721,7 +721,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
     # _update_summarization_models removed - settings now inherited from other tabs
 
     def _select_output_directory(self) -> None:
-        """Select output directory."""
+        """ Select output directory.""".
         directory = QFileDialog.getExistingDirectory(
             self, "Select Output Directory", "", QFileDialog.Option.ShowDirsOnly
         )
@@ -729,13 +729,13 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             self.output_directory.setText(directory)
 
     def _clear_progress(self) -> None:
-        """Clear the progress display."""
+        """ Clear the progress display.""".
         self.file_progress_list.clear()
         self.overall_progress.setVisible(False)
         self.status_label.setText("Ready to process")
 
     def _toggle_pause(self) -> None:
-        """Toggle pause/resume processing."""
+        """ Toggle pause/resume processing.""".
         if self.processing_worker and self.processing_worker.isRunning():
             # Toggle pause state (implementation would depend on worker)
             if hasattr(self.processing_worker, "paused"):
@@ -756,7 +756,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
                 self.append_log("⚠ Pause/resume not supported by current worker")
 
     def _stop_processing(self) -> None:
-        """Stop the current processing operation."""
+        """ Stop the current processing operation.""".
         if self.processing_worker:
             self.processing_worker.should_stop = True
             self.append_log("⏹ Stopping processing...")
@@ -772,7 +772,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         return "Start Processing Pipeline"
 
     def _start_processing(self) -> None:
-        """Start the processing pipeline."""
+        """ Start the processing pipeline.""".
         # Validate inputs
         if not self.validate_file_selection("process_files", 1):
             return
@@ -855,20 +855,20 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             )
 
     def _update_progress(self, current: int, total: int, status: str) -> None:
-        """Update progress display."""
+        """ Update progress display.""".
         self.overall_progress.setValue(current)
         self.overall_progress.setMaximum(total)
         self.status_label.setText(status)
 
     def _file_completed(self, file_path: str, success: bool, message: str):
-        """Handle file completion."""
+        """ Handle file completion.""".
         self.file_progress_list.addItem(message)
         # Scroll to bottom
         self.file_progress_list.scrollToBottom()
         self.append_log(message)
 
     def _processing_finished(self, results: dict[str, Any]) -> None:
-        """Handle processing completion."""
+        """ Handle processing completion.""".
         self.set_processing_state(False)
         self.stop_btn.setEnabled(False)
         self.status_label.setText("Processing completed")
@@ -901,7 +901,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             )
 
     def _processing_error(self, error: str) -> None:
-        """Handle processing error."""
+        """ Handle processing error.""".
         self.set_processing_state(False)
         self.stop_btn.setEnabled(False)
         self.status_label.setText("Processing failed")
@@ -909,11 +909,11 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         self.show_error("Processing Error", f"Processing failed: {error}")
 
     def validate_inputs(self) -> bool:
-        """Validate inputs before processing."""
+        """ Validate inputs before processing.""".
         return self.validate_file_selection("process_files", 1)
 
     def _load_settings(self) -> None:
-        """Load saved settings from session."""
+        """ Load saved settings from session.""".
         try:
             # Block signals during loading to prevent redundant saves
             widgets_to_block = [
@@ -965,7 +965,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             logger.error(f"Failed to load settings for {self.tab_name} tab: {e}")
 
     def _save_settings(self) -> None:
-        """Save current settings to session."""
+        """ Save current settings to session.""".
         try:
             # Save output directory
             self.gui_settings.set_output_directory(
@@ -991,5 +991,5 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             logger.error(f"Failed to save settings for {self.tab_name} tab: {e}")
 
     def _on_setting_changed(self) -> None:
-        """Called when any setting changes to automatically save."""
+        """ Called when any setting changes to automatically save.""".
         self._save_settings()
