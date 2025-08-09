@@ -224,7 +224,7 @@ class TestStateManager:
 
             assert isinstance(state, ApplicationState)
             assert state.session.session_id is not None
-            assert state.session.version == "0.1.0"
+            assert state.session.version == "0.1.1"
 
     def test_load_nonexistent_file(self) -> None:
         """Test loading when no state file exists."""

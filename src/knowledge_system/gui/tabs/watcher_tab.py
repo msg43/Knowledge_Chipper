@@ -1,4 +1,4 @@
-""" File watcher tab for monitoring directories and auto-processing files.""".
+""" File watcher tab for monitoring directories and auto-processing files."""
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 
 
 class WatcherTab(BaseTab, FileOperationsMixin):
-    """ Tab for managing file watcher operations.""".
+    """ Tab for managing file watcher operations."""
 
     def __init__(self, parent=None) -> None:
         # Initialize attributes before calling super() to prevent AttributeError
@@ -44,7 +44,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         super().__init__(parent)
 
     def _setup_ui(self):
-        """ Setup the file watcher UI.""".
+        """ Setup the file watcher UI."""
         layout = QVBoxLayout(self)
 
         # Watch configuration section
@@ -67,7 +67,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         self._load_settings()
 
     def _create_configuration_section(self) -> QGroupBox:
-        """ Create the watch configuration section.""".
+        """ Create the watch configuration section."""
         group = QGroupBox("Watch Configuration")
         layout = QGridLayout()
 
@@ -137,7 +137,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         return group
 
     def _create_control_section(self) -> QGroupBox:
-        """ Create the watcher control section.""".
+        """ Create the watcher control section."""
         group = QGroupBox("Watcher Control")
         layout = QVBoxLayout()
 
@@ -204,7 +204,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         return group
 
     def _create_status_section(self) -> QGroupBox:
-        """ Create the status monitoring section.""".
+        """ Create the status monitoring section."""
         group = QGroupBox("Watch Status")
         layout = QVBoxLayout()
 
@@ -238,7 +238,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         return group
 
     def _select_watch_directory(self):
-        """ Select directory to watch.""".
+        """ Select directory to watch."""
         directory = QFileDialog.getExistingDirectory(
             self, "Select Directory to Watch", "", QFileDialog.Option.ShowDirsOnly
         )
@@ -246,7 +246,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
             self.watch_directory.setText(directory)
 
     def _start_watching(self):
-        """ Start file watching.""".
+        """ Start file watching."""
         watch_path = self.watch_directory.text().strip()
         if not watch_path:
             self.show_warning("No Directory", "Please select a directory to watch")
@@ -285,7 +285,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
 
             # Initialize file watcher with callback
             def file_callback(file_path: Path):
-                """ Process detected files.""".
+                """ Process detected files."""
                 self._on_file_detected(str(file_path))
 
                 if config["auto_process"] and not config["dry_run"]:
@@ -315,7 +315,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
             logger.error(f"Failed to start file watcher: {e}")
 
     def _stop_watching(self):
-        """ Stop file watching.""".
+        """ Stop file watching."""
         if self.watcher:
             try:
                 self.watcher.stop()
@@ -328,7 +328,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
                 logger.error(f"Failed to stop file watcher: {e}")
 
     def _test_configuration(self):
-        """ Test the current configuration.""".
+        """ Test the current configuration."""
         watch_path = self.watch_directory.text().strip()
         if not watch_path:
             self.show_warning("No Directory", "Please select a directory to watch")
@@ -380,7 +380,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
             self.show_error("Configuration Test Failed", f"Error: {e}")
 
     def _update_watch_status(self, watching: bool):
-        """ Update the watch status UI.""".
+        """ Update the watch status UI."""
         if watching:
             self.status_label.setText("Watching (active)")
             self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
@@ -402,11 +402,11 @@ class WatcherTab(BaseTab, FileOperationsMixin):
             self.file_patterns.setEnabled(True)
 
     def _clear_recent_files(self):
-        """ Clear the recent files list.""".
+        """ Clear the recent files list."""
         self.recent_files_list.clear()
 
     def _on_file_detected(self, file_path: str):
-        """ Handle file detection signal.""".
+        """ Handle file detection signal."""
         self.recent_files_list.insertItem(0, f"Detected: {Path(file_path).name}")
 
         # Keep only last 50 items
@@ -416,12 +416,12 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         self.append_log(f"File detected: {file_path}")
 
     def _on_processing_started(self, file_path: str):
-        """ Handle processing started signal.""".
+        """ Handle processing started signal."""
         self.recent_files_list.insertItem(0, f"Processing: {Path(file_path).name}")
         self.append_log(f"Started processing: {file_path}")
 
     def _process_file(self, file_path: Path, config: dict[str, Any]):
-        """ Process a detected file with automatic type detection and default settings.""".
+        """ Process a detected file with automatic type detection and default settings."""
         try:
             self._on_processing_started(str(file_path))
 
@@ -517,11 +517,11 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         return "Start Watching"
 
     def _start_processing(self):
-        """ Start the main processing operation.""".
+        """ Start the main processing operation."""
         self._start_watching()
 
     def validate_inputs(self) -> bool:
-        """ Validate inputs before starting.""".
+        """ Validate inputs before starting."""
         watch_path = self.watch_directory.text().strip()
         if not watch_path:
             self.show_warning("No Directory", "Please select a directory to watch")
@@ -536,7 +536,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         return True
 
     def _load_settings(self):
-        """ Load saved settings from session.""".
+        """ Load saved settings from session."""
         try:
             # Load watch directory
             saved_watch_dir = self.gui_settings.get_line_edit_text(
@@ -574,7 +574,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
             logger.error(f"Failed to load settings for {self.tab_name} tab: {e}")
 
     def _save_settings(self):
-        """ Save current settings to session.""".
+        """ Save current settings to session."""
         try:
             # Save line edit text
             self.gui_settings.set_line_edit_text(
@@ -605,5 +605,5 @@ class WatcherTab(BaseTab, FileOperationsMixin):
             logger.error(f"Failed to save settings for {self.tab_name} tab: {e}")
 
     def _on_setting_changed(self):
-        """ Called when any setting changes to automatically save.""".
+        """ Called when any setting changes to automatically save."""
         self._save_settings()

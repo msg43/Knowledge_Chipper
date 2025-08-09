@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 
 
 class Message:
-    """ Represents a message in the queue.""".
+    """ Represents a message in the queue."""
 
     def __init__(
         self, message_type: str, data: Any = None, callback: Callable | None = None
@@ -27,7 +27,7 @@ class Message:
 
 
 class MessageQueueProcessor(QObject):
-    """ Processes messages from a queue in the GUI thread.""".
+    """ Processes messages from a queue in the GUI thread."""
 
     # Signals for different message types
     status_message = pyqtSignal(str)
@@ -53,12 +53,12 @@ class MessageQueueProcessor(QObject):
     def add_message(
         self, message_type: str, data: Any = None, callback: Callable | None = None
     ):
-        """ Add a message to the queue.""".
+        """ Add a message to the queue."""
         message = Message(message_type, data, callback)
         self.message_queue.put(message)
 
     def _process_messages(self):
-        """ Process all messages in the queue.""".
+        """ Process all messages in the queue."""
         try:
             while True:
                 try:
@@ -70,7 +70,7 @@ class MessageQueueProcessor(QObject):
             logger.error(f"Error processing messages: {e}")
 
     def _handle_message(self, message: Message):
-        """ Handle a single message.""".
+        """ Handle a single message."""
         try:
             handler = self.handlers.get(message.type)
             if handler:
@@ -83,15 +83,15 @@ class MessageQueueProcessor(QObject):
             logger.error(f"Error handling message {message.type}: {e}")
 
     def _handle_status_message(self, message: Message):
-        """ Handle status messages.""".
+        """ Handle status messages."""
         self.status_message.emit(str(message.data))
 
     def _handle_error_message(self, message: Message):
-        """ Handle error messages.""".
+        """ Handle error messages."""
         self.error_message.emit(str(message.data))
 
     def _handle_progress_message(self, message: Message):
-        """ Handle progress update messages.""".
+        """ Handle progress update messages."""
         if isinstance(message.data, tuple) and len(message.data) == 2:
             progress, text = message.data
             self.progress_update.emit(int(progress), str(text))
@@ -99,9 +99,9 @@ class MessageQueueProcessor(QObject):
             logger.warning(f"Invalid progress message data: {message.data}")
 
     def _handle_log_message(self, message: Message):
-        """ Handle log messages.""".
+        """ Handle log messages."""
         self.log_message.emit(str(message.data))
 
     def stop(self):
-        """ Stop the message processor.""".
+        """ Stop the message processor."""
         self.timer.stop()

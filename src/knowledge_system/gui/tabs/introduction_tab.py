@@ -1,4 +1,4 @@
-""" Introduction tab providing comprehensive guidance for new users.""".
+""" Introduction tab providing comprehensive guidance for new users."""
 
 import subprocess
 import sys
@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 
 
 class IntroductionTab(BaseTab):
-    """ Introduction tab for new users.""".
+    """ Introduction tab for new users."""
 
     # Signal for tab navigation
     navigate_to_tab = pyqtSignal(str)  # tab_name
@@ -38,7 +38,7 @@ class IntroductionTab(BaseTab):
         super().__init__(parent)
 
     def _setup_ui(self) -> None:
-        """ Setup the introduction UI.""".
+        """ Setup the introduction UI."""
         main_layout = QVBoxLayout(self)
 
         # Create scroll area for content
@@ -76,7 +76,7 @@ class IntroductionTab(BaseTab):
         main_layout.addWidget(scroll_area)
 
     def _create_welcome_section(self, parent_layout: Any) -> None:
-        """ Create the welcome header section.""".
+        """ Create the welcome header section."""
         # Title
         title_label = QLabel("🎉 Welcome to Knowledge Chipper!")
         title_font = QFont()
@@ -97,7 +97,7 @@ class IntroductionTab(BaseTab):
         parent_layout.addWidget(subtitle_label)
 
     def _create_overview_section(self, parent_layout: Any) -> None:
-        """ Create the app overview section.""".
+        """ Create the app overview section."""
         # Section header
         header_label = QLabel("📚 What is Knowledge Chipper?")
         header_font = QFont()
@@ -138,7 +138,7 @@ class IntroductionTab(BaseTab):
         parent_layout.addWidget(overview_text)
 
     def _create_quick_start_section(self, parent_layout: Any) -> None:
-        """ Create the quick start guide section.""".
+        """ Create the quick start guide section."""
         # Section header
         header_label = QLabel("🚀 Quick Start Guide")
         header_font = QFont()
@@ -178,7 +178,7 @@ class IntroductionTab(BaseTab):
         parent_layout.addWidget(quickstart_text)
 
     def _create_tab_guide_section(self, parent_layout: Any) -> None:
-        """ Create the tab navigation guide section.""".
+        """ Create the tab navigation guide section."""
         # Section header
         header_label = QLabel("🧭 Tab Navigation Guide")
         header_font = QFont()
@@ -230,7 +230,7 @@ class IntroductionTab(BaseTab):
         parent_layout.addWidget(tabs_text)
 
     def _create_tips_section(self, parent_layout: Any) -> None:
-        """ Create the tips and best practices section.""".
+        """ Create the tips and best practices section."""
         # Section header
         header_label = QLabel("💡 Tips & Best Practices")
         header_font = QFont()
@@ -278,7 +278,7 @@ class IntroductionTab(BaseTab):
         parent_layout.addWidget(tips_text)
 
     def _create_documentation_section(self, parent_layout: Any) -> None:
-        """ Create the documentation section.""".
+        """ Create the documentation section."""
         # Section header
         header_label = QLabel("📚 Documentation & Resources")
         header_font = QFont()
@@ -295,7 +295,7 @@ class IntroductionTab(BaseTab):
         # README file section
         readme_section = QLabel(
             """ <b>📖 Complete Documentation:</b>.
-            
+
 <b>📖 Complete Documentation:</b>
 <br>• <a href="readme://open">README.md</a> - Full setup guide, troubleshooting, and advanced features
 <br>• <a href="changelog://open">CHANGELOG.md</a> - Latest updates and version history
@@ -314,7 +314,7 @@ class IntroductionTab(BaseTab):
         readme_section.linkActivated.connect(self._handle_documentation_link)
         readme_section.setStyleSheet(
             """ QLabel {.
-            
+
             QLabel {
                 background-color: #f8f9fa;
                 padding: 15px;
@@ -330,7 +330,7 @@ class IntroductionTab(BaseTab):
                 text-decoration: underline;
             }
         """ ).
-        
+
         )
         doc_layout.addWidget(readme_section)
 
@@ -338,7 +338,7 @@ class IntroductionTab(BaseTab):
         parent_layout.addWidget(doc_group)
 
     def _handle_documentation_link(self, link: str) -> None:
-        """ Handle clicks on documentation links.""".
+        """ Handle clicks on documentation links."""
         try:
             project_root = Path(__file__).parents[4]  # Go up to Knowledge_Chipper root
 
@@ -452,7 +452,7 @@ class IntroductionTab(BaseTab):
             self.show_error("Error", f"Could not open documentation: {str(e)}")
 
     def _create_navigation_buttons(self, parent_layout: Any) -> None:
-        """ Create quick navigation buttons.""".
+        """ Create quick navigation buttons."""
         nav_group = QGroupBox("🚀 Quick Actions")
         nav_layout = QHBoxLayout()
 
@@ -461,7 +461,7 @@ class IntroductionTab(BaseTab):
         api_keys_btn.clicked.connect(lambda: self.navigate_to_tab.emit("⚙️ Settings"))
         api_keys_btn.setStyleSheet(
             """ QPushButton {.
-            
+
             QPushButton {
                 background-color: #ff9800;
                 color: white;
@@ -474,7 +474,7 @@ class IntroductionTab(BaseTab):
                 background-color: #f57c00;
             }
         """ ).
-        
+
         )
         nav_layout.addWidget(api_keys_btn)
 
@@ -485,7 +485,7 @@ class IntroductionTab(BaseTab):
         )
         process_btn.setStyleSheet(
             """ QPushButton {.
-            
+
             QPushButton {
                 background-color: #4caf50;
                 color: white;
@@ -498,7 +498,7 @@ class IntroductionTab(BaseTab):
                 background-color: #45a049;
             }
         """ ).
-        
+
         )
         nav_layout.addWidget(process_btn)
 
@@ -507,7 +507,7 @@ class IntroductionTab(BaseTab):
         youtube_btn.clicked.connect(lambda: self.navigate_to_tab.emit("YouTube"))
         youtube_btn.setStyleSheet(
             """ QPushButton {.
-            
+
             QPushButton {
                 background-color: #f44336;
                 color: white;
@@ -520,7 +520,7 @@ class IntroductionTab(BaseTab):
                 background-color: #da190b;
             }
         """ ).
-        
+
         )
         nav_layout.addWidget(youtube_btn)
 
@@ -529,11 +529,11 @@ class IntroductionTab(BaseTab):
 
     # Override base class methods since this is an informational tab
     def _get_start_button_text(self) -> str:
-        """ Return start button text.""".
+        """ Return start button text."""
         return "Get Started"
 
     def _start_processing(self) -> None:
-        """ Navigate to the process tab when start is clicked.""".
+        """ Navigate to the process tab when start is clicked."""
         self.show_info(
             "Welcome!",
             "Let's start by reviewing your Settings, then move to Process Management to begin!",
@@ -541,7 +541,7 @@ class IntroductionTab(BaseTab):
         self.navigate_to_tab.emit("⚙️ Settings")
 
     def _create_action_layout(self) -> QHBoxLayout:
-        """ Override to provide custom action layout for intro tab.""".
+        """ Override to provide custom action layout for intro tab."""
         layout = QHBoxLayout()
 
         # Custom start button that navigates
@@ -549,7 +549,7 @@ class IntroductionTab(BaseTab):
         self.start_btn.clicked.connect(self._start_processing)
         self.start_btn.setStyleSheet(
             """ QPushButton {.
-            
+
             QPushButton {
                 background-color: #4caf50;
                 color: white;
@@ -563,7 +563,7 @@ class IntroductionTab(BaseTab):
                 background-color: #45a049;
             }
         """ ).
-        
+
         )
         layout.addWidget(self.start_btn)
 
@@ -571,7 +571,7 @@ class IntroductionTab(BaseTab):
         return layout
 
     def _create_output_section(self) -> Any:
-        """ Override to provide custom output section.""".
+        """ Override to provide custom output section."""
         layout = QVBoxLayout()
 
         # Welcome message instead of log output
@@ -581,7 +581,7 @@ class IntroductionTab(BaseTab):
         welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         welcome_label.setStyleSheet(
             """ QLabel {.
-            
+
             QLabel {
                 background-color: #e8f5e8;
                 padding: 15px;
@@ -591,7 +591,7 @@ class IntroductionTab(BaseTab):
                 font-size: 14px;
             }
         """ ).
-        
+
         )
         layout.addWidget(welcome_label)
 

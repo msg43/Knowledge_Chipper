@@ -1,4 +1,4 @@
-""" Utilities package for the Knowledge System.""".
+""" Utilities package for the Knowledge System."""
 
 # Import only the cache management for now to avoid circular import issues
 try:

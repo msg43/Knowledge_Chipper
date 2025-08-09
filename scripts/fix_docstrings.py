@@ -128,6 +128,8 @@ def process_file(path: Path) -> bool:
             i += 1
 
     updated = "".join(lines)
+    # Remove stray period accidentally appended after closing triple quotes: """. -> """
+    updated = re.sub(r'(\"\"\"|\'\'\')\.', r'\1', updated)
     if updated != text:
         path.write_text(updated, encoding="utf-8")
         changed = True
@@ -154,5 +156,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-

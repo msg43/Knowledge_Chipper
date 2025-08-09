@@ -22,7 +22,7 @@ def validate_file_input(
     Returns:
         True if input is valid, False otherwise
     """ if isinstance(input_data, (str, Path)):.
-    
+
     if isinstance(input_data, (str, Path)):
         path = Path(input_data)
 
@@ -60,7 +60,7 @@ def validate_audio_input(input_path: str | Path) -> bool:
     Returns:
         True if input is a valid audio file, False otherwise
     """ audio_formats = [".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".webm"].
-    
+
     audio_formats = [".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".webm"]
     return validate_file_input(input_path, audio_formats)
 
@@ -75,7 +75,7 @@ def validate_text_input(input_path: str | Path) -> bool:
     Returns:
         True if input is a valid text file, False otherwise
     """ text_formats = [".txt", ".md", ".rst", ".json"].
-    
+
     text_formats = [".txt", ".md", ".rst", ".json"]
     return validate_file_input(input_path, text_formats)
 
@@ -90,7 +90,7 @@ def validate_document_input(input_path: str | Path) -> bool:
     Returns:
         True if input is a valid document file, False otherwise
     """ document_formats = [".pdf", ".docx", ".doc", ".txt", ".md", ".rtf"].
-    
+
     document_formats = [".pdf", ".docx", ".doc", ".txt", ".md", ".rtf"]
     return validate_file_input(input_path, document_formats)
 
@@ -106,7 +106,7 @@ def can_process_file(input_path: str | Path, supported_formats: list[str]) -> bo
     Returns:
         True if file can be processed, False otherwise
     """ path = Path(input_path).
-    
+
     path = Path(input_path)
     return path.suffix.lower() in [fmt.lower() for fmt in supported_formats]
 
@@ -121,7 +121,7 @@ def validate_string_input(input_data: str | Path) -> bool:
     Returns:
         True if input is a non-empty string, False otherwise
     """ if isinstance(input_data, str):.
-    
+
     if isinstance(input_data, str):
         return len(input_data.strip()) > 0
     else:  # Path
@@ -139,7 +139,7 @@ def validate_url_or_file_input(input_data: Any, url_validator: Any = None) -> bo
     Returns:
         True if input is valid, False otherwise
     """ if isinstance(input_data, (str, Path)):.
-    
+
     if isinstance(input_data, (str, Path)):
         input_str = str(input_data)
 

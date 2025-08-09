@@ -30,7 +30,7 @@ def scan_and_update_models() -> dict[str, int]:
     Returns:
         Dictionary of model names to detected context windows
     """ try:.
-    
+
     try:
         from .ollama_manager import get_ollama_manager
 
@@ -110,7 +110,7 @@ def add_model_override(model_name: str, context_window: int) -> None:
         model_name: Name of the model
         context_window: Context window size in tokens
     """ add_custom_model_context(model_name, context_window).
-    
+
     add_custom_model_context(model_name, context_window)
     print(
         f"✅ Added custom context window for '{model_name}': {context_window:,} tokens"
@@ -118,7 +118,7 @@ def add_model_override(model_name: str, context_window: int) -> None:
 
 
 def main():
-    """ Main CLI interface for model updater.""".
+    """ Main CLI interface for model updater."""
     import sys
 
     if len(sys.argv) < 2:

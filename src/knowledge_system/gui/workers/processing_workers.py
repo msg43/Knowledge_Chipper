@@ -1,4 +1,4 @@
-""" Enhanced worker threads for background processing operations.""".
+""" Enhanced worker threads for background processing operations."""
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -19,7 +19,7 @@ YOUTUBE_LOGS_DIR = Path.home() / ".knowledge_system" / "logs" / "youtube"
 
 
 class EnhancedSummarizationWorker(QThread):
-    """ Enhanced worker thread for summarization with real-time progress dialog.""".
+    """ Enhanced worker thread for summarization with real-time progress dialog."""
 
     progress_updated = pyqtSignal(object)  # SummarizationProgress
     file_completed = pyqtSignal(int, int)  # current, total
@@ -34,7 +34,7 @@ class EnhancedSummarizationWorker(QThread):
         self.progress_dialog = None
 
     def run(self):
-        """ Run the summarization process with progress tracking.""".
+        """ Run the summarization process with progress tracking."""
         try:
             from ...processors.summarizer import SummarizerProcessor
 
@@ -50,7 +50,7 @@ class EnhancedSummarizationWorker(QThread):
 
                     def progress_callback(progress: SummarizationProgress):
 
-                        """ Progress callback.""".
+                        """ Progress callback."""
                         self.progress_updated.emit(progress)
 
                     # Process file with progress tracking
@@ -84,7 +84,7 @@ class EnhancedSummarizationWorker(QThread):
 
 
 class EnhancedTranscriptionWorker(QThread):
-    """ Enhanced worker thread for transcription with TRUE parallel batch processing.""".
+    """ Enhanced worker thread for transcription with TRUE parallel batch processing."""
 
     progress_updated = pyqtSignal(object)  # TranscriptionProgress
     file_completed = pyqtSignal(int, int)  # current, total
@@ -99,7 +99,7 @@ class EnhancedTranscriptionWorker(QThread):
         self.should_stop = False
 
     def run(self):
-        """ Run the transcription process with TRUE parallel processing.""".
+        """ Run the transcription process with TRUE parallel processing."""
         try:
             import time
             from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -134,7 +134,7 @@ class EnhancedTranscriptionWorker(QThread):
             self.processing_error.emit(str(e))
 
     def _process_sequential(self):
-        """ Process files one at a time (sequential mode).""".
+        """ Process files one at a time (sequential mode)."""
         from ...processors.audio_processor import AudioProcessor
 
         processor = self._create_processor()
@@ -164,7 +164,7 @@ class EnhancedTranscriptionWorker(QThread):
         self.processing_finished.emit()
 
     def _process_parallel(self, max_concurrent):
-        """ Process files in parallel using ThreadPoolExecutor.""".
+        """ Process files in parallel using ThreadPoolExecutor."""
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         logger.info(
@@ -217,7 +217,7 @@ class EnhancedTranscriptionWorker(QThread):
         self.processing_finished.emit()
 
     def _process_single_file(self, file_path, file_index):
-        """ Process a single file (used by parallel processing).""".
+        """ Process a single file (used by parallel processing)."""
         try:
             processor = self._create_processor()
 
@@ -233,7 +233,7 @@ class EnhancedTranscriptionWorker(QThread):
             return False
 
     def _create_processor(self):
-        """ Create an AudioProcessor with current settings.""".
+        """ Create an AudioProcessor with current settings."""
         from ...processors.audio_processor import AudioProcessor
 
         return AudioProcessor(
@@ -250,12 +250,12 @@ class EnhancedTranscriptionWorker(QThread):
         )
 
     def stop(self) -> None:
-        """ Stop the processing.""".
+        """ Stop the processing."""
         self.should_stop = True
 
 
 class ProcessingReport:
-    """ Track and generate processing reports.""".
+    """ Track and generate processing reports."""
 
     def __init__(self, operation_type: str) -> None:
         self.operation_type = operation_type
@@ -285,7 +285,7 @@ class ProcessingReport:
         }
 
     def finish(self) -> None:
-        """ Mark the report as finished.""".
+        """ Mark the report as finished."""
         self.end_time = QDateTime.currentDateTime()
 
         # Calculate final summarization statistics
@@ -311,7 +311,7 @@ class ProcessingReport:
         output_file: str | None = None,
         metadata: dict[str, Any] | None = None,
     ):
-        """ Add a successful file.""".
+        """ Add a successful file."""
         self.successful_files.append(filename)
         self.processed_files += 1
         if output_file:
@@ -364,7 +364,7 @@ class ProcessingReport:
             stats["file_stats"].append(file_stat)
 
     def add_failure(self, filename: str, error: str):
-        """ Add a failed file.""".
+        """ Add a failed file."""
         self.failed_files.append((filename, error))
         self.processed_files += 1
 
@@ -382,15 +382,15 @@ class ProcessingReport:
         self.file_details.append(file_detail)
 
     def add_skipped(self, filename: str, reason: str):
-        """ Add a skipped file.""".
+        """ Add a skipped file."""
         self.skipped_files.append((filename, reason))
 
     def add_warning(self, message: str):
-        """ Add a warning message.""".
+        """ Add a warning message."""
         self.warnings.append(message)
 
     def get_duration(self) -> str:
-        """ Get processing duration as string.""".
+        """ Get processing duration as string."""
         if self.end_time is None:
             return "In progress..."
         duration = self.start_time.secsTo(self.end_time)
@@ -402,7 +402,7 @@ class ProcessingReport:
         )
 
     def save_report(self) -> Path:
-        """ Save report to file and return path.""".
+        """ Save report to file and return path."""
         REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
         timestamp = self.start_time.toString("yyyy-MM-dd_HH-mm-ss")
@@ -532,7 +532,7 @@ class ProcessingReport:
 
 
 class WorkerThread(QThread):
-    """ Generic worker thread for running operations.""".
+    """ Generic worker thread for running operations."""
 
     message_signal = pyqtSignal(dict)
     finished_signal = pyqtSignal()
@@ -545,7 +545,7 @@ class WorkerThread(QThread):
 
     def run(self):
 
-        """ Run.""".
+        """ Run."""
         try:
             self.target(*self.args)
             self.finished_signal.emit()
@@ -554,7 +554,7 @@ class WorkerThread(QThread):
 
 
 def setup_youtube_logger():
-    """ Set up dedicated YouTube logging to a specific file.""".
+    """ Set up dedicated YouTube logging to a specific file."""
     from datetime import datetime
 
     from loguru import logger as loguru_logger
@@ -592,7 +592,7 @@ def setup_youtube_logger():
 
 
 def get_youtube_logger():
-    """ Get the YouTube-specific logger.""".
+    """ Get the YouTube-specific logger."""
     from loguru import logger as loguru_logger
 
     return loguru_logger.bind(youtube_session=True)

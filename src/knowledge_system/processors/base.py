@@ -16,7 +16,7 @@ from ..utils.progress import CancellationError, CancellationToken
 
 
 class ProcessorResult:
-    """ Container for processor execution results.""".
+    """ Container for processor execution results."""
 
     def __init__(
         self,
@@ -38,7 +38,7 @@ class ProcessorResult:
             warnings: List of warning messages
             dry_run: If True, do not perform any real processing, just simulate
         """ self.success = success.
-        
+
         self.success = success
         self.data = data
         self.metadata = metadata or {}
@@ -48,23 +48,23 @@ class ProcessorResult:
         self.timestamp = time.time()
 
     def __bool__(self) -> bool:
-        """ Return success status when used in boolean context.""".
+        """ Return success status when used in boolean context."""
         return self.success
 
     def __str__(self) -> str:
-        """ String representation of the result.""".
+        """ String representation of the result."""
         status = "SUCCESS" if self.success else "FAILED"
         error_info = f" ({len(self.errors)} errors)" if self.errors else ""
         warning_info = f" ({len(self.warnings)} warnings)" if self.warnings else ""
         return f"ProcessorResult[{status}{error_info}{warning_info}]"
 
     def add_error(self, error: str) -> None:
-        """ Add an error message.""".
+        """ Add an error message."""
         self.errors.append(error)
         self.success = False
 
     def add_warning(self, warning: str) -> None:
-        """ Add a warning message.""".
+        """ Add a warning message."""
         self.warnings.append(warning)
 
 
@@ -83,7 +83,7 @@ class BaseProcessor(ABC):
         Args:
             name: Optional name for the processor (defaults to class name)
         """ self.name = name or self.__class__.__name__.
-        
+
         self.name = name or self.__class__.__name__
         self.logger = get_logger(f"processor.{self.name.lower()}")
         self.settings = get_settings()
@@ -133,7 +133,7 @@ class BaseProcessor(ABC):
     @property
     @abstractmethod
     def supported_formats(self) -> list[str]:
-        """ Return list of supported input formats.""".
+        """ Return list of supported input formats."""
 
     def can_process(self, input_path: str | Path) -> bool:
         """ Check if this processor can handle the given input.
@@ -145,7 +145,7 @@ class BaseProcessor(ABC):
         Returns:
             True if processor can handle this input
         """ path = Path(input_path).
-        
+
         path = Path(input_path)
         return path.suffix.lower() in [fmt.lower() for fmt in self.supported_formats]
 
@@ -159,7 +159,7 @@ class BaseProcessor(ABC):
         Raises:
             CancellationError: If operation was cancelled
         """ if cancellation_token:.
-        
+
         if cancellation_token:
             # Check for cancellation first
             cancellation_token.throw_if_cancelled()
@@ -191,7 +191,7 @@ class BaseProcessor(ABC):
         Returns:
             ProcessorResult containing the processing results
         """ try:.
-        
+
         try:
             # Check cancellation before starting
             self.check_cancellation(cancellation_token)
@@ -230,7 +230,7 @@ class BaseProcessor(ABC):
         Returns:
             ProcessorResult containing the processing results
         """ start_time = time.time().
-        
+
         start_time = time.time()
         cancellation_token = kwargs.get("cancellation_token")
 
@@ -364,7 +364,7 @@ class BaseProcessor(ABC):
                 )
 
     def _update_stats(self, success: bool, duration: float) -> None:
-        """ Update internal statistics.""".
+        """ Update internal statistics."""
         self._stats["processed_count"] += 1
         self._stats["total_processing_time"] += duration
 
@@ -394,7 +394,7 @@ class BaseProcessor(ABC):
         return stats
 
     def reset_stats(self) -> None:
-        """ Reset processing statistics.""".
+        """ Reset processing statistics."""
         self._stats = {
             "processed_count": 0,
             "success_count": 0,
@@ -404,11 +404,11 @@ class BaseProcessor(ABC):
         self.logger.info(f"Statistics reset for {self.name}")
 
     def __str__(self) -> str:
-        """ String representation of the processor.""".
+        """ String representation of the processor."""
         return f"{self.__class__.__name__}(name={self.name})"
 
     def __repr__(self) -> str:
-        """ Detailed string representation of the processor.""".
+        """ Detailed string representation of the processor."""
         stats = self.get_stats()
         return (
             f"{self.__class__.__name__}("
@@ -436,7 +436,7 @@ class BaseProcessor(ABC):
         Returns:
             List of ProcessorResult objects
         """ results = [].
-        
+
         results = []
         for i, input_item in enumerate(inputs):
             try:
@@ -474,10 +474,10 @@ class BaseProcessor(ABC):
 
 
 class ProcessorRegistry:
-    """ Registry for managing processor instances.""".
+    """ Registry for managing processor instances."""
 
     def __init__(self) -> None:
-        """ Initialize the processor registry.""".
+        """ Initialize the processor registry."""
         self._processors: dict[str, BaseProcessor] = {}
         self.logger = get_logger("processor.registry")
 
@@ -530,7 +530,7 @@ class ProcessorRegistry:
         Returns:
             True if processor was found and removed, False otherwise
         """ if name in self._processors:.
-        
+
         if name in self._processors:
             del self._processors[name]
             self.logger.info(f"Unregistered processor: {name}")
@@ -538,7 +538,7 @@ class ProcessorRegistry:
         return False
 
     def clear(self) -> None:
-        """ Clear all registered processors.""".
+        """ Clear all registered processors."""
         count = len(self._processors)
         self._processors.clear()
         self.logger.info(f"Cleared {count} registered processors")
@@ -549,5 +549,5 @@ _registry = ProcessorRegistry()
 
 
 def get_processor_registry() -> ProcessorRegistry:
-    """ Get the global processor registry.""".
+    """ Get the global processor registry."""
     return _registry

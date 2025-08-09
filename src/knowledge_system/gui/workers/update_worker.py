@@ -1,4 +1,4 @@
-"""Worker for handling app updates."""
+""" Worker for handling app updates."""
 
 import os
 import subprocess
@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 
 
 class UpdateWorker(QThread):
-    """Worker thread for handling app updates."""
+    """ Worker thread for handling app updates."""
 
     # Signals
     update_progress = pyqtSignal(str)  # Status message
@@ -23,12 +23,12 @@ class UpdateWorker(QThread):
     update_error = pyqtSignal(str)  # Error message
 
     def __init__(self) -> None:
-        """Initialize the update worker."""
+        """ Initialize the update worker."""
         super().__init__()
         self.script_path = self._find_update_script()
 
     def _find_update_script(self) -> Path | None:
-        """Find the build_macos_app.sh script."""
+        """ Find the build_macos_app.sh script."""
         try:
             # Always use the main repository path for updates
             # This avoids permission issues with the app bundle
@@ -59,7 +59,7 @@ class UpdateWorker(QThread):
             return None
 
     def run(self) -> None:
-        """Run the update process."""
+        """ Run the update process."""
         try:
             if not self.script_path:
                 raise FileNotFoundError("Could not find build_macos_app.sh")

@@ -4,7 +4,7 @@
 # Application Settings
 app:
   name: "Knowledge System"
-  version: "0.1.0"
+  version: "0.1.1"
   debug: false
 
 # File Paths

@@ -5,7 +5,7 @@ This package provides AI-powered tools for transcribing, summarizing, and organi
 videos, audio files, and documents into searchable knowledge.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "Knowledge_Chipper"
 __email__ = "dev@knowledge-system.local"
 
@@ -15,7 +15,7 @@ from .logger import get_logger
 
 
 def gui_main() -> None:
-    """ Launch the GUI application from the main package.""".
+    """ Launch the GUI application from the main package."""
     import sys
 
     # Smart cache clearing - clear only if needed

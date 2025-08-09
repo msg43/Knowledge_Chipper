@@ -25,7 +25,7 @@ except ImportError:
 
 
 class HTMLProcessor(BaseProcessor):
-    """ Processor for extracting text from HTML files or folders.""".
+    """ Processor for extracting text from HTML files or folders."""
 
     def __init__(self, name: str | None = None) -> None:
         super().__init__(name or "html_processor")
@@ -52,7 +52,7 @@ class HTMLProcessor(BaseProcessor):
         return False
 
     def _extract_text_from_html(self, html_path: Path) -> dict[str, Any]:
-        """ Extract text content from HTML file.""".
+        """ Extract text content from HTML file."""
         try:
             with open(html_path, encoding="utf-8", errors="replace") as f:
                 html_content = f.read()
@@ -133,7 +133,7 @@ class HTMLProcessor(BaseProcessor):
     def process(
         self, input_data: Any, dry_run: bool = False, **kwargs: Any
     ) -> ProcessorResult:
-        """ Process HTML files and extract text content.""".
+        """ Process HTML files and extract text content."""
         paths = []
         if isinstance(input_data, (str, Path)):
             path = Path(input_data)
@@ -211,7 +211,7 @@ class HTMLProcessor(BaseProcessor):
 
 
 def fetch_html_text(html_path: str | Path) -> str:
-    """ Convenience function to extract text from a single HTML file.""".
+    """ Convenience function to extract text from a single HTML file."""
     processor = HTMLProcessor()
     result = processor.process(html_path)
     if not result.success:

@@ -36,7 +36,7 @@ def sanitize_tag(tag: str) -> str:
     Returns:
         Sanitized tag string suitable for YAML and general use
     """ if not tag or not isinstance(tag, str):.
-    
+
     if not tag or not isinstance(tag, str):
         return ""
 
@@ -64,7 +64,7 @@ def sanitize_tags(tags: list[str]) -> list[str]:
     Returns:
         List of sanitized tag strings with empty strings filtered out
     """ if not tags:.
-    
+
     if not tags:
         return []
 
@@ -93,7 +93,7 @@ except Exception as e:
 
 
 class YouTubeTranscript(BaseModel):
-    """ YouTube transcript model.""".
+    """ YouTube transcript model."""
 
     video_id: str = Field(..., description="YouTube video ID")
     title: str = Field(..., description="Video title")
@@ -120,7 +120,7 @@ class YouTubeTranscript(BaseModel):
     )
 
     def to_dict(self) -> dict[str, Any]:
-        """ Convert to dictionary for JSON serialization.""".
+        """ Convert to dictionary for JSON serialization."""
         data = self.model_dump()
         # Convert datetime to ISO string for JSON serialization
         if "fetched_at" in data and isinstance(data["fetched_at"], datetime):
@@ -136,7 +136,7 @@ class YouTubeTranscript(BaseModel):
         strip_interjections: bool = False,
         interjections_file: Path | None = None,
     ) -> str:
-        """ Convert transcript to markdown format with enhanced Obsidian sections.""".
+        """ Convert transcript to markdown format with enhanced Obsidian sections."""
         lines = []
 
         # Add YAML frontmatter with title and metadata
@@ -238,7 +238,7 @@ class YouTubeTranscript(BaseModel):
         strip_interjections: bool = False,
         interjections_file: Path | None = None,
     ) -> str:
-        """ Convert transcript to SRT format.""".
+        """ Convert transcript to SRT format."""
         if not self.transcript_data:
             return ""
 
@@ -266,7 +266,7 @@ class YouTubeTranscript(BaseModel):
         return "\n".join(srt_lines)
 
     def _format_srt_timestamp(self, seconds: float) -> str:
-        """ Format seconds to SRT timestamp format (HH:MM:SS,mmm).""".
+        """ Format seconds to SRT timestamp format (HH:MM:SS,mmm)."""
         hours = int(seconds // 3600)
         minutes = int((seconds % 3600) // 60)
         secs = int(seconds % 60)
@@ -289,7 +289,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         fallback_to_auto: bool = True,
         **kwargs,
     ) -> None:
-        """ Initialize the YouTube transcript processor.""".
+        """ Initialize the YouTube transcript processor."""
         super().__init__("youtube_transcript")
         self.preferred_language = preferred_language
         self.prefer_manual = prefer_manual
@@ -303,11 +303,11 @@ class YouTubeTranscriptProcessor(BaseProcessor):
 
     @property
     def supported_formats(self) -> list[str]:
-        """ Return list of supported input formats.""".
+        """ Return list of supported input formats."""
         return ["youtube_url"]
 
     def validate_input(self, input_data: Any) -> bool:
-        """ Validate that input contains YouTube URLs.""".
+        """ Validate that input contains YouTube URLs."""
         if isinstance(input_data, str):
             return is_youtube_url(input_data)
         elif isinstance(input_data, list):
@@ -315,7 +315,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         return False
 
     def _extract_video_id(self, url: str) -> str | None:
-        """ Extract video ID from YouTube URL.""".
+        """ Extract video ID from YouTube URL."""
         if "youtu.be/" in url:
             return url.split("youtu.be/")[1].split("?")[0]
         elif "watch?v=" in url:
@@ -325,7 +325,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             return None
 
     def _validate_webshare_config(self) -> list[str]:
-        """ Validate WebShare proxy configuration.""".
+        """ Validate WebShare proxy configuration."""
         from ..config import get_settings
 
         settings = get_settings()
@@ -341,7 +341,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
     def _fetch_video_transcript(
         self, url: str, cancellation_token: CancellationToken | None = None
     ) -> YouTubeTranscript | None:
-        """ Fetch transcript for a single video using proxy-based YouTube Transcript API.""".
+        """ Fetch transcript for a single video using proxy-based YouTube Transcript API."""
 
         logger.info(f"Fetching transcript for: {url}")
 
@@ -697,7 +697,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         return None
 
     def _build_video_id_index(self, output_dir: Path) -> set:
-        """ Build index of existing video IDs from YAML frontmatter in output directory.""".
+        """ Build index of existing video IDs from YAML frontmatter in output directory."""
         video_ids = set()
         files_scanned = 0
         files_failed = 0
@@ -795,7 +795,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         return video_ids
 
     def _save_index_to_file(self, index_file: Path, video_ids: set) -> None:
-        """ Save video ID index to JSON file.""".
+        """ Save video ID index to JSON file."""
         try:
             with open(index_file, "w", encoding="utf-8") as f:
                 json.dump(sorted(list(video_ids)), f, indent=2)
@@ -804,7 +804,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             logger.error(f"Failed to save index file: {e}")
 
     def _update_index_file(self, index_file: Path, video_id: str) -> None:
-        """ Append a new video ID to the index file.""".
+        """ Append a new video ID to the index file."""
         try:
             # Read existing index
             video_ids = set()
@@ -833,7 +833,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         cancellation_token: CancellationToken | None = None,
         **kwargs,
     ) -> ProcessorResult:
-        """ Process YouTube URLs to extract transcripts.""".
+        """ Process YouTube URLs to extract transcripts."""
         try:
             # Check for cancellation at the start
             if cancellation_token and cancellation_token.is_cancelled():
@@ -1437,7 +1437,7 @@ def extract_youtube_transcript(
     Returns:
         YouTubeTranscript object or None if extraction failed
     """ processor = YouTubeTranscriptProcessor(.
-    
+
     processor = YouTubeTranscriptProcessor(
         preferred_language=preferred_language,
         prefer_manual=prefer_manual,

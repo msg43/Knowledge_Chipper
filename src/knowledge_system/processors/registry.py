@@ -18,7 +18,7 @@ def register_processor(
     url_patterns: list[str] | None = None,
     name: str | None = None,
 ):
-    """ Register a processor for file extensions and/or URL patterns.""".
+    """ Register a processor for file extensions and/or URL patterns."""
     _PROCESSOR_REGISTRY.append(
         {
             "name": name or processor_cls.__name__,
@@ -32,7 +32,7 @@ def register_processor(
 def get_processor_for_input(
     input_path_or_url: str | Path,
 ) -> type[BaseProcessor] | None:
-    """ Return the processor class for a given file path or URL.""".
+    """ Return the processor class for a given file path or URL."""
     s = str(input_path_or_url)
     # Check URL patterns first
     for entry in _PROCESSOR_REGISTRY:
@@ -52,7 +52,7 @@ def list_processors() -> list[str]:
 
 
 def get_all_processor_stats() -> dict[str, dict]:
-    """ Get statistics from all registered processor instances.""".
+    """ Get statistics from all registered processor instances."""
     from knowledge_system.processors.base import get_processor_registry
 
     registry = get_processor_registry()

@@ -1,4 +1,4 @@
-""" API Keys configuration tab for managing all API credentials.""".
+""" API Keys configuration tab for managing all API credentials."""
 
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 
 
 class APIKeysTab(BaseTab):
-    """ Tab for API keys configuration.""".
+    """ Tab for API keys configuration."""
 
     # Signals for settings changes
     settings_saved = pyqtSignal()
@@ -49,7 +49,7 @@ class APIKeysTab(BaseTab):
         super().__init__(parent)
 
     def _setup_ui(self) -> None:
-        """ Setup the API keys UI.""".
+        """ Setup the API keys UI."""
         main_layout = QVBoxLayout(self)
 
         # Instructions section with dark background - moved to top
@@ -74,20 +74,20 @@ class APIKeysTab(BaseTab):
 
 
         """ ).
-        
+
         )
         instructions_text.setWordWrap(True)
         # Dark background with light text for better readability
         instructions_text.setStyleSheet(
             """ background-color: #2b2b2b;.
-            
+
             background-color: #2b2b2b;
             color: #ffffff;
             padding: 15px;
             border: 1px solid #555;
             border-radius: 5px;
         """ ).
-        
+
         )
         instructions_layout.addWidget(instructions_text)
 
@@ -214,7 +214,7 @@ class APIKeysTab(BaseTab):
         update_btn.clicked.connect(self._check_for_updates)
         update_btn.setStyleSheet(
             """ QPushButton {.
-            
+
             QPushButton {
                 background-color: #2196F3;
                 color: white;
@@ -230,7 +230,7 @@ class APIKeysTab(BaseTab):
                 background-color: #0D47A1;
             }
         """ ).
-        
+
         )
         update_btn.setToolTip(
             "Check for and install the latest version.\n"
@@ -257,7 +257,7 @@ class APIKeysTab(BaseTab):
         )
         self.auto_update_checkbox.setStyleSheet(
             """ QCheckBox {.
-            
+
             QCheckBox {
                 font-size: 12px;
                 color: #666;
@@ -266,7 +266,7 @@ class APIKeysTab(BaseTab):
                 color: #2196F3;
             }
         """ ).
-        
+
         )
         # Load saved preference
         self.auto_update_checkbox.setChecked(
@@ -286,7 +286,7 @@ class APIKeysTab(BaseTab):
         main_layout.addStretch()
 
     def _load_existing_values(self) -> None:
-        """ Load existing API key values from settings.""".
+        """ Load existing API key values from settings."""
         # Load OpenAI key
         if self.settings.api_keys.openai_api_key:
             self._actual_api_keys[
@@ -327,7 +327,7 @@ class APIKeysTab(BaseTab):
             self.webshare_password_edit.setText("••••••••••••••••")
 
     def _setup_change_handlers(self) -> None:
-        """ Set up change handlers for password/key fields.""".
+        """ Set up change handlers for password/key fields."""
         self.openai_key_edit.textChanged.connect(
             lambda text: self._handle_key_change("openai_api_key", text)
         )
@@ -343,21 +343,21 @@ class APIKeysTab(BaseTab):
         self.webshare_username_edit.textChanged.connect(self._on_setting_changed)
 
     def _handle_key_change(self, key_name: str, new_text: str) -> None:
-        """ Handle changes to API key fields.""".
+        """ Handle changes to API key fields."""
         # If user types new content (not just the obscured dots), update the actual key
         if new_text and not new_text.startswith("••"):
             self._actual_api_keys[key_name] = new_text
             self._on_setting_changed()
 
     def _handle_password_change(self, key_name: str, new_text: str) -> None:
-        """ Handle changes to password fields.""".
+        """ Handle changes to password fields."""
         # If user types new content (not just the obscured dots), update the actual password
         if new_text and not new_text.startswith("••"):
             self._actual_api_keys[key_name] = new_text
             self._on_setting_changed()
 
     def _on_setting_changed(self) -> None:
-        """ Called when any setting changes to automatically save to session.""".
+        """ Called when any setting changes to automatically save to session."""
         try:
             # Save to GUI session (for UI state persistence)
             self.gui_settings.set_line_edit_text(
@@ -396,7 +396,7 @@ class APIKeysTab(BaseTab):
             logger.error(f"Failed to save API keys session data: {e}")
 
     def _load_settings(self) -> None:
-        """ Load saved settings from session and existing credential files.""".
+        """ Load saved settings from session and existing credential files."""
         try:
             # First load from the credential files (like the existing _load_existing_values)
             self._load_existing_values()
@@ -416,15 +416,15 @@ class APIKeysTab(BaseTab):
             logger.error(f"Failed to load settings for {self.tab_name} tab: {e}")
 
     def _get_start_button_text(self) -> str:
-        """ Get the text for the start button.""".
+        """ Get the text for the start button."""
         return "Save API Keys"
 
     def _start_processing(self) -> None:
-        """ Save settings when start button is pressed.""".
+        """ Save settings when start button is pressed."""
         self._save_settings()
 
     def _save_settings(self) -> None:
-        """ Save API key settings and update environment variables.""".
+        """ Save API key settings and update environment variables."""
         try:
             logger.info("🔧 DEBUG: _save_settings() called")
             self.append_log("🔧 DEBUG: Save button clicked - starting save process...")
@@ -498,7 +498,7 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
             self.append_log(error_msg)
 
     def _save_credentials_to_file(self) -> None:
-        """ Save API credentials to persistent YAML file.""".
+        """ Save API credentials to persistent YAML file."""
         try:
             logger.info("🔧 DEBUG: _save_credentials_to_file() called")
             self.append_log("🔧 DEBUG: Starting credential file save process...")
@@ -581,26 +581,26 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
             logger.error(f"Full traceback: {traceback.format_exc()}")
 
     def _load_api_keys_to_environment(self) -> None:
-        """ Load API keys to environment variables - stub method.""".
+        """ Load API keys to environment variables - stub method."""
         # This method should be connected to the main window's implementation
         parent = self.parent()
         if parent and hasattr(parent, "_load_api_keys_to_environment"):
             parent._load_api_keys_to_environment()
 
     def _save_session(self) -> None:
-        """ Save session data - stub method.""".
+        """ Save session data - stub method."""
         # This method should be connected to the main window's implementation
         parent = self.parent()
         if parent and hasattr(parent, "_save_session"):
             parent._save_session()
 
     def validate_inputs(self) -> bool:
-        """ Validate API key inputs.""".
+        """ Validate API key inputs."""
         # All API keys are optional, so always valid
         return True
 
     def _on_auto_update_changed(self, state: int) -> None:
-        """ Handle auto-update checkbox state change.""".
+        """ Handle auto-update checkbox state change."""
         is_enabled = bool(state)
         self.gui_settings.set_value(self.tab_name, "auto_update_enabled", is_enabled)
         self.gui_settings.save()
@@ -609,12 +609,12 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
         )
 
     def check_for_updates_on_launch(self) -> None:
-        """ Check for updates if auto-update is enabled.""".
+        """ Check for updates if auto-update is enabled."""
         if self.gui_settings.get_value(self.tab_name, "auto_update_enabled", False):
             self._check_for_updates(is_auto=True)
 
     def _check_for_updates(self, is_auto: bool = False) -> None:
-        """ Check for and install updates.""".
+        """ Check for and install updates."""
         try:
             # If a previous worker exists
             if self.update_worker:
@@ -656,7 +656,7 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
             self._handle_update_error(str(e))
 
     def _cancel_update(self) -> None:
-        """ Cancel the update process.""".
+        """ Cancel the update process."""
         if self.update_worker:
             try:
                 if self.update_worker.isRunning():
@@ -672,7 +672,7 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
         self.append_log("Update cancelled by user")
 
     def _handle_update_progress(self, message: str) -> None:
-        """ Handle update progress messages.""".
+        """ Handle update progress messages."""
         # Keep a rolling buffer of the last few lines for later inspection if needed
         self._update_log_buffer.append(message)
         if len(self._update_log_buffer) > 200:
@@ -690,7 +690,7 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
         self.append_log(message)
 
     def _handle_update_finished(self, success: bool, message: str) -> None:
-        """ Handle update completion.""".
+        """ Handle update completion."""
         # Close progress dialog
         if self.update_progress_dialog:
             self.update_progress_dialog.close()
@@ -723,7 +723,7 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
         self.update_worker = None
 
     def _handle_update_error(self, error: str) -> None:
-        """ Handle update errors.""".
+        """ Handle update errors."""
         # Close progress dialog
         if self.update_progress_dialog:
             self.update_progress_dialog.close()
@@ -744,7 +744,7 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
         self.update_worker = None
 
     def _install_ffmpeg(self) -> None:
-        """ Start FFmpeg installation in background.""".
+        """ Start FFmpeg installation in background."""
         try:
             # Example known-good static build (placeholder URL and checksum)
             # Replace with your vetted source/checksum
