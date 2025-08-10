@@ -1,37 +1,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
 
 from .validators import Landmarks
+from .llm_adapter import SuperChunkLLMAdapter
 
 
 @dataclass
 class LandmarksDetector:
+    adapter: SuperChunkLLMAdapter
+
+    @staticmethod
+    def create_default() -> "LandmarksDetector":
+        return LandmarksDetector(adapter=SuperChunkLLMAdapter.create_default())
+
     def detect(self, chunk_text: str) -> Landmarks:
-        lines = [ln.strip() for ln in chunk_text.splitlines() if ln.strip()]
-        section_title = lines[0] if lines else None
-        key_facts: list[str] = []
-        numbered_claims: list[str] = []
-        anchors: list[list[int]] = []
-
-        # Simple heuristics: bullets and numbered lines
-        offset = 0
-        for ln in chunk_text.splitlines(True):  # keep line breaks for span accounting
-            stripped = ln.strip()
-            start = offset
-            end = start + len(ln)
-            if stripped.startswith(('-', '*')):
-                key_facts.append(stripped.lstrip('-* ').strip())
-                anchors.append([start, end])
-            elif stripped[:2].isdigit() and stripped[1:2] == '.':
-                numbered_claims.append(stripped)
-                anchors.append([start, end])
-            offset = end
-
-        return Landmarks(
-            section_title=section_title,
-            key_facts=key_facts,
-            numbered_claims=numbered_claims,
-            anchors=anchors,
+        prompt = (
+            "Extract landmarks from the chunk. Return JSON with keys: "
+            "section_title (string or null), key_facts (array of strings), numbered_claims (array of strings), "
+            "anchors (array of [span_start, span_end] for each bullet/numbered line). Ensure spans are within text bounds.\n\n"
+            f"Chunk:\n{chunk_text}"
         )
+        return self.adapter.generate_json(prompt, Landmarks, estimated_output_tokens=400)

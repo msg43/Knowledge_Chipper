@@ -11,20 +11,28 @@ class Linker:
     duplicate_threshold: float = 0.88
     neighbor_threshold: float = 0.70
 
-    def link(self, candidates: Iterable[tuple[str, str, str]]):
-        # candidates: (src_id, dst_id, relation_hint)
+    def link(self, candidates: Iterable[tuple[str, str, str, str, str]]):
+        # candidates: (src_id, src_text, dst_id, dst_text, relation_hint)
         links: list[dict] = []
-        for src_id, dst_id, relation_hint in candidates:
-            # In a real version, we'd compare texts; here return conservative placeholders
-            relation = relation_hint if relation_hint in {"support", "contradict", "refine", "duplicate"} else "none"
-            confidence = 0.5 if relation != "none" else 0.0
+        for src_id, src_text, dst_id, dst_text, relation_hint in candidates:
+            sim = jaccard(src_text, dst_text)
+            if sim >= self.duplicate_threshold:
+                relation = "duplicate"
+                confidence = 0.9
+            elif sim >= self.neighbor_threshold:
+                relation = relation_hint if relation_hint in {"support", "contradict", "refine"} else "support"
+                confidence = 0.6
+            else:
+                relation = "none"
+                confidence = 0.0
             links.append(
                 {
                     "src_id": src_id,
                     "dst_id": dst_id,
                     "relation": relation,
-                    "rationale": "heuristic placeholder",
+                    "rationale": f"jaccard={sim:.2f}",
                     "confidence": confidence,
+                    "semantic_similarity": sim,
                 }
             )
         return links

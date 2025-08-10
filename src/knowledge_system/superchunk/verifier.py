@@ -5,6 +5,7 @@ from typing import Iterable, List
 
 from .config import SuperChunkConfig
 from .validators import ClaimItem
+from .ledger import Ledger
 
 
 @dataclass
@@ -19,20 +20,25 @@ class VerificationResult:
 @dataclass
 class Verifier:
     config: SuperChunkConfig
+    ledger: Ledger
 
     def verify_top_claims(self, claims: List[tuple[int, ClaimItem]]) -> List[VerificationResult]:
-        # claims: list of (claim_id, ClaimItem)
-        # Stub: mark all as supported with zero delta
         results: list[VerificationResult] = []
         for claim_id, item in claims:
-            excerpt = item.quote[: self.config.max_quote_words * 6]  # approximate words to chars
-            results.append(
-                VerificationResult(
-                    claim_id=claim_id,
-                    source_excerpt=excerpt,
-                    supported_bool=True,
-                    confidence_delta=0.0,
-                    reason="stub verifier",
-                )
+            excerpt = item.quote[: self.config.max_quote_words * 6]
+            res = VerificationResult(
+                claim_id=claim_id,
+                source_excerpt=excerpt,
+                supported_bool=True,
+                confidence_delta=0.0,
+                reason="stub verifier",
             )
+            self.ledger.insert_verification_result(
+                claim_id=claim_id,
+                source_excerpt=res.source_excerpt,
+                supported=res.supported_bool,
+                confidence_delta=res.confidence_delta,
+                reason=res.reason,
+            )
+            results.append(res)
         return results
