@@ -82,7 +82,8 @@ class UserPreferences(BaseModel):
     auto_summarize: bool = True
 
     # LLM Preferences
-    default_llm_model: str = "gpt-4o-mini-2024-07-18"
+    last_llm_provider: str | None = None
+    last_llm_model: str | None = None
     max_tokens: int = 1000
     temperature: float = 0.7
 

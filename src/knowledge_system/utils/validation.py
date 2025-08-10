@@ -5,6 +5,9 @@ Common validation utilities for processors.
 Consolidates validation patterns used across the codebase.
 """
 
+from __future__ import annotations
+
+import time
 from pathlib import Path
 from typing import Any, List, Union
 
@@ -169,3 +172,26 @@ def validate_url_or_file_input(input_data: Any, url_validator: Any = None) -> bo
                 pass
 
     return False
+
+
+def cleanup_old_runs(base_dir: Path, days: int = 90) -> int:
+    cutoff = time.time() - days * 24 * 3600
+    removed = 0
+    if not base_dir.exists():
+        return 0
+    for child in base_dir.iterdir():
+        try:
+            if child.is_dir() and child.stat().st_mtime < cutoff:
+                for p in child.rglob("*"):
+                    try:
+                        p.unlink()
+                    except Exception:
+                        pass
+                try:
+                    child.rmdir()
+                    removed += 1
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    return removed

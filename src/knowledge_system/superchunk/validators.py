@@ -57,3 +57,9 @@ class JargonItem(BaseModel):
     span_start: int
     span_end: int
     para_idx: int
+
+
+class VerificationItem(BaseModel):
+    supported_bool: bool
+    confidence_delta: confloat(ge=-1.0, le=1.0)
+    reason: str
