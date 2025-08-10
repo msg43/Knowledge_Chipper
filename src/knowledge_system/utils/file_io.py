@@ -44,8 +44,6 @@ def safe_filename(
         Safe filename string
     """
     if not filename:
-
-    if not filename:
         return "unnamed_file"
 
     # Split extension if preserving
@@ -452,8 +450,6 @@ def format_file_size(size_bytes: int) -> str:
     Returns:
         Formatted size string
     """
-    if size_bytes == 0:
-
     if size_bytes == 0:
         return "0 B"
 

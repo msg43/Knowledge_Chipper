@@ -117,7 +117,6 @@ def process(
          knowledge-system process ./content/ --no-transcribe --patterns "*.pdf" "*.txt"
          knowledge-system process audio.wav --output ./results --dry-run
      """
-     settings = ctx.get_settings()
     settings = ctx.get_settings()
 
     if not ctx.quiet:

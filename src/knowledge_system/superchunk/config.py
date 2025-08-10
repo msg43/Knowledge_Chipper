@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal, Optional
 
@@ -31,9 +31,21 @@ class SuperChunkConfig:
     adaptive_switching: bool = True
 
     # Preset windows (tokens)
-    precision: WindowSettings = WindowSettings(min_tokens=2500, max_tokens=3500, overlap_tokens=280)
-    balanced: WindowSettings = WindowSettings(min_tokens=4000, max_tokens=5000, overlap_tokens=280)
-    narrative: WindowSettings = WindowSettings(min_tokens=5000, max_tokens=8000, overlap_tokens=280)
+    precision: WindowSettings = field(
+        default_factory=lambda: WindowSettings(
+            min_tokens=2500, max_tokens=3500, overlap_tokens=280
+        )
+    )
+    balanced: WindowSettings = field(
+        default_factory=lambda: WindowSettings(
+            min_tokens=4000, max_tokens=5000, overlap_tokens=280
+        )
+    )
+    narrative: WindowSettings = field(
+        default_factory=lambda: WindowSettings(
+            min_tokens=5000, max_tokens=8000, overlap_tokens=280
+        )
+    )
 
     # Extraction counts and caps
     non_obvious_claims_count: int = 7

@@ -86,7 +86,6 @@ def main(
     into structured knowledge with transcription, summarization, and MOC generation.
     """
     # Configure threading and resource management based on user settings
-    # Configure threading and resource management based on user settings
 
     # Ensure context object exists
     if ctx.obj is None:
@@ -364,7 +363,6 @@ def status(
         knowledge-system status --settings
         knowledge-system status --logs --no-processors
     """
-    settings_obj = ctx.get_settings()
     settings_obj = ctx.get_settings()
 
     console.print("[bold blue]Knowledge_Chipper Status[/bold blue]\n")
