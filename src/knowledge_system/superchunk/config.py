@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal
+from typing import Literal, Optional
 
 from ..config import get_settings
 
@@ -74,7 +74,28 @@ class SuperChunkConfig:
 
     @staticmethod
     def from_global_settings() -> "SuperChunkConfig":
-        # Hook for reading future overrides from global settings if needed
         settings = get_settings()
-        _ = settings  # reserved for future integration
+        _ = settings
         return SuperChunkConfig()
+
+    def with_overrides(
+        self,
+        *,
+        preset: Optional[str] = None,
+        verify_top_percent: Optional[float] = None,
+        max_quote_words: Optional[int] = None,
+        max_concurrent_calls: Optional[int] = None,
+    ) -> "SuperChunkConfig":
+        cfg = SuperChunkConfig(**self.__dict__)
+        if preset:
+            try:
+                cfg.preset = WindowPreset(preset)
+            except Exception:
+                pass
+        if verify_top_percent is not None:
+            cfg.verify_top_percent = verify_top_percent
+        if max_quote_words is not None:
+            cfg.max_quote_words = max_quote_words
+        if max_concurrent_calls is not None:
+            cfg.max_concurrent_calls = max_concurrent_calls
+        return cfg

@@ -79,6 +79,10 @@ from .transcribe import _generate_obsidian_link, format_transcript_content
 )
 @click.option("--progress", is_flag=True, help="Show progress tracking")
 @click.option("--superchunk-artifacts", type=click.Path(path_type=Path), required=False, help="If set, run SuperChunk summarizer on the input text/markdown and write artifacts here")
+@click.option("--sc-preset", type=click.Choice(["precision", "balanced", "narrative"]), required=False, help="SuperChunk window preset override")
+@click.option("--sc-verify-top", type=float, required=False, help="SuperChunk verification top percent (0..1)")
+@click.option("--sc-quote-cap", type=int, required=False, help="SuperChunk max quote words")
+@click.option("--sc-max-concurrent", type=int, required=False, help="SuperChunk max concurrent calls")
 @pass_context
 def process(
     ctx: CLIContext,
@@ -95,6 +99,10 @@ def process(
     dry_run: bool,
     progress: bool,
     superchunk_artifacts: Path | None,
+    sc_preset: str | None,
+    sc_verify_top: float | None,
+    sc_quote_cap: int | None,
+    sc_max_concurrent: int | None,
 ) -> None:
     """
     Process files or folders with transcription, summarization, and MOC generation
@@ -345,7 +353,12 @@ def process(
                 if superchunk_artifacts and file_path.suffix.lower() in [".md", ".txt"]:
                     text = Path(file_path).read_text(encoding="utf-8")
                     paragraphs = [p for p in text.split("\n\n") if p.strip()]
-                    cfg = SuperChunkConfig.from_global_settings()
+                    cfg = SuperChunkConfig.from_global_settings().with_overrides(
+                        preset=sc_preset,
+                        verify_top_percent=sc_verify_top,
+                        max_quote_words=sc_quote_cap,
+                        max_concurrent_calls=sc_max_concurrent,
+                    )
                     runner = Runner(config=cfg, artifacts_dir=superchunk_artifacts)
                     runner.run(paragraphs)
                     if not ctx.quiet:
