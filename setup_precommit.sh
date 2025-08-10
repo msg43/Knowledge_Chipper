@@ -82,16 +82,16 @@ echo "  git commit --no-verify        # Skip hooks (emergency only)"
 echo ""
 echo "📖 For more info: https://pre-commit.com/"
 
-# Offer to install a simple pre-commit hook that bumps version and date in version.py
-HOOK_PATH=".git/hooks/pre-commit"
+# Offer to install a pre-push hook that updates build metadata in version.py (no index mutation on commit)
+HOOK_PATH=".git/hooks/pre-push"
 if [ -d .git ]; then
   echo ""
-  read -p "Install simple version bump pre-commit hook to update src/knowledge_system/version.py automatically? (y/N): " -n 1 -r
+  read -p "Install build-metadata pre-push hook to update src/knowledge_system/version.py (BRANCH/BUILD_DATE) automatically? (y/N): " -n 1 -r
   echo
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     cat > "$HOOK_PATH" << 'EOF'
 #!/bin/bash
-# Auto-bump version (patch) and update BUILD_DATE in src/knowledge_system/version.py
+# Update build metadata (BRANCH, BUILD_DATE) in src/knowledge_system/version.py without changing semantic VERSION
 
 VP="src/knowledge_system/version.py"
 if [ ! -f "$VP" ]; then
@@ -99,31 +99,31 @@ if [ ! -f "$VP" ]; then
 fi
 
 current_version=$(grep '^VERSION\s*=\s*"' "$VP" | sed -E 's/.*"([^"]+)".*/\1/')
+current_branch=$(git rev-parse --abbrev-ref HEAD)
 current_date=$(date +"%Y-%m-%d")
 
-# If VERSION isn't semantic, default to 1.0.0
-if [[ ! "$current_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  new_version="1.0.0"
-else
-  IFS='.' read -r major minor patch <<< "$current_version"
-  patch=$((patch + 1))
-  new_version="$major.$minor.$patch"
-fi
-
-# Update VERSION and BUILD_DATE
 tmpfile=$(mktemp)
-awk -v ver="$new_version" -v today="$current_date" '
-  /^VERSION\s*=/{ sub(/"[^"]+"/,"\"" ver "\"",$0) }
-  /^BUILD_DATE\s*=/{ sub(/"[^"]+"/,"\"" today "\"",$0) }
+awk -v ver="$current_version" -v branch="$current_branch" -v today="$current_date" '
+  /^VERSION\s*=/{ sub(/"[^"]+"/,"\"" ver "\"",$0); print; next }
+  /^BRANCH\s*=/{ sub(/"[^"]+"/,"\"" branch "\"",$0); print; next }
+  /^BUILD_DATE\s*=/{ sub(/"[^"]+"/,"\"" today "\"",$0); print; next }
   { print }
 ' "$VP" > "$tmpfile" && mv "$tmpfile" "$VP"
 
 git add "$VP"
-echo "Bumped version to $new_version (date $current_date)"
+git commit --no-verify -m "chore(build): update build metadata (branch/date)"
 exit 0
 EOF
     chmod +x "$HOOK_PATH"
-    echo "✅ Installed version-bump pre-commit hook."
+    echo "✅ Installed build-metadata pre-push hook."
+
+    # Migrate any existing pre-commit version-bump hook to avoid GUI commit stalls
+    if [ -f ".git/hooks/pre-commit" ]; then
+      if grep -q 'src/knowledge_system/version.py' ".git/hooks/pre-commit"; then
+        mv .git/hooks/pre-commit .git/hooks/pre-commit.disabled 2>/dev/null || true
+        echo "ℹ️  Disabled existing pre-commit version-bump hook (migrated to pre-push)."
+      fi
+    fi
   else
     echo "ℹ️  Skipped installing version-bump hook."
   fi
