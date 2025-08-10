@@ -1,0 +1,93 @@
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable
+
+from .config import SuperChunkConfig
+from .extractors import Extractors
+from .ledger import Ledger
+from .mapper import Mapper
+from .segmenter import Segmenter, Paragraph
+from .synthesizer import Synthesizer
+from .scorecard import Scorecard
+
+
+@dataclass
+class Runner:
+    config: SuperChunkConfig
+    artifacts_dir: Path
+
+    def run(self, paragraphs: Iterable[str]) -> None:
+        self.artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+        # Phase 0: guide map
+        mapper = Mapper()
+        guide = mapper.map(paragraphs)
+        (self.artifacts_dir / "global_context.json").write_text(
+            json.dumps(guide.model_dump(), indent=2), encoding="utf-8"
+        )
+
+        # Phase 1: segment
+        # Compute spans naively as cumulative char indices
+        paras = list(paragraphs)
+        cursor = 0
+        para_objs: list[Paragraph] = []
+        for p in paras:
+            start = cursor
+            end = start + len(p)
+            para_objs.append(Paragraph(text=p, span_start=start, span_end=end))
+            cursor = end + 1  # account for a newline join later
+
+        segmenter = Segmenter(config=self.config)
+        chunks = segmenter.segment(para_objs)
+        # chunking decisions
+        (self.artifacts_dir / "chunking_decisions.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": c.id,
+                        "span": [c.span_start, c.span_end],
+                        "para_range": [c.para_start, c.para_end],
+                        "preset_used": c.preset_used,
+                    }
+                    for c in chunks
+                ],
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        # Phase 2: extraction
+        extractors = Extractors.create_default()
+        ledger = Ledger(self.artifacts_dir / "ledger.sqlite")
+        run_id = ledger.start_run(config=self.config.__dict__)
+
+        for c in chunks:
+            claims = extractors.extract_claims(c.text)
+            ledger.insert_claims(run_id, c.id, claims)
+
+        # Phase 4: synth (retrieval-only is implicit via selection of slices; stub just quotes chunks)
+        synth = Synthesizer(config=self.config)
+        final_sections = [
+            synth.synthesize_section("Summary", [(c.id, c.text) for c in chunks])
+        ]
+        (self.artifacts_dir / "final.md").write_text("\n\n".join(final_sections), encoding="utf-8")
+
+        # Phase 6: scorecard
+        score = Scorecard().compute({})
+        (self.artifacts_dir / "scorecard.json").write_text(
+            json.dumps(score, indent=2), encoding="utf-8"
+        )
+
+        # Quality gates (placeholder): if any gate fails, write refine_plan.json
+        if not (score["rare_retention"] >= 0.95 and score["contradictions_surfaced"] >= 0.80):
+            refine = {
+                "reason": "Quality gates unmet (placeholder)",
+                "targets": [chunks[0].id] if chunks else [],
+                "actions": ["increase window", "re-read targets", "re-synthesize"],
+            }
+            (self.artifacts_dir / "refine_plan.json").write_text(
+                json.dumps(refine, indent=2), encoding="utf-8"
+            )
