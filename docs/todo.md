@@ -1,6 +1,8 @@
 # SuperChunk Implementation To-Dos
 
-- [ ] Create config + validators + model‑agnostic LLM adapter
+See `docs/superchunk-plan.mdc` and `docs/superchunk-workflow.mdc` for rules/specs.
+
+- [x] Create config + validators + model‑agnostic LLM adapter
 - [ ] Implement mapper (skim) and segmenter (adaptive windows) + write `chunking_decisions.json`
 - [ ] Implement landmarks (section titles, key facts, numbered claims)
 - [ ] Implement extractors (schema validation + exact counts) and persist to SQLite

@@ -1,0 +1,24 @@
+# SuperChunk Workflow (Rules)
+
+## Working Mode
+- Use **Agent** for multi‑file changes; Manual for small edits.
+- Always read and update `docs/todo.md` to track progress (commit after each task).
+
+## Implementation Order (Cursor should follow this unless told otherwise)
+1) Config + validators + model‑agnostic LLM adapter.
+2) Mapper (skim) → Segmenter (adaptive windows) → Landmarks.
+3) Extractors with **schema validation** and **exact counts**.
+4) Ledger + Retrieval (fuzzy baseline) + Linker (conservative “none” allowed).
+5) Synthesis (retrieval‑only) + Verification (top 20% claims).
+6) Scorecard + Refine loop (targeted re‑reads only).
+7) Observability (events, costs) + DB indexing.
+
+## Non‑Negotiables
+- Don’t exceed window presets without explicit config.
+- Don’t use full transcript in prompts.
+- All JSON must validate; on shortfall, **delta reprompt** (ask only for missing items).
+- Store quotes with **char spans** and **para indices**.
+- Produce `chunking_decisions.json` explaining preset choices.
+
+## Deliverables
+Module skeletons with clear I/O; prompt templates under `/prompts` (versioned); `final.md`, databases, scorecard, refine plan, debug bundle.
