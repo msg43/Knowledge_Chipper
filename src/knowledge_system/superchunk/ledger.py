@@ -58,7 +58,42 @@ class Ledger:
                 );
                 """
             )
+            c.execute(
+                """
+                CREATE TABLE IF NOT EXISTS links (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  run_id INTEGER,
+                  src_id INTEGER,
+                  dst_id INTEGER,
+                  relation TEXT,
+                  rationale TEXT,
+                  confidence REAL,
+                  semantic_similarity REAL,
+                  included_in_final INTEGER,
+                  FOREIGN KEY(run_id) REFERENCES runs(id)
+                );
+                """
+            )
+            c.execute(
+                """
+                CREATE TABLE IF NOT EXISTS verification_results (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  claim_id INTEGER,
+                  source_excerpt TEXT,
+                  supported_bool INTEGER,
+                  confidence_delta REAL,
+                  reason TEXT,
+                  FOREIGN KEY(claim_id) REFERENCES claims(id)
+                );
+                """
+            )
             c.execute("CREATE INDEX IF NOT EXISTS idx_claims_para ON claims(para_idx);")
+            c.execute(
+                "CREATE INDEX IF NOT EXISTS idx_claims_novelty_included ON claims(novelty_score, included_in_final);"
+            )
+            c.execute(
+                "CREATE INDEX IF NOT EXISTS idx_links_relation_sim ON links(relation, semantic_similarity);"
+            )
             conn.commit()
 
     def start_run(self, config: dict[str, Any], correlation_id: Optional[str] = None) -> int:
@@ -86,7 +121,7 @@ class Ledger:
                     int(c.span_end),
                     int(c.para_idx),
                     json.dumps(c.hedges),
-                    None,
+                    0.0,
                     0,
                     None,
                 )
@@ -101,5 +136,15 @@ class Ledger:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 rows,
+            )
+            conn.commit()
+
+    def insert_verification_result(
+        self, claim_id: int, source_excerpt: str, supported: bool, confidence_delta: float, reason: str
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO verification_results (claim_id, source_excerpt, supported_bool, confidence_delta, reason) VALUES (?, ?, ?, ?, ?)",
+                (claim_id, source_excerpt, 1 if supported else 0, confidence_delta, reason),
             )
             conn.commit()

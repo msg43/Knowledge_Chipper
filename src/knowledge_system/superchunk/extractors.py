@@ -18,6 +18,12 @@ class Extractors:
         adapter = SuperChunkLLMAdapter.create_default()
         return Extractors(adapter=adapter, config=adapter.config)
 
+    def _bounds_check(self, items: List[ClaimItem] | List[JargonItem], source: str) -> None:
+        n = len(source)
+        for it in items:
+            if it.span_start < 0 or it.span_end > n or it.span_start >= it.span_end:
+                raise ValueError("Invalid span bounds in extractor output")
+
     def extract_claims(self, chunk_text: str) -> List[ClaimItem]:
         c = self.config.non_obvious_claims_count
         prompt = (
@@ -28,7 +34,9 @@ class Extractors:
             f"max_quote_words={self.config.max_quote_words}.\n\n"
             f"Chunk:\n{chunk_text}"
         )
-        return self.adapter.extract_claims(prompt, count=c)
+        items = self.adapter.extract_claims(prompt, count=c)
+        self._bounds_check(items, chunk_text)
+        return items
 
     def extract_local_contradictions(self, chunk_text: str) -> List[LocalContradictionItem]:
         c = self.config.max_local_contradictions
@@ -47,4 +55,6 @@ class Extractors:
             f"max_quote_words={self.config.max_quote_words}.\n\n"
             f"Chunk:\n{chunk_text}"
         )
-        return self.adapter.extract_jargon(prompt, count=c)
+        items = self.adapter.extract_jargon(prompt, count=c)
+        self._bounds_check(items, chunk_text)
+        return items

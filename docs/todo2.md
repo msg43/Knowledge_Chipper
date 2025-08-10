@@ -14,49 +14,49 @@
   - Maintain char spans and para indices; minimize mid-sentence splits
   - Acceptance: segmentation unit tests covering overlap and boundary integrity
 
-- [ ] Robust Landmarks Detection
+- [x] Robust Landmarks Detection
   - Extract section titles, key facts, numbered claims; produce anchors with char spans
   - Use LLM with JSON schema and delta reprompt if missing fields
   - Acceptance: JSON validation, anchors within text bounds
 
-- [ ] Extractors (Production)
+- [x] Extractors (Production)
   - Exact-count extraction with quote caps and strict JSON validation
   - Delta reprompts to fill missing items; enforce char spans + para_idx
   - Persist to SQLite with run_id and chunk_id; deterministic IDs
   - Acceptance: schema adherence; quotes ≤ max_quote_words; persistence verified
 
-- [ ] Ledger: Canonicalization, Dedupe, Novelty, Evolution
+- [x] Ledger: Canonicalization, Dedupe, Novelty, Evolution
   - Canonical form of claims/entities; novelty scoring; dedupe threshold ≥0.88
   - Track claim evolution over para ranges; mark included_in_final
   - DB indexes: (novelty_score, included_in_final), (relation, semantic_similarity), (para_idx)
   - Acceptance: deterministic dedupe; evolution trajectories computed
 
-- [ ] Retrieval (Baseline + Pluggable Embeddings)
+- [x] Retrieval (Baseline + Pluggable Embeddings)
   - Fuzzy baseline now; interface to swap in embeddings later
   - Provide topK for linking and synthesis; thresholds configurable
   - Acceptance: precision/recall metrics computed on fixtures
 
-- [ ] Linker (Relations with “none” allowed)
+- [x] Linker (Relations with “none” allowed)
   - Create support/contradict/refine/duplicate links with rationale and confidence
   - Conservative “none” when below neighbor threshold (≥0.70)
   - Acceptance: link distribution sane; duplicates reduced by dedupe threshold
 
-- [ ] Synthesis (Retrieval-Only)
+- [x] Synthesis (Retrieval-Only)
   - Build `final.md` sections from top-K retrieved slices; preserve hedging
   - Enforce quote caps; use only retrieved text; never full transcript
   - Acceptance: sections render with spans and para idx references
 
-- [ ] Verification (Top 20%)
+- [x] Verification (Top 20%)
   - Verify top claims with source spans; adjust confidence; exclude if delta < −0.3
   - Record results in `verification_results` table and `verification_log.json`
   - Acceptance: excluded claims not present in final selections
 
-- [ ] Scorecard + Gates + Refine Loop
+- [x] Scorecard + Gates + Refine Loop
   - Compute coverage, rare-retention, contradictions surfaced, retrieval P/R, verification pass
   - If any gate fails: write `refine_plan.json`, re-read targets only, re-synthesize
   - Acceptance: targeted refine loop modifies only affected regions
 
-- [ ] Observability & Costs
+- [x] Observability & Costs
   - Log events, token budgets, costs per run and per claim (`llm_calls.jsonl`, `token_trace.csv`)
   - Add DB indexes and optimize WAL pragmas
   - Acceptance: artifacts written; logs consistent with calls
