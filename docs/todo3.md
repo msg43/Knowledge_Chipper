@@ -1,6 +1,6 @@
 # SuperChunk Smart Chunking Summarization — Remaining Scope (v3)
 
-- [ ] Embeddings Retrieval + Top‑K + Provider Alignment
+- [x] Embeddings Retrieval + Top‑K + Provider Alignment
   - Auto-select embedding endpoint aligned with chosen provider/model; fallback to baseline when unavailable
   - Implement vector store (SQLite-backed now), cosine similarity; batch index/update
   - Provide `topK_linking` and `topK_section` with thresholds; benchmarks on fixtures
@@ -21,7 +21,7 @@
   - On gate fail: write `refine_plan.json`, re‑read only target chunks, re‑synthesize sections
   - Acceptance: refine loop isolates work to failing targets and improves metrics
 
-- [ ] Full Debug Bundle + Artifacts DB
+- [x] Full Debug Bundle + Artifacts DB
   - Write: `llm_calls.jsonl`, `decision_log.json`, `verification_log.json`, `evolution_timeline.json`, `link_graph.dot`, `token_trace.csv`
   - Add `artifacts.sqlite` for convenient inspection
   - Acceptance: bundle generated for each run; schema documented

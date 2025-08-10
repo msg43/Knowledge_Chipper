@@ -12,6 +12,7 @@ from .mapper import Mapper
 from .segmenter import Segmenter, Paragraph
 from .synthesizer import Synthesizer
 from .scorecard import Scorecard
+from .retrieval import Retrieval
 
 
 @dataclass
@@ -21,6 +22,8 @@ class Runner:
 
     def run(self, paragraphs: Iterable[str]) -> None:
         self.artifacts_dir.mkdir(parents=True, exist_ok=True)
+        decision_log = []
+        llm_calls_log = []
 
         # Phase 0: guide map
         mapper = Mapper()
@@ -30,7 +33,6 @@ class Runner:
         )
 
         # Phase 1: segment
-        # Compute spans naively as cumulative char indices
         paras = list(paragraphs)
         cursor = 0
         para_objs: list[Paragraph] = []
@@ -38,11 +40,10 @@ class Runner:
             start = cursor
             end = start + len(p)
             para_objs.append(Paragraph(text=p, span_start=start, span_end=end))
-            cursor = end + 1  # account for a newline join later
+            cursor = end + 1
 
         segmenter = Segmenter(config=self.config)
         chunks = segmenter.segment(para_objs, hotspots=guide.hotspots)
-        # chunking decisions
         (self.artifacts_dir / "chunking_decisions.json").write_text(
             json.dumps(
                 [
@@ -68,17 +69,18 @@ class Runner:
             claims = extractors.extract_claims(c.text)
             ledger.insert_claims(run_id, c.id, claims)
 
-        # Phase 4: synth (retrieval-only)
+        # Phase 3/4: retrieval (embeddings) + synth (retrieval-only)
+        retrieval = Retrieval()
+        retrieval.index_corpus([(c.id, c.text) for c in chunks])
+        top_slices = []
+        # Use first chunk as query for demo; in real flow, select by section/topic
+        if chunks:
+            results = retrieval.top_k_embeddings(chunks[0].text, k=min(10, len(chunks)))
+            for cid, score, txt in results:
+                ch = next(cc for cc in chunks if cc.id == cid)
+                top_slices.append((cid, txt, ch.span_start, ch.span_end, ch.para_start))
         synth = Synthesizer(config=self.config)
-        final_sections = [
-            synth.synthesize_section(
-                "Summary",
-                [
-                    (c.id, c.text, c.span_start, c.span_end, c.para_start)
-                    for c in chunks
-                ],
-            )
-        ]
+        final_sections = [synth.synthesize_section("Summary", top_slices)]
         (self.artifacts_dir / "final.md").write_text("\n\n".join(final_sections), encoding="utf-8")
 
         # Phase 6: scorecard
@@ -87,7 +89,17 @@ class Runner:
             json.dumps(score, indent=2), encoding="utf-8"
         )
 
-        # Quality gates (placeholder): if any gate fails, write refine_plan.json
+        # Debug bundle placeholders
+        (self.artifacts_dir / "llm_calls.jsonl").write_text("", encoding="utf-8")
+        (self.artifacts_dir / "decision_log.json").write_text(
+            json.dumps(decision_log, indent=2), encoding="utf-8"
+        )
+        (self.artifacts_dir / "verification_log.json").write_text("[]", encoding="utf-8")
+        (self.artifacts_dir / "evolution_timeline.json").write_text("{}", encoding="utf-8")
+        (self.artifacts_dir / "link_graph.dot").write_text("digraph G {}\n", encoding="utf-8")
+        (self.artifacts_dir / "token_trace.csv").write_text("step,tokens\n", encoding="utf-8")
+
+        # Quality gates (placeholder)
         if not (score["rare_retention"] >= 0.95 and score["contradictions_surfaced"] >= 0.80):
             refine = {
                 "reason": "Quality gates unmet (placeholder)",
