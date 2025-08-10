@@ -1,0 +1,83 @@
+name: Auto Version Bump on Merge to Main
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  version_bump:
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Determine bump level
+        id: bump
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          BODY="${{ github.event.pull_request.body }}"
+          LABELS=$(jq -r '[.pull_request.labels[].name] | join(",")' <<< "${{ toJson(github.event) }}")
+          BUMP="patch"
+          if echo "$LABELS" | grep -iq "major"; then BUMP="major"; fi
+          if echo "$LABELS" | grep -iq "minor"; then BUMP="minor"; fi
+          if echo "$BODY" | grep -iq "BREAKING CHANGE"; then BUMP="major"; fi
+          if echo "$TITLE" | grep -iq "feat" && [ "$BUMP" = "patch" ]; then BUMP="minor"; fi
+          echo "bump_level=$BUMP" >> $GITHUB_OUTPUT
+
+      - name: Bump version in pyproject.toml
+        id: bump_version
+        run: |
+          python - << 'PY'
+          import re, sys, pathlib
+          bump = '${{ steps.bump.outputs.bump_level }}'
+          p = pathlib.Path('pyproject.toml')
+          s = p.read_text(encoding='utf-8')
+          m = re.search(r"^version\s*=\s*\"(\d+)\.(\d+)\.(\d+)\"", s, flags=re.M|re.I)
+          if not m:
+            print('No version field found in pyproject.toml', file=sys.stderr)
+            sys.exit(1)
+          major, minor, patch = map(int, m.groups())
+          if bump == 'major':
+            major, minor, patch = major + 1, 0, 0
+          elif bump == 'minor':
+            minor, patch = minor + 1, 0
+          else:
+            patch += 1
+          new_ver = f"{major}.{minor}.{patch}"
+          s = re.sub(r"(^version\s*=\s*\")[0-9]+\.[0-9]+\.[0-9]+(\")", rf"\\g<1>{new_ver}\\2", s, flags=re.M)
+          p.write_text(s, encoding='utf-8')
+          print(new_ver)
+          PY
+
+      - name: Read new version
+        id: read_version
+        run: |
+          NEW_VER=$(python - << 'PY'
+          import re, pathlib
+          s = pathlib.Path('pyproject.toml').read_text(encoding='utf-8')
+          print(re.search(r"^version\s*=\s*\"(\d+\.\d+\.\d+)\"", s, flags=re.M).group(1))
+          PY
+          )
+          echo "new_version=$NEW_VER" >> $GITHUB_OUTPUT
+
+      - name: Commit and tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_VER='${{ steps.read_version.outputs.new_version }}'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml
+          git commit -m "chore(release): bump version to ${NEW_VER}"
+          git tag -a "v${NEW_VER}" -m "Release ${NEW_VER}"
+          git push origin HEAD:main --follow-tags
