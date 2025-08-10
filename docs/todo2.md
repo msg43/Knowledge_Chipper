@@ -8,7 +8,7 @@
   - Write `chunking_decisions.json` with reasons per chunk
   - Acceptance: deterministic decisions on a fixed input; unit tests for thresholds and transitions
 
-- [ ] Boundary-Aware Segmentation
+- [x] Boundary-Aware Segmentation
   - Segment by meaning boundaries using mapper hotspots and landmarks anchors
   - Enforce window presets (Precision 2.5–3.5k; Balanced 4–5k; Narrative 5–8k; overlap 250–300)
   - Maintain char spans and para indices; minimize mid-sentence splits
