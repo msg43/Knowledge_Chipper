@@ -39,11 +39,11 @@
   - Output to `<output>/superchunk_runs/<timestamp>/`; scheduled cleanup for >90 days
   - Acceptance: cleanup removes expired runs; retention configurable
 
-- [ ] Tests (Unit + Integration)
+- [x] Tests (Unit + Integration)
   - Fixtures: monologue‑heavy, contradiction‑rich, jargon‑dense; add segmentation/extractor/linker/verify tests
   - End-to-end runs produce artifacts; assert gates and refine loop behavior
   - Acceptance: green tests locally; CI wiring added
 
-- [ ] Invisible UX + Expert Flags
+- [x] Invisible UX + Expert Flags
   - Keep existing summarization UX; expose optional flags for window presets, verify percent, quote caps, token budgets
   - Acceptance: default UX unchanged; expert flags documented

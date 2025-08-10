@@ -17,6 +17,7 @@ import requests
 
 from ..config import get_settings
 from ..logger import get_logger
+from ..utils.state import get_state_manager
 
 logger = get_logger(__name__)
 
@@ -366,6 +367,13 @@ class UnifiedLLMClient:
         model: str | None = None,
         temperature: float = 0.3,
     ) -> None:
+        # Load last selection from state if not explicitly provided
+        state = get_state_manager().get_state()
+        if provider is None and state.preferences.last_llm_provider:
+            provider = state.preferences.last_llm_provider  # type: ignore[assignment]
+        if model is None and state.preferences.last_llm_model:
+            model = state.preferences.last_llm_model
+
         self.provider_name = provider
         self.provider = LLMProviderFactory.create_provider(provider, model, temperature)
 
@@ -373,7 +381,16 @@ class UnifiedLLMClient:
         self, prompt: str, progress_callback: Callable | None = None
     ) -> LLMResponse:
         """ Generate text using the configured provider."""
-        return self.provider.call(prompt, progress_callback)
+        response = self.provider.call(prompt, progress_callback)
+        # Persist last selection
+        try:
+            sm = get_state_manager()
+            sm.update_preferences(
+                last_llm_provider=self.provider_name, last_llm_model=self.provider.model
+            )
+        except Exception:
+            pass
+        return response
 
     def generate_dict(
         self, prompt: str, progress_callback: Callable | None = None
