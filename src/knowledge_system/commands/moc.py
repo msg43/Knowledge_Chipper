@@ -76,7 +76,6 @@ def moc(
          knowledge-system moc *.md --title "Project Knowledge" --depth 2
      """
     settings = ctx.get_settings()
-    settings = ctx.get_settings()
 
     if not input_paths:
         console.print("[red]Error:[/red] No input paths provided")

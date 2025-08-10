@@ -12,7 +12,7 @@ Hierarchical RAG for long transcripts without timestamps. Extract locally with h
 
 ## Persistent Checklist
 Before any work:
-1) Open `docs/todo.md`.
+1) Open `docs/todo.md` abd `docs/todo2.md` and `docs/todo3.md`.
 2) Find the **first unchecked** task.
 3) Do it, **check it off**, commit with a brief message ("chore: complete <task>"), and move to the next.
 4) Repeat until all are checked.

@@ -175,15 +175,14 @@ def summarize(
     with key points, insights, and actionable items. Supports both single files
     and batch processing of directories.
 
-     Examples:
+    Examples:
          knowledge-system summarize transcript.md
          knowledge-system summarize document.pdf --template custom_prompt.txt
          knowledge-system summarize ./transcripts/ --recursive --progress
          knowledge-system summarize text.txt --template custom_prompt.txt
          knowledge-system summarize file.md --update-md
          knowledge-system summarize ./docs/ --patterns "*.pdf" "*.md"
-     """
-     settings = ctx.get_settings()
+    """
     settings = ctx.get_settings()
 
     # Get list of files to process
