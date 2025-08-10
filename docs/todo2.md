@@ -1,6 +1,6 @@
 # SuperChunk Smart Chunking Summarization — Comprehensive TODO (v2)
 
-- [ ] Adaptive Chunking Signals + Switching
+- [x] Adaptive Chunking Signals + Switching
   - Compute PrecisionScore per ~500-token region from signals (cohesion breaks, discourse markers, new terms, numbers/symbols, questions/hedges, story cues, sentence-length variance)
   - Episode decision: ≥0.55 Precision; ≤0.45 Narrative; else Balanced; Region decision: ≥0.60 Precision; ≤0.40 Narrative; else Balanced
   - Transitional chunk when switching presets; sticky decision requires ≥0.10 delta across two regions
