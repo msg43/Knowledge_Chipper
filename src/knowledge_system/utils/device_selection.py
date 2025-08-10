@@ -1,4 +1,5 @@
-""" Intelligent device selection for optimal performance.
+"""
+Intelligent device selection for optimal performance
 Intelligent device selection for optimal performance.
 
 This module provides smart device selection that considers hardware capabilities,
@@ -21,7 +22,8 @@ def select_optimal_device(
     batch_size: int = 16,
     force_device: str | None = None,
 ) -> str:
-    """ Select the optimal device for processing based on hardware and workload.
+    """
+    Select the optimal device for processing based on hardware and workload
     Select the optimal device for processing based on hardware and workload.
 
     Args:
@@ -33,7 +35,8 @@ def select_optimal_device(
 
     Returns:
         Device string for PyTorch/Whisper
-    """ if force_device:.
+    """
+    if force_device:
 
     if force_device:
         logger.info(f"Device selection forced to: {force_device}")
@@ -211,12 +214,14 @@ def _evaluate_mps_suitability(
 
 
 def get_device_recommendations(workload_type: str = "transcription") -> dict[str, Any]:
-    """ Get device recommendations and capability information.
+    """
+    Get device recommendations and capability information
     Get device recommendations and capability information.
 
     Returns detailed information about available devices and their suitability
     for different workloads.
-    """ detector = get_hardware_detector().
+    """
+    detector = get_hardware_detector()
 
     detector = get_hardware_detector()
     specs = detector.detect_hardware()

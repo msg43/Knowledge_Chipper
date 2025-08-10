@@ -1,4 +1,5 @@
-""" Transcribe command for the Knowledge System CLI.
+"""
+Transcribe command for the Knowledge System CLI
 Transcribe command for the Knowledge System CLI.
 
 Handles transcription of audio/video files and YouTube URLs using OpenAI Whisper.
@@ -133,7 +134,8 @@ def _add_analysis_sections(text: str, vault_path: Path | None = None) -> str:
 def _generate_obsidian_link(
     source_file_stem: str, link_type: str, output_dir: Path | None = None
 ) -> str:
-    """ Generate Obsidian link to the corresponding file.
+    """
+    Generate Obsidian link to the corresponding file
     Generate Obsidian link to the corresponding file.
 
     Args:
@@ -143,7 +145,7 @@ def _generate_obsidian_link(
 
     Returns:
         Formatted Obsidian link or empty string if target doesn't exist
-    """ if link_type == "summary":.
+    """
 
     if link_type == "summary":
         target_filename = f"{source_file_stem}_summary"
@@ -453,7 +455,8 @@ def transcribe(
     use_whisper_cpp: bool,
     vault_path: Path | None,
 ) -> None:
-    """ Transcribe audio/video files or YouTube URLs using OpenAI Whisper.
+    """
+    Transcribe audio/video files or YouTube URLs using OpenAI Whisper
     Transcribe audio/video files or YouTube URLs using OpenAI Whisper.
 
     Supports local audio/video files and YouTube URLs. Uses OpenAI's Whisper model
@@ -465,7 +468,8 @@ def transcribe(
         knowledge-system transcribe video.mp4 --model large --device mps
         knowledge-system transcribe audio.wav --format srt --no-timestamps
         knowledge-system transcribe --batch-urls urls.csv --output ./transcripts/
-    """ settings = ctx.get_settings().
+    """
+    settings = ctx.get_settings()
     settings = ctx.get_settings()
 
     # Handle batch URL processing

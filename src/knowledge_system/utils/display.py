@@ -1,4 +1,5 @@
-""" Progress Display using Rich Console.
+"""
+Progress Display using Rich Console
 Progress Display using Rich Console
 
 Provides rich console display for progress tracking with tables and progress bars.

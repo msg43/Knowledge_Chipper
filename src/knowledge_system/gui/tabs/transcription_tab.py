@@ -377,14 +377,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         )
         self.recommendations_label.setWordWrap(True)
         self.recommendations_label.setStyleSheet(
-            """ background-color: #f5f5f5;.
+            """
+            background-color: #f5f5f5;
 
             background-color: #f5f5f5;
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 5px;
             font-size: 11px;
-        """ ).
+        """
+        )
 
         )
         self.recommendations_label.setMinimumHeight(35)
@@ -594,7 +596,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.file_progress_bar.setValue(0)
         self.file_progress_bar.setVisible(False)  # Hidden initially
         self.file_progress_bar.setStyleSheet(
-            """ QProgressBar {.
+            """
+            QProgressBar {
 
             QProgressBar {
                 border: 1px solid #ccc;
@@ -606,7 +609,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 background-color: #4caf50;
                 border-radius: 4px;
             }
-        """ ).
+        """
+        )
 
         )
         layout.addWidget(self.file_progress_bar)
@@ -824,14 +828,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
             self.recommendations_label.setText("\n".join(display_text))
             self.recommendations_label.setStyleSheet(
-                """ background-color: #e8f5e8;.
+                """
+                background-color: #e8f5e8;
 
                 background-color: #e8f5e8;
                 padding: 10px;
                 border: 1px solid #4caf50;
                 border-radius: 5px;
                 font-size: 11px;
-            """ ).
+            """
+            )
             )
 
             # Enable the "Use Recommended Settings" button
@@ -843,14 +849,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             error_msg = f"Failed to get hardware recommendations: {e}"
             self.recommendations_label.setText(f"❌ {error_msg}")
             self.recommendations_label.setStyleSheet(
-                """ background-color: #ffeaea;.
+                """
+                background-color: #ffeaea;
 
                 background-color: #ffeaea;
                 padding: 10px;
                 border: 1px solid #f44336;
                 border-radius: 5px;
                 font-size: 11px;
-            """ ).
+            """
+            )
             )
 
     def _apply_recommended_settings(self):

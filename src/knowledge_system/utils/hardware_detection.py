@@ -1,4 +1,5 @@
-""" Hardware Detection and Performance Profiling for Knowledge System.
+"""
+Hardware Detection and Performance Profiling for Knowledge System
 Hardware Detection and Performance Profiling for Knowledge System
 
 Automatically detects Apple Silicon hardware specifications and provides

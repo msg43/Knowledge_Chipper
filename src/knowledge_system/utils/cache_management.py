@@ -1,4 +1,5 @@
-""" Cache Management Utilities.
+"""
+Cache Management Utilities
 Cache Management Utilities
 
 Provides smart Python cache clearing functionality to prevent import issues
@@ -22,7 +23,8 @@ logger = get_logger(__name__)
 def clear_python_cache(
     target_dir: Path | None = None, force: bool = False
 ) -> tuple[bool, str]:
-    """ Clear Python bytecode cache files (.pyc) and __pycache__ directories.
+    """
+    Clear Python bytecode cache files (.pyc) and __pycache__ directories
     Clear Python bytecode cache files (.pyc) and __pycache__ directories.
 
     Args:
@@ -31,7 +33,7 @@ def clear_python_cache(
 
     Returns:
         Tuple of (success, message)
-    """ if target_dir is None:.
+    """
 
     if target_dir is None:
         # Default to current project directory
@@ -73,7 +75,8 @@ def clear_python_cache(
 
 
 def should_clear_cache_on_startup() -> tuple[bool, str]:
-    """ Determine if Python cache should be cleared on startup.
+    """
+    Determine if Python cache should be cleared on startup
     Determine if Python cache should be cleared on startup.
 
     Uses smart heuristics to avoid unnecessary cache clearing:
@@ -84,7 +87,7 @@ def should_clear_cache_on_startup() -> tuple[bool, str]:
 
     Returns:
         Tuple of (should_clear, reason)
-    """ try:.
+    """
 
     try:
         project_root = Path(__file__).parent.parent.parent.parent
@@ -238,12 +241,14 @@ def _has_recent_import_errors() -> bool:
 
 
 def clear_cache_if_needed() -> tuple[bool, str]:
-    """ Clear Python cache if smart heuristics determine it's needed.
+    """
+    Clear Python cache if smart heuristics determine it's needed
     Clear Python cache if smart heuristics determine it's needed.
 
     Returns:
         Tuple of (was_cleared, message)
-    """ should_clear, reason = should_clear_cache_on_startup().
+    """
+    should_clear, reason = should_clear_cache_on_startup()
     should_clear, reason = should_clear_cache_on_startup()
 
     if should_clear:
@@ -257,12 +262,14 @@ def clear_cache_if_needed() -> tuple[bool, str]:
 
 
 def force_clear_cache() -> tuple[bool, str]:
-    """ Force clear Python cache regardless of heuristics.
+    """
+    Force clear Python cache regardless of heuristics
     Force clear Python cache regardless of heuristics.
 
     Returns:
         Tuple of (success, message)
-    """ return clear_python_cache(force=True).
+    """
+    return clear_python_cache(force=True)
     return clear_python_cache(force=True)
 
 

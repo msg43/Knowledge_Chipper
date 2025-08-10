@@ -1,4 +1,5 @@
-""" Process command for the Knowledge System CLI.
+"""
+Process command for the Knowledge System CLI
 Process command for the Knowledge System CLI.
 
 Handles comprehensive file processing with transcription, summarization, and MOC generation.
@@ -91,18 +92,20 @@ def process(
     dry_run: bool,
     progress: bool,
 ) -> None:
-    """ Process files or folders with transcription, summarization, and MOC generation.
+    """
+    Process files or folders with transcription, summarization, and MOC generation
     Process files or folders with transcription, summarization, and MOC generation.
 
     Can process a single file or recursively process all files in a folder
     that match the specified patterns.
 
-    Examples:
-        knowledge-system process video.mp4
-        knowledge-system process ./videos/ --recursive
-        knowledge-system process ./content/ --no-transcribe --patterns "*.pdf" "*.txt"
-        knowledge-system process audio.wav --output ./results --dry-run
-    """ settings = ctx.get_settings().
+     Examples:
+         knowledge-system process video.mp4
+         knowledge-system process ./videos/ --recursive
+         knowledge-system process ./content/ --no-transcribe --patterns "*.pdf" "*.txt"
+         knowledge-system process audio.wav --output ./results --dry-run
+     """
+     settings = ctx.get_settings()
     settings = ctx.get_settings()
 
     if not ctx.quiet:

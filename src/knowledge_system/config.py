@@ -1,4 +1,5 @@
-""" Configuration management for Knowledge System.
+"""
+Configuration management for Knowledge System
 
 Configuration management for Knowledge System.
 Supports YAML files, environment variables, and settings persistence.

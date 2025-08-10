@@ -1,4 +1,5 @@
-""" Main GUI Window for Knowledge System - PyQt6 Implementation.
+"""
+Main GUI Window for Knowledge System - PyQt6 Implementation
 Main GUI Window for Knowledge System - PyQt6 Implementation
 
 Streamlined main window that focuses on window setup and coordination.
@@ -198,7 +199,8 @@ class MainWindow(QMainWindow):
     def _apply_dark_theme(self) -> None:
         """ Apply dark theme styling."""
         self.setStyleSheet(
-            """ QMainWindow {.
+            """
+            QMainWindow {
 
             QMainWindow {
                 background-color: #1e1e1e;
@@ -285,7 +287,8 @@ class MainWindow(QMainWindow):
                 background-color: #007acc;
                 border-radius: 2px;
             }
-        """ ).
+        """
+        )
         )
 
     def _handle_progress_cancellation(self, reason: str) -> None:

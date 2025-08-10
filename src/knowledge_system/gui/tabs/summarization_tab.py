@@ -574,7 +574,8 @@ class EnhancedSummarizationWorker(QThread):
             self.cancellation_token.cancel("User requested cancellation")
 
     def _extract_youtube_url_from_file(self, file_path: Path) -> str | None:
-        """ Extract YouTube URL from a processed file's YAML frontmatter or content.
+        """
+        Extract YouTube URL from a processed file's YAML frontmatter or content
         Extract YouTube URL from a processed file's YAML frontmatter or content.
 
         Looks for YouTube URLs in multiple locations:
@@ -588,7 +589,8 @@ class EnhancedSummarizationWorker(QThread):
 
         Returns:
             YouTube URL if found, None otherwise
-        """ try:.
+        """
+        try:
 
         try:
             with open(file_path, encoding="utf-8") as f:
@@ -647,7 +649,8 @@ class EnhancedSummarizationWorker(QThread):
         return None
 
     def _extract_thumbnail_from_file(self, file_path: Path) -> str:
-        """ Extract thumbnail content from the original markdown file.
+        """
+        Extract thumbnail content from the original markdown file
         Extract thumbnail content from the original markdown file.
 
         Looks for thumbnail images in various formats:
@@ -660,7 +663,8 @@ class EnhancedSummarizationWorker(QThread):
 
         Returns:
             Thumbnail markdown content if found, empty string otherwise
-        """ try:.
+        """
+        try:
 
         try:
             with open(file_path, encoding="utf-8") as f:
@@ -704,7 +708,8 @@ class EnhancedSummarizationWorker(QThread):
     def _copy_thumbnail_file_and_update_reference(
         self, source_file: Path, output_file: Path, original_thumbnail_content: str
     ) -> tuple[bool, str]:
-        """ Copy thumbnail image file from source directory to output Thumbnails subdirectory and update reference.
+        """
+        Copy thumbnail image file from source directory to output Thumbnails subdirectory and update reference
         Copy thumbnail image file from source directory to output Thumbnails subdirectory and update reference.
 
         Args:
@@ -714,7 +719,8 @@ class EnhancedSummarizationWorker(QThread):
 
         Returns:
             Tuple of (success_flag, updated_thumbnail_content)
-        """ try:.
+        """
+        try:
 
         try:
             import re

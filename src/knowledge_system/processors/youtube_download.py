@@ -1,4 +1,5 @@
-""" YouTube Download Processor.
+"""
+YouTube Download Processor
 YouTube Download Processor
 
 Downloads audio and thumbnails from YouTube videos or playlists using yt-dlp.

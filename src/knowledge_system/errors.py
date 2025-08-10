@@ -1,4 +1,5 @@
-""" Custom exception hierarchy for Knowledge System.
+"""
+Custom exception hierarchy for Knowledge System
 
 Custom exception hierarchy for Knowledge System.
 Provides structured error handling with context preservation.
@@ -17,7 +18,8 @@ class KnowledgeSystemError(Exception):
         context: dict[str, Any] | None = None,
         cause: Exception | None = None,
     ) -> None:
-        """ Initialize base exception.
+        """
+        Initialize base exception
         Initialize base exception.
 
         Args:
@@ -25,7 +27,7 @@ class KnowledgeSystemError(Exception):
             error_code: Machine-readable error code
             context: Additional context information
             cause: Original exception that caused this error
-        """ super().__init__(message).
+        """
 
         super().__init__(message)
         self.message = message
@@ -325,7 +327,8 @@ def wrap_exception(
     context: dict[str, Any] | None = None,
     error_type: type[KnowledgeSystemError] = KnowledgeSystemError,
 ) -> KnowledgeSystemError:
-    """ Wrap a generic exception in a Knowledge System exception.
+    """
+    Wrap a generic exception in a Knowledge System exception
     Wrap a generic exception in a Knowledge System exception.
 
     Args:
@@ -336,7 +339,8 @@ def wrap_exception(
 
     Returns:
         Wrapped Knowledge System exception
-    """ message = f"Error in {func_name}: {str(original_exception)}".
+    """
+    message = f"Error in {func_name}: {str(original_exception)}"
 
     message = f"Error in {func_name}: {str(original_exception)}"
     full_context = {"function": func_name}
@@ -349,7 +353,8 @@ def wrap_exception(
 def handle_api_error(
     response: Any, provider: str, operation: str, context: dict[str, Any] | None = None
 ) -> APIError:
-    """ Handle API response errors and create appropriate exceptions.
+    """
+    Handle API response errors and create appropriate exceptions
     Handle API response errors and create appropriate exceptions.
 
     Args:
@@ -360,7 +365,8 @@ def handle_api_error(
 
     Returns:
         Appropriate API error exception
-    """ status_code = getattr(response, "status_code", None).
+    """
+    status_code = getattr(response, "status_code", None)
 
     status_code = getattr(response, "status_code", None)
     response_text = getattr(response, "text", "No response body")
@@ -400,7 +406,8 @@ def handle_api_error(
 def format_error_message(
     error: Exception, include_context: bool = True, include_cause: bool = True
 ) -> str:
-    """ Format an error message for user display.
+    """
+    Format an error message for user display
     Format an error message for user display.
 
     Args:
@@ -410,14 +417,11 @@ def format_error_message(
 
     Returns:
         Formatted error message
-    """ if isinstance(error, KnowledgeSystemError):.
-
+    """
     if isinstance(error, KnowledgeSystemError):
         message = str(error)
-
         if include_cause and error.cause:
             message += f"\nCaused by: {error.cause}"
-
         return message
     else:
         return str(error)

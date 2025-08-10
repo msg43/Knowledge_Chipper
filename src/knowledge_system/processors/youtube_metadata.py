@@ -1,4 +1,5 @@
-""" Simplified YouTube Metadata Processor.
+"""
+Simplified YouTube Metadata Processor
 Simplified YouTube Metadata Processor
 
 Uses only WebShare rotating proxies with YT-DLP. Eliminates complex fallback strategies,

@@ -108,7 +108,8 @@ class IntroductionTab(BaseTab):
         parent_layout.addWidget(header_label)
 
         overview_text = QLabel(
-            """ <b>Knowledge Chipper transforms your media content into organized, searchable knowledge.</b>.
+            """
+            <b>Knowledge Chipper transforms your media content into organized, searchable knowledge.</b>
 <b>Knowledge Chipper transforms your media content into organized, searchable knowledge.</b>
 
 <br><br><b>🎯 Perfect for:</b>
@@ -130,7 +131,8 @@ class IntroductionTab(BaseTab):
 • <b>Multiple AI Providers:</b> OpenAI, Anthropic, local models via Ollama
 • <b>Batch Processing:</b> Handle multiple files simultaneously
 • <b>File Watching:</b> Automatic processing of new files
-        """ ).
+        """
+        )
         )
 
         overview_text.setWordWrap(True)
@@ -149,7 +151,8 @@ class IntroductionTab(BaseTab):
         parent_layout.addWidget(header_label)
 
         quickstart_text = QLabel(
-            """ <b>Get started in 3 simple steps:</b>.
+            """
+            <b>Get started in 3 simple steps:</b>
 <b>Get started in 3 simple steps:</b>
 
 <br><br><b>1. Configure Settings</b> 📁
@@ -170,7 +173,8 @@ class IntroductionTab(BaseTab):
 • Use "View Last Report" to see detailed results
 
 <br><br><b>💡 Pro Tip:</b> Start with shorter files (under 30 minutes) to get familiar with the workflow, then scale up to longer content!
-        """ ).
+        """
+        )
         )
 
         quickstart_text.setWordWrap(True)
@@ -189,7 +193,8 @@ class IntroductionTab(BaseTab):
         parent_layout.addWidget(header_label)
 
         tabs_text = QLabel(
-            """ <b>Each tab serves a specific purpose:</b>.
+            """
+            <b>Each tab serves a specific purpose:</b>
 <b>Each tab serves a specific purpose:</b>
 
 <br><br><b>📁 Process Management</b> - Your main workspace
@@ -222,7 +227,8 @@ class IntroductionTab(BaseTab):
 • Manage all your API credentials securely
 • Test connections and validate keys
 • Required for AI-powered features
-        """ ).
+        """
+        )
         )
 
         tabs_text.setWordWrap(True)
@@ -241,7 +247,8 @@ class IntroductionTab(BaseTab):
         parent_layout.addWidget(header_label)
 
         tips_text = QLabel(
-            """ <b>🏆 Best Practices for Success:</b>.
+            """
+            <b>🏆 Best Practices for Success:</b>
 <b>🏆 Best Practices for Success:</b>
 
 <br><br><b>File Organization:</b>
@@ -270,7 +277,8 @@ class IntroductionTab(BaseTab):
 • Dry run mode lets you test settings without processing
 
 <br><br><b>🎯 Remember:</b> Knowledge Chipper is designed to handle everything from quick voice memos to multi-hour lectures. Start small and scale up as you get comfortable!
-        """ ).
+        """
+        )
         )
 
         tips_text.setWordWrap(True)
@@ -294,7 +302,8 @@ class IntroductionTab(BaseTab):
 
         # README file section
         readme_section = QLabel(
-            """ <b>📖 Complete Documentation:</b>.
+            """
+            <b>📖 Complete Documentation:</b>
 
 <b>📖 Complete Documentation:</b>
 <br>• <a href="readme://open">README.md</a> - Full setup guide, troubleshooting, and advanced features
@@ -305,7 +314,8 @@ class IntroductionTab(BaseTab):
 <br>• <a href="youtube://setup">YouTube API Setup Guide</a> - Configure YouTube integration
 <br>• <a href="performance://guide">Performance Optimization</a> - Get the best results
 <br>• <a href="troubleshooting://help">Troubleshooting Guide</a> - Common issues and solutions
-        """ ).
+        """
+        )
         )
 
         readme_section.setWordWrap(True)
@@ -313,7 +323,8 @@ class IntroductionTab(BaseTab):
         readme_section.setOpenExternalLinks(False)  # Handle clicks manually
         readme_section.linkActivated.connect(self._handle_documentation_link)
         readme_section.setStyleSheet(
-            """ QLabel {.
+            """
+            QLabel {
 
             QLabel {
                 background-color: #f8f9fa;
@@ -329,7 +340,8 @@ class IntroductionTab(BaseTab):
                 color: #0056b3;
                 text-decoration: underline;
             }
-        """ ).
+        """
+        )
 
         )
         doc_layout.addWidget(readme_section)
@@ -460,7 +472,8 @@ class IntroductionTab(BaseTab):
         api_keys_btn = QPushButton("⚙️ Open Settings")
         api_keys_btn.clicked.connect(lambda: self.navigate_to_tab.emit("⚙️ Settings"))
         api_keys_btn.setStyleSheet(
-            """ QPushButton {.
+            """
+            QPushButton {
 
             QPushButton {
                 background-color: #ff9800;
@@ -473,7 +486,8 @@ class IntroductionTab(BaseTab):
             QPushButton:hover {
                 background-color: #f57c00;
             }
-        """ ).
+        """
+        )
 
         )
         nav_layout.addWidget(api_keys_btn)
@@ -484,7 +498,8 @@ class IntroductionTab(BaseTab):
             lambda: self.navigate_to_tab.emit("Process Management")
         )
         process_btn.setStyleSheet(
-            """ QPushButton {.
+            """
+            QPushButton {
 
             QPushButton {
                 background-color: #4caf50;
@@ -497,7 +512,8 @@ class IntroductionTab(BaseTab):
             QPushButton:hover {
                 background-color: #45a049;
             }
-        """ ).
+        """
+        )
 
         )
         nav_layout.addWidget(process_btn)
@@ -506,7 +522,8 @@ class IntroductionTab(BaseTab):
         youtube_btn = QPushButton("📺 Process YouTube Videos")
         youtube_btn.clicked.connect(lambda: self.navigate_to_tab.emit("YouTube"))
         youtube_btn.setStyleSheet(
-            """ QPushButton {.
+            """
+            QPushButton {
 
             QPushButton {
                 background-color: #f44336;
@@ -519,7 +536,8 @@ class IntroductionTab(BaseTab):
             QPushButton:hover {
                 background-color: #da190b;
             }
-        """ ).
+        """
+        )
 
         )
         nav_layout.addWidget(youtube_btn)
@@ -548,7 +566,8 @@ class IntroductionTab(BaseTab):
         self.start_btn = QPushButton("🚀 Get Started Now")
         self.start_btn.clicked.connect(self._start_processing)
         self.start_btn.setStyleSheet(
-            """ QPushButton {.
+            """
+            QPushButton {
 
             QPushButton {
                 background-color: #4caf50;
@@ -562,7 +581,8 @@ class IntroductionTab(BaseTab):
             QPushButton:hover {
                 background-color: #45a049;
             }
-        """ ).
+        """
+        )
 
         )
         layout.addWidget(self.start_btn)
@@ -580,7 +600,8 @@ class IntroductionTab(BaseTab):
         )
         welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         welcome_label.setStyleSheet(
-            """ QLabel {.
+            """
+            QLabel {
 
             QLabel {
                 background-color: #e8f5e8;
@@ -590,7 +611,8 @@ class IntroductionTab(BaseTab):
                 font-weight: bold;
                 font-size: 14px;
             }
-        """ ).
+        """
+        )
 
         )
         layout.addWidget(welcome_label)

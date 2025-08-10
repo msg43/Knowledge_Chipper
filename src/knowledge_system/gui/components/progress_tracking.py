@@ -171,7 +171,8 @@ class EnhancedProgressBar(QFrame):
         self.setFixedHeight(80)
         self.setFrameStyle(QFrame.Shape.Box)
         self.setStyleSheet(
-            """ QFrame {.
+            """
+            QFrame {
 
             QFrame {
                 background-color: #2d2d2d;
@@ -179,7 +180,8 @@ class EnhancedProgressBar(QFrame):
                 border-radius: 5px;
                 margin: 5px;
             }
-        """ ).
+        """
+        )
         )
 
         # Initially hide
@@ -205,7 +207,8 @@ class EnhancedProgressBar(QFrame):
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.clicked.connect(self.cancellation_requested.emit)
         self.cancel_btn.setStyleSheet(
-            """ QPushButton {.
+            """
+            QPushButton {
 
             QPushButton {
                 background-color: #d32f2f;
@@ -217,7 +220,8 @@ class EnhancedProgressBar(QFrame):
             QPushButton:hover {
                 background-color: #b71c1c;
             }
-        """ ).
+        """
+        )
 
         )
         self.cancel_btn.hide()
@@ -228,7 +232,8 @@ class EnhancedProgressBar(QFrame):
         # Progress bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setStyleSheet(
-            """ QProgressBar {.
+            """
+            QProgressBar {
 
             QProgressBar {
                 background-color: #3c3c3c;
@@ -241,7 +246,8 @@ class EnhancedProgressBar(QFrame):
                 background-color: #007acc;
                 border-radius: 3px;
             }
-        """ ).
+        """
+        )
 
         )
         self.progress_bar.hide()

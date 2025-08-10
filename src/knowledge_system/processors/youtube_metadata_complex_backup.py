@@ -1,4 +1,5 @@
-""" YouTube Metadata Processor.
+"""
+YouTube Metadata Processor
 YouTube Metadata Processor
 
 Fetches metadata from YouTube videos using YT-DLP with rotating proxies as primary method.

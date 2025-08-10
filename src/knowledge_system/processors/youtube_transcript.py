@@ -1,4 +1,5 @@
-""" YouTube Transcript Processor.
+"""
+YouTube Transcript Processor
 YouTube Transcript Processor
 
 Extracts transcripts from YouTube videos using Webshare rotating residential proxies.
@@ -27,7 +28,8 @@ logger = get_logger(__name__)
 
 
 def sanitize_tag(tag: str) -> str:
-    """ Sanitize YouTube tags by replacing spaces with underscores and removing/converting non-alphanumeric characters.
+    """
+    Sanitize YouTube tags by replacing spaces with underscores and removing/converting non-alphanumeric characters
     Sanitize YouTube tags by replacing spaces with underscores and removing/converting non-alphanumeric characters.
 
     Args:
@@ -35,8 +37,7 @@ def sanitize_tag(tag: str) -> str:
 
     Returns:
         Sanitized tag string suitable for YAML and general use
-    """ if not tag or not isinstance(tag, str):.
-
+    """
     if not tag or not isinstance(tag, str):
         return ""
 
@@ -55,7 +56,8 @@ def sanitize_tag(tag: str) -> str:
 
 
 def sanitize_tags(tags: list[str]) -> list[str]:
-    """ Sanitize a list of YouTube tags.
+    """
+    Sanitize a list of YouTube tags
     Sanitize a list of YouTube tags.
 
     Args:
@@ -63,8 +65,7 @@ def sanitize_tags(tags: list[str]) -> list[str]:
 
     Returns:
         List of sanitized tag strings with empty strings filtered out
-    """ if not tags:.
-
+    """
     if not tags:
         return []
 
@@ -275,7 +276,8 @@ class YouTubeTranscript(BaseModel):
 
 
 class YouTubeTranscriptProcessor(BaseProcessor):
-    """ Processor for extracting YouTube transcripts using Webshare rotating proxies.
+    """
+    Processor for extracting YouTube transcripts using Webshare rotating proxies
     Processor for extracting YouTube transcripts using Webshare rotating proxies.
 
     Simplified processor that only uses the proxy-based YouTube Transcript API.
@@ -1425,7 +1427,8 @@ def extract_youtube_transcript(
     prefer_manual: bool = True,
     fallback_to_auto: bool = True,
 ) -> YouTubeTranscript | None:
-    """ Standalone function to extract a single YouTube transcript.
+    """
+    Standalone function to extract a single YouTube transcript
     Standalone function to extract a single YouTube transcript.
 
     Args:
@@ -1436,8 +1439,7 @@ def extract_youtube_transcript(
 
     Returns:
         YouTubeTranscript object or None if extraction failed
-    """ processor = YouTubeTranscriptProcessor(.
-
+    """
     processor = YouTubeTranscriptProcessor(
         preferred_language=preferred_language,
         prefer_manual=prefer_manual,

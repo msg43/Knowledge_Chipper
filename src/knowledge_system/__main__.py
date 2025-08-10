@@ -1,4 +1,5 @@
-""" Main entry point for running knowledge_system as a module.
+"""
+Main entry point for running knowledge_system as a module
 Main entry point for running knowledge_system as a module.
 
 Usage:

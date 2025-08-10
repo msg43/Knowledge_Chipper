@@ -1,4 +1,5 @@
-""" Logging setup for Knowledge System.
+"""
+Logging setup for Knowledge System
 
 Logging setup for Knowledge System.
 Provides structured logging with rotation, multiple outputs, and proper formatting.
@@ -48,7 +49,8 @@ def setup_logging(
     enable_file: bool = True,
     intercept_stdlib: bool = True,
 ) -> None:
-    """ Set up comprehensive logging configuration.
+    """
+    Set up comprehensive logging configuration
     Set up comprehensive logging configuration.
 
     Args:
@@ -60,7 +62,8 @@ def setup_logging(
         enable_console: Whether to log to console
         enable_file: Whether to log to file
         intercept_stdlib: Whether to intercept standard library logging
-    """ # Remove default handler.
+    """
+    # Remove default handler
 
     # Remove default handler
     logger.remove()
@@ -117,7 +120,8 @@ def setup_logging(
 
 
 def get_logger(name: str = "knowledge_system") -> Any:
-    """Get a logger instance.
+    """
+    Get a logger instance
 
     Args:
         name: Logger name (for filtering and identification)
@@ -134,7 +138,8 @@ def log_exception(
     level: str = "ERROR",
     **kwargs: Any,
 ) -> None:
-    """Log an exception with context.
+    """
+    Log an exception with context
 
     Args:
         exception: The exception to log
@@ -146,7 +151,8 @@ def log_exception(
 
 
 def log_performance(operation: str, duration: float, **kwargs: Any) -> None:
-    """Log performance metrics.
+    """
+    Log performance metrics
 
     Args:
         operation: Name of the operation
@@ -159,7 +165,8 @@ def log_performance(operation: str, duration: float, **kwargs: Any) -> None:
 
 
 def log_user_action(action: str, user_id: str | None = None, **kwargs: Any) -> None:
-    """Log user actions for audit trail.
+    """
+    Log user actions for audit trail
 
     Args:
         action: Description of the action
@@ -173,7 +180,8 @@ def log_user_action(action: str, user_id: str | None = None, **kwargs: Any) -> N
 def log_system_event(
     event: str, component: str, status: str = "info", **kwargs: Any
 ) -> None:
-    """Log system events.
+    """
+    Log system events
 
     Args:
         event: Event description
@@ -181,7 +189,6 @@ def log_system_event(
         status: Event status (info, warning, error, critical)
         **kwargs: Additional context
     """
-    context = {"event": event, "component": component, "status": status, **kwargs}
     context = {"event": event, "component": component, "status": status, **kwargs}
 
     level_map = {

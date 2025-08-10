@@ -1,4 +1,5 @@
-""" Cancellation Support for Long-Running Operations.
+"""
+Cancellation Support for Long-Running Operations
 Cancellation Support for Long-Running Operations
 
 Provides thread-safe cancellation tokens for graceful operation cancellation.
