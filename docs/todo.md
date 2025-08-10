@@ -3,7 +3,7 @@
 See `docs/superchunk-plan.mdc` and `docs/superchunk-workflow.mdc` for rules/specs.
 
 - [x] Create config + validators + model‑agnostic LLM adapter
-- [ ] Implement mapper (skim) and segmenter (adaptive windows) + write `chunking_decisions.json`
+- [x] Implement mapper (skim) and segmenter (adaptive windows) + write `chunking_decisions.json`
 - [ ] Implement landmarks (section titles, key facts, numbered claims)
 - [ ] Implement extractors (schema validation + exact counts) and persist to SQLite
 - [ ] Implement ledger (canonicalization, dedupe, novelty) + retrieval (fuzzy baseline)
