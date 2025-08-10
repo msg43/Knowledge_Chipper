@@ -1,4 +1,5 @@
-""" Batch Processing and Hang Detection.
+"""
+Batch Processing and Hang Detection
 Batch Processing and Hang Detection
 
 Provides hang detection for long-running batch operations to prevent

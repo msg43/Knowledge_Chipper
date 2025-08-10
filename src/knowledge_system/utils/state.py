@@ -1,4 +1,5 @@
-""" State management for Knowledge System.
+"""
+State management for Knowledge System
 
 State management for Knowledge System.
 Handles application state persistence, session management, and user preferences.

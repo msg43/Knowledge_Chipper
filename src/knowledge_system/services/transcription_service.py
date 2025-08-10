@@ -1,4 +1,5 @@
-""" Transcription Service.
+"""
+Transcription Service
 Transcription Service
 
 Provides transcription capabilities for audio files and YouTube URLs using Whisper.
@@ -28,7 +29,8 @@ class TranscriptionService:
         temp_dir: str | Path | None = None,
         use_whisper_cpp: bool = False,
     ) -> None:
-        """ Initialize the transcription service.
+        """
+        Initialize the transcription service
 
         Args:
             whisper_model: Whisper model to use
@@ -37,7 +39,8 @@ class TranscriptionService:
             prefer_transcripts: Whether to prefer YouTube transcripts over audio transcription
             temp_dir: Temporary directory for downloads
             use_whisper_cpp: Whether to use whisper.cpp with Core ML acceleration
-        """ self.whisper_model = whisper_model.
+        """
+        self.whisper_model = whisper_model
 
         self.whisper_model = whisper_model
         self.normalize_audio = normalize_audio

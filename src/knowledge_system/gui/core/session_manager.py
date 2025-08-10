@@ -1,4 +1,5 @@
-""" Session management for GUI settings persistence.
+"""
+Session management for GUI settings persistence
 Session management for GUI settings persistence.
 
 Handles saving and loading user preferences across application sessions.

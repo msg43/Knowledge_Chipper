@@ -1,4 +1,5 @@
-""" Icon management for Knowledge Chipper GUI.
+"""
+Icon management for Knowledge Chipper GUI
 
 Icon management for Knowledge Chipper GUI.
 Provides centralized access to application icons.

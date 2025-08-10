@@ -477,11 +477,13 @@ class YouTubeExtractionWorker(QThread):
             self.cancellation_token.cancel("User requested cancellation")
 
     def _write_failure_log(self, failed_urls: list[str]) -> None:
-        """ Write failed URL extractions to timestamped log files.
+        """
+        Write failed URL extractions to timestamped log files
 
         Returns:
             tuple: (log_file_path, csv_file_path) or (None, None) if failed
-        """ try:.
+        """
+        try:
 
         try:
             import csv
@@ -811,7 +813,8 @@ class YouTubeTab(BaseTab):
         )
         # Make green and take 3/4 of the width
         self.start_btn.setStyleSheet(
-            """ QPushButton {.
+            """
+            QPushButton {
 
             QPushButton {
                 background-color: #4CAF50;
@@ -829,7 +832,8 @@ class YouTubeTab(BaseTab):
                 background-color: #cccccc;
                 color: #666666;
             }
-        """ ).
+        """
+        )
 
         )
         layout.addWidget(self.start_btn, 3)  # 3/4 stretch factor
@@ -851,7 +855,8 @@ class YouTubeTab(BaseTab):
         )
         # Make red and take 1/4 of the width
         self.stop_btn.setStyleSheet(
-            """ QPushButton {.
+            """
+            QPushButton {
 
             QPushButton {
                 background-color: #f44336;
@@ -870,7 +875,8 @@ class YouTubeTab(BaseTab):
                 color: #ffffff;
                 opacity: 0.7;
             }
-        """ ).
+        """
+        )
 
         )
         layout.addWidget(self.stop_btn, 1)  # 1/4 stretch factor

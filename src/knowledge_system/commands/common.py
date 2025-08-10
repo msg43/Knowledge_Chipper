@@ -1,4 +1,5 @@
-""" Common utilities for CLI commands to avoid duplication.
+"""
+Common utilities for CLI commands to avoid duplication
 Common utilities for CLI commands to avoid duplication.
 
 Shared classes, decorators, and utilities used across command modules.

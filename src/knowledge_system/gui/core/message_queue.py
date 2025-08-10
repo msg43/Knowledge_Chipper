@@ -1,4 +1,5 @@
-""" Message Queue Processor for GUI.
+"""
+Message Queue Processor for GUI
 Message Queue Processor for GUI
 
 Handles inter-thread communication and message processing in the GUI.

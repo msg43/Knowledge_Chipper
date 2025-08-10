@@ -1,4 +1,5 @@
-""" File Watcher.
+"""
+File Watcher
 File Watcher
 
 Monitors directories for new/changed files using watchdog.

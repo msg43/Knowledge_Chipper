@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 import urllib.request
+import urllib.parse
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from ...logger import get_logger
@@ -60,7 +61,11 @@ class FFmpegInstaller(QThread):
             BIN_DIR.mkdir(parents=True, exist_ok=True)
 
             with tempfile.TemporaryDirectory() as tmpdir:
-                tmp_path = Path(tmpdir) / "ffmpeg.tar.xz"
+                # Preserve archive filename to allow proper extraction method detection
+                archive_name = (
+                    Path(urllib.parse.urlparse(self.release.url).path).name or "ffmpeg_download"
+                )
+                tmp_path = Path(tmpdir) / archive_name
                 self._download(self.release.url, tmp_path)
 
                 self.progress.emit("Verifying download…")
@@ -69,13 +74,13 @@ class FFmpegInstaller(QThread):
                     raise RuntimeError("FFmpeg checksum verification failed")
 
                 self.progress.emit("Extracting…")
-                # Try to extract tarballs; if a single binary was provided, just copy
+                # Try to extract known archive formats (.zip, .tar, .tar.gz, .tar.xz, etc.)
                 extract_dir = Path(tmpdir) / "extract"
                 extract_dir.mkdir(parents=True, exist_ok=True)
                 try:
-                    subprocess.run(["tar", "-xf", str(tmp_path), "-C", str(extract_dir)], check=True)
+                    shutil.unpack_archive(str(tmp_path), str(extract_dir))
                 except Exception:
-                    # Not a tarball - treat as raw binary
+                    # Not a recognized archive - treat as raw binary
                     shutil.copy2(tmp_path, extract_dir / self.release.ffmpeg_name)
 
                 # Find ffmpeg and ffprobe in extracted content

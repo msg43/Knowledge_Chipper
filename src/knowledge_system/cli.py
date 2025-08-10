@@ -1,4 +1,5 @@
-""" Command Line Interface for Knowledge System.
+"""
+Command Line Interface for Knowledge System
 
 Command Line Interface for Knowledge System.
 Provides comprehensive CLI commands for all system operations.
@@ -77,12 +78,14 @@ def handle_cli_error(func: Any) -> Any:
 def main(
     ctx: click.Context, version: bool, verbose: bool, quiet: bool, config: str | None
 ) -> None:
-    """ Knowledge_Chipper - Comprehensive knowledge processing and management.
+    """
+    Knowledge_Chipper - Comprehensive knowledge processing and management
     Knowledge_Chipper - Comprehensive knowledge processing and management.
 
     A powerful tool for processing YouTube videos, PDFs, and other content
     into structured knowledge with transcription, summarization, and MOC generation.
-    """ # Configure threading and resource management based on user settings.
+    """
+    # Configure threading and resource management based on user settings
     # Configure threading and resource management based on user settings
 
     # Ensure context object exists
@@ -198,7 +201,8 @@ def watch(
     dry_run: bool,
     device: str,
 ) -> None:
-    """ Watch directory for new files and auto-process them.
+    """
+    Watch directory for new files and auto-process them
     Watch directory for new files and auto-process them.
 
     Monitors a directory for new audio, video, or document files and
@@ -209,7 +213,7 @@ def watch(
         knowledge-system watch ./input/
         knowledge-system watch ~/Downloads --patterns "*.mp4" "*.pdf"
         knowledge-system watch ./videos --no-summarize --debounce 10
-    """ if not ctx.quiet:.
+    """
 
     if not ctx.quiet:
         console.print(f"[bold cyan]Watching:[/bold cyan] {watch_path}")
@@ -348,7 +352,8 @@ def watch(
 def status(
     ctx: CLIContext, processors: bool, paths: bool, settings: bool, logs: bool
 ) -> None:
-    """ Show system status and statistics.
+    """
+    Show system status and statistics
     Show system status and statistics.
 
     Displays information about processor performance, configured paths,
@@ -358,7 +363,8 @@ def status(
         knowledge-system status
         knowledge-system status --settings
         knowledge-system status --logs --no-processors
-    """ settings_obj = ctx.get_settings().
+    """
+    settings_obj = ctx.get_settings()
     settings_obj = ctx.get_settings()
 
     console.print("[bold blue]Knowledge_Chipper Status[/bold blue]\n")
@@ -460,7 +466,8 @@ def status(
 @click.argument("file_path", type=click.Path(exists=True, path_type=Path))
 @pass_context
 def info(ctx: CLIContext, file_path: Path) -> None:
-    """ Show detailed information about a file.
+    """
+    Show detailed information about a file
     Show detailed information about a file.
 
     Displays file metadata, processing history, and compatibility information.
@@ -468,7 +475,7 @@ def info(ctx: CLIContext, file_path: Path) -> None:
     Examples:
         knowledge-system info video.mp4
         knowledge-system info transcript.md
-    """ if not ctx.quiet:.
+    """
 
     if not ctx.quiet:
         console.print(f"[bold blue]File Information:[/bold blue] {file_path}\n")

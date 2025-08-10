@@ -1,4 +1,5 @@
-""" Summarize command for the Knowledge System CLI.
+"""
+Summarize command for the Knowledge System CLI
 Summarize command for the Knowledge System CLI.
 
 Handles summarization of transcripts and documents using LLM services.
@@ -19,7 +20,8 @@ from .transcribe import _generate_obsidian_link
 
 
 def _extract_youtube_url_from_file(file_path: Path) -> str | None:
-    """ Extract YouTube URL from a processed file's YAML frontmatter.
+    """
+    Extract YouTube URL from a processed file's YAML frontmatter
     Extract YouTube URL from a processed file's YAML frontmatter.
 
     Looks for the 'source' field in the YAML frontmatter which typically
@@ -30,7 +32,10 @@ def _extract_youtube_url_from_file(file_path: Path) -> str | None:
 
     Returns:
         YouTube URL if found, None otherwise
-    """ import re.
+    """
+    import re
+    
+    import re
     import re
 
     import yaml
@@ -162,21 +167,23 @@ def summarize(
     resume: bool,
     force: bool,
 ) -> None:
-    """ Summarize transcripts or documents using LLM.
+    """
+    Summarize transcripts or documents using LLM
     Summarize transcripts or documents using LLM.
 
     Takes transcripts, PDFs, or markdown files and generates structured summaries
     with key points, insights, and actionable items. Supports both single files
     and batch processing of directories.
 
-    Examples:
-        knowledge-system summarize transcript.md
-        knowledge-system summarize document.pdf --template custom_prompt.txt
-        knowledge-system summarize ./transcripts/ --recursive --progress
-        knowledge-system summarize text.txt --template custom_prompt.txt
-        knowledge-system summarize file.md --update-md
-        knowledge-system summarize ./docs/ --patterns "*.pdf" "*.md"
-    """ settings = ctx.get_settings().
+     Examples:
+         knowledge-system summarize transcript.md
+         knowledge-system summarize document.pdf --template custom_prompt.txt
+         knowledge-system summarize ./transcripts/ --recursive --progress
+         knowledge-system summarize text.txt --template custom_prompt.txt
+         knowledge-system summarize file.md --update-md
+         knowledge-system summarize ./docs/ --patterns "*.pdf" "*.md"
+     """
+     settings = ctx.get_settings()
     settings = ctx.get_settings()
 
     # Get list of files to process

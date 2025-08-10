@@ -1,4 +1,5 @@
-""" Backward compatibility launcher for GUI.
+"""
+Backward compatibility launcher for GUI
 Backward compatibility launcher for GUI.
 
 DEPRECATED: Use 'python -m knowledge_system gui' instead.

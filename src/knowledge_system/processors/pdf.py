@@ -1,4 +1,5 @@
-""" PDF Processor.
+"""
+PDF Processor
 PDF Processor
 
 Extracts text from PDF files using PyPDF2 and pdfplumber.

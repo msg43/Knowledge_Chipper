@@ -1,4 +1,5 @@
-""" Knowledge_Chipper - A comprehensive knowledge management system for macOS.
+"""
+Knowledge_Chipper - A comprehensive knowledge management system for macOS
 Knowledge_Chipper - A comprehensive knowledge management system for macOS.
 
 This package provides AI-powered tools for transcribing, summarizing, and organizing

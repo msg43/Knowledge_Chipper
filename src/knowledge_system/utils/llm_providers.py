@@ -1,4 +1,5 @@
-""" Shared LLM Provider Utilities.
+"""
+Shared LLM Provider Utilities
 Shared LLM Provider Utilities
 
 Centralizes API calls to different LLM providers (OpenAI, Anthropic, Local) to eliminate

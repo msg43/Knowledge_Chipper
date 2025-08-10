@@ -1,4 +1,5 @@
-""" Unified Error Handling Utilities.
+"""
+Unified Error Handling Utilities
 Unified Error Handling Utilities
 
 Provides standardized error handling patterns across all processors to eliminate
@@ -28,7 +29,8 @@ class ErrorHandler:
         context: dict[str, Any] | None = None,
         dry_run: bool = False,
     ) -> ProcessorResult:
-        """ Create a standardized error ProcessorResult.
+        """
+        Create a standardized error ProcessorResult
         Create a standardized error ProcessorResult.
 
         Args:
@@ -39,7 +41,8 @@ class ErrorHandler:
 
         Returns:
             ProcessorResult with error details
-        """ if isinstance(error, Exception):.
+        """
+        if isinstance(error, Exception):
 
         if isinstance(error, Exception):
             error_msg = f"{processor_name} failed: {str(error)}"
@@ -71,7 +74,8 @@ class ErrorHandler:
         expected_formats: list[str] | None = None,
         dry_run: bool = False,
     ) -> ProcessorResult:
-        """ Create a standardized validation error ProcessorResult.
+        """
+        Create a standardized validation error ProcessorResult
         Create a standardized validation error ProcessorResult.
 
         Args:
@@ -82,7 +86,8 @@ class ErrorHandler:
 
         Returns:
             ProcessorResult with validation error details
-        """ if isinstance(input_data, (str, Path)):.
+        """
+        if isinstance(input_data, (str, Path)):
 
         if isinstance(input_data, (str, Path)):
             path = Path(input_data)
@@ -114,7 +119,8 @@ class ErrorHandler:
         input_description: str = "valid input",
         dry_run: bool = False,
     ) -> ProcessorResult:
-        """ Create a standardized "no input found" error ProcessorResult.
+        """
+        Create a standardized "no input found" error ProcessorResult
         Create a standardized "no input found" error ProcessorResult.
 
         Args:
@@ -124,7 +130,8 @@ class ErrorHandler:
 
         Returns:
             ProcessorResult with no input error details
-        """ error_msg = f"No {input_description} found in input".
+        """
+        error_msg = f"No {input_description} found in input"
         error_msg = f"No {input_description} found in input"
 
         return ProcessorResult(
@@ -195,7 +202,8 @@ class YouTubeErrorHandler:
 
     @classmethod
     def categorize_youtube_error(cls, error_msg: str, url: str = "") -> str:
-        """ Categorize and format YouTube-specific errors for better user understanding.
+        """
+        Categorize and format YouTube-specific errors for better user understanding
         Categorize and format YouTube-specific errors for better user understanding.
 
         Args:
@@ -204,7 +212,8 @@ class YouTubeErrorHandler:
 
         Returns:
             User-friendly error message with emoji and clear explanation
-        """ error_msg_lower = error_msg.lower().
+        """
+        error_msg_lower = error_msg.lower()
         error_msg_lower = error_msg.lower()
 
         for error_type, config in cls.ERROR_PATTERNS.items():
@@ -231,7 +240,8 @@ class YouTubeErrorHandler:
         context: dict[str, Any] | None = None,
         dry_run: bool = False,
     ) -> ProcessorResult:
-        """ Create a ProcessorResult with YouTube-specific error formatting.
+        """
+        Create a ProcessorResult with YouTube-specific error formatting
         Create a ProcessorResult with YouTube-specific error formatting.
 
         Args:
@@ -243,7 +253,8 @@ class YouTubeErrorHandler:
 
         Returns:
             ProcessorResult with categorized YouTube error
-        """ error_msg = str(error).
+        """
+        error_msg = str(error)
 
         error_msg = str(error)
         categorized_error = cls.categorize_youtube_error(error_msg, url)
@@ -272,7 +283,8 @@ class YouTubeErrorHandler:
 def with_error_handling(
     processor_name: str | None = None, error_handler: Callable | None = None
 ) -> Callable:
-    """ Decorator to add standardized error handling to processor methods.
+    """
+    Decorator to add standardized error handling to processor methods
     Decorator to add standardized error handling to processor methods.
 
     Args:
@@ -327,7 +339,8 @@ def with_error_handling(
 
 
 def with_youtube_error_handling(processor_name: str | None = None) -> Callable:
-    """ Decorator specifically for YouTube processors with specialized error handling.
+    """
+    Decorator specifically for YouTube processors with specialized error handling
     Decorator specifically for YouTube processors with specialized error handling.
 
     Args:
@@ -362,7 +375,8 @@ class BatchErrorHandler:
     def collect_batch_errors(
         results: list[ProcessorResult], operation_name: str = "batch_operation"
     ) -> dict[str, Any]:
-        """ Collect and categorize errors from a batch of ProcessorResults.
+        """
+        Collect and categorize errors from a batch of ProcessorResults
         Collect and categorize errors from a batch of ProcessorResults.
 
         Args:
@@ -371,7 +385,8 @@ class BatchErrorHandler:
 
         Returns:
             Dictionary with error statistics and details
-        """ total_count = len(results).
+        """
+        total_count = len(results)
 
         total_count = len(results)
         success_count = sum(1 for r in results if r.success)
@@ -409,7 +424,8 @@ class BatchErrorHandler:
         operation_name: str = "batch_operation",
         dry_run: bool = False,
     ) -> ProcessorResult:
-        """ Create a summary ProcessorResult for a batch operation.
+        """
+        Create a summary ProcessorResult for a batch operation
         Create a summary ProcessorResult for a batch operation.
 
         Args:
@@ -419,7 +435,8 @@ class BatchErrorHandler:
 
         Returns:
             Summary ProcessorResult with batch statistics
-        """ error_analysis = BatchErrorHandler.collect_batch_errors(results, operation_name).
+        """
+        error_analysis = BatchErrorHandler.collect_batch_errors(results, operation_name)
         error_analysis = BatchErrorHandler.collect_batch_errors(results, operation_name)
 
         # Determine overall success (succeed if any items succeeded)

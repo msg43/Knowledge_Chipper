@@ -1,4 +1,5 @@
-""" HTML Processor.
+"""
+HTML Processor
 HTML Processor
 
 Extracts text content from HTML files using BeautifulSoup.

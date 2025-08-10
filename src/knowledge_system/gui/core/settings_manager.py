@@ -1,4 +1,5 @@
-""" GUI Settings Manager.
+"""
+GUI Settings Manager
 GUI Settings Manager
 
 Manages GUI-specific settings and integrates with the session manager

@@ -1,4 +1,5 @@
-""" Maps of Content (MOC) Processor.
+"""
+Maps of Content (MOC) Processor
 Maps of Content (MOC) Processor
 
 Generates structured Maps of Content from markdown files, including:

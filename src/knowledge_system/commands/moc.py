@@ -1,4 +1,5 @@
-""" MOC (Maps of Content) command for the Knowledge System CLI.
+"""
+MOC (Maps of Content) command for the Knowledge System CLI
 MOC (Maps of Content) command for the Knowledge System CLI.
 
 Handles generation of Maps of Content from processed documents.
@@ -62,17 +63,19 @@ def moc(
     template: Path | None,
     dry_run: bool,
 ) -> None:
-    """ Generate Maps of Content (MOC) from processed documents.
+    """
+    Generate Maps of Content (MOC) from processed documents
     Generate Maps of Content (MOC) from processed documents.
 
-    Creates structured MOCs that organize and link related content,
+     Creates structured MOCs that organize and link related content,
     with optional belief graph integration for knowledge relationships.
-
-    Examples:
-        knowledge-system moc summary1.md summary2.md
-        knowledge-system moc ./summaries/ --theme hierarchical
-        knowledge-system moc *.md --title "Project Knowledge" --depth 2
-    """ settings = ctx.get_settings().
+     
+     Examples:
+         knowledge-system moc summary1.md summary2.md
+         knowledge-system moc ./summaries/ --theme hierarchical
+         knowledge-system moc *.md --title "Project Knowledge" --depth 2
+     """
+    settings = ctx.get_settings()
     settings = ctx.get_settings()
 
     if not input_paths:

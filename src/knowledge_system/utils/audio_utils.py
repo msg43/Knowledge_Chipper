@@ -1,4 +1,5 @@
-""" FFmpeg-based audio processing utilities to replace pydub functionality.
+"""
+FFmpeg-based audio processing utilities to replace pydub functionality
 
 FFmpeg-based audio processing utilities to replace pydub functionality.
 Compatible with Python 3.13+ and provides the same core functionality.
@@ -26,12 +27,14 @@ class FFmpegAudioProcessor:
         self._check_ffmpeg_available()
 
     def _resolve_binary(self, name: str) -> str | None:
-        """ Resolve absolute path to ffmpeg/ffprobe.
+        """
+        Resolve absolute path to ffmpeg/ffprobe
 
         Resolution order:
         1) Environment variable FFMPEG_PATH/FFPROBE_PATH (absolute path)
         2) PATH lookup via shutil.which
-        """ # 1) Environment override.
+        """
+        # 1) Environment override
 
         # 1) Environment override
         env_key = "FFMPEG_PATH" if name == "ffmpeg" else "FFPROBE_PATH"
@@ -76,7 +79,8 @@ class FFmpegAudioProcessor:
         sample_rate: int | None = None,
         channels: int | None = None,
     ) -> bool:
-        """ Convert audio file to target format using FFmpeg.
+        """
+        Convert audio file to target format using FFmpeg
         Convert audio file to target format using FFmpeg.
 
         Args:
@@ -89,7 +93,7 @@ class FFmpegAudioProcessor:
 
         Returns:
             True if conversion successful, False otherwise
-        """ try:.
+        """
 
         try:
             input_path = Path(input_path)
@@ -135,7 +139,8 @@ class FFmpegAudioProcessor:
             return False
 
     def get_audio_metadata(self, file_path: str | Path) -> dict[str, Any]:
-        """ Extract audio metadata using ffprobe.
+        """
+        Extract audio metadata using ffprobe
         Extract audio metadata using ffprobe.
 
         Args:
@@ -143,7 +148,7 @@ class FFmpegAudioProcessor:
 
         Returns:
             Dictionary containing audio metadata
-        """ try:.
+        """
 
         try:
             file_path = Path(file_path)
@@ -216,7 +221,8 @@ class FFmpegAudioProcessor:
             return {}
 
     def get_audio_duration(self, file_path: str | Path) -> float | None:
-        """ Get audio duration in seconds using ffprobe.
+        """
+        Get audio duration in seconds using ffprobe
         Get audio duration in seconds using ffprobe.
 
         Args:
@@ -224,7 +230,7 @@ class FFmpegAudioProcessor:
 
         Returns:
             Duration in seconds, or None if extraction failed
-        """ try:.
+        """
 
         try:
             file_path = Path(file_path)
@@ -254,7 +260,8 @@ class FFmpegAudioProcessor:
             return None
 
     def normalize_audio(self, input_path: str | Path, output_path: str | Path) -> bool:
-        """ Normalize audio levels using FFmpeg.
+        """
+        Normalize audio levels using FFmpeg
         Normalize audio levels using FFmpeg.
 
         Args:
@@ -263,7 +270,7 @@ class FFmpegAudioProcessor:
 
         Returns:
             True if normalization successful, False otherwise
-        """ try:.
+        """
 
         try:
             input_path = Path(input_path)

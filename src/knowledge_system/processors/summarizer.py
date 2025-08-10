@@ -1,4 +1,5 @@
-""" Summarizer Processor using Unified LLM Providers.
+"""
+Summarizer Processor using Unified LLM Providers
 Summarizer Processor using Unified LLM Providers
 
 Refactored to use shared LLM provider utilities, eliminating duplicate API calling code.
@@ -373,7 +374,8 @@ class SummarizerProcessor(BaseProcessor):
     def _calculate_smart_chunking_threshold(
         self, text: str, prompt_template: str | Path | None
     ) -> int:
-        """ Calculate the intelligent chunking threshold based on model capabilities and user settings.
+        """
+        Calculate the intelligent chunking threshold based on model capabilities and user settings
         Calculate the intelligent chunking threshold based on model capabilities and user settings.
 
         Uses the same logic as calculate_chunking_config but returns just the threshold
@@ -385,8 +387,7 @@ class SummarizerProcessor(BaseProcessor):
 
         Returns:
             Maximum tokens that can be processed without chunking
-        """ from ..utils.text_utils import (.
-
+        """
         from ..utils.text_utils import (
             estimate_tokens_improved,
             get_model_context_window,
@@ -574,12 +575,14 @@ class SummarizerProcessor(BaseProcessor):
         prompt_template: str | Path | None,
         cancellation_token: CancellationToken | None = None,
     ) -> tuple[list[Any], str, Any]:
-        """ Set up chunking configuration and create chunks.
+        """
+        Set up chunking configuration and create chunks
         Set up chunking configuration and create chunks.
 
         Returns:
             Tuple of (chunks, original_prompt_template, chunking_config)
-        """ logger.info(f"Setting up chunking configuration (model: {self.model})").
+        """
+        logger.info(f"Setting up chunking configuration (model: {self.model})")
         logger.info(f"Setting up chunking configuration (model: {self.model})")
 
         # Check for cancellation
@@ -668,7 +671,8 @@ class SummarizerProcessor(BaseProcessor):
         total_characters: int | None = None,
         current_file_size: int | None = None,
     ) -> tuple[list[str], dict[str, int]]:
-        """ Process all chunks and return summaries with statistics.
+        """
+        Process all chunks and return summaries with statistics
         Process all chunks and return summaries with statistics.
 
         Args:
@@ -679,7 +683,8 @@ class SummarizerProcessor(BaseProcessor):
 
         Returns:
             Tuple of (chunk_summaries, processing_stats)
-        """ chunk_summaries = [].
+        """
+        chunk_summaries = []
 
         chunk_summaries = []
         total_prompt_tokens = 0
@@ -775,7 +780,8 @@ class SummarizerProcessor(BaseProcessor):
         total_characters: int | None = None,
         current_file_size: int | None = None,
     ) -> tuple[str, dict[str, int]]:
-        """ Reassemble chunk summaries into final summary.
+        """
+        Reassemble chunk summaries into final summary
         Reassemble chunk summaries into final summary.
 
         Args:
@@ -786,7 +792,8 @@ class SummarizerProcessor(BaseProcessor):
 
         Returns:
             Tuple of (final_summary, additional_stats)
-        """ # Update progress for reassembly phase with character tracking.
+        """
+        # Update progress for reassembly phase with character tracking
 
         # Update progress for reassembly phase with character tracking
         if progress_callback:
@@ -865,7 +872,8 @@ class SummarizerProcessor(BaseProcessor):
         total_characters: int | None = None,
         current_file_size: int | None = None,
     ) -> dict[str, Any]:
-        """ Process text using intelligent chunking.
+        """
+        Process text using intelligent chunking
         Process text using intelligent chunking.
 
         Args:
@@ -877,7 +885,8 @@ class SummarizerProcessor(BaseProcessor):
 
         Returns:
             Dictionary with summary and metadata
-        """ logger.info(f"Processing with intelligent chunking (model: {self.model})").
+        """
+        logger.info(f"Processing with intelligent chunking (model: {self.model})")
         logger.info(f"Processing with intelligent chunking (model: {self.model})")
 
         # Step 1: Setup chunking configuration and create chunks

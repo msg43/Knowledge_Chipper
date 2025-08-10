@@ -57,7 +57,8 @@ class APIKeysTab(BaseTab):
         instructions_layout = QVBoxLayout()
 
         instructions_text = QLabel(
-            """ 🔑 API Key Configuration Guide:.
+            """
+            🔑 API Key Configuration Guide:
 🔑 API Key Configuration Guide:
 
 • WebShare Proxy: Required for YouTube access. The system uses only WebShare rotating residential proxies.
@@ -73,20 +74,23 @@ class APIKeysTab(BaseTab):
   Get your free token at: https://huggingface.co/settings/tokens
 
 
-        """ ).
+        """
+        )
 
         )
         instructions_text.setWordWrap(True)
         # Dark background with light text for better readability
         instructions_text.setStyleSheet(
-            """ background-color: #2b2b2b;.
+            """
+            background-color: #2b2b2b;
 
             background-color: #2b2b2b;
             color: #ffffff;
             padding: 15px;
             border: 1px solid #555;
             border-radius: 5px;
-        """ ).
+        """
+        )
 
         )
         instructions_layout.addWidget(instructions_text)
@@ -213,7 +217,8 @@ class APIKeysTab(BaseTab):
         update_btn = QPushButton("🔄 Check for Updates")
         update_btn.clicked.connect(self._check_for_updates)
         update_btn.setStyleSheet(
-            """ QPushButton {.
+            """
+            QPushButton {
 
             QPushButton {
                 background-color: #2196F3;
@@ -229,7 +234,8 @@ class APIKeysTab(BaseTab):
             QPushButton:pressed {
                 background-color: #0D47A1;
             }
-        """ ).
+        """
+        )
 
         )
         update_btn.setToolTip(
@@ -256,7 +262,8 @@ class APIKeysTab(BaseTab):
             "updates each time you launch the application."
         )
         self.auto_update_checkbox.setStyleSheet(
-            """ QCheckBox {.
+            """
+            QCheckBox {
 
             QCheckBox {
                 font-size: 12px;
@@ -265,7 +272,8 @@ class APIKeysTab(BaseTab):
             QCheckBox:hover {
                 color: #2196F3;
             }
-        """ ).
+        """
+        )
 
         )
         # Load saved preference
@@ -746,11 +754,11 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
     def _install_ffmpeg(self) -> None:
         """ Start FFmpeg installation in background."""
         try:
-            # Example known-good static build (placeholder URL and checksum)
-            # Replace with your vetted source/checksum
+            # Static build vetted source and checksum
+            # Reference: https://www.osxexperts.net/ffmpeg711arm.zip
             release = FFmpegRelease(
-                url="https://evermeet.cx/ffmpeg/ffmpeg-6.1.1.zip",
-                sha256="0000000000000000000000000000000000000000000000000000000000000000",
+                url="https://www.osxexperts.net/ffmpeg711arm.zip",
+                sha256="011221d75eae36943b5a6a28f70e25928cfb5602fe616d06da0a3b9b55ff6b75",
                 ffmpeg_name="ffmpeg",
                 ffprobe_name="ffprobe",
             )

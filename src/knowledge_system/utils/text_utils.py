@@ -1,4 +1,5 @@
-""" Text processing utilities for the knowledge system.
+"""
+Text processing utilities for the knowledge system
 Text processing utilities for the knowledge system.
 """
 
@@ -116,7 +117,8 @@ class ChunkingSummary:
 
 
 def estimate_tokens_improved(text: str, model: str = "default") -> int:
-    """ Improved token estimation that considers model-specific tokenization.
+    """
+    Improved token estimation that considers model-specific tokenization
     Improved token estimation that considers model-specific tokenization.
 
     Args:
@@ -125,8 +127,7 @@ def estimate_tokens_improved(text: str, model: str = "default") -> int:
 
     Returns:
         Estimated token count
-    """ if not text:.
-
+    """
     if not text:
         return 0
 
@@ -154,7 +155,8 @@ def estimate_tokens_improved(text: str, model: str = "default") -> int:
 
 
 def _detect_context_window_from_ollama(model: str) -> int | None:
-    """ Detect context window by querying Ollama for model information.
+    """
+    Detect context window by querying Ollama for model information
     Detect context window by querying Ollama for model information.
 
     Args:
@@ -162,8 +164,7 @@ def _detect_context_window_from_ollama(model: str) -> int | None:
 
     Returns:
         Context window size in tokens, or None if not available
-    """ try:.
-
+    """
     try:
         from ..utils.ollama_manager import get_ollama_manager
 
@@ -234,7 +235,8 @@ def _detect_context_window_from_ollama(model: str) -> int | None:
 
 
 def get_model_context_window(model: str) -> int:
-    """ Get the context window size for a specific model with dynamic detection.
+    """
+    Get the context window size for a specific model with dynamic detection
     Get the context window size for a specific model with dynamic detection.
 
     Args:
@@ -242,7 +244,8 @@ def get_model_context_window(model: str) -> int:
 
     Returns:
         Context window size in tokens
-    """ global _model_context_cache, _cache_timestamp.
+    """
+    global _model_context_cache, _cache_timestamp
     global _model_context_cache, _cache_timestamp
 
     # Normalize model name
@@ -290,11 +293,13 @@ def get_model_context_window(model: str) -> int:
 
 
 def refresh_model_context_cache() -> None:
-    """ Force refresh of the model context window cache.
+    """
+    Force refresh of the model context window cache
 
     Force refresh of the model context window cache.
     Useful when new models are installed or Ollama is restarted.
-    """ global _model_context_cache, _cache_timestamp.
+    """
+    global _model_context_cache, _cache_timestamp
 
     global _model_context_cache, _cache_timestamp
     _model_context_cache.clear()
@@ -303,13 +308,15 @@ def refresh_model_context_cache() -> None:
 
 
 def add_custom_model_context(model: str, context_window: int) -> None:
-    """ Add a custom context window for a specific model.
+    """
+    Add a custom context window for a specific model
     Add a custom context window for a specific model.
 
     Args:
         model: Model name
         context_window: Context window size in tokens
-    """ global _model_context_cache.
+    """
+    global _model_context_cache
 
     global _model_context_cache
     model_normalized = model.lower().strip()
@@ -320,12 +327,14 @@ def add_custom_model_context(model: str, context_window: int) -> None:
 
 
 def get_cached_models() -> dict[str, int]:
-    """ Get all currently cached model context windows.
+    """
+    Get all currently cached model context windows
     Get all currently cached model context windows.
 
     Returns:
         Dictionary of model names to context window sizes
-    """ return _model_context_cache.copy().
+    """
+    return _model_context_cache.copy()
     return _model_context_cache.copy()
 
 
@@ -335,7 +344,8 @@ def calculate_chunking_config(
     prompt_template: str,
     max_output_tokens: int,
 ) -> ChunkingConfig:
-    """ Calculate optimal chunking configuration based on all parameters.
+    """
+    Calculate optimal chunking configuration based on all parameters
     Calculate optimal chunking configuration based on all parameters.
 
     Args:
@@ -346,7 +356,8 @@ def calculate_chunking_config(
 
     Returns:
         ChunkingConfig with optimal settings
-    """ context_window = get_model_context_window(model).
+    """
+    context_window = get_model_context_window(model)
     context_window = get_model_context_window(model)
 
     # Estimate prompt tokens
@@ -387,7 +398,8 @@ def calculate_chunking_config(
 
 
 def split_at_sentence_boundaries(text: str, max_length: int) -> list[str]:
-    """ Split text at sentence boundaries while respecting maximum length.
+    """
+    Split text at sentence boundaries while respecting maximum length
     Split text at sentence boundaries while respecting maximum length.
 
     Args:
@@ -396,8 +408,7 @@ def split_at_sentence_boundaries(text: str, max_length: int) -> list[str]:
 
     Returns:
         List of text chunks split at sentence boundaries
-    """ if len(text) <= max_length:.
-
+    """
     if len(text) <= max_length:
         return [text]
 
@@ -454,7 +465,8 @@ def split_at_sentence_boundaries(text: str, max_length: int) -> list[str]:
 def create_intelligent_chunks(
     text: str, config: ChunkingConfig, model: str = "default"
 ) -> list[TextChunk]:
-    """ Create intelligent text chunks based on configuration and model.
+    """
+    Create intelligent text chunks based on configuration and model
     Create intelligent text chunks based on configuration and model.
 
     Args:
@@ -464,8 +476,7 @@ def create_intelligent_chunks(
 
     Returns:
         List of TextChunk objects
-    """ if not text.strip():.
-
+    """
     if not text.strip():
         return []
 
@@ -530,7 +541,8 @@ def generate_chunk_summary_prompt(
     chunk_context: str = "",
     is_final_chunk: bool = False,
 ) -> str:
-    """ Generate a specialized prompt for summarizing a chunk.
+    """
+    Generate a specialized prompt for summarizing a chunk
     Generate a specialized prompt for summarizing a chunk.
 
     Args:
@@ -541,7 +553,8 @@ def generate_chunk_summary_prompt(
 
     Returns:
         Specialized prompt for the chunk
-    """ # Create chunk-specific context.
+    """
+    # Create chunk-specific context
 
     # Create chunk-specific context
     chunk_info = f"This is chunk {chunk.chunk_id + 1}"
@@ -578,7 +591,8 @@ def reassemble_chunk_summaries(
     model: str,
     max_output_tokens: int,
 ) -> str:
-    """ Intelligently reassemble chunk summaries into a coherent final summary.
+    """
+    Intelligently reassemble chunk summaries into a coherent final summary
     Intelligently reassemble chunk summaries into a coherent final summary.
 
     Args:
@@ -589,8 +603,7 @@ def reassemble_chunk_summaries(
 
     Returns:
         Final reassembled summary
-    """ if not chunk_summaries:.
-
+    """
     if not chunk_summaries:
         return ""
 
@@ -622,7 +635,8 @@ Final Summary:"""
 def get_chunking_summary(
     chunks: list[TextChunk], config: ChunkingConfig
 ) -> ChunkingSummary:
-    """ Generate a summary of the chunking process.
+    """
+    Generate a summary of the chunking process
     Generate a summary of the chunking process.
 
     Args:
@@ -631,8 +645,7 @@ def get_chunking_summary(
 
     Returns:
         ChunkingSummary with process information
-    """ if not chunks:.
-
+    """
     if not chunks:
         return ChunkingSummary(
             total_chunks=0,
@@ -668,7 +681,8 @@ def get_chunking_summary(
 
 # Existing functions remain unchanged
 def load_interjections(interjections_file: Path) -> set[str]:
-    """ Load interjections from a text file.
+    """
+    Load interjections from a text file
     Load interjections from a text file.
 
     Args:
@@ -676,7 +690,8 @@ def load_interjections(interjections_file: Path) -> set[str]:
 
     Returns:
         Set of interjection strings to strip
-    """ interjections = set().
+    """
+    interjections = set()
     interjections = set()
 
     try:
@@ -700,7 +715,8 @@ def load_interjections(interjections_file: Path) -> set[str]:
 
 
 def strip_interjections(text: str, interjections: set[str]) -> str:
-    """ Strip interjections from text.
+    """
+    Strip interjections from text
     Strip interjections from text.
 
     Args:
@@ -709,8 +725,7 @@ def strip_interjections(text: str, interjections: set[str]) -> str:
 
     Returns:
         Text with interjections removed
-    """ if not interjections:.
-
+    """
     if not interjections:
         return text
 
@@ -730,7 +745,8 @@ def strip_interjections(text: str, interjections: set[str]) -> str:
 
 
 def strip_bracketed_content(text: str) -> str:
-    """ Strip ANY content between brackets from text.
+    """
+    Strip ANY content between brackets from text
     Strip ANY content between brackets from text.
 
     Args:
@@ -744,8 +760,7 @@ def strip_bracketed_content(text: str) -> str:
         "Hello world"
         >>> strip_bracketed_content("The speaker said [inaudible] something important")
         "The speaker said something important"
-    """ if not text:.
-
+    """
     if not text:
         return text
 
@@ -763,12 +778,14 @@ def strip_bracketed_content(text: str) -> str:
 
 
 def get_default_interjections_file() -> Path:
-    """ Get the default path to the interjections file.
+    """
+    Get the default path to the interjections file
     Get the default path to the interjections file.
 
     Returns:
         Path to the default interjections file
-    """ # Look for the file in the data directory relative to the project root.
+    """
+    # Look for the file in the data directory relative to the project root
 
     # Look for the file in the data directory relative to the project root
     project_root = Path(__file__).parent.parent.parent.parent

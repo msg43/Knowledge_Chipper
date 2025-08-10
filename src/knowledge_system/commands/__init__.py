@@ -1,4 +1,5 @@
-""" CLI command modules for Knowledge System.
+"""
+CLI command modules for Knowledge System
 CLI command modules for Knowledge System.
 
 This package contains modular CLI commands that were extracted from the monolithic cli.py file

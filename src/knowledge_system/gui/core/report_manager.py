@@ -1,4 +1,5 @@
-""" Report Manager for GUI.
+"""
+Report Manager for GUI
 Report Manager for GUI
 
 Manages processing reports and results display in the GUI.

@@ -1,4 +1,5 @@
-""" Progress Tracking for Batch Operations.
+"""
+Progress Tracking for Batch Operations
 Progress Tracking for Batch Operations
 
 Provides progress tracking classes for various operation types and
@@ -620,7 +621,8 @@ def format_time_remaining(seconds: int | None) -> str:
 
 
 def format_progress_message(progress: Any, operation_type: str = "processing") -> str:
-    """ Format a comprehensive progress message with ETAs.
+    """
+    Format a comprehensive progress message with ETAs
     Format a comprehensive progress message with ETAs.
 
     Args:
@@ -629,7 +631,7 @@ def format_progress_message(progress: Any, operation_type: str = "processing") -
 
     Returns:
         Formatted progress string with current status and ETAs
-    """ parts = [].
+    """
     parts = []
 
     # Current operation status
@@ -674,7 +676,8 @@ def format_progress_message(progress: Any, operation_type: str = "processing") -
 def create_character_progress_tracker(
     file_paths: list[str], start_time: float
 ) -> dict[str, Any]:
-    """ Create a character-based progress tracker for a batch of files.
+    """
+    Create a character-based progress tracker for a batch of files
     Create a character-based progress tracker for a batch of files.
 
     Args:
@@ -683,7 +686,7 @@ def create_character_progress_tracker(
 
     Returns:
         Dictionary with tracking information
-    """ from pathlib import Path.
+    """
     from pathlib import Path
 
     file_sizes = []
@@ -714,7 +717,8 @@ def create_character_progress_tracker(
 def create_duration_progress_tracker(
     audio_files: list[str], start_time: float
 ) -> dict[str, Any]:
-    """ Create a duration-based progress tracker for audio/video files.
+    """
+    Create a duration-based progress tracker for audio/video files
     Create a duration-based progress tracker for audio/video files.
 
     Args:
@@ -723,7 +727,8 @@ def create_duration_progress_tracker(
 
     Returns:
         Dictionary with tracking information
-    """ # This would need to integrate with audio duration detection.
+    """
+    # This would need to integrate with audio duration detection
 
     # This would need to integrate with audio duration detection
     # For now, use file size as a proxy
@@ -736,7 +741,8 @@ def update_progress_with_character_tracking(
     current_file_progress_percent: float,
     elapsed_time: float,
 ) -> dict[str, Any]:
-    """ Update progress tracking with current file progress.
+    """
+    Update progress tracking with current file progress
     Update progress tracking with current file progress.
 
     Args:
@@ -747,7 +753,7 @@ def update_progress_with_character_tracking(
 
     Returns:
         Updated progress information with ETAs
-    """ import time.
+    """
     import time
 
     # Calculate characters completed

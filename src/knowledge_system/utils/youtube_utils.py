@@ -1,4 +1,5 @@
-""" YouTube utility functions for URL validation and processing.
+"""
+YouTube utility functions for URL validation and processing
 
 YouTube utility functions for URL validation and processing.
 Consolidates common YouTube operations used across processors.
@@ -29,7 +30,8 @@ _cookie_jar_ttl = 7200  # Cache cookies for 2 hours to avoid repeated keychain a
 
 
 def is_youtube_url(text: str) -> bool:
-    """ Check if text contains a YouTube URL.
+    """
+    Check if text contains a YouTube URL
     Check if text contains a YouTube URL.
 
     Args:
@@ -37,12 +39,14 @@ def is_youtube_url(text: str) -> bool:
 
     Returns:
         True if text contains a YouTube URL, False otherwise
-    """ return any(re.search(pattern, text) for pattern in YOUTUBE_URL_PATTERNS).
+    """
+    return any(re.search(pattern, text) for pattern in YOUTUBE_URL_PATTERNS)
     return any(re.search(pattern, text) for pattern in YOUTUBE_URL_PATTERNS)
 
 
 def extract_urls(input_data: Any) -> list[str]:
-    """ Extract YouTube URLs from input data.
+    """
+    Extract YouTube URLs from input data
 
     Extract YouTube URLs from input data.
     Handles both direct URLs and files containing URLs.
@@ -56,7 +60,8 @@ def extract_urls(input_data: Any) -> list[str]:
     Raises:
         FileNotFoundError: If input appears to be a file path but file doesn't exist
         IOError: If file cannot be read
-    """ input_str = str(input_data).
+    """
+    input_str = str(input_data)
 
     input_str = str(input_data)
     urls = []
@@ -86,13 +91,13 @@ def extract_urls(input_data: Any) -> list[str]:
 
 
 def get_manual_cookie_file() -> Path | None:
-    """ Check for manual cookie file in common locations.
+    """
+    Check for manual cookie file in common locations
     Check for manual cookie file in common locations.
 
     Returns:
         Path to cookie file if found, None otherwise
-    """ possible_paths = [.
-
+    """
     possible_paths = [
         Path.home() / ".config" / "knowledge_system" / "cookies.txt",
         Path.home() / ".knowledge_system" / "cookies.txt",
@@ -109,10 +114,10 @@ def get_manual_cookie_file() -> Path | None:
 
 
 def _show_cookie_help_dialog(error_message: str | None = None):
-    """ Shows a helpful dialog box when cookies are stale or authentication fails.
+    """
+    Shows a helpful dialog box when cookies are stale or authentication fails
     Shows a helpful dialog box when cookies are stale or authentication fails.
-    """ try:.
-
+    """
     try:
         # Try to import GUI components
         from PyQt6.QtWidgets import QApplication, QMessageBox
@@ -148,8 +153,7 @@ To fix this, please:
 This will allow the app to access YouTube without being blocked.
 
 Would you like to see detailed instructions?
-            """ else:.
-
+            """
         else:
             title = "YouTube Authentication Failed"
             message = """
@@ -192,7 +196,8 @@ Would you like to see detailed instructions?
 
 
 def get_single_working_strategy() -> dict[str, Any]:
-    """ Gets a single, persistently cached, working authentication strategy.
+    """
+    Gets a single, persistently cached, working authentication strategy
     Gets a single, persistently cached, working authentication strategy.
 
     This function tries strategies in order of effectiveness and caches the first
@@ -206,7 +211,8 @@ def get_single_working_strategy() -> dict[str, Any]:
 
     Returns:
         A dictionary of yt-dlp options for authentication.
-    """ global _cookie_jar_cache, _cookie_jar_timestamp.
+    """
+    global _cookie_jar_cache, _cookie_jar_timestamp
     global _cookie_jar_cache, _cookie_jar_timestamp
 
     # Strategy 1: Re-use a recently cached, working cookie jar
@@ -274,13 +280,13 @@ def get_single_working_strategy() -> dict[str, Any]:
 
 
 def create_cookie_instructions() -> str:
-    """ Create instructions for manually creating a cookie file.
+    """
+    Create instructions for manually creating a cookie file
     Create instructions for manually creating a cookie file.
 
     Returns:
         String with detailed instructions
-    """ return """
-
+    """
     return """
 To fix YouTube authentication issues, you can create a manual cookie file:
 
@@ -303,7 +309,8 @@ Alternatively, you can try:
 
 
 def extract_video_id(url: str) -> str:
-    """ Extract video ID from YouTube URL.
+    """
+    Extract video ID from YouTube URL
     Extract video ID from YouTube URL.
 
     Args:
@@ -311,8 +318,7 @@ def extract_video_id(url: str) -> str:
 
     Returns:
         Video ID string
-    """ patterns = [.
-
+    """
     patterns = [
         r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]+)",
         r"youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)",
@@ -330,7 +336,8 @@ def extract_video_id(url: str) -> str:
 
 
 def is_playlist_url(url: str) -> bool:
-    """ Check if URL is a YouTube playlist.
+    """
+    Check if URL is a YouTube playlist
     Check if URL is a YouTube playlist.
 
     Args:
@@ -338,12 +345,14 @@ def is_playlist_url(url: str) -> bool:
 
     Returns:
         True if URL is a playlist, False otherwise
-    """ return "playlist?list=" in url or ("list=" in url and "watch?v=" not in url).
+    """
+    return "playlist?list=" in url or ("list=" in url and "watch?v=" not in url)
     return "playlist?list=" in url or ("list=" in url and "watch?v=" not in url)
 
 
 def expand_playlist_urls(urls: list[str]) -> list[str]:
-    """ Expand any playlist URLs in the list to individual video URLs.
+    """
+    Expand any playlist URLs in the list to individual video URLs
     Expand any playlist URLs in the list to individual video URLs.
 
     Args:
@@ -351,14 +360,16 @@ def expand_playlist_urls(urls: list[str]) -> list[str]:
 
     Returns:
         List of individual video URLs with playlists expanded
-    """ result = expand_playlist_urls_with_metadata(urls).
+    """
+    result = expand_playlist_urls_with_metadata(urls)
 
     result = expand_playlist_urls_with_metadata(urls)
     return result["expanded_urls"]
 
 
 def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
-    """ Expand any playlist URLs in the list to individual video URLs with playlist metadata.
+    """
+    Expand any playlist URLs in the list to individual video URLs with playlist metadata
     Expand any playlist URLs in the list to individual video URLs with playlist metadata.
 
     Args:
@@ -368,8 +379,7 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
         Dictionary containing:
         - 'expanded_urls': List of individual video URLs with playlists expanded
         - 'playlist_info': List of playlist metadata for tracking progress
-    """ try:.
-
+    """
     try:
         import yt_dlp
 
@@ -453,7 +463,8 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
 def download_thumbnail_direct(
     url: str, output_dir: Path, thumbnail_url: str | None = None
 ) -> str | None:
-    """ Download thumbnail for YouTube video using direct URL access (no cookies needed).
+    """
+    Download thumbnail for YouTube video using direct URL access (no cookies needed)
     Download thumbnail for YouTube video using direct URL access (no cookies needed).
 
     Args:
@@ -463,8 +474,7 @@ def download_thumbnail_direct(
 
     Returns:
         Path to downloaded thumbnail file, or None if failed
-    """ try:.
-
+    """
     try:
         import time
 
@@ -562,7 +572,8 @@ def download_thumbnail(
     use_cookies: bool = False,
     thumbnail_url: str | None = None,
 ) -> str | None:
-    """ Download thumbnail for YouTube video using direct URL access (no bot detection risk).
+    """
+    Download thumbnail for YouTube video using direct URL access (no bot detection risk)
     Download thumbnail for YouTube video using direct URL access (no bot detection risk).
 
     Args:
@@ -573,19 +584,22 @@ def download_thumbnail(
 
     Returns:
         Path to downloaded thumbnail file, or None if failed
-    """ # Always use direct download method - no yt-dlp fallback to avoid bot detection.
+    """
+    # Always use direct download method - no yt-dlp fallback to avoid bot detection
 
     # Always use direct download method - no yt-dlp fallback to avoid bot detection
     return download_thumbnail_direct(url, output_dir, thumbnail_url)
 
 
 def get_no_cookie_strategy() -> dict[str, Any]:
-    """ Gets authentication strategy that never uses cookies.
+    """
+    Gets authentication strategy that never uses cookies
     Gets authentication strategy that never uses cookies.
 
     Returns:
         A dictionary of yt-dlp options for cookie-free authentication.
-    """ logger.info("Using no-cookie authentication strategy.").
+    """
+    logger.info("Using no-cookie authentication strategy.")
 
     logger.info("Using no-cookie authentication strategy.")
     return {
@@ -602,7 +616,8 @@ def get_no_cookie_strategy() -> dict[str, Any]:
 def download_thumbnails_batch(
     urls: list[str], output_dir: Path, timeout: int = 30, use_cookies: bool = False
 ) -> list[str | None]:
-    """ Download thumbnails for multiple YouTube videos with rate limiting.
+    """
+    Download thumbnails for multiple YouTube videos with rate limiting
     Download thumbnails for multiple YouTube videos with rate limiting.
 
     Args:
@@ -613,7 +628,8 @@ def download_thumbnails_batch(
 
     Returns:
         List of thumbnail paths (None for failed downloads)
-    """ thumbnail_paths = [].
+    """
+    thumbnail_paths = []
     thumbnail_paths = []
 
     for i, url in enumerate(urls):
@@ -640,12 +656,14 @@ def clear_authentication_cache():
 
 
 def get_authentication_status() -> dict[str, Any]:
-    """ Get current authentication status and diagnostics.
+    """
+    Get current authentication status and diagnostics
     Get current authentication status and diagnostics.
 
     Returns:
         Dictionary with authentication status information
-    """ now = time.time().
+    """
+    now = time.time()
     now = time.time()
 
     status = {
@@ -662,15 +680,15 @@ def get_authentication_status() -> dict[str, Any]:
 
 
 def initiate_browser_authentication() -> bool:
-    """ Initiate a browser-based authentication flow for YouTube.
+    """
+    Initiate a browser-based authentication flow for YouTube
 
     Initiate a browser-based authentication flow for YouTube.
     This opens the user's browser to authenticate with YouTube without storing passwords.
 
     Returns:
         True if authentication was initiated successfully, False otherwise
-    """ try:.
-
+    """
     try:
         import platform
         import subprocess
@@ -712,25 +730,25 @@ def initiate_browser_authentication() -> bool:
 
 
 def get_authentication_help() -> str:
-    """ Get comprehensive help for YouTube authentication issues.
+    """
+    Get comprehensive help for YouTube authentication issues
     Get comprehensive help for YouTube authentication issues.
 
     Returns:
         String with detailed authentication help
-    """ return """
-
+    """
     return """
-🔐 YouTube Authentication Help
+YouTube Authentication Help
 
 The app needs to authenticate with YouTube to access video transcripts. Here are the secure ways to do this:
 
-📱 BROWSER-BASED AUTHENTICATION (RECOMMENDED):
+Browser-based authentication (recommended):
 1. Click "Open Browser for Authentication" in the Utilities tab
 2. Sign in to your Google account in the browser
 3. Visit a few YouTube videos to establish your session
 4. Return to the app and try processing again
 
-🍪 MANUAL COOKIE EXPORT:
+Manual cookie export:
 1. Install a browser extension:
    • Chrome: "Get cookies.txt" extension
    • Firefox: "cookies.txt" extension
@@ -738,13 +756,13 @@ The app needs to authenticate with YouTube to access video transcripts. Here are
 3. Use the extension to export cookies for youtube.com
 4. Save as 'cookies.txt' in your config folder
 
-🔒 SECURITY NOTES:
+Security notes:
 • Your app NEVER stores passwords
 • Only session cookies are used (like your browser)
 • Cookies expire automatically
 • You can revoke access anytime in your Google account
 
-💡 TROUBLESHOOTING:
+Troubleshooting:
 • Try different browsers (Chrome, Safari, Firefox)
 • Wait a few minutes between attempts
 • Check if videos are age-restricted or private
