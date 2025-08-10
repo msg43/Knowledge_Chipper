@@ -12,6 +12,7 @@ from .mapper import Mapper
 from .segmenter import Segmenter, Paragraph
 from .synthesizer import Synthesizer
 from .scorecard import Scorecard
+from .gates import QualityGates
 from .retrieval import Retrieval
 
 
@@ -99,13 +100,11 @@ class Runner:
         (self.artifacts_dir / "link_graph.dot").write_text("digraph G {}\n", encoding="utf-8")
         (self.artifacts_dir / "token_trace.csv").write_text("step,tokens\n", encoding="utf-8")
 
-        # Quality gates (placeholder)
-        if not (score["rare_retention"] >= 0.95 and score["contradictions_surfaced"] >= 0.80):
-            refine = {
-                "reason": "Quality gates unmet (placeholder)",
-                "targets": [chunks[0].id] if chunks else [],
-                "actions": ["increase window", "re-read targets", "re-synthesize"],
-            }
+        # Quality gates
+        gates = QualityGates()
+        ok, _ = gates.evaluate(score)
+        if not ok:
+            refine = gates.refine_plan([chunks[0].id] if chunks else [])
             (self.artifacts_dir / "refine_plan.json").write_text(
                 json.dumps(refine, indent=2), encoding="utf-8"
             )
