@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional
 import click
 
 from ..logger import log_system_event
+from ..superchunk.config import SuperChunkConfig
+from ..superchunk.runner import Runner
 from .common import CLIContext, console, logger, pass_context
 from .transcribe import _generate_obsidian_link, format_transcript_content
 
@@ -76,6 +78,7 @@ from .transcribe import _generate_obsidian_link, format_transcript_content
     "--dry-run", is_flag=True, help="Show what would be done without making changes"
 )
 @click.option("--progress", is_flag=True, help="Show progress tracking")
+@click.option("--superchunk-artifacts", type=click.Path(path_type=Path), required=False, help="If set, run SuperChunk summarizer on the input text/markdown and write artifacts here")
 @pass_context
 def process(
     ctx: CLIContext,
@@ -91,6 +94,7 @@ def process(
     device: str,
     dry_run: bool,
     progress: bool,
+    superchunk_artifacts: Path | None,
 ) -> None:
     """
     Process files or folders with transcription, summarization, and MOC generation
@@ -336,6 +340,18 @@ def process(
                             console.print(
                                 f"[red]✗ Summarization failed: {input_for_summary.name}[/red]"
                             )
+
+                # Optionally, run SuperChunk on text/markdown inputs
+                if superchunk_artifacts and file_path.suffix.lower() in [".md", ".txt"]:
+                    text = Path(file_path).read_text(encoding="utf-8")
+                    paragraphs = [p for p in text.split("\n\n") if p.strip()]
+                    cfg = SuperChunkConfig.from_global_settings()
+                    runner = Runner(config=cfg, artifacts_dir=superchunk_artifacts)
+                    runner.run(paragraphs)
+                    if not ctx.quiet:
+                        console.print(
+                            f"[green]✓ SuperChunk artifacts written to: {superchunk_artifacts}[/green]"
+                        )
 
                 # Collect files for MOC generation (but don't generate yet)
                 if moc:

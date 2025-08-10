@@ -41,7 +41,7 @@ class Runner:
             cursor = end + 1  # account for a newline join later
 
         segmenter = Segmenter(config=self.config)
-        chunks = segmenter.segment(para_objs)
+        chunks = segmenter.segment(para_objs, hotspots=guide.hotspots)
         # chunking decisions
         (self.artifacts_dir / "chunking_decisions.json").write_text(
             json.dumps(
@@ -68,10 +68,16 @@ class Runner:
             claims = extractors.extract_claims(c.text)
             ledger.insert_claims(run_id, c.id, claims)
 
-        # Phase 4: synth (retrieval-only is implicit via selection of slices; stub just quotes chunks)
+        # Phase 4: synth (retrieval-only)
         synth = Synthesizer(config=self.config)
         final_sections = [
-            synth.synthesize_section("Summary", [(c.id, c.text) for c in chunks])
+            synth.synthesize_section(
+                "Summary",
+                [
+                    (c.id, c.text, c.span_start, c.span_end, c.para_start)
+                    for c in chunks
+                ],
+            )
         ]
         (self.artifacts_dir / "final.md").write_text("\n\n".join(final_sections), encoding="utf-8")
 
