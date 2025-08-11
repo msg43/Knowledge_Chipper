@@ -7,12 +7,11 @@ Refactored to use shared LLM provider utilities, eliminating duplicate API calli
 
 import hashlib
 import json
-import os
 import time
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 from knowledge_system.config import get_settings
 from knowledge_system.logger import get_logger
@@ -297,7 +296,7 @@ class SummarizerProcessor(BaseProcessor):
         final_prompt = ""
 
         if template:
-            logger.info(f"🔧 Template provided, checking if it's a file path...")
+            logger.info("🔧 Template provided, checking if it's a file path...")
             # Use custom template
             if isinstance(template, Path) or (
                 isinstance(template, str) and template.endswith(".txt")
@@ -336,7 +335,7 @@ class SummarizerProcessor(BaseProcessor):
                 except Exception as e:
                     logger.error(f"❌ Could not load template {template_path}: {e}")
                     logger.error(
-                        f"❌ Template file must exist and be readable for custom summarization"
+                        "❌ Template file must exist and be readable for custom summarization"
                     )
                     raise ValueError(
                         f"Failed to load required template file: {template_path}. Error: {e}"
@@ -357,7 +356,7 @@ class SummarizerProcessor(BaseProcessor):
                 )  # Support lowercase variant
         else:
             # Use default prompt
-            logger.info(f"🔧 Using default prompt")
+            logger.info("🔧 Using default prompt")
             final_prompt = f"{default_prompt}\n\nText:\n{text}\n\nSummary:"
 
         logger.info(f"🔧 Generated prompt length: {len(final_prompt)} chars")
@@ -971,7 +970,7 @@ class SummarizerProcessor(BaseProcessor):
                 )
 
             if not text.strip():
-                logger.error(f"🔧 Empty or invalid input text after reading")
+                logger.error("🔧 Empty or invalid input text after reading")
                 return ProcessorResult(
                     success=False,
                     errors=["Empty or invalid input text"],

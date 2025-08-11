@@ -11,7 +11,7 @@ import platform
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import psutil
 
@@ -400,7 +400,7 @@ class HardwareDetector:
                         cuda_version = torch.version.cuda
                     else:
                         cuda_version = "Unknown"
-                except:
+                except Exception:
                     cuda_version = "Unknown"
 
             cuda_specs = CUDASpecs(

@@ -3,7 +3,7 @@ Tests for the base processor class and processor registry.
 """
 
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -13,11 +13,14 @@ from knowledge_system.processors.base import (
     BaseProcessor,
     ProcessorRegistry,
     ProcessorResult,
-    get_processor_registry,
+    register_processor,
+    get_processor,
+    get_processor_for_file,
 )
 from knowledge_system.processors.registry import (
     get_all_processor_stats,
     list_processors,
+    get_processor_for_input,
 )
 
 
@@ -370,9 +373,9 @@ class TestGlobalRegistry:
     def setup_method(self) -> None:
         """Setup for each test method."""
         # Clear global registry
-        from knowledge_system.processors.base import _registry
+        from knowledge_system.processors.base import get_processor_registry
 
-        _registry._processors.clear()
+        get_processor_registry().clear()
 
     def test_register_processor(self) -> None:
         """Test global processor registration."""

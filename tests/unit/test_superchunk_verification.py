@@ -5,7 +5,6 @@ from knowledge_system.superchunk.config import SuperChunkConfig
 from knowledge_system.superchunk.validators import ClaimItem, VerificationItem
 from knowledge_system.superchunk.ledger import Ledger
 
-from pathlib import Path
 
 
 def test_verifier_monkeypatched(tmp_path, monkeypatch):

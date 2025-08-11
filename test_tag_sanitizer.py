@@ -55,7 +55,7 @@ def test_tag_sanitizer():
         for i, tag in enumerate(sanitized_batch):
             print(f"  {i+1}. '{tag}'")
 
-        print(f"\n✅ Tag sanitizer is working correctly!")
+        print("\n✅ Tag sanitizer is working correctly!")
         print(f"• Original count: {len(test_cases)}")
         print(f"• Sanitized count: {len(sanitized_batch)}")
         print(f"• Empty tags filtered out: {len(test_cases) - len(sanitized_batch)}")

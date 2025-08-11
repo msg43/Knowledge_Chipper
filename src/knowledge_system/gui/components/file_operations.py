@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import (
     QFileDialog,
@@ -12,11 +12,10 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QPushButton,
     QVBoxLayout,
-    QWidget,
 )
 
 if TYPE_CHECKING:
-    from PyQt6.QtWidgets import QWidget
+    pass
 
 
 class FileOperationsMixin:

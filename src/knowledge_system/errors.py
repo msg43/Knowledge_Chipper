@@ -5,7 +5,7 @@ Custom exception hierarchy for Knowledge System.
 Provides structured error handling with context preservation.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class KnowledgeSystemError(Exception):

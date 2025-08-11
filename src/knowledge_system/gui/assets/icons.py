@@ -6,7 +6,6 @@ Provides centralized access to application icons.
 """
 
 from pathlib import Path
-from typing import Optional, Union
 
 from PyQt6.QtGui import QIcon, QPixmap
 

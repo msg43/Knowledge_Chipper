@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Any, List, Union
+from typing import Any
 
 
 def validate_file_input(

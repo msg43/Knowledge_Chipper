@@ -8,7 +8,7 @@ Handles saving and loading user preferences across application sessions.
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from ...logger import get_logger
 

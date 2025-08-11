@@ -12,7 +12,7 @@ import re
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import requests
 
@@ -692,15 +692,15 @@ class YouTubeMetadataProcessor(BaseProcessor):
             with open(
                 log_file, "a", encoding="utf-8"
             ) as f:  # Changed 'w' to 'a' for append
-                f.write(f"\n\nYouTube Metadata Extraction Failures\n")
+                f.write("\n\nYouTube Metadata Extraction Failures\n")
                 f.write(f"Generated: {datetime.now().isoformat()}\n")
                 f.write(f"Total failures: {len(failed_videos)}\n")
                 f.write(f"{'='*70}\n\n")
                 f.write(
-                    f"These videos failed both YT-DLP and YouTube Data API v3 extraction.\n"
+                    "These videos failed both YT-DLP and YouTube Data API v3 extraction.\n"
                 )
                 f.write(
-                    f"You may need to check them manually or try alternative methods.\n\n"
+                    "You may need to check them manually or try alternative methods.\n\n"
                 )
 
                 for i, failed_video in enumerate(failed_videos, 1):
@@ -732,16 +732,16 @@ class YouTubeMetadataProcessor(BaseProcessor):
                         attempts.append("YouTube Data API v3")
                     f.write(f"   Failed Methods: {', '.join(attempts)}\n")
 
-                    f.write(f"\n")
+                    f.write("\n")
 
                 f.write(f"\n{'='*70}\n")
-                f.write(f"Manual Investigation Tips:\n")
+                f.write("Manual Investigation Tips:\n")
                 f.write(
-                    f"• Check if videos are private, deleted, or region-restricted\n"
+                    "• Check if videos are private, deleted, or region-restricted\n"
                 )
-                f.write(f"• Verify your YouTube Data API key has sufficient quota\n")
-                f.write(f"• Try accessing videos directly in a browser\n")
-                f.write(f"• Consider using alternative extraction methods\n")
+                f.write("• Verify your YouTube Data API key has sufficient quota\n")
+                f.write("• Try accessing videos directly in a browser\n")
+                f.write("• Consider using alternative extraction methods\n")
 
             logger.info(f"Human-readable failure log written to: {log_file}")
 

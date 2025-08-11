@@ -64,7 +64,8 @@ class Runner:
         # Phase 2: extraction
         extractors = Extractors.create_default()
         ledger = Ledger(self.artifacts_dir / "ledger.sqlite")
-        run_id = ledger.start_run(config=self.config.__dict__)
+        # Ensure we only store JSON-serializable config
+        run_id = ledger.start_run(config=self.config.to_json_dict())
 
         for c in chunks:
             claims = extractors.extract_claims(c.text)

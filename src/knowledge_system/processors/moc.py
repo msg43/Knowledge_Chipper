@@ -13,7 +13,7 @@ Generates structured Maps of Content from markdown files, including:
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import yaml  # type: ignore
 from pydantic import BaseModel, Field

@@ -3,20 +3,16 @@
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-from PyQt6.QtCore import Qt, QUrl, pyqtSignal
-from PyQt6.QtGui import QDesktopServices, QFont, QPixmap
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QFrame,
-    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
-    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
@@ -110,7 +106,6 @@ class IntroductionTab(BaseTab):
         overview_text = QLabel(
             """
             <b>Knowledge Chipper transforms your media content into organized, searchable knowledge.</b>
-<b>Knowledge Chipper transforms your media content into organized, searchable knowledge.</b>
 
 <br><br><b>🎯 Perfect for:</b>
 • Researchers processing interview recordings
@@ -133,7 +128,6 @@ class IntroductionTab(BaseTab):
 • <b>File Watching:</b> Automatic processing of new files
         """
         )
-        )
 
         overview_text.setWordWrap(True)
         overview_text.setTextFormat(Qt.TextFormat.RichText)
@@ -153,7 +147,6 @@ class IntroductionTab(BaseTab):
         quickstart_text = QLabel(
             """
             <b>Get started in 3 simple steps:</b>
-<b>Get started in 3 simple steps:</b>
 
 <br><br><b>1. Configure Settings</b> 📁
 • Go to the <b>⚙️ Settings</b> tab
@@ -175,7 +168,6 @@ class IntroductionTab(BaseTab):
 <br><br><b>💡 Pro Tip:</b> Start with shorter files (under 30 minutes) to get familiar with the workflow, then scale up to longer content!
         """
         )
-        )
 
         quickstart_text.setWordWrap(True)
         quickstart_text.setTextFormat(Qt.TextFormat.RichText)
@@ -195,7 +187,6 @@ class IntroductionTab(BaseTab):
         tabs_text = QLabel(
             """
             <b>Each tab serves a specific purpose:</b>
-<b>Each tab serves a specific purpose:</b>
 
 <br><br><b>📁 Process Management</b> - Your main workspace
 • Upload and process multiple files at once
@@ -229,7 +220,6 @@ class IntroductionTab(BaseTab):
 • Required for AI-powered features
         """
         )
-        )
 
         tabs_text.setWordWrap(True)
         tabs_text.setTextFormat(Qt.TextFormat.RichText)
@@ -249,7 +239,6 @@ class IntroductionTab(BaseTab):
         tips_text = QLabel(
             """
             <b>🏆 Best Practices for Success:</b>
-<b>🏆 Best Practices for Success:</b>
 
 <br><br><b>File Organization:</b>
 • Use descriptive filenames for better organization
@@ -279,7 +268,6 @@ class IntroductionTab(BaseTab):
 <br><br><b>🎯 Remember:</b> Knowledge Chipper is designed to handle everything from quick voice memos to multi-hour lectures. Start small and scale up as you get comfortable!
         """
         )
-        )
 
         tips_text.setWordWrap(True)
         tips_text.setTextFormat(Qt.TextFormat.RichText)
@@ -304,8 +292,6 @@ class IntroductionTab(BaseTab):
         readme_section = QLabel(
             """
             <b>📖 Complete Documentation:</b>
-
-<b>📖 Complete Documentation:</b>
 <br>• <a href="readme://open">README.md</a> - Full setup guide, troubleshooting, and advanced features
 <br>• <a href="changelog://open">CHANGELOG.md</a> - Latest updates and version history
 <br>• <a href="contributing://open">CONTRIBUTING.md</a> - Development and contribution guidelines
@@ -316,7 +302,6 @@ class IntroductionTab(BaseTab):
 <br>• <a href="troubleshooting://help">Troubleshooting Guide</a> - Common issues and solutions
         """
         )
-        )
 
         readme_section.setWordWrap(True)
         readme_section.setTextFormat(Qt.TextFormat.RichText)
@@ -324,8 +309,6 @@ class IntroductionTab(BaseTab):
         readme_section.linkActivated.connect(self._handle_documentation_link)
         readme_section.setStyleSheet(
             """
-            QLabel {
-
             QLabel {
                 background-color: #f8f9fa;
                 padding: 15px;
@@ -341,8 +324,6 @@ class IntroductionTab(BaseTab):
                 text-decoration: underline;
             }
         """
-        )
-
         )
         doc_layout.addWidget(readme_section)
 
@@ -474,8 +455,6 @@ class IntroductionTab(BaseTab):
         api_keys_btn.setStyleSheet(
             """
             QPushButton {
-
-            QPushButton {
                 background-color: #ff9800;
                 color: white;
                 font-weight: bold;
@@ -488,8 +467,6 @@ class IntroductionTab(BaseTab):
             }
         """
         )
-
-        )
         nav_layout.addWidget(api_keys_btn)
 
         # Process files button
@@ -499,8 +476,6 @@ class IntroductionTab(BaseTab):
         )
         process_btn.setStyleSheet(
             """
-            QPushButton {
-
             QPushButton {
                 background-color: #4caf50;
                 color: white;
@@ -514,8 +489,6 @@ class IntroductionTab(BaseTab):
             }
         """
         )
-
-        )
         nav_layout.addWidget(process_btn)
 
         # YouTube button
@@ -523,8 +496,6 @@ class IntroductionTab(BaseTab):
         youtube_btn.clicked.connect(lambda: self.navigate_to_tab.emit("YouTube"))
         youtube_btn.setStyleSheet(
             """
-            QPushButton {
-
             QPushButton {
                 background-color: #f44336;
                 color: white;
@@ -537,8 +508,6 @@ class IntroductionTab(BaseTab):
                 background-color: #da190b;
             }
         """
-        )
-
         )
         nav_layout.addWidget(youtube_btn)
 
@@ -568,8 +537,6 @@ class IntroductionTab(BaseTab):
         self.start_btn.setStyleSheet(
             """
             QPushButton {
-
-            QPushButton {
                 background-color: #4caf50;
                 color: white;
                 font-weight: bold;
@@ -582,8 +549,6 @@ class IntroductionTab(BaseTab):
                 background-color: #45a049;
             }
         """
-        )
-
         )
         layout.addWidget(self.start_btn)
 
@@ -602,8 +567,6 @@ class IntroductionTab(BaseTab):
         welcome_label.setStyleSheet(
             """
             QLabel {
-
-            QLabel {
                 background-color: #e8f5e8;
                 padding: 15px;
                 border: 1px solid #4caf50;
@@ -612,8 +575,6 @@ class IntroductionTab(BaseTab):
                 font-size: 14px;
             }
         """
-        )
-
         )
         layout.addWidget(welcome_label)
 

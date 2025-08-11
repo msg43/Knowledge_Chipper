@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from knowledge_system.superchunk.segmenter import Segmenter, Paragraph
-from knowledge_system.superchunk.config import SuperChunkConfig, WindowPreset
+from knowledge_system.superchunk.config import SuperChunkConfig
 
 
 def test_boundary_respects_hotspots_and_sentences():

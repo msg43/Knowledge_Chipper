@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Iterable, List, Tuple
+from typing import Iterable, List
 
 from .validators import ClaimItem
 

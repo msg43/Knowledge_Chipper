@@ -8,7 +8,7 @@ Handles single files and folders, returns clean text content stripped of HTML ta
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from ..errors import ProcessingError
 from ..logger import get_logger

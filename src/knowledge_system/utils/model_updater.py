@@ -10,14 +10,12 @@ This utility helps keep model context windows up to date by:
 4. Providing manual override capabilities
 """
 
-from typing import Dict, List, Optional
 
 from ..logger import get_logger
 from .text_utils import (
     _detect_context_window_from_ollama,
     add_custom_model_context,
     get_cached_models,
-    get_model_context_window,
     refresh_model_context_cache,
 )
 
@@ -32,8 +30,6 @@ def scan_and_update_models() -> dict[str, int]:
     Returns:
         Dictionary of model names to detected context windows
     """
-    try:
-
     try:
         from .ollama_manager import get_ollama_manager
 
@@ -84,7 +80,6 @@ def list_model_context_windows() -> None:
     List all known model context windows (static + cached).
     """
     from .text_utils import MODEL_CONTEXT_WINDOWS
-    from .text_utils import MODEL_CONTEXT_WINDOWS
 
     print("\n📋 Known Model Context Windows:")
     print("=" * 50)
@@ -116,8 +111,6 @@ def add_model_override(model_name: str, context_window: int) -> None:
         model_name: Name of the model
         context_window: Context window size in tokens
     """
-    add_custom_model_context(model_name, context_window)
-
     add_custom_model_context(model_name, context_window)
     print(
         f"✅ Added custom context window for '{model_name}': {context_window:,} tokens"

@@ -21,6 +21,7 @@ from knowledge_system.config import (
     TranscriptionConfig,
     get_settings,
 )
+from knowledge_system.config import get_settings as reload_settings
 
 
 class TestAppConfig:

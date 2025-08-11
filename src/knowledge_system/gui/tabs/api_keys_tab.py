@@ -1,7 +1,7 @@
 """ API Keys configuration tab for managing all API credentials."""
 
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any
 
 from PyQt6.QtCore import QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -59,7 +59,6 @@ class APIKeysTab(BaseTab):
         instructions_text = QLabel(
             """
             🔑 API Key Configuration Guide:
-🔑 API Key Configuration Guide:
 
 • WebShare Proxy: Required for YouTube access. The system uses only WebShare rotating residential proxies.
   Sign up at: https://www.webshare.io/
@@ -72,26 +71,18 @@ class APIKeysTab(BaseTab):
 
 • HuggingFace Token: Required for speaker diarization (separating different speakers in audio).
   Get your free token at: https://huggingface.co/settings/tokens
-
-
-        """
-        )
-
+            """
         )
         instructions_text.setWordWrap(True)
         # Dark background with light text for better readability
         instructions_text.setStyleSheet(
             """
             background-color: #2b2b2b;
-
-            background-color: #2b2b2b;
             color: #ffffff;
             padding: 15px;
             border: 1px solid #555;
             border-radius: 5px;
         """
-        )
-
         )
         instructions_layout.addWidget(instructions_text)
 
@@ -219,8 +210,6 @@ class APIKeysTab(BaseTab):
         update_btn.setStyleSheet(
             """
             QPushButton {
-
-            QPushButton {
                 background-color: #2196F3;
                 color: white;
                 font-weight: bold;
@@ -235,8 +224,6 @@ class APIKeysTab(BaseTab):
                 background-color: #0D47A1;
             }
         """
-        )
-
         )
         update_btn.setToolTip(
             "Check for and install the latest version.\n"
@@ -264,8 +251,6 @@ class APIKeysTab(BaseTab):
         self.auto_update_checkbox.setStyleSheet(
             """
             QCheckBox {
-
-            QCheckBox {
                 font-size: 12px;
                 color: #666;
             }
@@ -273,8 +258,6 @@ class APIKeysTab(BaseTab):
                 color: #2196F3;
             }
         """
-        )
-
         )
         # Load saved preference
         self.auto_update_checkbox.setChecked(

@@ -233,3 +233,4 @@ settings.yaml
 # Temporary debug files
 *.rsls
 *.rslsc
+.app_build/

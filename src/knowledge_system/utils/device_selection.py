@@ -7,10 +7,10 @@ workload requirements, and user preferences to choose the best processing device
 """
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..logger import get_logger
-from .hardware_detection import CUDASpecs, GPUType, get_hardware_detector
+from .hardware_detection import CUDASpecs, get_hardware_detector
 
 logger = get_logger(__name__)
 
@@ -36,8 +36,6 @@ def select_optimal_device(
     Returns:
         Device string for PyTorch/Whisper
     """
-    if force_device:
-
     if force_device:
         logger.info(f"Device selection forced to: {force_device}")
         return force_device
@@ -221,8 +219,6 @@ def get_device_recommendations(workload_type: str = "transcription") -> dict[str
     Returns detailed information about available devices and their suitability
     for different workloads.
     """
-    detector = get_hardware_detector()
-
     detector = get_hardware_detector()
     specs = detector.detect_hardware()
 

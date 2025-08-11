@@ -4,7 +4,6 @@ Patch to add tag sanitization to YouTube transcript processor.
 This script will add a sanitize_tags function and update the tag processing.
 """
 
-import re
 from pathlib import Path
 
 
@@ -163,7 +162,7 @@ def test_tag_sanitizer():
             sanitized = sanitize_tag(tag)
             print(f"'{tag}' -> '{sanitized}'")
 
-        print(f"\nBatch sanitization:")
+        print("\nBatch sanitization:")
         print(f"Original: {test_tags}")
         sanitized_batch = sanitize_tags(test_tags)
         print(f"Sanitized: {sanitized_batch}")

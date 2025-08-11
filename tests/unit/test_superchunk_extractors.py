@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 
 from knowledge_system.superchunk.extractors import Extractors
 

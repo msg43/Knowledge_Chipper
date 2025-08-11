@@ -8,7 +8,7 @@ Provides structured logging with rotation, multiple outputs, and proper formatti
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 from loguru import logger
 

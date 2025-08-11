@@ -1,16 +1,10 @@
 """ YouTube extraction tab for downloading and processing YouTube transcripts."""
 
-import json
 import os  # Added for os.access
-import random
-import re
-import time
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from PyQt6.QtCore import QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -73,8 +67,6 @@ class YouTubeExtractionWorker(QThread):
             return
 
         try:
-            import json
-            from datetime import datetime
             from pathlib import Path
 
             from ...processors.youtube_transcript import YouTubeTranscriptProcessor
@@ -227,7 +219,7 @@ class YouTubeExtractionWorker(QThread):
                     logger.info(
                         f"🔧 About to call processor for URL {i+1}/{total_urls}: {url}"
                     )
-                    logger.info(f"🔧 Processor parameters:")
+                    logger.info("🔧 Processor parameters:")
                     logger.info(
                         f"   output_dir: {repr(output_dir_param)} (type: {type(output_dir_param)})"
                     )
@@ -239,7 +231,7 @@ class YouTubeExtractionWorker(QThread):
                     # CRITICAL VALIDATION: Check output directory before processing
                     if output_dir_param:
                         output_path = Path(output_dir_param)
-                        logger.info(f"🔧 Output directory validation:")
+                        logger.info("🔧 Output directory validation:")
                         logger.info(f"   Path exists: {output_path.exists()}")
                         logger.info(
                             f"   Is directory: {output_path.is_dir() if output_path.exists() else 'N/A'}"
@@ -261,7 +253,7 @@ class YouTubeExtractionWorker(QThread):
                                     f"❌ Failed to create output directory {output_path}: {e}"
                                 )
                     else:
-                        logger.warning(f"⚠️ No output_dir parameter provided!")
+                        logger.warning("⚠️ No output_dir parameter provided!")
 
                     # Pass cancellation token to processor
                     result = processor.process(
@@ -484,10 +476,6 @@ class YouTubeExtractionWorker(QThread):
             tuple: (log_file_path, csv_file_path) or (None, None) if failed
         """
         try:
-
-        try:
-            import csv
-            import json
             from datetime import datetime
             from pathlib import Path
 
@@ -506,7 +494,7 @@ class YouTubeExtractionWorker(QThread):
             # Write new timestamped log file
             with open(log_file, "w", encoding="utf-8") as f:
                 f.write(f"{'='*70}\n")
-                f.write(f"YouTube Extraction Failures\n")
+                f.write("YouTube Extraction Failures\n")
                 f.write(f"Session: {datetime.now().isoformat()}\n")
                 f.write(f"Total failed: {len(failed_urls)}\n")
                 f.write(f"{'='*70}\n\n")
@@ -524,10 +512,10 @@ class YouTubeExtractionWorker(QThread):
                     else:
                         # Fallback for simple string URLs
                         f.write(f"{i}. URL: {failed_item}\n")
-                        f.write(f"   Error: No additional information available\n\n")
+                        f.write("   Error: No additional information available\n\n")
 
                 f.write(f"\n{'='*70}\n")
-                f.write(f"Note: This is a session-specific failure log.\n")
+                f.write("Note: This is a session-specific failure log.\n")
                 f.write(f"For retry, use the corresponding CSV file: {csv_file.name}\n")
                 f.write(f"{'='*70}\n")
 
@@ -815,8 +803,6 @@ class YouTubeTab(BaseTab):
         self.start_btn.setStyleSheet(
             """
             QPushButton {
-
-            QPushButton {
                 background-color: #4CAF50;
                 color: white;
                 font-weight: bold;
@@ -832,9 +818,7 @@ class YouTubeTab(BaseTab):
                 background-color: #cccccc;
                 color: #666666;
             }
-        """
-        )
-
+            """
         )
         layout.addWidget(self.start_btn, 3)  # 3/4 stretch factor
 
@@ -857,8 +841,6 @@ class YouTubeTab(BaseTab):
         self.stop_btn.setStyleSheet(
             """
             QPushButton {
-
-            QPushButton {
                 background-color: #f44336;
                 color: white;
                 font-weight: bold;
@@ -875,9 +857,7 @@ class YouTubeTab(BaseTab):
                 color: #ffffff;
                 opacity: 0.7;
             }
-        """
-        )
-
+            """
         )
         layout.addWidget(self.stop_btn, 1)  # 1/4 stretch factor
 
@@ -1047,7 +1027,7 @@ class YouTubeTab(BaseTab):
         }
 
         # CRITICAL DEBUG: Log the exact config being passed to worker
-        logger.info(f"🔧 Extraction config created:")
+        logger.info("🔧 Extraction config created:")
         logger.info(
             f"   output_dir: {repr(config['output_dir'])} (type: {type(config['output_dir'])})"
         )
@@ -1291,11 +1271,11 @@ class YouTubeTab(BaseTab):
                 self.append_log(f"\n📋 Failed extractions logged to: {log_file}")
                 self.append_log(f"🔄 Failed URLs saved for retry to: {csv_file}")
                 self.append_log(
-                    f"   💡 Tip: You can load the CSV file directly to retry failed extractions"
+                    "   💡 Tip: You can load the CSV file directly to retry failed extractions"
                 )
             else:
                 self.append_log(
-                    f"\n⚠️ Warning: Could not write failure logs (check logs directory permissions)"
+                    "\n⚠️ Warning: Could not write failure logs (check logs directory permissions)"
                 )
 
         # Show summary of what files were actually created
@@ -1315,7 +1295,7 @@ class YouTubeTab(BaseTab):
                 )
         else:
             self.append_log(
-                f"\n📊 Summary: No files were saved. Check the issues above."
+                "\n📊 Summary: No files were saved. Check the issues above."
             )
 
         # Reset UI
@@ -1368,7 +1348,6 @@ class YouTubeTab(BaseTab):
 
     def _show_payment_required_dialog(self):
         """ Show popup dialog for 402 Payment Required error."""
-        from PyQt6.QtWidgets import QMessageBox
 
         from ..assets.icons import get_app_icon
 
@@ -1400,7 +1379,7 @@ class YouTubeTab(BaseTab):
         summary = playlist_data.get("summary", "")
 
         # Show comprehensive content summary
-        self.append_log(f"\n📊 Content Analysis:")
+        self.append_log("\n📊 Content Analysis:")
         if summary:
             self.append_log(f"   • {summary}")
             self.append_log(f"   • Grand Total: {total_videos} videos to process")
@@ -1409,7 +1388,7 @@ class YouTubeTab(BaseTab):
 
         # Show detailed playlist breakdown
         if total_playlists > 0:
-            self.append_log(f"\n📋 Playlist Details:")
+            self.append_log("\n📋 Playlist Details:")
             for i, playlist in enumerate(playlists, 1):
                 title = playlist.get("title", "Unknown Playlist")
                 video_count = playlist.get("total_videos", 0)

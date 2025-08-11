@@ -88,7 +88,7 @@ def debug_transcript_availability(video_url: str):
         # Get available transcripts
         transcript_list = api.list(video_id)
 
-        print(f"✅ Successfully connected to YouTube transcript API")
+        print("✅ Successfully connected to YouTube transcript API")
         print()
 
         # List all available transcripts

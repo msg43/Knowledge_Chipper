@@ -5,7 +5,6 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -51,7 +50,7 @@ class UpdateWorker(QThread):
                     logger.info(f"Found update script at: {script_path}")
                     return script_path
 
-            logger.warning(f"Update script not found")
+            logger.warning("Update script not found")
             return None
 
         except Exception as e:

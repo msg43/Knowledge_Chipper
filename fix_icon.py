@@ -60,7 +60,7 @@ def test_icon_availability():
     try:
         # Add src to path
         sys.path.insert(0, str(Path(__file__).parent / "src"))
-        from knowledge_system.gui.assets.icons import get_app_icon, get_icon_path
+        from knowledge_system.gui.assets.icons import get_icon_path
 
         icon_path = get_icon_path()
         if icon_path:

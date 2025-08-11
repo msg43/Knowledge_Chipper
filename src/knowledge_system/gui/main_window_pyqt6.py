@@ -6,20 +6,16 @@ Streamlined main window that focuses on window setup and coordination.
 All business logic has been moved to modular tab classes.
 """
 
-import json
 import os
 import queue
 import sys
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QCloseEvent, QIcon
+from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import (
-    QApplication,
     QLabel,
     QMainWindow,
-    QMessageBox,
     QSizePolicy,
     QStatusBar,
     QTabWidget,
@@ -29,7 +25,8 @@ from PyQt6.QtWidgets import (
 
 from ..config import get_settings
 from ..logger import get_logger
-from ..version import BRANCH, BUILD_DATE, VERSION
+from ..version import BUILD_DATE
+from .. import __version__
 from .assets.icons import get_app_icon, get_icon_path
 
 # Import workers and components
@@ -112,7 +109,7 @@ class MainWindow(QMainWindow):
     def _setup_ui(self) -> None:
         """ Set up the streamlined main UI."""
         self.setWindowTitle(
-            f"Knowledge Chipper v{VERSION} - Your Personal Knowledge Assistant"
+            f"Knowledge Chipper v{__version__} - Your Personal Knowledge Assistant"
         )
         # Make window resizable with reasonable default size and minimum size
         self.resize(1200, 800)  # Default size
@@ -146,7 +143,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
 
         # Add version label to the right side (show semantic version, not commit hash)
-        version_msg = f"Knowledge Chipper v{VERSION} • Built: {BUILD_DATE}"
+        version_msg = f"Knowledge Chipper v{__version__} • Built: {BUILD_DATE}"
 
         version_label = QLabel(version_msg)
         version_label.setStyleSheet("color: #666;")
@@ -200,8 +197,6 @@ class MainWindow(QMainWindow):
         """ Apply dark theme styling."""
         self.setStyleSheet(
             """
-            QMainWindow {
-
             QMainWindow {
                 background-color: #1e1e1e;
             }
@@ -288,7 +283,6 @@ class MainWindow(QMainWindow):
                 border-radius: 2px;
             }
         """
-        )
         )
 
     def _handle_progress_cancellation(self, reason: str) -> None:
@@ -432,11 +426,10 @@ class MainWindow(QMainWindow):
 
 def launch_gui() -> None:
     """ Launch the Knowledge System GUI application."""
-    import sys
 
     try:
         # Import PyQt6 first to check availability
-        from PyQt6.QtGui import QIcon
+        from PyQt6.QtGui import QIcon  # noqa: F401
         from PyQt6.QtWidgets import QApplication
 
         # Create the QApplication

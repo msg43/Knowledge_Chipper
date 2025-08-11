@@ -10,7 +10,7 @@ import time
 from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from ..errors import ProcessingError, ValidationError
 from ..logger import get_logger
@@ -42,8 +42,6 @@ class ErrorHandler:
         Returns:
             ProcessorResult with error details
         """
-        if isinstance(error, Exception):
-
         if isinstance(error, Exception):
             error_msg = f"{processor_name} failed: {str(error)}"
         else:
@@ -88,8 +86,6 @@ class ErrorHandler:
             ProcessorResult with validation error details
         """
         if isinstance(input_data, (str, Path)):
-
-        if isinstance(input_data, (str, Path)):
             path = Path(input_data)
             if not path.exists():
                 error_msg = f"File not found: {path}"
@@ -131,7 +127,6 @@ class ErrorHandler:
         Returns:
             ProcessorResult with no input error details
         """
-        error_msg = f"No {input_description} found in input"
         error_msg = f"No {input_description} found in input"
 
         return ProcessorResult(
@@ -214,7 +209,6 @@ class YouTubeErrorHandler:
             User-friendly error message with emoji and clear explanation
         """
         error_msg_lower = error_msg.lower()
-        error_msg_lower = error_msg.lower()
 
         for error_type, config in cls.ERROR_PATTERNS.items():
             if any(
@@ -254,8 +248,6 @@ class YouTubeErrorHandler:
         Returns:
             ProcessorResult with categorized YouTube error
         """
-        error_msg = str(error)
-
         error_msg = str(error)
         categorized_error = cls.categorize_youtube_error(error_msg, url)
 
@@ -436,7 +428,6 @@ class BatchErrorHandler:
         Returns:
             Summary ProcessorResult with batch statistics
         """
-        error_analysis = BatchErrorHandler.collect_batch_errors(results, operation_name)
         error_analysis = BatchErrorHandler.collect_batch_errors(results, operation_name)
 
         # Determine overall success (succeed if any items succeeded)

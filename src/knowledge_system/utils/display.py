@@ -6,7 +6,6 @@ Provides rich console display for progress tracking with tables and progress bar
 """
 
 from pathlib import Path
-from typing import List
 
 from rich.console import Console
 from rich.progress import (

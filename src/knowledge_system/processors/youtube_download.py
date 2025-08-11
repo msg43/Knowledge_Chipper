@@ -8,7 +8,7 @@ Supports configurable output format (mp3/wav), error handling, and returns outpu
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any
 
 import yt_dlp
 

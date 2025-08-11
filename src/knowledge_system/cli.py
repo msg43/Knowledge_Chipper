@@ -8,7 +8,7 @@ Provides comprehensive CLI commands for all system operations.
 import os
 import sys
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 
 import click
 from rich.console import Console
@@ -20,6 +20,11 @@ from .errors import KnowledgeSystemError
 from .logger import get_logger, log_system_event
 from .processors.registry import get_all_processor_stats, list_processors
 from .utils.file_io import get_file_info
+from .utils.model_registry import (
+    get_provider_models,
+    load_model_overrides,
+    save_model_overrides,
+)
 
 console = Console()
 logger = get_logger("cli")
@@ -144,6 +149,80 @@ main.add_command(transcribe)
 main.add_command(summarize)
 main.add_command(moc)
 main.add_command(process)
+# Models subcommands
+@main.group()
+def models() -> None:
+    """Model management commands (providers and overrides)."""
+    pass
+
+
+@models.command("list")
+@click.option(
+    "--provider",
+    type=click.Choice(["openai", "anthropic"], case_sensitive=False),
+    required=True,
+    help="Provider to list models for",
+)
+def models_list(provider: str) -> None:
+    """List available models for a provider (dynamic + overrides)."""
+    try:
+        models = get_provider_models(provider)
+        console.print(f"[bold]Models for {provider}:[/bold]")
+        for m in models:
+            console.print(f"- {m}")
+        console.print(f"[dim]{len(models)} total[/dim]")
+    except Exception as e:
+        console.print(f"[red]Failed to list models for {provider}:[/red] {e}")
+
+
+@models.command("override")
+@click.option(
+    "--provider",
+    type=click.Choice(["openai", "anthropic"], case_sensitive=False),
+    required=True,
+    help="Provider to override",
+)
+@click.argument("model", nargs=-1)
+def models_override(provider: str, model: tuple[str, ...]) -> None:
+    """Add one or more model names to the overrides file."""
+    if not model:
+        console.print("[yellow]No models provided. Nothing to do.[/yellow]")
+        return
+    try:
+        save_model_overrides(provider, list(model))
+        console.print(
+            f"[green]✓ Added override(s) to {provider}:[/green] {', '.join(model)}"
+        )
+    except Exception as e:
+        console.print(f"[red]Failed to add overrides:[/red] {e}")
+
+
+@models.command("show-overrides")
+def models_show_overrides() -> None:
+    """Show current model overrides from config/model_overrides.yaml."""
+    overrides = load_model_overrides()
+    console.print("[bold]Model Overrides:[/bold]")
+    for provider, models in overrides.items():
+        console.print(f"- {provider}: {', '.join(models) if models else '(none)'}")
+
+
+@models.command("refresh")
+@click.option(
+    "--provider",
+    type=click.Choice(["openai", "anthropic"], case_sensitive=False),
+    required=False,
+    help="Provider to refresh (defaults to both)",
+)
+def models_refresh(provider: str | None) -> None:
+    """Refresh dynamic model lists (warms caches, prints counts)."""
+    try:
+        providers = [provider] if provider else ["openai", "anthropic"]
+        for p in providers:
+            models = get_provider_models(p)
+            console.print(f"[green]✓ Refreshed {p} models:[/green] {len(models)} found")
+    except Exception as e:
+        console.print(f"[red]Failed to refresh models:[/red] {e}")
+
 
 
 @main.command()

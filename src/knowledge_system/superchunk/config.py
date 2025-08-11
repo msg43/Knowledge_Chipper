@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from enum import Enum
-from typing import Literal, Optional
+from typing import Optional, Any, Dict
 
 from ..config import get_settings
 
@@ -89,6 +89,45 @@ class SuperChunkConfig:
         settings = get_settings()
         _ = settings
         return SuperChunkConfig()
+
+    def to_json_dict(self) -> Dict[str, Any]:
+        """Return a JSON-serializable dictionary of this configuration.
+
+        Converts Enum and nested dataclasses to plain Python types that json can handle.
+        """
+        return {
+            "preset": self.preset.value if isinstance(self.preset, WindowPreset) else str(self.preset),
+            "adaptive_switching": bool(self.adaptive_switching),
+            # windows
+            "precision": asdict(self.precision),
+            "balanced": asdict(self.balanced),
+            "narrative": asdict(self.narrative),
+            # extraction caps
+            "non_obvious_claims_count": int(self.non_obvious_claims_count),
+            "max_local_contradictions": int(self.max_local_contradictions),
+            "jargon_terms_count": int(self.jargon_terms_count),
+            "max_quote_words": int(self.max_quote_words),
+            # verification
+            "verify_top_percent": float(self.verify_top_percent),
+            "min_confidence": float(self.min_confidence),
+            "exclude_if_confidence_delta_below": float(self.exclude_if_confidence_delta_below),
+            # retrieval
+            "topk_linking": int(self.topk_linking),
+            "topk_section": int(self.topk_section),
+            "dedupe_threshold": float(self.dedupe_threshold),
+            "neighbor_threshold": float(self.neighbor_threshold),
+            # performance
+            "max_concurrent_calls": int(self.max_concurrent_calls),
+            "batch_size": int(self.batch_size),
+            "circuit_breaker": int(self.circuit_breaker),
+            "cooldown_seconds": int(self.cooldown_seconds),
+            # temperatures
+            "temperature_mapper": float(self.temperature_mapper),
+            "temperature_extract": float(self.temperature_extract),
+            "temperature_link": float(self.temperature_link),
+            "temperature_synth": float(self.temperature_synth),
+            "temperature_verify": float(self.temperature_verify),
+        }
 
     def with_overrides(
         self,

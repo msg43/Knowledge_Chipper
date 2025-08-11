@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ...logger import get_logger
+from ...utils.model_registry import get_provider_models
 from ...utils.ollama_manager import get_ollama_manager
 from ..components.base_tab import BaseTab
 from ..core.settings_manager import get_gui_settings_manager
@@ -78,6 +79,7 @@ class EnhancedSummarizationWorker(QThread):
             from ...utils.file_io import overwrite_or_insert_summary_section
             from ...utils.ollama_manager import get_ollama_manager
             from ...utils.progress import SummarizationProgress
+            from datetime import datetime as _dt
 
             provider = self.gui_settings.get("provider", "openai")
             model = self.gui_settings.get("model", "gpt-4o-mini-2024-07-18")
@@ -356,11 +358,11 @@ class EnhancedSummarizationWorker(QThread):
                                 self.gui_settings.get(
                                     "model", "gpt-4o-mini-2024-07-18"
                                 ),
-                                metadata.get(
+                                (result.metadata or {}).get(
                                     "provider",
                                     self.gui_settings.get("provider", "unknown"),
                                 ),
-                                metadata,
+                                result.metadata or {},
                                 template_path,
                                 self.gui_settings.get(
                                     "analysis_type", "document summary"
@@ -468,9 +470,7 @@ class EnhancedSummarizationWorker(QThread):
                                         f.write(f'{field_name}: "{escaped_value}"\n')
 
                                 # Add generation timestamp
-                                from datetime import datetime
-
-                                f.write(f'generated: "{datetime.now().isoformat()}"\n')
+                                f.write(f'generated: "{_dt.now().isoformat()}"\n')
                                 f.write("---\n\n")
 
                                 # Add thumbnail if found
@@ -591,8 +591,6 @@ class EnhancedSummarizationWorker(QThread):
             YouTube URL if found, None otherwise
         """
         try:
-
-        try:
             with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
@@ -665,8 +663,6 @@ class EnhancedSummarizationWorker(QThread):
             Thumbnail markdown content if found, empty string otherwise
         """
         try:
-
-        try:
             with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
@@ -720,8 +716,6 @@ class EnhancedSummarizationWorker(QThread):
         Returns:
             Tuple of (success_flag, updated_thumbnail_content)
         """
-        try:
-
         try:
             import re
             import shutil
@@ -916,6 +910,8 @@ class SummarizationTab(BaseTab):
             "Select the specific AI model to use for summarization. Different models have different capabilities, costs, and speed."
         )
         self.model_combo = QComboBox()
+        # Allow free-text model entry for newly released models
+        self.model_combo.setEditable(True)
         self._update_models()  # Initialize with correct models
         self.model_combo.currentTextChanged.connect(self._on_setting_changed)
         self.model_combo.setToolTip(
@@ -932,7 +928,7 @@ class SummarizationTab(BaseTab):
 
         # Add refresh button for local models
         self.refresh_models_btn = QPushButton("🔄")
-        self.refresh_models_btn.setToolTip("Refresh available local models")
+        self.refresh_models_btn.setToolTip("Refresh available models for selected provider")
         self.refresh_models_btn.setMaximumWidth(40)
         self.refresh_models_btn.clicked.connect(self._refresh_models)
         settings_layout.addWidget(self.refresh_models_btn, 0, 5)
@@ -1399,26 +1395,22 @@ class SummarizationTab(BaseTab):
         logger.info(f"🔄 NEW DYNAMIC MODEL SYSTEM ACTIVATED - Provider: {provider}")
         self.model_combo.clear()
 
-        if provider == "openai":
-            models = [
-                "gpt-3.5-turbo-0125",
-                "gpt-3.5-turbo-1106",
-                "gpt-4-0613",
-                "gpt-4-1106-preview",
-                "gpt-4-turbo-2024-04-09",
-                "gpt-4o-2024-05-13",
-                "gpt-4o-2024-08-06",
-                "gpt-4o-mini-2024-07-18",
-            ]
-        elif provider == "anthropic":
-            models = [
-                "claude-3-haiku-20240307",
-                "claude-3-sonnet-20240229",
-                "claude-3-opus-20240229",
-                "claude-3-5-sonnet-20240620",
-                "claude-3-5-sonnet-20241022",
-                "claude-3-5-haiku-20241022",
-            ]
+        if provider in {"openai", "anthropic"}:
+            # Dynamic provider models with safe fallback and overrides
+            try:
+                models = get_provider_models(provider)
+                # Remove duplicates and keep order just in case
+                seen = set()
+                unique_models = []
+                for m in models:
+                    key = m.strip().lower()
+                    if key and key not in seen:
+                        seen.add(key)
+                        unique_models.append(m.strip())
+                models = unique_models
+            except Exception as e:
+                logger.warning(f"Falling back to curated list for {provider}: {e}")
+                models = get_provider_models(provider)
         else:  # local
             # Use the new dynamic registry system
             try:
@@ -1463,12 +1455,33 @@ class SummarizationTab(BaseTab):
 
         self.model_combo.addItems(models)
 
-        # Set a reasonable default
+        # Set a reasonable default while preserving prior selection
         if models:
             if provider == "openai":
-                self.model_combo.setCurrentText("gpt-4o-mini-2024-07-18")
+                # Prefer a modern small default if present; otherwise first item
+                preferred = [
+                    "gpt-4o-mini-2024-07-18",
+                    "gpt-4o-2024-08-06",
+                    "gpt-5",
+                ]
+                for name in preferred:
+                    if name in models:
+                        self.model_combo.setCurrentText(name)
+                        break
+                else:
+                    self.model_combo.setCurrentIndex(0)
             elif provider == "anthropic":
-                self.model_combo.setCurrentText("claude-3-5-sonnet-20241022")
+                preferred = [
+                    "claude-3-5-sonnet-20241022",
+                    "claude-3-5-sonnet-latest",
+                    "claude-3-5-haiku-20241022",
+                ]
+                for name in preferred:
+                    if name in models:
+                        self.model_combo.setCurrentText(name)
+                        break
+                else:
+                    self.model_combo.setCurrentIndex(0)
             else:
                 # Try to set a good default for local models
                 preferred_defaults = [

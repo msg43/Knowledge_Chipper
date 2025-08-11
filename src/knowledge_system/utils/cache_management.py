@@ -8,12 +8,10 @@ and ensure clean application startup when needed.
 
 import hashlib
 import json
-import os
 import shutil
 import sys
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 from ..logger import get_logger
 

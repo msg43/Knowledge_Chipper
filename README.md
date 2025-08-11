@@ -8,6 +8,20 @@ A comprehensive knowledge management system for macOS that transforms videos, au
 
 ## 🎉 What's New (Latest Updates)
 
+### 🧠 Context-Driven Long‑Form Analysis (New Synthesis Engine)
+- **Purpose**: Deliver faithful, scalable analysis for very long inputs (multi‑hour transcripts, large PDFs) without dumping entire texts into a single prompt.
+- **How it works (high level)**:
+  - **Adaptive segmentation** guided by content signals keeps attention dense where it matters.
+  - **Retrieval‑first synthesis**: works from targeted slices, not the whole transcript at once.
+  - **Structured extraction**: schema‑validated outputs for entities, concepts, relationships, and claims.
+  - **Evidence tracking**: quotes include character spans and paragraph indices; configurable quote caps.
+  - **Linking & deduplication**: conservative cross‑references across chunks/files (allows “none” when uncertain).
+  - **Verification pass**: checks top claims and surfaces contradictions before finalizing results.
+  - **Preflight token budgeting**: respects real model windows and prompt/output budgets.
+  - **Refine loop**: if quality gates fail, re‑reads only targeted regions, not the whole corpus.
+  - **Artifacts for reproducibility**: final outputs plus optional scorecards, decision logs, link graphs, token traces, and lightweight ledgers.
+- **Why we added this**: To maximize accuracy, transparency, and cost efficiency on long content while keeping normal GUI/CLI flows simple. Advanced behavior stays mostly invisible by default; power users can review artifacts when needed.
+
 ### 🚀 Smart Model-Aware Chunking (Major Performance Upgrade)
 - **3.4x More Capacity**: Replaced hardcoded 8,000 token limit with intelligent model-aware thresholds
 - **95% Model Utilization**: Now uses 95% of each model's actual context window instead of 25%
@@ -89,6 +103,8 @@ A comprehensive knowledge management system for macOS that transforms videos, au
   - [Supported File Types](#supported-file-types)
   - [Performance Considerations](#performance-considerations)
   - [System Architecture](#system-architecture)
+  - [Long‑Form Context Engine](#long-form-context-engine)
+  - [Advanced Artifacts (Optional, Experts)](#advanced-artifacts-optional-experts)
   - [Intelligent Chunking System](#intelligent-chunking-system)
   - [Process Control System](#process-control-system)
 - [📄 License & Credits](#-license--credits)
@@ -1387,6 +1403,43 @@ The system now includes intelligent caching to avoid reprocessing unchanged cont
 - **Plugin-based services** for AI providers
 - **Queue-based processing** for reliability
 - **Progress tracking** throughout pipeline
+
+### Long‑Form Context Engine
+
+Built for accuracy and scale on very long inputs while staying cost‑aware and reproducible:
+
+- **Segmentation & Signals**: adaptive windows based on content signals (precision/narrative balance) with sticky transitions and overlaps.
+- **Targeted Retrieval**: synthesizes from retrieved slices instead of prompting with entire transcripts.
+- **Schema‑Validated Extractors**: produces consistent JSON for entities, concepts, relationships, and claims with exact counts.
+- **Evidence Fidelity**: quotes carry character spans and paragraph indices; configurable maximum quoted words.
+- **Linker & Deduplication**: conservative cross‑linking; allows explicit “none” when links are uncertain.
+- **Verification & Gates**: verifies top claims, tracks novelty/rarity coverage, and surfaces contradictions before finalizing.
+- **Token Budget Discipline**: pre‑checks prompt/input/output budgets against real model windows.
+- **Refine Cycle**: if a gate fails, generates a focused refine plan and re‑reads only the relevant regions.
+- **Artifacts & Observability**: optional scorecards, decision logs, token traces, link graphs, and a compact ledger to make results explainable.
+
+### Advanced Artifacts (Optional, Experts)
+
+Most users can ignore this section. These artifacts are for advanced users who want transparency, auditing, or to integrate outputs into research or pipelines. They are saved alongside your outputs (for example, within `Reports/` or the processing folder).
+
+<details>
+<summary>Show advanced artifacts</summary>
+
+- **final.md**: The readable, human‑friendly write‑up produced after analysis. This is the document most people will read.
+- **scorecard.json**: A small report with quality metrics (e.g., coverage of rare items, verification outcomes). Useful to sanity‑check that the result meets expected quality.
+- **decision_log.json**: A step‑by‑step record of major decisions (how content was segmented, why certain slices were retrieved, when verification was triggered). Helps explain “why the system did what it did.”
+- **llm_calls.jsonl**: A newline‑delimited log of model calls (sanitized prompts/outputs with timing and token counts). Handy for debugging or cost analysis.
+- **token_trace.csv**: Spreadsheet‑friendly view of token usage across steps. Use any spreadsheet app to spot outliers or bottlenecks.
+- **link_graph.dot**: A graph representation of relationships between entities/concepts. Open with a Graphviz viewer or any DOT‑file visualizer to see how ideas connect.
+- **global_context.json**: Condensed context built from retrieved slices that informed the final synthesis. Useful to understand what evidence the system considered.
+- **chunking_decisions.json**: Records where and why the text was split, including overlaps and presets. Helpful when validating segmentation on long inputs.
+- **verification_log.json**: Shows which top claims were checked and the outcomes. Useful for trust and auditing.
+- **refine_plan.json**: If quality gates fail, this file describes targeted follow‑ups (what to re‑read or double‑check) instead of reprocessing everything.
+- **ledger.sqlite / artifacts.sqlite**: Lightweight databases for indexing artifacts and traces, enabling faster inspection with external tools.
+
+Tip: If you don’t need these, you can ignore them—your normal summaries, transcripts, and reports work the same as always.
+
+</details>
 
 ### Intelligent Chunking System
 

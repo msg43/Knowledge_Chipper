@@ -7,7 +7,7 @@ Manages processing reports and results display in the GUI.
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from ...logger import get_logger
 

@@ -7,13 +7,12 @@ Handles generation of Maps of Content from processed documents.
 
 import sys
 from pathlib import Path
-from typing import List, Optional
 
 import click
 
 from ..logger import log_system_event
 from ..processors.moc import MOCProcessor
-from .common import CLIContext, console, logger, pass_context
+from .common import CLIContext, console, pass_context
 
 
 @click.command()
