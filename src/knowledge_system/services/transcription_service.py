@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 
 
 class TranscriptionService:
-    """ Service for transcribing audio files and YouTube URLs."""
+    """Service for transcribing audio files and YouTube URLs."""
 
     def __init__(
         self,
@@ -60,14 +60,14 @@ class TranscriptionService:
         self.youtube_transcript_processor = YouTubeTranscriptProcessor()
 
     def set_progress_callback(self, callback):
-        """ Set a progress callback for model downloads and other progress updates."""
+        """Set a progress callback for model downloads and other progress updates."""
         if hasattr(self.audio_processor, "transcriber") and hasattr(
             self.audio_processor.transcriber, "progress_callback"
         ):
             self.audio_processor.transcriber.progress_callback = callback
 
     def transcribe_audio_file(self, audio_file: str | Path) -> dict[str, Any]:
-        """ Transcribe an audio file using Whisper."""
+        """Transcribe an audio file using Whisper."""
         logger.info(f"Starting transcription of audio file: {audio_file}")
 
         try:
@@ -102,7 +102,7 @@ class TranscriptionService:
         output_dir: str | Path | None = None,
         include_timestamps: bool = True,
     ) -> dict[str, Any]:
-        """ Extract transcript from a YouTube URL."""
+        """Extract transcript from a YouTube URL."""
         logger.info(f"Starting transcript extraction from YouTube URL: {url}")
 
         try:
@@ -226,7 +226,7 @@ class TranscriptionService:
         output_dir: str | Path | None = None,
         include_timestamps: bool = True,
     ) -> dict[str, Any]:
-        """ Transcribe any supported input (audio file or YouTube URL)."""
+        """Transcribe any supported input (audio file or YouTube URL)."""
         input_str = str(input_path_or_url)
 
         # Check if it's a YouTube URL
@@ -247,7 +247,7 @@ class TranscriptionService:
         output_dir: str | Path | None = None,
         include_timestamps: bool = True,
     ) -> list[dict[str, Any]]:
-        """ Transcribe multiple inputs in batch."""
+        """Transcribe multiple inputs in batch."""
         logger.info(f"Starting batch transcription of {len(inputs)} items")
 
         results = []
@@ -266,7 +266,7 @@ class TranscriptionService:
         return results
 
     def get_supported_formats(self) -> dict[str, list[str] | str]:
-        """ Get information about supported input formats."""
+        """Get information about supported input formats."""
         return {
             "audio_formats": self.audio_processor.supported_formats,
             "youtube_urls": ["youtube.com", "youtu.be"],
@@ -280,7 +280,7 @@ def transcribe_audio(
     normalize: bool = True,
     temp_dir: str | Path | None = None,
 ) -> str | None:
-    """ Convenience function to transcribe an audio file."""
+    """Convenience function to transcribe an audio file."""
     service = TranscriptionService(
         whisper_model=model, normalize_audio=normalize, temp_dir=temp_dir
     )
@@ -297,7 +297,7 @@ def transcribe_youtube(
     output_dir: str | Path | None = None,
     include_timestamps: bool = True,
 ) -> str | None:
-    """ Convenience function to extract transcript from a YouTube URL."""
+    """Convenience function to extract transcript from a YouTube URL."""
     service = TranscriptionService(
         normalize_audio=normalize,
         download_thumbnails=download_thumbnails,

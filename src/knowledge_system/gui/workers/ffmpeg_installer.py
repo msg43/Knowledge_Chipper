@@ -7,12 +7,12 @@ import os
 import shutil
 import subprocess
 import tempfile
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-import urllib.request
-import urllib.parse
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from ...logger import get_logger
@@ -33,7 +33,7 @@ class FFmpegRelease:
 
 
 class FFmpegInstaller(QThread):
-    """ Background worker to install FFmpeg into user-space without sudo."""
+    """Background worker to install FFmpeg into user-space without sudo."""
 
     progress = pyqtSignal(str)
     finished = pyqtSignal(bool, str, str)  # success, message, installed_path
@@ -63,7 +63,8 @@ class FFmpegInstaller(QThread):
             with tempfile.TemporaryDirectory() as tmpdir:
                 # Preserve archive filename to allow proper extraction method detection
                 archive_name = (
-                    Path(urllib.parse.urlparse(self.release.url).path).name or "ffmpeg_download"
+                    Path(urllib.parse.urlparse(self.release.url).path).name
+                    or "ffmpeg_download"
                 )
                 tmp_path = Path(tmpdir) / archive_name
                 self._download(self.release.url, tmp_path)
@@ -84,13 +85,15 @@ class FFmpegInstaller(QThread):
                     shutil.copy2(tmp_path, extract_dir / self.release.ffmpeg_name)
 
                 # Find ffmpeg and ffprobe in extracted content
-                ffmpeg_src: Optional[Path] = None
-                ffprobe_src: Optional[Path] = None
+                ffmpeg_src: Path | None = None
+                ffprobe_src: Path | None = None
                 for p in extract_dir.rglob("*"):
                     if p.is_file():
                         if p.name == self.release.ffmpeg_name and os.access(p, os.X_OK):
                             ffmpeg_src = p
-                        elif p.name == self.release.ffprobe_name and os.access(p, os.X_OK):
+                        elif p.name == self.release.ffprobe_name and os.access(
+                            p, os.X_OK
+                        ):
                             ffprobe_src = p
 
                 if not ffmpeg_src:
@@ -118,17 +121,24 @@ class FFmpegInstaller(QThread):
 
                 # Remove quarantine if present
                 try:
-                    subprocess.run(["xattr", "-d", "com.apple.quarantine", str(ffmpeg_dst)], check=False)
+                    subprocess.run(
+                        ["xattr", "-d", "com.apple.quarantine", str(ffmpeg_dst)],
+                        check=False,
+                    )
                 except Exception:
                     pass
 
                 # Validate
                 self.progress.emit("Validating installation…")
-                result = subprocess.run([str(ffmpeg_dst), "-version"], capture_output=True, text=True)
+                result = subprocess.run(
+                    [str(ffmpeg_dst), "-version"], capture_output=True, text=True
+                )
                 if result.returncode != 0:
                     raise RuntimeError(f"FFmpeg validation failed: {result.stderr}")
 
-                self.finished.emit(True, "FFmpeg installed successfully", str(ffmpeg_dst))
+                self.finished.emit(
+                    True, "FFmpeg installed successfully", str(ffmpeg_dst)
+                )
         except Exception as e:
             logger.error(f"FFmpeg installation failed: {e}")
             self.finished.emit(False, str(e), "")

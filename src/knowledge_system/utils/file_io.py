@@ -631,7 +631,7 @@ def cleanup_old_backups(
     original_name: str,
     max_backups: int,
 ) -> None:
-    """ Clean up old backup files, keeping only the most recent ones."""
+    """Clean up old backup files, keeping only the most recent ones."""
     pattern = f"{Path(original_name).stem}.backup.*{Path(original_name).suffix}"
     backups = find_files(backup_dir, pattern, recursive=False)
 
@@ -795,7 +795,6 @@ def generate_unified_yaml_metadata(
         Dictionary of YAML fields ready for frontmatter
     """
     from ..logger import get_logger
-
     from .header_to_yaml import process_summary_for_yaml_headers
 
     logger = get_logger(__name__)

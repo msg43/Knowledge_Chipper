@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, List
+from typing import List
 
 from .validators import ClaimItem
 
@@ -19,7 +20,7 @@ def _hash(text: str) -> str:
 class Canonicalizer:
     dedupe_threshold: float = 0.88
 
-    def canonicalize(self, claims: Iterable[ClaimItem]) -> List[tuple[str, ClaimItem]]:
+    def canonicalize(self, claims: Iterable[ClaimItem]) -> list[tuple[str, ClaimItem]]:
         # Return (canonical_id, claim)
         out: list[tuple[str, ClaimItem]] = []
         for c in claims:
@@ -28,7 +29,7 @@ class Canonicalizer:
             out.append((cid, c))
         return out
 
-    def compute_novelty(self, ordered_claims: Iterable[ClaimItem]) -> List[float]:
+    def compute_novelty(self, ordered_claims: Iterable[ClaimItem]) -> list[float]:
         # Simple novelty: earlier claims get higher novelty; duplicates share lower
         seen: set[str] = set()
         novelty: list[float] = []
@@ -41,7 +42,9 @@ class Canonicalizer:
                 seen.add(key)
         return novelty
 
-    def track_evolution(self, claims_with_para: Iterable[tuple[ClaimItem, int]]) -> dict[str, list[int]]:
+    def track_evolution(
+        self, claims_with_para: Iterable[tuple[ClaimItem, int]]
+    ) -> dict[str, list[int]]:
         # Map canonical_id to list of paragraph indices where it appears
         trajectory: dict[str, list[int]] = {}
         for c, para_idx in claims_with_para:

@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 
 
 class FileWatcher:
-    """ Watches a directory for new/changed files and triggers a callback."""
+    """Watches a directory for new/changed files and triggers a callback."""
 
     def __init__(
         self,
@@ -68,8 +68,7 @@ class FileWatcher:
                 logger.error(f"Callback error for {file_path}: {e}")
 
     def start(self):
-
-        """ Start."""
+        """Start."""
         if not self.directory.exists() or not self.directory.is_dir():
             raise ValueError(f"Directory does not exist: {self.directory}")
         event_handler = PatternMatchingEventHandler(
@@ -96,8 +95,7 @@ class FileWatcher:
             logger.error(f"FileWatcher run error: {e}")
 
     def stop(self):
-
-        """ Stop."""
+        """Stop."""
         self._stop_event.set()
         if self._observer:
             self._observer.stop()
@@ -112,7 +110,7 @@ def watch_directory(
     debounce: float = 2.0,
     recursive: bool = False,
 ) -> FileWatcher:
-    """ Convenience function to start a file watcher."""
+    """Convenience function to start a file watcher."""
     watcher = FileWatcher(
         directory,
         patterns=patterns,

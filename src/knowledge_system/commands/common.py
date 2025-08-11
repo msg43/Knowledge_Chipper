@@ -18,16 +18,16 @@ logger = get_logger(__name__)
 
 
 class CLIContext:
-    """ Context object for CLI commands."""
+    """Context object for CLI commands."""
 
     def __init__(self) -> None:
-        """ Initialize CLI context."""
+        """Initialize CLI context."""
         self.settings: Settings | None = None
         self.verbose: bool = False
         self.quiet: bool = False
 
     def get_settings(self) -> Settings:
-        """ Get or initialize settings."""
+        """Get or initialize settings."""
         if self.settings is None:
             self.settings = get_settings()
         return self.settings

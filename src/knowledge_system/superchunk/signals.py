@@ -8,7 +8,7 @@ def _approx_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-def _sliding_windows(tokens: List[str], window_size: int, stride: int):
+def _sliding_windows(tokens: list[str], window_size: int, stride: int):
     for start in range(0, max(1, len(tokens) - window_size + 1), stride):
         yield start, tokens[start : start + window_size]
 
@@ -41,13 +41,17 @@ HEDGES = {"perhaps", "maybe", "seems", "appears", "likely", "unlikely", "approxi
 STORY = {"once", "then", "suddenly", "after", "before", "story", "narrative"}
 
 
-def _sentence_lengths(text: str) -> List[int]:
+def _sentence_lengths(text: str) -> list[int]:
     # crude sentence segmentation
-    sentences = [s.strip() for s in text.replace("?", ".").replace("!", ".").split(".") if s.strip()]
+    sentences = [
+        s.strip()
+        for s in text.replace("?", ".").replace("!", ".").split(".")
+        if s.strip()
+    ]
     return [max(1, len(s.split())) for s in sentences] or [1]
 
 
-def compute_signals(text: str) -> List[Tuple[int, Signals]]:
+def compute_signals(text: str) -> list[tuple[int, Signals]]:
     # Tokenize naively by words for windows
     words = text.split()
     # 500-token regions, 100-token stride
@@ -59,20 +63,24 @@ def compute_signals(text: str) -> List[Tuple[int, Signals]]:
 
     for start, window_tokens in _sliding_windows(words, window_size, stride):
         window_text = " ".join(window_tokens)
-        lower_tokens = [t.strip('.,;:!?').lower() for t in window_tokens]
+        lower_tokens = [t.strip(".,;:!?").lower() for t in window_tokens]
         token_set = set(lower_tokens)
         # cohesion proxy: inverse of unique ratio
         unique_ratio = len(token_set) / max(1, len(lower_tokens))
         cohesion = max(0.0, min(1.0, 1.0 - unique_ratio))
         # discourse markers
-        markers = sum(1 for t in lower_tokens if t in MARKERS) / max(1, len(lower_tokens))
+        markers = sum(1 for t in lower_tokens if t in MARKERS) / max(
+            1, len(lower_tokens)
+        )
         markers = min(1.0, markers * 10)
         # new terms rate
         new_count = sum(1 for t in token_set if t not in seen_terms)
         new_terms = new_count / max(1, len(token_set))
         seen_terms.update(token_set)
         # numbers/symbols
-        numbers = sum(1 for t in lower_tokens if any(ch.isdigit() for ch in t)) / max(1, len(lower_tokens))
+        numbers = sum(1 for t in lower_tokens if any(ch.isdigit() for ch in t)) / max(
+            1, len(lower_tokens)
+        )
         numbers = min(1.0, numbers * 10)
         # hedges
         hedges = sum(1 for t in lower_tokens if t in HEDGES) / max(1, len(lower_tokens))
@@ -86,6 +94,11 @@ def compute_signals(text: str) -> List[Tuple[int, Signals]]:
         var = sum((l - mean_len) ** 2 for l in lens) / len(lens)
         sent_var = max(0.0, min(1.0, var / (mean_len**2 + 1e-6)))
 
-        results.append((start, Signals(cohesion, markers, new_terms, numbers, hedges, story, sent_var)))
+        results.append(
+            (
+                start,
+                Signals(cohesion, markers, new_terms, numbers, hedges, story, sent_var),
+            )
+        )
 
     return results

@@ -68,12 +68,12 @@ def moc(
 
      Creates structured MOCs that organize and link related content,
     with optional belief graph integration for knowledge relationships.
-     
+
      Examples:
          knowledge-system moc summary1.md summary2.md
          knowledge-system moc ./summaries/ --theme hierarchical
          knowledge-system moc *.md --title "Project Knowledge" --depth 2
-     """
+    """
     settings = ctx.get_settings()
 
     if not input_paths:

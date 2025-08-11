@@ -7,14 +7,14 @@ and merges optional user overrides from `config/model_overrides.yaml`.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import yaml
 
 from ..config import get_settings
 from ..logger import get_logger
-
 
 logger = get_logger(__name__)
 
@@ -51,7 +51,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     try:
         if not path.exists():
             return {}
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except Exception as e:
         logger.warning(f"Failed to load model overrides from {path}: {e}")
@@ -121,9 +121,7 @@ def get_openai_models() -> list[str]:
 
     # Merge dynamic + fallbacks + overrides
     overrides = load_model_overrides().get("openai", [])
-    merged = _dedupe_preserve_order(
-        [*OPENAI_FALLBACK_MODELS, *dynamic, *overrides]
-    )
+    merged = _dedupe_preserve_order([*OPENAI_FALLBACK_MODELS, *dynamic, *overrides])
     return merged
 
 
@@ -154,5 +152,3 @@ def _dedupe_preserve_order(items: Iterable[str]) -> list[str]:
             seen.add(key)
             out.append(name)
     return out
-
-

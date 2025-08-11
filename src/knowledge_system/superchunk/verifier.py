@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import List
 
 from .config import SuperChunkConfig
-from .validators import ClaimItem, VerificationItem
 from .ledger import Ledger
 from .llm_adapter import SuperChunkLLMAdapter
+from .validators import ClaimItem, VerificationItem
 
 
 @dataclass
@@ -25,8 +25,10 @@ class Verifier:
     adapter: SuperChunkLLMAdapter
 
     @staticmethod
-    def create_default(ledger: Ledger, config: SuperChunkConfig) -> "Verifier":
-        return Verifier(config=config, ledger=ledger, adapter=SuperChunkLLMAdapter.create_default())
+    def create_default(ledger: Ledger, config: SuperChunkConfig) -> Verifier:
+        return Verifier(
+            config=config, ledger=ledger, adapter=SuperChunkLLMAdapter.create_default()
+        )
 
     def _verify_one(self, claim: ClaimItem) -> VerificationItem:
         prompt = (
@@ -35,12 +37,18 @@ class Verifier:
             f"Claim: {claim.text}\n"
             f"Quote: {claim.quote}\n"
         )
-        return self.adapter.generate_json(prompt, VerificationItem, estimated_output_tokens=200)
+        return self.adapter.generate_json(
+            prompt, VerificationItem, estimated_output_tokens=200
+        )
 
-    def verify_top_claims(self, claim_rows: List[tuple[int, ClaimItem]]) -> List[VerificationResult]:
+    def verify_top_claims(
+        self, claim_rows: list[tuple[int, ClaimItem]]
+    ) -> list[VerificationResult]:
         results: list[VerificationResult] = []
         # Select top N% by confidence (simple proxy)
-        claim_rows_sorted = sorted(claim_rows, key=lambda x: x[1].confidence, reverse=True)
+        claim_rows_sorted = sorted(
+            claim_rows, key=lambda x: x[1].confidence, reverse=True
+        )
         top_n = max(1, int(len(claim_rows_sorted) * self.config.verify_top_percent))
         for claim_id, item in claim_rows_sorted[:top_n]:
             vi = self._verify_one(item)

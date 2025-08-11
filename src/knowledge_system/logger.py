@@ -16,10 +16,10 @@ from .config import get_settings
 
 
 class InterceptHandler(logging.Handler):
-    """ Intercept standard logging records and send them to loguru."""
+    """Intercept standard logging records and send them to loguru."""
 
     def emit(self, record: logging.LogRecord) -> None:
-        """ Emit a log record to loguru."""
+        """Emit a log record to loguru."""
         # Get corresponding loguru level if it exists
         try:
             level = logger.level(record.levelname).name
@@ -204,7 +204,7 @@ def log_system_event(
 
 
 def configure_third_party_logging() -> None:
-    """ Configure logging for third-party libraries."""
+    """Configure logging for third-party libraries."""
     # Set specific levels for noisy libraries
     third_party_loggers = {
         "urllib3.connectionpool": "WARNING",
@@ -224,27 +224,27 @@ def configure_third_party_logging() -> None:
 
 
 class LogContext:
-    """ Context manager for adding structured context to logs."""
+    """Context manager for adding structured context to logs."""
 
     def __init__(self, **context: Any) -> None:
-        """ Initialize context manager with key-value pairs."""
+        """Initialize context manager with key-value pairs."""
         self.context = context
         self._token = None
 
     def __enter__(self) -> None:
-        """ Enter context and bind logger."""
+        """Enter context and bind logger."""
         self._token = logger.contextualize(**self.context)
         return self._token
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """ Exit context."""
+        """Exit context."""
         if self._token:
             self._token.__exit__(exc_type, exc_val, exc_tb)
 
 
 # Initialize logging on module import
 def initialize_logging() -> None:
-    """ Initialize logging with default configuration."""
+    """Initialize logging with default configuration."""
     try:
         setup_logging()
         configure_third_party_logging()
@@ -264,25 +264,25 @@ initialize_logging()
 
 # Convenience functions for common log levels
 def debug(message: str, **kwargs: Any) -> None:
-    """ Log a debug message."""
+    """Log a debug message."""
     logger.bind(**kwargs).debug(message)
 
 
 def info(message: str, **kwargs: Any) -> None:
-    """ Log an info message."""
+    """Log an info message."""
     logger.bind(**kwargs).info(message)
 
 
 def warning(message: str, **kwargs: Any) -> None:
-    """ Log a warning message."""
+    """Log a warning message."""
     logger.bind(**kwargs).warning(message)
 
 
 def error(message: str, **kwargs: Any) -> None:
-    """ Log an error message."""
+    """Log an error message."""
     logger.bind(**kwargs).error(message)
 
 
 def critical(message: str, **kwargs: Any) -> None:
-    """ Log a critical message."""
+    """Log a critical message."""
     logger.bind(**kwargs).critical(message)

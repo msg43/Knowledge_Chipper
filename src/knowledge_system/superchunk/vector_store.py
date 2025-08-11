@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import math
 import sqlite3
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import List, Tuple
 
 
 def cosine(a: list[float], b: list[float]) -> float:
@@ -35,22 +36,41 @@ class VectorStore:
             )
             conn.commit()
 
-    def index(self, ids: Iterable[str], texts: Iterable[str], embeddings: Iterable[list[float]]) -> None:
+    def index(
+        self,
+        ids: Iterable[str],
+        texts: Iterable[str],
+        embeddings: Iterable[list[float]],
+    ) -> None:
         with sqlite3.connect(self.path) as conn:
             rows = []
             for vid, txt, vec in zip(ids, texts, embeddings):
-                rows.append((vid, txt, sqlite3.Binary(memoryview(bytearray(float(x).hex().encode() for x in vec)))))
+                rows.append(
+                    (
+                        vid,
+                        txt,
+                        sqlite3.Binary(
+                            memoryview(bytearray(float(x).hex().encode() for x in vec))
+                        ),
+                    )
+                )
             # Simpler: store as JSON string for portability
             rows = []
             import json
 
             for vid, txt, vec in zip(ids, texts, embeddings):
                 rows.append((vid, txt, json.dumps(vec)))
-            conn.executemany("INSERT OR REPLACE INTO vectors (id, text, embedding) VALUES (?, ?, ?)", rows)
+            conn.executemany(
+                "INSERT OR REPLACE INTO vectors (id, text, embedding) VALUES (?, ?, ?)",
+                rows,
+            )
             conn.commit()
 
-    def top_k(self, query_vec: list[float], k: int = 10) -> List[Tuple[str, float, str]]:
+    def top_k(
+        self, query_vec: list[float], k: int = 10
+    ) -> list[tuple[str, float, str]]:
         import json
+
         with sqlite3.connect(self.path) as conn:
             c = conn.cursor()
             c.execute("SELECT id, text, embedding FROM vectors")

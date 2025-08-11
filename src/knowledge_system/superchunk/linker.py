@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from .retrieval import jaccard
 
@@ -20,7 +20,11 @@ class Linker:
                 relation = "duplicate"
                 confidence = 0.9
             elif sim >= self.neighbor_threshold:
-                relation = relation_hint if relation_hint in {"support", "contradict", "refine"} else "support"
+                relation = (
+                    relation_hint
+                    if relation_hint in {"support", "contradict", "refine"}
+                    else "support"
+                )
                 confidence = 0.6
             else:
                 relation = "none"

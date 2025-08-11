@@ -13,14 +13,14 @@ from knowledge_system.processors.base import (
     BaseProcessor,
     ProcessorRegistry,
     ProcessorResult,
-    register_processor,
     get_processor,
     get_processor_for_file,
+    register_processor,
 )
 from knowledge_system.processors.registry import (
     get_all_processor_stats,
-    list_processors,
     get_processor_for_input,
+    list_processors,
 )
 
 

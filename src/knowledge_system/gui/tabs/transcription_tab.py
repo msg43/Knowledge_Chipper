@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 
 
 class EnhancedTranscriptionWorker(QThread):
-    """ Enhanced worker thread for transcription with real-time progress."""
+    """Enhanced worker thread for transcription with real-time progress."""
 
     progress_updated = pyqtSignal(object)  # Progress object
     file_completed = pyqtSignal(int, int)  # current, total
@@ -54,7 +54,7 @@ class EnhancedTranscriptionWorker(QThread):
     def _transcription_progress_callback(
         self, step_description_or_dict: Any, progress_percent: int = 0
     ) -> None:
-        """ Callback to emit real-time transcription progress."""
+        """Callback to emit real-time transcription progress."""
         # Handle both string step descriptions and model download dictionaries
         if isinstance(step_description_or_dict, dict):
             # This is a model download progress update
@@ -90,7 +90,7 @@ class EnhancedTranscriptionWorker(QThread):
             )
 
     def run(self) -> None:
-        """ Run the transcription process with real-time progress tracking."""
+        """Run the transcription process with real-time progress tracking."""
         try:
             from ...processors.audio_processor import AudioProcessor
 
@@ -250,12 +250,12 @@ class EnhancedTranscriptionWorker(QThread):
             self.processing_error.emit(str(e))
 
     def stop(self) -> None:
-        """ Stop the transcription process."""
+        """Stop the transcription process."""
         self.should_stop = True
 
 
 class TranscriptionTab(BaseTab, FileOperationsMixin):
-    """ Tab for audio and video transcription using Whisper."""
+    """Tab for audio and video transcription using Whisper."""
 
     def __init__(self, parent=None) -> None:
         self.transcription_worker: EnhancedTranscriptionWorker | None = None
@@ -264,7 +264,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         super().__init__(parent)
 
     def _setup_ui(self) -> None:
-        """ Setup the transcription UI."""
+        """Setup the transcription UI."""
         layout = QVBoxLayout(self)
         layout.setSpacing(10)  # Add consistent spacing
         layout.setContentsMargins(10, 10, 10, 10)  # Add margins
@@ -301,7 +301,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self._load_settings()
 
     def _create_input_section(self) -> QGroupBox:
-        """ Create the input files section."""
+        """Create the input files section."""
         group = QGroupBox("Input Files")
         layout = QVBoxLayout()
         layout.setSpacing(8)  # Add spacing between elements
@@ -347,7 +347,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         return group
 
     def _create_recommendations_section(self) -> QGroupBox:
-        """ Create the hardware recommendations section."""
+        """Create the hardware recommendations section."""
         group = QGroupBox("Hardware Recommendations")
 
         # Use horizontal layout
@@ -396,7 +396,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         return group
 
     def _create_settings_section(self) -> QGroupBox:
-        """ Create the transcription settings section."""
+        """Create the transcription settings section."""
         group = QGroupBox("Settings")
         layout = QGridLayout()
 
@@ -522,7 +522,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         return group
 
     def _create_performance_section(self) -> QGroupBox:
-        """ Create the thread & resource management section."""
+        """Create the thread & resource management section."""
         group = QGroupBox("Thread & Resource Management")
         layout = QGridLayout()
 
@@ -577,7 +577,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         return group
 
     def _create_progress_section(self) -> QGroupBox:
-        """ Create the progress tracking section."""
+        """Create the progress tracking section."""
         group = QGroupBox("Transcription Progress")
         layout = QVBoxLayout()
         layout.setSpacing(8)
@@ -618,7 +618,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         file_list_attr: str = "transcription_files",
         file_patterns: str = "Audio/Video files (*.mp4 *.mp3 *.wav *.webm *.m4a *.flac *.ogg);;All files (*.*)",
     ):
-        """ Add files for transcription."""
+        """Add files for transcription."""
         file_list = getattr(self, file_list_attr, self.transcription_files)
         files, _ = QFileDialog.getOpenFileNames(
             self,
@@ -630,7 +630,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             file_list.addItem(file)
 
     def _add_folder(self):
-        """ Add transcription folder."""
+        """Add transcription folder."""
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
         if folder:
             folder_path = Path(folder)
@@ -640,21 +640,21 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                     self.transcription_files.addItem(str(file))
 
     def _clear_files(self):
-        """ Clear transcription file list."""
+        """Clear transcription file list."""
         self.transcription_files.clear()
 
     def _select_output_directory(self):
-        """ Select output directory for transcripts."""
+        """Select output directory for transcripts."""
         dir_path = QFileDialog.getExistingDirectory(self, "Select Output Directory")
         if dir_path:
             self.output_dir_input.setText(dir_path)
 
     def _get_start_button_text(self) -> str:
-        """ Get the text for the start button."""
+        """Get the text for the start button."""
         return "Start Transcription"
 
     def _start_processing(self) -> None:
-        """ Start transcription process."""
+        """Start transcription process."""
         # Get files to process
         files = []
         for i in range(self.transcription_files.count()):
@@ -699,7 +699,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.status_updated.emit("Transcription in progress...")
 
     def _update_transcription_step(self, step_description: str, progress_percent: int):
-        """ Update real-time transcription step display."""
+        """Update real-time transcription step display."""
         self.append_log(f"🎤 {step_description}")
 
         # Update progress bar and status
@@ -712,7 +712,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.progress_status_label.setText(step_description)
 
     def _update_progress(self, progress_data):
-        """ Update transcription progress display."""
+        """Update transcription progress display."""
         if isinstance(progress_data, dict):
             file_name = Path(progress_data["file"]).name
             current = progress_data["current"]
@@ -739,12 +739,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.append_log(f"Progress: {progress_data}")
 
     def _file_completed(self, current: int, total: int):
-        """ Handle transcription file completion."""
+        """Handle transcription file completion."""
         if current < total:
             self.append_log(f"📁 Processing file {current + 1} of {total}...")
 
     def _processing_finished(self):
-        """ Handle transcription completion."""
+        """Handle transcription completion."""
         self.append_log("\n✅ All transcriptions completed!")
         self.append_log(
             "📋 Note: Transcriptions are processed in memory. Use the Process Pipeline tab to save transcripts to markdown files."
@@ -765,7 +765,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.processing_finished.emit()
 
     def _processing_error(self, error_msg: str):
-        """ Handle transcription error."""
+        """Handle transcription error."""
         self.append_log(f"❌ Error: {error_msg}")
         self.show_error("Transcription Error", f"Transcription failed: {error_msg}")
 
@@ -783,7 +783,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.status_updated.emit("Ready")
 
     def _get_hardware_recommendations(self):
-        """ Get hardware recommendations and display them."""
+        """Get hardware recommendations and display them."""
         try:
             from ...utils.device_selection import get_device_recommendations
             from ...utils.hardware_detection import get_hardware_detector
@@ -845,7 +845,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             )
 
     def _apply_recommended_settings(self):
-        """ Get hardware recommendations if needed, then apply them to the UI controls."""
+        """Get hardware recommendations if needed, then apply them to the UI controls."""
         # First, check if we have recommendations - if not, get them
         if not hasattr(self, "_current_recommendations"):
             self.append_log("🔍 Getting hardware recommendations...")
@@ -906,7 +906,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.append_log(f"❌ {error_msg}")
 
     def _get_transcription_settings(self) -> dict[str, Any]:
-        """ Get current transcription settings."""
+        """Get current transcription settings."""
         return {
             "model": self.model_combo.currentText(),
             "device": self.device_combo.currentText(),
@@ -942,7 +942,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         }
 
     def validate_inputs(self) -> bool:
-        """ Validate inputs before processing."""
+        """Validate inputs before processing."""
         # Check output directory
         output_dir = self.output_dir_input.text().strip()
         if not output_dir:
@@ -992,7 +992,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         return True
 
     def cleanup_workers(self):
-        """ Clean up any active workers."""
+        """Clean up any active workers."""
         if self.transcription_worker and self.transcription_worker.isRunning():
             # Set stop flag and terminate if needed
             if hasattr(self.transcription_worker, "should_stop"):
@@ -1002,7 +1002,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         super().cleanup_workers()
 
     def _load_settings(self) -> None:
-        """ Load saved settings from session."""
+        """Load saved settings from session."""
         try:
             # Block signals during loading to prevent redundant saves
             widgets_to_block = [
@@ -1117,7 +1117,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             logger.error(f"Failed to load settings for {self.tab_name} tab: {e}")
 
     def _save_settings(self) -> None:
-        """ Save current settings to session."""
+        """Save current settings to session."""
         try:
             # Save output directory
             self.gui_settings.set_output_directory(
@@ -1180,11 +1180,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             logger.error(f"Failed to save settings for {self.tab_name} tab: {e}")
 
     def _on_setting_changed(self):
-        """ Called when any setting changes to automatically save."""
+        """Called when any setting changes to automatically save."""
         self._save_settings()
 
     def _on_quality_retry_toggled(self, checked: bool):
-        """ Handle toggling of quality retry checkbox."""
+        """Handle toggling of quality retry checkbox."""
         # Enable/disable max retry attempts based on quality retry setting
         self.max_retry_attempts.setEnabled(checked)
 

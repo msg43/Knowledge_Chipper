@@ -22,6 +22,7 @@ PATTERNS = [
     re.compile(r'^(?P<indent>\s*)(?P<q>"""|\'\'\')\s+(?P<code>.+?)\.(?P<trail>\s*)$')
 ]
 
+
 def repair_file(path: Path) -> bool:
     try:
         text = path.read_text(encoding="utf-8")
@@ -74,5 +75,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-

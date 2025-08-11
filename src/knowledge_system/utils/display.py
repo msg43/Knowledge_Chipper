@@ -22,7 +22,7 @@ from .tracking import ProgressTracker, TaskInfo
 
 
 class ProgressDisplay:
-    """ Rich console display for progress tracking."""
+    """Rich console display for progress tracking."""
 
     def __init__(self, tracker: ProgressTracker, show_details: bool = True) -> None:
         self.tracker = tracker
@@ -37,21 +37,21 @@ class ProgressDisplay:
         )
 
     def start(self) -> None:
-        """ Start the progress display."""
+        """Start the progress display."""
         self.progress.start()
         self._update_display()
 
     def stop(self) -> None:
-        """ Stop the progress display."""
+        """Stop the progress display."""
         self.progress.stop()
         self._show_final_summary()
 
     def update(self) -> None:
-        """ Update the progress display."""
+        """Update the progress display."""
         self._update_display()
 
     def _update_display(self) -> None:
-        """ Update the progress display with current status."""
+        """Update the progress display with current status."""
         summary = self.tracker.get_progress_summary()
 
         # Update main progress bar
@@ -72,7 +72,7 @@ class ProgressDisplay:
             self._show_failed_tasks(failed_tasks)
 
     def _show_failed_tasks(self, failed_tasks: list[TaskInfo]) -> None:
-        """ Display failed tasks in a table."""
+        """Display failed tasks in a table."""
         if not failed_tasks:
             return
 
@@ -102,7 +102,7 @@ class ProgressDisplay:
         Console().print(table)
 
     def _show_final_summary(self) -> None:
-        """ Show final summary when operation completes."""
+        """Show final summary when operation completes."""
         summary = self.tracker.get_progress_summary()
 
         # Create summary table

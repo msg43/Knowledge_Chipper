@@ -33,7 +33,7 @@ logger = get_logger(__name__)
 
 
 class YouTubeMetadata(BaseModel):
-    """ YouTube video metadata model."""
+    """YouTube video metadata model."""
 
     # Core identifiers
     video_id: str = Field(..., description="YouTube video ID")
@@ -83,7 +83,7 @@ class YouTubeMetadata(BaseModel):
     )
 
     def to_dict(self) -> dict[str, Any]:
-        """ Convert to dictionary for JSON serialization."""
+        """Convert to dictionary for JSON serialization."""
         data = self.model_dump()
         # Convert datetime to ISO string for JSON serialization
         if "fetched_at" in data and isinstance(data["fetched_at"], datetime):
@@ -91,7 +91,7 @@ class YouTubeMetadata(BaseModel):
         return data
 
     def to_markdown_metadata(self) -> str:
-        """ Convert to markdown metadata section."""
+        """Convert to markdown metadata section."""
         lines = ["# Metadata"]
         lines.append("")
 
@@ -154,7 +154,7 @@ class YouTubeMetadata(BaseModel):
 
 
 class FailedVideo(BaseModel):
-    """ Information about a failed video extraction."""
+    """Information about a failed video extraction."""
 
     video_id: str = Field(..., description="YouTube video ID")
     url: str = Field(..., description="Full YouTube URL")
@@ -167,12 +167,12 @@ class FailedVideo(BaseModel):
     api_failed: bool = Field(default=True, description="Whether API extraction failed")
 
     def to_dict(self) -> dict[str, Any]:
-        """ Convert to dictionary."""
+        """Convert to dictionary."""
         return self.model_dump()
 
 
 class MetadataExtractionStats(BaseModel):
-    """ Statistics for metadata extraction session."""
+    """Statistics for metadata extraction session."""
 
     total_videos: int = 0
     primary_success: int = 0
@@ -183,13 +183,13 @@ class MetadataExtractionStats(BaseModel):
     extraction_time: float = 0.0
 
     def success_rate(self) -> float:
-        """ Calculate overall success rate."""
+        """Calculate overall success rate."""
         if self.total_videos == 0:
             return 0.0
         return (self.primary_success + self.backfill_success) / self.total_videos
 
     def to_dict(self) -> dict[str, Any]:
-        """ Convert to dictionary."""
+        """Convert to dictionary."""
         return {
             "total_videos": self.total_videos,
             "primary_success": self.primary_success,
@@ -203,10 +203,10 @@ class MetadataExtractionStats(BaseModel):
 
 
 class YouTubeMetadataProcessor(BaseProcessor):
-    """ Processor for extracting YouTube video metadata using YT-DLP with rotating proxies."""
+    """Processor for extracting YouTube video metadata using YT-DLP with rotating proxies."""
 
     def __init__(self, name: str | None = None) -> None:
-        """ Initialize the YouTube metadata processor."""
+        """Initialize the YouTube metadata processor."""
         super().__init__(name or "youtube_metadata")
 
         if yt_dlp is None:
@@ -244,7 +244,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
         self._configure_proxy()
 
     def _configure_proxy(self):
-        """ Configure rotating proxy for YT-DLP if credentials are available."""
+        """Configure rotating proxy for YT-DLP if credentials are available."""
         try:
             webshare_username = self.settings.api_keys.webshare_username
             webshare_password = self.settings.api_keys.webshare_password
@@ -264,11 +264,11 @@ class YouTubeMetadataProcessor(BaseProcessor):
 
     @property
     def supported_formats(self) -> list[str]:
-        """ Return list of supported input formats."""
+        """Return list of supported input formats."""
         return [".url", ".txt"]
 
     def validate_input(self, input_data: Any) -> bool:
-        """ Validate that the input data is suitable for processing."""
+        """Validate that the input data is suitable for processing."""
         if isinstance(input_data, (str, Path)):
             input_str = str(input_data)
 
@@ -290,7 +290,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
         return False
 
     def _extract_video_id(self, url: str) -> str | None:
-        """ Extract video ID from YouTube URL."""
+        """Extract video ID from YouTube URL."""
         patterns = [
             r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]+)",
             r"youtube\.com/embed/([a-zA-Z0-9_-]+)",
@@ -305,7 +305,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
         return None
 
     def _extract_metadata_ytdlp(self, url: str) -> YouTubeMetadata | None:
-        """ Extract metadata using YT-DLP with rotating proxies."""
+        """Extract metadata using YT-DLP with rotating proxies."""
         try:
             # Add configurable delay to avoid rate limiting
             delay_config = self.settings.youtube_processing
@@ -437,7 +437,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
     def _batch_backfill_api(
         self, failed_video_ids: list[str]
     ) -> tuple[list[YouTubeMetadata], list[str]]:
-        """ Batch backfill failed metadata using YouTube Data API v3."""
+        """Batch backfill failed metadata using YouTube Data API v3."""
         if not failed_video_ids:
             return [], []
 
@@ -619,7 +619,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
         return successful_metadata, still_failed
 
     def _get_basic_video_info(self, video_id: str) -> dict[str, str | None]:
-        """ Try to get basic video info (title, uploader) using a lightweight method."""
+        """Try to get basic video info (title, uploader) using a lightweight method."""
         try:
             # Use a simple regex approach to extract title from YouTube page
             import requests
@@ -661,7 +661,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
     def _write_failure_log(
         self, failed_videos: list[FailedVideo], output_dir: Path | None = None
     ):
-        """ Write final failure log file with human-readable titles."""
+        """Write final failure log file with human-readable titles."""
         if not failed_videos:
             return
 
@@ -755,7 +755,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
         output_dir: Path | None = None,
         **kwargs: Any,
     ) -> ProcessorResult:
-        """ Process YouTube URLs and extract metadata using YT-DLP + API backfill."""
+        """Process YouTube URLs and extract metadata using YT-DLP + API backfill."""
         start_time = time.time()
 
         try:
@@ -922,7 +922,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
 
 
 def fetch_metadata(url: str) -> YouTubeMetadata:
-    """ Convenience function to fetch metadata for a single video."""
+    """Convenience function to fetch metadata for a single video."""
     processor = YouTubeMetadataProcessor()
     result = processor.process(url)
 

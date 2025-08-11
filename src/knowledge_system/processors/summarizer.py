@@ -16,12 +16,10 @@ from typing import Any
 from knowledge_system.config import get_settings
 from knowledge_system.logger import get_logger
 from knowledge_system.processors.base import BaseProcessor, ProcessorResult
+from knowledge_system.superchunk.config import SuperChunkConfig
+from knowledge_system.superchunk.runner import Runner
 from knowledge_system.utils.cancellation import CancellationError
 from knowledge_system.utils.llm_providers import UnifiedLLMClient
-from knowledge_system.superchunk.config import SuperChunkConfig
-from knowledge_system.superchunk.runner import Runner
-from knowledge_system.superchunk.config import SuperChunkConfig
-from knowledge_system.superchunk.runner import Runner
 from knowledge_system.utils.progress import CancellationToken, SummarizationProgress
 from knowledge_system.utils.text_utils import (
     calculate_chunking_config,
@@ -35,7 +33,7 @@ logger = get_logger(__name__)
 
 
 class SummarizerProcessor(BaseProcessor):
-    """ Summarizes text using various LLM providers via unified client."""
+    """Summarizes text using various LLM providers via unified client."""
 
     @property
     def supported_formats(self) -> list[str]:
@@ -78,7 +76,7 @@ class SummarizerProcessor(BaseProcessor):
             return input_data.exists() and input_data.is_file()
 
     def _read_text_from_file(self, file_path: Path) -> str:
-        """ Read text content from file."""
+        """Read text content from file."""
         try:
             suffix = file_path.suffix.lower()
 
@@ -116,7 +114,7 @@ class SummarizerProcessor(BaseProcessor):
             raise
 
     def _build_summary_index(self, output_dir: Path) -> dict[str, dict[str, Any]]:
-        """ Build index of existing summaries in output directory."""
+        """Build index of existing summaries in output directory."""
         summary_index: dict[str, dict[str, Any]] = {}
         files_scanned = 0
         files_failed = 0
@@ -191,7 +189,7 @@ class SummarizerProcessor(BaseProcessor):
     def _check_needs_summarization(
         self, source_file: Path, summary_index: dict[str, dict[str, Any]]
     ) -> tuple[bool, str]:
-        """ Check if a source file needs summarization."""
+        """Check if a source file needs summarization."""
         source_path_str = str(source_file.absolute())
 
         # Check if summary exists in index
@@ -232,7 +230,7 @@ class SummarizerProcessor(BaseProcessor):
         )
 
     def _calculate_file_hash(self, file_path: Path, chunk_size: int = 8192) -> str:
-        """ Calculate SHA-256 hash of file content."""
+        """Calculate SHA-256 hash of file content."""
         sha256_hash = hashlib.sha256()
         try:
             with open(file_path, "rb") as f:
@@ -246,7 +244,7 @@ class SummarizerProcessor(BaseProcessor):
     def _save_index_to_file(
         self, index_file: Path, summary_index: dict[str, dict[str, Any]]
     ) -> None:
-        """ Save summary index to JSON file."""
+        """Save summary index to JSON file."""
         try:
             with open(index_file, "w", encoding="utf-8") as f:
                 json.dump(summary_index, f, indent=2, ensure_ascii=False)
@@ -259,7 +257,7 @@ class SummarizerProcessor(BaseProcessor):
     def _update_index_file(
         self, index_file: Path, source_path: str, summary_info: dict[str, Any]
     ) -> None:
-        """ Update the index file with new summary information."""
+        """Update the index file with new summary information."""
         try:
             # Read existing index
             summary_index = {}
@@ -281,7 +279,7 @@ class SummarizerProcessor(BaseProcessor):
         text: str,
         template: str | Path | None = None,
     ) -> str:
-        """ Generate summarization prompt."""
+        """Generate summarization prompt."""
 
         logger.info(
             f"🔧 _generate_prompt called with text length: {len(text)} chars, template: {template}"
@@ -370,7 +368,7 @@ class SummarizerProcessor(BaseProcessor):
         return final_prompt
 
     def _estimate_tokens(self, text: str) -> int:
-        """ Estimate token count for text (rough approximation)."""
+        """Estimate token count for text (rough approximation)."""
         # Rough approximation: 1 token ≈ 4 characters for English text
         return len(text) // 4
 
@@ -440,7 +438,7 @@ class SummarizerProcessor(BaseProcessor):
         progress_callback: Callable[[SummarizationProgress], None] | None = None,
         cancellation_token: CancellationToken | None = None,
     ) -> dict[str, Any]:
-        """ Call the LLM provider using unified client with character-based progress tracking."""
+        """Call the LLM provider using unified client with character-based progress tracking."""
         import threading
         import time
 
@@ -462,7 +460,7 @@ class SummarizerProcessor(BaseProcessor):
         prompt_chars = len(prompt)
 
         def heartbeat_worker() -> None:
-            """ Send character-based progress updates during LLM calls with cancellation support."""
+            """Send character-based progress updates during LLM calls with cancellation support."""
             nonlocal heartbeat_active
             last_update = 0.0
             while heartbeat_active:
@@ -537,7 +535,7 @@ class SummarizerProcessor(BaseProcessor):
             heartbeat_thread.start()
 
         def llm_progress_callback(progress_data: Any) -> None:
-            """ Adapt generic progress to SummarizationProgress."""
+            """Adapt generic progress to SummarizationProgress."""
             if progress_callback and isinstance(progress_data, dict):
                 progress_callback(
                     SummarizationProgress(
@@ -654,7 +652,7 @@ class SummarizerProcessor(BaseProcessor):
         return chunks, original_template, chunking_config
 
     def _get_style_template(self, style: str) -> str:
-        """ Get default template for a given style."""
+        """Get default template for a given style."""
         style_templates = {
             "bullet": "Create a concise bullet-point summary of the following text:\n\n{text}\n\nSummary:",
             "paragraph": "Write a clear paragraph summary of the following text:\n\n{text}\n\nSummary:",
@@ -946,7 +944,7 @@ class SummarizerProcessor(BaseProcessor):
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
     ) -> ProcessorResult:
-        """ Process input and generate summary using unified LLM client."""
+        """Process input and generate summary using unified LLM client."""
         # Extract parameters from kwargs for backwards compatibility
         prompt_template = kwargs.get("prompt_template", None)
         # Also extract cancellation_token from kwargs if not passed as parameter
@@ -1039,13 +1037,18 @@ class SummarizerProcessor(BaseProcessor):
 
             # SuperChunk path for text/markdown files (GUI continues to handle file output/append logic)
             if input_path is not None and input_path.suffix.lower() in [".md", ".txt"]:
-                # Choose artifacts dir under configured output, invisible to user
-                out_base = (
-                    Path(self.settings.paths.output)
-                    if self.settings.paths.output
-                    else Path.cwd() / "output"
+                # Choose artifacts dir with user/GUIs override when provided
+                preferred_base = (
+                    kwargs.get("artifacts_output_dir")
+                    or self.settings.paths.output
+                    or (Path.cwd() / "output")
                 )
-                run_dir = out_base / "superchunk_runs" / datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+                out_base = Path(preferred_base)
+                run_dir = (
+                    out_base
+                    / "superchunk_runs"
+                    / datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+                )
                 run_dir.mkdir(parents=True, exist_ok=True)
 
                 # Prepare paragraphs and run SuperChunk
@@ -1096,13 +1099,18 @@ class SummarizerProcessor(BaseProcessor):
             # Route .md/.txt through SuperChunk to avoid single-shot full-text prompts
             if input_path is not None and input_path.suffix.lower() in [".md", ".txt"]:
                 logger.info("🧩 Using SuperChunk routing for text/markdown input")
-                # Choose artifacts dir under configured output
-                out_base = (
-                    Path(self.settings.paths.output)
-                    if self.settings.paths.output
-                    else Path.cwd() / "output"
+                # Choose artifacts dir with user/GUIs override when provided
+                preferred_base = (
+                    kwargs.get("artifacts_output_dir")
+                    or self.settings.paths.output
+                    or (Path.cwd() / "output")
                 )
-                run_dir = out_base / "superchunk_runs" / datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+                out_base = Path(preferred_base)
+                run_dir = (
+                    out_base
+                    / "superchunk_runs"
+                    / datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+                )
                 run_dir.mkdir(parents=True, exist_ok=True)
 
                 paragraphs = [p for p in text.split("\n\n") if p.strip()]
@@ -1385,7 +1393,7 @@ def fetch_summary(
     style: str = "general",
     max_tokens: int = 500,
 ) -> str | None:
-    """ Convenience function to get a summary using unified LLM providers."""
+    """Convenience function to get a summary using unified LLM providers."""
     processor = SummarizerProcessor(provider=provider, max_tokens=max_tokens)
     result = processor.process(text, style=style)
     return result.data if result.success else None

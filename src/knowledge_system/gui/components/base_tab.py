@@ -23,7 +23,7 @@ from ..assets.icons import get_app_icon
 
 
 class BaseTab(QWidget):
-    """ Base class for all GUI tabs with common functionality."""
+    """Base class for all GUI tabs with common functionality."""
 
     # Signals for communication with main window
     status_updated = pyqtSignal(str)
@@ -44,15 +44,15 @@ class BaseTab(QWidget):
         self._connect_signals()
 
     def _setup_ui(self) -> None:
-        """ Setup the UI for this tab. Must be implemented by subclasses."""
+        """Setup the UI for this tab. Must be implemented by subclasses."""
         raise NotImplementedError("Subclasses must implement _setup_ui()")
 
     def _connect_signals(self) -> None:
-        """ Connect internal signals. Can be overridden by subclasses."""
+        """Connect internal signals. Can be overridden by subclasses."""
         pass
 
     def _create_action_layout(self) -> QHBoxLayout:
-        """ Create a standard action button layout."""
+        """Create a standard action button layout."""
         layout = QHBoxLayout()
 
         # Start button
@@ -78,7 +78,7 @@ class BaseTab(QWidget):
         return layout
 
     def _create_output_section(self) -> QVBoxLayout:
-        """ Create a standard output section with log display."""
+        """Create a standard output section with log display."""
         layout = QVBoxLayout()
 
         # Header with report button
@@ -124,7 +124,7 @@ class BaseTab(QWidget):
         row: int,
         col: int,
     ) -> None:
-        """ Add a field with label and tooltip to a grid layout."""
+        """Add a field with label and tooltip to a grid layout."""
         label = QLabel(label_text)
         label.setToolTip(tooltip)
         widget.setToolTip(tooltip)
@@ -133,19 +133,19 @@ class BaseTab(QWidget):
         layout.addWidget(widget, row, col + 1)
 
     def append_log(self, message: str) -> None:
-        """ Append a message to the output log."""
+        """Append a message to the output log."""
         if hasattr(self, "output_text"):
             self.output_text.append(message)
             self.output_text.repaint()
         self.log_message.emit(message)
 
     def clear_log(self) -> None:
-        """ Clear the output log."""
+        """Clear the output log."""
         if hasattr(self, "output_text"):
             self.output_text.clear()
 
     def set_processing_state(self, processing: bool) -> None:
-        """ Set the processing state (enable/disable controls)."""
+        """Set the processing state (enable/disable controls)."""
         if hasattr(self, "start_btn"):
             self.start_btn.setEnabled(not processing)
         if hasattr(self, "stop_btn"):
@@ -160,7 +160,7 @@ class BaseTab(QWidget):
             self.processing_finished.emit()
 
     def show_error(self, title: str, message: str) -> None:
-        """ Show an error message box with custom icon."""
+        """Show an error message box with custom icon."""
         msg_box = QMessageBox(self)
         msg_box.setIcon(QMessageBox.Icon.Critical)
         msg_box.setWindowTitle(title)
@@ -175,7 +175,7 @@ class BaseTab(QWidget):
         msg_box.exec()
 
     def show_warning(self, title: str, message: str) -> None:
-        """ Show a warning message box with custom icon."""
+        """Show a warning message box with custom icon."""
         msg_box = QMessageBox(self)
         msg_box.setIcon(QMessageBox.Icon.Warning)
         msg_box.setWindowTitle(title)
@@ -190,7 +190,7 @@ class BaseTab(QWidget):
         msg_box.exec()
 
     def show_info(self, title: str, message: str) -> None:
-        """ Show an info message box with custom icon."""
+        """Show an info message box with custom icon."""
         msg_box = QMessageBox(self)
         msg_box.setIcon(QMessageBox.Icon.Information)
         msg_box.setWindowTitle(title)
@@ -205,7 +205,7 @@ class BaseTab(QWidget):
         msg_box.exec()
 
     def cleanup_workers(self) -> None:
-        """ Clean up any active worker threads."""
+        """Clean up any active worker threads."""
         for worker in self.active_workers:
             if worker.isRunning():
                 worker.terminate()
@@ -213,15 +213,15 @@ class BaseTab(QWidget):
         self.active_workers.clear()
 
     def _get_start_button_text(self) -> str:
-        """ Get the text for the start button. Must be implemented by subclasses."""
+        """Get the text for the start button. Must be implemented by subclasses."""
         raise NotImplementedError("Subclasses must implement _get_start_button_text()")
 
     def _start_processing(self) -> None:
-        """ Start the main processing operation. Must be implemented by subclasses."""
+        """Start the main processing operation. Must be implemented by subclasses."""
         raise NotImplementedError("Subclasses must implement _start_processing()")
 
     def _stop_processing(self) -> None:
-        """ Stop the current processing operation. Can be overridden by subclasses."""
+        """Stop the current processing operation. Can be overridden by subclasses."""
         # Default implementation - stop all active workers
         for worker in self.active_workers:
             if worker.isRunning():
@@ -239,7 +239,7 @@ class BaseTab(QWidget):
         self.set_processing_state(False)
 
     def _view_last_report(self) -> None:
-        """ View the last generated report."""
+        """View the last generated report."""
         # First try current_report if set
         report_path = self.current_report
 
@@ -269,7 +269,7 @@ class BaseTab(QWidget):
             )
 
     def _find_latest_report(self) -> str | None:
-        """ Find the most recent report file for this tab type."""
+        """Find the most recent report file for this tab type."""
         try:
             # Get the tab-specific report type
             tab_type = getattr(
@@ -311,9 +311,9 @@ class BaseTab(QWidget):
             return None
 
     def get_output_directory(self, default_path: str) -> Path:
-        """ Get the configured output directory or return default."""
+        """Get the configured output directory or return default."""
         return Path(default_path)
 
     def validate_inputs(self) -> bool:
-        """ Validate inputs before processing. Can be overridden by subclasses."""
+        """Validate inputs before processing. Can be overridden by subclasses."""
         return True

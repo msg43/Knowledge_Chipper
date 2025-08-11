@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 
 
 class FFmpegAudioProcessor:
-    """ FFmpeg-based audio processor to replace pydub functionality."""
+    """FFmpeg-based audio processor to replace pydub functionality."""
 
     def __init__(self) -> None:
         self._ffmpeg_path: str | None = None
@@ -51,7 +51,7 @@ class FFmpegAudioProcessor:
         return None
 
     def _check_ffmpeg_available(self) -> bool:
-        """ Check if FFmpeg is available on the system."""
+        """Check if FFmpeg is available on the system."""
         self._ffmpeg_path = self._resolve_binary("ffmpeg")
         self._ffprobe_path = self._resolve_binary("ffprobe")
 
@@ -318,22 +318,22 @@ def convert_audio_file(
     sample_rate: int | None = None,
     channels: int | None = None,
 ) -> bool:
-    """ Convenience function for audio conversion."""
+    """Convenience function for audio conversion."""
     return ffmpeg_processor.convert_audio(
         input_path, output_path, target_format, normalize, sample_rate, channels
     )
 
 
 def get_audio_metadata(file_path: str | Path) -> dict[str, Any]:
-    """ Convenience function for getting audio metadata."""
+    """Convenience function for getting audio metadata."""
     return ffmpeg_processor.get_audio_metadata(file_path)
 
 
 def get_audio_duration(file_path: str | Path) -> float | None:
-    """ Convenience function for getting audio duration."""
+    """Convenience function for getting audio duration."""
     return ffmpeg_processor.get_audio_duration(file_path)
 
 
 def normalize_audio_file(input_path: str | Path, output_path: str | Path) -> bool:
-    """ Convenience function for audio normalization."""
+    """Convenience function for audio normalization."""
     return ffmpeg_processor.normalize_audio(input_path, output_path)

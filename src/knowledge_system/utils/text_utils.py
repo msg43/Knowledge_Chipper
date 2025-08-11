@@ -80,7 +80,7 @@ MODEL_CONTEXT_WINDOWS = {
 
 @dataclass
 class ChunkingConfig:
-    """ Configuration for intelligent text chunking."""
+    """Configuration for intelligent text chunking."""
 
     max_chunk_tokens: int
     overlap_tokens: int = 200
@@ -92,7 +92,7 @@ class ChunkingConfig:
 
 @dataclass
 class TextChunk:
-    """ Represents a chunk of text with metadata."""
+    """Represents a chunk of text with metadata."""
 
     content: str
     chunk_id: int
@@ -105,7 +105,7 @@ class TextChunk:
 
 @dataclass
 class ChunkingSummary:
-    """ Summary of the chunking process."""
+    """Summary of the chunking process."""
 
     total_chunks: int
     total_tokens: int

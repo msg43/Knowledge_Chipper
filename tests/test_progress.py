@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from knowledge_system.utils.batch_processing import batch_process_with_progress
 from knowledge_system.utils.progress import (
     ProgressDisplay,
     ProgressTracker,
@@ -16,7 +17,6 @@ from knowledge_system.utils.progress import (
     TaskStatus,
 )
 from knowledge_system.utils.tracking import resume_from_checkpoint
-from knowledge_system.utils.batch_processing import batch_process_with_progress
 
 
 class TestTaskStatus:

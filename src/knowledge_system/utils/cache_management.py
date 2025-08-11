@@ -147,7 +147,7 @@ def should_clear_cache_on_startup() -> tuple[bool, str]:
 
 
 def _get_cache_state(project_root: Path) -> dict:
-    """ Get current state for cache invalidation decisions."""
+    """Get current state for cache invalidation decisions."""
     state = {
         "timestamp": time.time(),
         "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
@@ -199,7 +199,7 @@ def _get_cache_state(project_root: Path) -> dict:
 
 
 def _has_recent_import_errors() -> bool:
-    """ Check if there were import errors in recent logs."""
+    """Check if there were import errors in recent logs."""
     try:
         from ..config import get_settings
 
@@ -272,7 +272,7 @@ def force_clear_cache() -> tuple[bool, str]:
 
 
 def create_manual_clear_flag() -> None:
-    """ Create a flag file to force cache clearing on next startup."""
+    """Create a flag file to force cache clearing on next startup."""
     try:
         project_root = Path(__file__).parent.parent.parent.parent
         flag_file = project_root / ".clear_cache"

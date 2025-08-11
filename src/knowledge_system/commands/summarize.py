@@ -34,7 +34,6 @@ def _extract_youtube_url_from_file(file_path: Path) -> str | None:
         YouTube URL if found, None otherwise
     """
     import re
-    
 
     import yaml
 

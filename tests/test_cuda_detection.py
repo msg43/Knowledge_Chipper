@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-
 from knowledge_system.utils.hardware_detection import (
     ChipType,
     CUDASpecs,

@@ -6,7 +6,47 @@ This package provides AI-powered tools for transcribing, summarizing, and organi
 videos, audio files, and documents into searchable knowledge.
 """
 
-__version__ = "0.1.1"
+from __future__ import annotations
+
+import re
+from importlib import metadata
+from pathlib import Path
+
+
+def _resolve_version() -> str:
+    """Resolve package version with robust fallbacks.
+
+    Order:
+    1) importlib.metadata.version for installed/editable installs
+    2) Read pyproject.toml nearby (source tree)
+    3) Fallback to "0.0.0"
+    """
+    # 1) Distribution metadata (works for pip install -e . and wheels)
+    try:
+        return metadata.version("knowledge-system")
+    except Exception:
+        pass
+
+    # 2) Fallback: read pyproject.toml
+    try:
+        current = Path(__file__).resolve()
+        # Walk up to find pyproject.toml
+        for ancestor in [current.parent, *current.parents]:
+            candidate = ancestor / "pyproject.toml"
+            if candidate.exists():
+                text = candidate.read_text(encoding="utf-8")
+                match = re.search(r"^version\s*=\s*\"(\d+\.\d+\.\d+)\"", text, re.M)
+                if match:
+                    return match.group(1)
+                break
+    except Exception:
+        pass
+
+    # 3) Safe default
+    return "0.0.0"
+
+
+__version__ = _resolve_version()
 __author__ = "Knowledge_Chipper"
 __email__ = "dev@knowledge-system.local"
 
@@ -16,7 +56,7 @@ from .logger import get_logger
 
 
 def gui_main() -> None:
-    """ Launch the GUI application from the main package."""
+    """Launch the GUI application from the main package."""
     import sys
 
     # Smart cache clearing - clear only if needed

@@ -6,7 +6,7 @@ from typing import Dict
 
 @dataclass
 class Scorecard:
-    def compute(self, stats: Dict[str, float]) -> Dict[str, float]:
+    def compute(self, stats: dict[str, float]) -> dict[str, float]:
         defaults = {
             "rare_retention": stats.get("rare_retention", 0.95),
             "novelty_coverage": stats.get("novelty_coverage", 0.90),

@@ -118,7 +118,7 @@ def add_model_override(model_name: str, context_window: int) -> None:
 
 
 def main():
-    """ Main CLI interface for model updater."""
+    """Main CLI interface for model updater."""
     import sys
 
     if len(sys.argv) < 2:
