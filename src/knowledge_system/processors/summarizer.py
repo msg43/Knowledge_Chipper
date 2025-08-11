@@ -20,6 +20,8 @@ from knowledge_system.utils.cancellation import CancellationError
 from knowledge_system.utils.llm_providers import UnifiedLLMClient
 from knowledge_system.superchunk.config import SuperChunkConfig
 from knowledge_system.superchunk.runner import Runner
+from knowledge_system.superchunk.config import SuperChunkConfig
+from knowledge_system.superchunk.runner import Runner
 from knowledge_system.utils.progress import CancellationToken, SummarizationProgress
 from knowledge_system.utils.text_utils import (
     calculate_chunking_config,
@@ -1052,6 +1054,61 @@ class SummarizerProcessor(BaseProcessor):
                 Runner(config=cfg, artifacts_dir=run_dir).run(paragraphs)
 
                 # Read final.md as the produced summary; GUI will still write/append per its existing flow
+                final_md_path = run_dir / "final.md"
+                try:
+                    summary_text = final_md_path.read_text(encoding="utf-8")
+                except Exception:
+                    summary_text = ""
+
+                processing_time = time.time() - start_time
+                metadata = {
+                    "provider": self.provider,
+                    "model": self.model,
+                    "input_length": len(text),
+                    "output_length": len(summary_text),
+                    "processing_time": processing_time,
+                    "mode": "superchunk",
+                    "artifacts_dir": str(run_dir),
+                }
+
+                if progress_callback:
+                    progress_callback(
+                        SummarizationProgress(
+                            status="completed",
+                            current_step="Summary generation complete!",
+                            percent=100.0,
+                            model_name=self.model,
+                            provider=self.provider,
+                            total_characters=total_characters,
+                            characters_completed=total_characters,
+                            current_file_size=current_file_size,
+                            current_file_chars_done=current_file_size,
+                        )
+                    )
+
+                return ProcessorResult(
+                    success=True,
+                    data=summary_text,
+                    metadata=metadata,
+                    dry_run=dry_run,
+                )
+
+            # Route .md/.txt through SuperChunk to avoid single-shot full-text prompts
+            if input_path is not None and input_path.suffix.lower() in [".md", ".txt"]:
+                logger.info("🧩 Using SuperChunk routing for text/markdown input")
+                # Choose artifacts dir under configured output
+                out_base = (
+                    Path(self.settings.paths.output)
+                    if self.settings.paths.output
+                    else Path.cwd() / "output"
+                )
+                run_dir = out_base / "superchunk_runs" / datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+                run_dir.mkdir(parents=True, exist_ok=True)
+
+                paragraphs = [p for p in text.split("\n\n") if p.strip()]
+                cfg = SuperChunkConfig.from_global_settings()
+                Runner(config=cfg, artifacts_dir=run_dir).run(paragraphs)
+
                 final_md_path = run_dir / "final.md"
                 try:
                     summary_text = final_md_path.read_text(encoding="utf-8")
