@@ -9,9 +9,8 @@ import json
 import os
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from knowledge_system.logger import get_logger
 
@@ -126,7 +125,7 @@ class FFmpegAudioProcessor:
                 return True
             else:
                 logger.error(
-                    f"FFmpeg conversion failed: output file is empty or missing"
+                    "FFmpeg conversion failed: output file is empty or missing"
                 )
                 return False
 

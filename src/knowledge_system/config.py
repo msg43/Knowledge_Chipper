@@ -7,7 +7,7 @@ Supports YAML files, environment variables, and settings persistence.
 
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 import yaml  # type: ignore
 from pydantic import BaseModel, Field, field_validator
@@ -418,7 +418,7 @@ class Settings(BaseSettings):
                             if key != "api_keys":  # api_keys already handled above
                                 kwargs[key] = value
                         break
-                except Exception as e:
+                except Exception:
                     pass  # Silently continue if credentials file can't be loaded
 
         # Load API keys from environment if not provided

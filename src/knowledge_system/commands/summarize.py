@@ -9,7 +9,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import click
 
@@ -35,8 +35,6 @@ def _extract_youtube_url_from_file(file_path: Path) -> str | None:
     """
     import re
     
-    import re
-    import re
 
     import yaml
 
@@ -394,7 +392,7 @@ def summarize(
                 # Handle different file types
                 if file_path.suffix.lower() == ".pdf":
                     if not ctx.quiet:
-                        console.print(f"[blue]📄 Extracting text from PDF...[/blue]")
+                        console.print("[blue]📄 Extracting text from PDF...[/blue]")
 
                     from ..processors.pdf import PDFProcessor
 
@@ -512,7 +510,7 @@ def summarize(
                         )
                         output_path = file_path
                         if not ctx.quiet:
-                            console.print(f"[green]✓ Updated summary in-place[/green]")
+                            console.print("[green]✓ Updated summary in-place[/green]")
                     else:
                         # Create new summary file
                         # Clean filename by removing hyphens for better readability
@@ -705,7 +703,7 @@ def summarize(
             console.print("=" * 80)
 
             # Summary overview
-            console.print(f"[bold]Session Summary:[/bold]")
+            console.print("[bold]Session Summary:[/bold]")
             console.print(
                 f"✅ Successful: [green]{session_stats['successful_files']}[/green]"
             )
@@ -714,7 +712,7 @@ def summarize(
             console.print(f"⏱️  Total time: {total_session_time:.1f}s")
 
             # Token and cost statistics
-            console.print(f"\n[bold]Resource Usage:[/bold]")
+            console.print("\n[bold]Resource Usage:[/bold]")
             console.print(
                 f"🎯 Total tokens: [blue]{session_stats['total_tokens']:,}[/blue] ({session_stats['total_prompt_tokens']:,} prompt + {session_stats['total_completion_tokens']:,} completion)"
             )
@@ -724,7 +722,7 @@ def summarize(
             console.print(f"⚡ Average speed: {avg_tokens_per_second:.1f} tokens/second")
 
             # Content statistics
-            console.print(f"\n[bold]Content Analysis:[/bold]")
+            console.print("\n[bold]Content Analysis:[/bold]")
             console.print(
                 f"📝 Total input: {session_stats['total_input_length']:,} characters"
             )
@@ -747,7 +745,7 @@ def summarize(
 
             # Failed files details
             if session_stats["failed_files_list"]:
-                console.print(f"\n[bold red]Failed Files:[/bold red]")
+                console.print("\n[bold red]Failed Files:[/bold red]")
                 for file_path, error in session_stats["failed_files_list"]:
                     console.print(f"❌ {Path(file_path).name}: {error}")
 
@@ -757,7 +755,7 @@ def summarize(
         report_file.parent.mkdir(parents=True, exist_ok=True)
 
         with open(report_file, "w", encoding="utf-8") as f:
-            f.write(f"# Summarization Session Report\n\n")
+            f.write("# Summarization Session Report\n\n")
             f.write(f"**Generated:** {datetime.now().isoformat()}\n")
             f.write(f"**Session Duration:** {total_session_time:.1f} seconds\n")
             f.write(f"**Input Path:** {input_path}\n")
@@ -846,7 +844,7 @@ def summarize(
 
             # Report index optimization statistics
             if not force and skipped_via_index > 0:
-                console.print(f"\n[green]🚀 Performance optimization:[/green]")
+                console.print("\n[green]🚀 Performance optimization:[/green]")
                 console.print(
                     f"  - Skipped {skipped_via_index} unchanged files via index"
                 )
@@ -872,7 +870,7 @@ def summarize(
             try:
                 index_file.unlink()
                 logger.debug(f"Cleaned up session index file: {index_file.name}")
-            except:
+            except Exception:
                 pass
 
     except Exception as e:

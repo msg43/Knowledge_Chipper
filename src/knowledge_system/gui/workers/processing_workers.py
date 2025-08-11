@@ -1,13 +1,12 @@
 """ Enhanced worker threads for background processing operations."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from PyQt6.QtCore import QDateTime, QThread, pyqtSignal
-from PyQt6.QtWidgets import QWidget
 
 from ...logger import get_logger
-from ...utils.progress import SummarizationProgress, TranscriptionProgress
+from ...utils.progress import SummarizationProgress
 
 logger = get_logger(__name__)
 
@@ -101,10 +100,7 @@ class EnhancedTranscriptionWorker(QThread):
     def run(self):
         """ Run the transcription process with TRUE parallel processing."""
         try:
-            import time
-            from concurrent.futures import ThreadPoolExecutor, as_completed
 
-            from ...processors.audio_processor import AudioProcessor
 
             # Get parallel processing settings from GUI
             max_concurrent = self.gui_settings.get("max_concurrent", 4)
@@ -135,7 +131,6 @@ class EnhancedTranscriptionWorker(QThread):
 
     def _process_sequential(self):
         """ Process files one at a time (sequential mode)."""
-        from ...processors.audio_processor import AudioProcessor
 
         processor = self._create_processor()
 

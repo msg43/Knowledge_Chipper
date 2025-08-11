@@ -7,7 +7,7 @@ Handles inter-thread communication and message processing in the GUI.
 
 import queue
 from collections.abc import Callable
-from typing import Any, Dict, Optional
+from typing import Any
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 

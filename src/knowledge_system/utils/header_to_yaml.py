@@ -8,7 +8,6 @@ bullet points under specific headers, converting them to YAML fields.
 
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from ..logger import get_logger
 
@@ -176,7 +175,6 @@ def sanitize_yaml_field_name(header: str) -> str:
     Returns:
         YAML field name that exactly matches the header pattern
     """
-    import re
     import re
 
     # First normalize multiple spaces to single spaces, then replace with underscores

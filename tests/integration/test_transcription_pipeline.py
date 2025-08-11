@@ -1,7 +1,11 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from knowledge_system.services.transcription_service import TranscriptionService
+from knowledge_system.services.transcription_service import (
+    TranscriptionService,
+    transcribe_file,
+    transcribe_youtube,
+)
 
 
 class TestTranscriptionService:

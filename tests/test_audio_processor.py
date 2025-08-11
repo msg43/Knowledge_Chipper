@@ -1,10 +1,8 @@
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from knowledge_system.processors.audio_processor import AudioProcessor
-from knowledge_system.processors.base import ProcessorResult
 
 
 @pytest.fixture

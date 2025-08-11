@@ -13,11 +13,10 @@ import re
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-from ..errors import YouTubeAPIError
 from ..logger import get_logger
 from ..utils.cancellation import CancellationError, CancellationToken
 from ..utils.text_utils import strip_bracketed_content
@@ -186,8 +185,8 @@ class YouTubeTranscript(BaseModel):
                     )
 
         # Add transcript processing metadata
-        lines.append(f'model: "YouTube Transcript"')
-        lines.append(f'device: "Web API"')
+        lines.append('model: "YouTube Transcript"')
+        lines.append('device: "Web API"')
 
         # Add extraction timestamp
         lines.append(f'fetched: "{self.fetched_at.strftime("%Y-%m-%d %H:%M:%S")}"')
@@ -489,7 +488,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                             logger.info(
                                 f"Found manual transcript in {self.preferred_language}"
                             )
-                        except:
+                        except Exception:
                             try:
                                 # Try English as fallback
                                 transcript = (
@@ -499,7 +498,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                                 )
                                 is_manual = True
                                 logger.info("Found manual transcript in English")
-                            except:
+                            except Exception:
                                 # Try any manual transcript
                                 try:
                                     for t in transcript_list:
@@ -511,7 +510,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                                                 f"Found manual transcript in {getattr(t, 'language_code', 'unknown')}"
                                             )
                                             break
-                                except:
+                                except Exception:
                                     pass
 
                     # Then try automatic captions if no manual found and allowed
@@ -525,7 +524,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                             logger.info(
                                 f"Found automatic transcript in {self.preferred_language}"
                             )
-                        except:
+                        except Exception:
                             try:
                                 # Try English as fallback
                                 transcript = transcript_list.find_generated_transcript(
@@ -533,7 +532,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                                 )
                                 is_manual = False
                                 logger.info("Found automatic transcript in English")
-                            except:
+                            except Exception:
                                 # Try any automatic transcript
                                 try:
                                     for t in transcript_list:
@@ -545,7 +544,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                                                 f"Found automatic transcript in {getattr(t, 'language_code', 'unknown')}"
                                             )
                                             break
-                                except:
+                                except Exception:
                                     pass
 
                     if not transcript:

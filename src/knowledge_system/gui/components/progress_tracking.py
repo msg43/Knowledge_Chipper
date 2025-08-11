@@ -1,6 +1,5 @@
 """ Progress tracking components for GUI operations."""
 
-from typing import Any, Dict, Optional
 
 from PyQt6.QtCore import QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -8,7 +7,6 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
@@ -173,15 +171,12 @@ class EnhancedProgressBar(QFrame):
         self.setStyleSheet(
             """
             QFrame {
-
-            QFrame {
                 background-color: #2d2d2d;
                 border: 1px solid #3c3c3c;
                 border-radius: 5px;
                 margin: 5px;
             }
         """
-        )
         )
 
         # Initially hide
@@ -209,8 +204,6 @@ class EnhancedProgressBar(QFrame):
         self.cancel_btn.setStyleSheet(
             """
             QPushButton {
-
-            QPushButton {
                 background-color: #d32f2f;
                 color: white;
                 border: none;
@@ -222,8 +215,6 @@ class EnhancedProgressBar(QFrame):
             }
         """
         )
-
-        )
         self.cancel_btn.hide()
         top_layout.addWidget(self.cancel_btn)
 
@@ -233,8 +224,6 @@ class EnhancedProgressBar(QFrame):
         self.progress_bar = QProgressBar()
         self.progress_bar.setStyleSheet(
             """
-            QProgressBar {
-
             QProgressBar {
                 background-color: #3c3c3c;
                 border: 1px solid #4c4c4c;
@@ -247,8 +236,6 @@ class EnhancedProgressBar(QFrame):
                 border-radius: 3px;
             }
         """
-        )
-
         )
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)

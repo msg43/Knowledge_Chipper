@@ -1,13 +1,11 @@
 """ File watcher tab for monitoring directories and auto-processing files."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from PyQt6.QtCore import QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QFileDialog,
     QGridLayout,
     QGroupBox,
@@ -15,7 +13,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
-    QMessageBox,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -362,7 +359,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
             matching_files = sorted(list(set(matching_files)))
 
             # Show results
-            self.append_log(f"\n=== Configuration Test ===")
+            self.append_log("\n=== Configuration Test ===")
             self.append_log(f"Directory: {watch_path}")
             self.append_log(f"Patterns: {', '.join(patterns)}")
             self.append_log(f"Recursive: {self.recursive_checkbox.isChecked()}")

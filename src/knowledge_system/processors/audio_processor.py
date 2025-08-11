@@ -1,8 +1,7 @@
-import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any
 
 from knowledge_system.logger import get_logger
 from knowledge_system.processors.base import BaseProcessor, ProcessorResult
@@ -13,10 +12,7 @@ from knowledge_system.utils.audio_utils import (
     convert_audio_file,
     ffmpeg_processor,
     get_audio_duration,
-    get_audio_metadata,
-    normalize_audio_file,
 )
-from knowledge_system.utils.validation import can_process_file, validate_audio_input
 
 logger = get_logger(__name__)
 
@@ -305,7 +301,7 @@ class AudioProcessor(BaseProcessor):
         lines.append(f'text_length: {len(transcription_data.get("text", ""))}')
         lines.append(f'segments_count: {len(transcription_data.get("segments", []))}')
         if model_metadata.get("diarization_enabled"):
-            lines.append(f"diarization_enabled: true")
+            lines.append("diarization_enabled: true")
         lines.append(f"include_timestamps: {include_timestamps}")
         lines.append("---")
         lines.append("")

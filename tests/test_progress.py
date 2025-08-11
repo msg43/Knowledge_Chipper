@@ -15,6 +15,8 @@ from knowledge_system.utils.progress import (
     TaskInfo,
     TaskStatus,
 )
+from knowledge_system.utils.tracking import resume_from_checkpoint
+from knowledge_system.utils.batch_processing import batch_process_with_progress
 
 
 class TestTaskStatus:

@@ -8,7 +8,6 @@ Provides thread-safe cancellation tokens for graceful operation cancellation.
 # Import logger for debugging
 import logging
 import threading
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

@@ -3,7 +3,6 @@
 Script to add tag sanitization to YouTube transcript processor.
 """
 
-import re
 from pathlib import Path
 
 

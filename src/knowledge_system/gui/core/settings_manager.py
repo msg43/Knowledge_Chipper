@@ -7,7 +7,7 @@ for persistent storage of user preferences.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from ...logger import get_logger
 from .session_manager import get_session_manager, save_session

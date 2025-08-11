@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
 from typing import Iterable, List, Tuple, Optional
 
@@ -9,7 +8,12 @@ from .vector_store import VectorStore
 
 
 def _tokenize(text: str) -> set[str]:
-    return set(t.strip('.,;:!?'"""'"""()).lower() for t in text.split() if t.strip())
+    # Normalize tokens by stripping common punctuation and quotes
+    return {
+        t.strip(".,;:!?\"'()[]{}").lower()
+        for t in text.split()
+        if t.strip()
+    }
 
 
 def jaccard(a: str, b: str) -> float:

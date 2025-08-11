@@ -10,14 +10,12 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import click
-from rich.table import Table
 
 from ..logger import log_system_event
 from ..utils.text_utils import strip_bracketed_content
-from ..utils.youtube_utils import extract_video_id
 from .common import CLIContext, console, logger, pass_context
 
 

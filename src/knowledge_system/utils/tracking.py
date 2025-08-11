@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .cancellation import CancellationToken
 
@@ -754,7 +754,6 @@ def update_progress_with_character_tracking(
     Returns:
         Updated progress information with ETAs
     """
-    import time
 
     # Calculate characters completed
     characters_completed = 0

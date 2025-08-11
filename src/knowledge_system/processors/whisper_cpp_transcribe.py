@@ -2,7 +2,7 @@ import platform
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any
 
 from knowledge_system.logger import get_logger
 from knowledge_system.processors.base import BaseProcessor, ProcessorResult
@@ -835,7 +835,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             progress = 60 + min(
                 15, int(elapsed_time / 3)
             )  # Gradual increase from 60% to 75%
-            self.progress_callback(f"🎯 Processing segments...", progress)
+            self.progress_callback("🎯 Processing segments...", progress)
         elif "done" in line or "finished" in line or "complete" in line:
             # Near completion
             self.progress_callback("🎯 Finalizing transcription...", 75)

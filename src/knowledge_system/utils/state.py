@@ -8,7 +8,7 @@ Handles application state persistence, session management, and user preferences.
 import json
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from pydantic import BaseModel, Field, validator
 

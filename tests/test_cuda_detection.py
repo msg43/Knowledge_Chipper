@@ -1,9 +1,7 @@
 """Tests for CUDA detection and hardware optimization."""
 
-import unittest.mock as mock
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from knowledge_system.utils.hardware_detection import (
     ChipType,

@@ -8,7 +8,7 @@ Provides abstract interface and common functionality for all processors.
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from ..config import get_settings
 from ..errors import ProcessingError, ValidationError
@@ -566,3 +566,28 @@ _registry = ProcessorRegistry()
 def get_processor_registry() -> ProcessorRegistry:
     """ Get the global processor registry."""
     return _registry
+
+
+# Convenience wrappers for global registry access (backward compatibility with tests)
+def register_processor(processor: BaseProcessor, name: str | None = None) -> None:
+    """Register a processor instance in the global registry."""
+    get_processor_registry().register(processor, name)
+
+
+def get_processor(name: str) -> BaseProcessor | None:
+    """Retrieve a processor by name from the global registry."""
+    return get_processor_registry().get(name)
+
+
+def get_processor_for_file(input_path: str | Path) -> BaseProcessor | None:
+    """Find the first registered processor that can handle the given file."""
+    path = Path(input_path)
+    registry = get_processor_registry()
+    for processor in registry._processors.values():
+        try:
+            if processor.can_process(path):
+                return processor
+        except Exception:
+            # Ignore processors that error on can_process
+            continue
+    return None

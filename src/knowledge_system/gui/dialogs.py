@@ -1,10 +1,9 @@
 """ Custom dialog components for the knowledge system GUI."""
 
-import os
-from typing import Any, Optional
+from typing import Any
 
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QCloseEvent, QFont, QPixmap
+from PyQt6.QtGui import QCloseEvent, QFont
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -13,7 +12,6 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QTextEdit,
     QVBoxLayout,
 )
 
@@ -24,7 +22,6 @@ from knowledge_system.utils.ollama_manager import (
     get_ollama_manager,
 )
 from knowledge_system.utils.progress import (
-    CancellationError,
     CancellationToken,
     ExtractionProgress,
     MOCProgress,
@@ -215,8 +212,11 @@ class OllamaInstallWorker(QThread):
             self.install_error.emit(str(e))
 
 
-class ModelDownloadDialog(QDialog):
-    """ Dialog for downloading Ollama models with progress tracking."""
+class ModelDownloadDialogLegacy(QDialog):
+    """ Dialog for downloading Ollama models with progress tracking.
+
+    Note: Renamed to avoid name collision with the newer ModelDownloadDialog below.
+    """
 
     def __init__(self, model_name: str, model_info, parent=None) -> None:
         super().__init__(parent)

@@ -7,14 +7,14 @@ Handles comprehensive file processing with transcription, summarization, and MOC
 
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import click
 
 from ..logger import log_system_event
 from ..superchunk.config import SuperChunkConfig
 from ..superchunk.runner import Runner
-from .common import CLIContext, console, logger, pass_context
+from .common import CLIContext, console, pass_context
 from .transcribe import _generate_obsidian_link, format_transcript_content
 
 

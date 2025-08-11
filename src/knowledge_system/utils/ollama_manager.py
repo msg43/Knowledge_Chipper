@@ -1,15 +1,12 @@
 """ Ollama service and model management utilities."""
 
 import json
-import os
-import platform
 import shutil
 import subprocess
 import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 

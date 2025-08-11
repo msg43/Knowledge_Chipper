@@ -10,7 +10,7 @@ import re
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 try:
     import yt_dlp  # type: ignore[import-untyped]
@@ -474,7 +474,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
             # Append to existing log file instead of creating new timestamped files
             with open(log_file, "a", encoding="utf-8") as f:
                 f.write(f"\n{'='*70}\n")
-                f.write(f"YouTube Metadata Extraction Failures\n")
+                f.write("YouTube Metadata Extraction Failures\n")
                 f.write(f"Timestamp: {datetime.now().isoformat()}\n")
                 f.write(f"Total failures: {len(errors)}\n")
                 f.write(f"{'='*70}\n\n")
@@ -483,10 +483,10 @@ class YouTubeMetadataProcessor(BaseProcessor):
                     f.write(f"{i}. {error}\n")
 
                 f.write(
-                    f"\nNote: All processing uses WebShare rotating proxies only.\n"
+                    "\nNote: All processing uses WebShare rotating proxies only.\n"
                 )
                 f.write(
-                    f"If failures persist, check proxy credentials and YouTube accessibility.\n"
+                    "If failures persist, check proxy credentials and YouTube accessibility.\n"
                 )
                 f.write(f"\n{'='*70}\n")
 

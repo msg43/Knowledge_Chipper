@@ -2,10 +2,9 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from PyQt6.QtCore import QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -16,12 +15,10 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
-    QMessageBox,
     QProgressBar,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
-    QWidget,
 )
 
 from ...logger import get_logger
@@ -379,15 +376,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.recommendations_label.setStyleSheet(
             """
             background-color: #f5f5f5;
-
-            background-color: #f5f5f5;
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 5px;
             font-size: 11px;
         """
-        )
-
         )
         self.recommendations_label.setMinimumHeight(35)
         # Remove max height limit to allow expansion for recommendations
@@ -598,8 +591,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.file_progress_bar.setStyleSheet(
             """
             QProgressBar {
-
-            QProgressBar {
                 border: 1px solid #ccc;
                 border-radius: 5px;
                 text-align: center;
@@ -610,8 +601,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 border-radius: 4px;
             }
         """
-        )
-
         )
         layout.addWidget(self.file_progress_bar)
 
@@ -830,14 +819,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.recommendations_label.setStyleSheet(
                 """
                 background-color: #e8f5e8;
-
-                background-color: #e8f5e8;
                 padding: 10px;
                 border: 1px solid #4caf50;
                 border-radius: 5px;
                 font-size: 11px;
-            """
-            )
+                """
             )
 
             # Enable the "Use Recommended Settings" button
@@ -851,14 +837,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.recommendations_label.setStyleSheet(
                 """
                 background-color: #ffeaea;
-
-                background-color: #ffeaea;
                 padding: 10px;
                 border: 1px solid #f44336;
                 border-radius: 5px;
                 font-size: 11px;
-            """
-            )
+                """
             )
 
     def _apply_recommended_settings(self):

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 from knowledge_system.logger import get_logger
 from knowledge_system.processors.base import BaseProcessor, ProcessorResult
@@ -26,7 +26,7 @@ def _check_diarization_dependencies() -> bool:
         PIPELINE_AVAILABLE = True
         logger.info("Diarization dependencies loaded successfully")
         return True
-    except ImportError as e:
+    except ImportError:
         PIPELINE_AVAILABLE = False
         PIPELINE = None
         logger.warning(

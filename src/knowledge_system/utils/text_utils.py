@@ -3,12 +3,10 @@ Text processing utilities for the knowledge system
 Text processing utilities for the knowledge system.
 """
 
-import math
 import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..logger import get_logger
 
@@ -23,6 +21,7 @@ _cache_ttl = 300  # 5 minutes
 # Model context window definitions
 MODEL_CONTEXT_WINDOWS = {
     # OpenAI models - specific versions
+    "gpt-5": 200000,
     "gpt-3.5-turbo-0125": 16385,
     "gpt-3.5-turbo-1106": 16385,
     "gpt-4-0613": 8192,
@@ -245,8 +244,7 @@ def get_model_context_window(model: str) -> int:
     Returns:
         Context window size in tokens
     """
-    global _model_context_cache, _cache_timestamp
-    global _model_context_cache, _cache_timestamp
+    global _cache_timestamp
 
     # Normalize model name
     model_normalized = model.lower().strip()
@@ -299,9 +297,7 @@ def refresh_model_context_cache() -> None:
     Force refresh of the model context window cache.
     Useful when new models are installed or Ollama is restarted.
     """
-    global _model_context_cache, _cache_timestamp
-
-    global _model_context_cache, _cache_timestamp
+    global _cache_timestamp
     _model_context_cache.clear()
     _cache_timestamp = 0
     logger.info("🔄 Model context window cache refreshed")
@@ -316,10 +312,8 @@ def add_custom_model_context(model: str, context_window: int) -> None:
         model: Model name
         context_window: Context window size in tokens
     """
-    global _model_context_cache
-
-    global _model_context_cache
     model_normalized = model.lower().strip()
+    # Mutate cache without rebinding
     _model_context_cache[model_normalized] = context_window
     logger.info(
         f"✅ Added custom context window for '{model}': {context_window:,} tokens"
@@ -334,7 +328,6 @@ def get_cached_models() -> dict[str, int]:
     Returns:
         Dictionary of model names to context window sizes
     """
-    return _model_context_cache.copy()
     return _model_context_cache.copy()
 
 
@@ -357,7 +350,6 @@ def calculate_chunking_config(
     Returns:
         ChunkingConfig with optimal settings
     """
-    context_window = get_model_context_window(model)
     context_window = get_model_context_window(model)
 
     # Estimate prompt tokens
@@ -691,7 +683,6 @@ def load_interjections(interjections_file: Path) -> set[str]:
     Returns:
         Set of interjection strings to strip
     """
-    interjections = set()
     interjections = set()
 
     try:

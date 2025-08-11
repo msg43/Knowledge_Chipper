@@ -11,7 +11,7 @@ import shutil
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from ..errors import (
     DirectoryError,
@@ -695,7 +695,6 @@ def _update_yaml_frontmatter(
         Updated list of lines with modified YAML frontmatter
     """
     from ..logger import get_logger
-    from ..logger import get_logger
 
     logger = get_logger(__name__)
 
@@ -797,7 +796,6 @@ def generate_unified_yaml_metadata(
     """
     from ..logger import get_logger
 
-    from ..logger import get_logger
     from .header_to_yaml import process_summary_for_yaml_headers
 
     logger = get_logger(__name__)

@@ -118,7 +118,7 @@ class Segmenter:
             return last_two[-1][1]
 
         def emit_chunk(para_end_idx: int, preset_used: WindowPreset):
-            nonlocal current_text, acc_len, current_start, current_para_start
+            nonlocal current_text, acc_len
             text_joined = "\n\n".join(current_text)
             chunks.append(
                 Chunk(

@@ -1,27 +1,17 @@
 """ Base tab class for consistent tab interface and shared functionality."""
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
-from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
-    QComboBox,
-    QFileDialog,
-    QFrame,
     QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMessageBox,
-    QProgressBar,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
-    QSpinBox,
-    QTextBrowser,
     QTextEdit,
     QVBoxLayout,
     QWidget,

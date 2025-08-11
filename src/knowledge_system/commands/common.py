@@ -5,7 +5,6 @@ Common utilities for CLI commands to avoid duplication.
 Shared classes, decorators, and utilities used across command modules.
 """
 
-from typing import Optional
 
 import click
 from rich.console import Console

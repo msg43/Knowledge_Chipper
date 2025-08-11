@@ -1,6 +1,5 @@
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Type, Union
 
 from knowledge_system.processors.base import BaseProcessor
 from knowledge_system.processors.html import HTMLProcessor
