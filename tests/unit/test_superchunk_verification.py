@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from knowledge_system.superchunk.verifier import Verifier
 from knowledge_system.superchunk.config import SuperChunkConfig
-from knowledge_system.superchunk.validators import ClaimItem, VerificationItem
 from knowledge_system.superchunk.ledger import Ledger
-
+from knowledge_system.superchunk.validators import ClaimItem, VerificationItem
+from knowledge_system.superchunk.verifier import Verifier
 
 
 def test_verifier_monkeypatched(tmp_path, monkeypatch):
@@ -22,8 +21,15 @@ def test_verifier_monkeypatched(tmp_path, monkeypatch):
         (
             1,
             ClaimItem(
-                text="Claim", why_nonobvious="Because", rarity=0.5, confidence=0.9,
-                quote="quoted text", span_start=0, span_end=5, para_idx=0, hedges=[]
+                text="Claim",
+                why_nonobvious="Because",
+                rarity=0.5,
+                confidence=0.9,
+                quote="quoted text",
+                span_start=0,
+                span_end=5,
+                para_idx=0,
+                hedges=[],
             ),
         )
     ]

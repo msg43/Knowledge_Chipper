@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 from .config import SuperChunkConfig
 from .extractors import Extractors
+from .gates import QualityGates
 from .ledger import Ledger
 from .mapper import Mapper
-from .segmenter import Segmenter, Paragraph
-from .synthesizer import Synthesizer
-from .scorecard import Scorecard
-from .gates import QualityGates
 from .retrieval import Retrieval
+from .scorecard import Scorecard
+from .segmenter import Paragraph, Segmenter
+from .synthesizer import Synthesizer
 
 
 @dataclass
@@ -83,7 +83,9 @@ class Runner:
                 top_slices.append((cid, txt, ch.span_start, ch.span_end, ch.para_start))
         synth = Synthesizer(config=self.config)
         final_sections = [synth.synthesize_section("Summary", top_slices)]
-        (self.artifacts_dir / "final.md").write_text("\n\n".join(final_sections), encoding="utf-8")
+        (self.artifacts_dir / "final.md").write_text(
+            "\n\n".join(final_sections), encoding="utf-8"
+        )
 
         # Phase 6: scorecard
         score = Scorecard().compute({})
@@ -96,10 +98,18 @@ class Runner:
         (self.artifacts_dir / "decision_log.json").write_text(
             json.dumps(decision_log, indent=2), encoding="utf-8"
         )
-        (self.artifacts_dir / "verification_log.json").write_text("[]", encoding="utf-8")
-        (self.artifacts_dir / "evolution_timeline.json").write_text("{}", encoding="utf-8")
-        (self.artifacts_dir / "link_graph.dot").write_text("digraph G {}\n", encoding="utf-8")
-        (self.artifacts_dir / "token_trace.csv").write_text("step,tokens\n", encoding="utf-8")
+        (self.artifacts_dir / "verification_log.json").write_text(
+            "[]", encoding="utf-8"
+        )
+        (self.artifacts_dir / "evolution_timeline.json").write_text(
+            "{}", encoding="utf-8"
+        )
+        (self.artifacts_dir / "link_graph.dot").write_text(
+            "digraph G {}\n", encoding="utf-8"
+        )
+        (self.artifacts_dir / "token_trace.csv").write_text(
+            "step,tokens\n", encoding="utf-8"
+        )
 
         # Quality gates
         gates = QualityGates()

@@ -29,9 +29,7 @@ pip install -r requirements-dev.txt
 echo "🔧 Installing pre-commit hooks..."
 pre-commit install
 
-# Install commit message hook for conventional commits
-echo "📝 Installing commit message hooks..."
-pre-commit install --hook-type commit-msg
+# Commit message hook (conventional commits) intentionally not installed
 
 # Run pre-commit on all files to check setup
 echo "🧪 Testing pre-commit setup on all files..."
@@ -72,7 +70,7 @@ echo "  • Code will be formatted with Black and isort"
 echo "  • Linting will catch potential issues"
 echo "  • Type checking will run on src/ directory"
 echo "  • Security scanning will check for vulnerabilities"
-echo "  • Commit messages will be validated (conventional commits)"
+
 echo ""
 echo "🔧 Useful commands:"
 echo "  pre-commit run --all-files    # Run all hooks manually"

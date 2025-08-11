@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 
 
 class YouTubeDownloadProcessor(BaseProcessor):
-    """ Processor for downloading audio and thumbnails from YouTube videos/playlists."""
+    """Processor for downloading audio and thumbnails from YouTube videos/playlists."""
 
     # Class-level cookie cache to avoid reloading cookies for each instance
     _cookie_cache = None
@@ -86,7 +86,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
         return False
 
     def _download_thumbnail_from_url(self, url: str, output_dir: Path) -> str | None:
-        """ Download thumbnail using centralized utility function."""
+        """Download thumbnail using centralized utility function."""
         try:
             from ..utils.youtube_utils import download_thumbnail
 
@@ -96,7 +96,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
             return None
 
     def _extract_video_id(self, url: str) -> str:
-        """ Extract video ID from YouTube URL."""
+        """Extract video ID from YouTube URL."""
         import re
 
         patterns = [
@@ -273,7 +273,7 @@ def fetch_audio(
     output_format: str = "mp3",
     download_thumbnails: bool = True,
 ) -> str:
-    """ Convenience function to download audio for a single video. Returns output file path."""
+    """Convenience function to download audio for a single video. Returns output file path."""
     processor = YouTubeDownloadProcessor(
         output_format=output_format, download_thumbnails=download_thumbnails
     )

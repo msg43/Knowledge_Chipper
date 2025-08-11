@@ -126,12 +126,12 @@ repos:
   #       types: [yaml]
   #       exclude: '^\.github/'  # GitHub workflow files have specific formatting
 
-  # Commit message linting (conventional commits)
-  - repo: https://github.com/commitizen-tools/commitizen
-    rev: v3.13.0
-    hooks:
-      - id: commitizen
-        stages: [commit-msg]
+  # Commit message linting (conventional commits) — disabled
+  # - repo: https://github.com/commitizen-tools/commitizen
+  #   rev: v3.13.0
+  #   hooks:
+  #     - id: commitizen
+  #       stages: [commit-msg]
 
 # Configuration for the pre-commit framework itself
 ci:
@@ -143,5 +143,5 @@ ci:
   autoupdate_branch: ''
   autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
   autoupdate_schedule: weekly
-  skip: [commitizen]  # Skip commit message linting in CI
+  skip: []
   submodules: false

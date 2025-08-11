@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Type, TypeVar
+from typing import Any, Optional, Type, TypeVar
 
 from ..utils.llm_providers import UnifiedLLMClient
 from .config import SuperChunkConfig
@@ -15,10 +16,10 @@ T = TypeVar("T")
 class SuperChunkLLMAdapter:
     config: SuperChunkConfig
     client: UnifiedLLMClient
-    event_logger: Optional[Callable[[dict[str, Any]], None]] = None
+    event_logger: Callable[[dict[str, Any]], None] | None = None
 
     @staticmethod
-    def create_default() -> "SuperChunkLLMAdapter":
+    def create_default() -> SuperChunkLLMAdapter:
         cfg = SuperChunkConfig.from_global_settings()
         client = UnifiedLLMClient()
         return SuperChunkLLMAdapter(config=cfg, client=client, event_logger=None)
@@ -121,7 +122,7 @@ class SuperChunkLLMAdapter:
         self,
         original_prompt: str,
         parsed: Any,
-        schema: Type[T],
+        schema: type[T],
         attempts_left: int,
     ) -> Any:
         try:
@@ -136,38 +137,77 @@ class SuperChunkLLMAdapter:
             prompt = original_prompt + "\n\n" + delta
             content = self._call_raw(prompt)
             data = self._parse_json(content)
-            return self._delta_reprompt(original_prompt, data, schema, attempts_left - 1)
+            return self._delta_reprompt(
+                original_prompt, data, schema, attempts_left - 1
+            )
 
-    def generate_json(self, prompt: str, schema: Type[T], estimated_output_tokens: int = 800, attempts: int = 2) -> T:
+    def generate_json(
+        self,
+        prompt: str,
+        schema: type[T],
+        estimated_output_tokens: int = 800,
+        attempts: int = 2,
+    ) -> T:
         final_prompt = self._with_token_budget(prompt, estimated_output_tokens)
         content = self._call_raw(final_prompt)
         data = self._parse_json(content)
         return self._delta_reprompt(final_prompt, data, schema, attempts)
 
     # Convenience helpers for extractors
-    def extract_claims(self, prompt: str, count: int, estimated_output_tokens: int = 800):
-        final_prompt = self._with_token_budget(self._require_exact_count(prompt, count), estimated_output_tokens)
+    def extract_claims(
+        self, prompt: str, count: int, estimated_output_tokens: int = 800
+    ):
+        final_prompt = self._with_token_budget(
+            self._require_exact_count(prompt, count), estimated_output_tokens
+        )
         content = self._call_raw(final_prompt)
         try:
             data = self._parse_json(content)
             return [ClaimItem.model_validate(item) for item in data]
         except Exception:
-            return self.generate_json(final_prompt, ClaimItem, estimated_output_tokens, attempts=1)
+            # Fallback: try schema-validated list; if single object, wrap
+            tried = self.generate_json(
+                final_prompt, ClaimItem, estimated_output_tokens, attempts=1
+            )
+            if isinstance(tried, list):
+                return tried
+            return [tried]
 
-    def extract_contradictions(self, prompt: str, max_count: int, estimated_output_tokens: int = 400):
-        final_prompt = self._with_token_budget(self._require_exact_count(prompt, max_count), estimated_output_tokens)
+    def extract_contradictions(
+        self, prompt: str, max_count: int, estimated_output_tokens: int = 400
+    ):
+        final_prompt = self._with_token_budget(
+            self._require_exact_count(prompt, max_count), estimated_output_tokens
+        )
         content = self._call_raw(final_prompt)
         try:
             data = self._parse_json(content)
             return [LocalContradictionItem.model_validate(item) for item in data]
         except Exception:
-            return self.generate_json(final_prompt, LocalContradictionItem, estimated_output_tokens, attempts=1)
+            tried = self.generate_json(
+                final_prompt,
+                LocalContradictionItem,
+                estimated_output_tokens,
+                attempts=1,
+            )
+            if isinstance(tried, list):
+                return tried
+            return [tried]
 
-    def extract_jargon(self, prompt: str, count: int, estimated_output_tokens: int = 400):
-        final_prompt = self._with_token_budget(self._require_exact_count(prompt, count), estimated_output_tokens)
+    def extract_jargon(
+        self, prompt: str, count: int, estimated_output_tokens: int = 400
+    ):
+        final_prompt = self._with_token_budget(
+            self._require_exact_count(prompt, count), estimated_output_tokens
+        )
         content = self._call_raw(final_prompt)
         try:
             data = self._parse_json(content)
             return [JargonItem.model_validate(item) for item in data]
         except Exception:
-            return self.generate_json(final_prompt, JargonItem, estimated_output_tokens, attempts=1)
+            tried = self.generate_json(
+                final_prompt, JargonItem, estimated_output_tokens, attempts=1
+            )
+            if isinstance(tried, list):
+                return tried
+            return [tried]

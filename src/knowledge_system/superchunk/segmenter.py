@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import List, Sequence, Optional
+from typing import List, Optional
 
 from .config import SuperChunkConfig, WindowPreset
-from .validators import Chunk
 from .signals import compute_signals
+from .validators import Chunk
 
 
 @dataclass
@@ -56,10 +57,14 @@ class Segmenter:
     def segment(
         self,
         paragraphs: Sequence[Paragraph],
-        hotspots: Optional[List[List[int]]] = None,
-    ) -> List[Chunk]:
+        hotspots: list[list[int]] | None = None,
+    ) -> list[Chunk]:
         text = "\n".join(p.text for p in paragraphs)
-        episode_preset = self._decide_episode_preset(text) if self.config.adaptive_switching else self.config.preset
+        episode_preset = (
+            self._decide_episode_preset(text)
+            if self.config.adaptive_switching
+            else self.config.preset
+        )
         region_scores = compute_signals(text)
 
         # Build a mapping from span index to region preset
@@ -75,21 +80,33 @@ class Segmenter:
             para_sentence_ends.append(_sentence_end_positions(p.text, p.span_start))
 
         # Helper: snap a desired end char position to nearest sentence end within tolerance
-        def snap_to_sentence_end(desired_end_char: int, para_idx: int, tolerance: int = 200) -> tuple[int, str]:
+        def snap_to_sentence_end(
+            desired_end_char: int, para_idx: int, tolerance: int = 200
+        ) -> tuple[int, str]:
             ends = para_sentence_ends[para_idx]
             if not ends:
                 return desired_end_char, "no_sentence_end"
             # choose sentence end <= desired_end_char within tolerance; else nearest above within tolerance
-            candidates = [e for e in ends if e <= desired_end_char and desired_end_char - e <= tolerance]
+            candidates = [
+                e
+                for e in ends
+                if e <= desired_end_char and desired_end_char - e <= tolerance
+            ]
             if candidates:
                 return max(candidates), "snapped_to_sentence_end"
-            candidates_above = [e for e in ends if e >= desired_end_char and e - desired_end_char <= tolerance]
+            candidates_above = [
+                e
+                for e in ends
+                if e >= desired_end_char and e - desired_end_char <= tolerance
+            ]
             if candidates_above:
                 return min(candidates_above), "snapped_to_sentence_end"
             return desired_end_char, "no_sentence_end_within_tolerance"
 
         # Helper: adjust para_end to respect hotspots ranges
-        def respect_hotspots(current_para_start: int, candidate_para_end: int) -> tuple[int, str]:
+        def respect_hotspots(
+            current_para_start: int, candidate_para_end: int
+        ) -> tuple[int, str]:
             if not hotspots:
                 return candidate_para_end, "no_hotspots"
             reason = "no_hotspot_overlap"
@@ -102,7 +119,7 @@ class Segmenter:
                     reason = "extended_for_hotspot"
             return end, reason
 
-        chunks: List[Chunk] = []
+        chunks: list[Chunk] = []
         current_text: list[str] = []
         current_start = paragraphs[0].span_start if paragraphs else 0
         current_para_start = 0
@@ -149,10 +166,14 @@ class Segmenter:
                 # propose boundary at previous paragraph
                 candidate_para_end = idx - 1
                 # respect hotspots
-                candidate_para_end, hotspot_reason = respect_hotspots(current_para_start, candidate_para_end)
+                candidate_para_end, hotspot_reason = respect_hotspots(
+                    current_para_start, candidate_para_end
+                )
                 # snap to sentence end within candidate para
                 desired_end_char = paragraphs[candidate_para_end].span_end
-                snapped_char, snap_reason = snap_to_sentence_end(desired_end_char, candidate_para_end)
+                snapped_char, snap_reason = snap_to_sentence_end(
+                    desired_end_char, candidate_para_end
+                )
                 # adjust text by chopping to snapped_char if necessary
                 # rebuild current_text up to snapped_char
                 full_text = "\n\n".join(current_text)
@@ -188,7 +209,9 @@ class Segmenter:
             acc_len += para_len
 
         if current_text:
-            preset_now = current_preset_for_position(paragraphs[-1].span_end if paragraphs else 0)
+            preset_now = current_preset_for_position(
+                paragraphs[-1].span_end if paragraphs else 0
+            )
             emit_chunk(len(paragraphs) - 1 if paragraphs else 0, preset_now)
 
         return chunks

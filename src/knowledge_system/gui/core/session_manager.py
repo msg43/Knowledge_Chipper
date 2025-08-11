@@ -19,15 +19,15 @@ SESSION_FILE = Path.home() / ".knowledge_system" / "gui_session.json"
 
 
 class SessionManager:
-    """ Manages GUI session state persistence."""
+    """Manages GUI session state persistence."""
 
     def __init__(self) -> None:
-        """ Initialize session manager."""
+        """Initialize session manager."""
         self._session_data: dict[str, Any] = {}
         self._load_session()
 
     def _load_session(self) -> None:
-        """ Load session data from file."""
+        """Load session data from file."""
         try:
             if SESSION_FILE.exists():
                 with open(SESSION_FILE, encoding="utf-8") as f:
@@ -43,7 +43,7 @@ class SessionManager:
             self._session_data = {}
 
     def _save_session(self) -> None:
-        """ Save session data to file."""
+        """Save session data to file."""
         try:
             # Create session directory if it doesn't exist
             SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -58,19 +58,19 @@ class SessionManager:
             logger.error(f"Failed to save session data: {e}")
 
     def get_value(self, key: str, default: Any = None) -> Any:
-        """ Get a value from session data."""
+        """Get a value from session data."""
         return self._session_data.get(key, default)
 
     def set_value(self, key: str, value: Any) -> None:
-        """ Set a value in session data."""
+        """Set a value in session data."""
         self._session_data[key] = value
 
     def get_window_geometry(self) -> dict[str, int] | None:
-        """ Get saved window geometry."""
+        """Get saved window geometry."""
         return self._session_data.get("window_geometry")
 
     def set_window_geometry(self, x: int, y: int, width: int, height: int) -> None:
-        """ Save window geometry."""
+        """Save window geometry."""
         self._session_data["window_geometry"] = {
             "x": x,
             "y": y,
@@ -79,11 +79,11 @@ class SessionManager:
         }
 
     def get_tab_settings(self, tab_name: str) -> dict[str, Any]:
-        """ Get settings for a specific tab."""
+        """Get settings for a specific tab."""
         return self._session_data.get("tab_settings", {}).get(tab_name, {})
 
     def set_tab_settings(self, tab_name: str, settings: dict[str, Any]) -> None:
-        """ Save settings for a specific tab."""
+        """Save settings for a specific tab."""
         if "tab_settings" not in self._session_data:
             self._session_data["tab_settings"] = {}
         self._session_data["tab_settings"][tab_name] = settings
@@ -91,12 +91,12 @@ class SessionManager:
     def get_tab_setting(
         self, tab_name: str, setting_name: str, default: Any = None
     ) -> Any:
-        """ Get a specific setting from a tab."""
+        """Get a specific setting from a tab."""
         tab_settings = self.get_tab_settings(tab_name)
         return tab_settings.get(setting_name, default)
 
     def set_tab_setting(self, tab_name: str, setting_name: str, value: Any) -> None:
-        """ Set a specific setting for a tab."""
+        """Set a specific setting for a tab."""
         if "tab_settings" not in self._session_data:
             self._session_data["tab_settings"] = {}
         if tab_name not in self._session_data["tab_settings"]:
@@ -104,11 +104,11 @@ class SessionManager:
         self._session_data["tab_settings"][tab_name][setting_name] = value
 
     def save(self) -> None:
-        """ Save session data to file."""
+        """Save session data to file."""
         self._save_session()
 
     def clear(self) -> None:
-        """ Clear all session data."""
+        """Clear all session data."""
         self._session_data = {}
         try:
             if SESSION_FILE.exists():
@@ -123,7 +123,7 @@ _session_manager: SessionManager | None = None
 
 
 def get_session_manager() -> SessionManager:
-    """ Get the global session manager instance."""
+    """Get the global session manager instance."""
     global _session_manager
     if _session_manager is None:
         _session_manager = SessionManager()
@@ -131,25 +131,25 @@ def get_session_manager() -> SessionManager:
 
 
 def save_session() -> None:
-    """ Save the current session data."""
+    """Save the current session data."""
     get_session_manager().save()
 
 
 def get_session_value(key: str, default: Any = None) -> Any:
-    """ Convenience function to get a session value."""
+    """Convenience function to get a session value."""
     return get_session_manager().get_value(key, default)
 
 
 def set_session_value(key: str, value: Any) -> None:
-    """ Convenience function to set a session value."""
+    """Convenience function to set a session value."""
     get_session_manager().set_value(key, value)
 
 
 def get_tab_setting(tab_name: str, setting_name: str, default: Any = None) -> Any:
-    """ Convenience function to get a tab setting."""
+    """Convenience function to get a tab setting."""
     return get_session_manager().get_tab_setting(tab_name, setting_name, default)
 
 
 def set_tab_setting(tab_name: str, setting_name: str, value: Any) -> None:
-    """ Convenience function to set a tab setting."""
+    """Convenience function to set a tab setting."""
     get_session_manager().set_tab_setting(tab_name, setting_name, value)

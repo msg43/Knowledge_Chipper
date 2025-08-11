@@ -11,7 +11,7 @@ from PyQt6.QtGui import QIcon, QPixmap
 
 
 def get_icon_paths() -> list[Path]:
-    """ Get all possible icon file paths in order of preference."""
+    """Get all possible icon file paths in order of preference."""
     base_paths = [
         Path(__file__).parent.parent.parent.parent.parent,  # Project root
         Path(__file__).parent,  # This assets directory
@@ -31,7 +31,7 @@ def get_icon_paths() -> list[Path]:
 
 
 def get_app_icon() -> QIcon | None:
-    """ Get the application icon as a QIcon."""
+    """Get the application icon as a QIcon."""
     for icon_path in get_icon_paths():
         if icon_path.exists():
             try:
@@ -42,7 +42,7 @@ def get_app_icon() -> QIcon | None:
 
 
 def get_app_pixmap(size: tuple[int, int] | None = None) -> QPixmap | None:
-    """ Get the application icon as a QPixmap."""
+    """Get the application icon as a QPixmap."""
     for icon_path in get_icon_paths():
         if icon_path.exists():
             try:
@@ -56,7 +56,7 @@ def get_app_pixmap(size: tuple[int, int] | None = None) -> QPixmap | None:
 
 
 def get_icon_path() -> Path | None:
-    """ Get the first available icon file path."""
+    """Get the first available icon file path."""
     for icon_path in get_icon_paths():
         if icon_path.exists():
             return icon_path

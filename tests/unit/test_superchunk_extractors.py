@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from knowledge_system.superchunk.extractors import Extractors
 
 
@@ -8,7 +7,9 @@ def test_extractors_exact_counts_and_bounds(monkeypatch):
     # Monkeypatch adapter to return deterministic items
     ex = Extractors.create_default()
 
-    def fake_extract_claims(prompt: str, count: int, estimated_output_tokens: int = 800):
+    def fake_extract_claims(
+        prompt: str, count: int, estimated_output_tokens: int = 800
+    ):
         return [
             {
                 "text": "Claim",
@@ -24,7 +25,13 @@ def test_extractors_exact_counts_and_bounds(monkeypatch):
             for _ in range(count)
         ]
 
-    monkeypatch.setattr(ex.adapter, "extract_claims", lambda prompt, count, estimated_output_tokens=800: [ex.adapter.generate_json.__annotations__])
+    monkeypatch.setattr(
+        ex.adapter,
+        "extract_claims",
+        lambda prompt, count, estimated_output_tokens=800: [
+            ex.adapter.generate_json.__annotations__
+        ],
+    )
     # Instead, bypass adapter and assert bounds checking path directly
     items = [
         ex.adapter.__class__.__annotations__ if False else None  # no-op, placeholder

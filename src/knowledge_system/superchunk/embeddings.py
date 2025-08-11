@@ -8,24 +8,26 @@ from ..config import get_settings
 
 @dataclass
 class EmbeddingsResult:
-    vectors: List[List[float]]
+    vectors: list[list[float]]
     model: str
     dims: int
 
 
 class EmbeddingsBackend:
-    def embed_texts(self, texts: List[str]) -> EmbeddingsResult:  # pragma: no cover (interface)
+    def embed_texts(
+        self, texts: list[str]
+    ) -> EmbeddingsResult:  # pragma: no cover (interface)
         raise NotImplementedError
 
 
 class OpenAIEmbeddings(EmbeddingsBackend):
-    def __init__(self, model: Optional[str] = None) -> None:
+    def __init__(self, model: str | None = None) -> None:
         settings = get_settings()
         # Choose a reasonable default small embedding model; align with provider selection later if needed
         self.model = model or "text-embedding-3-small"
         self._api_key = settings.api_keys.openai_api_key or settings.api_keys.openai
 
-    def embed_texts(self, texts: List[str]) -> EmbeddingsResult:
+    def embed_texts(self, texts: list[str]) -> EmbeddingsResult:
         import openai
 
         client = openai.OpenAI(api_key=self._api_key)
@@ -36,6 +38,8 @@ class OpenAIEmbeddings(EmbeddingsBackend):
 
 
 class FallbackEmbeddings(EmbeddingsBackend):
-    def embed_texts(self, texts: List[str]) -> EmbeddingsResult:
+    def embed_texts(self, texts: list[str]) -> EmbeddingsResult:
         # Return zero vectors to signal unavailability
-        return EmbeddingsResult(vectors=[[0.0] * 8 for _ in texts], model="none", dims=8)
+        return EmbeddingsResult(
+            vectors=[[0.0] * 8 for _ in texts], model="none", dims=8
+        )

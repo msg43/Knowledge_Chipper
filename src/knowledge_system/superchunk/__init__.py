@@ -8,15 +8,15 @@ Default window preset is Balanced with adaptive switching enabled.
 """
 
 from .config import SuperChunkConfig
+from .llm_adapter import SuperChunkLLMAdapter
 from .validators import (
+    Chunk,
     ClaimItem,
-    LocalContradictionItem,
+    GuideMap,
     JargonItem,
     Landmarks,
-    Chunk,
-    GuideMap,
+    LocalContradictionItem,
 )
-from .llm_adapter import SuperChunkLLMAdapter
 
 __all__ = [
     "SuperChunkConfig",

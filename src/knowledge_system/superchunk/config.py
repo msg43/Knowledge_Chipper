@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Optional, Any, Dict
+from typing import Any, Dict, Optional
 
 from ..config import get_settings
 
@@ -85,18 +85,20 @@ class SuperChunkConfig:
         return self.balanced
 
     @staticmethod
-    def from_global_settings() -> "SuperChunkConfig":
+    def from_global_settings() -> SuperChunkConfig:
         settings = get_settings()
         _ = settings
         return SuperChunkConfig()
 
-    def to_json_dict(self) -> Dict[str, Any]:
+    def to_json_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable dictionary of this configuration.
 
         Converts Enum and nested dataclasses to plain Python types that json can handle.
         """
         return {
-            "preset": self.preset.value if isinstance(self.preset, WindowPreset) else str(self.preset),
+            "preset": self.preset.value
+            if isinstance(self.preset, WindowPreset)
+            else str(self.preset),
             "adaptive_switching": bool(self.adaptive_switching),
             # windows
             "precision": asdict(self.precision),
@@ -110,7 +112,9 @@ class SuperChunkConfig:
             # verification
             "verify_top_percent": float(self.verify_top_percent),
             "min_confidence": float(self.min_confidence),
-            "exclude_if_confidence_delta_below": float(self.exclude_if_confidence_delta_below),
+            "exclude_if_confidence_delta_below": float(
+                self.exclude_if_confidence_delta_below
+            ),
             # retrieval
             "topk_linking": int(self.topk_linking),
             "topk_section": int(self.topk_section),
@@ -132,11 +136,11 @@ class SuperChunkConfig:
     def with_overrides(
         self,
         *,
-        preset: Optional[str] = None,
-        verify_top_percent: Optional[float] = None,
-        max_quote_words: Optional[int] = None,
-        max_concurrent_calls: Optional[int] = None,
-    ) -> "SuperChunkConfig":
+        preset: str | None = None,
+        verify_top_percent: float | None = None,
+        max_quote_words: int | None = None,
+        max_concurrent_calls: int | None = None,
+    ) -> SuperChunkConfig:
         cfg = SuperChunkConfig(**self.__dict__)
         if preset:
             try:

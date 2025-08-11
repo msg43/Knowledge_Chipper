@@ -29,7 +29,7 @@ logger = get_logger(__name__)
 
 
 class YouTubeMetadata(BaseModel):
-    """ YouTube video metadata model."""
+    """YouTube video metadata model."""
 
     # Core identifiers
     video_id: str = Field(..., description="YouTube video ID")
@@ -66,11 +66,11 @@ class YouTubeMetadata(BaseModel):
     )
 
     def to_dict(self) -> dict[str, Any]:
-        """ Convert to dictionary."""
+        """Convert to dictionary."""
         return self.model_dump()
 
     def to_markdown_metadata(self) -> str:
-        """ Generate markdown metadata section."""
+        """Generate markdown metadata section."""
         lines = ["## Video Metadata", ""]
 
         lines.append(f"- **Title**: {self.title}")
@@ -126,10 +126,10 @@ class YouTubeMetadata(BaseModel):
 
 
 class YouTubeMetadataProcessor(BaseProcessor):
-    """ Simplified processor for extracting YouTube video metadata using YT-DLP with WebShare proxies."""
+    """Simplified processor for extracting YouTube video metadata using YT-DLP with WebShare proxies."""
 
     def __init__(self, name: str | None = None) -> None:
-        """ Initialize the YouTube metadata processor."""
+        """Initialize the YouTube metadata processor."""
         super().__init__(name or "youtube_metadata")
 
         if yt_dlp is None:
@@ -156,7 +156,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
         self._configure_webshare_proxy()
 
     def _configure_webshare_proxy(self):
-        """ Configure WebShare rotating proxy (required for YouTube access)."""
+        """Configure WebShare rotating proxy (required for YouTube access)."""
         webshare_username = self.settings.api_keys.webshare_username
         webshare_password = self.settings.api_keys.webshare_password
 
@@ -173,11 +173,11 @@ class YouTubeMetadataProcessor(BaseProcessor):
 
     @property
     def supported_formats(self) -> list[str]:
-        """ Return list of supported input formats."""
+        """Return list of supported input formats."""
         return [".url", ".txt"]
 
     def validate_input(self, input_data: Any) -> bool:
-        """ Validate that the input data is suitable for processing."""
+        """Validate that the input data is suitable for processing."""
         if isinstance(input_data, (str, Path)):
             input_str = str(input_data)
 
@@ -199,7 +199,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
         return False
 
     def _extract_video_id(self, url: str) -> str | None:
-        """ Extract video ID from YouTube URL."""
+        """Extract video ID from YouTube URL."""
         patterns = [
             r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]+)",
             r"youtube\.com/embed/([a-zA-Z0-9_-]+)",
@@ -214,7 +214,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
         return None
 
     def _extract_metadata(self, url: str) -> YouTubeMetadata | None:
-        """ Extract metadata using YT-DLP with WebShare proxy."""
+        """Extract metadata using YT-DLP with WebShare proxy."""
         try:
             with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:  # type: ignore[union-attr]
                 info = ydl.extract_info(url, download=False)
@@ -254,7 +254,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
 
                 # Parse numeric fields safely
                 def safe_int(value):
-                    """ Safe int."""
+                    """Safe int."""
                     if value is None:
                         return None
                     try:
@@ -295,7 +295,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
     def process(
         self, input_data: Any, dry_run: bool = False, **kwargs: Any
     ) -> ProcessorResult:
-        """ Process YouTube URLs and extract metadata using YT-DLP with WebShare proxy."""
+        """Process YouTube URLs and extract metadata using YT-DLP with WebShare proxy."""
         start_time = time.time()
 
         try:
@@ -459,7 +459,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
                 )
 
     def _write_simple_failure_log(self, errors: list[str]):
-        """ Write a simple failure log for debugging."""
+        """Write a simple failure log for debugging."""
         try:
             # Get the logs directory from settings
             from ..config import get_settings
@@ -482,9 +482,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
                 for i, error in enumerate(errors, 1):
                     f.write(f"{i}. {error}\n")
 
-                f.write(
-                    "\nNote: All processing uses WebShare rotating proxies only.\n"
-                )
+                f.write("\nNote: All processing uses WebShare rotating proxies only.\n")
                 f.write(
                     "If failures persist, check proxy credentials and YouTube accessibility.\n"
                 )
@@ -498,7 +496,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
 
 # Convenience function for single video metadata extraction
 def fetch_metadata(url: str) -> YouTubeMetadata:
-    """ Convenience function to fetch metadata for a single video."""
+    """Convenience function to fetch metadata for a single video."""
     processor = YouTubeMetadataProcessor()
     result = processor.process(url)
 

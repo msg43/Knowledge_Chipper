@@ -646,7 +646,7 @@ def download_thumbnails_batch(
 
 
 def clear_authentication_cache():
-    """ Clear the authentication cache to force re-authentication."""
+    """Clear the authentication cache to force re-authentication."""
     global _cookie_jar_cache, _cookie_jar_timestamp
 
     _cookie_jar_cache = None

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Optional
 
 from .validators import ClaimItem
 
@@ -96,7 +97,9 @@ class Ledger:
             )
             conn.commit()
 
-    def start_run(self, config: dict[str, Any], correlation_id: Optional[str] = None) -> int:
+    def start_run(
+        self, config: dict[str, Any], correlation_id: str | None = None
+    ) -> int:
         with self._connect() as conn:
             cur = conn.cursor()
             cur.execute(
@@ -106,7 +109,9 @@ class Ledger:
             conn.commit()
             return int(cur.lastrowid)
 
-    def insert_claims(self, run_id: int, chunk_id: str, claims: Iterable[ClaimItem]) -> None:
+    def insert_claims(
+        self, run_id: int, chunk_id: str, claims: Iterable[ClaimItem]
+    ) -> None:
         with self._connect() as conn:
             rows = [
                 (
@@ -140,11 +145,22 @@ class Ledger:
             conn.commit()
 
     def insert_verification_result(
-        self, claim_id: int, source_excerpt: str, supported: bool, confidence_delta: float, reason: str
+        self,
+        claim_id: int,
+        source_excerpt: str,
+        supported: bool,
+        confidence_delta: float,
+        reason: str,
     ) -> None:
         with self._connect() as conn:
             conn.execute(
                 "INSERT INTO verification_results (claim_id, source_excerpt, supported_bool, confidence_delta, reason) VALUES (?, ?, ?, ?, ?)",
-                (claim_id, source_excerpt, 1 if supported else 0, confidence_delta, reason),
+                (
+                    claim_id,
+                    source_excerpt,
+                    1 if supported else 0,
+                    confidence_delta,
+                    reason,
+                ),
             )
             conn.commit()

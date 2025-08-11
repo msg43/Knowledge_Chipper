@@ -19,8 +19,8 @@ from knowledge_system.config import (
     ProcessingConfig,
     Settings,
     TranscriptionConfig,
-    get_settings,
 )
+from knowledge_system.config import get_settings
 from knowledge_system.config import get_settings as reload_settings
 
 

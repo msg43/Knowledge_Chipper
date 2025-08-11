@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 @dataclass
 class LLMResponse:
-    """ Standardized response from LLM providers."""
+    """Standardized response from LLM providers."""
 
     content: str
     prompt_tokens: int
@@ -39,7 +39,7 @@ class LLMResponse:
 
 
 class BaseLLMProvider(ABC):
-    """ Base class for LLM providers."""
+    """Base class for LLM providers."""
 
     def __init__(
         self,
@@ -54,17 +54,17 @@ class BaseLLMProvider(ABC):
     def call(
         self, prompt: str, progress_callback: Callable | None = None
     ) -> LLMResponse:
-        """ Make API call to the LLM provider."""
+        """Make API call to the LLM provider."""
         pass
 
     def _estimate_tokens(self, text: str) -> int:
-        """ Estimate token count for text (rough approximation)."""
+        """Estimate token count for text (rough approximation)."""
         # Rough approximation: 1 token ≈ 4 characters for English text
         return len(text) // 4
 
 
 class OpenAIProvider(BaseLLMProvider):
-    """ OpenAI API provider."""
+    """OpenAI API provider."""
 
     def __init__(
         self,
@@ -77,7 +77,7 @@ class OpenAIProvider(BaseLLMProvider):
     def call(
         self, prompt: str, progress_callback: Callable | None = None
     ) -> LLMResponse:
-        """ Call OpenAI API."""
+        """Call OpenAI API."""
         try:
             import openai
 
@@ -112,7 +112,7 @@ class OpenAIProvider(BaseLLMProvider):
 
 
 class AnthropicProvider(BaseLLMProvider):
-    """ Anthropic API provider."""
+    """Anthropic API provider."""
 
     def __init__(
         self,
@@ -125,7 +125,7 @@ class AnthropicProvider(BaseLLMProvider):
     def call(
         self, prompt: str, progress_callback: Callable | None = None
     ) -> LLMResponse:
-        """ Call Anthropic API."""
+        """Call Anthropic API."""
         try:
             import anthropic
 
@@ -176,7 +176,7 @@ class AnthropicProvider(BaseLLMProvider):
 
 
 class LocalLLMProvider(BaseLLMProvider):
-    """ Local LLM provider (Ollama/LM Studio)."""
+    """Local LLM provider (Ollama/LM Studio)."""
 
     def __init__(
         self,
@@ -192,7 +192,7 @@ class LocalLLMProvider(BaseLLMProvider):
     def call(
         self, prompt: str, progress_callback: Callable | None = None
     ) -> LLMResponse:
-        """ Call local LLM provider."""
+        """Call local LLM provider."""
         if self.local_config.backend == "ollama":
             return self._call_ollama(prompt, progress_callback)
         elif self.local_config.backend == "lmstudio":
@@ -203,7 +203,7 @@ class LocalLLMProvider(BaseLLMProvider):
     def _call_ollama(
         self, prompt: str, progress_callback: Callable | None = None
     ) -> LLMResponse:
-        """ Call Ollama API."""
+        """Call Ollama API."""
         try:
             # Check if Ollama service is running before making the request
             try:
@@ -288,7 +288,7 @@ class LocalLLMProvider(BaseLLMProvider):
     def _call_lmstudio(
         self, prompt: str, progress_callback: Callable | None = None
     ) -> LLMResponse:
-        """ Call LM Studio API."""
+        """Call LM Studio API."""
         try:
             url = f"{self.local_config.base_url}/v1/chat/completions"
 
@@ -338,7 +338,7 @@ class LocalLLMProvider(BaseLLMProvider):
 
 
 class LLMProviderFactory:
-    """ Factory for creating LLM providers."""
+    """Factory for creating LLM providers."""
 
     @staticmethod
     def create_provider(
@@ -346,7 +346,7 @@ class LLMProviderFactory:
         model: str | None = None,
         temperature: float = 0.3,
     ) -> BaseLLMProvider:
-        """ Create an LLM provider instance."""
+        """Create an LLM provider instance."""
         if provider == "openai":
             return OpenAIProvider(model, temperature)
         elif provider == "anthropic":
@@ -358,7 +358,7 @@ class LLMProviderFactory:
 
 
 class UnifiedLLMClient:
-    """ Unified client for all LLM providers with simplified interface."""
+    """Unified client for all LLM providers with simplified interface."""
 
     def __init__(
         self,
@@ -379,7 +379,7 @@ class UnifiedLLMClient:
     def generate(
         self, prompt: str, progress_callback: Callable | None = None
     ) -> LLMResponse:
-        """ Generate text using the configured provider."""
+        """Generate text using the configured provider."""
         response = self.provider.call(prompt, progress_callback)
         # Persist last selection
         try:
@@ -394,7 +394,7 @@ class UnifiedLLMClient:
     def generate_dict(
         self, prompt: str, progress_callback: Callable | None = None
     ) -> dict[str, Any]:
-        """ Generate text and return as dictionary (for backward compatibility)."""
+        """Generate text and return as dictionary (for backward compatibility)."""
         response = self.generate(prompt, progress_callback)
         return {
             "summary": response.content,  # For backward compatibility with summarizer
@@ -409,14 +409,14 @@ class UnifiedLLMClient:
 
     @property
     def model(self) -> str:
-        """ Get the current model name."""
+        """Get the current model name."""
         return self.provider.model or "unknown"
 
     # max_tokens property removed - no longer used for API constraints
 
     @property
     def temperature(self) -> float:
-        """ Get the current temperature setting."""
+        """Get the current temperature setting."""
         return self.provider.temperature
 
 
@@ -428,7 +428,7 @@ def call_llm(
     temperature: float = 0.3,
     progress_callback: Callable | None = None,
 ) -> LLMResponse:
-    """ Convenience function to call any LLM provider."""
+    """Convenience function to call any LLM provider."""
     client = UnifiedLLMClient(provider, model, temperature)
     return client.generate(prompt, progress_callback)
 
@@ -440,6 +440,6 @@ def call_llm_dict(
     temperature: float = 0.3,
     progress_callback: Callable | None = None,
 ) -> dict[str, Any]:
-    """ Convenience function to call any LLM provider and return dictionary."""
+    """Convenience function to call any LLM provider and return dictionary."""
     client = UnifiedLLMClient(provider, model, temperature)
     return client.generate_dict(prompt, progress_callback)

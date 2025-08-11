@@ -12,6 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, validator
 
+from .. import __version__
 from ..config import get_settings
 from ..logger import get_logger
 from ..utils.file_io import atomic_write, ensure_directory
@@ -20,7 +21,7 @@ logger = get_logger("state")
 
 
 class ProcessingState(BaseModel):
-    """ State for ongoing processing operations."""
+    """State for ongoing processing operations."""
 
     operation_id: str
     operation_type: str  # 'transcribe', 'summarize', 'moc', 'watch'
@@ -35,29 +36,29 @@ class ProcessingState(BaseModel):
 
     @validator("progress")
     def validate_progress(cls, v) -> bool:
-        """ Ensure progress is between 0 and 1."""
+        """Ensure progress is between 0 and 1."""
         if not 0.0 <= v <= 1.0:
             raise ValueError("Progress must be between 0.0 and 1.0")
         return v
 
     @validator("status")
     def validate_status(cls, v) -> bool:
-        """ Ensure status is valid."""
+        """Ensure status is valid."""
         valid_statuses = {"pending", "running", "completed", "failed", "cancelled"}
         if v not in valid_statuses:
             raise ValueError(f"Status must be one of {valid_statuses}")
         return v
 
     def is_active(self) -> bool:
-        """ Check if operation is currently active."""
+        """Check if operation is currently active."""
         return self.status in {"pending", "running"}
 
     def is_completed(self) -> bool:
-        """ Check if operation completed successfully."""
+        """Check if operation completed successfully."""
         return self.status == "completed"
 
     def duration(self) -> float | None:
-        """ Get operation duration in seconds."""
+        """Get operation duration in seconds."""
         if self.completed_at:
             return self.completed_at - self.started_at
         elif self.is_active():
@@ -66,7 +67,7 @@ class ProcessingState(BaseModel):
 
 
 class UserPreferences(BaseModel):
-    """ User preferences and settings."""
+    """User preferences and settings."""
 
     # UI Preferences
     theme: str = "dark"
@@ -98,21 +99,21 @@ class UserPreferences(BaseModel):
 
     @validator("temperature")
     def validate_temperature(cls, v) -> bool:
-        """ Ensure temperature is valid."""
+        """Ensure temperature is valid."""
         if not 0.0 <= v <= 2.0:
             raise ValueError("Temperature must be between 0.0 and 2.0")
         return v
 
     @validator("max_tokens")
     def validate_max_tokens(cls, v) -> bool:
-        """ Ensure max_tokens is positive."""
+        """Ensure max_tokens is positive."""
         if v <= 0:
             raise ValueError("max_tokens must be positive")
         return v
 
 
 class SessionInfo(BaseModel):
-    """ Information about the current session."""
+    """Information about the current session."""
 
     session_id: str
     started_at: float
@@ -126,20 +127,20 @@ class SessionInfo(BaseModel):
     errors_count: int = 0
 
     def update_activity(self) -> None:
-        """ Update last activity timestamp."""
+        """Update last activity timestamp."""
         self.last_activity = time.time()
 
     def duration(self) -> float:
-        """ Get session duration in seconds."""
+        """Get session duration in seconds."""
         return time.time() - self.started_at
 
     def is_active(self, timeout: float = 3600) -> bool:
-        """ Check if session is still active based on timeout."""
+        """Check if session is still active based on timeout."""
         return (time.time() - self.last_activity) < timeout
 
 
 class RecentFiles(BaseModel):
-    """ Recently accessed files tracking."""
+    """Recently accessed files tracking."""
 
     files: list[dict[str, Any]] = Field(default_factory=list)
     max_files: int = 50
@@ -150,7 +151,7 @@ class RecentFiles(BaseModel):
         operation: str,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """ Add a file to recent files list."""
+        """Add a file to recent files list."""
         file_entry = {
             "path": str(file_path),
             "operation": operation,
@@ -169,22 +170,22 @@ class RecentFiles(BaseModel):
             self.files = self.files[: self.max_files]
 
     def get_recent(self, count: int = 10) -> list[dict[str, Any]]:
-        """ Get most recent files."""
+        """Get most recent files."""
         return self.files[:count]
 
     def get_by_operation(self, operation: str, count: int = 10) -> list[dict[str, Any]]:
-        """ Get recent files by operation type."""
+        """Get recent files by operation type."""
         filtered = [f for f in self.files if f["operation"] == operation]
         return filtered[:count]
 
     def clear_old(self, max_age_days: int = 30) -> None:
-        """ Clear files older than specified days."""
+        """Clear files older than specified days."""
         cutoff = time.time() - (max_age_days * 24 * 3600)
         self.files = [f for f in self.files if f["accessed_at"] > cutoff]
 
 
 class ApplicationState(BaseModel):
-    """ Complete application state."""
+    """Complete application state."""
 
     # Core state components
     session: SessionInfo
@@ -199,16 +200,16 @@ class ApplicationState(BaseModel):
 
     # Metadata
     last_saved: float = Field(default_factory=time.time)
-    version: str = "0.1.1"
+    version: str = __version__
 
     def add_operation(self, operation: ProcessingState) -> None:
-        """ Add an active operation."""
+        """Add an active operation."""
         self.active_operations[operation.operation_id] = operation
         self.session.operations_count += 1
         self.session.update_activity()
 
     def update_operation(self, operation_id: str, **updates) -> bool:
-        """ Update an operation's state."""
+        """Update an operation's state."""
         if operation_id in self.active_operations:
             operation = self.active_operations[operation_id]
             for key, value in updates.items():
@@ -228,7 +229,7 @@ class ApplicationState(BaseModel):
         return False
 
     def remove_operation(self, operation_id: str) -> bool:
-        """ Remove an operation from active operations."""
+        """Remove an operation from active operations."""
         if operation_id in self.active_operations:
             del self.active_operations[operation_id]
             self.session.update_activity()
@@ -236,11 +237,11 @@ class ApplicationState(BaseModel):
         return False
 
     def get_active_operations(self) -> list[ProcessingState]:
-        """ Get all active operations."""
+        """Get all active operations."""
         return [op for op in self.active_operations.values() if op.is_active()]
 
     def cleanup_completed_operations(self, max_age_hours: int = 24) -> None:
-        """ Clean up old completed operations."""
+        """Clean up old completed operations."""
         cutoff = time.time() - (max_age_hours * 3600)
         to_remove = []
 
@@ -257,10 +258,10 @@ class ApplicationState(BaseModel):
 
 
 class StateManager:
-    """ Manages application state persistence and operations."""
+    """Manages application state persistence and operations."""
 
     def __init__(self, state_file: Path | None = None) -> None:
-        """ Initialize state manager."""
+        """Initialize state manager."""
         self.settings = get_settings()
 
         if state_file is None:
@@ -276,20 +277,20 @@ class StateManager:
         self._last_save = 0.0
 
     def _create_new_state(self) -> ApplicationState:
-        """ Create a new application state."""
+        """Create a new application state."""
         import uuid
 
         session = SessionInfo(
             session_id=str(uuid.uuid4()),
             started_at=time.time(),
             last_activity=time.time(),
-            version="0.1.1",
+            version=__version__,
         )
 
         return ApplicationState(session=session)
 
     def load(self) -> ApplicationState:
-        """ Load application state from file."""
+        """Load application state from file."""
         if self._state is not None:
             return self._state
 
@@ -317,7 +318,7 @@ class StateManager:
         return self._state
 
     def save(self, force: bool = False) -> bool:
-        """ Save application state to file."""
+        """Save application state to file."""
         if self._state is None:
             return False
 
@@ -347,13 +348,13 @@ class StateManager:
             return False
 
     def get_state(self) -> ApplicationState:
-        """ Get current application state."""
+        """Get current application state."""
         if self._state is None:
             return self.load()
         return self._state
 
     def update_preferences(self, **preferences) -> bool:
-        """ Update user preferences."""
+        """Update user preferences."""
         try:
             state = self.get_state()
             for key, value in preferences.items():
@@ -374,7 +375,7 @@ class StateManager:
         operation: str,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """ Add a file to recent files."""
+        """Add a file to recent files."""
         state = self.get_state()
         state.recent_files.add_file(file_path, operation, metadata)
 
@@ -388,7 +389,7 @@ class StateManager:
         output_path: str | Path | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> str:
-        """ Start a new operation and return operation ID."""
+        """Start a new operation and return operation ID."""
         import uuid
 
         operation_id = str(uuid.uuid4())
@@ -420,7 +421,7 @@ class StateManager:
         status: str | None = None,
         error_message: str | None = None,
     ) -> bool:
-        """ Update operation progress."""
+        """Update operation progress."""
         updates = {"progress": progress}
         if status:
             updates["status"] = status
@@ -441,35 +442,35 @@ class StateManager:
         success: bool = True,
         error_message: str | None = None,
     ) -> bool:
-        """ Mark operation as completed."""
+        """Mark operation as completed."""
         status = "completed" if success else "failed"
         return self.update_operation_progress(operation_id, 1.0, status, error_message)
 
     def cancel_operation(self, operation_id: str) -> bool:
-        """ Cancel an operation."""
+        """Cancel an operation."""
         return self.update_operation_progress(operation_id, 0.0, "cancelled")
 
     def get_recent_files(
         self, operation: str | None = None, count: int = 10
     ) -> list[dict[str, Any]]:
-        """ Get recent files, optionally filtered by operation."""
+        """Get recent files, optionally filtered by operation."""
         state = self.get_state()
         if operation:
             return state.recent_files.get_by_operation(operation, count)
         return state.recent_files.get_recent(count)
 
     def get_active_operations(self) -> list[ProcessingState]:
-        """ Get all active operations."""
+        """Get all active operations."""
         state = self.get_state()
         return state.get_active_operations()
 
     def get_session_info(self) -> SessionInfo:
-        """ Get current session information."""
+        """Get current session information."""
         state = self.get_state()
         return state.session
 
     def clear_cache(self) -> None:
-        """ Clear application cache."""
+        """Clear application cache."""
         state = self.get_state()
         state.cache.clear()
 
@@ -477,7 +478,7 @@ class StateManager:
             self.save()
 
     def reset_state(self) -> None:
-        """ Reset application state (for testing or fresh start)."""
+        """Reset application state (for testing or fresh start)."""
         self._state = self._create_new_state()
         if self.state_file.exists():
             self.state_file.unlink()
@@ -485,16 +486,16 @@ class StateManager:
         logger.info("Application state reset")
 
     def set_auto_save(self, enabled: bool, interval: int = 30) -> None:
-        """ Configure auto-save behavior."""
+        """Configure auto-save behavior."""
         self._auto_save = enabled
         self._save_interval = interval
 
     def __enter__(self):
-        """ Context manager entry."""
+        """Context manager entry."""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """ Context manager exit - save state."""
+        """Context manager exit - save state."""
         self.save(force=True)
 
 
@@ -503,7 +504,7 @@ _state_manager: StateManager | None = None
 
 
 def get_state_manager() -> StateManager:
-    """ Get or create global state manager instance."""
+    """Get or create global state manager instance."""
     global _state_manager
     if _state_manager is None:
         _state_manager = StateManager()
@@ -511,10 +512,10 @@ def get_state_manager() -> StateManager:
 
 
 def get_application_state() -> ApplicationState:
-    """ Get current application state."""
+    """Get current application state."""
     return get_state_manager().get_state()
 
 
 def save_application_state() -> bool:
-    """ Save current application state."""
+    """Save current application state."""
     return get_state_manager().save(force=True)

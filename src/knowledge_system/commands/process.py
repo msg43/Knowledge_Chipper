@@ -78,11 +78,33 @@ from .transcribe import _generate_obsidian_link, format_transcript_content
     "--dry-run", is_flag=True, help="Show what would be done without making changes"
 )
 @click.option("--progress", is_flag=True, help="Show progress tracking")
-@click.option("--superchunk-artifacts", type=click.Path(path_type=Path), required=False, help="If set, run SuperChunk summarizer on the input text/markdown and write artifacts here")
-@click.option("--sc-preset", type=click.Choice(["precision", "balanced", "narrative"]), required=False, help="SuperChunk window preset override")
-@click.option("--sc-verify-top", type=float, required=False, help="SuperChunk verification top percent (0..1)")
-@click.option("--sc-quote-cap", type=int, required=False, help="SuperChunk max quote words")
-@click.option("--sc-max-concurrent", type=int, required=False, help="SuperChunk max concurrent calls")
+@click.option(
+    "--superchunk-artifacts",
+    type=click.Path(path_type=Path),
+    required=False,
+    help="If set, run SuperChunk summarizer on the input text/markdown and write artifacts here",
+)
+@click.option(
+    "--sc-preset",
+    type=click.Choice(["precision", "balanced", "narrative"]),
+    required=False,
+    help="SuperChunk window preset override",
+)
+@click.option(
+    "--sc-verify-top",
+    type=float,
+    required=False,
+    help="SuperChunk verification top percent (0..1)",
+)
+@click.option(
+    "--sc-quote-cap", type=int, required=False, help="SuperChunk max quote words"
+)
+@click.option(
+    "--sc-max-concurrent",
+    type=int,
+    required=False,
+    help="SuperChunk max concurrent calls",
+)
 @pass_context
 def process(
     ctx: CLIContext,
@@ -116,7 +138,7 @@ def process(
          knowledge-system process ./videos/ --recursive
          knowledge-system process ./content/ --no-transcribe --patterns "*.pdf" "*.txt"
          knowledge-system process audio.wav --output ./results --dry-run
-     """
+    """
     settings = ctx.get_settings()
 
     if not ctx.quiet:

@@ -27,7 +27,7 @@ if not FFMPEG_AVAILABLE:
 
 
 class AudioProcessor(BaseProcessor):
-    """ Processes audio files for transcription pipeline with automatic retry and failure logging."""
+    """Processes audio files for transcription pipeline with automatic retry and failure logging."""
 
     def __init__(
         self,
@@ -80,7 +80,7 @@ class AudioProcessor(BaseProcessor):
         return False
 
     def _convert_audio(self, input_path: Path, output_path: Path) -> bool:
-        """ Convert audio file to target format using FFmpeg."""
+        """Convert audio file to target format using FFmpeg."""
         if not FFMPEG_AVAILABLE:
             logger.warning("Audio conversion skipped - FFmpeg not available")
             logger.info(
@@ -109,7 +109,7 @@ class AudioProcessor(BaseProcessor):
             return False
 
     def _perform_diarization(self, audio_path: Path) -> list | None:
-        """ Run speaker diarization on the audio file."""
+        """Run speaker diarization on the audio file."""
         try:
             from .diarization import (
                 SpeakerDiarizationProcessor,
@@ -143,7 +143,7 @@ class AudioProcessor(BaseProcessor):
     def _merge_diarization(
         self, transcription_data: dict, diarization_segments: list
     ) -> dict:
-        """ Merge speaker labels into transcription segments."""
+        """Merge speaker labels into transcription segments."""
         if not diarization_segments or "segments" not in transcription_data:
             return transcription_data
 
@@ -166,7 +166,7 @@ class AudioProcessor(BaseProcessor):
     def _find_dominant_speaker(
         self, start: float, end: float, diarization_segments: list
     ) -> str | None:
-        """ Find the speaker with the most overlap in the given time range."""
+        """Find the speaker with the most overlap in the given time range."""
         if not diarization_segments:
             return None
 
@@ -195,7 +195,7 @@ class AudioProcessor(BaseProcessor):
         model_used: str,
         audio_duration: float | None = None,
     ) -> None:
-        """ Log transcription failure to a dedicated failure log file."""
+        """Log transcription failure to a dedicated failure log file."""
         try:
             # Create logs directory if it doesn't exist
             logs_dir = Path("logs")
@@ -231,7 +231,7 @@ class AudioProcessor(BaseProcessor):
             logger.error(f"Failed to log transcription failure: {e}")
 
     def _get_audio_metadata(self, audio_path: Path) -> dict:
-        """ Extract metadata from audio file."""
+        """Extract metadata from audio file."""
         try:
             stat = audio_path.stat()
             metadata = {
@@ -261,7 +261,7 @@ class AudioProcessor(BaseProcessor):
             return {"filename": audio_path.name, "error": str(e)}
 
     def _format_duration(self, seconds: float) -> str:
-        """ Format duration in seconds to MM:SS or HH:MM:SS format."""
+        """Format duration in seconds to MM:SS or HH:MM:SS format."""
         if seconds is None:
             return "Unknown"
 
@@ -281,7 +281,7 @@ class AudioProcessor(BaseProcessor):
         model_metadata: dict,
         include_timestamps: bool = True,
     ) -> str:
-        """ Create markdown content from transcription data and metadata."""
+        """Create markdown content from transcription data and metadata."""
         lines = []
 
         # YAML frontmatter
@@ -346,7 +346,7 @@ class AudioProcessor(BaseProcessor):
         output_dir: str | Path | None = None,
         include_timestamps: bool = True,
     ) -> Path | None:
-        """ Save transcription result to a markdown file."""
+        """Save transcription result to a markdown file."""
         if not transcription_result.success:
             logger.error("Cannot save transcript - transcription failed")
             return None
@@ -420,7 +420,7 @@ class AudioProcessor(BaseProcessor):
     def process(
         self, input_data: Any, dry_run: bool = False, **kwargs: Any
     ) -> ProcessorResult:
-        """ Process audio with automatic retry and failure logging."""
+        """Process audio with automatic retry and failure logging."""
         # Extract parameters from kwargs for backwards compatibility
         device = kwargs.get("device", self.device)
 
@@ -442,7 +442,7 @@ class AudioProcessor(BaseProcessor):
     def _transcribe_with_retry(
         self, path: Path, audio_metadata: dict, device: str | None, **kwargs: Any
     ) -> ProcessorResult:
-        """ Attempt transcription with automatic retry using better model if quality validation fails."""
+        """Attempt transcription with automatic retry using better model if quality validation fails."""
         current_model = self.model
         audio_duration = audio_metadata.get("duration_seconds")
 
@@ -698,7 +698,7 @@ def process_audio_for_transcription(
     model: str = "base",
     use_whisper_cpp: bool = False,
 ) -> str | None:
-    """ Convenience function to process audio and get transcription."""
+    """Convenience function to process audio and get transcription."""
     processor = AudioProcessor(
         normalize_audio=normalize,
         device=device,

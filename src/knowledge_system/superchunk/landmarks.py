@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .validators import Landmarks
 from .llm_adapter import SuperChunkLLMAdapter
+from .validators import Landmarks
 
 
 @dataclass
@@ -11,7 +11,7 @@ class LandmarksDetector:
     adapter: SuperChunkLLMAdapter
 
     @staticmethod
-    def create_default() -> "LandmarksDetector":
+    def create_default() -> LandmarksDetector:
         return LandmarksDetector(adapter=SuperChunkLLMAdapter.create_default())
 
     def detect(self, chunk_text: str) -> Landmarks:
@@ -21,4 +21,6 @@ class LandmarksDetector:
             "anchors (array of [span_start, span_end] for each bullet/numbered line). Ensure spans are within text bounds.\n\n"
             f"Chunk:\n{chunk_text}"
         )
-        return self.adapter.generate_json(prompt, Landmarks, estimated_output_tokens=400)
+        return self.adapter.generate_json(
+            prompt, Landmarks, estimated_output_tokens=400
+        )

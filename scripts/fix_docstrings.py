@@ -83,10 +83,11 @@ def add_minimal_docstrings(source: str) -> str:
 
     Heuristic-based regex approach to avoid heavy AST rewriting.
     """
+
     def repl_init(match: re.Match[str]) -> str:
         indent = match.group("indent")
         header = match.group("header")
-        return f"{header}\n{indent}    \"\"\"Initialize the instance.\"\"\"\n"
+        return f'{header}\n{indent}    """Initialize the instance."""\n'
 
     init_pat = re.compile(
         r"^(?P<header>(?P<indent>\s*)def\s+__init__\s*\([^\)]*\)\s*:\s*)\n(?!\s*\"\"\"|\s*''')",
@@ -129,7 +130,7 @@ def process_file(path: Path) -> bool:
 
     updated = "".join(lines)
     # Remove stray period accidentally appended after closing triple quotes: """. -> """
-    updated = re.sub(r'(\"\"\"|\'\'\')\.', r'\1', updated)
+    updated = re.sub(r"(\"\"\"|\'\'\')\.", r"\1", updated)
     if updated != text:
         path.write_text(updated, encoding="utf-8")
         changed = True

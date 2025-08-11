@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 
 
 class ErrorHandler:
-    """ Centralized error handling for processors."""
+    """Centralized error handling for processors."""
 
     @staticmethod
     def create_error_result(
@@ -143,7 +143,7 @@ class ErrorHandler:
 
 
 class YouTubeErrorHandler:
-    """ Specialized error handling for YouTube-related processors."""
+    """Specialized error handling for YouTube-related processors."""
 
     ERROR_PATTERNS = {
         "proxy_auth": {
@@ -361,7 +361,7 @@ def with_youtube_error_handling(processor_name: str | None = None) -> Callable:
 
 
 class BatchErrorHandler:
-    """ Error handling for batch processing operations."""
+    """Error handling for batch processing operations."""
 
     @staticmethod
     def collect_batch_errors(
@@ -463,7 +463,7 @@ class BatchErrorHandler:
 def file_not_found_error(
     file_path: str | Path, processor_name: str = "processor"
 ) -> ProcessorResult:
-    """ Create a standardized file not found error."""
+    """Create a standardized file not found error."""
     return ErrorHandler.create_error_result(
         error=f"File not found: {file_path}",
         processor_name=processor_name,
@@ -476,7 +476,7 @@ def unsupported_format_error(
     supported_formats: list[str],
     processor_name: str = "processor",
 ) -> ProcessorResult:
-    """ Create a standardized unsupported format error."""
+    """Create a standardized unsupported format error."""
     path = Path(file_path)
     return ErrorHandler.create_error_result(
         error=f"Unsupported format: {path.suffix}. Supported: {', '.join(supported_formats)}",
@@ -492,7 +492,7 @@ def unsupported_format_error(
 def network_error(
     url: str, error_msg: str, processor_name: str = "processor"
 ) -> ProcessorResult:
-    """ Create a standardized network error."""
+    """Create a standardized network error."""
     return ErrorHandler.create_error_result(
         error=f"Network error accessing {url}: {error_msg}",
         processor_name=processor_name,

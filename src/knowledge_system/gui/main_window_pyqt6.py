@@ -23,10 +23,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from .. import __version__
 from ..config import get_settings
 from ..logger import get_logger
 from ..version import BUILD_DATE
-from .. import __version__
 from .assets.icons import get_app_icon, get_icon_path
 
 # Import workers and components
@@ -51,7 +51,7 @@ logger = get_logger(__name__)
 
 
 class MainWindow(QMainWindow):
-    """ Streamlined main application window for Knowledge System using PyQt6."""
+    """Streamlined main application window for Knowledge System using PyQt6."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -94,7 +94,7 @@ class MainWindow(QMainWindow):
         self._ffmpeg_monthly_check()
 
     def _set_window_icon(self) -> None:
-        """ Set the custom window icon."""
+        """Set the custom window icon."""
         icon = get_app_icon()
         if icon:
             try:
@@ -107,7 +107,7 @@ class MainWindow(QMainWindow):
             logger.warning("No custom icon found, using default")
 
     def _setup_ui(self) -> None:
-        """ Set up the streamlined main UI."""
+        """Set up the streamlined main UI."""
         self.setWindowTitle(
             f"Knowledge Chipper v{__version__} - Your Personal Knowledge Assistant"
         )
@@ -159,7 +159,7 @@ class MainWindow(QMainWindow):
         self._apply_dark_theme()
 
     def _create_tabs(self) -> None:
-        """ Create all modular tabs."""
+        """Create all modular tabs."""
         # Each tab handles its own business logic
 
         # Introduction tab - first tab for new users
@@ -187,14 +187,14 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.api_keys_tab, "⚙️ Settings")
 
     def _navigate_to_tab(self, tab_name: str) -> None:
-        """ Navigate to a specific tab by name."""
+        """Navigate to a specific tab by name."""
         for i in range(self.tabs.count()):
             if self.tabs.tabText(i) == tab_name:
                 self.tabs.setCurrentIndex(i)
                 break
 
     def _apply_dark_theme(self) -> None:
-        """ Apply dark theme styling."""
+        """Apply dark theme styling."""
         self.setStyleSheet(
             """
             QMainWindow {
@@ -286,7 +286,7 @@ class MainWindow(QMainWindow):
         )
 
     def _handle_progress_cancellation(self, reason: str) -> None:
-        """ Handle progress bar cancellation requests."""
+        """Handle progress bar cancellation requests."""
         logger.info(f"Progress cancellation requested: {reason}")
 
         # Cancel any active threads
@@ -304,7 +304,7 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"Operation cancelled: {reason}")
 
     def _load_api_keys_to_environment(self) -> None:
-        """ Load API keys to environment variables for processors to use."""
+        """Load API keys to environment variables for processors to use."""
         try:
             # Set OpenAI API key
             if self.settings.api_keys.openai_api_key:
@@ -322,7 +322,7 @@ class MainWindow(QMainWindow):
             logger.error(f"Failed to load API keys to environment: {e}")
 
     def _process_messages(self) -> None:
-        """ Process messages from the message queue."""
+        """Process messages from the message queue."""
         try:
             while not self.message_queue.empty():
                 message = self.message_queue.get_nowait()
@@ -332,7 +332,7 @@ class MainWindow(QMainWindow):
             logger.debug(f"Message processing error: {e}")
 
     def _load_session(self) -> None:
-        """ Load session state."""
+        """Load session state."""
         try:
             # Restore window geometry if available
             geometry = self.gui_settings.get_window_geometry()
@@ -346,7 +346,7 @@ class MainWindow(QMainWindow):
             logger.error(f"Could not load session state: {e}")
 
     def _save_session(self) -> None:
-        """ Save session state."""
+        """Save session state."""
         try:
             # Save window geometry
             self.gui_settings.set_window_geometry(
@@ -361,12 +361,12 @@ class MainWindow(QMainWindow):
             logger.error(f"Could not save session state: {e}")
 
     def _check_for_updates_on_launch(self) -> None:
-        """ Check for updates on application launch if enabled."""
+        """Check for updates on application launch if enabled."""
         if hasattr(self, "api_keys_tab"):
             self.api_keys_tab.check_for_updates_on_launch()
 
     def _ffmpeg_monthly_check(self) -> None:
-        """ Run a monthly FFmpeg presence check and prompt to install if missing."""
+        """Run a monthly FFmpeg presence check and prompt to install if missing."""
         try:
             import shutil
             from datetime import datetime, timedelta
@@ -404,7 +404,7 @@ class MainWindow(QMainWindow):
             pass
 
     def closeEvent(self, event: QCloseEvent | None) -> None:
-        """ Handle window close event."""
+        """Handle window close event."""
         try:
             # Save session before closing
             self._save_session()
@@ -425,7 +425,7 @@ class MainWindow(QMainWindow):
 
 
 def launch_gui() -> None:
-    """ Launch the Knowledge System GUI application."""
+    """Launch the Knowledge System GUI application."""
 
     try:
         # Import PyQt6 first to check availability

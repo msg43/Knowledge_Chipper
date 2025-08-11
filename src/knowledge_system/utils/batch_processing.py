@@ -39,7 +39,7 @@ def get_logger(name: str = "batch_processing") -> Any:
 
 
 class HangDetectionLevel(Enum):
-    """ Levels of hang detection aggressiveness."""
+    """Levels of hang detection aggressiveness."""
 
     DISABLED = "disabled"
     BASIC = "basic"  # Only detect obvious hangs
@@ -48,7 +48,7 @@ class HangDetectionLevel(Enum):
 
 
 class OperationType(Enum):
-    """ Types of operations for hang detection configuration."""
+    """Types of operations for hang detection configuration."""
 
     TRANSCRIPTION = "transcription"
     SUMMARIZATION = "summarization"
@@ -61,7 +61,7 @@ class OperationType(Enum):
 
 @dataclass
 class HangDetectionConfig:
-    """ Configuration for hang detection system."""
+    """Configuration for hang detection system."""
 
     level: HangDetectionLevel = HangDetectionLevel.MODERATE
     check_interval: int = 30  # seconds between checks
@@ -90,7 +90,7 @@ class HangDetectionConfig:
     )
 
     def get_timeout(self, operation_type: OperationType) -> int | None:
-        """ Get timeout for operation type with level multiplier applied."""
+        """Get timeout for operation type with level multiplier applied."""
         if self.level == HangDetectionLevel.DISABLED:
             return None
 
@@ -99,13 +99,13 @@ class HangDetectionConfig:
         return int(base_timeout * multiplier)
 
     def set_custom_timeout(self, operation_type: OperationType, timeout: int) -> None:
-        """ Set custom timeout for an operation type."""
+        """Set custom timeout for an operation type."""
         self.timeouts[operation_type] = timeout
 
 
 @dataclass
 class TrackedOperation:
-    """ Information about an operation being tracked for hangs."""
+    """Information about an operation being tracked for hangs."""
 
     operation_id: str
     operation_type: OperationType
@@ -116,19 +116,19 @@ class TrackedOperation:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def is_stale(self, timeout_seconds: int) -> bool:
-        """ Check if operation has been inactive for too long."""
+        """Check if operation has been inactive for too long."""
         if timeout_seconds <= 0:
             return False
         elapsed = (datetime.now() - self.last_update).total_seconds()
         return elapsed > timeout_seconds
 
     def total_runtime(self) -> timedelta:
-        """ Get total runtime of the operation."""
+        """Get total runtime of the operation."""
         return datetime.now() - self.start_time
 
 
 class HangDetector:
-    """ Monitors operations for potential hangs and provides recovery."""
+    """Monitors operations for potential hangs and provides recovery."""
 
     def __init__(self, config: HangDetectionConfig) -> None:
         self.config = config
@@ -138,7 +138,7 @@ class HangDetector:
         self._lock = threading.Lock()
 
     def start_monitoring(self) -> None:
-        """ Start the hang detection monitoring thread."""
+        """Start the hang detection monitoring thread."""
         if self.config.level == HangDetectionLevel.DISABLED:
             get_logger().info("Hang detection is disabled")
             return
@@ -154,7 +154,7 @@ class HangDetector:
         )
 
     def stop_monitoring(self) -> None:
-        """ Stop the hang detection monitoring."""
+        """Stop the hang detection monitoring."""
         self.monitoring = False
         if self.monitor_thread:
             self.monitor_thread.join(timeout=1.0)
@@ -167,7 +167,7 @@ class HangDetector:
         cancellation_token: CancellationToken | None = None,
         recovery_callback: Callable[[str], None] | None = None,
     ) -> None:
-        """ Register an operation for hang detection."""
+        """Register an operation for hang detection."""
         with self._lock:
             now = datetime.now()
             self.operations[operation_id] = TrackedOperation(
@@ -181,7 +181,7 @@ class HangDetector:
         get_logger().debug(f"Registered operation for hang detection: {operation_id}")
 
     def unregister_operation(self, operation_id: str) -> None:
-        """ Unregister an operation from hang detection."""
+        """Unregister an operation from hang detection."""
         with self._lock:
             if operation_id in self.operations:
                 del self.operations[operation_id]
@@ -192,7 +192,7 @@ class HangDetector:
     def update_operation(
         self, operation_id: str, metadata: dict[str, Any] | None = None
     ) -> None:
-        """ Update an operation's last activity time."""
+        """Update an operation's last activity time."""
         with self._lock:
             if operation_id in self.operations:
                 self.operations[operation_id].last_update = datetime.now()
@@ -200,7 +200,7 @@ class HangDetector:
                     self.operations[operation_id].metadata.update(metadata)
 
     def _monitor_loop(self) -> None:
-        """ Main monitoring loop that checks for hung operations."""
+        """Main monitoring loop that checks for hung operations."""
         while self.monitoring:
             try:
                 self._check_for_hangs()
@@ -210,7 +210,7 @@ class HangDetector:
                 time.sleep(5)  # Brief pause before retrying
 
     def _check_for_hangs(self) -> None:
-        """ Check all registered operations for potential hangs."""
+        """Check all registered operations for potential hangs."""
         with self._lock:
             hung_operations = []
 
@@ -224,7 +224,7 @@ class HangDetector:
                 self._handle_hung_operation(op)
 
     def _handle_hung_operation(self, operation: TrackedOperation) -> None:
-        """ Handle a detected hung operation."""
+        """Handle a detected hung operation."""
         runtime = operation.total_runtime()
         timeout = self.config.get_timeout(operation.operation_type)
 
@@ -264,7 +264,7 @@ class HangDetector:
                 del self.operations[operation.operation_id]
 
     def get_status(self) -> dict[str, Any]:
-        """ Get current status of hang detection."""
+        """Get current status of hang detection."""
         with self._lock:
             active_ops = len(self.operations)
             oldest_op = None
@@ -291,7 +291,7 @@ _hang_detector: HangDetector | None = None
 
 
 def get_hang_detector() -> HangDetector:
-    """ Get the global hang detector instance."""
+    """Get the global hang detector instance."""
     global _hang_detector
     if _hang_detector is None:
         config = HangDetectionConfig()
@@ -300,7 +300,7 @@ def get_hang_detector() -> HangDetector:
 
 
 def configure_hang_detection(level: HangDetectionLevel) -> None:
-    """ Configure global hang detection level."""
+    """Configure global hang detection level."""
     global _hang_detector
 
     # Stop existing detector if running
@@ -314,7 +314,7 @@ def configure_hang_detection(level: HangDetectionLevel) -> None:
 
 
 class HangDetectionContext:
-    """ Context manager for automatic hang detection registration."""
+    """Context manager for automatic hang detection registration."""
 
     def __init__(
         self,
@@ -332,7 +332,7 @@ class HangDetectionContext:
         self.detector = get_hang_detector()
 
     def __enter__(self) -> Any:
-        """ Register operation for hang detection."""
+        """Register operation for hang detection."""
         if self.custom_timeout:
             self.detector.config.set_custom_timeout(
                 self.operation_type, self.custom_timeout
@@ -347,9 +347,9 @@ class HangDetectionContext:
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """ Unregister operation from hang detection."""
+        """Unregister operation from hang detection."""
         self.detector.unregister_operation(self.operation_id)
 
     def update(self, metadata: dict[str, Any] | None = None) -> None:
-        """ Update operation status."""
+        """Update operation status."""
         self.detector.update_operation(self.operation_id, metadata)
