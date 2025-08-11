@@ -1,4 +1,4 @@
 # Auto-generated version info
-VERSION = "9b54f10"
+VERSION = "675b8aa"
 BRANCH = "summarizer-V2"
 BUILD_DATE = "2025-08-10"
