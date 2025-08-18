@@ -15,6 +15,7 @@ import yaml
 
 from ..config import get_settings
 from ..logger import get_logger
+from .model_registry_api import get_community_registry
 
 logger = get_logger(__name__)
 
@@ -23,15 +24,13 @@ DEFAULT_OVERRIDES_PATH = Path("config/model_overrides.yaml")
 
 
 OPENAI_FALLBACK_MODELS = [
-    "gpt-5",
     "gpt-4o-2024-08-06",
     "gpt-4o-2024-05-13",
     "gpt-4o-mini-2024-07-18",
     "gpt-4-turbo-2024-04-09",
-    "gpt-4-1106-preview",
+    "gpt-4-0125-preview",  # Updated from gpt-4-1106-preview
     "gpt-4-0613",
-    "gpt-3.5-turbo-1106",
-    "gpt-3.5-turbo-0125",
+    "gpt-3.5-turbo-0125",  # Current model, removed deprecated variants
 ]
 
 
@@ -100,9 +99,18 @@ def _is_openai_chat_model(name: str) -> bool:
     return not any(x in n for x in excluded)
 
 
-def get_openai_models() -> list[str]:
+def get_openai_models(force_refresh: bool = False) -> list[str]:
+    """Get OpenAI models from community list, API (if available), and overrides."""
     settings = get_settings()
     api_key = settings.api_keys.openai_api_key or settings.api_keys.openai
+
+    # Start with community list as the base
+    community_registry = get_community_registry()
+    community_models = community_registry.get_provider_models(
+        "openai", force_refresh=force_refresh
+    )
+
+    # Try to get dynamic models from API if we have a key
     dynamic: list[str] = []
     if api_key:
         try:
@@ -117,27 +125,45 @@ def get_openai_models() -> list[str]:
                 if name and _is_openai_chat_model(name):
                     dynamic.append(name)
         except Exception as e:
-            logger.info(f"OpenAI model listing failed, using fallbacks: {e}")
+            logger.info(f"OpenAI API model listing failed: {e}")
 
-    # Merge dynamic + fallbacks + overrides
+    # Get user overrides
     overrides = load_model_overrides().get("openai", [])
-    merged = _dedupe_preserve_order([*OPENAI_FALLBACK_MODELS, *dynamic, *overrides])
+
+    # Merge all sources: community + dynamic + overrides
+    # If community list is empty, fall back to hardcoded list
+    base_models = community_models if community_models else OPENAI_FALLBACK_MODELS
+    merged = _dedupe_preserve_order([*base_models, *dynamic, *overrides])
+
     return merged
 
 
-def get_anthropic_models() -> list[str]:
-    # No official public list endpoint; use curated + overrides
+def get_anthropic_models(force_refresh: bool = False) -> list[str]:
+    """Get Anthropic models from community list and overrides."""
+    # Get community list
+    community_registry = get_community_registry()
+    community_models = community_registry.get_provider_models(
+        "anthropic", force_refresh=force_refresh
+    )
+
+    # Get user overrides
     overrides = load_model_overrides().get("anthropic", [])
-    merged = _dedupe_preserve_order([*ANTHROPIC_FALLBACK_MODELS, *overrides])
+
+    # Merge community + overrides
+    # If community list is empty, fall back to hardcoded list
+    base_models = community_models if community_models else ANTHROPIC_FALLBACK_MODELS
+    merged = _dedupe_preserve_order([*base_models, *overrides])
+
     return merged
 
 
-def get_provider_models(provider: str) -> list[str]:
+def get_provider_models(provider: str, force_refresh: bool = False) -> list[str]:
+    """Get models for a provider, optionally forcing a refresh from community source."""
     p = provider.lower().strip()
     if p == "openai":
-        return get_openai_models()
+        return get_openai_models(force_refresh=force_refresh)
     if p in {"anthropic", "claude"}:
-        return get_anthropic_models()
+        return get_anthropic_models(force_refresh=force_refresh)
     return []
 
 
@@ -152,3 +178,50 @@ def _dedupe_preserve_order(items: Iterable[str]) -> list[str]:
             seen.add(key)
             out.append(name)
     return out
+
+
+def validate_model_name(provider: str, model: str) -> tuple[bool, str | None]:
+    """
+    Validate if a model name is available for the given provider.
+
+    Args:
+        provider: The LLM provider (openai, anthropic, local)
+        model: The model name to validate
+
+    Returns:
+        Tuple of (is_valid, suggested_model_name_if_different)
+    """
+    if not model or not provider:
+        return False, None
+
+    available_models = get_provider_models(provider)
+    if not available_models:
+        return True, None  # Can't validate, assume it's OK
+
+    # Direct match
+    if model in available_models:
+        return True, None
+
+    # Case-insensitive match
+    model_lower = model.lower()
+    for available in available_models:
+        if available.lower() == model_lower:
+            return True, available  # Return the correct casing
+
+    # Check for common deprecations
+    if provider == "openai":
+        # Map deprecated models to replacements
+        deprecation_map = {
+            "gpt-3.5-turbo-16k": "gpt-3.5-turbo-0125",
+            "gpt-4-1106-preview": "gpt-4-0125-preview",
+            "gpt-4.1": "gpt-4o-2024-08-06",  # Assuming gpt-4.1 was meant to be gpt-4o
+        }
+        if model in deprecation_map:
+            replacement = deprecation_map[model]
+            if replacement in available_models:
+                logger.warning(
+                    f"Model '{model}' is deprecated, suggesting '{replacement}'"
+                )
+                return False, replacement
+
+    return False, None

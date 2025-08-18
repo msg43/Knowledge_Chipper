@@ -169,20 +169,13 @@ class YouTubeTranscript(BaseModel):
         if self.view_count:
             lines.append(f"view_count: {self.view_count}")
 
-        # Add tags if available (limit to first 10 to keep YAML manageable)
+        # Add tags if available (include all tags, don't truncate)
         if self.tags:
-            # Sanitize tags before processing
-            sanitized_tags = sanitize_tags(self.tags)
-            if sanitized_tags:
-                tags_subset = sanitized_tags[:10]
-                # Format tags as a YAML array, escaping quotes in tag names
-                safe_tags = [tag.replace('"', '\\"') for tag in tags_subset]
-                tags_yaml = "[" + ", ".join(f'"{tag}"' for tag in safe_tags) + "]"
-                lines.append(f"tags: {tags_yaml}")
-                if len(sanitized_tags) > 10:
-                    lines.append(
-                        f"# ... and {len(sanitized_tags) - 10} more sanitized tags"
-                    )
+            # Use original tags with minimal sanitization (only escape quotes)
+            safe_tags = [tag.replace('"', '\\"') for tag in self.tags]
+            tags_yaml = "[" + ", ".join(f'"{tag}"' for tag in safe_tags) + "]"
+            lines.append(f"tags: {tags_yaml}")
+            lines.append(f"# Total tags: {len(self.tags)}")
 
         # Add transcript processing metadata
         lines.append('model: "YouTube Transcript"')
@@ -288,6 +281,8 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         preferred_language: str = "en",
         prefer_manual: bool = True,
         fallback_to_auto: bool = True,
+        force_diarization: bool = False,
+        require_diarization: bool = False,
         **kwargs,
     ) -> None:
         """Initialize the YouTube transcript processor."""
@@ -295,6 +290,8 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         self.preferred_language = preferred_language
         self.prefer_manual = prefer_manual
         self.fallback_to_auto = fallback_to_auto
+        self.force_diarization = force_diarization
+        self.require_diarization = require_diarization
 
         if YouTubeTranscriptApi is None or WebshareProxyConfig is None:
             raise ImportError(
@@ -345,6 +342,46 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         """Fetch transcript for a single video using proxy-based YouTube Transcript API."""
 
         logger.info(f"Fetching transcript for: {url}")
+
+        # If diarization is forced, skip transcript API but still get metadata
+        if self.force_diarization:
+            logger.info(
+                f"Force diarization enabled - skipping transcript API for: {url}"
+            )
+            # Return empty transcript object with metadata - diarization will handle transcript
+            from ..processors.youtube_metadata import YouTubeMetadataProcessor
+
+            try:
+                metadata_processor = YouTubeMetadataProcessor()
+                metadata_result = metadata_processor.process([url])
+
+                if metadata_result.success and metadata_result.data:
+                    video_metadata = metadata_result.data[0]
+                    # Create empty transcript with metadata for diarization to fill
+                    return YouTubeTranscript(
+                        video_id=self._extract_video_id(url),
+                        title=video_metadata.get("title", "Unknown Title"),
+                        url=url,
+                        language="en",  # Will be updated by diarization
+                        is_manual=False,
+                        transcript_text="",  # Empty - will be filled by diarization
+                        transcript_data=[],  # Empty - will be filled by diarization
+                        duration=video_metadata.get("duration"),
+                        uploader=video_metadata.get("uploader", ""),
+                        upload_date=video_metadata.get("upload_date"),
+                        description=video_metadata.get("description", ""),
+                        view_count=video_metadata.get("view_count"),
+                        tags=video_metadata.get("tags", []),
+                        thumbnail_url=video_metadata.get("thumbnail"),
+                    )
+                else:
+                    logger.warning(
+                        "Failed to get metadata for diarization - proceeding without metadata"
+                    )
+                    return None
+            except Exception as e:
+                logger.warning(f"Failed to get metadata for diarization: {e}")
+                return None
 
         if YouTubeTranscriptApi is None:
             logger.error("youtube-transcript-api is not available")
@@ -400,7 +437,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             except Exception as e:
                 logger.warning(f"Could not fetch metadata for {video_id}: {e}")
 
-            # Try transcript extraction with retry logic
+            # Try transcript extraction with minimal retry logic
             max_retries = 3
             for attempt in range(max_retries):
                 try:
@@ -670,7 +707,9 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                         break
 
                     if attempt < max_retries - 1:
-                        wait_time = random.uniform(2, 5)
+                        wait_time = random.uniform(
+                            5, 10
+                        )  # Longer delay to avoid YouTube rate limiting
                         logger.info(f"Waiting {wait_time:.1f}s before retry...")
 
                         # Check cancellation during wait
@@ -804,6 +843,331 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         except Exception as e:
             logger.error(f"Failed to save index file: {e}")
 
+    def _process_with_diarization(
+        self,
+        url: str,
+        original_transcript: "YouTubeTranscript",
+        output_dir: Path,
+        cancellation_token: CancellationToken | None = None,
+        progress_callback: callable = None,
+        **kwargs,
+    ) -> "YouTubeTranscript | None":
+        """
+        Process YouTube video with diarization by downloading audio and using AudioProcessor.
+
+        Args:
+            url: YouTube video URL
+            original_transcript: The original transcript from YouTube
+            output_dir: Output directory for files
+            cancellation_token: Cancellation token for stopping processing
+            progress_callback: Function to call with progress updates
+            **kwargs: Additional arguments
+
+        Returns:
+            Updated transcript with diarization data, or None if failed
+        """
+
+        def report_progress(message: str, percent: int = 0):
+            """Helper to report progress if callback is available."""
+            if progress_callback:
+                progress_callback(message, percent)
+            logger.info(message)
+
+        try:
+            import tempfile
+            from pathlib import Path
+
+            report_progress("🔍 Checking diarization dependencies...", 5)
+
+            # Check if required dependencies are available
+            try:
+                from ..processors.audio_processor import AudioProcessor
+                from ..processors.diarization import is_diarization_available
+            except ImportError as e:
+                logger.error(
+                    f"Required dependencies not available for diarization: {e}"
+                )
+                report_progress("❌ Diarization dependencies not available")
+                return None
+
+            if not is_diarization_available():
+                logger.error("Diarization dependencies not available")
+                report_progress("❌ Diarization dependencies not installed")
+                return None
+
+            report_progress("✅ Diarization dependencies available", 10)
+
+            # Create temporary directory for audio download
+            report_progress("📁 Creating temporary workspace...", 15)
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                audio_file = temp_path / f"{original_transcript.video_id}.mp3"
+
+                # Download audio using yt-dlp with Webshare proxy
+                try:
+                    report_progress(
+                        "🌐 Setting up WebShare proxy for audio download...", 20
+                    )
+
+                    # Get WebShare credentials
+                    from ..config import get_settings
+
+                    settings = get_settings()
+                    webshare_username = settings.api_keys.webshare_username
+                    webshare_password = settings.api_keys.webshare_password
+
+                    if not webshare_username or not webshare_password:
+                        logger.error(
+                            "WebShare credentials not available for audio download"
+                        )
+                        report_progress("❌ WebShare credentials not available")
+                        return None
+
+                    # Configure yt-dlp with Webshare proxy - use HTTPS for secure connections
+                    proxy_url = f"http://{webshare_username}:{webshare_password}@p.webshare.io:80/"
+
+                    # Import yt-dlp
+                    try:
+                        import yt_dlp
+                    except ImportError:
+                        logger.error("yt-dlp not available for audio download")
+                        report_progress("❌ yt-dlp not available for audio download")
+                        return None
+
+                    report_progress("📥 Starting audio download...", 25)
+
+                    # Configure yt-dlp options for high-quality audio extraction optimized for proxy
+                    ydl_opts = {
+                        "format": "bestaudio[ext=m4a]/bestaudio/best",  # High quality audio, prefer m4a
+                        "extractaudio": True,
+                        "audioformat": "mp3",
+                        "audioquality": 0,  # Best quality for accurate transcription/diarization
+                        "outtmpl": str(audio_file.with_suffix(".%(ext)s")),
+                        "proxy": proxy_url,
+                        "quiet": True,
+                        "no_warnings": True,
+                        "socket_timeout": 45,  # Longer timeout for parallel downloads
+                        "retries": 3,  # Standard retries for connection issues
+                        "fragment_retries": 5,  # Moderate fragment retries for stability
+                        "http_chunk_size": 524288,  # 512KB chunks - balance between efficiency and stability
+                        # SSL/TLS troubleshooting for WebShare proxy
+                        "nocheckcertificate": True,  # Skip SSL certificate verification for proxy
+                        "prefer_insecure": True,  # Prefer HTTP over HTTPS when possible
+                        # WebShare proxy optimizations for parallel downloads
+                        "http_chunk_retry": True,  # Retry failed chunks
+                        "keep_fragments": False,  # Don't keep fragments to save space
+                        "concurrent_fragment_downloads": 12,  # Use more connections for diarization downloads
+                        "postprocessors": [
+                            {
+                                "key": "FFmpegExtractAudio",
+                                "preferredcodec": "mp3",
+                                "preferredquality": "0",  # Best quality
+                            }
+                        ],
+                    }
+
+                    # Add progress hook for real-time download progress in GUI
+                    def download_progress_hook(d):
+                        """Hook to capture yt-dlp download progress and forward to GUI."""
+                        if d["status"] == "downloading":
+                            # Extract progress information
+                            downloaded_bytes = d.get("downloaded_bytes", 0)
+                            total_bytes = d.get("total_bytes") or d.get(
+                                "total_bytes_estimate", 0
+                            )
+                            speed = d.get("speed", 0)
+                            filename = d.get("filename", "Unknown file")
+
+                            if total_bytes > 0:
+                                percent = (downloaded_bytes / total_bytes) * 100
+                                downloaded_mb = downloaded_bytes / (1024 * 1024)
+                                total_mb = total_bytes / (1024 * 1024)
+                                speed_mbps = (speed / (1024 * 1024)) if speed else 0
+
+                                # Extract just the filename for cleaner display
+                                import os
+
+                                clean_filename = os.path.basename(filename)
+
+                                progress_msg = f"📥 Downloading: {clean_filename[:50]}{'...' if len(clean_filename) > 50 else ''}"
+                                progress_detail = f"   {downloaded_mb:.1f}/{total_mb:.1f} MB ({percent:.1f}%)"
+                                if speed_mbps > 0:
+                                    progress_detail += f" @ {speed_mbps:.1f} MB/s"
+
+                                report_progress(
+                                    progress_msg, 25 + int(percent * 0.15)
+                                )  # Map to 25-40% range
+                                report_progress(
+                                    progress_detail, 25 + int(percent * 0.15)
+                                )
+                        elif d["status"] == "finished":
+                            filename = d.get("filename", "Unknown file")
+                            import os
+
+                            clean_filename = os.path.basename(filename)
+                            report_progress(
+                                f"✅ Download complete: {clean_filename[:50]}{'...' if len(clean_filename) > 50 else ''}",
+                                40,
+                            )
+                        elif d["status"] == "error":
+                            report_progress(
+                                f"❌ Download error: {d.get('error', 'Unknown error')}"
+                            )
+
+                    ydl_opts["progress_hooks"] = [download_progress_hook]
+
+                    # Download audio using yt-dlp with proxy
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        report_progress(
+                            f"📥 Starting audio download from {original_transcript.video_id}...",
+                            25,
+                        )
+                        ydl.download([url])
+
+                    if not audio_file.exists():
+                        logger.error(f"Audio file not created: {audio_file}")
+                        report_progress("❌ Audio file not created after download")
+                        return None
+
+                    file_size_mb = audio_file.stat().st_size / (1024 * 1024)
+                    report_progress(
+                        f"✅ Audio downloaded successfully ({file_size_mb:.1f} MB)", 40
+                    )
+
+                except Exception as e:
+                    logger.error(f"Failed to download audio with Webshare proxy: {e}")
+                    report_progress(f"❌ Audio download failed: {e}")
+                    return None
+
+                # Check for cancellation
+                if cancellation_token and cancellation_token.is_cancelled():
+                    logger.info("Processing cancelled during audio download")
+                    report_progress("⚠️ Processing cancelled")
+                    return None
+
+                # Process with AudioProcessor for diarization
+                try:
+                    report_progress("🎙️ Initializing diarization pipeline...", 45)
+
+                    # Get settings from the main settings
+                    from ..config import get_settings
+
+                    settings = get_settings()
+                    hf_token = getattr(settings.api_keys, "huggingface_token", None)
+
+                    # Create progress callback that reports diarization progress
+                    def diarization_progress_callback(message: str, percent: int = 0):
+                        # Map diarization progress to overall progress (45-85%)
+                        overall_percent = 45 + int((percent / 100) * 40)
+                        report_progress(f"🎙️ {message}", overall_percent)
+
+                    processor = AudioProcessor(
+                        model="base",  # Use base model for reasonable speed/quality
+                        enable_diarization=True,
+                        require_diarization=True,  # Strict mode: require diarization success
+                        hf_token=hf_token,
+                        progress_callback=diarization_progress_callback,
+                    )
+
+                    # Process the audio file
+                    report_progress("🎯 Processing audio with diarization...", 50)
+                    result = processor.process(
+                        audio_file,
+                        output_dir=None,  # Don't save to file, just get data
+                        timestamps=True,
+                    )
+
+                    if not result.success:
+                        logger.error(f"AudioProcessor failed: {result.errors}")
+                        report_progress(
+                            f"❌ Diarization failed: {'; '.join(result.errors)}"
+                        )
+                        return None
+
+                    if not result.data:
+                        logger.error("AudioProcessor returned no data")
+                        report_progress("❌ Diarization returned no data")
+                        return None
+
+                    report_progress("✅ Diarization processing completed", 85)
+
+                    # Create new transcript with diarization data
+                    report_progress("📝 Integrating diarization results...", 90)
+                    segments = result.data.get("segments", [])
+                    if not segments:
+                        logger.warning("No segments found in diarization result")
+                        report_progress(
+                            "⚠️ No speaker segments found in diarization result"
+                        )
+                        return None
+
+                    # Convert segments to transcript format
+                    transcript_data = []
+                    full_text_parts = []
+
+                    for segment in segments:
+                        start_time = segment.get("start", 0)
+                        text = segment.get("text", "").strip()
+                        speaker = segment.get("speaker", "")
+
+                        if text:
+                            # Add to transcript data
+                            transcript_data.append(
+                                {
+                                    "start": start_time,
+                                    "duration": segment.get("end", start_time)
+                                    - start_time,
+                                    "text": text,
+                                }
+                            )
+
+                            # Add to full text with speaker labels
+                            if speaker:
+                                # Convert speaker ID to human-readable format
+                                speaker_num = speaker.replace("SPEAKER_", "").zfill(2)
+                                try:
+                                    speaker_number = int(speaker_num) + 1
+                                    full_text_parts.append(
+                                        f"(Speaker {speaker_number}): {text}"
+                                    )
+                                except (ValueError, AttributeError):
+                                    # Fallback if speaker format is unexpected
+                                    full_text_parts.append(f"({speaker}): {text}")
+                            else:
+                                full_text_parts.append(text)
+
+                    # Create updated transcript
+                    updated_transcript = YouTubeTranscript(
+                        video_id=original_transcript.video_id,
+                        title=original_transcript.title,
+                        url=original_transcript.url,
+                        language=original_transcript.language,
+                        is_manual=False,  # This is AI-generated
+                        transcript_text="\n".join(full_text_parts),
+                        transcript_data=transcript_data,
+                        duration=original_transcript.duration,
+                        uploader=original_transcript.uploader,
+                        upload_date=original_transcript.upload_date,
+                        description=original_transcript.description,
+                        view_count=original_transcript.view_count,
+                        tags=original_transcript.tags,
+                        thumbnail_url=original_transcript.thumbnail_url,
+                        fetched_at=original_transcript.fetched_at,
+                    )
+
+                    report_progress("✅ Diarization integration completed!", 100)
+                    return updated_transcript
+
+                except Exception as e:
+                    logger.error(f"Failed to process audio with diarization: {e}")
+                    report_progress(f"❌ Diarization processing failed: {e}")
+                    return None
+
+        except Exception as e:
+            logger.error(f"Diarization processing failed: {e}")
+            report_progress(f"❌ Diarization failed: {e}")
+            return None
+
     def _update_index_file(self, index_file: Path, video_id: str) -> None:
         """Append a new video ID to the index file."""
         try:
@@ -831,7 +1195,9 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         include_analysis: bool = True,
         strip_interjections: bool = False,
         interjections_file: str | Path | None = None,
+        enable_diarization: bool = False,
         cancellation_token: CancellationToken | None = None,
+        progress_callback: callable = None,
         **kwargs,
     ) -> ProcessorResult:
         """Process YouTube URLs to extract transcripts."""
@@ -917,6 +1283,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             errors = []
             saved_files = []
             skipped_files = []  # Track files that were skipped due to overwrite=False
+            failed_files = []  # Track files that failed processing
 
             # Build video ID index if overwrite is disabled
             existing_video_ids = set()
@@ -925,8 +1292,6 @@ class YouTubeTranscriptProcessor(BaseProcessor):
 
             if not overwrite_existing:
                 # Create session-specific index file
-                from datetime import datetime
-
                 index_filename = (
                     f".youtube_index_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
                 )
@@ -985,6 +1350,87 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     )
                     transcript = self._fetch_video_transcript(url, cancellation_token)
                     if transcript:
+                        # Handle diarization if enabled
+                        if enable_diarization:
+                            logger.info(
+                                f"Diarization enabled for {transcript.video_id}, downloading audio for processing..."
+                            )
+                            diarized_transcript = self._process_with_diarization(
+                                url,
+                                transcript,
+                                output_dir,
+                                cancellation_token,
+                                progress_callback,
+                                **kwargs,
+                            )
+                            if diarized_transcript:
+                                transcript = diarized_transcript
+                                logger.info(
+                                    f"Successfully processed {transcript.video_id} with diarization"
+                                )
+                            else:
+                                # Diarization failed - write error file instead of proceeding with regular transcript
+                                logger.error(
+                                    f"Diarization failed for {transcript.video_id}, writing error file instead of transcript"
+                                )
+
+                                # Create error filename
+                                safe_title = re.sub(
+                                    r"[<>:\"/\\|?*]", "", transcript.title
+                                ).strip()
+                                safe_title = safe_title.replace("-", " ")
+                                safe_title = re.sub(r"\s+", " ", safe_title)
+                                if safe_title and len(safe_title) > 100:
+                                    safe_title = safe_title[:100].rstrip()
+
+                                error_filename = (
+                                    f"{safe_title}_DIARIZATION_ERROR.md"
+                                    if safe_title
+                                    else f"{transcript.video_id}_DIARIZATION_ERROR.md"
+                                )
+                                error_file_path = output_dir / error_filename
+
+                                # Write error file with details
+                                error_content = f"""# Diarization Error Report
+
+**Video:** {transcript.title}
+**Video ID:** {transcript.video_id}
+**URL:** {url}
+**Error Time:** {datetime.now().isoformat()}
+
+## Error Details
+Diarization processing failed for this video. The transcript was not saved to allow re-processing with diarization once the issue is resolved.
+
+## Troubleshooting
+1. Check WebShare proxy credentials in settings
+2. Verify yt-dlp installation and dependencies
+3. Ensure sufficient disk space for audio download
+4. Check diarization model dependencies (pyannote.audio, etc.)
+
+## Next Steps
+- Fix the underlying issue
+- Re-run the transcript extraction with diarization enabled
+- This error file will be overwritten when processing succeeds
+"""
+
+                                try:
+                                    with open(
+                                        error_file_path, "w", encoding="utf-8"
+                                    ) as f:
+                                        f.write(error_content)
+                                    logger.info(
+                                        f"Error file written: {error_file_path}"
+                                    )
+                                    # Track as a failed file instead of skipped
+                                    failed_files.append(str(error_file_path))
+                                except Exception as e:
+                                    logger.error(
+                                        f"Failed to write error file {error_file_path}: {e}"
+                                    )
+
+                                # Skip adding to transcripts - no regular transcript should be saved
+                                continue
+
                         transcripts.append(transcript)
 
                         # IMMEDIATE FILE WRITING: Write file right after extraction instead of batching

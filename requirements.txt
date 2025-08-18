@@ -22,7 +22,7 @@ pdfplumber>=0.9.0
 # pydub>=0.25.1  # Removed - replaced with FFmpeg
 
 # ML and transcription (core)
-openai-whisper>=20231117
+# openai-whisper>=20231117  # REMOVED: Replaced with whisper.cpp binary
 
 # YouTube processing
 yt-dlp>=2023.10.13

@@ -3,15 +3,37 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import psutil
+
 from knowledge_system.logger import get_logger
 from knowledge_system.processors.base import BaseProcessor, ProcessorResult
 from knowledge_system.processors.whisper_cpp_transcribe import (
     WhisperCppTranscribeProcessor,
 )
+from knowledge_system.utils.apple_silicon_optimizations import (
+    apply_memory_pressure_mitigations,
+    check_memory_pressure,
+    optimize_transcription_for_apple_silicon,
+)
+from knowledge_system.utils.async_processing import (
+    AsyncTranscriptionManager,
+    estimate_parallel_speedup,
+    should_use_parallel_processing,
+)
 from knowledge_system.utils.audio_utils import (
     convert_audio_file,
     ffmpeg_processor,
     get_audio_duration,
+)
+from knowledge_system.utils.batch_processing import (
+    BatchItem,
+    BatchProcessor,
+    create_batch_from_files,
+    determine_optimal_batch_strategy,
+)
+from knowledge_system.utils.streaming_processing import (
+    StreamingProcessor,
+    should_use_streaming_processing,
 )
 
 logger = get_logger(__name__)
@@ -42,6 +64,7 @@ class AudioProcessor(BaseProcessor):
         hf_token: str | None = None,
         enable_quality_retry: bool = True,
         max_retry_attempts: int = 1,
+        require_diarization: bool = False,
     ) -> None:
         self.normalize_audio = normalize_audio
         self.target_format = target_format
@@ -54,6 +77,7 @@ class AudioProcessor(BaseProcessor):
         self.hf_token = hf_token
         self.enable_quality_retry = enable_quality_retry
         self.max_retry_attempts = max_retry_attempts
+        self.require_diarization = require_diarization
 
         # Use whisper.cpp as the default transcriber
         self.transcriber = WhisperCppTranscribeProcessor(
@@ -108,8 +132,10 @@ class AudioProcessor(BaseProcessor):
             logger.error(f"Audio conversion error: {e}")
             return False
 
-    def _perform_diarization(self, audio_path: Path) -> list | None:
-        """Run speaker diarization on the audio file."""
+    def _perform_diarization(
+        self, audio_path: Path, **diarization_kwargs
+    ) -> list | None:
+        """Run speaker diarization on the audio file with optional optimization parameters."""
         try:
             from .diarization import (
                 SpeakerDiarizationProcessor,
@@ -126,8 +152,12 @@ class AudioProcessor(BaseProcessor):
                 return None
 
             logger.info("Running speaker diarization...")
-            diarizer = SpeakerDiarizationProcessor(hf_token=self.hf_token)
-            result = diarizer.process(audio_path)
+            diarizer = SpeakerDiarizationProcessor(
+                hf_token=self.hf_token,
+                device=self.device,
+                progress_callback=self.progress_callback,
+            )
+            result = diarizer.process(audio_path, **diarization_kwargs)
             if result.success:
                 logger.info(
                     f"Diarization completed with {len(result.data)} speaker segments"
@@ -139,6 +169,121 @@ class AudioProcessor(BaseProcessor):
         except Exception as e:
             logger.warning(f"Diarization failed: {e}")
             return None
+
+    def _process_with_streaming(
+        self,
+        audio_path: Path,
+        converted_audio_path: Path,
+        audio_duration: float,
+        diarization_enabled: bool,
+        optimized_kwargs: dict,
+        diarization_config: dict,
+        under_pressure: bool,
+        mitigations: dict,
+    ) -> ProcessorResult:
+        """Process very long audio files using streaming chunks."""
+        try:
+            logger.info(
+                f"🌊 Starting streaming processing for {audio_duration/60:.1f} minute file"
+            )
+
+            # Prepare processors
+            transcriber = self.transcriber
+            diarizer = None
+
+            if diarization_enabled:
+                from .diarization import (
+                    SpeakerDiarizationProcessor,
+                    is_diarization_available,
+                )
+
+                if is_diarization_available():
+                    diarizer = SpeakerDiarizationProcessor(
+                        hf_token=self.hf_token,
+                        device=self.device,
+                        progress_callback=self.progress_callback,
+                    )
+                else:
+                    logger.warning("Diarization not available for streaming processing")
+                    diarization_enabled = False
+
+            # Prepare kwargs
+            streaming_diarization_kwargs = diarization_config.copy()
+            if under_pressure:
+                streaming_diarization_kwargs.update(mitigations.get("diarization", {}))
+
+            # Use smaller chunks for very long files to manage memory
+            chunk_duration = (
+                20.0 if audio_duration > 7200 else 30.0
+            )  # 20s for 2+ hour files
+            overlap_duration = (
+                3.0 if audio_duration > 7200 else 5.0
+            )  # 3s for 2+ hour files
+
+            # Process with streaming
+            with StreamingProcessor(
+                chunk_duration=chunk_duration,
+                overlap_duration=overlap_duration,
+                max_workers=3,
+                progress_callback=self.progress_callback,
+            ) as streaming_processor:
+                results = streaming_processor.process_streaming(
+                    audio_path=converted_audio_path,
+                    total_duration=audio_duration,
+                    transcriber=transcriber,
+                    diarizer=diarizer if diarization_enabled else None,
+                    transcription_kwargs=optimized_kwargs,
+                    diarization_kwargs=streaming_diarization_kwargs,
+                )
+
+            # Convert streaming results to standard format
+            if results["success_rate"] > 0.5:  # At least 50% of chunks succeeded
+                # Merge diarization into transcription segments
+                final_data = results["transcription"]
+
+                if diarization_enabled and results["diarization"]:
+                    final_data = self._merge_diarization(
+                        results["transcription"], results["diarization"]
+                    )
+
+                # Enhanced metadata for streaming
+                model_name = getattr(transcriber, "model_name", "unknown")
+                enhanced_metadata = {
+                    "original_format": audio_path.suffix,
+                    "transcription_model": model_name,
+                    "diarization_enabled": diarization_enabled,
+                    "processing_mode": "streaming",
+                    "chunks_processed": results["chunks_processed"],
+                    "chunks_successful": results["chunks_successful"],
+                    "success_rate": results["success_rate"],
+                    "chunk_duration": chunk_duration,
+                    "overlap_duration": overlap_duration,
+                    "duration_seconds": audio_duration,
+                }
+
+                logger.info(
+                    f"✅ Streaming processing completed: {results['chunks_successful']}/{results['chunks_processed']} chunks successful"
+                )
+
+                return ProcessorResult(
+                    success=True, data=final_data, metadata=enhanced_metadata
+                )
+            else:
+                error_msg = f"Streaming processing failed: only {results['success_rate']:.1%} of chunks succeeded"
+                logger.error(error_msg)
+                return ProcessorResult(
+                    success=False,
+                    errors=[error_msg],
+                    metadata={"processing_mode": "streaming_failed"},
+                )
+
+        except Exception as e:
+            logger.error(f"Streaming processing error: {e}")
+            return ProcessorResult(
+                success=False,
+                errors=[f"Streaming processing failed: {e}"],
+                metadata={"processing_mode": "streaming_error"},
+            )
 
     def _merge_diarization(
         self, transcription_data: dict, diarization_segments: list
@@ -489,10 +634,129 @@ class AudioProcessor(BaseProcessor):
                     output_path.unlink(missing_ok=True)
                     return ProcessorResult(success=False, errors=[error_msg])
 
-                # Transcribe processed audio
-                transcription_result = self.transcriber.process(
-                    output_path, device=device or self.device, **kwargs
+                # Apply Apple Silicon optimizations if available
+                audio_duration = audio_metadata.get("duration_seconds", 3600.0)
+                optimized_kwargs = kwargs.copy()
+
+                # Get optimized settings for Apple Silicon
+                (
+                    whisper_config,
+                    diarization_config,
+                ) = optimize_transcription_for_apple_silicon(
+                    model_size=current_model,
+                    audio_duration_seconds=audio_duration,
+                    enable_diarization=kwargs.get(
+                        "diarization", self.enable_diarization
+                    ),
                 )
+
+                # Apply whisper optimizations
+                optimized_kwargs.update(whisper_config)
+
+                # Check for memory pressure and apply mitigations if needed
+                under_pressure, usage = check_memory_pressure()
+                if under_pressure:
+                    logger.warning(
+                        f"Memory pressure detected ({usage:.1%} usage), applying conservative settings"
+                    )
+                    mitigations = apply_memory_pressure_mitigations()
+                    optimized_kwargs.update(mitigations.get("whisper", {}))
+
+                # Determine processing strategy based on file characteristics
+                diarization_enabled = kwargs.get("diarization", self.enable_diarization)
+                memory_gb = psutil.virtual_memory().total / (1024**3)
+
+                # Check if we should use streaming processing for very long files
+                use_streaming = should_use_streaming_processing(
+                    audio_duration, memory_gb
+                )
+
+                if use_streaming:
+                    logger.info(
+                        f"🌊 Using streaming processing for {audio_duration/60:.1f} minute file"
+                    )
+                    return self._process_with_streaming(
+                        path,
+                        output_path,
+                        audio_duration,
+                        diarization_enabled,
+                        optimized_kwargs,
+                        diarization_config,
+                        under_pressure,
+                        mitigations,
+                    )
+
+                # For shorter files, determine if we should use parallel processing
+                use_parallel = should_use_parallel_processing(
+                    diarization_enabled,
+                    audio_duration,
+                    psutil.cpu_count(logical=False) or 4,
+                )
+
+                if use_parallel and diarization_enabled:
+                    # Run transcription and diarization in parallel
+                    logger.info(
+                        "🚀 Using parallel processing for transcription + diarization"
+                    )
+                    speedup_estimates = estimate_parallel_speedup(audio_duration)
+                    logger.info(
+                        f"Expected speedup: {speedup_estimates['speedup_factor']:.1f}x "
+                        f"(saving {speedup_estimates['time_saved']:.1f}s)"
+                    )
+
+                    with AsyncTranscriptionManager(max_workers=2) as async_manager:
+                        # Prepare diarization processor and kwargs
+                        from .diarization import (
+                            SpeakerDiarizationProcessor,
+                            is_diarization_available,
+                        )
+
+                        diarization_kwargs = diarization_config.copy()
+                        if under_pressure:
+                            diarization_kwargs.update(
+                                mitigations.get("diarization", {})
+                            )
+
+                        if is_diarization_available():
+                            diarizer = SpeakerDiarizationProcessor(
+                                hf_token=self.hf_token,
+                                device=self.device,
+                                progress_callback=self.progress_callback,
+                            )
+
+                            # Run both in parallel
+                            (
+                                transcription_result,
+                                diarization_result,
+                            ) = async_manager.process_parallel(
+                                audio_path=output_path,
+                                transcriber=self.transcriber,
+                                diarizer=diarizer,
+                                transcription_kwargs={
+                                    "device": device or self.device,
+                                    **optimized_kwargs,
+                                },
+                                diarization_kwargs=diarization_kwargs,
+                                progress_callback=self.progress_callback,
+                            )
+                        else:
+                            # Fallback to transcription only if diarization not available
+                            logger.warning(
+                                "Diarization not available, running transcription only"
+                            )
+                            transcription_result = self.transcriber.process(
+                                output_path,
+                                device=device or self.device,
+                                **optimized_kwargs,
+                            )
+                            diarization_result = None
+                else:
+                    # Sequential processing (original behavior)
+                    logger.info("Using sequential processing")
+                    transcription_result = self.transcriber.process(
+                        output_path, device=device or self.device, **optimized_kwargs
+                    )
+                    diarization_result = None
 
                 # Clean up temporary file
                 output_path.unlink(missing_ok=True)
@@ -577,17 +841,57 @@ class AudioProcessor(BaseProcessor):
                             self.transcriber, "model", None
                         ) or getattr(self.transcriber, "model_name", current_model)
 
-                        # Add diarization if enabled
-                        diarization_enabled = kwargs.get(
-                            "diarization", self.enable_diarization
-                        )
+                        # Process diarization results
                         final_data = transcription_result.data
 
                         if diarization_enabled:
-                            diarization_result = self._perform_diarization(path)
-                            if diarization_result:
+                            diarization_successful = False
+
+                            if diarization_result and diarization_result.success:
+                                # Merge parallel diarization results
                                 final_data = self._merge_diarization(
-                                    transcription_result.data, diarization_result
+                                    transcription_result.data, diarization_result.data
+                                )
+                                logger.info(
+                                    "✅ Successfully merged transcription and diarization results"
+                                )
+                                diarization_successful = True
+                            elif not use_parallel:
+                                # Fallback to sequential diarization if parallel wasn't used
+                                diarization_kwargs = diarization_config.copy()
+                                if under_pressure:
+                                    diarization_kwargs.update(
+                                        mitigations.get("diarization", {})
+                                    )
+
+                                sequential_diarization = self._perform_diarization(
+                                    output_path, **diarization_kwargs
+                                )
+                                if sequential_diarization:
+                                    final_data = self._merge_diarization(
+                                        transcription_result.data,
+                                        sequential_diarization,
+                                    )
+                                    diarization_successful = True
+
+                            # Check if diarization was required but failed
+                            if self.require_diarization and not diarization_successful:
+                                error_msg = "Diarization was required but failed - no transcript will be saved to allow re-processing"
+                                logger.error(f"STRICT DIARIZATION FAILURE: {error_msg}")
+                                self._log_transcription_failure(
+                                    path, error_msg, current_model, audio_duration
+                                )
+                                return ProcessorResult(
+                                    success=False,
+                                    errors=[error_msg],
+                                    metadata={
+                                        "original_format": path.suffix,
+                                        "diarization_required": True,
+                                        "diarization_failed": True,
+                                        "transcription_successful": True,
+                                        "retry_count": attempt,
+                                        "duration_seconds": audio_duration,
+                                    },
                                 )
 
                         # Enhanced metadata
@@ -682,12 +986,93 @@ class AudioProcessor(BaseProcessor):
     def process_batch(
         self, inputs: list[Any], dry_run: bool = False, **kwargs: Any
     ) -> list[ProcessorResult]:
-        # Extract device from kwargs
-        device = kwargs.get("device", None)
-        return [
-            self.process(input_item, dry_run=dry_run, device=device)
-            for input_item in inputs
-        ]
+        """
+        Process multiple audio files efficiently using batch optimization.
+
+        Args:
+            inputs: List of audio file paths
+            dry_run: Whether this is a dry run
+            **kwargs: Additional processing arguments
+
+        Returns:
+            List of ProcessorResult objects
+        """
+        if not inputs:
+            return []
+
+        if len(inputs) == 1:
+            # Single file - use regular processing
+            return [self.process(inputs[0], dry_run=dry_run, **kwargs)]
+
+        # Convert inputs to Path objects
+        file_paths = [Path(input_item) for input_item in inputs]
+
+        # Determine optimal batch strategy
+        memory_gb = psutil.virtual_memory().total / (1024**3)
+        cpu_cores = psutil.cpu_count(logical=False) or 4
+
+        # Estimate average file duration (rough estimate)
+        avg_duration = (
+            300.0  # Default 5 minutes, could be improved with actual estimation
+        )
+
+        strategy, max_concurrent = determine_optimal_batch_strategy(
+            file_count=len(file_paths),
+            average_file_duration=avg_duration,
+            available_cores=cpu_cores,
+            available_memory_gb=memory_gb,
+        )
+
+        logger.info(
+            f"Batch processing {len(file_paths)} files with strategy: {strategy.value}"
+        )
+
+        # Create batch items
+        batch_items = create_batch_from_files(file_paths)
+
+        # Setup batch processor
+        batch_processor = BatchProcessor(
+            max_concurrent_files=max_concurrent,
+            strategy=strategy,
+            progress_callback=self.progress_callback,
+            enable_diarization=kwargs.get("diarization", self.enable_diarization),
+        )
+
+        # Process the batch
+        batch_results = batch_processor.process_batch(
+            items=batch_items,
+            audio_processor=self,
+            transcription_kwargs=kwargs,
+            diarization_kwargs={},
+        )
+
+        # Convert batch results to ProcessorResult objects
+        processor_results = []
+        for batch_result in batch_results:
+            if batch_result.transcription_result:
+                processor_results.append(batch_result.transcription_result)
+            else:
+                # Create failed result
+                error_result = ProcessorResult(
+                    success=False,
+                    errors=[
+                        batch_result.error_message or "Unknown batch processing error"
+                    ],
+                    metadata={
+                        "batch_processing": True,
+                        "file_path": str(batch_result.file_path),
+                    },
+                    dry_run=dry_run,
+                )
+                processor_results.append(error_result)
+
+        # Log batch statistics
+        successful = sum(1 for r in processor_results if r.success)
+        logger.info(
+            f"Batch processing completed: {successful}/{len(processor_results)} files successful"
+        )
+
+        return processor_results
 
 
 def process_audio_for_transcription(

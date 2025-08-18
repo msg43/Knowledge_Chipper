@@ -6,12 +6,26 @@ Supports YAML files, environment variables, and settings persistence.
 """
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
 import yaml  # type: ignore
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def get_valid_whisper_models() -> list[str]:
+    """Extract valid Whisper model names from the configuration pattern."""
+    # Extract from the pattern in TranscriptionConfig
+    pattern = r"^(tiny|base|small|medium|large|large-v2|large-v3)$"
+    # Parse the pattern to extract model names
+    match = re.search(r"\((.*?)\)", pattern)
+    if match:
+        models_str = match.group(1)
+        return [model.strip() for model in models_str.split("|")]
+    # Fallback if pattern parsing fails
+    return ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"]
 
 
 class AppConfig(BaseModel):
@@ -333,6 +347,23 @@ class MonitoringConfig(BaseModel):
     track_resource_usage: bool = True
 
 
+class GUIFeaturesConfig(BaseModel):
+    """GUI feature toggles configuration."""
+
+    # Tab visibility settings
+    show_process_management_tab: bool = Field(
+        default=False, description="Show the Process Management tab in the GUI"
+    )
+    show_file_watcher_tab: bool = Field(
+        default=True, description="Show the File Watcher tab in the GUI"
+    )
+
+    # Other GUI feature toggles can be added here in the future
+    enable_advanced_features: bool = Field(
+        default=False, description="Enable advanced/experimental GUI features"
+    )
+
+
 class Settings(BaseSettings):
     """Main settings class with YAML support and validation."""
 
@@ -357,6 +388,7 @@ class Settings(BaseSettings):
     )
     moc: MOCConfig = Field(default_factory=MOCConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
+    gui_features: GUIFeaturesConfig = Field(default_factory=GUIFeaturesConfig)
     summarization: LLMConfig = Field(default_factory=LLMConfig)
 
     def __init__(self, config_path: str | Path | None = None, **kwargs) -> None:

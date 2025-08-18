@@ -126,7 +126,12 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         self.debounce_delay.setMaximum(300)
         self.debounce_delay.setValue(5)
         self.debounce_delay.setSuffix(" seconds")
-        self.debounce_delay.setToolTip("Wait time before processing after file change")
+        self.debounce_delay.setToolTip(
+            "Wait time in seconds before processing files after they are added or modified. "
+            "Prevents processing files while they're still being written. "
+            "Use higher values (10-30s) for large files or slow storage, "
+            "lower values (1-5s) for small files or fast storage."
+        )
         self.debounce_delay.valueChanged.connect(self._on_setting_changed)
         layout.addWidget(self.debounce_delay, 3, 1)
 

@@ -95,78 +95,93 @@ class APIKeysTab(BaseTab):
         layout.addWidget(QFrame(), 1, 0, 1, 2)  # Separator
 
         # OpenAI API Key
-        layout.addWidget(QLabel("OpenAI API Key:"), 2, 0)
         self.openai_key_edit = QLineEdit()
         self.openai_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.openai_key_edit.setPlaceholderText("sk-...")
-        self.openai_key_edit.setToolTip(
+        self._add_field_with_info(
+            layout,
+            "OpenAI API Key:",
+            self.openai_key_edit,
             "Your OpenAI API key for GPT models (required for AI summarization).\n"
             "• Get your key at: https://platform.openai.com/api-keys\n"
             "• Format: sk-proj-... or sk-...\n"
             "• Used for: Document summarization, knowledge extraction, and analysis\n"
-            "• Cost: Pay-per-token usage based on model and content length"
+            "• Cost: Pay-per-token usage based on model and content length",
+            2,
+            0,
         )
-        layout.addWidget(self.openai_key_edit, 2, 1)
 
         # Anthropic API Key
-        layout.addWidget(QLabel("Anthropic API Key:"), 3, 0)
         self.anthropic_key_edit = QLineEdit()
         self.anthropic_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.anthropic_key_edit.setPlaceholderText("sk-ant-api03-...")
-        self.anthropic_key_edit.setToolTip(
+        self._add_field_with_info(
+            layout,
+            "Anthropic API Key:",
+            self.anthropic_key_edit,
             "Your Anthropic API key for Claude models (alternative to OpenAI).\n"
             "• Get your key at: https://console.anthropic.com/\n"
             "• Format: sk-ant-api03-...\n"
             "• Used for: Document analysis with Claude's excellent reasoning capabilities\n"
-            "• Cost: Competitive pricing with different token limits per model"
+            "• Cost: Competitive pricing with different token limits per model",
+            3,
+            0,
         )
-        layout.addWidget(self.anthropic_key_edit, 3, 1)
 
         # HuggingFace Token
-        layout.addWidget(QLabel("HuggingFace Token:"), 4, 0)
         self.huggingface_token_edit = QLineEdit()
         self.huggingface_token_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.huggingface_token_edit.setPlaceholderText("hf_...")
-        self.huggingface_token_edit.setToolTip(
+        self._add_field_with_info(
+            layout,
+            "HuggingFace Token:",
+            self.huggingface_token_edit,
             "Your HuggingFace access token (optional, for speaker diarization).\n"
             "• Get your token at: https://huggingface.co/settings/tokens\n"
             "• Format: hf_...\n"
             "• Used for: Speaker diarization (identifying different speakers in audio)\n"
             "• Cost: Free for most models, some premium models may require subscription\n"
-            "• Note: Only needed if you want to identify different speakers in transcriptions"
+            "• Note: Only needed if you want to identify different speakers in transcriptions",
+            4,
+            0,
         )
-        layout.addWidget(self.huggingface_token_edit, 4, 1)
 
         # WebShare Proxy Credentials
         layout.addWidget(QLabel("🌐 WebShare Proxy Credentials"), 5, 0, 1, 2)
 
         # WebShare Username
-        layout.addWidget(QLabel("WebShare Username:"), 6, 0)
         self.webshare_username_edit = QLineEdit()
         self.webshare_username_edit.setPlaceholderText("username")
-        self.webshare_username_edit.setToolTip(
+        self._add_field_with_info(
+            layout,
+            "WebShare Username:",
+            self.webshare_username_edit,
             "Your WebShare proxy service username (required for YouTube access).\n"
             "• Sign up at: https://www.webshare.io/\n"
             "• Used for: Downloading YouTube videos and playlists\n"
             "• Why needed: Helps avoid rate limiting and access restrictions\n"
             "• Cost: Various plans available, free tier available for testing\n"
-            "• Note: Only required if you plan to process YouTube content"
+            "• Note: Only required if you plan to process YouTube content",
+            6,
+            0,
         )
-        layout.addWidget(self.webshare_username_edit, 6, 1)
 
         # WebShare Password
-        layout.addWidget(QLabel("WebShare Password:"), 7, 0)
         self.webshare_password_edit = QLineEdit()
         self.webshare_password_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.webshare_password_edit.setPlaceholderText("password")
-        self.webshare_password_edit.setToolTip(
+        self._add_field_with_info(
+            layout,
+            "WebShare Password:",
+            self.webshare_password_edit,
             "Your WebShare proxy service password.\n"
             "• Use the password from your WebShare account\n"
             "• Keep this secure - it provides access to your proxy quota\n"
             "• Required along with username for YouTube video processing\n"
-            "• Tip: Use a dedicated password for API services"
+            "• Tip: Use a dedicated password for API services",
+            7,
+            0,
         )
-        layout.addWidget(self.webshare_password_edit, 7, 1)
 
         # Load existing values and set up change handlers
         self._load_existing_values()
@@ -238,7 +253,11 @@ class APIKeysTab(BaseTab):
         ffmpeg_btn = QPushButton("📥 Install/Update FFmpeg")
         ffmpeg_btn.clicked.connect(self._install_ffmpeg)
         ffmpeg_btn.setToolTip(
-            "Install a user-space FFmpeg (no admin required). If FFmpeg is already on PATH, that will continue to be used unless you choose this managed binary."
+            "Install FFmpeg for video/audio processing (no admin privileges required). "
+            "FFmpeg is needed for: YouTube video downloads, audio format conversions, "
+            "and video file transcription. If FFmpeg is already installed system-wide, "
+            "that version will be used unless you install this managed version. "
+            "Safe to install - creates a user-space binary that doesn't affect your system."
         )
         update_section.addWidget(ffmpeg_btn)
 

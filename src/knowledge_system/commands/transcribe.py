@@ -255,7 +255,14 @@ def format_transcript_content(
                     # Only add the segment if there's still text after bracket removal
                     if text.strip():
                         if speaker:
-                            content += f"**Speaker {speaker}** "
+                            # Convert speaker ID to human-readable format
+                            speaker_num = speaker.replace("SPEAKER_", "").zfill(2)
+                            try:
+                                speaker_number = int(speaker_num) + 1
+                                content += f"**Speaker {speaker_number}** "
+                            except (ValueError, AttributeError):
+                                # Fallback if speaker format is unexpected
+                                content += f"**{speaker}** "
                         if timestamps:
                             start_time = format_timestamp(segment.get("start", 0))
                             end_time = format_timestamp(segment.get("end", 0))
@@ -576,6 +583,9 @@ def transcribe(
                     download_thumbnails=download_thumbnails,
                     output_dir=output,
                     include_timestamps=timestamps,
+                    enable_diarization=speaker_labels,
+                    require_diarization=speaker_labels,
+                    overwrite=overwrite,
                 )
 
                 if result["success"]:
@@ -712,6 +722,9 @@ def transcribe(
                 download_thumbnails=download_thumbnails,
                 output_dir=output,
                 include_timestamps=timestamps,
+                enable_diarization=speaker_labels,
+                require_diarization=speaker_labels,
+                overwrite=overwrite,
             )
 
             if result["success"]:
@@ -803,7 +816,11 @@ def transcribe(
 
             # Create audio processor
             processor = AudioProcessor(
-                device=device, model=model, use_whisper_cpp=use_whisper_cpp
+                device=device,
+                model=model,
+                use_whisper_cpp=use_whisper_cpp,
+                enable_diarization=speaker_labels,
+                require_diarization=speaker_labels,  # Strict mode: if diarization enabled, require it
             )
 
             # Process the input

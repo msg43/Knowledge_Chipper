@@ -228,12 +228,15 @@ class EnhancedTranscriptionWorker(QThread):
         """Create an AudioProcessor with current settings."""
         from ...processors.audio_processor import AudioProcessor
 
+        enable_diarization = self.gui_settings.get("kwargs", {}).get(
+            "diarization", False
+        )
+
         return AudioProcessor(
             model=self.gui_settings["model"],
             device=self.gui_settings["device"],
-            enable_diarization=self.gui_settings.get("kwargs", {}).get(
-                "diarization", False
-            ),
+            enable_diarization=enable_diarization,
+            require_diarization=enable_diarization,  # Strict mode: if diarization enabled, require it
             **{
                 k: v
                 for k, v in self.gui_settings.items()

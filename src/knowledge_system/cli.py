@@ -168,7 +168,7 @@ def models() -> None:
 def models_list(provider: str) -> None:
     """List available models for a provider (dynamic + overrides)."""
     try:
-        models = get_provider_models(provider)
+        models = get_provider_models(provider, force_refresh=False)
         console.print(f"[bold]Models for {provider}:[/bold]")
         for m in models:
             console.print(f"- {m}")
@@ -220,7 +220,7 @@ def models_refresh(provider: str | None) -> None:
     try:
         providers = [provider] if provider else ["openai", "anthropic"]
         for p in providers:
-            models = get_provider_models(p)
+            models = get_provider_models(p, force_refresh=True)
             console.print(f"[green]✓ Refreshed {p} models:[/green] {len(models)} found")
     except Exception as e:
         console.print(f"[red]Failed to refresh models:[/red] {e}")

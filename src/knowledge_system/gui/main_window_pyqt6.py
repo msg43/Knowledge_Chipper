@@ -176,11 +176,16 @@ class MainWindow(QMainWindow):
         summarization_tab = SummarizationTab(self)
         self.tabs.addTab(summarization_tab, "Summarization")
 
-        process_tab = ProcessTab(self)
-        self.tabs.addTab(process_tab, "Process Management")
+        # Only add Process Management tab if enabled in settings
+        settings = get_settings()
+        if settings.gui_features.show_process_management_tab:
+            process_tab = ProcessTab(self)
+            self.tabs.addTab(process_tab, "Process Management")
 
-        watcher_tab = WatcherTab(self)
-        self.tabs.addTab(watcher_tab, "File Watcher")
+        # Only add File Watcher tab if enabled in settings
+        if settings.gui_features.show_file_watcher_tab:
+            watcher_tab = WatcherTab(self)
+            self.tabs.addTab(watcher_tab, "File Watcher")
 
         # Settings tab (far right)
         self.api_keys_tab = APIKeysTab(self)
@@ -429,20 +434,56 @@ def launch_gui() -> None:
 
     try:
         # Import PyQt6 first to check availability
+        import os
+
+        from PyQt6.QtCore import QLoggingCategory
         from PyQt6.QtGui import QIcon  # noqa: F401
         from PyQt6.QtWidgets import QApplication
+
+        # Suppress Qt CSS warnings about unknown properties like "transform"
+        # Qt's CSS parser doesn't support all CSS3 properties and generates warnings
+        QLoggingCategory.setFilterRules("qt.qss.debug=false")
+
+        # For macOS: Set environment variables to avoid Python rocket ship icon
+        if sys.platform == "darwin":
+            os.environ["PYQT_MACOS_BUNDLE_IDENTIFIER"] = "com.knowledgechipper.app"
+            # Try to use app bundle path if available
+            bundle_path = os.environ.get("RESOURCEPATH")
+            if not bundle_path and hasattr(sys, "_MEIPASS"):
+                bundle_path = sys._MEIPASS
 
         # Create the QApplication
         app = QApplication(sys.argv)
 
+        # For macOS: Additional setup to avoid rocket ship icon
+        if sys.platform == "darwin":
+            try:
+                # Set the activation policy to regular application
+                import objc
+                from AppKit import NSApplication, NSApplicationActivationPolicyRegular
+
+                ns_app = NSApplication.sharedApplication()
+                ns_app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
+            except ImportError:
+                # AppKit not available, use alternative approach
+                # Set process name to help with icon association
+                try:
+                    import ctypes
+                    from ctypes import c_char_p
+
+                    libc = ctypes.CDLL("libc.dylib")
+                    libc.setproctitle(c_char_p(b"Knowledge Chipper"))
+                except:
+                    pass
+
         # Set application properties
         app.setApplicationName("Knowledge_Chipper")
-        app.setApplicationDisplayName("Knowledge_Chipper")
+        app.setApplicationDisplayName("Knowledge Chipper")
         app.setApplicationVersion("1.0")
         app.setOrganizationName("Knowledge_Chipper")
         app.setOrganizationDomain("knowledge-chipper.local")
 
-        # Set custom application icon
+        # Set custom application icon (both window and app icon)
         app_icon = get_app_icon()
         if app_icon:
             try:

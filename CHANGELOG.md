@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2025-08-18
+
 ### Added
 - Intelligent quality detection with automatic retry
 - Duration-based transcription validation
@@ -29,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GUI layout issues in transcription tab
 - Process control and cancellation reliability
 
-## [1.0.0] - 2024-07-21
+## [0.0.9] - 2024-07-21
 
 ### Added
 - Initial release of Knowledge System

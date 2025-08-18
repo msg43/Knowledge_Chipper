@@ -21,20 +21,17 @@ _cache_ttl = 300  # 5 minutes
 # Model context window definitions
 MODEL_CONTEXT_WINDOWS = {
     # OpenAI models - specific versions
-    "gpt-5": 200000,
     "gpt-3.5-turbo-0125": 16385,
     "gpt-3.5-turbo-1106": 16385,
     "gpt-4-0613": 8192,
-    "gpt-4-1106-preview": 128000,
+    "gpt-4-0125-preview": 128000,  # Current GPT-4 preview model
     "gpt-4-turbo-2024-04-09": 128000,
     "gpt-4o-2024-05-13": 128000,
     "gpt-4o-2024-08-06": 128000,
     "gpt-4o-mini-2024-07-18": 128000,
     # Legacy OpenAI model names for backwards compatibility
     "gpt-3.5-turbo": 16385,
-    "gpt-3.5-turbo-16k": 16385,
     "gpt-4": 8192,
-    "gpt-4-32k": 32768,
     "gpt-4-turbo": 128000,
     "gpt-4-turbo-preview": 128000,
     "gpt-4o": 128000,

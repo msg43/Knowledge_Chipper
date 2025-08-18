@@ -26,6 +26,7 @@ from ...logger import get_logger
 from ...utils.cancellation import CancellationToken
 from ..components.base_tab import BaseTab
 from ..core.settings_manager import get_gui_settings_manager
+from ..workers.youtube_batch_worker import YouTubeBatchWorker
 
 logger = get_logger(__name__)
 
@@ -255,14 +256,26 @@ class YouTubeExtractionWorker(QThread):
                     else:
                         logger.warning("⚠️ No output_dir parameter provided!")
 
-                    # Pass cancellation token to processor
+                    # Create progress callback to forward diarization progress to GUI
+                    def progress_callback(message: str, percent: int = 0):
+                        """Forward diarization progress messages to GUI console."""
+                        # Emit progress update with detailed message
+                        self.progress_updated.emit(
+                            i,
+                            total_urls,
+                            f"🎙️ {global_progress} ({percent}%) {message}",
+                        )
+
+                    # Pass cancellation token and progress callback to processor
                     result = processor.process(
                         url,
                         output_dir=self.config.get("output_dir"),
                         output_format=self.config.get("format", "md"),
                         include_timestamps=self.config.get("timestamps", True),
                         overwrite=self.config.get("overwrite", False),
+                        enable_diarization=self.config.get("enable_diarization", False),
                         cancellation_token=self.cancellation_token,
+                        progress_callback=progress_callback,
                     )
 
                     # CRITICAL DEBUG: Log result summary
@@ -717,20 +730,23 @@ class YouTubeTab(BaseTab):
         layout = QGridLayout()
 
         # Output directory
-        layout.addWidget(QLabel("Output Directory:"), 0, 0)
         self.output_dir_input = QLineEdit()
         self.output_dir_input.setPlaceholderText(
             "Click Browse to select output directory (required)"
         )
         # Remove default setting - require user selection
         self.output_dir_input.textChanged.connect(self._on_setting_changed)
-        self.output_dir_input.setToolTip(
+        self._add_field_with_info(
+            layout,
+            "Output Directory:",
+            self.output_dir_input,
             "Directory where transcript files and thumbnails will be saved.\n"
             "• Click Browse to select a directory\n"
             "• Ensure it has write permissions\n"
-            "• Transcripts will be in .md format, thumbnails in a subdirectory"
+            "• Transcripts will be in .md format, thumbnails in a subdirectory",
+            0,
+            0,
         )
-        layout.addWidget(self.output_dir_input, 0, 1)
 
         browse_output_btn = QPushButton("Browse")
         browse_output_btn.clicked.connect(self._select_output_directory)
@@ -741,29 +757,21 @@ class YouTubeTab(BaseTab):
         layout.addWidget(browse_output_btn, 0, 2)
 
         # Format selection
-        layout.addWidget(QLabel("Output Format:"), 1, 0)
         self.format_combo = QComboBox()
         self.format_combo.addItems(["md", "txt", "json"])
         self.format_combo.setCurrentText("md")
         self.format_combo.currentTextChanged.connect(self._on_setting_changed)
-        self.format_combo.setToolTip(
+        self._add_field_with_info(
+            layout,
+            "Output Format:",
+            self.format_combo,
             "Select the output format for the transcript.\n"
             "• md: Markdown format (default)\n"
             "• txt: Plain text\n"
-            "• json: JSON format (for advanced processing)"
+            "• json: JSON format (for advanced processing)",
+            1,
+            0,
         )
-        layout.addWidget(self.format_combo, 1, 1)
-
-        # Options
-        self.timestamps_checkbox = QCheckBox("Include timestamps")
-        self.timestamps_checkbox.setChecked(True)
-        self.timestamps_checkbox.toggled.connect(self._on_setting_changed)
-        self.timestamps_checkbox.setToolTip(
-            "Include timestamps in the transcript.\n"
-            "• Timestamps are useful for navigation and searching\n"
-            "• Only available for YouTube videos with timestamps"
-        )
-        layout.addWidget(self.timestamps_checkbox, 2, 0, 1, 2)
 
         self.overwrite_checkbox = QCheckBox("Overwrite existing transcripts")
         self.overwrite_checkbox.setChecked(False)
@@ -773,7 +781,49 @@ class YouTubeTab(BaseTab):
             "• If disabled, new transcript files will be named with a timestamp\n"
             "• This prevents accidental overwriting of existing work"
         )
-        layout.addWidget(self.overwrite_checkbox, 2, 2)
+        layout.addWidget(self.overwrite_checkbox, 2, 0, 1, 2)
+
+        self.diarization_checkbox = QCheckBox("Enable speaker diarization")
+        self.diarization_checkbox.setChecked(False)
+        self.diarization_checkbox.toggled.connect(self._on_setting_changed)
+        self.diarization_checkbox.setToolTip(
+            "<b>Speaker Diarization</b> - AI-powered speaker identification<br/><br/>"
+            "<b>🎯 What it does:</b><br/>"
+            "• Identifies and labels different speakers in audio/video content<br/>"
+            "• Creates transcripts with speaker labels (Speaker 1, Speaker 2, etc.)<br/>"
+            "• Uses advanced AI to distinguish voices, accents, and speaking patterns<br/><br/>"
+            "<b>📝 Example Output:</b><br/>"
+            "<i>Speaker 1: Welcome to today's podcast.<br/>"
+            "Speaker 2: Thanks for having me on the show.<br/>"
+            "Speaker 1: Let's dive into the topic...</i><br/><br/>"
+            "<b>✅ Perfect for:</b><br/>"
+            "• Podcasts, interviews, debates, panel discussions<br/>"
+            "• Conference calls, meetings, webinars<br/>"
+            "• Multi-person conversations or presentations<br/><br/>"
+            "<b>❌ Skip for:</b><br/>"
+            "• Single-speaker content (lectures, monologues, tutorials)<br/>"
+            "• Music videos or content with background music<br/><br/>"
+            "<b>⚙️ Requirements:</b><br/>"
+            "• HuggingFace token (free - configure in API Keys tab)<br/>"
+            "• Additional processing time (2-3x longer)<br/>"
+            "• Automatically falls back to regular transcript if it fails<br/><br/>"
+            "<b>💡 Pro Tip:</b> Try it on a short video first to see if it adds value for your content type!"
+        )
+        layout.addWidget(self.diarization_checkbox, 2, 2)
+
+        # NEW: Download-all mode checkbox
+        self.download_all_checkbox = QCheckBox("Download all audio files first")
+        self.download_all_checkbox.setChecked(False)
+        self.download_all_checkbox.toggled.connect(self._on_setting_changed)
+        self.download_all_checkbox.setToolTip(
+            "Download all audio files before processing (for slow internet connections).\n"
+            "• Phase 1: Downloads all audio files (can disconnect internet after)\n"
+            "• Phase 2: Processes all files offline with diarization\n"
+            "• Best for: Slow internet, large disk space, overnight processing\n"
+            "• System automatically checks if you have enough disk space\n"
+            "• Falls back to normal mode if insufficient space"
+        )
+        layout.addWidget(self.download_all_checkbox, 3, 0, 1, 3)
 
         group.setLayout(layout)
         return group
@@ -941,13 +991,157 @@ class YouTubeTab(BaseTab):
         """Get the text for the start button."""
         return "🎬 Extract Transcripts"
 
+    def _check_diarization_dependencies(self) -> None:
+        """Check and report status of diarization dependencies asynchronously."""
+        # Start with immediate feedback
+        self.append_log("🔍 Checking diarization dependencies...")
+
+        # Use QThread for heavy dependency checking
+        from PyQt6.QtCore import QThread, pyqtSignal
+
+        class DiarizationCheckWorker(QThread):
+            check_completed = pyqtSignal(bool, str, dict)  # success, message, gpu_info
+
+            def run(self):
+                try:
+                    # Import and check dependencies (potentially slow)
+                    from ...processors.diarization import (
+                        _check_diarization_dependencies,
+                    )
+
+                    deps_available = _check_diarization_dependencies()
+
+                    if deps_available:
+                        # Check GPU availability (potentially slow)
+                        gpu_info = {"has_torch": False, "backend": "cpu"}
+                        try:
+                            import torch
+
+                            gpu_info["has_torch"] = True
+                            if torch.backends.mps.is_available():
+                                gpu_info["backend"] = "mps"
+                            elif torch.cuda.is_available():
+                                gpu_info["backend"] = "cuda"
+                            else:
+                                gpu_info["backend"] = "cpu"
+                        except ImportError:
+                            gpu_info["has_torch"] = False
+                            gpu_info["backend"] = "cpu"
+
+                        self.check_completed.emit(
+                            True, "Dependencies available", gpu_info
+                        )
+                    else:
+                        self.check_completed.emit(False, "Dependencies missing", {})
+
+                except Exception as e:
+                    self.check_completed.emit(False, f"Error: {e}", {})
+
+        # Create and start worker
+        self._diarization_worker = DiarizationCheckWorker()
+        self._diarization_worker.check_completed.connect(
+            self._handle_diarization_check_result
+        )
+        self._diarization_worker.start()
+
+    def _handle_diarization_check_result(
+        self, success: bool, message: str, gpu_info: dict
+    ) -> None:
+        """Handle the result of async diarization dependency check."""
+        try:
+            if success:
+                self.append_log("✅ Diarization dependencies (pyannote.audio) available")
+
+                # Check for HuggingFace token
+                hf_token = getattr(self.settings.api_keys, "huggingface_token", None)
+                if hf_token:
+                    self.append_log(
+                        "✅ HuggingFace token found - can use premium models"
+                    )
+                else:
+                    self.append_log("ℹ️ No HuggingFace token - using default models")
+
+                # Report GPU status
+                if gpu_info.get("has_torch", False):
+                    backend = gpu_info.get("backend", "cpu")
+                    if backend == "mps":
+                        self.append_log(
+                            "✅ Apple Silicon GPU (MPS) available for diarization"
+                        )
+                    elif backend == "cuda":
+                        self.append_log("✅ NVIDIA GPU (CUDA) available for diarization")
+                    else:
+                        self.append_log(
+                            "ℹ️ Using CPU for diarization (slower but functional)"
+                        )
+                else:
+                    self.append_log(
+                        "ℹ️ Using CPU for diarization (PyTorch not available)"
+                    )
+            else:
+                if "Dependencies missing" in message:
+                    self.append_log("❌ Diarization dependencies missing!")
+                    self.append_log("   Install with: pip install -e '.[diarization]'")
+                    self.show_warning(
+                        "Diarization Dependencies Missing",
+                        "Speaker diarization requires additional dependencies.\n\n"
+                        "Please install with:\n"
+                        "pip install -e '.[diarization]'\n\n"
+                        "Or disable diarization to continue.",
+                    )
+                else:
+                    self.append_log(
+                        f"⚠️ Error checking diarization dependencies: {message}"
+                    )
+                    self.append_log(
+                        "   Processing will continue but diarization may fail"
+                    )
+
+        finally:
+            # Clean up worker
+            if hasattr(self, "_diarization_worker"):
+                self._diarization_worker.deleteLater()
+                del self._diarization_worker
+
+            # Continue processing if we have pending parameters
+            if hasattr(self, "_pending_urls"):
+                urls = self._pending_urls
+                output_dir = self._pending_output_dir
+                enable_diarization = self._pending_enable_diarization
+
+                # Clean up pending parameters
+                del self._pending_urls
+                del self._pending_output_dir
+                del self._pending_enable_diarization
+
+                # Continue with processing
+                self._finalize_and_start_processing(
+                    urls, output_dir, enable_diarization
+                )
+
     def _start_processing(self) -> None:
-        """Start YouTube transcript extraction."""
+        """Start YouTube transcript extraction using intelligent processing mode selection."""
+        # Clear output and show immediate initialization feedback
+        self.output_text.clear()
+        self.append_log("🔄 Initializing YouTube processing...")
+
+        # Disable start button immediately to prevent multiple clicks
+        self.start_btn.setEnabled(False)
+        self.start_btn.setText("Initializing...")
+
+        # Process UI events to show immediate feedback
+        from PyQt6.QtWidgets import QApplication
+
+        QApplication.processEvents()
+
         # Check WebShare credentials from settings
+        self.append_log("🔐 Checking WebShare proxy credentials...")
         webshare_username = self.settings.api_keys.webshare_username
         webshare_password = self.settings.api_keys.webshare_password
 
         if not webshare_username or not webshare_password:
+            self.append_log("❌ WebShare credentials missing!")
+            self._reset_button_state()
             self.show_warning(
                 "Missing Credentials",
                 "WebShare proxy credentials are required for YouTube processing.\n\n"
@@ -955,105 +1149,295 @@ class YouTubeTab(BaseTab):
             )
             return
 
-        # Get URLs with early logging
+        self.append_log(f"✅ WebShare credentials found for user: {webshare_username}")
+
+        # Use async URL collection to prevent GUI blocking
+        self.append_log("📋 Collecting URLs from input...")
         logger.info("Starting YouTube extraction process - collecting URLs...")
-        logger.info(f"URL radio checked: {self.url_radio.isChecked()}")
-        logger.info(f"File radio checked: {self.file_radio.isChecked()}")
-        if self.file_radio.isChecked():
-            logger.info(f"Selected file: {self.file_input.text().strip()}")
 
-        urls = self._collect_urls()
-        logger.info(f"Collected {len(urls)} URLs for processing")
+        # Collect URLs asynchronously
+        from PyQt6.QtCore import QTimer
 
-        # DEBUGGING: Log first few URLs to verify they're valid
-        if urls:
-            logger.info(f"First few URLs: {urls[:3]}")
-            # Validate URLs are properly formatted
-            invalid_urls = [
-                url
-                for url in urls
-                if not (
-                    url.startswith("http")
-                    and ("youtube.com" in url or "youtu.be" in url)
+        QTimer.singleShot(0, self._async_collect_and_start)
+
+    def _async_collect_and_start(self) -> None:
+        """Asynchronously collect URLs and start processing to prevent GUI blocking."""
+        try:
+            urls = self._collect_urls()
+            logger.info(f"Collected {len(urls)} URLs for processing")
+
+            if not urls:
+                self.append_log("❌ No URLs found in input!")
+                logger.info("No URLs found - showing warning to user")
+                self._reset_button_state()
+                self.show_warning(
+                    "No URLs",
+                    "Please enter YouTube URLs or select a file containing URLs.",
                 )
-            ]
-            if invalid_urls:
-                logger.warning(
-                    f"Found {len(invalid_urls)} invalid URLs: {invalid_urls[:3]}"
-                )
+                return
 
-        if not urls:
-            logger.info("No URLs found - showing warning to user")
-            self.show_warning(
-                "No URLs", "Please enter YouTube URLs or select a file containing URLs."
+            self.append_log(f"✅ Found {len(urls)} URLs to process")
+
+            # Validate inputs
+            self.append_log("🔍 Validating inputs...")
+            if not self.validate_inputs():
+                self.append_log("❌ Input validation failed!")
+                logger.info("Input validation failed - aborting processing")
+                self._reset_button_state()
+                return
+            self.append_log("✅ Input validation passed")
+
+            # Continue with the rest of processing
+            self._continue_processing_with_urls(urls)
+
+        except Exception as e:
+            logger.error(f"Error in async URL collection: {e}")
+            self.append_log(f"❌ Error collecting URLs: {e}")
+            self._reset_button_state()
+
+    def _continue_processing_with_urls(self, urls: list[str]) -> None:
+        """Continue processing after URLs have been collected."""
+        # Schedule validation and setup asynchronously to prevent blocking
+        from PyQt6.QtCore import QTimer
+
+        QTimer.singleShot(0, lambda: self._async_validate_and_start(urls))
+
+    def _async_validate_and_start(self, urls: list[str]) -> None:
+        """Asynchronously validate inputs and start processing."""
+        try:
+            # Validate inputs asynchronously to prevent filesystem blocking
+            self.append_log("🔍 Validating inputs...")
+            from PyQt6.QtCore import QTimer
+
+            QTimer.singleShot(0, lambda: self._async_validate_inputs_and_continue(urls))
+        except Exception as e:
+            logger.error(f"Error starting async validation: {e}")
+            self.append_log(f"❌ Validation error: {e}")
+            self._reset_button_state()
+
+    def _async_validate_inputs_and_continue(self, urls: list[str]) -> None:
+        """Perform validation checks and continue processing."""
+        try:
+            # Get output directory first (non-blocking)
+            self.append_log("📁 Setting up output directory...")
+            output_dir = self.output_dir_input.text().strip()
+            if not output_dir:
+                output_dir = str(Path.cwd())
+
+            # Store URLs for later use
+            self._pending_urls = urls
+            self._pending_output_dir = output_dir
+
+            # Use async directory validation to prevent filesystem blocking
+            self.append_log("🔍 Validating output directory...")
+            self.async_validate_directory(
+                output_dir,
+                self._handle_directory_validation_result,
+                check_writable=True,  # YouTube tab needs writable directory
+                check_parent=False,
             )
-            return
 
-        # Additional safety check to prevent empty worker creation
-        if len(urls) == 0:
-            logger.warning("URL list is empty - aborting processing")
-            return
+        except Exception as e:
+            logger.error(f"Error in async validation: {e}")
+            self.append_log(f"❌ Validation error: {e}")
+            self._reset_button_state()
 
-        # Validate inputs
-        if not self.validate_inputs():
-            logger.info("Input validation failed - aborting processing")
-            return
+    def _handle_directory_validation_result(
+        self, valid: bool, path: str, error_message: str
+    ) -> None:
+        """Handle the result of async directory validation."""
+        try:
+            if not valid:
+                self.append_log(f"❌ Directory validation failed: {error_message}")
+                self.show_error("Invalid Output Directory", error_message)
+                self._reset_button_state()
+                return
 
-        # Get output directory
-        output_dir = self.output_dir_input.text().strip()
-        if not output_dir:
-            output_dir = str(Path.cwd())
+            self.append_log(f"✅ Output directory validated: {path}")
 
-        logger.info(f"Starting extraction of {len(urls)} YouTube URLs to {output_dir}")
+            # Continue with other validations (non-filesystem ones)
+            if not self._validate_non_filesystem_inputs():
+                return
 
-        # Clear output and start processing
-        self.output_text.clear()
-        self.append_log(f"Starting extraction of {len(urls)} YouTube URLs...")
-        self.append_log(f"Using WebShare proxy: {webshare_username}")
-        self.append_log(f"Output directory: {output_dir}")
+            self.append_log("✅ All input validation passed")
+
+            # Retrieve stored parameters
+            urls = self._pending_urls
+            output_dir = self._pending_output_dir
+
+            # Clean up stored parameters
+            del self._pending_urls
+            del self._pending_output_dir
+
+            logger.info(
+                f"Starting extraction of {len(urls)} YouTube URLs to {output_dir}"
+            )
+
+            # Schedule diarization check asynchronously if needed
+            enable_diarization = self.diarization_checkbox.isChecked()
+            if enable_diarization:
+                self.append_log("🎙️ Diarization enabled - checking dependencies...")
+                # Process UI events before running potentially slow diarization check
+                from PyQt6.QtWidgets import QApplication
+
+                QApplication.processEvents()
+
+                # Check diarization dependencies asynchronously
+                from PyQt6.QtCore import QTimer
+
+                QTimer.singleShot(
+                    0,
+                    lambda: self._async_check_diarization_and_start(
+                        urls, output_dir, enable_diarization
+                    ),
+                )
+            else:
+                # No diarization, proceed directly
+                self._finalize_and_start_processing(
+                    urls, output_dir, enable_diarization
+                )
+
+        except Exception as e:
+            logger.error(f"Error handling directory validation: {e}")
+            self.append_log(f"❌ Validation error: {e}")
+            self._reset_button_state()
+
+    def _validate_non_filesystem_inputs(self) -> bool:
+        """Validate inputs that don't require filesystem access."""
+        # Check WebShare proxy credentials (required for YouTube processing)
+        webshare_username = getattr(self.settings.api_keys, "webshare_username", None)
+        webshare_password = getattr(self.settings.api_keys, "webshare_password", None)
+
+        if not webshare_username or not webshare_password:
+            self.append_log("❌ WebShare credentials missing!")
+            self.show_error(
+                "Missing WebShare Credentials",
+                "YouTube processing requires WebShare rotating residential proxy credentials.\n\n"
+                "Please configure your WebShare Username and Password in the Settings tab.\n\n"
+                "This system uses only WebShare proxies for YouTube access - no other methods are supported.\n\n"
+                "Sign up at: https://www.webshare.io/",
+            )
+            self._reset_button_state()
+            return False
+
+        # Check speaker diarization requirements if enabled
+        if self.diarization_checkbox.isChecked():
+            hf_token = getattr(self.settings.api_keys, "huggingface_token", None)
+            if not hf_token:
+                self.append_log("⚠️ Warning: HuggingFace token missing for diarization")
+                self.append_log(
+                    "   Diarization will use default models (may be slower)"
+                )
+
+        return True
+
+    def _async_check_diarization_and_start(
+        self, urls: list[str], output_dir: str, enable_diarization: bool
+    ) -> None:
+        """Asynchronously check diarization dependencies and start processing."""
+        try:
+            # Store the parameters for later use
+            self._pending_urls = urls
+            self._pending_output_dir = output_dir
+            self._pending_enable_diarization = enable_diarization
+
+            # Start async diarization check - it will call _continue_after_diarization_check when done
+            self._check_diarization_dependencies()
+
+        except Exception as e:
+            logger.error(f"Error in diarization check: {e}")
+            self.append_log(f"❌ Diarization check error: {e}")
+            self._reset_button_state()
+
+    def _finalize_and_start_processing(
+        self, urls: list[str], output_dir: str, enable_diarization: bool
+    ) -> None:
+        """Finalize configuration and start the processing worker."""
+        self.append_log(f"🚀 Ready to process {len(urls)} URLs")
         self.append_log("-" * 50)
-
-        # Disable start button
-        self.start_btn.setEnabled(False)
-        self.start_btn.setText("Processing...")
-        self.stop_btn.setEnabled(True)  # Enable stop button
 
         # Configure extraction
         config = {
             "output_dir": output_dir,
             "format": self.format_combo.currentText(),
-            "timestamps": self.timestamps_checkbox.isChecked(),
+            "timestamps": False,  # Do not include timestamps for YouTube transcripts
             "overwrite": self.overwrite_checkbox.isChecked(),
+            "enable_diarization": enable_diarization,
+            "download_all_mode": self.download_all_checkbox.isChecked(),
         }
 
-        # CRITICAL DEBUG: Log the exact config being passed to worker
-        logger.info("🔧 Extraction config created:")
-        logger.info(
-            f"   output_dir: {repr(config['output_dir'])} (type: {type(config['output_dir'])})"
-        )
-        logger.info(f"   format: {config['format']}")
-        logger.info(f"   timestamps: {config['timestamps']}")
-        logger.info(f"   overwrite: {config['overwrite']}")
-        logger.info(
-            f"   Output directory exists: {Path(config['output_dir']).exists() if config['output_dir'] else False}"
-        )
-        logger.info(
-            f"   Output directory is writable: {os.access(config['output_dir'], os.W_OK) if config['output_dir'] and Path(config['output_dir']).exists() else 'Unknown'}"
-        )
+        # Choose worker based on processing requirements
+        use_batch_worker = (
+            config["enable_diarization"]
+            and len(urls) > 1  # Use batch worker for diarization with multiple URLs
+        ) or len(
+            urls
+        ) > 10  # Or for large batches even without diarization
 
-        # Final safety check before creating worker
-        if not urls or len(urls) == 0:
-            logger.error(
-                "CRITICAL: Attempting to create worker with empty URL list - aborting!"
+        if use_batch_worker:
+            self.append_log(
+                "📦 Using intelligent batch processing with resource management"
             )
-            self.show_error("Internal Error", "No URLs available for processing")
-            self._reset_ui_state()
-            return
+            if config["download_all_mode"]:
+                self.append_log(
+                    "📥 Download-all mode: Will download all audio files first"
+                )
+            else:
+                self.append_log("🔄 Conveyor belt mode: Processing in optimized batches")
+            self.append_log("-" * 50)
+            self._start_batch_processing(urls, config)
+        else:
+            self.append_log("🔄 Using sequential processing")
+            self.append_log("-" * 50)
+            self._start_sequential_processing(urls, config)
 
-        # Start extraction worker
-        logger.info(f"Creating YouTube extraction worker with {len(urls)} URLs")
-        logger.info(f"Worker config will be: {config}")
+    def _reset_button_state(self) -> None:
+        """Reset button to original state."""
+        self.start_btn.setEnabled(True)
+        self.start_btn.setText(self._get_start_button_text())
+
+    def _start_batch_processing(self, urls: list[str], config: dict) -> None:
+        """Start processing using the YouTubeBatchWorker."""
+        # Disable start button
+        self.start_btn.setEnabled(False)
+        if config.get("download_all_mode", False):
+            self.start_btn.setText("Processing (Download-All Mode)...")
+        else:
+            self.start_btn.setText("Processing (Batch Mode)...")
+        self.stop_btn.setEnabled(True)
+
+        # Create and configure batch worker
+        self.extraction_worker = YouTubeBatchWorker(urls, config, self)
+
+        # Connect batch worker signals
+        self.extraction_worker.progress_updated.connect(
+            self._update_extraction_progress
+        )
+        self.extraction_worker.url_completed.connect(self._url_extraction_completed)
+        self.extraction_worker.batch_status.connect(self._handle_batch_status)
+        self.extraction_worker.memory_pressure.connect(self._handle_memory_pressure)
+        self.extraction_worker.resource_warning.connect(self._handle_resource_warning)
+        self.extraction_worker.extraction_finished.connect(self._extraction_finished)
+        self.extraction_worker.extraction_error.connect(self._extraction_error)
+
+        # Add to active workers
+        self.active_workers.append(self.extraction_worker)
+        logger.info("Starting YouTube batch processing worker")
+        self.extraction_worker.start()
+
+        self.status_updated.emit("YouTube batch processing in progress...")
+
+    def _start_sequential_processing(self, urls: list[str], config: dict) -> None:
+        """Start processing using the original YouTubeExtractionWorker."""
+        # Disable start button
+        self.start_btn.setEnabled(False)
+        self.start_btn.setText("Processing...")
+        self.stop_btn.setEnabled(True)
+
+        # Use original worker
         self.extraction_worker = YouTubeExtractionWorker(urls, config, self)
+
+        # Connect original worker signals
         self.extraction_worker.progress_updated.connect(
             self._update_extraction_progress
         )
@@ -1065,11 +1449,46 @@ class YouTubeTab(BaseTab):
         )
         self.extraction_worker.playlist_info_updated.connect(self._handle_playlist_info)
 
+        # Add to active workers
         self.active_workers.append(self.extraction_worker)
         logger.info("Starting YouTube extraction worker thread")
         self.extraction_worker.start()
 
         self.status_updated.emit("YouTube extraction in progress...")
+
+    def _handle_batch_status(self, status: dict) -> None:
+        """Handle batch status updates from YouTubeBatchWorker."""
+        batch_number = status.get("batch_number", 0)
+        batch_processed = status.get("batch_processed", 0)
+        total_processed = status.get("total_processed", 0)
+        total_successful = status.get("total_successful", 0)
+        total_failed = status.get("total_failed", 0)
+        memory_usage = status.get("memory_usage", 0)
+        current_concurrency = status.get("current_concurrency", 0)
+        initial_concurrency = status.get("initial_concurrency", 0)
+
+        self.append_log(f"\n📦 Batch {batch_number} completed:")
+        self.append_log(f"   • Processed: {batch_processed} videos")
+        self.append_log(f"   • Total progress: {total_processed} videos")
+        self.append_log(f"   • Success: {total_successful}, Failed: {total_failed}")
+        self.append_log(f"   • Memory usage: {memory_usage:.1f}%")
+        if current_concurrency != initial_concurrency:
+            self.append_log(
+                f"   • Concurrency adjusted: {current_concurrency} (from {initial_concurrency})"
+            )
+
+    def _handle_memory_pressure(self, level: int, message: str) -> None:
+        """Handle memory pressure warnings from YouTubeBatchWorker."""
+        if level >= 3:  # Emergency
+            self.append_log(f"🚨 EMERGENCY: {message}")
+        elif level >= 2:  # Critical
+            self.append_log(f"🔥 CRITICAL: {message}")
+        else:  # Warning
+            self.append_log(f"⚠️ WARNING: {message}")
+
+    def _handle_resource_warning(self, warning: str) -> None:
+        """Handle resource warnings from YouTubeBatchWorker."""
+        self.append_log(f"⚠️ Resource Warning: {warning}")
 
     def _stop_processing(self):
         """Stop the currently running extraction process."""
@@ -1164,42 +1583,61 @@ class YouTubeTab(BaseTab):
         return unique_urls
 
     def _update_extraction_progress(self, current: int, total: int, status: str):
-        """Update extraction progress."""
+        """Update extraction progress with enhanced messaging."""
+        # Always display the status message for detailed progress
+        self.append_log(status)
+
         if total > 0:
             percent = (current / total) * 100
-            # Display the full enhanced status message
-            self.append_log(status)
 
-            # Create a cleaner progress label
-            if (
-                "Processing:" in status
-                or "Fetching metadata" in status
-                or "Transcript extracted:" in status
-                or "Saved" in status
-            ):
-                # Extract just the essential info for the progress label
-                if current < total:
-                    self.progress_label.setText(
-                        f"Processing {current + 1} of {total} URLs ({percent:.1f}%)"
-                    )
-                else:
-                    self.progress_label.setText(
-                        f"Completed {total} of {total} URLs (100%)"
-                    )
+            # Enhanced progress label with more detail
+            if "downloading" in status.lower() or "download" in status.lower():
+                # Download phase
+                self.progress_label.setText(
+                    f"📥 Downloading audio {current + 1}/{total} ({percent:.1f}%)"
+                )
+            elif "processing" in status.lower() or "diarization" in status.lower():
+                # Processing phase
+                self.progress_label.setText(
+                    f"🎙️ Processing audio {current + 1}/{total} ({percent:.1f}%)"
+                )
+            elif "transcript" in status.lower():
+                # Transcript extraction
+                self.progress_label.setText(
+                    f"📝 Extracting transcripts {current + 1}/{total} ({percent:.1f}%)"
+                )
+            elif current >= total:
+                # Completion
+                self.progress_label.setText(f"✅ Completed {total}/{total} URLs (100%)")
             else:
-                self.progress_label.setText(f"Processing {current} of {total} URLs...")
+                # Generic progress
+                self.progress_label.setText(
+                    f"🔄 Processing {current + 1}/{total} URLs ({percent:.1f}%)"
+                )
 
             self.progress_bar.setValue(int(percent))
             self.progress_bar.setVisible(True)
         else:
-            self.append_log(status)
+            # Indeterminate progress (preparing, initializing, etc.)
             self.progress_bar.setValue(0)
-            self.progress_bar.setVisible(False)
+            self.progress_bar.setVisible(True)
             self.progress_label.setText(status)
+
+        # Force immediate GUI update for real-time display
+        from PyQt6.QtWidgets import QApplication
+
+        QApplication.processEvents()
 
     def _url_extraction_completed(self, url: str, success: bool, message: str):
         """Handle completion of single URL extraction."""
-        self.append_log(f"  → {message}")
+        # Handle both completion and progress messages
+        if success is None:
+            # This is a progress update, not a completion
+            self.append_log(f"  → {message}")
+        else:
+            # This is an actual completion
+            status_icon = "✅" if success else "❌"
+            self.append_log(f"  {status_icon} {message}")
 
     def _extraction_finished(self, results: dict[str, Any]):
         """Handle completion of all extractions."""
@@ -1217,6 +1655,11 @@ class YouTubeTab(BaseTab):
             )
 
         self.append_log(f"❌ Failed: {results['failed']}")
+
+        # Show processing mode
+        processing_mode = results.get("processing_mode", "unknown")
+        if processing_mode in ["download-all", "conveyor-belt"]:
+            self.append_log(f"🔧 Processing mode: {processing_mode}")
 
         # Calculate files that were extracted but not saved (partial failures)
         total_attempted = results["successful"] + results["failed"] + skipped_count
@@ -1419,15 +1862,20 @@ class YouTubeTab(BaseTab):
             if index >= 0:
                 self.format_combo.setCurrentIndex(index)
 
-            # Load checkbox states
-            self.timestamps_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(
-                    self.tab_name, "include_timestamps", True
-                )
-            )
+            # Timestamps are always enabled for YouTube (no longer configurable)
             self.overwrite_checkbox.setChecked(
                 self.gui_settings.get_checkbox_state(
                     self.tab_name, "overwrite_existing", False
+                )
+            )
+            self.diarization_checkbox.setChecked(
+                self.gui_settings.get_checkbox_state(
+                    self.tab_name, "enable_diarization", False
+                )
+            )
+            self.download_all_checkbox.setChecked(
+                self.gui_settings.get_checkbox_state(
+                    self.tab_name, "download_all_mode", False
                 )
             )
 
@@ -1458,14 +1906,19 @@ class YouTubeTab(BaseTab):
                 self.tab_name, "format", self.format_combo.currentText()
             )
 
-            # Save checkbox states
-            self.gui_settings.set_checkbox_state(
-                self.tab_name,
-                "include_timestamps",
-                self.timestamps_checkbox.isChecked(),
-            )
+            # Timestamps are always enabled for YouTube (no longer configurable)
             self.gui_settings.set_checkbox_state(
                 self.tab_name, "overwrite_existing", self.overwrite_checkbox.isChecked()
+            )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name,
+                "enable_diarization",
+                self.diarization_checkbox.isChecked(),
+            )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name,
+                "download_all_mode",
+                self.download_all_checkbox.isChecked(),
             )
 
             # Save radio button state (use checkbox method for boolean values)
@@ -1523,6 +1976,42 @@ class YouTubeTab(BaseTab):
                 "Sign up at: https://www.webshare.io/",
             )
             return False
+
+        # Check speaker diarization requirements if enabled
+        if self.diarization_checkbox.isChecked():
+            # Check if diarization is available
+            try:
+                from knowledge_system.processors.diarization import (
+                    get_diarization_installation_instructions,
+                    is_diarization_available,
+                )
+
+                if not is_diarization_available():
+                    self.show_error(
+                        "Missing Diarization Dependencies",
+                        "Speaker diarization requires additional dependencies.\n\n"
+                        + get_diarization_installation_instructions(),
+                    )
+                    return False
+            except ImportError:
+                self.show_error(
+                    "Missing Dependency",
+                    "Speaker diarization requires 'pyannote.audio' to be installed.\n\n"
+                    "Install it with: pip install -e '.[diarization]'\n\n"
+                    "Please install this dependency or disable speaker diarization.",
+                )
+                return False
+
+            # Check if HuggingFace token is configured
+            hf_token = getattr(self.settings.api_keys, "huggingface_token", None)
+            if not hf_token:
+                self.show_warning(
+                    "Missing HuggingFace Token",
+                    "Speaker diarization requires a HuggingFace token to access the pyannote models.\n\n"
+                    "Please configure your HuggingFace token in the Settings tab or disable speaker diarization.\n\n"
+                    "You can get a free token at: https://huggingface.co/settings/tokens",
+                )
+                # Don't return False here, just warn - let the user proceed if they want
 
         return True
 

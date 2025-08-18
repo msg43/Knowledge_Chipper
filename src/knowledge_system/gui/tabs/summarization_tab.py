@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
-from PyQt6.QtCore import QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QTextEdit,
     QVBoxLayout,
+    QWidget,
 )
 
 from ...logger import get_logger
@@ -367,6 +368,7 @@ class EnhancedSummarizationWorker(QThread):
                                 self.gui_settings.get(
                                     "analysis_type", "document summary"
                                 ),
+                                existing_file_path=file_path_obj,  # Pass existing file path for duplicate checking
                             )
 
                             # Update existing .md file in-place with YAML fields
@@ -858,23 +860,31 @@ class SummarizationTab(BaseTab):
         analysis_group = QGroupBox("Analysis Type")
         analysis_layout = QHBoxLayout()
 
-        analysis_label = QLabel("Analysis Type:")
-        analysis_label.setToolTip(
-            "Select the type of analysis to perform on your documents. Each type uses a different prompt template optimized for specific purposes."
-        )
+        # Create a grid layout temporarily for the _add_field_with_info method
+        temp_grid = QGridLayout()
 
         self.analysis_type_combo = QComboBox()
         self.analysis_type_combo.addItems(self._load_analysis_types())
-        self.analysis_type_combo.setToolTip(
-            "Choose analysis type: Document Summary (comprehensive overview), Knowledge Map (structured knowledge extraction), Entity Extraction (people, places, concepts), or Relationship Analysis (connections and networks)"
-        )
         self.analysis_type_combo.currentTextChanged.connect(
             self._on_analysis_type_changed
         )
         self.analysis_type_combo.setMinimumWidth(280)
 
-        analysis_layout.addWidget(analysis_label)
-        analysis_layout.addWidget(self.analysis_type_combo)
+        self._add_field_with_info(
+            temp_grid,
+            "Analysis Type:",
+            self.analysis_type_combo,
+            "Choose analysis type: Document Summary (comprehensive overview), Knowledge Map (structured knowledge extraction), Entity Extraction (people, places, concepts), or Relationship Analysis (connections and networks)",
+            0,
+            0,
+        )
+
+        # Extract the widgets from the grid and add to horizontal layout
+        label_widget = temp_grid.itemAtPosition(0, 0).widget()
+        combo_container = temp_grid.itemAtPosition(0, 1).widget()
+
+        analysis_layout.addWidget(label_widget)
+        analysis_layout.addWidget(combo_container)
         analysis_layout.addStretch()
 
         analysis_group.setLayout(analysis_layout)
@@ -888,42 +898,62 @@ class SummarizationTab(BaseTab):
         settings_layout = QGridLayout()
 
         # Provider selection (made narrower)
-        provider_label = QLabel("Provider:")
-        provider_label.setToolTip(
-            "Choose AI provider: OpenAI (GPT models), Anthropic (Claude models), or Local (self-hosted models). Requires API keys in Settings."
-        )
         self.provider_combo = QComboBox()
         self.provider_combo.addItems(["openai", "anthropic", "local"])
         self.provider_combo.currentTextChanged.connect(self._update_models)
         self.provider_combo.currentTextChanged.connect(self._on_setting_changed)
-        self.provider_combo.setToolTip(
-            "Choose AI provider: OpenAI (GPT models), Anthropic (Claude models), or Local (self-hosted models). Requires API keys in Settings."
-        )
         self.provider_combo.setMaximumWidth(120)  # Make provider field narrower
-
-        settings_layout.addWidget(provider_label, 0, 0)
-        settings_layout.addWidget(self.provider_combo, 0, 1)
+        self._add_field_with_info(
+            settings_layout,
+            "Provider:",
+            self.provider_combo,
+            "Choose AI provider: OpenAI (GPT models), Anthropic (Claude models), or Local (self-hosted models). Requires API keys in Settings.",
+            0,
+            0,
+        )
 
         # Model selection (made wider)
-        model_label = QLabel("Model:")
-        model_label.setToolTip(
-            "Select the specific AI model to use for summarization. Different models have different capabilities, costs, and speed."
-        )
         self.model_combo = QComboBox()
         # Allow free-text model entry for newly released models
         self.model_combo.setEditable(True)
         self.model_combo.currentTextChanged.connect(self._on_setting_changed)
-        self.model_combo.setToolTip(
-            "Select the specific AI model to use for summarization. Different models have different capabilities, costs, and speed."
-        )
         self.model_combo.setMinimumWidth(
             300
         )  # Make model field wider to accommodate long model names
 
-        settings_layout.addWidget(model_label, 0, 2)
-        settings_layout.addWidget(
-            self.model_combo, 0, 3, 1, 2
-        )  # Span 2 columns to make it wider
+        # Model selection with custom layout for tooltip positioning
+        settings_layout.addWidget(QLabel("Model:"), 0, 2)
+
+        # Create a horizontal layout for model combo + tooltip + refresh button
+        model_layout = QHBoxLayout()
+        model_layout.setContentsMargins(0, 0, 0, 0)
+        model_layout.setSpacing(8)
+
+        model_layout.addWidget(self.model_combo)
+
+        # Add tooltip info indicator between model combo and refresh button
+        model_tooltip = "Select the specific AI model to use for summarization. Different models have different capabilities, costs, and speed."
+        formatted_model_tooltip = f"<b>Model:</b><br/><br/>{model_tooltip}"
+
+        model_info_label = QLabel("ⓘ")
+        model_info_label.setFixedSize(16, 16)
+        model_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        model_info_label.setToolTip(formatted_model_tooltip)
+        model_info_label.setStyleSheet(
+            """
+            QLabel {
+                color: #007AFF;
+                font-size: 12px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+            }
+            QLabel:hover {
+                color: #0051D5;
+            }
+        """
+        )
+        model_layout.addWidget(model_info_label)
 
         # Add refresh button for local models
         self.refresh_models_btn = QPushButton("🔄")
@@ -932,7 +962,17 @@ class SummarizationTab(BaseTab):
         )
         self.refresh_models_btn.setMaximumWidth(40)
         self.refresh_models_btn.clicked.connect(self._refresh_models)
-        settings_layout.addWidget(self.refresh_models_btn, 0, 5)
+        model_layout.addWidget(self.refresh_models_btn)
+
+        # Create container widget for the custom layout
+        model_container = QWidget()
+        model_container.setLayout(model_layout)
+        settings_layout.addWidget(
+            model_container, 0, 3, 1, 3
+        )  # Span across multiple columns
+
+        # Set tooltips for model combo as well
+        self.model_combo.setToolTip(formatted_model_tooltip)
 
         # Max tokens
         max_tokens_label = QLabel("Max Response Size (Tokens):")
@@ -1112,10 +1152,26 @@ class SummarizationTab(BaseTab):
                 f"🔧 DEBUG: Local provider detected, checking model availability for '{model}'"
             )
             self.append_log(f"🔧 Checking local model availability: {model}")
-            if not self._check_model_availability(model):
-                logger.info(f"🔧 DEBUG: Model availability check failed for '{model}'")
-                return  # Model check will handle dialog and potential download
-            logger.info(f"🔧 DEBUG: Model availability check passed for '{model}'")
+
+            # Store processing parameters for async model check
+            self._pending_files = files
+            self._pending_gui_settings = {
+                "provider": provider,
+                "model": model,
+                "max_tokens": self.max_tokens_spin.value(),
+                "template_path": self.template_path_edit.text(),
+                "output_dir": self.output_edit.text()
+                if self.separate_file_checkbox.isChecked()
+                else None,
+                "update_in_place": self.update_md_checkbox.isChecked(),
+                "create_separate_file": self.separate_file_checkbox.isChecked(),
+                "force_regenerate": self.force_regenerate_checkbox.isChecked(),
+                "analysis_type": self.analysis_type_combo.currentText(),
+            }
+
+            # Start async model availability check
+            self._start_async_model_check(model)
+            return  # Exit early, processing will continue after model check
 
         # Prepare settings
         gui_settings = {
@@ -1220,6 +1276,245 @@ class SummarizationTab(BaseTab):
                 return False
 
         return True
+
+    def _start_async_model_check(self, model: str) -> None:
+        """Start async model availability check to prevent GUI blocking."""
+        from PyQt6.QtCore import QThread, pyqtSignal
+
+        class ModelCheckWorker(QThread):
+            """Worker thread for checking model availability without blocking GUI."""
+
+            check_completed = pyqtSignal(
+                bool, str, str
+            )  # available, model_name, error_message
+            service_check_completed = pyqtSignal(
+                bool, str
+            )  # service_running, model_name
+
+            def __init__(self, model: str):
+                super().__init__()
+                self.model = model
+                self.clean_model_name = self._clean_model_name(model)
+
+            def _clean_model_name(self, model: str) -> str:
+                """Clean model name by removing suffixes."""
+                import re
+
+                clean_name = model.replace(" (Installed)", "")
+                clean_name = re.sub(r" \(\d+ GB\)$", "", clean_name)
+                return clean_name
+
+            def run(self):
+                """Check model availability asynchronously."""
+                try:
+                    # Import here to avoid blocking main thread during module import
+                    from ...utils.ollama_manager import get_ollama_manager
+
+                    # If model already has "(Installed)" suffix, it's available
+                    if self.model.endswith(" (Installed)"):
+                        self.check_completed.emit(True, self.model, "")
+                        return
+
+                    ollama_manager = get_ollama_manager()
+
+                    # Check if Ollama service is running (potentially slow subprocess call)
+                    service_running = ollama_manager.is_service_running()
+
+                    if not service_running:
+                        # Emit service not running signal
+                        self.service_check_completed.emit(False, self.model)
+                        return
+
+                    # Check if model is available (potentially slow subprocess call)
+                    model_available = ollama_manager.is_model_available(
+                        self.clean_model_name
+                    )
+
+                    if model_available:
+                        self.check_completed.emit(True, self.model, "")
+                    else:
+                        self.check_completed.emit(
+                            False, self.model, "Model not installed"
+                        )
+
+                except Exception as e:
+                    self.check_completed.emit(False, self.model, str(e))
+
+        # Disable start button during check
+        if hasattr(self, "start_btn"):
+            self.start_btn.setEnabled(False)
+            self.start_btn.setText("🔍 Checking model availability...")
+
+        # Create and start worker
+        self._model_check_worker = ModelCheckWorker(model)
+        self._model_check_worker.check_completed.connect(
+            self._handle_model_check_result
+        )
+        self._model_check_worker.service_check_completed.connect(
+            self._handle_service_check_result
+        )
+        self._model_check_worker.start()
+
+    def _handle_service_check_result(self, service_running: bool, model: str) -> None:
+        """Handle Ollama service check result."""
+        if not service_running:
+            # Re-enable start button
+            if hasattr(self, "start_btn"):
+                self.start_btn.setEnabled(True)
+                self.start_btn.setText(self._get_start_button_text())
+
+            # Show service dialog
+            from PyQt6.QtWidgets import QDialog
+
+            from ..dialogs import OllamaServiceDialog
+
+            dialog = OllamaServiceDialog(self)
+
+            def on_service_dialog_finished():
+                if hasattr(self, "_model_check_worker"):
+                    self._model_check_worker.deleteLater()
+                    del self._model_check_worker
+
+                # If user started service, restart model check
+                dialog_result = dialog.result()
+                if dialog_result == QDialog.DialogCode.Accepted:
+                    self.append_log("🔄 Ollama service started, rechecking model...")
+                    self._start_async_model_check(model)
+                else:
+                    self.append_log("❌ Ollama service required for local models")
+
+            dialog.finished.connect(on_service_dialog_finished)
+            dialog.exec()
+
+        # Clean up worker
+        if hasattr(self, "_model_check_worker"):
+            self._model_check_worker.deleteLater()
+            del self._model_check_worker
+
+    def _handle_model_check_result(
+        self, available: bool, model: str, error_message: str
+    ) -> None:
+        """Handle model availability check result."""
+        try:
+            if available:
+                self.append_log(f"✅ Model '{model}' is available")
+                logger.info(f"🔧 DEBUG: Model availability check passed for '{model}'")
+                # Continue with processing using stored parameters
+                self._continue_processing_after_model_check()
+            else:
+                if error_message:
+                    self.append_log(f"❌ Model check failed: {error_message}")
+                    logger.error(
+                        f"🔧 DEBUG: Model availability check failed for '{model}': {error_message}"
+                    )
+                else:
+                    self.append_log(f"📥 Model '{model}' not installed")
+                    logger.info(
+                        f"🔧 DEBUG: Model '{model}' not available - showing download dialog"
+                    )
+                    # Show download dialog
+                    self._show_model_download_dialog(model)
+                    return
+        finally:
+            # Clean up worker
+            if hasattr(self, "_model_check_worker"):
+                self._model_check_worker.deleteLater()
+                del self._model_check_worker
+
+    def _show_model_download_dialog(self, model: str) -> None:
+        """Show model download dialog for missing models."""
+        # Clean model name for download
+        import re
+
+        from PyQt6.QtWidgets import QDialog
+
+        from ..dialogs import ModelDownloadDialog
+
+        clean_model_name = model.replace(" (Installed)", "")
+        clean_model_name = re.sub(r" \(\d+ GB\)$", "", clean_model_name)
+
+        dialog = ModelDownloadDialog(clean_model_name, self)
+
+        def on_download_progress(progress):
+            if hasattr(self, "start_btn") and hasattr(progress, "percent"):
+                if progress.percent > 0:
+                    self.start_btn.setText(f"📥 Downloading: {progress.percent:.1f}%")
+
+        def on_dialog_finished():
+            if hasattr(self, "start_btn"):
+                self.start_btn.setEnabled(True)
+                self.start_btn.setText(self._get_start_button_text())
+
+            # If download succeeded, continue processing
+            dialog_result = dialog.result()
+            if dialog_result == QDialog.DialogCode.Accepted:
+                self.append_log(f"✅ Model '{clean_model_name}' downloaded successfully")
+                self._continue_processing_after_model_check()
+            else:
+                self.append_log(f"❌ Model download cancelled or failed")
+
+        # Connect signals
+        dialog.download_progress.connect(on_download_progress)
+        dialog.finished.connect(on_dialog_finished)
+
+        # Show dialog
+        dialog.exec()
+
+    def _continue_processing_after_model_check(self) -> None:
+        """Continue processing after successful model check."""
+        if not hasattr(self, "_pending_files") or not hasattr(
+            self, "_pending_gui_settings"
+        ):
+            self.append_log("❌ Internal error: Missing processing parameters")
+            if hasattr(self, "start_btn"):
+                self.start_btn.setEnabled(True)
+                self.start_btn.setText(self._get_start_button_text())
+            return
+
+        # Retrieve stored parameters
+        files = self._pending_files
+        gui_settings = self._pending_gui_settings
+
+        # Clean up stored parameters
+        del self._pending_files
+        del self._pending_gui_settings
+
+        # Continue with worker creation and processing
+        self.append_log("🚀 Starting summarization worker...")
+        self._start_summarization_worker(files, gui_settings)
+
+    def _start_summarization_worker(self, files: list, gui_settings: dict) -> None:
+        """Start the summarization worker with the provided settings."""
+        # Start worker
+        self.summarization_worker = EnhancedSummarizationWorker(
+            files, self.settings, gui_settings, self
+        )
+        self.summarization_worker.progress_updated.connect(self._on_progress_updated)
+        self.summarization_worker.file_completed.connect(self._on_file_completed)
+        self.summarization_worker.processing_finished.connect(
+            self._on_processing_finished
+        )
+        self.summarization_worker.processing_error.connect(self._on_processing_error)
+
+        self.active_workers.append(self.summarization_worker)
+        self.set_processing_state(True)
+        self.clear_log()
+
+        # Show informative startup message
+        file_count = len(files)
+        if file_count == 1:
+            file_info = f"file: {Path(files[0]).name}"
+        elif file_count <= 3:
+            file_names = [Path(f).name for f in files]
+            file_info = f"files: {', '.join(file_names)}"
+        else:
+            file_info = f"{file_count} files"
+
+        self.append_log(f"📝 Starting summarization of {file_info}")
+        self.append_log(f"🤖 Using {gui_settings['provider']}: {gui_settings['model']}")
+
+        # Start the worker
+        self.summarization_worker.start()
 
     def _check_model_availability(self, model: str) -> bool:
         """Check if the model is available locally and offer to download if not."""
@@ -1371,9 +1666,22 @@ class SummarizationTab(BaseTab):
         return files
 
     def _refresh_models(self):
-        """Refresh the model list, especially useful for local models."""
+        """Refresh the model list from community source."""
         current_model = self.model_combo.currentText()
-        self._update_models()
+        provider = self.provider_combo.currentText()
+
+        # Clear cache for local provider
+        if provider == "local":
+            try:
+                from ...utils.ollama_manager import get_ollama_manager
+
+                ollama_manager = get_ollama_manager()
+                ollama_manager.clear_registry_cache()
+            except Exception as e:
+                logger.warning(f"Failed to clear Ollama cache: {e}")
+
+        # Force refresh from community source
+        self._update_models(force_refresh=True)
 
         # Try to restore the previously selected model
         if current_model:
@@ -1385,12 +1693,26 @@ class SummarizationTab(BaseTab):
                     f"Previously selected model '{current_model}' no longer available"
                 )
 
-        # Show feedback to user
-        provider = self.provider_combo.currentText()
-        if provider == "local":
-            self.append_log("🔄 Refreshed local model list")
+        # Show feedback to user with safety information
+        if provider == "openai":
+            self.append_log(f"🔄 Refreshed OpenAI models from API")
+        elif provider == "anthropic":
+            self.append_log(f"🔄 Anthropic models (manually maintained)")
+        elif provider == "local":
+            model_count = self.model_combo.count()
+            if model_count > 0:
+                self.append_log(
+                    f"🔄 Refreshed Ollama models from ollama.com/library ({model_count} models)"
+                )
+            else:
+                self.append_log(
+                    "⚠️ Refresh attempted but no models available (offline or Ollama not running)"
+                )
+                self.append_log(
+                    "💡 Previous model list preserved to keep app functional"
+                )
 
-    def _update_models(self):
+    def _update_models(self, force_refresh: bool = False):
         """Update the model list based on selected provider with dynamic registry."""
         provider = self.provider_combo.currentText()
         logger.debug(f"🔄 NEW DYNAMIC MODEL SYSTEM ACTIVATED - Provider: {provider}")
@@ -1399,7 +1721,7 @@ class SummarizationTab(BaseTab):
         if provider in {"openai", "anthropic"}:
             # Dynamic provider models with safe fallback and overrides
             try:
-                models = get_provider_models(provider)
+                models = get_provider_models(provider, force_refresh=force_refresh)
                 # Remove duplicates and keep order just in case
                 seen = set()
                 unique_models = []
@@ -1411,12 +1733,16 @@ class SummarizationTab(BaseTab):
                 models = unique_models
             except Exception as e:
                 logger.warning(f"Falling back to curated list for {provider}: {e}")
-                models = get_provider_models(provider)
+                models = get_provider_models(provider, force_refresh=False)
         else:  # local
-            # Use the new dynamic registry system
+            # Use the new dynamic registry system with proper caching
             try:
                 ollama_manager = get_ollama_manager()
-                registry_models = ollama_manager.get_registry_models()
+                # Use cache by default, only bypass cache when force_refresh=True
+                use_cache = not force_refresh
+                registry_models = ollama_manager.get_registry_models(
+                    use_cache=use_cache
+                )
 
                 models = []
                 for model_info in registry_models:
@@ -1432,8 +1758,15 @@ class SummarizationTab(BaseTab):
                         [m for m in registry_models if "(Installed)" in m.name]
                     )
                     available_count = len(registry_models) - installed_count
+                    cache_info = (
+                        " (cached)"
+                        if use_cache
+                        and hasattr(ollama_manager, "_registry_cache")
+                        and ollama_manager._registry_cache
+                        else ""
+                    )
                     logger.info(
-                        f"Found {installed_count} installed and {available_count} available models from dynamic registry"
+                        f"Found {installed_count} installed and {available_count} available models from dynamic registry{cache_info}"
                     )
                 else:
                     logger.warning("No models found in registry")

@@ -1,6 +1,5 @@
 """ Introduction tab providing comprehensive guidance for new users."""
 
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -8,11 +7,13 @@ from typing import Any
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -36,6 +37,7 @@ class IntroductionTab(BaseTab):
     def _setup_ui(self) -> None:
         """Setup the introduction UI."""
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(10, 10, 10, 10)  # Add margins
 
         # Create scroll area for content
         scroll_area = QScrollArea()
@@ -47,9 +49,6 @@ class IntroductionTab(BaseTab):
         content_widget = QWidget()
         content_layout = QVBoxLayout(content_widget)
 
-        # Welcome header
-        self._create_welcome_section(content_layout)
-
         # App overview
         self._create_overview_section(content_layout)
 
@@ -59,9 +58,6 @@ class IntroductionTab(BaseTab):
         # Tab navigation guide
         self._create_tab_guide_section(content_layout)
 
-        # Tips and best practices
-        self._create_tips_section(content_layout)
-
         # Documentation section
         self._create_documentation_section(content_layout)
 
@@ -70,27 +66,6 @@ class IntroductionTab(BaseTab):
 
         scroll_area.setWidget(content_widget)
         main_layout.addWidget(scroll_area)
-
-    def _create_welcome_section(self, parent_layout: Any) -> None:
-        """Create the welcome header section."""
-        # Title
-        title_label = QLabel("🎉 Welcome to Knowledge Chipper!")
-        title_font = QFont()
-        title_font.setPointSize(18)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        parent_layout.addWidget(title_label)
-
-        # Subtitle
-        subtitle_label = QLabel("Your comprehensive knowledge management system")
-        subtitle_font = QFont()
-        subtitle_font.setPointSize(12)
-        subtitle_font.setItalic(True)
-        subtitle_label.setFont(subtitle_font)
-        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle_label.setStyleSheet("color: #666; margin-bottom: 20px;")
-        parent_layout.addWidget(subtitle_label)
 
     def _create_overview_section(self, parent_layout: Any) -> None:
         """Create the app overview section."""
@@ -120,12 +95,13 @@ class IntroductionTab(BaseTab):
 <br>🔍 <b>Makes Searchable</b> → Everything becomes easily findable
 
 <br><br><b>🚀 Key Features:</b>
-• <b>Smart Model-Aware Chunking:</b> 95% efficiency vs 25% with hardcoded limits
-• <b>Real-time Progress Tracking:</b> Accurate ETAs and detailed status updates
-• <b>YouTube Integration:</b> Direct video download and processing
-• <b>Multiple AI Providers:</b> OpenAI, Anthropic, local models via Ollama
-• <b>Batch Processing:</b> Handle multiple files simultaneously
-• <b>File Watching:</b> Automatic processing of new files
+<br>• <b>Smart Model-Aware Chunking:</b> 95% efficiency vs 25% with hardcoded limits
+<br>• <b>Real-time Progress Tracking:</b> Accurate ETAs and detailed status updates
+<br>• <b>YouTube Integration:</b> Direct video download and processing with proxy support
+<br>• <b>Speaker Diarization:</b> Identify different speakers in multi-speaker content
+<br>• <b>Multiple AI Providers:</b> OpenAI, Anthropic, local models via Ollama
+<br>• <b>Batch Processing:</b> Handle multiple files simultaneously
+<br>• <b>File Watching:</b> Automatic processing of new files
         """
         )
 
@@ -146,23 +122,31 @@ class IntroductionTab(BaseTab):
 
         quickstart_text = QLabel(
             """
-            <b>Get started in 3 simple steps:</b>
+            <b>Get started in 4 simple steps:</b>
 
-<br><br><b>1. Configure Settings</b> 📁
-• Go to the <b>⚙️ Settings</b> tab
+<br><br><b>1. Configure API Keys</b> 🔑
+• Go to the <b>API Keys</b> tab
 • Add your OpenAI or Anthropic API key for summarization
-• Optionally add HuggingFace token for speaker diarization
+• For YouTube: Add WebShare proxy credentials (required)
+• For speaker diarization: Add HuggingFace token (optional)
 
-<br><br><b>2. Process Your First File</b> 🎵
-• Go to the <b>Process Management</b> tab
-• Click "Add Files" and select audio/video files
-• Choose your AI provider and summarization settings
-• Click "Start Processing"
+<br><br><b>2. Extract YouTube metadata and full transcript with optional diarization</b> 📺
+• Go to the <b>YouTube</b> tab
+• Enter YouTube URLs or upload a file with URLs
+• Enable speaker diarization for multi-speaker content
+• Click "Extract Transcripts"
 
-<br><br><b>3. View Your Results</b> 📄
+<br><br><b>3. Summarize YouTube transcript or any other document using advanced AI techniques</b> 📝
+• Go to the <b>Summarization</b> tab
+• Upload your transcripts or other documents
+• Choose your AI provider and custom prompts
+• Click "Start Summarization"
+
+<br><br><b>4. View your results, which can be saved in a variety of formats both in separate files or inline with Obsidian .md files</b> 📄
 • Transcripts are saved as .txt files
-• Summaries are saved as .md files
+• Summaries are saved as .md files with YAML frontmatter
 • Knowledge maps (MOCs) organize everything
+• Output supports Obsidian integration
 • Use "View Last Report" to see detailed results
 
 <br><br><b>💡 Pro Tip:</b> Start with shorter files (under 30 minutes) to get familiar with the workflow, then scale up to longer content!
@@ -200,9 +184,11 @@ class IntroductionTab(BaseTab):
 • Perfect for ongoing projects or regular content
 
 <br><br><b>📺 YouTube</b> - Video content processing
-• Download videos directly from YouTube URLs
-• Process entire playlists or channels
+• Download videos directly from YouTube URLs with proxy support
+• Process entire playlists or channels automatically
+• Speaker diarization for multi-speaker content
 • Automatic metadata extraction and organization
+• Requires WebShare proxy credentials
 
 <br><br><b>🎙️ Transcription</b> - Audio-to-text conversion
 • Advanced Whisper-based transcription
@@ -214,7 +200,7 @@ class IntroductionTab(BaseTab):
 • Smart chunking for long content
 • Multiple AI providers (OpenAI, Anthropic, Ollama)
 
-<br><br><b>⚙️ Settings</b> - Configuration and setup
+<br><br><b>🔑 API Keys</b> - Configuration and setup
 • Manage all your API credentials securely
 • Test connections and validate keys
 • Required for AI-powered features
@@ -224,54 +210,6 @@ class IntroductionTab(BaseTab):
         tabs_text.setWordWrap(True)
         tabs_text.setTextFormat(Qt.TextFormat.RichText)
         parent_layout.addWidget(tabs_text)
-
-    def _create_tips_section(self, parent_layout: Any) -> None:
-        """Create the tips and best practices section."""
-        # Section header
-        header_label = QLabel("💡 Tips & Best Practices")
-        header_font = QFont()
-        header_font.setPointSize(14)
-        header_font.setBold(True)
-        header_label.setFont(header_font)
-        header_label.setStyleSheet("margin-top: 20px; margin-bottom: 10px;")
-        parent_layout.addWidget(header_label)
-
-        tips_text = QLabel(
-            """
-            <b>🏆 Best Practices for Success:</b>
-
-<br><br><b>File Organization:</b>
-• Use descriptive filenames for better organization
-• Keep source files in dedicated folders
-• Check output directories for generated content
-
-<br><br><b>Performance Optimization:</b>
-• Larger Whisper models = better accuracy but slower processing
-• GPU acceleration significantly speeds up transcription
-• Batch similar files together for efficiency
-
-<br><br><b>AI Model Selection:</b>
-• <b>OpenAI GPT-4:</b> Best overall quality, costs per token
-• <b>Anthropic Claude:</b> Excellent for analysis, different pricing
-• <b>Local Ollama:</b> Free but requires good hardware
-
-<br><br><b>Quality Tips:</b>
-• Clear audio = better transcriptions
-• Use speaker diarization for multi-speaker content
-• Custom prompts improve summary relevance
-
-<br><br><b>🔧 Troubleshooting:</b>
-• Check the output log in each tab for detailed information
-• Use "View Last Report" buttons to see processing results
-• Dry run mode lets you test settings without processing
-
-<br><br><b>🎯 Remember:</b> Knowledge Chipper is designed to handle everything from quick voice memos to multi-hour lectures. Start small and scale up as you get comfortable!
-        """
-        )
-
-        tips_text.setWordWrap(True)
-        tips_text.setTextFormat(Qt.TextFormat.RichText)
-        parent_layout.addWidget(tips_text)
 
     def _create_documentation_section(self, parent_layout: Any) -> None:
         """Create the documentation section."""
@@ -284,12 +222,8 @@ class IntroductionTab(BaseTab):
         header_label.setStyleSheet("margin-top: 20px; margin-bottom: 10px;")
         parent_layout.addWidget(header_label)
 
-        # Documentation group
-        doc_group = QGroupBox()
-        doc_layout = QVBoxLayout()
-
-        # README file section
-        readme_section = QLabel(
+        # Documentation links in main text
+        doc_text = QLabel(
             """
             <b>📖 Complete Documentation:</b>
 <br>• <a href="readme://open">README.md</a> - Full setup guide, troubleshooting, and advanced features
@@ -303,32 +237,11 @@ class IntroductionTab(BaseTab):
         """
         )
 
-        readme_section.setWordWrap(True)
-        readme_section.setTextFormat(Qt.TextFormat.RichText)
-        readme_section.setOpenExternalLinks(False)  # Handle clicks manually
-        readme_section.linkActivated.connect(self._handle_documentation_link)
-        readme_section.setStyleSheet(
-            """
-            QLabel {
-                background-color: #f8f9fa;
-                padding: 15px;
-                border: 1px solid #dee2e6;
-                border-radius: 5px;
-            }
-            QLabel a {
-                color: #007bff;
-                text-decoration: none;
-            }
-            QLabel a:hover {
-                color: #0056b3;
-                text-decoration: underline;
-            }
-        """
-        )
-        doc_layout.addWidget(readme_section)
-
-        doc_group.setLayout(doc_layout)
-        parent_layout.addWidget(doc_group)
+        doc_text.setWordWrap(True)
+        doc_text.setTextFormat(Qt.TextFormat.RichText)
+        doc_text.setOpenExternalLinks(False)  # Handle clicks manually
+        doc_text.linkActivated.connect(self._handle_documentation_link)
+        parent_layout.addWidget(doc_text)
 
     def _handle_documentation_link(self, link: str) -> None:
         """Handle clicks on documentation links."""
@@ -337,182 +250,35 @@ class IntroductionTab(BaseTab):
 
             if link == "readme://open":
                 readme_path = project_root / "README.md"
-                if readme_path.exists():
-                    # Try to open with default markdown viewer/editor
-                    if sys.platform == "darwin":  # macOS
-                        subprocess.run(["open", str(readme_path)], check=False)
-                    elif sys.platform == "win32":  # Windows
-                        subprocess.run(
-                            ["start", str(readme_path)], shell=True, check=False
-                        )
-                    else:  # Linux
-                        subprocess.run(["xdg-open", str(readme_path)], check=False)
-                else:
-                    self.show_error(
-                        "File Not Found", f"README.md not found at {readme_path}"
-                    )
+                self.async_open_file(str(readme_path), "README.md")
 
             elif link == "changelog://open":
                 changelog_path = project_root / "CHANGELOG.md"
-                if changelog_path.exists():
-                    if sys.platform == "darwin":
-                        subprocess.run(["open", str(changelog_path)], check=False)
-                    elif sys.platform == "win32":
-                        subprocess.run(
-                            ["start", str(changelog_path)], shell=True, check=False
-                        )
-                    else:
-                        subprocess.run(["xdg-open", str(changelog_path)], check=False)
-                else:
-                    self.show_error(
-                        "File Not Found", f"CHANGELOG.md not found at {changelog_path}"
-                    )
+                self.async_open_file(str(changelog_path), "CHANGELOG.md")
 
             elif link == "contributing://open":
                 contributing_path = project_root / "CONTRIBUTING.md"
-                if contributing_path.exists():
-                    if sys.platform == "darwin":
-                        subprocess.run(["open", str(contributing_path)], check=False)
-                    elif sys.platform == "win32":
-                        subprocess.run(
-                            ["start", str(contributing_path)], shell=True, check=False
-                        )
-                    else:
-                        subprocess.run(
-                            ["xdg-open", str(contributing_path)], check=False
-                        )
-                else:
-                    self.show_error(
-                        "File Not Found",
-                        f"CONTRIBUTING.md not found at {contributing_path}",
-                    )
+                self.async_open_file(str(contributing_path), "CONTRIBUTING.md")
 
             elif link == "youtube://setup":
                 youtube_setup_path = project_root / "docs" / "YOUTUBE_API_SETUP.md"
-                if youtube_setup_path.exists():
-                    if sys.platform == "darwin":
-                        subprocess.run(["open", str(youtube_setup_path)], check=False)
-                    elif sys.platform == "win32":
-                        subprocess.run(
-                            ["start", str(youtube_setup_path)], shell=True, check=False
-                        )
-                    else:
-                        subprocess.run(
-                            ["xdg-open", str(youtube_setup_path)], check=False
-                        )
-                else:
-                    self.show_error(
-                        "File Not Found",
-                        f"YouTube setup guide not found at {youtube_setup_path}",
-                    )
+                self.async_open_file(str(youtube_setup_path), "YouTube API Setup Guide")
 
             elif link == "performance://guide":
                 # Open the README section on performance
                 readme_path = project_root / "README.md"
-                if readme_path.exists():
-                    if sys.platform == "darwin":
-                        subprocess.run(["open", str(readme_path)], check=False)
-                    elif sys.platform == "win32":
-                        subprocess.run(
-                            ["start", str(readme_path)], shell=True, check=False
-                        )
-                    else:
-                        subprocess.run(["xdg-open", str(readme_path)], check=False)
-                else:
-                    self.show_error(
-                        "File Not Found", f"README.md not found at {readme_path}"
-                    )
+                self.async_open_file(str(readme_path), "Performance Guide (README.md)")
 
             elif link == "troubleshooting://help":
                 # Open the README section on troubleshooting
                 readme_path = project_root / "README.md"
-                if readme_path.exists():
-                    if sys.platform == "darwin":
-                        subprocess.run(["open", str(readme_path)], check=False)
-                    elif sys.platform == "win32":
-                        subprocess.run(
-                            ["start", str(readme_path)], shell=True, check=False
-                        )
-                    else:
-                        subprocess.run(["xdg-open", str(readme_path)], check=False)
-                else:
-                    self.show_error(
-                        "File Not Found", f"README.md not found at {readme_path}"
-                    )
+                self.async_open_file(
+                    str(readme_path), "Troubleshooting Guide (README.md)"
+                )
 
         except Exception as e:
             logger.error(f"Error opening documentation: {e}")
             self.show_error("Error", f"Could not open documentation: {str(e)}")
-
-    def _create_navigation_buttons(self, parent_layout: Any) -> None:
-        """Create quick navigation buttons."""
-        nav_group = QGroupBox("🚀 Quick Actions")
-        nav_layout = QHBoxLayout()
-
-        # Settings button
-        api_keys_btn = QPushButton("⚙️ Open Settings")
-        api_keys_btn.clicked.connect(lambda: self.navigate_to_tab.emit("⚙️ Settings"))
-        api_keys_btn.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #ff9800;
-                color: white;
-                font-weight: bold;
-                padding: 10px 20px;
-                border-radius: 5px;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #f57c00;
-            }
-        """
-        )
-        nav_layout.addWidget(api_keys_btn)
-
-        # Process files button
-        process_btn = QPushButton("📁 Start Processing Files")
-        process_btn.clicked.connect(
-            lambda: self.navigate_to_tab.emit("Process Management")
-        )
-        process_btn.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #4caf50;
-                color: white;
-                font-weight: bold;
-                padding: 10px 20px;
-                border-radius: 5px;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """
-        )
-        nav_layout.addWidget(process_btn)
-
-        # YouTube button
-        youtube_btn = QPushButton("📺 Process YouTube Videos")
-        youtube_btn.clicked.connect(lambda: self.navigate_to_tab.emit("YouTube"))
-        youtube_btn.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #f44336;
-                color: white;
-                font-weight: bold;
-                padding: 10px 20px;
-                border-radius: 5px;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #da190b;
-            }
-        """
-        )
-        nav_layout.addWidget(youtube_btn)
-
-        nav_group.setLayout(nav_layout)
-        parent_layout.addWidget(nav_group)
 
     # Override base class methods since this is an informational tab
     def _get_start_button_text(self) -> str:
@@ -523,59 +289,6 @@ class IntroductionTab(BaseTab):
         """Navigate to the process tab when start is clicked."""
         self.show_info(
             "Welcome!",
-            "Let's start by reviewing your Settings, then move to Process Management to begin!",
+            "Let's start by configuring your API Keys, then move to Process Management to begin!",
         )
-        self.navigate_to_tab.emit("⚙️ Settings")
-
-    def _create_action_layout(self) -> QHBoxLayout:
-        """Override to provide custom action layout for intro tab."""
-        layout = QHBoxLayout()
-
-        # Custom start button that navigates
-        self.start_btn = QPushButton("🚀 Get Started Now")
-        self.start_btn.clicked.connect(self._start_processing)
-        self.start_btn.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #4caf50;
-                color: white;
-                font-weight: bold;
-                padding: 12px 24px;
-                border-radius: 6px;
-                border: none;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """
-        )
-        layout.addWidget(self.start_btn)
-
-        layout.addStretch()
-        return layout
-
-    def _create_output_section(self) -> Any:
-        """Override to provide custom output section."""
-        layout = QVBoxLayout()
-
-        # Welcome message instead of log output
-        welcome_label = QLabel(
-            "👋 Ready to transform your content into organized knowledge?"
-        )
-        welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        welcome_label.setStyleSheet(
-            """
-            QLabel {
-                background-color: #e8f5e8;
-                padding: 15px;
-                border: 1px solid #4caf50;
-                border-radius: 5px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-        """
-        )
-        layout.addWidget(welcome_label)
-
-        return layout
+        self.navigate_to_tab.emit("API Keys")

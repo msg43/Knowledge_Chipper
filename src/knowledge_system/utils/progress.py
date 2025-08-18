@@ -12,16 +12,8 @@ The progress system has been split into focused modules:
 - batch_processing.py: Hang detection classes
 """
 
-from .batch_processing import (
-    HangDetectionConfig,
-    HangDetectionContext,
-    HangDetectionLevel,
-    HangDetector,
-    OperationType,
-    TrackedOperation,
-    configure_hang_detection,
-    get_hang_detector,
-)
+# Note: Hang detection classes were moved to a separate module
+# from .batch_processing import (...)
 
 # Import all classes for backward compatibility
 from .cancellation import CancellationError, CancellationToken
@@ -51,13 +43,13 @@ __all__ = [
     "ProgressTracker",
     # Display
     "ProgressDisplay",
-    # Batch processing / hang detection
-    "HangDetectionLevel",
-    "OperationType",
-    "HangDetectionConfig",
-    "TrackedOperation",
-    "HangDetector",
-    "get_hang_detector",
-    "configure_hang_detection",
-    "HangDetectionContext",
+    # Batch processing / hang detection (deprecated)
+    # "HangDetectionLevel",
+    # "OperationType",
+    # "HangDetectionConfig",
+    # "TrackedOperation",
+    # "HangDetector",
+    # "get_hang_detector",
+    # "configure_hang_detection",
+    # "HangDetectionContext",
 ]

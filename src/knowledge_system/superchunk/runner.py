@@ -62,7 +62,10 @@ class Runner:
         )
 
         # Phase 2: extraction
-        extractors = Extractors.create_default()
+        # Get provider and model from config if available
+        provider = getattr(self.config, "provider", None)
+        model = getattr(self.config, "model", None)
+        extractors = Extractors.create_default(provider=provider, model=model)
         ledger = Ledger(self.artifacts_dir / "ledger.sqlite")
         # Ensure we only store JSON-serializable config
         run_id = ledger.start_run(config=self.config.to_json_dict())

@@ -140,16 +140,21 @@ class YouTubeMetadataProcessor(BaseProcessor):
 
         self.settings = get_settings()
 
-        # Simple YT-DLP configuration - WebShare handles rotation automatically
+        # Optimized YT-DLP configuration for fast metadata-only extraction
         self.ydl_opts = {
             "quiet": True,
             "no_warnings": True,
             "extract_flat": False,
             "ignoreerrors": True,
             "skip_download": True,  # Metadata only
-            "socket_timeout": 30,
-            "retries": 3,  # Reduced since WebShare handles reliability
-            "extractor_retries": 2,  # Reduced since WebShare handles reliability
+            "no_check_formats": True,  # Skip format checking to avoid fragment downloads
+            "youtube_include_dash_manifest": False,  # Skip DASH manifest
+            "youtube_include_hls_manifest": False,  # Skip HLS manifest
+            "writesubtitles": False,  # Skip subtitle downloads
+            "writeautomaticsub": False,  # Skip auto-generated subtitles
+            "socket_timeout": 15,  # Shorter timeout for faster failures
+            "retries": 3,  # Normal retries since WebShare handles rate limiting
+            "extractor_retries": 3,  # Normal retries since WebShare handles rate limiting
         }
 
         # Configure WebShare proxy (required)

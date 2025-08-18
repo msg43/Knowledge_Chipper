@@ -58,6 +58,9 @@ class OllamaManager:
     def __init__(self, base_url: str = "http://localhost:11434") -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = 30
+        # Model registry cache - persistent until manually refreshed
+        self._registry_cache: list[ModelInfo] = []
+        self._cache_valid: bool = False
 
     def is_installed(self) -> tuple[bool, str | None]:
         """Check if Ollama is installed and return the path if found."""
@@ -314,6 +317,14 @@ class OllamaManager:
 
     def get_registry_models(self, use_cache: bool = True) -> list[ModelInfo]:
         """Get comprehensive list of available models from multiple sources."""
+
+        # Check if we should use cached data (persistent until manually refreshed)
+        if use_cache and self._cache_valid and self._registry_cache:
+            logger.debug(
+                f"Using cached model registry ({len(self._registry_cache)} models)"
+            )
+            return self._registry_cache
+
         try:
             models = []
 
@@ -343,7 +354,7 @@ class OllamaManager:
                     models.append(model_info)
 
             # 3. Sort models: Installed first, then by size
-            return sorted(
+            sorted_models = sorted(
                 models,
                 key=lambda m: (
                     0 if "(Installed)" in m.name else 1,  # Installed first
@@ -351,9 +362,46 @@ class OllamaManager:
                 ),
             )
 
+            # Update cache and mark as valid until manually cleared
+            self._registry_cache = sorted_models
+            self._cache_valid = True
+            logger.debug(
+                f"Updated model registry cache with {len(sorted_models)} models"
+            )
+
+            return sorted_models
+
         except Exception as e:
             logger.error(f"Failed to get registry models: {e}")
             return []
+
+    def clear_registry_cache(self) -> None:
+        """Clear the model registry cache to force refresh on next request."""
+        # Store backup of current cache in case refresh fails
+        backup_cache = self._registry_cache.copy()
+        backup_valid = self._cache_valid
+
+        # Clear cache to force refresh
+        self._registry_cache = []
+        self._cache_valid = False
+
+        try:
+            # Try to get fresh models (this will repopulate cache)
+            fresh_models = self.get_registry_models(use_cache=False)
+            if fresh_models:
+                logger.debug("Successfully refreshed model registry cache")
+            else:
+                # No fresh models available, restore backup
+                logger.warning("No fresh models available, restoring previous cache")
+                self._registry_cache = backup_cache
+                self._cache_valid = backup_valid
+        except Exception as e:
+            # Refresh failed, restore backup to prevent app becoming unusable
+            logger.error(
+                f"Failed to refresh model registry, restoring previous cache: {e}"
+            )
+            self._registry_cache = backup_cache
+            self._cache_valid = backup_valid
 
     def _get_popular_models_database(self) -> list[ModelInfo]:
         """Enhanced database of popular models with accurate metadata."""

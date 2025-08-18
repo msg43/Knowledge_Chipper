@@ -775,6 +775,7 @@ def generate_unified_yaml_metadata(
     metadata: dict,
     template_path: Path | None = None,
     analysis_type: str = "document summary",
+    existing_file_path: Path | None = None,
 ) -> dict[str, str]:
     """
     Generate unified YAML metadata for summary files
@@ -790,6 +791,7 @@ def generate_unified_yaml_metadata(
         metadata: Processing metadata from the summarizer
         template_path: Optional template file path
         analysis_type: Type of analysis performed
+        existing_file_path: Path to existing file being updated (for checking existing YAML)
 
     Returns:
         Dictionary of YAML fields ready for frontmatter
@@ -799,11 +801,52 @@ def generate_unified_yaml_metadata(
 
     logger = get_logger(__name__)
 
+    # If updating an existing file, read its current YAML fields
+    existing_yaml_fields = set()
+    if existing_file_path and existing_file_path.exists():
+        try:
+            with open(existing_file_path, encoding="utf-8") as f:
+                lines = f.readlines()
+
+            # Find YAML frontmatter
+            if len(lines) > 0 and lines[0].strip() == "---":
+                yaml_end = next(
+                    (i for i in range(1, len(lines)) if lines[i].strip() == "---"), -1
+                )
+                if yaml_end > 0:
+                    import yaml as yaml_parser
+
+                    yaml_content = "".join(lines[1:yaml_end])
+                    try:
+                        existing_data = yaml_parser.safe_load(yaml_content)
+                        if isinstance(existing_data, dict):
+                            existing_yaml_fields = set(existing_data.keys())
+                            logger.debug(
+                                f"Found {len(existing_yaml_fields)} existing YAML fields in {existing_file_path}"
+                            )
+                    except Exception:
+                        # If parsing fails, use regex to find field names
+                        import re
+
+                        for line in lines[1:yaml_end]:
+                            match = re.match(r"^(\w+):", line.strip())
+                            if match:
+                                existing_yaml_fields.add(match.group(1))
+        except Exception as e:
+            logger.warning(
+                f"Could not read existing YAML from {existing_file_path}: {e}"
+            )
+
     yaml_fields = {}
 
-    # Basic metadata
+    # Basic metadata - only add if not already present
     clean_display_name = file_path.stem.replace("-", " ").replace("_", " ")
-    yaml_fields["title"] = f"Summary of {clean_display_name}"
+
+    # Only add title if it doesn't exist
+    if "title" not in existing_yaml_fields:
+        yaml_fields["title"] = f"Summary of {clean_display_name}"
+
+    # Always update these fields as they may change
     yaml_fields["source_file"] = file_path.name
     yaml_fields["source_path"] = str(file_path.absolute())
     yaml_fields["model"] = model
@@ -847,14 +890,14 @@ def generate_unified_yaml_metadata(
         summary_content, analysis_type
     )
 
-    # Merge header-derived YAML fields, avoiding duplicates
-    existing_fields = set(yaml_fields.keys())
+    # Merge header-derived YAML fields, avoiding duplicates from both newly generated fields and existing file fields
+    all_existing_fields = set(yaml_fields.keys()) | existing_yaml_fields
     for field_name, field_value in header_yaml_fields.items():
-        if field_name not in existing_fields:
+        if field_name not in all_existing_fields:
             yaml_fields[field_name] = field_value
         else:
-            logger.warning(
-                f"YAML field '{field_name}' already exists in metadata, skipping duplicate from header processing"
+            logger.debug(
+                f"Skipping YAML field '{field_name}' - already exists in file or metadata"
             )
 
     logger.info(f"Generated {len(yaml_fields)} unified YAML metadata fields")

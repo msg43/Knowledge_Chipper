@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -19,8 +19,10 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QVBoxLayout,
+    QWidget,
 )
 
+from ...config import get_valid_whisper_models
 from ...logger import get_logger
 from ..components.base_tab import BaseTab
 from ..components.file_operations import FileOperationsMixin
@@ -112,6 +114,7 @@ class EnhancedTranscriptionWorker(QThread):
                 "hf_token",
                 "enable_quality_retry",
                 "max_retry_attempts",
+                "require_diarization",
             }
 
             # Filter kwargs to only include valid AudioProcessor constructor parameters
@@ -134,6 +137,7 @@ class EnhancedTranscriptionWorker(QThread):
                 model=self.gui_settings["model"],
                 device=self.gui_settings["device"],
                 enable_diarization=enable_diarization,
+                require_diarization=enable_diarization,  # Strict mode: if diarization enabled, require it
                 enable_quality_retry=self.gui_settings.get(
                     "enable_quality_retry", True
                 ),
@@ -364,33 +368,51 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         )
         self.use_recommended_btn.setToolTip(
             "Automatically detects your hardware capabilities and applies optimal transcription settings. "
-            "This will configure the best model, device, batch size, and thread count for your system."
+            "This will configure the best model, device, batch size, and thread count for your system. "
+            "Memory calculations include OS overhead and leave room for other applications."
         )
         main_layout.addWidget(self.use_recommended_btn)
 
-        # Right side: Info box with expandable height
-        self.recommendations_label = QLabel(
-            "Click 'Get & Apply Recommended Settings' to automatically detect and configure optimal settings for your hardware."
-        )
-        self.recommendations_label.setWordWrap(True)
-        self.recommendations_label.setStyleSheet(
+        # Right side: Info box with two-column layout
+        self.recommendations_widget = QGroupBox()
+        self.recommendations_widget.setStyleSheet(
             """
-            background-color: #f5f5f5;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 11px;
+            QGroupBox {
+                background-color: #e8f5e8;
+                border: 1px solid #4caf50;
+                border-radius: 5px;
+                font-size: 11px;
+                padding-top: 5px;
+            }
         """
         )
-        self.recommendations_label.setMinimumHeight(35)
-        # Remove max height limit to allow expansion for recommendations
-        # Set size policy to allow both horizontal and vertical expansion
+
+        # Set height to match the button height but allow for readable text
+        self.recommendations_widget.setMinimumHeight(60)
+        self.recommendations_widget.setMaximumHeight(60)
+
+        # Create a grid layout for recommendations
+        self.recommendations_layout = QGridLayout()
+        self.recommendations_layout.setSpacing(5)  # Better spacing for readability
+        self.recommendations_layout.setContentsMargins(8, 5, 8, 5)
+
+        # Initially show placeholder text
+        placeholder_label = QLabel(
+            "Click 'Get & Apply Recommended Settings' to automatically detect and configure optimal settings for your hardware."
+        )
+        placeholder_label.setWordWrap(True)
+        placeholder_label.setStyleSheet("font-size: 11px; color: #666;")
+        self.recommendations_layout.addWidget(placeholder_label, 0, 0, 1, 2)
+
+        self.recommendations_widget.setLayout(self.recommendations_layout)
+
+        # Set size policy to prevent expansion
         from PyQt6.QtWidgets import QSizePolicy
 
-        self.recommendations_label.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        self.recommendations_widget.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        main_layout.addWidget(self.recommendations_label, 1)  # Give it more space
+        main_layout.addWidget(self.recommendations_widget, 1)  # Give it more space
 
         group.setLayout(main_layout)
         return group
@@ -401,80 +423,138 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         layout = QGridLayout()
 
         # Model selection
-        layout.addWidget(QLabel("Transcription Model:"), 0, 0)
         self.model_combo = QComboBox()
-        self.model_combo.addItems(["tiny", "base", "small", "medium", "large"])
+        self.model_combo.addItems(get_valid_whisper_models())
         self.model_combo.setCurrentText("base")
-        self.model_combo.setToolTip(
-            "Choose the Whisper model size. Larger models are more accurate but slower and use more memory. "
-            "'base' is recommended for most users."
-        )
+        self.model_combo.setMinimumWidth(200)  # Increase width to show full model names
         self.model_combo.currentTextChanged.connect(self._on_setting_changed)
-        layout.addWidget(self.model_combo, 0, 1)
+        self._add_field_with_info(
+            layout,
+            "Transcription Model:",
+            self.model_combo,
+            "Choose the Whisper model size. Larger models are more accurate but slower and use more memory. "
+            "'base' is recommended for most users.",
+            0,
+            0,
+        )
 
         # Language selection
-        layout.addWidget(QLabel("Language:"), 0, 2)
         self.language_combo = QComboBox()
         self.language_combo.addItems(
             ["auto", "en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh"]
         )
         self.language_combo.setCurrentText("auto")
-        self.language_combo.setToolTip(
-            "Select the language of the audio. 'auto' lets Whisper detect the language automatically. "
-            "Specifying the exact language can improve accuracy."
-        )
         self.language_combo.currentTextChanged.connect(self._on_setting_changed)
-        layout.addWidget(self.language_combo, 0, 3)
+        self._add_field_with_info(
+            layout,
+            "Language:",
+            self.language_combo,
+            "Select the language of the audio. 'auto' lets Whisper detect the language automatically. "
+            "Specifying the exact language can improve accuracy.",
+            0,
+            2,
+        )
 
         # Device selection
-        layout.addWidget(QLabel("GPU Acceleration:"), 1, 0)
         self.device_combo = QComboBox()
         self.device_combo.addItems(["auto", "cpu", "cuda", "mps"])
         self.device_combo.setCurrentText("auto")
-        self.device_combo.setToolTip(
-            "Choose processing device: 'auto' detects best available, 'cpu' uses CPU only, "
-            "'cuda' uses NVIDIA GPU, 'mps' uses Apple Silicon GPU."
-        )
         self.device_combo.currentTextChanged.connect(self._on_setting_changed)
-        layout.addWidget(self.device_combo, 1, 1)
+        self._add_field_with_info(
+            layout,
+            "GPU Acceleration:",
+            self.device_combo,
+            "Choose processing device: 'auto' detects best available, 'cpu' uses CPU only, "
+            "'cuda' uses NVIDIA GPU, 'mps' uses Apple Silicon GPU.",
+            1,
+            0,
+        )
 
         # Output format
-        layout.addWidget(QLabel("Format:"), 1, 2)
         self.format_combo = QComboBox()
         self.format_combo.addItems(["txt", "md", "srt", "vtt"])
         self.format_combo.setCurrentText("md")
-        self.format_combo.setToolTip(
-            "Output format: 'txt' for plain text, 'md' for Markdown, 'srt' and 'vtt' for subtitle files with precise timing."
-        )
         self.format_combo.currentTextChanged.connect(self._on_setting_changed)
-        layout.addWidget(self.format_combo, 1, 3)
+        self._add_field_with_info(
+            layout,
+            "Format:",
+            self.format_combo,
+            "Output format: 'txt' for plain text, 'md' for Markdown, 'srt' and 'vtt' for subtitle files with precise timing.",
+            1,
+            2,
+        )
 
-        # Output directory (make more compact)
+        # Output directory with custom layout for tooltip positioning
         layout.addWidget(QLabel("Output Directory:"), 2, 0)
+
+        # Create a horizontal layout for text input + tooltip + browse button
+        output_dir_layout = QHBoxLayout()
+        output_dir_layout.setContentsMargins(0, 0, 0, 0)
+        output_dir_layout.setSpacing(8)
+
         self.output_dir_input = QLineEdit()
         self.output_dir_input.setPlaceholderText(
             "Click Browse to select output directory (required)"
         )
-        # Remove default setting - require user selection
         self.output_dir_input.textChanged.connect(self._on_setting_changed)
-        # Make output directory field take only 1 column instead of 2
-        layout.addWidget(self.output_dir_input, 2, 1, 1, 1)
+        output_dir_layout.addWidget(self.output_dir_input)
+
+        # Add tooltip info indicator between input and browse button
+        output_dir_tooltip = "Directory where transcribed files will be saved. Click Browse to select a folder with write permissions."
+        formatted_tooltip = f"<b>Output Directory:</b><br/><br/>{output_dir_tooltip}"
+
+        info_label = QLabel("ⓘ")
+        info_label.setFixedSize(16, 16)
+        info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        info_label.setToolTip(formatted_tooltip)
+        info_label.setStyleSheet(
+            """
+            QLabel {
+                color: #007AFF;
+                font-size: 12px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+            }
+            QLabel:hover {
+                color: #0051D5;
+            }
+        """
+        )
+        output_dir_layout.addWidget(info_label)
 
         browse_output_btn = QPushButton("Browse")
-        browse_output_btn.setMaximumWidth(80)  # Limit browse button width
+        browse_output_btn.setMaximumWidth(80)
         browse_output_btn.clicked.connect(self._select_output_directory)
-        layout.addWidget(browse_output_btn, 2, 2)
+        output_dir_layout.addWidget(browse_output_btn)
 
-        # Add some spacing in the last column
-        layout.addWidget(QLabel(""), 2, 3)
+        # Create container widget for the custom layout
+        output_dir_container = QWidget()
+        output_dir_container.setLayout(output_dir_layout)
+        layout.addWidget(
+            output_dir_container, 2, 1, 1, 3
+        )  # Span across multiple columns
+
+        # Set tooltips for input and button as well
+        self.output_dir_input.setToolTip(formatted_tooltip)
+        browse_output_btn.setToolTip(formatted_tooltip)
 
         # Options
         self.timestamps_checkbox = QCheckBox("Include timestamps")
         self.timestamps_checkbox.setChecked(True)
+        self.timestamps_checkbox.setToolTip(
+            "Include precise timing information in the transcript. "
+            "Useful for creating subtitles or referencing specific moments in the audio."
+        )
         self.timestamps_checkbox.toggled.connect(self._on_setting_changed)
         layout.addWidget(self.timestamps_checkbox, 3, 0, 1, 2)
 
         self.diarization_checkbox = QCheckBox("Enable speaker diarization")
+        self.diarization_checkbox.setToolTip(
+            "Identify and separate different speakers in the audio. "
+            "Requires a HuggingFace token and additional dependencies. "
+            "Useful for meetings, interviews, or conversations with multiple speakers."
+        )
         self.diarization_checkbox.toggled.connect(self._on_setting_changed)
         layout.addWidget(self.diarization_checkbox, 3, 2, 1, 2)
 
@@ -503,20 +583,17 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.max_retry_attempts.setMaximum(3)
         self.max_retry_attempts.setValue(1)
         self.max_retry_attempts.setToolTip(
-            "Maximum number of retry attempts with larger models when quality validation fails. "
-            "0 = No retries (fastest), 1 = One retry (recommended), 2-3 = Multiple retries (slowest but highest quality)"
+            "Maximum number of retry attempts with larger models when quality validation fails.\n"
+            "• 0 = No retries (fastest processing)\n"
+            "• 1 = One retry (recommended balance)\n"
+            "• 2-3 = Multiple retries (slowest but highest quality)\n\n"
+            "💡 Tip: Disable retry for fastest processing, enable for best quality"
         )
         self.max_retry_attempts.valueChanged.connect(self._on_setting_changed)
         layout.addWidget(self.max_retry_attempts, 5, 1)
 
-        # Quality vs Performance info label
-        quality_info_label = QLabel(
-            "💡 Tip: Disable retry for fastest processing, enable for best quality"
-        )
-        quality_info_label.setStyleSheet(
-            "color: #666; font-size: 10px; font-style: italic;"
-        )
-        layout.addWidget(quality_info_label, 5, 2, 1, 2)
+        # Quality vs Performance info integrated into retry tooltip
+        # (Tip is now part of the max_retry_attempts tooltip above)
 
         group.setLayout(layout)
         return group
@@ -533,7 +610,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.omp_threads.setMaximum(32)
         self.omp_threads.setValue(max(1, min(8, os.cpu_count() or 4)))
         self.omp_threads.setToolTip(
-            "Number of OpenMP threads for whisper.cpp processing. Passed as -t parameter."
+            "Number of OpenMP threads for Whisper.cpp processing cores. "
+            "• More threads = Faster transcription but higher CPU usage "
+            "• Recommended: 4-8 threads for most systems "
+            "• Lower values: Preserve CPU for other applications "
+            "• Higher values: May not improve speed beyond 8-12 threads "
+            "💡 Use 'Get & Apply Recommended Settings' for optimal configuration"
         )
         self.omp_threads.valueChanged.connect(self._on_setting_changed)
         layout.addWidget(self.omp_threads, 0, 1)
@@ -545,7 +627,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.max_concurrent.setMaximum(16)
         self.max_concurrent.setValue(max(1, min(4, (os.cpu_count() or 4) // 2)))
         self.max_concurrent.setToolTip(
-            "Maximum number of files to process simultaneously. Controls actual parallel processing."
+            "Maximum number of files processed at the same time (parallel processing). "
+            "• Higher values = Faster batch processing but exponentially more memory usage "
+            "• CAUTION: Each file can use 2-10GB RAM depending on model size "
+            "• Memory usage = Files × Model RAM requirement "
+            "• Reduce if experiencing memory issues, crashes, or system slowdown "
+            "💡 Use 'Get & Apply Recommended Settings' for optimal configuration"
         )
         self.max_concurrent.valueChanged.connect(self._on_setting_changed)
         layout.addWidget(self.max_concurrent, 0, 3)
@@ -557,7 +644,10 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.batch_size.setMaximum(64)
         self.batch_size.setValue(16)
         self.batch_size.setToolTip(
-            "Batch size for whisper.cpp processing. Passed as -bs parameter."
+            "Number of audio segments processed together. "
+            "Higher values = better GPU utilization but more memory usage. "
+            "Recommended: 16-32 for GPU, 8-16 for CPU. "
+            "Reduce if you get out-of-memory errors."
         )
         self.batch_size.valueChanged.connect(self._on_setting_changed)
         layout.addWidget(self.batch_size, 1, 1)
@@ -630,14 +720,120 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             file_list.addItem(file)
 
     def _add_folder(self):
-        """Add transcription folder."""
+        """Add transcription folder with async scanning to prevent GUI blocking."""
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
         if folder:
-            folder_path = Path(folder)
-            extensions = [".mp4", ".mp3", ".wav", ".webm", ".m4a", ".flac", ".ogg"]
-            for file in folder_path.rglob("*"):
-                if file.suffix.lower() in extensions:
-                    self.transcription_files.addItem(str(file))
+            # Start async folder scanning to prevent GUI blocking
+            self.append_log(f"📁 Scanning folder: {folder}")
+            self.append_log("🔍 Please wait while scanning for audio/video files...")
+
+            # Create and start folder scan worker
+            self._start_folder_scan(folder)
+
+    def _start_folder_scan(self, folder_path: str) -> None:
+        """Start async folder scanning worker."""
+        from PyQt6.QtCore import QThread, pyqtSignal
+
+        class FolderScanWorker(QThread):
+            """Worker thread for scanning folders without blocking GUI."""
+
+            files_found = pyqtSignal(list)  # List of file paths found
+            scan_progress = pyqtSignal(int, str)  # count, current_file_name
+            scan_completed = pyqtSignal(int, str)  # total_found, folder_name
+            scan_error = pyqtSignal(str)  # error_message
+
+            def __init__(self, folder_path: str):
+                super().__init__()
+                self.folder_path = Path(folder_path)
+                self.extensions = [
+                    ".mp4",
+                    ".mp3",
+                    ".wav",
+                    ".webm",
+                    ".m4a",
+                    ".flac",
+                    ".ogg",
+                ]
+                self.should_stop = False
+
+            def run(self):
+                """Scan folder for audio/video files."""
+                try:
+                    found_files = []
+                    files_processed = 0
+
+                    # Use iterator to avoid loading all files into memory at once
+                    for file_path in self.folder_path.rglob("*"):
+                        if self.should_stop:
+                            break
+
+                        files_processed += 1
+
+                        # Check if it's a file and has a valid extension
+                        if (
+                            file_path.is_file()
+                            and file_path.suffix.lower() in self.extensions
+                        ):
+                            found_files.append(str(file_path))
+                            # Emit progress update every 10 files found or every 100 files processed
+                            if len(found_files) % 10 == 0 or files_processed % 100 == 0:
+                                self.scan_progress.emit(
+                                    len(found_files), file_path.name
+                                )
+
+                    # Emit final results
+                    self.files_found.emit(found_files)
+                    self.scan_completed.emit(len(found_files), self.folder_path.name)
+
+                except Exception as e:
+                    self.scan_error.emit(f"Error scanning folder: {str(e)}")
+
+            def stop(self):
+                """Stop the scanning process."""
+                self.should_stop = True
+
+        # Create and configure worker
+        self._folder_scan_worker = FolderScanWorker(folder_path)
+        self._folder_scan_worker.files_found.connect(self._handle_scanned_files)
+        self._folder_scan_worker.scan_progress.connect(self._handle_scan_progress)
+        self._folder_scan_worker.scan_completed.connect(self._handle_scan_completed)
+        self._folder_scan_worker.scan_error.connect(self._handle_scan_error)
+
+        # Start scanning
+        self._folder_scan_worker.start()
+
+    def _handle_scanned_files(self, file_paths: list[str]) -> None:
+        """Handle the list of scanned files."""
+        # Add all found files to the list
+        for file_path in file_paths:
+            self.transcription_files.addItem(file_path)
+
+    def _handle_scan_progress(self, files_found: int, current_file: str) -> None:
+        """Handle scan progress updates."""
+        self.append_log(
+            f"🔍 Found {files_found} audio/video files (scanning {current_file}...)"
+        )
+
+    def _handle_scan_completed(self, total_found: int, folder_name: str) -> None:
+        """Handle scan completion."""
+        self.append_log(
+            f"✅ Scan complete: Found {total_found} audio/video files in '{folder_name}'"
+        )
+
+        # Clean up worker
+        if hasattr(self, "_folder_scan_worker"):
+            self._folder_scan_worker.deleteLater()
+            del self._folder_scan_worker
+
+    def _handle_scan_error(self, error_message: str) -> None:
+        """Handle scan errors."""
+        self.append_log(f"❌ {error_message}")
+        self.show_error("Folder Scan Error", error_message)
+
+        # Clean up worker
+        if hasattr(self, "_folder_scan_worker"):
+            self._folder_scan_worker.deleteLater()
+            del self._folder_scan_worker
 
     def _clear_files(self):
         """Clear transcription file list."""
@@ -798,33 +994,52 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 "recommendations": recommendations,
             }
 
-            # Display hardware specs in left column
-            spec_text = []
-            spec_text.append(f"🎯 Recommended Device: {specs.recommended_device}")
-            spec_text.append(f"🧠 Recommended Model: {specs.recommended_whisper_model}")
-            spec_text.append(f"📦 Batch Size: {specs.optimal_batch_size}")
-            spec_text.append(f"🔄 Max Concurrent: {specs.max_concurrent_transcriptions}")
+            # Clear the layout first
+            for i in reversed(range(self.recommendations_layout.count())):
+                item = self.recommendations_layout.takeAt(i)
+                if item and item.widget():
+                    item.widget().deleteLater()
 
-            # Combine specifications and performance notes into single display
-            display_text = []
-            display_text.extend(spec_text)
-
-            if recommendations["performance_notes"]:
-                display_text.append("")  # Empty line separator
-                display_text.append("💡 Performance Notes:")
-                for note in recommendations["performance_notes"]:
-                    display_text.append(f"• {note}")
-
-            self.recommendations_label.setText("\n".join(display_text))
-            self.recommendations_label.setStyleSheet(
-                """
-                background-color: #e8f5e8;
-                padding: 10px;
-                border: 1px solid #4caf50;
-                border-radius: 5px;
-                font-size: 11px;
-                """
+            # Create a readable compact layout
+            # Left side - Device and Model
+            device_label = QLabel("🎯 Device:")
+            device_label.setStyleSheet(
+                "font-weight: bold; font-size: 11px; color: black;"
             )
+            device_value = QLabel(str(specs.recommended_device))
+            device_value.setStyleSheet("font-size: 11px; color: black;")
+
+            model_label = QLabel("🧠 Model:")
+            model_label.setStyleSheet(
+                "font-weight: bold; font-size: 11px; color: black;"
+            )
+            model_value = QLabel(str(specs.recommended_whisper_model))
+            model_value.setStyleSheet("font-size: 11px; color: black;")
+
+            # Right side - Batch Size and Max Concurrent (including "Max" note)
+            batch_label = QLabel("📦 Batch:")
+            batch_label.setStyleSheet(
+                "font-weight: bold; font-size: 11px; color: black;"
+            )
+            batch_value = QLabel(str(specs.optimal_batch_size))
+            batch_value.setStyleSheet("font-size: 11px; color: black;")
+
+            max_label = QLabel("🔄 Max Files:")
+            max_label.setStyleSheet("font-weight: bold; font-size: 11px; color: black;")
+            max_value_text = f"{specs.max_concurrent_transcriptions} (Max)"
+            max_value = QLabel(max_value_text)
+            max_value.setStyleSheet("font-size: 11px; color: black;")
+
+            # Add widgets to grid layout with better spacing
+            self.recommendations_layout.addWidget(device_label, 0, 0)
+            self.recommendations_layout.addWidget(device_value, 0, 1)
+            self.recommendations_layout.addWidget(batch_label, 0, 2)
+            self.recommendations_layout.addWidget(batch_value, 0, 3)
+
+            self.recommendations_layout.addWidget(model_label, 1, 0)
+            self.recommendations_layout.addWidget(model_value, 1, 1)
+            self.recommendations_layout.addWidget(max_label, 1, 2)
+            self.recommendations_layout.addWidget(max_value, 1, 3)
 
             # Enable the "Use Recommended Settings" button
             self.use_recommended_btn.setEnabled(True)
@@ -833,15 +1048,30 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         except Exception as e:
             error_msg = f"Failed to get hardware recommendations: {e}"
-            self.recommendations_label.setText(f"❌ {error_msg}")
-            self.recommendations_label.setStyleSheet(
+
+            # Clear the layout first
+            for i in reversed(range(self.recommendations_layout.count())):
+                item = self.recommendations_layout.takeAt(i)
+                if item and item.widget():
+                    item.widget().deleteLater()
+
+            # Show error message
+            error_label = QLabel(f"❌ {error_msg}")
+            error_label.setStyleSheet("color: #f44336; font-size: 11px;")
+            error_label.setWordWrap(True)
+            self.recommendations_layout.addWidget(error_label, 0, 0, 1, 4)
+
+            # Update widget style for error
+            self.recommendations_widget.setStyleSheet(
                 """
-                background-color: #ffeaea;
-                padding: 10px;
-                border: 1px solid #f44336;
-                border-radius: 5px;
-                font-size: 11px;
-                """
+                QGroupBox {
+                    background-color: #ffeaea;
+                    border: 1px solid #f44336;
+                    border-radius: 5px;
+                    font-size: 11px;
+                    padding-top: 5px;
+                }
+            """
             )
 
     def _apply_recommended_settings(self):
@@ -861,49 +1091,92 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         try:
             specs = self._current_recommendations["specs"]
 
+            # Debug logging
+            self.append_log(f"🔧 Applying recommendations:")
+            self.append_log(f"   Model: {specs.recommended_whisper_model}")
+            self.append_log(f"   Device: {specs.recommended_device}")
+            self.append_log(f"   Batch Size: {specs.optimal_batch_size}")
+            self.append_log(f"   Max Concurrent: {specs.max_concurrent_transcriptions}")
+            self.append_log(f"   CPU Cores: {specs.cpu_cores}")
+
             # Apply recommended settings
             # Model
-            if specs.recommended_whisper_model in [
-                "tiny",
-                "base",
-                "small",
-                "medium",
-                "large",
-            ]:
+            if specs.recommended_whisper_model in get_valid_whisper_models():
+                old_model = self.model_combo.currentText()
                 index = self.model_combo.findText(specs.recommended_whisper_model)
                 if index >= 0:
                     self.model_combo.setCurrentIndex(index)
+                    self.append_log(
+                        f"   ✓ Model changed: {old_model} → {specs.recommended_whisper_model}"
+                    )
+                else:
+                    self.append_log(
+                        f"   ⚠️ Model '{specs.recommended_whisper_model}' not found in combo box"
+                    )
+            else:
+                self.append_log(
+                    f"   ⚠️ Model '{specs.recommended_whisper_model}' not supported"
+                )
 
             # Device
             device_mapping = {"cpu": "cpu", "cuda": "cuda", "mps": "mps"}
             recommended_device = device_mapping.get(
                 specs.recommended_device.lower(), "auto"
             )
+            old_device = self.device_combo.currentText()
             index = self.device_combo.findText(recommended_device)
             if index >= 0:
                 self.device_combo.setCurrentIndex(index)
+                self.append_log(
+                    f"   ✓ Device changed: {old_device} → {recommended_device}"
+                )
+            else:
+                self.append_log(
+                    f"   ⚠️ Device '{recommended_device}' not found in combo box"
+                )
 
             # Batch size
             if hasattr(specs, "optimal_batch_size") and specs.optimal_batch_size:
+                old_batch = self.batch_size.value()
                 self.batch_size.setValue(specs.optimal_batch_size)
+                self.append_log(
+                    f"   ✓ Batch size changed: {old_batch} → {specs.optimal_batch_size}"
+                )
+            else:
+                self.append_log(f"   ⚠️ No optimal batch size available")
 
             # Max concurrent files
             if (
                 hasattr(specs, "max_concurrent_transcriptions")
                 and specs.max_concurrent_transcriptions
             ):
+                old_concurrent = self.max_concurrent.value()
                 self.max_concurrent.setValue(specs.max_concurrent_transcriptions)
+                self.append_log(
+                    f"   ✓ Max concurrent changed: {old_concurrent} → {specs.max_concurrent_transcriptions}"
+                )
+            else:
+                self.append_log(f"   ⚠️ No max concurrent recommendation available")
 
             # Calculate optimal thread count (usually leave some cores free)
             if hasattr(specs, "cpu_cores") and specs.cpu_cores:
                 optimal_threads = max(1, min(8, specs.cpu_cores - 1))
+                old_threads = self.omp_threads.value()
                 self.omp_threads.setValue(optimal_threads)
+                self.append_log(
+                    f"   ✓ Thread count changed: {old_threads} → {optimal_threads}"
+                )
+            else:
+                self.append_log(f"   ⚠️ No CPU cores information available")
 
             self.append_log("✅ Recommended settings applied successfully!")
 
         except Exception as e:
             error_msg = f"Failed to apply recommended settings: {e}"
             self.append_log(f"❌ {error_msg}")
+            import traceback
+
+            self.append_log(f"   Stack trace: {traceback.format_exc()}")
 
     def _get_transcription_settings(self) -> dict[str, Any]:
         """Get current transcription settings."""

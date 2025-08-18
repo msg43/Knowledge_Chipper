@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from ..config import get_settings
+from ..utils.text_utils import get_model_context_window
 
 
 class WindowPreset(str, Enum):
@@ -30,6 +31,10 @@ class SuperChunkConfig:
     preset: WindowPreset = WindowPreset.BALANCED
     adaptive_switching: bool = True
 
+    # LLM configuration (passed from summarizer)
+    provider: str | None = None
+    model: str | None = None
+
     # Preset windows (tokens)
     precision: WindowSettings = field(
         default_factory=lambda: WindowSettings(
@@ -43,7 +48,9 @@ class SuperChunkConfig:
     )
     narrative: WindowSettings = field(
         default_factory=lambda: WindowSettings(
-            min_tokens=5000, max_tokens=8000, overlap_tokens=280
+            min_tokens=4000,
+            max_tokens=6000,
+            overlap_tokens=280,  # Reduced to fit in 8k models
         )
     )
 
@@ -78,11 +85,68 @@ class SuperChunkConfig:
     temperature_verify: float = 0.0
 
     def get_window(self) -> WindowSettings:
+        # If model is specified, calculate dynamic windows
+        if self.model:
+            return self._get_dynamic_window()
+
+        # Otherwise use preset defaults
         if self.preset == WindowPreset.PRECISION:
             return self.precision
         if self.preset == WindowPreset.NARRATIVE:
             return self.narrative
         return self.balanced
+
+    def _get_dynamic_window(self) -> WindowSettings:
+        """Calculate window settings dynamically based on model's context window."""
+        if not self.model:
+            return self.get_window()  # Fallback to preset
+
+        # Get the model's actual context window
+        context_window = get_model_context_window(self.model)
+
+        # Calculate appropriate window sizes based on context
+        # Reserve space for: safety margin, output tokens, and prompt overhead
+        if context_window >= 100000:  # 128k models (GPT-4o, Claude 3)
+            # Use ~75% of context for very large models
+            max_window = min(75000, int(context_window * 0.75))
+            min_window = max_window - 10000
+            overlap = 500
+        elif context_window >= 30000:  # 32k+ models
+            # Use ~70% of context for large models
+            max_window = min(20000, int(context_window * 0.70))
+            min_window = max_window - 5000
+            overlap = 400
+        elif context_window >= 15000:  # 16k models (GPT-3.5-turbo)
+            # Use ~60% of context for medium models
+            max_window = min(9000, int(context_window * 0.60))
+            min_window = max_window - 2000
+            overlap = 300
+        elif context_window >= 8000:  # 8k models (GPT-4)
+            # Use ~50% of context for standard models
+            max_window = min(4000, int(context_window * 0.50))
+            min_window = max_window - 1000
+            overlap = 280
+        else:  # 4k models
+            # Use ~40% of context for small models
+            max_window = min(1600, int(context_window * 0.40))
+            min_window = max_window - 400
+            overlap = 200
+
+        # Adjust based on preset preferences
+        if self.preset == WindowPreset.PRECISION:
+            # Precision mode: smaller windows for accuracy
+            max_window = int(max_window * 0.7)
+            min_window = int(min_window * 0.7)
+        elif self.preset == WindowPreset.NARRATIVE:
+            # Narrative mode: larger windows for context
+            max_window = int(max_window * 1.2)
+            min_window = int(min_window * 1.2)
+
+        return WindowSettings(
+            min_tokens=max(1000, min_window),  # Never go below 1000 tokens
+            max_tokens=max(1500, max_window),  # Never go below 1500 tokens
+            overlap_tokens=overlap,
+        )
 
     @staticmethod
     def from_global_settings() -> SuperChunkConfig:
@@ -100,6 +164,8 @@ class SuperChunkConfig:
             if isinstance(self.preset, WindowPreset)
             else str(self.preset),
             "adaptive_switching": bool(self.adaptive_switching),
+            "provider": self.provider,
+            "model": self.model,
             # windows
             "precision": asdict(self.precision),
             "balanced": asdict(self.balanced),

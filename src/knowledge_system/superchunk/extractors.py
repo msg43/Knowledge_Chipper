@@ -17,8 +17,10 @@ class Extractors:
     logger = get_logger(__name__)
 
     @staticmethod
-    def create_default() -> Extractors:
-        adapter = SuperChunkLLMAdapter.create_default()
+    def create_default(
+        provider: str | None = None, model: str | None = None
+    ) -> Extractors:
+        adapter = SuperChunkLLMAdapter.create_default(provider=provider, model=model)
         return Extractors(adapter=adapter, config=adapter.config)
 
     def _bounds_check(

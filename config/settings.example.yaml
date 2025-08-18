@@ -145,6 +145,15 @@ monitoring:
   track_processing_times: true
   track_resource_usage: true
 
+# GUI Feature Toggles
+gui_features:
+  # Tab visibility settings
+  show_process_management_tab: false  # Set to true to enable Process Management tab in GUI
+  show_file_watcher_tab: true         # File Watcher tab (default: enabled)
+
+  # Advanced feature toggles
+  enable_advanced_features: false     # Enable experimental/advanced GUI features
+
 # Summarization Settings (inherits from llm by default)
 summarization:
   provider: "openai"
