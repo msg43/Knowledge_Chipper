@@ -51,6 +51,13 @@ A comprehensive knowledge management system for macOS that transforms videos, au
 - **MOC Classification**: Automatically adds `Is_MOC` field based on analysis type for better organization
 - **Zero Configuration**: Works automatically with Document Summary analysis type
 
+### 🤖 Dynamic Model Management & Smart Validation
+- **Live Model Updates**: Fetches latest models from OpenAI API and Ollama.com/library when you hit refresh (🔄)
+- **Smart Session Validation**: Automatically validates model access on first use - no test buttons needed
+- **Clear Error Messages**: Specific, actionable feedback like "Model requires GPT-4 access" or "Run 'ollama pull llama3.2'"
+- **Intelligent Fallbacks**: Automatically suggests alternatives for deprecated models
+- **Zero Manual Configuration**: Model lists update automatically, validation happens transparently
+
 ## Table of Contents
 
 - [🚀 Quick Start](#-quick-start)
@@ -416,7 +423,7 @@ Generated: {generated_at} | Files: {source_files_count}
 1. Add documents or folders
 2. Choose Analysis Type from dropdown (Document Summary, Knowledge Map, Entity Extraction, or Relationship Analysis)
 3. Template auto-populates based on selection (customize if desired)
-4. Configure provider, model, and other settings
+4. Configure provider and model (use 🔄 to refresh available models)
 5. Click "Start Content Analysis"
 
 **CLI:**
@@ -714,9 +721,9 @@ Enhanced Summarization Progress Example:
 
 ## 🎯 Common Use Cases
 
-### YouTube Video Processing
+### YouTube Video Processing with Advanced Batch Management
 
-**Perfect for:** Lectures, podcasts, tutorials, interviews
+**Perfect for:** Lectures, podcasts, tutorials, interviews, large channel archives
 
 ```bash
 # Single video
@@ -733,6 +740,67 @@ knowledge-system transcribe --batch-urls logs/youtube_extraction_failures.csv
 ```
 
 **GUI:** Use the "YouTube Extraction" tab for the easiest experience.
+
+#### 🚀 **NEW: Intelligent Batch Processing with Resource Management**
+
+For processing large numbers of videos (100s-1000s), the system now includes enterprise-grade resource management:
+
+**🔄 Conveyor Belt Mode (Default)**
+- Downloads videos in small batches (50-100 at a time)
+- Processes each batch with parallel diarization 
+- Automatically cleans up audio files after successful processing
+- Memory-efficient for long-running operations
+- **Best for:** Normal internet, limited disk space
+
+**📥 Download-All Mode (New Option)**
+- Downloads ALL audio files first, then processes offline
+- Can disconnect internet after download phase
+- Retains audio files until all processing completes
+- **Best for:** Slow internet, large disk space, overnight processing
+
+**🧠 Smart Resource Monitoring**
+- **Memory Pressure Handling**: Automatically reduces concurrency when memory usage hits 85%
+- **Emergency Protection**: Stops processing at 98% memory to prevent crashes
+- **Dynamic Adjustment**: Concurrency adapts based on system performance
+- **Disk Space Validation**: Checks available space before starting large batches
+
+**🛡️ Crash Recovery**
+- Audio files are retained until successful transcription
+- Failed downloads can be retried without re-downloading successful ones
+- Automatic failure logging with CSV files for easy retry
+
+#### 🎙️ **Enhanced Speaker Diarization**
+
+YouTube videos now support advanced speaker identification:
+
+```bash
+# Enable diarization for speaker-aware transcripts
+knowledge-system transcribe --input "https://youtube.com/watch?v=VIDEO_ID" --enable-diarization
+```
+
+**Features:**
+- **Speaker Labels**: Output includes (SPEAKER_00), (SPEAKER_01), etc.
+- **Webshare Proxy Integration**: Uses your configured proxy for reliable audio downloads
+- **Intelligent Processing**: Automatically switches between regular transcripts and diarization
+- **Fallback Handling**: Gracefully falls back to regular transcripts if diarization fails
+
+**Sample Output with Diarization:**
+```markdown
+## Interview Analysis
+
+**(SPEAKER_00):** Welcome to the show. Today we're discussing...
+
+**(SPEAKER_01):** Thanks for having me. I'm excited to talk about...
+
+**(SPEAKER_00):** Let's start with the basics. Can you explain...
+```
+
+#### ⚡ **Performance & Reliability**
+
+- **80-90% Faster Re-runs**: Automatically skips already processed videos
+- **WebShare Proxy Required**: Ensures reliable access to YouTube content  
+- **Automatic Retry Logic**: Failed extractions are logged and can be easily retried
+- **Parallel Processing**: Multiple videos processed simultaneously with resource monitoring
 
 **Performance Note:** Re-running YouTube extractions is now 80-90% faster! The system automatically skips videos that have already been processed by checking video IDs before making any API calls.
 
@@ -787,11 +855,18 @@ For AI summarization, you need API keys:
 1. Go to https://platform.openai.com/account/api-keys
 2. Create a new key
 3. Add it in Settings tab → "OpenAI API Key"
+4. Models automatically populate from your account when you click refresh (🔄)
 
 **Anthropic (Alternative):**
 1. Go to https://console.anthropic.com/
 2. Create a new key
 3. Add it in Settings tab → "Anthropic API Key"
+4. Latest Claude models are pre-configured and updated regularly
+
+**Ollama (Local):**
+- Models automatically detected from your local Ollama installation
+- Click refresh (🔄) to update the list from ollama.com/library
+- System validates models are actually installed before use
 
 ### Hardware-Aware Performance Options
 
@@ -1130,6 +1205,15 @@ Content to analyze:
 - **Solution**: Add your API key in Settings tab
 - **Details**: OpenAI or Anthropic API key required for summarization
 
+**❌ "Model validation failed"**
+- **Solution**: The system automatically checks model access when you start processing
+- **Common causes and fixes**:
+  - "No access to model": Check your API subscription (e.g., GPT-4 requires specific access)
+  - "Model not installed": For Ollama, run `ollama pull <model-name>`
+  - "Invalid API key": Verify your API key is correct and active
+  - "Rate limit exceeded": Wait a few minutes and try again
+- **Details**: First use of each model validates it can actually respond
+
 **❌ "FFmpeg not found"**
 - **Solution**: Install FFmpeg: `brew install ffmpeg`
 - **Details**: Required for audio/video processing
@@ -1294,6 +1378,22 @@ knowledge-system summarize large_transcript.md  # Intelligent chunking uses 95% 
 # Example: 100K char files process as single unit on qwen2.5:32b (vs forced chunking before)
 ```
 
+### Model Management
+
+```bash
+# List available models for a provider
+knowledge-system models list openai
+knowledge-system models list anthropic
+knowledge-system models list local
+
+# Refresh model lists from official sources
+knowledge-system models refresh        # Refresh all providers
+knowledge-system models refresh openai # Refresh specific provider
+
+# Models are automatically validated when first used
+# No manual testing needed - happens transparently
+```
+
 ### Batch Operations
 
 ```bash
@@ -1396,6 +1496,51 @@ The system now includes intelligent caching to avoid reprocessing unchanged cont
 - Shows exact time saved by skipping unchanged content
 - Estimates API tokens and costs saved
 - Reports number of files skipped via smart caching
+
+#### Crash Recovery & Resume Capabilities
+
+**Robust Recovery for Large YouTube Processing Operations**
+
+The system includes comprehensive crash recovery mechanisms specifically designed for large YouTube transcription batches with diarization:
+
+**🔄 Automatic Crash Recovery:**
+- **Video ID Index**: Maintains persistent index of successfully processed videos
+- **Resume from Checkpoint**: Automatically skips completed videos when restarting after a crash
+- **Diarization-Aware**: Recovery works regardless of whether diarization was enabled
+- **Progress Preservation**: Checkpoint system saves task states throughout processing
+
+**📊 Recovery Mechanisms:**
+- **Index Building**: Scans existing transcript files for video IDs in YAML frontmatter
+- **Smart Skip Logic**: Checks video IDs before processing - skips if already completed
+- **File-Based Recovery**: Works by examining actual output files, not just memory state
+- **Graceful Restart**: Simply re-run the same batch - completed videos are automatically skipped
+
+**🎯 Real-World Scenario:**
+```
+Initial batch: 100 YouTube videos with diarization
+App crashes after: 45 videos successfully completed
+On restart: System automatically skips the 45 completed videos
+Continues from: Video #46 (automatically detected)
+Time saved: 80-90% (no re-downloading or re-processing)
+```
+
+**⚡ Performance Benefits:**
+- **80-90% Time Savings**: Re-runs are dramatically faster due to intelligent skipping
+- **No Re-processing**: Completed transcriptions (with diarization) are preserved
+- **Checkpoint-Based**: Progress tracking with automatic resume capability
+- **Override Available**: Use "Overwrite existing" option to force re-processing if needed
+
+**🔧 How It Works:**
+1. **During Processing**: System tracks completed video IDs and saves to persistent checkpoint files
+2. **After Crash**: On restart, system builds index of existing transcripts from output directory
+3. **Smart Resume**: Compares new batch against existing files and skips matches
+4. **Seamless Continue**: Picks up exactly where it left off without user intervention
+
+**💡 Perfect For:**
+- Large YouTube playlist processing (100+ videos)
+- Long-running transcription jobs with diarization
+- Batch processing operations that might be interrupted
+- Research projects requiring reliable, resumable workflows
 
 ### System Architecture
 

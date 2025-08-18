@@ -101,6 +101,9 @@ class TranscriptionService:
         download_thumbnails: bool | None = None,
         output_dir: str | Path | None = None,
         include_timestamps: bool = True,
+        enable_diarization: bool = False,
+        require_diarization: bool = False,
+        overwrite: bool = False,
     ) -> dict[str, Any]:
         """Extract transcript from a YouTube URL."""
         logger.info(f"Starting transcript extraction from YouTube URL: {url}")
@@ -120,20 +123,38 @@ class TranscriptionService:
                     "source": url,
                 }
 
-            # Primary method: Try transcript processor with WebShare proxy
-            from ..processors.youtube_transcript import YouTubeTranscriptProcessor
+            # If diarization is required, skip YouTube transcript API and use audio processing
+            if enable_diarization:
+                logger.info(
+                    f"Diarization requested - using audio processing instead of YouTube API for: {url}"
+                )
 
-            processor = YouTubeTranscriptProcessor(
-                preferred_language="en",
-                prefer_manual=True,
-                fallback_to_auto=True,
-            )
+                # Use YouTube transcript processor but force diarization mode
+                from ..processors.youtube_transcript import YouTubeTranscriptProcessor
+
+                processor = YouTubeTranscriptProcessor(
+                    preferred_language="en",
+                    prefer_manual=True,
+                    fallback_to_auto=True,
+                    force_diarization=True,  # Force diarization mode
+                    require_diarization=require_diarization,  # Strict mode
+                )
+            else:
+                # Primary method: Try transcript processor with WebShare proxy (normal mode)
+                from ..processors.youtube_transcript import YouTubeTranscriptProcessor
+
+                processor = YouTubeTranscriptProcessor(
+                    preferred_language="en",
+                    prefer_manual=True,
+                    fallback_to_auto=True,
+                )
 
             transcript_result = processor.process(
                 url,
                 output_dir=output_dir,
                 include_timestamps=include_timestamps,
                 include_analysis=True,
+                overwrite=overwrite,
             )
 
             if transcript_result.success and transcript_result.data.get("transcripts"):

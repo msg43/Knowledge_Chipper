@@ -62,6 +62,10 @@ class SummarizerProcessor(BaseProcessor):
             else:
                 self.model = "gpt-4o-mini-2024-07-18"  # fallback
 
+        # Basic model validation - ensure it's not empty
+        if not self.model:
+            raise ValueError("Model name cannot be empty")
+
         # Create unified LLM client (no max_tokens - rely on prompt instructions)
         self.llm_client = UnifiedLLMClient(
             provider=self.provider,
@@ -1036,7 +1040,11 @@ class SummarizerProcessor(BaseProcessor):
                 )
 
             # SuperChunk path for text/markdown files (GUI continues to handle file output/append logic)
+            logger.info(
+                f"🔍 Checking SuperChunk routing: input_path={input_path}, suffix={input_path.suffix.lower() if input_path else 'None'}"
+            )
             if input_path is not None and input_path.suffix.lower() in [".md", ".txt"]:
+                logger.info(f"✅ Routing through SuperChunk for {input_path}")
                 # Choose artifacts dir with user/GUIs override when provided
                 preferred_base = (
                     kwargs.get("artifacts_output_dir")
@@ -1054,14 +1062,38 @@ class SummarizerProcessor(BaseProcessor):
                 # Prepare paragraphs and run SuperChunk
                 paragraphs = [p for p in text.split("\n\n") if p.strip()]
                 cfg = SuperChunkConfig.from_global_settings()
-                Runner(config=cfg, artifacts_dir=run_dir).run(paragraphs)
+                # Pass provider and model info to SuperChunk
+                cfg.provider = self.provider
+                cfg.model = self.model
+                logger.info(
+                    f"🚀 Starting SuperChunk Runner with {len(paragraphs)} paragraphs"
+                )
+                try:
+                    Runner(config=cfg, artifacts_dir=run_dir).run(paragraphs)
+                    logger.info(f"✅ SuperChunk Runner completed")
+                except Exception as e:
+                    logger.error(f"❌ SuperChunk Runner failed: {e}")
+                    raise RuntimeError(f"SuperChunk processing failed: {e}") from e
 
                 # Read final.md as the produced summary; GUI will still write/append per its existing flow
                 final_md_path = run_dir / "final.md"
                 try:
                     summary_text = final_md_path.read_text(encoding="utf-8")
-                except Exception:
-                    summary_text = ""
+                    if not summary_text.strip():
+                        logger.error(
+                            f"❌ SuperChunk produced empty final.md at {final_md_path}"
+                        )
+                        raise ValueError("SuperChunk produced empty summary")
+                except FileNotFoundError:
+                    logger.error(
+                        f"❌ SuperChunk failed to create final.md at {final_md_path}"
+                    )
+                    raise
+                except Exception as e:
+                    logger.error(
+                        f"❌ Error reading SuperChunk output from {final_md_path}: {e}"
+                    )
+                    raise
 
                 processing_time = time.time() - start_time
                 metadata = {
@@ -1115,13 +1147,37 @@ class SummarizerProcessor(BaseProcessor):
 
                 paragraphs = [p for p in text.split("\n\n") if p.strip()]
                 cfg = SuperChunkConfig.from_global_settings()
-                Runner(config=cfg, artifacts_dir=run_dir).run(paragraphs)
+                # Pass provider and model info to SuperChunk
+                cfg.provider = self.provider
+                cfg.model = self.model
+                logger.info(
+                    f"🚀 Starting SuperChunk Runner with {len(paragraphs)} paragraphs"
+                )
+                try:
+                    Runner(config=cfg, artifacts_dir=run_dir).run(paragraphs)
+                    logger.info(f"✅ SuperChunk Runner completed")
+                except Exception as e:
+                    logger.error(f"❌ SuperChunk Runner failed: {e}")
+                    raise RuntimeError(f"SuperChunk processing failed: {e}") from e
 
                 final_md_path = run_dir / "final.md"
                 try:
                     summary_text = final_md_path.read_text(encoding="utf-8")
-                except Exception:
-                    summary_text = ""
+                    if not summary_text.strip():
+                        logger.error(
+                            f"❌ SuperChunk produced empty final.md at {final_md_path}"
+                        )
+                        raise ValueError("SuperChunk produced empty summary")
+                except FileNotFoundError:
+                    logger.error(
+                        f"❌ SuperChunk failed to create final.md at {final_md_path}"
+                    )
+                    raise
+                except Exception as e:
+                    logger.error(
+                        f"❌ Error reading SuperChunk output from {final_md_path}: {e}"
+                    )
+                    raise
 
                 processing_time = time.time() - start_time
                 metadata = {
@@ -1358,7 +1414,13 @@ class SummarizerProcessor(BaseProcessor):
         except Exception as e:
             processing_time = time.time() - start_time
             error_msg = f"Summarization failed: {e}"
-            logger.error(error_msg)
+
+            # Add traceback to understand where the error is coming from
+            import traceback
+
+            logger.error(
+                f"{error_msg}\nTraceback:\n{''.join(traceback.format_tb(e.__traceback__))}"
+            )
 
             if progress_callback:
                 progress_callback(

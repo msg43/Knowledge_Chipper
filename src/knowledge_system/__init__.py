@@ -72,7 +72,12 @@ def gui_main() -> None:
 
     try:
         # Import PyQt6 first to check availability
+        from PyQt6.QtCore import QLoggingCategory
         from PyQt6.QtWidgets import QApplication
+
+        # Suppress Qt CSS warnings about unknown properties like "transform"
+        # Qt's CSS parser doesn't support all CSS3 properties and generates warnings
+        QLoggingCategory.setFilterRules("qt.qss.debug=false")
 
         # Create the QApplication
         app = QApplication(sys.argv)

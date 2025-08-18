@@ -1,0 +1,291 @@
+name: Build macOS App for Release
+
+on:
+  release:
+    types: [published, edited]
+  workflow_dispatch:  # Allow manual triggering
+    inputs:
+      test_build:
+        description: 'Test build without release upload'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.13'
+  APP_NAME: 'Knowledge_Chipper'
+
+jobs:
+  # Test the build process across multiple macOS versions
+  test-build:
+    name: Test Build on macOS ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-12, macos-13, macos-14]  # macOS Monterey, Ventura, Sonoma
+      fail-fast: false
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for proper version detection
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install system dependencies
+      run: |
+        # Install dependencies that might be needed
+        brew install --quiet ffmpeg
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest  # For any basic tests
+
+    - name: Verify icon files exist
+      run: |
+        if [ ! -f "chipper.png" ]; then
+          echo "❌ chipper.png not found"
+          exit 1
+        fi
+        if [ ! -f "chipper.ico" ]; then
+          echo "❌ chipper.ico not found"
+          exit 1
+        fi
+        echo "✅ Icon files found"
+        file chipper.png
+        file chipper.ico
+
+    - name: Test basic import
+      run: |
+        python -c "
+        import sys
+        sys.path.insert(0, 'src')
+        try:
+            from knowledge_system.gui.assets.icons import get_app_icon, get_icon_path
+            print('✅ Icon system imports successfully')
+
+            # Test icon loading (without creating QApplication)
+            from pathlib import Path
+            icon_path = get_icon_path()
+            if icon_path and icon_path.exists():
+                print(f'✅ Icon file found at: {icon_path}')
+            else:
+                print('❌ Icon file not found by icon system')
+                exit(1)
+        except Exception as e:
+            print(f'❌ Import test failed: {e}')
+            exit(1)
+        "
+
+    - name: Prepare build script
+      run: |
+        # Make build script executable
+        chmod +x build_macos_app.sh
+
+        # Show build script info
+        echo "📋 Build script info:"
+        head -20 build_macos_app.sh
+
+    - name: Test build (dry run)
+      if: matrix.os != 'macos-14' || github.event.inputs.test_build == 'true'
+      run: |
+        echo "🧪 Testing build process on ${{ matrix.os }}"
+        # Create a test version that doesn't require sudo
+        mkdir -p test_build
+
+        # Test icon creation
+        mkdir -p test_build/icon.iconset
+        for size in 16 32 128 256 512; do
+          sips -z $size $size chipper.png --out test_build/icon.iconset/icon_${size}x${size}.png
+          sips -z $((size*2)) $((size*2)) chipper.png --out test_build/icon.iconset/icon_${size}x${size}@2x.png
+        done
+        iconutil -c icns test_build/icon.iconset -o test_build/AppIcon.icns
+
+        echo "✅ Icon creation test passed on ${{ matrix.os }}"
+        ls -la test_build/AppIcon.icns
+        file test_build/AppIcon.icns
+
+  # Main build job - only runs on latest macOS for actual release
+  build-release:
+    name: Build Release App
+    runs-on: macos-14  # Use latest macOS for release builds
+    needs: test-build
+    if: github.event_name == 'release' || github.event.inputs.test_build == 'false'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install system dependencies
+      run: |
+        brew install --quiet ffmpeg
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Get version info
+      id: version
+      run: |
+        if [ -f "src/knowledge_system/version.py" ]; then
+          VERSION=$(grep '^VERSION\s*=\s*"' src/knowledge_system/version.py | sed -E 's/.*"([^"]+)".*/\1/')
+        else
+          VERSION=$(git describe --tags --always)
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "📋 Building version: $VERSION"
+
+    - name: Build macOS app
+      run: |
+        echo "🏗️ Building Knowledge Chipper.app..."
+
+        # Set up for automated build (no interactive prompts)
+        export CI=true
+        export AUTOMATED_BUILD=true
+
+        # Run the build script
+        chmod +x build_macos_app.sh
+
+        # Modify build script to work in CI environment
+        # Replace sudo commands with direct commands since we're in a clean environment
+        sed -i '' 's/sudo //g' build_macos_app.sh
+        sed -i '' 's|/Applications|./build_output|g' build_macos_app.sh
+
+        # Create output directory
+        mkdir -p build_output
+
+        # Run modified build
+        ./build_macos_app.sh
+
+    - name: Verify build output
+      run: |
+        if [ -d "build_output/${{ env.APP_NAME }}.app" ]; then
+          echo "✅ App bundle created successfully"
+          ls -la "build_output/${{ env.APP_NAME }}.app/Contents/"
+
+          # Check icon
+          if [ -f "build_output/${{ env.APP_NAME }}.app/Contents/Resources/AppIcon.icns" ]; then
+            echo "✅ App icon included"
+            file "build_output/${{ env.APP_NAME }}.app/Contents/Resources/AppIcon.icns"
+          else
+            echo "❌ App icon missing"
+            exit 1
+          fi
+
+          # Check executable
+          if [ -f "build_output/${{ env.APP_NAME }}.app/Contents/MacOS/launch" ]; then
+            echo "✅ Launch script included"
+          else
+            echo "❌ Launch script missing"
+            exit 1
+          fi
+        else
+          echo "❌ App bundle not created"
+          exit 1
+        fi
+
+    - name: Create DMG archive
+      run: |
+        cd build_output
+
+        # Create professional DMG disk image
+        hdiutil create \
+          -volname "${{ env.APP_NAME }}" \
+          -srcfolder "${{ env.APP_NAME }}.app" \
+          -ov \
+          -format UDZO \
+          -imagekey zlib-level=9 \
+          "${{ env.APP_NAME }}-v${{ steps.version.outputs.version }}-macOS.dmg"
+
+        echo "📦 Created release archive:"
+        ls -la *.dmg
+
+        # Verify DMG was created successfully
+        if [ ! -f "${{ env.APP_NAME }}-v${{ steps.version.outputs.version }}-macOS.dmg" ]; then
+          echo "❌ DMG creation failed"
+          exit 1
+        fi
+
+        echo "✅ DMG created successfully"
+        hdiutil imageinfo "${{ env.APP_NAME }}-v${{ steps.version.outputs.version }}-macOS.dmg"
+
+    - name: Upload DMG to release
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./build_output/${{ env.APP_NAME }}-v${{ steps.version.outputs.version }}-macOS.dmg
+        asset_name: ${{ env.APP_NAME }}-v${{ steps.version.outputs.version }}-macOS.dmg
+        asset_content_type: application/x-apple-diskimage
+
+    - name: Upload build artifacts (for manual downloads)
+      uses: actions/upload-artifact@v3
+      with:
+        name: macos-app-v${{ steps.version.outputs.version }}
+        path: build_output/${{ env.APP_NAME }}*.dmg
+        retention-days: 30
+
+  # Create a compatibility report
+  compatibility-report:
+    name: Generate Compatibility Report
+    runs-on: ubuntu-latest
+    needs: [test-build, build-release]
+    if: always()
+
+    steps:
+    - name: Create compatibility summary
+      run: |
+        echo "# macOS Compatibility Report" > compatibility_report.md
+        echo "" >> compatibility_report.md
+        echo "## Build Status" >> compatibility_report.md
+        echo "" >> compatibility_report.md
+        echo "| macOS Version | Status |" >> compatibility_report.md
+        echo "|---------------|--------|" >> compatibility_report.md
+        echo "| macOS 12 (Monterey) | ${{ needs.test-build.result }} |" >> compatibility_report.md
+        echo "| macOS 13 (Ventura) | ${{ needs.test-build.result }} |" >> compatibility_report.md
+        echo "| macOS 14 (Sonoma) | ${{ needs.test-build.result }} |" >> compatibility_report.md
+        echo "" >> compatibility_report.md
+        echo "## Release Build" >> compatibility_report.md
+        echo "" >> compatibility_report.md
+        echo "Status: ${{ needs.build-release.result }}" >> compatibility_report.md
+        echo "" >> compatibility_report.md
+        echo "Built on: $(date)" >> compatibility_report.md
+
+    - name: Upload compatibility report
+      uses: actions/upload-artifact@v3
+      with:
+        name: compatibility-report
+        path: compatibility_report.md
+        retention-days: 30

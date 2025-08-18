@@ -162,6 +162,71 @@ class Segmenter:
             overlap_chars = overlap * 4
 
             para_len = para.span_end - para.span_start
+
+            # If a single paragraph is too large, we need to split it
+            if para_len > max_chars:
+                print(
+                    f"🚨 Large paragraph detected: {para_len} chars > {max_chars} max_chars"
+                )
+                # Split the large paragraph into sentence-based chunks
+                sentences = []
+                current_sentence = []
+
+                # Simple sentence splitting (can be improved)
+                for word in para.text.split():
+                    current_sentence.append(word)
+                    if word.endswith((".", "!", "?")):
+                        sentences.append(" ".join(current_sentence))
+                        current_sentence = []
+
+                # Add any remaining words as a sentence
+                if current_sentence:
+                    sentences.append(" ".join(current_sentence))
+
+                # Group sentences into chunks that fit within max_chars
+                temp_chunk = []
+                temp_len = 0
+
+                for sentence in sentences:
+                    sentence_len = len(sentence)
+
+                    # If adding this sentence would exceed limit, emit current chunk
+                    if temp_len > 0 and temp_len + sentence_len + 1 > max_chars:
+                        # Emit the accumulated sentences as a chunk
+                        chunk_text = " ".join(temp_chunk)
+                        if current_text:
+                            current_text.append(chunk_text)
+                        else:
+                            current_text = [chunk_text]
+                            current_start = para.span_start
+                            current_para_start = idx
+
+                        acc_len += len(chunk_text)
+
+                        # Check if we need to emit this chunk
+                        if acc_len > max_chars:
+                            emit_chunk(idx, preset_now)
+                            current_start = para.span_start + len(chunk_text)
+                            current_para_start = idx
+
+                        # Start new temp chunk
+                        temp_chunk = [sentence]
+                        temp_len = sentence_len
+                    else:
+                        # Add sentence to current chunk
+                        temp_chunk.append(sentence)
+                        temp_len += sentence_len + 1
+
+                # Add any remaining sentences
+                if temp_chunk:
+                    chunk_text = " ".join(temp_chunk)
+                    current_text.append(chunk_text)
+                    acc_len += len(chunk_text)
+
+                # Continue to next paragraph
+                continue
+
+            # Normal processing for reasonably-sized paragraphs
             if acc_len and acc_len + para_len > max_chars:
                 # propose boundary at previous paragraph
                 candidate_para_end = idx - 1

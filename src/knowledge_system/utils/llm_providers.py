@@ -83,11 +83,35 @@ class OpenAIProvider(BaseLLMProvider):
 
             client = openai.OpenAI(api_key=self.settings.api_keys.openai_api_key)
 
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=self.temperature,
+            # Handle deprecated model names
+            actual_model = self.model
+            if self.model == "gpt-3.5-turbo-16k":
+                actual_model = "gpt-3.5-turbo"  # OpenAI deprecated the -16k suffix
+                logger.info(
+                    f"📝 Remapping deprecated model: {self.model} -> {actual_model}"
+                )
+
+            logger.info(f"🔍 OpenAI API call - Model requested: '{actual_model}'")
+
+            # Debug: Log exact parameters being sent
+            api_params = {
+                "model": actual_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": self.temperature,
+                "max_tokens": 4096,  # Set reasonable default to avoid context errors
+            }
+            logger.info(
+                f"🔍 API Parameters: model={api_params['model']}, temp={api_params['temperature']}, max_tokens={api_params['max_tokens']}, prompt_len={len(prompt)}"
             )
+
+            response = client.chat.completions.create(**api_params)
+            logger.info(
+                f"🔍 OpenAI API response - Model used: '{response.model if hasattr(response, 'model') else 'unknown'}'"
+            )
+            if hasattr(response, "model") and response.model != self.model:
+                logger.warning(
+                    f"⚠️ Model mismatch! Requested: '{self.model}', Got: '{response.model}'"
+                )
 
             # Extract usage statistics with null checks
             usage = response.usage
@@ -107,7 +131,35 @@ class OpenAIProvider(BaseLLMProvider):
             )
 
         except Exception as e:
+            error_str = str(e)
             logger.error(f"OpenAI API error: {e}")
+            logger.error(f"Model requested: '{self.model}'")
+            logger.error(f"Full error details: {type(e).__name__}: {error_str}")
+
+            # Check for context length errors
+            if "maximum context length" in error_str:
+                # Extract the numbers from the error message
+                import re
+
+                numbers = re.findall(r"\d+", error_str)
+                if len(numbers) >= 2:
+                    max_context = numbers[0]
+                    requested = numbers[1]
+                    logger.error(
+                        f"❌ Context length exceeded! Model {self.model} has a maximum context of {max_context} tokens, but {requested} tokens were requested."
+                    )
+                    logger.error(
+                        f"💡 Try: 1) Using a model with larger context window, 2) Reducing input size, or 3) Enabling chunking"
+                    )
+
+                    # Re-raise with more helpful message
+                    raise ValueError(
+                        f"Context length exceeded for {self.model}. "
+                        f"Maximum: {max_context} tokens, Requested: {requested} tokens. "
+                        f"Consider using a model with larger context window or reducing input size."
+                    ) from e
+
+            # Re-raise original exception if not context length error
             raise
 
 
@@ -171,7 +223,27 @@ class AnthropicProvider(BaseLLMProvider):
             )
 
         except Exception as e:
+            error_str = str(e)
             logger.error(f"Anthropic API error: {e}")
+
+            # Check for context length errors
+            if "maximum" in error_str and "tokens" in error_str:
+                import re
+
+                numbers = re.findall(r"\d+", error_str)
+                if numbers:
+                    logger.error(f"❌ Token limit exceeded for {self.model}!")
+                    logger.error(
+                        f"💡 Try: 1) Using a different model, 2) Reducing input size, or 3) Enabling chunking"
+                    )
+
+                    # Re-raise with more helpful message
+                    raise ValueError(
+                        f"Token limit exceeded for {self.model}. "
+                        f"Consider reducing input size or using chunking."
+                    ) from e
+
+            # Re-raise original exception if not token limit error
             raise
 
 

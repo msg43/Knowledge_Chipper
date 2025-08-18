@@ -471,31 +471,33 @@ class HardwareDetector:
 
         # Base calculations
         base_concurrent = max(1, cpu_cores // 2)
-        base_batch_size = max(8, min(32, memory_gb * 2))
+        base_batch_size = max(
+            8, min(8, memory_gb * 2)
+        )  # Capped at 8 for whisper.cpp compatibility
 
         # Hardware-specific optimizations
         if chip_type in [ChipType.M3_ULTRA, ChipType.M2_ULTRA, ChipType.M1_ULTRA]:
             # Ultra chips: Maximum performance
             max_concurrent = min(16, cpu_cores // 2)
-            optimal_batch = min(64, memory_gb * 4)
+            optimal_batch = 8  # Capped for whisper.cpp compatibility
             recommended_model = "large-v3"
 
         elif chip_type in [ChipType.M3_MAX, ChipType.M2_MAX, ChipType.M1_MAX]:
             # Max chips: High performance
             max_concurrent = min(12, cpu_cores // 2)
-            optimal_batch = min(48, memory_gb * 3)
+            optimal_batch = 8  # Capped for whisper.cpp compatibility
             recommended_model = "large-v3"
 
         elif chip_type in [ChipType.M3_PRO, ChipType.M2_PRO, ChipType.M1_PRO]:
             # Pro chips: Balanced performance
             max_concurrent = min(8, cpu_cores // 2)
-            optimal_batch = min(32, memory_gb * 2)
+            optimal_batch = 8  # Capped for whisper.cpp compatibility
             recommended_model = "medium"
 
         else:
             # Base chips: Conservative settings
             max_concurrent = min(6, cpu_cores // 2)
-            optimal_batch = min(24, memory_gb * 2)
+            optimal_batch = 8  # Capped for whisper.cpp compatibility
             recommended_model = "base"
 
         # Thermal design adjustments
@@ -504,13 +506,39 @@ class HardwareDetector:
             max_concurrent = max(1, max_concurrent // 2)
             optimal_batch = max(8, optimal_batch // 2)
 
-        # Memory constraints
-        if memory_gb < 16:
-            max_concurrent = min(max_concurrent, 4)
+        # Memory constraints - account for OS, apps, and safety margin
+        # Reserve memory for OS and other applications
+        os_overhead_gb = max(4, memory_gb * 0.25)  # 25% or min 4GB for OS + apps
+        available_memory_gb = max(2, memory_gb - os_overhead_gb)
+
+        # Model memory requirements (rough estimates including processing overhead)
+        model_memory_requirements = {
+            "tiny": 1.5,
+            "base": 2.0,
+            "small": 3.5,
+            "medium": 6.0,
+            "large": 12.0,
+            "large-v3": 12.0,
+        }
+
+        # Calculate safe concurrent limit based on available memory
+        model_memory_needed = model_memory_requirements.get(recommended_model, 6.0)
+        safe_concurrent = max(
+            1, int(available_memory_gb // (model_memory_needed * 1.2))
+        )  # 20% safety margin
+
+        # Apply memory-based constraints
+        if available_memory_gb < 8:
+            max_concurrent = min(max_concurrent, 2, safe_concurrent)
             optimal_batch = min(optimal_batch, 16)
-            recommended_model = "base"
-        elif memory_gb < 32:
-            max_concurrent = min(max_concurrent, 8)
+            recommended_model = "base"  # Force smaller model for low memory
+        elif available_memory_gb < 16:
+            max_concurrent = min(max_concurrent, 4, safe_concurrent)
+            optimal_batch = min(optimal_batch, 24)
+            if recommended_model in ["large", "large-v3"]:
+                recommended_model = "medium"  # Downgrade for memory safety
+        elif available_memory_gb < 24:
+            max_concurrent = min(max_concurrent, 6, safe_concurrent)
             optimal_batch = min(optimal_batch, 32)
 
         # CUDA-specific optimizations

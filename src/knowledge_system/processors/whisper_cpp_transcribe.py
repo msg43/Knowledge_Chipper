@@ -6,6 +6,7 @@ from typing import Any
 
 from knowledge_system.logger import get_logger
 from knowledge_system.processors.base import BaseProcessor, ProcessorResult
+from knowledge_system.utils.model_cache import ModelType, cache_whisper_model
 
 logger = get_logger(__name__)
 
@@ -37,6 +38,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             "small": "ggml-small",
             "medium": "ggml-medium",
             "large": "ggml-large-v3",
+            "large-v2": "ggml-large-v2",
             "large-v3": "ggml-large-v3",
         }
 
@@ -308,8 +310,16 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         """Download whisper.cpp model if needed (for subprocess usage)."""
         # We're using subprocess approach, so just ensure model is downloaded
         if self._model_path is None:
-            self._model_path = self._download_model(
-                self.model_name, self.progress_callback
+            # Use cached model path loading
+            def model_loader():
+                return self._download_model(self.model_name, self.progress_callback)
+
+            # Cache the model path (the actual file path, not the model itself)
+            self._model_path = cache_whisper_model(
+                model_name=self.model_name,
+                device="disk",  # Special device name for file paths
+                loader_func=model_loader,
+                use_coreml=self.use_coreml,
             )
 
     def _convert_to_wav(self, input_path: Path) -> Path:

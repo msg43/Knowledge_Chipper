@@ -19,15 +19,69 @@ class SuperChunkLLMAdapter:
     event_logger: Callable[[dict[str, Any]], None] | None = None
 
     @staticmethod
-    def create_default() -> SuperChunkLLMAdapter:
+    def create_default(
+        provider: str | None = None, model: str | None = None
+    ) -> SuperChunkLLMAdapter:
         cfg = SuperChunkConfig.from_global_settings()
-        client = UnifiedLLMClient()
+        # Create client with proper provider and model
+        client = (
+            UnifiedLLMClient(provider=provider, model=model)
+            if provider and model
+            else UnifiedLLMClient()
+        )
+        # Set the model on the config so it can calculate dynamic windows
+        if model:
+            cfg.model = model
+        elif client.model:
+            cfg.model = client.model
+        cfg.provider = provider or client.provider_name
         return SuperChunkLLMAdapter(config=cfg, client=client, event_logger=None)
 
     def _with_token_budget(self, prompt: str, estimated_output_tokens: int) -> str:
+        from ..utils.text_utils import (
+            estimate_tokens_improved,
+            get_model_context_window,
+        )
+
+        # Get the actual model's context window
+        model_context = get_model_context_window(self.client.model)
+
+        # Use SuperChunk window as a guide, but respect model's actual limits
         window = self.config.get_window()
-        input_budget = window.max_tokens
+
+        # Calculate dynamic safety margin based on model context window
+        if model_context >= 100000:  # 128k models
+            safety_margin = 5000  # Can afford larger margin
+        elif model_context >= 30000:  # 32k models
+            safety_margin = 3000
+        elif model_context >= 15000:  # 16k models
+            safety_margin = 2000
+        elif model_context >= 8000:  # 8k models
+            safety_margin = 1500
+        else:  # 4k models
+            safety_margin = 500  # Tight margin for small models
+
+        # Calculate safe input budget (leave room for output and safety margin)
+        max_possible_input = model_context - estimated_output_tokens - safety_margin
+
+        # Use the smaller of SuperChunk window or model's actual capacity
+        input_budget = min(window.max_tokens, max_possible_input)
         output_budget = max(256, min(2048, estimated_output_tokens))
+
+        # Check if prompt exceeds budget and truncate if necessary
+        prompt_tokens = estimate_tokens_improved(prompt, self.client.model)
+
+        if prompt_tokens > input_budget:
+            # Calculate how much to keep (90% of budget to be safe)
+            keep_ratio = (input_budget * 0.9) / prompt_tokens
+            keep_chars = int(len(prompt) * keep_ratio)
+
+            # Truncate prompt and add indicator
+            prompt = (
+                prompt[:keep_chars]
+                + "\n\n[Note: Content truncated to fit model context window]"
+            )
+
         header = (
             f"Token budgets — input: <= {input_budget} tokens; output: <= {output_budget} tokens. "
             "Return strictly JSON only, no prose."

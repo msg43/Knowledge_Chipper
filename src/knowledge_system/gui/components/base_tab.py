@@ -124,25 +124,193 @@ class BaseTab(QWidget):
         row: int,
         col: int,
     ) -> None:
-        """Add a field with label and tooltip to a grid layout."""
+        """Add a field with label and enhanced tooltip to a grid layout."""
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtWidgets import QHBoxLayout
+
+        # Create label with enhanced tooltip formatting
         label = QLabel(label_text)
-        label.setToolTip(tooltip)
-        widget.setToolTip(tooltip)
+
+        # Format tooltip for better readability
+        formatted_tooltip = (
+            f"<b>{label_text}</b><br/><br/>{tooltip.replace(chr(10), '<br/>')}"
+        )
+
+        label.setToolTip(formatted_tooltip)
+        widget.setToolTip(formatted_tooltip)
+
+        # Create a horizontal layout for the widget + info indicator
+        widget_layout = QHBoxLayout()
+        widget_layout.setContentsMargins(0, 0, 0, 0)
+        widget_layout.setSpacing(8)
+
+        # Add the main widget
+        widget_layout.addWidget(widget)
+
+        # Create a small, subtle info indicator using text
+        info_label = QLabel("ⓘ")
+        info_label.setFixedSize(16, 16)
+        info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        info_label.setToolTip(formatted_tooltip)
+        info_label.setStyleSheet(
+            """
+            QLabel {
+                color: #007AFF;
+                font-size: 12px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+            }
+            QLabel:hover {
+                color: #0051D5;
+            }
+        """
+        )
+
+        widget_layout.addWidget(info_label)
+        widget_layout.addStretch()  # Push everything to the left
+
+        # Create a container widget for the layout
+        widget_container = QWidget()
+        widget_container.setLayout(widget_layout)
 
         layout.addWidget(label, row, col)
-        layout.addWidget(widget, row, col + 1)
+        layout.addWidget(widget_container, row, col + 1)
 
     def append_log(self, message: str) -> None:
-        """Append a message to the output log."""
+        """Append a message to the output log with immediate GUI update."""
         if hasattr(self, "output_text"):
             self.output_text.append(message)
+            # Force immediate GUI update and scroll to bottom
             self.output_text.repaint()
+            self.output_text.ensureCursorVisible()
+            # Process events multiple times to ensure immediate visual update
+            from PyQt6.QtCore import QCoreApplication
+            from PyQt6.QtWidgets import QApplication
+
+            # Process events immediately to update GUI
+            QApplication.processEvents()
+            # Force another repaint cycle
+            self.output_text.update()
+            # Process events again for any pending redraws
+            QApplication.processEvents()
+
         self.log_message.emit(message)
+
+        # Process events one more time after signal emission
+        from PyQt6.QtWidgets import QApplication
+
+        QApplication.processEvents()
 
     def clear_log(self) -> None:
         """Clear the output log."""
         if hasattr(self, "output_text"):
             self.output_text.clear()
+
+    def async_validate_directory(
+        self,
+        directory_path: str,
+        callback: callable,
+        check_writable: bool = False,
+        check_parent: bool = False,
+    ) -> None:
+        """Asynchronously validate directory to prevent GUI blocking on slow filesystems."""
+        from PyQt6.QtCore import QThread, pyqtSignal
+
+        class DirectoryValidationWorker(QThread):
+            """Worker thread for directory validation without blocking GUI."""
+
+            validation_completed = pyqtSignal(
+                bool, str, str
+            )  # valid, path, error_message
+
+            def __init__(
+                self,
+                directory_path: str,
+                check_writable: bool = False,
+                check_parent: bool = False,
+            ):
+                super().__init__()
+                self.directory_path = directory_path
+                self.check_writable = check_writable
+                self.check_parent = check_parent
+
+            def run(self):
+                """Validate directory asynchronously."""
+                try:
+                    import os
+                    from pathlib import Path
+
+                    path = Path(self.directory_path)
+
+                    # Check if path exists
+                    if not path.exists():
+                        self.validation_completed.emit(
+                            False,
+                            self.directory_path,
+                            f"Directory does not exist: {self.directory_path}",
+                        )
+                        return
+
+                    # Check if it's a directory
+                    if not path.is_dir():
+                        self.validation_completed.emit(
+                            False,
+                            self.directory_path,
+                            f"Path is not a directory: {self.directory_path}",
+                        )
+                        return
+
+                    # Check if parent exists (if requested)
+                    if self.check_parent and not path.parent.exists():
+                        self.validation_completed.emit(
+                            False,
+                            self.directory_path,
+                            f"Parent directory does not exist: {path.parent}",
+                        )
+                        return
+
+                    # Check if writable (if requested)
+                    if self.check_writable and not os.access(path, os.W_OK):
+                        self.validation_completed.emit(
+                            False,
+                            self.directory_path,
+                            f"Directory is not writable: {self.directory_path}",
+                        )
+                        return
+
+                    # All checks passed
+                    self.validation_completed.emit(True, self.directory_path, "")
+
+                except Exception as e:
+                    self.validation_completed.emit(
+                        False, self.directory_path, f"Validation error: {str(e)}"
+                    )
+
+        # Create and start worker
+        worker = DirectoryValidationWorker(directory_path, check_writable, check_parent)
+        worker.validation_completed.connect(
+            lambda valid, path, error: self._handle_directory_validation(
+                valid, path, error, callback, worker
+            )
+        )
+        worker.start()
+
+    def _handle_directory_validation(
+        self,
+        valid: bool,
+        path: str,
+        error_message: str,
+        callback: callable,
+        worker: "QThread",
+    ) -> None:
+        """Handle directory validation result."""
+        try:
+            # Call the provided callback with results
+            callback(valid, path, error_message)
+        finally:
+            # Clean up worker
+            worker.deleteLater()
 
     def set_processing_state(self, processing: bool) -> None:
         """Set the processing state (enable/disable controls)."""
@@ -239,14 +407,119 @@ class BaseTab(QWidget):
         self.set_processing_state(False)
 
     def _view_last_report(self) -> None:
-        """View the last generated report."""
+        """View the last generated report asynchronously."""
         # First try current_report if set
         report_path = self.current_report
 
-        # If no current report, find the most recent report file
-        if not report_path:
-            report_path = self._find_latest_report()
+        if report_path and Path(report_path).exists():
+            self._open_report_file(report_path)
+        else:
+            # Find the most recent report file asynchronously
+            self.append_log("🔍 Searching for latest report...")
+            self._async_find_and_open_latest_report()
 
+    def _async_find_and_open_latest_report(self) -> None:
+        """Asynchronously find and open the latest report to prevent GUI blocking."""
+        from PyQt6.QtCore import QThread, pyqtSignal
+
+        class ReportSearchWorker(QThread):
+            """Worker thread for searching report files without blocking GUI."""
+
+            search_completed = pyqtSignal(
+                str
+            )  # report_path (empty string if none found)
+            search_error = pyqtSignal(str)  # error_message
+
+            def __init__(self, tab_type: str):
+                super().__init__()
+                self.tab_type = tab_type
+
+            def run(self):
+                """Search for the latest report file."""
+                try:
+                    from pathlib import Path
+
+                    # Check standard report locations
+                    report_dirs = [
+                        Path.home() / ".knowledge_system" / "reports",
+                        Path("Reports"),
+                        Path("logs"),
+                    ]
+
+                    latest_report = None
+                    latest_time = 0.0
+
+                    for report_dir in report_dirs:
+                        if not report_dir.exists():
+                            continue
+
+                        # Look for reports matching this tab type
+                        patterns = [
+                            f"*{self.tab_type.lower()}*.md",
+                            f"*{self.tab_type.lower()}*.txt",
+                            f"*{self.tab_type.lower()}*.log",
+                        ]
+
+                        for pattern in patterns:
+                            for report_file in report_dir.glob(pattern):
+                                if report_file.is_file():
+                                    mtime = report_file.stat().st_mtime
+                                    if mtime > latest_time:
+                                        latest_time = mtime
+                                        latest_report = str(report_file)
+
+                    self.search_completed.emit(latest_report or "")
+                except Exception as e:
+                    self.search_error.emit(str(e))
+
+        # Get tab type
+        tab_type = getattr(
+            self, "tab_name", self.__class__.__name__.lower().replace("tab", "")
+        )
+
+        # Create and start worker
+        self._report_search_worker = ReportSearchWorker(tab_type)
+        self._report_search_worker.search_completed.connect(
+            self._handle_report_search_result
+        )
+        self._report_search_worker.search_error.connect(
+            self._handle_report_search_error
+        )
+        self._report_search_worker.start()
+
+    def _handle_report_search_result(self, report_path: str) -> None:
+        """Handle report search result."""
+        try:
+            if report_path:
+                self.append_log(f"📄 Found latest report: {Path(report_path).name}")
+                self._open_report_file(report_path)
+            else:
+                self.append_log("❌ No recent reports found")
+                self.show_warning(
+                    "No Reports Found",
+                    f"No recent reports found for {getattr(self, 'tab_name', 'this tab')}.\n\n"
+                    "Reports are generated after processing operations complete.",
+                )
+        finally:
+            # Clean up worker
+            if hasattr(self, "_report_search_worker"):
+                self._report_search_worker.deleteLater()
+                del self._report_search_worker
+
+    def _handle_report_search_error(self, error_message: str) -> None:
+        """Handle report search error."""
+        self.append_log(f"❌ Error searching for reports: {error_message}")
+        self.show_error(
+            "Report Search Error", f"Error searching for reports: {error_message}"
+        )
+
+        # Clean up worker
+        if hasattr(self, "_report_search_worker"):
+            self._report_search_worker.deleteLater()
+            del self._report_search_worker
+
+    def _open_report_file(self, report_path: str) -> None:
+        """Open a report file using the system default application."""
         if report_path and Path(report_path).exists():
             try:
                 import platform
@@ -268,47 +541,83 @@ class BaseTab(QWidget):
                 "No report available yet. Complete a processing operation to generate a report.",
             )
 
-    def _find_latest_report(self) -> str | None:
-        """Find the most recent report file for this tab type."""
-        try:
-            # Get the tab-specific report type
-            tab_type = getattr(
-                self, "tab_name", self.__class__.__name__.lower().replace("tab", "")
+    def async_open_file(self, file_path: str, file_description: str = "file") -> None:
+        """Asynchronously open a file with the system default application to prevent GUI blocking."""
+        from PyQt6.QtCore import QThread, pyqtSignal
+
+        class FileOpenWorker(QThread):
+            """Worker thread for opening files without blocking GUI."""
+
+            open_completed = pyqtSignal(
+                bool, str, str
+            )  # success, file_path, error_message
+
+            def __init__(self, file_path: str):
+                super().__init__()
+                self.file_path = file_path
+
+            def run(self):
+                """Open file asynchronously."""
+                try:
+                    import platform
+                    import subprocess
+                    from pathlib import Path
+
+                    path = Path(self.file_path)
+
+                    # Check if file exists
+                    if not path.exists():
+                        self.open_completed.emit(
+                            False, self.file_path, f"File not found: {self.file_path}"
+                        )
+                        return
+
+                    # Open with platform-specific command
+                    if platform.system() == "Darwin":  # macOS
+                        subprocess.run(["open", str(path)], check=False)
+                    elif platform.system() == "Windows":
+                        subprocess.run(["start", str(path)], shell=True, check=False)
+                    else:  # Linux
+                        subprocess.run(["xdg-open", str(path)], check=False)
+
+                    self.open_completed.emit(True, self.file_path, "")
+
+                except Exception as e:
+                    self.open_completed.emit(False, self.file_path, str(e))
+
+        # Create and start worker
+        worker = FileOpenWorker(file_path)
+        worker.open_completed.connect(
+            lambda success, path, error: self._handle_file_open_result(
+                success, path, error, file_description, worker
             )
+        )
+        worker.start()
 
-            # Check standard report locations
-            report_dirs = [
-                Path.home() / ".knowledge_system" / "reports",
-                Path("Reports"),
-                Path("logs"),
-            ]
-
-            latest_report = None
-            latest_time = 0.0
-
-            for report_dir in report_dirs:
-                if not report_dir.exists():
-                    continue
-
-                # Look for reports matching this tab type
-                patterns = [
-                    f"*{tab_type.lower()}*.md",
-                    f"*{tab_type.lower()}*.txt",
-                    f"*{tab_type.lower()}*.log",
-                ]
-
-                for pattern in patterns:
-                    for report_file in report_dir.glob(pattern):
-                        if report_file.is_file():
-                            mtime = report_file.stat().st_mtime
-                            if mtime > latest_time:
-                                latest_time = mtime
-                                latest_report = str(report_file)
-
-            return latest_report
-        except Exception as e:
-            self.logger.error(f"Error finding latest report: {e}")
-            return None
+    def _handle_file_open_result(
+        self,
+        success: bool,
+        file_path: str,
+        error_message: str,
+        file_description: str,
+        worker: "QThread",
+    ) -> None:
+        """Handle file opening result."""
+        try:
+            if success:
+                self.append_log(f"📄 Opened {file_description}: {Path(file_path).name}")
+            else:
+                self.append_log(f"❌ Failed to open {file_description}: {error_message}")
+                if "not found" in error_message.lower():
+                    self.show_error("File Not Found", error_message)
+                else:
+                    self.show_error(
+                        "Open Error",
+                        f"Failed to open {file_description}: {error_message}",
+                    )
+        finally:
+            # Clean up worker
+            worker.deleteLater()
 
     def get_output_directory(self, default_path: str) -> Path:
         """Get the configured output directory or return default."""
