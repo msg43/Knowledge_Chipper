@@ -977,18 +977,18 @@ class SummarizationTab(BaseTab):
         # Max tokens
         max_tokens_label = QLabel("Max Response Size (Tokens):")
         max_tokens_label.setToolTip(
-            "Maximum length of generated summary in tokens. Higher values create longer summaries but cost more. 1000 tokens ≈ 750 words."
+            "Maximum response size for claim extraction. Higher values allow more detailed analysis but cost more. 1000 tokens ≈ 750 words."
         )
         self.max_tokens_spin = QSpinBox()
         self.max_tokens_spin.setRange(100, 100000)
         self.max_tokens_spin.setValue(10000)
         self.max_tokens_spin.setToolTip(
-            "Maximum length of generated summary in tokens. Higher values create longer summaries but cost more. 1000 tokens ≈ 750 words."
+            "Maximum response size for claim extraction. Higher values allow more detailed analysis but cost more. 1000 tokens ≈ 750 words."
         )
         self.max_tokens_spin.valueChanged.connect(self._on_setting_changed)
         self.max_tokens_spin.setMinimumWidth(120)
         self.max_tokens_spin.setToolTip(
-            "Maximum length of generated summary in tokens. Higher values create longer summaries but cost more. 1000 tokens ≈ 750 words."
+            "Maximum response size for claim extraction. Higher values allow more detailed analysis but cost more. 1000 tokens ≈ 750 words."
         )
 
         settings_layout.addWidget(max_tokens_label, 1, 0)
@@ -997,12 +997,12 @@ class SummarizationTab(BaseTab):
         # Prompt file
         prompt_label = QLabel("Prompt File:")
         prompt_label.setToolTip(
-            "Path to custom prompt template file for summarization. Leave empty to use default prompts."
+            "Path to custom prompt template file for claim extraction. Leave empty to use default HCE prompts."
         )
         self.template_path_edit = QLineEdit("")
         self.template_path_edit.setMinimumWidth(180)
         self.template_path_edit.setToolTip(
-            "Path to custom prompt template file for summarization. Leave empty to use default prompts."
+            "Path to custom prompt template file for claim extraction. Leave empty to use default HCE prompts."
         )
         self.template_path_edit.textChanged.connect(self._on_setting_changed)
 
