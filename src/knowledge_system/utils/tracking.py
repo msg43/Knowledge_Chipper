@@ -1,9 +1,14 @@
 """
-Progress Tracking for Batch Operations
-Progress Tracking for Batch Operations
+DEPRECATED: JSON-based Progress Tracking
 
-Provides progress tracking classes for various operation types and
-a ProgressTracker for managing batch operations with resume capabilities.
+⚠️ This module is deprecated and replaced by SQLite-based progress tracking.
+
+MIGRATION NOTICE:
+- Use `ProgressTracker` from `..utils.progress_tracker` for SQLite-based job tracking
+- Use `DatabaseService` from `..database.service` for operational data storage
+- The new SQLite-based system provides better reliability and resume capabilities
+
+This file is maintained for backward compatibility but will be removed in a future version.
 """
 
 import json
@@ -365,7 +370,11 @@ class TaskInfo:
 
 
 class ProgressTracker:
-    """Tracks progress of batch operations with resume capabilities."""
+    """
+    DEPRECATED: Tracks progress of batch operations with resume capabilities.
+
+    ⚠️ This class is deprecated. Use the new SQLite-based ProgressTracker from utils.progress_tracker instead.
+    """
 
     def __init__(
         self,

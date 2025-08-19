@@ -1,8 +1,14 @@
 """
-Session management for GUI settings persistence
-Session management for GUI settings persistence.
+DEPRECATED: JSON-based GUI Session Management
 
-Handles saving and loading user preferences across application sessions.
+⚠️ This module is deprecated and replaced by SQLite-based session management.
+
+MIGRATION NOTICE:
+- GUI sessions are now managed through the main SQLite database
+- Use `DatabaseService` from `...database.service` for persistent data
+- Settings are managed through the unified configuration system
+
+This file is maintained for backward compatibility but will be removed in a future version.
 """
 
 import json
@@ -19,7 +25,11 @@ SESSION_FILE = Path.home() / ".knowledge_system" / "gui_session.json"
 
 
 class SessionManager:
-    """Manages GUI session state persistence."""
+    """
+    DEPRECATED: Manages GUI session state persistence.
+
+    ⚠️ This class is deprecated. GUI state is now managed through the SQLite database.
+    """
 
     def __init__(self) -> None:
         """Initialize session manager."""

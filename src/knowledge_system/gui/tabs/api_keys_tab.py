@@ -146,8 +146,33 @@ class APIKeysTab(BaseTab):
             0,
         )
 
-        # WebShare Proxy Credentials
-        layout.addWidget(QLabel("🌐 WebShare Proxy Credentials"), 5, 0, 1, 2)
+        # Bright Data API Key
+        self.bright_data_api_key_edit = QLineEdit()
+        self.bright_data_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.bright_data_api_key_edit.setPlaceholderText(
+            "bd_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        )
+        self._add_field_with_info(
+            layout,
+            "Bright Data API Key:",
+            self.bright_data_api_key_edit,
+            "Your Bright Data API key for YouTube processing.\n"
+            "• Sign up at: https://brightdata.com/\n"
+            "• Used for: YouTube metadata, transcripts, and audio downloads\n"
+            "• Why needed: Pay-per-request model with residential proxies\n"
+            "• Cost: More cost-effective than monthly proxy subscriptions\n"
+            "• Benefits: Direct JSON responses, automatic IP rotation, reliable access\n"
+            "• Format: Starts with 'bd_' followed by alphanumeric characters",
+            5,
+            0,
+        )
+
+        # WebShare Proxy Credentials (DEPRECATED - use Bright Data instead)
+        webshare_header = QLabel("⚠️ WebShare Proxy Credentials (DEPRECATED)")
+        webshare_header.setStyleSheet(
+            "color: #FFA500; font-weight: bold;"
+        )  # Orange warning color
+        layout.addWidget(webshare_header, 6, 0, 1, 2)
 
         # WebShare Username
         self.webshare_username_edit = QLineEdit()
@@ -156,13 +181,13 @@ class APIKeysTab(BaseTab):
             layout,
             "WebShare Username:",
             self.webshare_username_edit,
-            "Your WebShare proxy service username (required for YouTube access).\n"
-            "• Sign up at: https://www.webshare.io/\n"
-            "• Used for: Downloading YouTube videos and playlists\n"
-            "• Why needed: Helps avoid rate limiting and access restrictions\n"
-            "• Cost: Various plans available, free tier available for testing\n"
+            "⚠️ DEPRECATED: Use Bright Data API Key instead (see above).\n"
+            "• WebShare will be removed in a future version\n"
+            "• Bright Data offers better cost efficiency (pay-per-request)\n"
+            "• Still supported for backward compatibility\n"
+            "• Sign up at: https://www.webshare.io/ (if still needed)\n"
             "• Note: Only required if you plan to process YouTube content",
-            6,
+            7,
             0,
         )
 
@@ -174,12 +199,12 @@ class APIKeysTab(BaseTab):
             layout,
             "WebShare Password:",
             self.webshare_password_edit,
-            "Your WebShare proxy service password.\n"
-            "• Use the password from your WebShare account\n"
-            "• Keep this secure - it provides access to your proxy quota\n"
-            "• Required along with username for YouTube video processing\n"
+            "⚠️ DEPRECATED: Use Bright Data API Key instead (see above).\n"
+            "• WebShare will be removed in a future version\n"
+            "• Bright Data is more cost-effective and reliable\n"
+            "• Still supported for backward compatibility\n"
             "• Tip: Use a dedicated password for API services",
-            7,
+            8,
             0,
         )
 
@@ -324,6 +349,18 @@ class APIKeysTab(BaseTab):
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
 
+        # Load Bright Data API key
+        if (
+            hasattr(self.settings.api_keys, "bright_data_api_key")
+            and self.settings.api_keys.bright_data_api_key
+        ):
+            self._actual_api_keys[
+                "bright_data_api_key"
+            ] = self.settings.api_keys.bright_data_api_key
+            self.bright_data_api_key_edit.setText(
+                "••••••••••••••••••••••••••••••••••••••••••••••••••••"
+            )
+
         # Load WebShare credentials
         if self.settings.api_keys.webshare_username:
             self.webshare_username_edit.setText(
@@ -346,6 +383,9 @@ class APIKeysTab(BaseTab):
         )
         self.huggingface_token_edit.textChanged.connect(
             lambda text: self._handle_key_change("huggingface_token", text)
+        )
+        self.bright_data_api_key_edit.textChanged.connect(
+            lambda text: self._handle_key_change("bright_data_api_key", text)
         )
         self.webshare_password_edit.textChanged.connect(
             lambda text: self._handle_password_change("webshare_password", text)
@@ -481,6 +521,12 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
             )
             if not huggingface_token.startswith("••"):
                 self.settings.api_keys.huggingface_token = huggingface_token
+
+            bright_data_api_key = self._actual_api_keys.get(
+                "bright_data_api_key", self.bright_data_api_key_edit.text().strip()
+            )
+            if not bright_data_api_key.startswith("••"):
+                self.settings.api_keys.bright_data_api_key = bright_data_api_key
 
             # PERSISTENT STORAGE: Save credentials to YAML file for persistence across sessions
             self._save_credentials_to_file()

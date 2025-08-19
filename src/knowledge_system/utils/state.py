@@ -1,8 +1,14 @@
 """
-State management for Knowledge System
+DEPRECATED: JSON-based State Management
 
-State management for Knowledge System.
-Handles application state persistence, session management, and user preferences.
+⚠️ This module is deprecated and replaced by SQLite-based state management.
+
+MIGRATION NOTICE:
+- Use `DatabaseService` from `..database.service` for operational data
+- Use `ProgressTracker` from `..utils.progress_tracker` for job tracking
+- Use the new SQLite-based architecture for all state management
+
+This file is maintained for backward compatibility but will be removed in a future version.
 """
 
 import json
@@ -21,7 +27,11 @@ logger = get_logger("state")
 
 
 class ProcessingState(BaseModel):
-    """State for ongoing processing operations."""
+    """
+    DEPRECATED: State for ongoing processing operations.
+
+    ⚠️ This class is deprecated. Use DatabaseService with ProcessingJob model instead.
+    """
 
     operation_id: str
     operation_type: str  # 'transcribe', 'summarize', 'moc', 'watch'

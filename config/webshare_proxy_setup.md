@@ -1,94 +1,89 @@
-# Webshare Proxy Setup for YouTube Transcript Extraction
+# ⚠️ DEPRECATED: WebShare Proxy Setup
 
-This system uses Webshare residential proxies to bypass YouTube's bot detection when extracting transcripts. Webshare automatically handles IP rotation behind the scenes - no complex setup needed!
+**This documentation is deprecated and will be removed in a future version.**
 
-## 1. Get Webshare Account
+## 🔄 Migration Notice
+
+**WebShare proxy support is being replaced with Bright Data integration** for improved cost efficiency and reliability.
+
+### Why the Change?
+
+- ✅ **Pay-per-request** instead of monthly subscriptions
+- ✅ **Better reliability** with Bright Data's YouTube API Scrapers
+- ✅ **Direct JSON responses** instead of proxy scraping
+- ✅ **Built-in IP rotation** and session management
+- ✅ **Lower costs** for typical usage patterns
+
+### 📚 New Documentation
+
+**Please use the new Bright Data setup guide:**
+- **Setup Guide**: `config/bright_data_setup.md`
+- **Configuration**: Use the GUI "API Keys" tab to enter your Bright Data API key
+
+### 🔄 Backward Compatibility
+
+WebShare credentials are still supported for backward compatibility, but Bright Data will be used when configured:
+
+1. **Bright Data API Key** (preferred) - pay per request
+2. **WebShare credentials** (fallback) - monthly subscription
+
+### 📋 Migration Steps
+
+1. **Get Bright Data API Key**: Sign up at [brightdata.com](https://brightdata.com/)
+2. **Configure in GUI**: Go to API Keys tab → Enter Bright Data API Key
+3. **Test**: Process a video to verify Bright Data integration works
+4. **Optional**: Remove WebShare credentials once Bright Data is working
+
+---
+
+## Legacy WebShare Instructions (Deprecated)
+
+> **⚠️ WARNING**: This section is maintained for backward compatibility only.
+> New users should use Bright Data instead.
+
+### 1. Get Webshare Account
 
 1. Go to [Webshare.io](https://www.webshare.io/)
 2. Sign up for an account
 3. Choose a residential proxy plan with rotating endpoints
 
-## 2. Get Your Credentials
+### 2. Get Your Credentials
 
 From your Webshare dashboard, you'll need:
 
 - **Username**: Your proxy username (should end with `-rotate` for automatic rotation)
 - **Password**: Your proxy password 
 
-That's it! No API tokens or complex configuration needed.
+### 3. Configure in Knowledge System
 
-## 3. Set Environment Variables
+**Option 1: Using the GUI (Recommended)**
+1. Open Knowledge System
+2. Go to "API Keys" tab
+3. Enter your WebShare Username and Password
+4. Save settings
 
-Add these environment variables to your system:
+**Option 2: Environment Variables**
+```bash
+export WEBSHARE_USERNAME="your_username_here"
+export WEBSHARE_PASSWORD="your_password_here"
+```
+
+**Option 3: Configuration File**
+```yaml
+# config/credentials.yaml
+api_keys:
+  webshare_username: "your_username_here"
+  webshare_password: "your_password_here"
+```
+
+### 4. Test Your Setup
+
+Run a test video to verify WebShare proxy is working:
 
 ```bash
-# Required credentials (Webshare handles rotation automatically)
-export WEBSHARE_USERNAME="your-username-rotate"
-export WEBSHARE_PASSWORD="your-password-here"
+knowledge-system process "https://youtube.com/watch?v=dQw4w9WgXcQ" --transcribe
 ```
 
-### On macOS/Linux:
-Add to your `~/.bashrc`, `~/.zshrc`, or `~/.profile`:
+---
 
-```bash
-export WEBSHARE_USERNAME="your-username-rotate"
-export WEBSHARE_PASSWORD="your-password-here"
-```
-
-### On Windows:
-Set via Command Prompt:
-```cmd
-set WEBSHARE_USERNAME=your-username-rotate
-set WEBSHARE_PASSWORD=your-password-here
-```
-
-Or via PowerShell:
-```powershell
-$env:WEBSHARE_USERNAME="your-username-rotate"
-$env:WEBSHARE_PASSWORD="your-password-here"
-```
-
-## 4. How It Works
-
-The system will:
-
-1. **Load your proxy credentials** from environment variables
-2. **Connect to Webshare's rotating endpoint** (`p.webshare.io:80`)
-3. **Webshare automatically rotates IP addresses** for each request
-4. **Use residential IP addresses** to avoid bot detection
-5. **Automatically retry** with random delays if requests fail
-
-## 5. Troubleshooting
-
-### "Webshare credentials not found" error:
-- Make sure environment variables are set correctly
-- Restart your terminal/application after setting variables
-- Check that variable names match exactly (case-sensitive)
-
-### "All attempts failed" error:
-- Your proxy quota might be exhausted
-- Check your Webshare dashboard for usage limits
-- Make sure your username ends with `-rotate`
-
-### Still getting blocked:
-- Make sure you're using residential proxies (not datacenter)
-- Check if your Webshare account is active
-- Verify you have sufficient proxy bandwidth remaining
-
-## 6. Cost Considerations
-
-- Residential proxies are more expensive than datacenter proxies
-- Each transcript request uses bandwidth
-- Monitor your usage in the Webshare dashboard
-- Consider batching requests to optimize costs
-
-## 7. Technical Details
-
-The system connects directly to Webshare's rotating proxy endpoint:
-- **Host**: `p.webshare.io`  
-- **Port**: `80`
-- **Authentication**: Your username and password
-- **IP Rotation**: Automatic (handled by Webshare)
-- **Implementation**: Simple inline code in the processor (no external dependencies)
-
-Each request may come from a different residential IP address, making it nearly impossible for YouTube to detect automated access. 
+**🔔 Reminder**: This setup method is deprecated. Please migrate to Bright Data for better performance and cost efficiency. See `bright_data_setup.md` for the new setup process.

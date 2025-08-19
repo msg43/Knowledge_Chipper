@@ -1,0 +1,542 @@
+"""
+Bright Data JSON response adapters for Knowledge System.
+
+Provides compatibility layer between Bright Data JSON responses and existing
+YouTubeMetadata/YouTubeTranscript Pydantic models to ensure seamless integration.
+"""
+
+import re
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from ..logger import get_logger
+from ..processors.youtube_metadata import YouTubeMetadata
+from ..processors.youtube_transcript import YouTubeTranscript
+
+logger = get_logger(__name__)
+
+
+class BrightDataAdapter:
+    """
+    Adapter for converting Bright Data JSON responses to Knowledge System models.
+
+    Provides methods to transform Bright Data YouTube API Scraper responses into
+    the existing YouTubeMetadata and YouTubeTranscript Pydantic models.
+    """
+
+    @staticmethod
+    def adapt_metadata_response(
+        bright_data_response: dict[str, Any], video_url: str
+    ) -> YouTubeMetadata:
+        """
+        Convert Bright Data YouTube metadata response to YouTubeMetadata model.
+
+        Args:
+            bright_data_response: Raw JSON response from Bright Data YouTube API Scraper
+            video_url: Original YouTube URL
+
+        Returns:
+            YouTubeMetadata instance compatible with existing processors
+        """
+        try:
+            # Extract video ID from URL or response
+            video_id = BrightDataAdapter._extract_video_id(
+                video_url, bright_data_response
+            )
+
+            # Map Bright Data fields to YouTubeMetadata fields
+            metadata_dict = {
+                "video_id": video_id,
+                "title": BrightDataAdapter._get_title(bright_data_response),
+                "url": video_url,
+                "description": BrightDataAdapter._get_description(bright_data_response),
+                "duration": BrightDataAdapter._get_duration(bright_data_response),
+                "view_count": BrightDataAdapter._get_view_count(bright_data_response),
+                "like_count": BrightDataAdapter._get_like_count(bright_data_response),
+                "comment_count": BrightDataAdapter._get_comment_count(
+                    bright_data_response
+                ),
+                "uploader": BrightDataAdapter._get_uploader(bright_data_response),
+                "uploader_id": BrightDataAdapter._get_uploader_id(bright_data_response),
+                "upload_date": BrightDataAdapter._get_upload_date(bright_data_response),
+                "tags": BrightDataAdapter._get_tags(bright_data_response),
+                "categories": BrightDataAdapter._get_categories(bright_data_response),
+                "thumbnail_url": BrightDataAdapter._get_thumbnail_url(
+                    bright_data_response
+                ),
+                "caption_availability": BrightDataAdapter._get_caption_availability(
+                    bright_data_response
+                ),
+                "privacy_status": BrightDataAdapter._get_privacy_status(
+                    bright_data_response
+                ),
+                "extraction_method": "bright_data_api_scraper",
+                "fetched_at": datetime.now(),
+            }
+
+            # Create and validate YouTubeMetadata instance
+            metadata = YouTubeMetadata(**metadata_dict)
+
+            logger.info(
+                f"Successfully adapted Bright Data metadata for video {video_id}"
+            )
+            return metadata
+
+        except Exception as e:
+            logger.error(f"Failed to adapt Bright Data metadata response: {e}")
+            # Create minimal metadata as fallback
+            return BrightDataAdapter._create_fallback_metadata(
+                video_url, bright_data_response
+            )
+
+    @staticmethod
+    def adapt_transcript_response(
+        bright_data_response: dict[str, Any], video_url: str, language: str = "en"
+    ) -> YouTubeTranscript:
+        """
+        Convert Bright Data YouTube transcript response to YouTubeTranscript model.
+
+        Args:
+            bright_data_response: Raw JSON response from Bright Data YouTube API Scraper
+            video_url: Original YouTube URL
+            language: Language code for the transcript
+
+        Returns:
+            YouTubeTranscript instance compatible with existing processors
+        """
+        try:
+            # Extract video ID from URL or response
+            video_id = BrightDataAdapter._extract_video_id(
+                video_url, bright_data_response
+            )
+
+            # Extract transcript data from Bright Data response
+            transcript_data = BrightDataAdapter._get_transcript_data(
+                bright_data_response
+            )
+            transcript_text = BrightDataAdapter._get_transcript_text(transcript_data)
+
+            # Map to YouTubeTranscript fields
+            transcript_dict = {
+                "video_id": video_id,
+                "title": BrightDataAdapter._get_title(bright_data_response),
+                "url": video_url,
+                "language": language,
+                "is_manual": BrightDataAdapter._is_manual_transcript(
+                    bright_data_response
+                ),
+                "transcript_text": transcript_text,
+                "transcript_data": transcript_data,
+                "duration": BrightDataAdapter._get_duration(bright_data_response),
+                "uploader": BrightDataAdapter._get_uploader(bright_data_response),
+                "upload_date": BrightDataAdapter._get_upload_date(bright_data_response),
+                "description": BrightDataAdapter._get_description(bright_data_response),
+                "view_count": BrightDataAdapter._get_view_count(bright_data_response),
+                "tags": BrightDataAdapter._get_tags(bright_data_response),
+                "thumbnail_url": BrightDataAdapter._get_thumbnail_url(
+                    bright_data_response
+                ),
+                "fetched_at": datetime.now(),
+            }
+
+            # Create and validate YouTubeTranscript instance
+            transcript = YouTubeTranscript(**transcript_dict)
+
+            logger.info(
+                f"Successfully adapted Bright Data transcript for video {video_id}"
+            )
+            return transcript
+
+        except Exception as e:
+            logger.error(f"Failed to adapt Bright Data transcript response: {e}")
+            # Create minimal transcript as fallback
+            return BrightDataAdapter._create_fallback_transcript(
+                video_url, bright_data_response
+            )
+
+    @staticmethod
+    def validate_bright_data_response(response: dict[str, Any]) -> bool:
+        """
+        Validate that response looks like a Bright Data YouTube API response.
+
+        Args:
+            response: JSON response to validate
+
+        Returns:
+            True if response appears to be from Bright Data YouTube API
+        """
+        try:
+            # Check for common Bright Data response structure
+            if not isinstance(response, dict):
+                return False
+
+            # Look for typical YouTube metadata fields
+            expected_fields = ["title", "url", "id", "videoId", "videoDetails"]
+            has_video_fields = any(field in response for field in expected_fields)
+
+            # Check for Bright Data specific markers
+            has_bright_data_markers = (
+                "brightdata" in str(response).lower()
+                or "scraper" in str(response).lower()
+                or "api_response" in response
+            )
+
+            return has_video_fields or has_bright_data_markers
+
+        except Exception as e:
+            logger.warning(f"Failed to validate Bright Data response: {e}")
+            return False
+
+    # Helper methods for field extraction
+    @staticmethod
+    def _extract_video_id(url: str, response: dict[str, Any]) -> str:
+        """Extract video ID from URL or response."""
+        # Try to get from response first
+        for field in ["id", "videoId", "video_id"]:
+            if field in response and response[field]:
+                return str(response[field])
+
+        # Extract from URL as fallback
+        if "youtu.be/" in url:
+            return url.split("youtu.be/")[1].split("?")[0]
+        elif "watch?v=" in url:
+            return url.split("watch?v=")[1].split("&")[0]
+        else:
+            raise ValueError(f"Could not extract video ID from URL: {url}")
+
+    @staticmethod
+    def _get_title(response: dict[str, Any]) -> str:
+        """Extract title from Bright Data response."""
+        for field in ["title", "videoDetails.title", "snippet.title"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                return str(value)
+        return "Unknown Title"
+
+    @staticmethod
+    def _get_description(response: dict[str, Any]) -> str:
+        """Extract description from Bright Data response."""
+        for field in [
+            "description",
+            "videoDetails.shortDescription",
+            "snippet.description",
+        ]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                return str(value)
+        return ""
+
+    @staticmethod
+    def _get_duration(response: dict[str, Any]) -> int | None:
+        """Extract duration in seconds from Bright Data response."""
+        for field in [
+            "duration",
+            "videoDetails.lengthSeconds",
+            "contentDetails.duration",
+        ]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                # Handle different duration formats
+                if isinstance(value, (int, float)):
+                    return int(value)
+                elif isinstance(value, str):
+                    # Parse ISO 8601 duration (PT1H2M3S) or seconds string
+                    return BrightDataAdapter._parse_duration_string(value)
+        return None
+
+    @staticmethod
+    def _get_view_count(response: dict[str, Any]) -> int | None:
+        """Extract view count from Bright Data response."""
+        for field in [
+            "view_count",
+            "viewCount",
+            "videoDetails.viewCount",
+            "statistics.viewCount",
+        ]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                try:
+                    return int(str(value).replace(",", ""))
+                except (ValueError, TypeError):
+                    continue
+        return None
+
+    @staticmethod
+    def _get_like_count(response: dict[str, Any]) -> int | None:
+        """Extract like count from Bright Data response."""
+        for field in ["like_count", "likeCount", "statistics.likeCount"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                try:
+                    return int(str(value).replace(",", ""))
+                except (ValueError, TypeError):
+                    continue
+        return None
+
+    @staticmethod
+    def _get_comment_count(response: dict[str, Any]) -> int | None:
+        """Extract comment count from Bright Data response."""
+        for field in ["comment_count", "commentCount", "statistics.commentCount"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                try:
+                    return int(str(value).replace(",", ""))
+                except (ValueError, TypeError):
+                    continue
+        return None
+
+    @staticmethod
+    def _get_uploader(response: dict[str, Any]) -> str:
+        """Extract uploader/channel name from Bright Data response."""
+        for field in [
+            "uploader",
+            "channel",
+            "videoDetails.author",
+            "snippet.channelTitle",
+        ]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                return str(value)
+        return ""
+
+    @staticmethod
+    def _get_uploader_id(response: dict[str, Any]) -> str:
+        """Extract uploader/channel ID from Bright Data response."""
+        for field in [
+            "uploader_id",
+            "channel_id",
+            "videoDetails.channelId",
+            "snippet.channelId",
+        ]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                return str(value)
+        return ""
+
+    @staticmethod
+    def _get_upload_date(response: dict[str, Any]) -> str | None:
+        """Extract upload date from Bright Data response."""
+        for field in ["upload_date", "uploadDate", "snippet.publishedAt"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                # Convert to YYYYMMDD format
+                return BrightDataAdapter._parse_date_string(str(value))
+        return None
+
+    @staticmethod
+    def _get_tags(response: dict[str, Any]) -> list[str]:
+        """Extract tags from Bright Data response."""
+        for field in ["tags", "videoDetails.keywords", "snippet.tags"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                if isinstance(value, list):
+                    return [str(tag) for tag in value if tag]
+                elif isinstance(value, str):
+                    # Split comma-separated tags
+                    return [tag.strip() for tag in value.split(",") if tag.strip()]
+        return []
+
+    @staticmethod
+    def _get_categories(response: dict[str, Any]) -> list[str]:
+        """Extract categories from Bright Data response."""
+        for field in ["categories", "snippet.categoryId"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                if isinstance(value, list):
+                    return [str(cat) for cat in value if cat]
+                elif isinstance(value, str):
+                    return [str(value)]
+        return []
+
+    @staticmethod
+    def _get_thumbnail_url(response: dict[str, Any]) -> str | None:
+        """Extract thumbnail URL from Bright Data response."""
+        for field in [
+            "thumbnail",
+            "thumbnails.high.url",
+            "snippet.thumbnails.high.url",
+        ]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                return str(value)
+        return None
+
+    @staticmethod
+    def _get_caption_availability(response: dict[str, Any]) -> bool | None:
+        """Extract caption availability from Bright Data response."""
+        for field in ["caption_availability", "captions", "videoDetails.captions"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value is not None:
+                if isinstance(value, bool):
+                    return value
+                elif isinstance(value, str):
+                    return value.lower() in ("true", "yes", "available")
+        return None
+
+    @staticmethod
+    def _get_privacy_status(response: dict[str, Any]) -> str | None:
+        """Extract privacy status from Bright Data response."""
+        for field in ["privacy_status", "privacyStatus", "status.privacyStatus"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                return str(value)
+        return None
+
+    @staticmethod
+    def _get_transcript_data(response: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract transcript data from Bright Data response."""
+        for field in ["transcript", "captions", "subtitles"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value and isinstance(value, list):
+                return value
+        return []
+
+    @staticmethod
+    def _get_transcript_text(transcript_data: list[dict[str, Any]]) -> str:
+        """Convert transcript data to plain text."""
+        if not transcript_data:
+            return ""
+
+        text_parts = []
+        for segment in transcript_data:
+            if isinstance(segment, dict):
+                text = segment.get("text", segment.get("content", ""))
+                if text:
+                    text_parts.append(str(text).strip())
+
+        return " ".join(text_parts)
+
+    @staticmethod
+    def _is_manual_transcript(response: dict[str, Any]) -> bool:
+        """Determine if transcript is manual or auto-generated."""
+        for field in ["is_manual", "manual", "kind"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value is not None:
+                if isinstance(value, bool):
+                    return value
+                elif isinstance(value, str):
+                    return "manual" in value.lower() or "asr" not in value.lower()
+        return False  # Default to auto-generated
+
+    @staticmethod
+    def _get_nested_field(data: dict[str, Any], field_path: str) -> Any:
+        """Get nested field value using dot notation."""
+        try:
+            current = data
+            for key in field_path.split("."):
+                if isinstance(current, dict) and key in current:
+                    current = current[key]
+                else:
+                    return None
+            return current
+        except (KeyError, TypeError):
+            return None
+
+    @staticmethod
+    def _parse_duration_string(duration_str: str) -> int | None:
+        """Parse duration string to seconds."""
+        try:
+            # Try parsing as integer first
+            return int(duration_str)
+        except ValueError:
+            pass
+
+        try:
+            # Parse ISO 8601 duration (PT1H2M3S)
+            if duration_str.startswith("PT"):
+                total_seconds = 0
+                # Extract hours, minutes, seconds
+                hours_match = re.search(r"(\d+)H", duration_str)
+                minutes_match = re.search(r"(\d+)M", duration_str)
+                seconds_match = re.search(r"(\d+)S", duration_str)
+
+                if hours_match:
+                    total_seconds += int(hours_match.group(1)) * 3600
+                if minutes_match:
+                    total_seconds += int(minutes_match.group(1)) * 60
+                if seconds_match:
+                    total_seconds += int(seconds_match.group(1))
+
+                return total_seconds
+        except Exception:
+            pass
+
+        return None
+
+    @staticmethod
+    def _parse_date_string(date_str: str) -> str | None:
+        """Parse date string to YYYYMMDD format."""
+        try:
+            # Try parsing ISO format first
+            if "T" in date_str:
+                date_obj = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                return date_obj.strftime("%Y%m%d")
+
+            # Try other common formats
+            for fmt in ["%Y-%m-%d", "%Y/%m/%d", "%Y%m%d"]:
+                try:
+                    date_obj = datetime.strptime(date_str, fmt)
+                    return date_obj.strftime("%Y%m%d")
+                except ValueError:
+                    continue
+        except Exception:
+            pass
+
+        return None
+
+    @staticmethod
+    def _create_fallback_metadata(
+        url: str, response: dict[str, Any]
+    ) -> YouTubeMetadata:
+        """Create minimal fallback metadata when adaptation fails."""
+        try:
+            video_id = BrightDataAdapter._extract_video_id(url, response)
+        except ValueError:
+            video_id = "unknown"
+
+        return YouTubeMetadata(
+            video_id=video_id,
+            title=response.get("title", "Unknown Title"),
+            url=url,
+            extraction_method="bright_data_api_scraper_fallback",
+            fetched_at=datetime.now(),
+        )
+
+    @staticmethod
+    def _create_fallback_transcript(
+        url: str, response: dict[str, Any]
+    ) -> YouTubeTranscript:
+        """Create minimal fallback transcript when adaptation fails."""
+        try:
+            video_id = BrightDataAdapter._extract_video_id(url, response)
+        except ValueError:
+            video_id = "unknown"
+
+        return YouTubeTranscript(
+            video_id=video_id,
+            title=response.get("title", "Unknown Title"),
+            url=url,
+            language="en",
+            is_manual=False,
+            transcript_text="",
+            transcript_data=[],
+            fetched_at=datetime.now(),
+        )
+
+
+# Convenience functions
+def adapt_bright_data_metadata(response: dict[str, Any], url: str) -> YouTubeMetadata:
+    """Convenience function to adapt Bright Data metadata response."""
+    return BrightDataAdapter.adapt_metadata_response(response, url)
+
+
+def adapt_bright_data_transcript(
+    response: dict[str, Any], url: str, language: str = "en"
+) -> YouTubeTranscript:
+    """Convenience function to adapt Bright Data transcript response."""
+    return BrightDataAdapter.adapt_transcript_response(response, url, language)
+
+
+def validate_bright_data_response(response: dict[str, Any]) -> bool:
+    """Convenience function to validate Bright Data response."""
+    return BrightDataAdapter.validate_bright_data_response(response)

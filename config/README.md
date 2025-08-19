@@ -8,10 +8,11 @@ This directory contains configuration files for the Knowledge Workflow system.
 1. Open the Knowledge Workflow application
 2. Go to the **"API Keys"** tab
 3. Enter your credentials:
-   - **WebShare Username & Password** (required for YouTube processing)
+   - **Bright Data API Key** (recommended for YouTube processing - pay per request)
    - **OpenAI API Key** (required for GPT summarization)
    - **Anthropic API Key** (required for Claude summarization)
    - **HuggingFace Token** (required for speaker diarization)
+   - **WebShare Username & Password** (legacy - will be deprecated)
 4. Click **"💾 Save API Keys"**
 5. Credentials will be automatically saved to `config/credentials.yaml`
 
@@ -49,7 +50,20 @@ config/
 
 ## 🔗 Where to Get API Keys
 
-- **WebShare Proxy**: https://www.webshare.io/
+- **Bright Data API**: https://brightdata.com/ (recommended for YouTube processing)
 - **OpenAI API**: https://platform.openai.com/api-keys
 - **Anthropic API**: https://console.anthropic.com/
-- **HuggingFace Token**: https://huggingface.co/settings/tokens 
+- **HuggingFace Token**: https://huggingface.co/settings/tokens
+- **WebShare Proxy**: https://www.webshare.io/ (legacy - will be deprecated)
+
+## 📊 Bright Data vs WebShare
+
+**Bright Data Advantages:**
+- ✅ **Pay-per-request** - More cost-effective than monthly subscriptions
+- ✅ **Direct JSON responses** - Cleaner data pipeline  
+- ✅ **Automatic IP rotation** - Built-in residential proxy management
+- ✅ **API-based** - More reliable than proxy scraping
+- ✅ **Structured data** - No parsing of yt-dlp output needed
+
+**Migration Note:**
+WebShare proxy credentials are still supported but will be deprecated in favor of Bright Data API integration. 

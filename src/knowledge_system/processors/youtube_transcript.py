@@ -1,9 +1,11 @@
 """
-YouTube Transcript Processor
-YouTube Transcript Processor
+Advanced YouTube Transcript Processor
 
-Extracts transcripts from YouTube videos using Webshare rotating residential proxies.
-Simplified version that only uses the proxy-based YouTube Transcript API.
+Supports dual extraction methods:
+1. Bright Data YouTube API Scrapers (Recommended) - Direct JSON responses, pay-per-request
+2. WebShare + YouTube Transcript API (Legacy) - Proxy-based scraping, monthly subscription
+
+Bright Data provides more reliable access, structured data, and cost efficiency.
 """
 
 import json
@@ -15,9 +17,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+try:
+    import requests
+except ImportError:
+    requests = None
+
 from pydantic import BaseModel, Field
 
 from ..logger import get_logger
+from ..utils.bright_data_adapters import (
+    adapt_bright_data_transcript,
+    validate_bright_data_response,
+)
 from ..utils.cancellation import CancellationError, CancellationToken
 from ..utils.text_utils import strip_bracketed_content
 from ..utils.youtube_utils import extract_urls, is_youtube_url
@@ -79,9 +90,13 @@ def sanitize_tags(tags: list[str]) -> list[str]:
 
 try:
     from youtube_transcript_api import YouTubeTranscriptApi
-    from youtube_transcript_api.proxies import WebshareProxyConfig
+    from youtube_transcript_api.proxies import (  # DEPRECATED: Legacy WebShare support
+        WebshareProxyConfig,
+    )
 
-    logger.debug("Successfully imported YouTubeTranscriptApi and WebshareProxyConfig")
+    logger.debug(
+        "Successfully imported YouTubeTranscriptApi and WebshareProxyConfig (legacy)"
+    )
 except ImportError as e:
     logger.error(f"Failed to import youtube_transcript_api: {e}")
     YouTubeTranscriptApi = None
@@ -268,13 +283,7 @@ class YouTubeTranscript(BaseModel):
 
 
 class YouTubeTranscriptProcessor(BaseProcessor):
-    """
-    Processor for extracting YouTube transcripts using Webshare rotating proxies
-    Processor for extracting YouTube transcripts using Webshare rotating proxies.
-
-    Simplified processor that only uses the proxy-based YouTube Transcript API.
-    No fallback methods - requires working Webshare credentials.
-    """
+    """YouTube transcript processor with dual extraction methods."""
 
     def __init__(
         self,
@@ -293,11 +302,67 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         self.force_diarization = force_diarization
         self.require_diarization = require_diarization
 
+        # Configure extraction method
+        from ..config import get_settings
+
+        self.settings = get_settings()
+        self.use_bright_data = False
+        self.bright_data_api_key = None
+
+        # Try to configure Bright Data first
+        self._configure_bright_data()
+
+        # If Bright Data isn't available, configure YouTube Transcript API + WebShare
+        if not self.use_bright_data:
+            self._configure_webshare_transcript_api()
+
+    def _configure_bright_data(self):
+        """Configure Bright Data YouTube API Scraper (preferred method)."""
+        try:
+            if requests is None:
+                logger.warning(
+                    "requests library not available - falling back to WebShare + YouTube Transcript API"
+                )
+                return
+
+            self.bright_data_api_key = getattr(
+                self.settings.api_keys, "bright_data_api_key", None
+            )
+
+            if self.bright_data_api_key:
+                # Validate API key format
+                if self.bright_data_api_key.startswith(("bd_", "brd_", "2")):
+                    self.use_bright_data = True
+                    logger.info(
+                        "✅ Configured Bright Data YouTube API Scraper for transcript extraction"
+                    )
+                    return
+                else:
+                    logger.warning(
+                        "Invalid Bright Data API key format - falling back to WebShare + YouTube Transcript API"
+                    )
+            else:
+                logger.info(
+                    "No Bright Data API key configured - falling back to WebShare + YouTube Transcript API"
+                )
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to configure Bright Data: {e} - falling back to WebShare + YouTube Transcript API"
+            )
+
+    def _configure_webshare_transcript_api(self):
+        """Configure WebShare + YouTube Transcript API (legacy fallback method)."""
         if YouTubeTranscriptApi is None or WebshareProxyConfig is None:
             raise ImportError(
-                "youtube-transcript-api is required for transcript extraction. "
-                "Install it with: pip install youtube-transcript-api"
+                "Neither Bright Data nor youtube-transcript-api are properly configured. "
+                "Please either:\n"
+                "1. Configure Bright Data API Key (recommended) in Settings\n"
+                "2. Install youtube-transcript-api with: pip install youtube-transcript-api"
             )
+        logger.info(
+            "⚠️ Using legacy WebShare + YouTube Transcript API for transcript extraction (consider upgrading to Bright Data)"
+        )
 
     @property
     def supported_formats(self) -> list[str]:
