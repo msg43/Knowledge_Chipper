@@ -263,6 +263,133 @@ class DatabaseService:
             return []
 
     # =============================================================================
+    # HCE OPERATIONS
+    # =============================================================================
+
+    def save_hce_data(self, video_id: str, hce_outputs) -> bool:
+        """Save HCE pipeline outputs to database tables."""
+        try:
+            from .hce_models import (
+                Claim,
+                Concept,
+                Episode,
+                EvidenceSpan,
+                JargonTerm,
+                Person,
+                Relation,
+            )
+
+            with self.get_session() as session:
+                # Create or get episode
+                episode = (
+                    session.query(Episode).filter(Episode.video_id == video_id).first()
+                )
+                if not episode:
+                    episode = Episode(
+                        episode_id=hce_outputs.episode_id,
+                        video_id=video_id,
+                        title=session.query(Video)
+                        .filter(Video.video_id == video_id)
+                        .first()
+                        .title,
+                    )
+                    session.add(episode)
+
+                # Save claims
+                for claim in hce_outputs.claims:
+                    db_claim = Claim(
+                        episode_id=episode.episode_id,
+                        claim_id=claim.claim_id,
+                        canonical=claim.canonical,
+                        claim_type=claim.claim_type,
+                        tier=claim.tier,
+                        scores_json=claim.scores,
+                    )
+                    session.add(db_claim)
+
+                    # Save evidence spans
+                    for i, evidence in enumerate(claim.evidence):
+                        span = EvidenceSpan(
+                            episode_id=episode.episode_id,
+                            claim_id=claim.claim_id,
+                            seq=i,
+                            t0=evidence.t0,
+                            t1=evidence.t1,
+                            quote=evidence.quote,
+                            segment_id=evidence.segment_id,
+                        )
+                        session.add(span)
+
+                # Save relations
+                for relation in hce_outputs.relations:
+                    db_relation = Relation(
+                        episode_id=episode.episode_id,
+                        source_claim_id=relation.source_claim_id,
+                        target_claim_id=relation.target_claim_id,
+                        type=relation.type,
+                        strength=relation.strength,
+                        rationale=relation.rationale,
+                    )
+                    session.add(db_relation)
+
+                # Save people
+                for person in hce_outputs.people:
+                    db_person = Person(
+                        episode_id=episode.episode_id,
+                        mention_id=person.mention_id,
+                        span_segment_id=person.span_segment_id,
+                        t0=person.t0,
+                        t1=person.t1,
+                        surface=person.surface,
+                        normalized=person.normalized,
+                        entity_type=person.entity_type,
+                        external_ids_json=person.external_ids,
+                        confidence=person.confidence,
+                    )
+                    session.add(db_person)
+
+                # Save concepts
+                for concept in hce_outputs.concepts:
+                    db_concept = Concept(
+                        episode_id=episode.episode_id,
+                        model_id=concept.model_id,
+                        name=concept.name,
+                        definition=concept.definition,
+                        first_mention_ts=concept.first_mention_ts,
+                        aliases_json=concept.aliases,
+                        evidence_json=[e.model_dump() for e in concept.evidence_spans],
+                    )
+                    session.add(db_concept)
+
+                # Save jargon
+                for jargon in hce_outputs.jargon:
+                    db_jargon = JargonTerm(
+                        episode_id=episode.episode_id,
+                        term_id=jargon.term_id,
+                        term=jargon.term,
+                        category=jargon.category,
+                        definition=jargon.definition,
+                        evidence_json=[e.model_dump() for e in jargon.evidence_spans],
+                    )
+                    session.add(db_jargon)
+
+                # Update FTS tables
+                session.execute(
+                    """INSERT INTO claims_fts (episode_id, claim_id, canonical, claim_type)
+                       SELECT episode_id, claim_id, canonical, claim_type FROM claims
+                       WHERE episode_id = :episode_id""",
+                    {"episode_id": episode.episode_id},
+                )
+
+                session.commit()
+                logger.info(f"Saved HCE data for episode {episode.episode_id}")
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to save HCE data: {e}")
+            return False
+
+    # =============================================================================
     # MOC OPERATIONS
     # =============================================================================
 
