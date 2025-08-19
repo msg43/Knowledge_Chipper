@@ -1,0 +1,2 @@
+Extract mentions of people and organizations with timestamps.
+Return JSON list: surface, entity_type (person|org), t0, t1, span_segment_id, normalized?, confidence?.

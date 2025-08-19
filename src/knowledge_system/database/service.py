@@ -39,6 +39,14 @@ class DatabaseService:
         self.engine = create_database_engine(database_url)
         self.Session = sessionmaker(bind=self.engine)
 
+        # Extract database path for SQLite URLs
+        if database_url.startswith("sqlite:///"):
+            self.db_path = Path(database_url[10:])  # Remove 'sqlite:///' prefix
+        elif database_url.startswith("sqlite://"):
+            self.db_path = Path(database_url[9:])  # Remove 'sqlite://' prefix
+        else:
+            self.db_path = Path("knowledge_system.db")  # Default fallback
+
         # Create tables if they don't exist
         create_all_tables(self.engine)
 

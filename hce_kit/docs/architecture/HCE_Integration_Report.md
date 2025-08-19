@@ -410,6 +410,60 @@ The proposed SQLite integration provides:
    - Views for common query patterns
    - Easy backup and replication options
 
+## Acceptance Criteria
+
+### Critical Requirements
+1. **UI Behavior**: All tabs render correctly with HCE-backed data
+   - Summarization tab shows same UI, generates claims internally
+   - Process tab runs HCE for both summarization and MOC steps
+   - Same progress tracking and error handling
+
+2. **File Outputs**: Identical filenames and locations
+   - `{video_id}_summary.md` contains claim-based summary
+   - `People.md`, `Tags.md`, `Jargon.md` generated from HCE entities
+   - YAML frontmatter preserved with same fields
+
+3. **Database Compatibility**: Legacy queries work via views
+   - `SELECT * FROM summaries` returns HCE data via view
+   - `SELECT * FROM moc_extractions` mapped to HCE entities
+   - FTS queries return results from `claims_fts` and `quotes_fts`
+
+4. **Performance**: Acceptable processing times
+   - < 3x slower than legacy for typical documents
+   - Memory usage comparable when streaming enabled
+   - No UI freezes or timeouts
+
+### Test Commands
+```bash
+# Verify CLI commands work identically
+chipper summarize input.txt -o output/
+chipper process video.mp4 --summarize --moc
+chipper moc summary1.md summary2.md -o output/moc/
+
+# Verify database views
+sqlite3 knowledge_system.db "SELECT * FROM summaries WHERE video_id='test123';"
+sqlite3 knowledge_system.db "SELECT * FROM legacy_claims WHERE episode_id='test123';"
+
+# Run test suite
+pytest -q tests/test_summarizer.py tests/test_moc.py
+```
+
+## Rollback Strategy
+
+If critical issues arise, rollback is possible via:
+
+1. **Code Rollback**: 
+   ```bash
+   git revert <hce-replacement-commit>
+   ```
+
+2. **Database Rollback**: Views maintain compatibility, so legacy code can read HCE data
+
+3. **Emergency Override**: Single env var for legacy path (if preserved):
+   ```bash
+   USE_LEGACY_SUMMARIZER=1 chipper summarize input.txt
+   ```
+
 ## Success Metrics
 
 ### Quantitative Metrics

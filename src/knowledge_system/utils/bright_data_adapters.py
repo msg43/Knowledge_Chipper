@@ -10,8 +10,20 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from ..logger import get_logger
-from ..processors.youtube_metadata import YouTubeMetadata
-from ..processors.youtube_transcript import YouTubeTranscript
+
+
+# Avoid circular imports by importing at runtime
+def get_youtube_metadata_class():
+    from ..processors.youtube_metadata import YouTubeMetadata
+
+    return YouTubeMetadata
+
+
+def get_youtube_transcript_class():
+    from ..processors.youtube_transcript import YouTubeTranscript
+
+    return YouTubeTranscript
+
 
 logger = get_logger(__name__)
 
