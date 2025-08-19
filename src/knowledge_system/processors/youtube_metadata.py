@@ -1,9 +1,11 @@
 """
-Simplified YouTube Metadata Processor
-Simplified YouTube Metadata Processor
+Advanced YouTube Metadata Processor
 
-Uses only WebShare rotating proxies with YT-DLP. Eliminates complex fallback strategies,
-manual proxy rotation, and elaborate retry logic since WebShare handles rotation automatically.
+Supports dual extraction methods:
+1. Bright Data YouTube API Scrapers (Recommended) - Direct JSON responses, pay-per-request
+2. WebShare + YT-DLP (Legacy) - Proxy-based scraping, monthly subscription
+
+Bright Data provides more reliable access, structured data, and cost efficiency.
 """
 
 import re
@@ -17,11 +19,20 @@ try:
 except ImportError:
     yt_dlp = None
 
+try:
+    import requests
+except ImportError:
+    requests = None
+
 from pydantic import BaseModel, Field
 
 from ..config import get_settings
 from ..errors import YouTubeAPIError
 from ..logger import get_logger
+from ..utils.bright_data_adapters import (
+    adapt_bright_data_metadata,
+    validate_bright_data_response,
+)
 from ..utils.youtube_utils import extract_urls, is_youtube_url
 from .base import BaseProcessor, ProcessorResult
 
@@ -59,7 +70,7 @@ class YouTubeMetadata(BaseModel):
 
     # Extraction metadata
     extraction_method: str = Field(
-        default="yt-dlp", description="Method used to extract metadata"
+        default="bright_data_api_scraper", description="Method used to extract metadata"
     )
     fetched_at: datetime = Field(
         default_factory=datetime.now, description="When metadata was fetched"
@@ -126,19 +137,67 @@ class YouTubeMetadata(BaseModel):
 
 
 class YouTubeMetadataProcessor(BaseProcessor):
-    """Simplified processor for extracting YouTube video metadata using YT-DLP with WebShare proxies."""
+    """YouTube metadata processor with dual extraction methods."""
 
     def __init__(self, name: str | None = None) -> None:
         """Initialize the YouTube metadata processor."""
         super().__init__(name or "youtube_metadata")
 
-        if yt_dlp is None:
-            raise YouTubeAPIError(
-                "yt-dlp is required for YouTube metadata extraction. "
-                "Please install it with: pip install yt-dlp"
+        self.settings = get_settings()
+        self.use_bright_data = False
+        self.bright_data_api_key = None
+
+        # Try to configure Bright Data first
+        self._configure_bright_data()
+
+        # If Bright Data isn't available, configure WebShare + yt-dlp
+        if not self.use_bright_data:
+            self._configure_webshare_ytdlp()
+
+    def _configure_bright_data(self):
+        """Configure Bright Data YouTube API Scraper (preferred method)."""
+        try:
+            if requests is None:
+                logger.warning(
+                    "requests library not available - falling back to WebShare + yt-dlp"
+                )
+                return
+
+            self.bright_data_api_key = getattr(
+                self.settings.api_keys, "bright_data_api_key", None
             )
 
-        self.settings = get_settings()
+            if self.bright_data_api_key:
+                # Validate API key format
+                if self.bright_data_api_key.startswith(("bd_", "brd_", "2")):
+                    self.use_bright_data = True
+                    logger.info(
+                        "✅ Configured Bright Data YouTube API Scraper for metadata extraction"
+                    )
+                    return
+                else:
+                    logger.warning(
+                        "Invalid Bright Data API key format - falling back to WebShare + yt-dlp"
+                    )
+            else:
+                logger.info(
+                    "No Bright Data API key configured - falling back to WebShare + yt-dlp"
+                )
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to configure Bright Data: {e} - falling back to WebShare + yt-dlp"
+            )
+
+    def _configure_webshare_ytdlp(self):
+        """Configure WebShare + YT-DLP (legacy fallback method)."""
+        if yt_dlp is None:
+            raise YouTubeAPIError(
+                "Neither Bright Data nor yt-dlp are properly configured. "
+                "Please either:\n"
+                "1. Configure Bright Data API Key (recommended) in Settings\n"
+                "2. Install yt-dlp with: pip install yt-dlp"
+            )
 
         # Optimized YT-DLP configuration for fast metadata-only extraction
         self.ydl_opts = {
@@ -157,24 +216,28 @@ class YouTubeMetadataProcessor(BaseProcessor):
             "extractor_retries": 3,  # Normal retries since WebShare handles rate limiting
         }
 
-        # Configure WebShare proxy (required)
+        # Configure WebShare proxy (required for yt-dlp method)
         self._configure_webshare_proxy()
 
     def _configure_webshare_proxy(self):
-        """Configure WebShare rotating proxy (required for YouTube access)."""
+        """Configure WebShare rotating proxy (required for yt-dlp method)."""
         webshare_username = self.settings.api_keys.webshare_username
         webshare_password = self.settings.api_keys.webshare_password
 
         if not webshare_username or not webshare_password:
             raise YouTubeAPIError(
-                "WebShare proxy credentials are required for YouTube processing. "
-                "Please configure WebShare Username and Password in Settings."
+                "Proxy credentials are required for YouTube processing. Please configure either:\n"
+                "• Bright Data API Key (recommended) - pay per request with better reliability\n"
+                "• WebShare Username and Password (legacy) - will be deprecated\n\n"
+                "Configure credentials in the API Keys tab. Bright Data is preferred for cost efficiency."
             )
 
         # WebShare automatically rotates proxies - no manual rotation needed
         proxy_url = f"http://{webshare_username}:{webshare_password}@p.webshare.io:80/"
         self.ydl_opts["proxy"] = proxy_url
-        logger.info("Configured YT-DLP with WebShare rotating proxy")
+        logger.info(
+            "⚠️ Using legacy WebShare + yt-dlp for metadata extraction (consider upgrading to Bright Data)"
+        )
 
     @property
     def supported_formats(self) -> list[str]:
@@ -297,10 +360,93 @@ class YouTubeMetadataProcessor(BaseProcessor):
             logger.error(f"Failed to extract metadata for {url}: {e}")
             return None
 
+    def _extract_metadata_bright_data(self, url: str) -> YouTubeMetadata | None:
+        """Extract metadata using Bright Data YouTube API Scraper."""
+        try:
+            video_id = self._extract_video_id(url)
+            if not video_id:
+                logger.error(f"Could not extract video ID from URL: {url}")
+                return None
+
+            # Bright Data YouTube API Scraper endpoint
+            api_url = "https://api.brightdata.com/datasets/youtube_videos/snapshot"
+
+            headers = {
+                "Authorization": f"Bearer {self.bright_data_api_key}",
+                "Content-Type": "application/json",
+            }
+
+            # Request payload for specific video
+            payload = {
+                "url": url,
+                "format": "json",
+                "include_comments": False,
+                "include_transcript": False,  # We handle transcripts separately
+                "include_metadata": True,
+            }
+
+            logger.debug(f"Requesting metadata from Bright Data for video {video_id}")
+
+            response = requests.post(api_url, headers=headers, json=payload, timeout=30)
+
+            if response.status_code == 200:
+                bright_data_response = response.json()
+
+                # Validate response structure
+                if not validate_bright_data_response(bright_data_response):
+                    logger.error(
+                        f"Invalid Bright Data response structure for {video_id}"
+                    )
+                    return None
+
+                # Use the adapter to convert to our YouTubeMetadata model
+                metadata = adapt_bright_data_metadata(bright_data_response, url)
+
+                logger.debug(
+                    f"✅ Successfully extracted metadata via Bright Data for {video_id}"
+                )
+                return metadata
+
+            elif response.status_code == 402:
+                logger.error("Bright Data API quota exceeded or payment required")
+                return None
+            elif response.status_code == 401:
+                logger.error("Invalid Bright Data API key")
+                return None
+            elif response.status_code == 429:
+                logger.warning("Bright Data API rate limit reached, retrying...")
+                time.sleep(2)
+                # Could implement retry logic here
+                return None
+            else:
+                logger.error(
+                    f"Bright Data API error {response.status_code}: {response.text}"
+                )
+                return None
+
+        except requests.exceptions.Timeout:
+            logger.error(f"Bright Data API timeout for {url}")
+            return None
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Bright Data API request failed for {url}: {e}")
+            return None
+        except Exception as e:
+            logger.error(
+                f"Unexpected error in Bright Data metadata extraction for {url}: {e}"
+            )
+            return None
+
+    def _extract_metadata_unified(self, url: str) -> YouTubeMetadata | None:
+        """Extract metadata using the configured method (Bright Data or WebShare+yt-dlp)."""
+        if self.use_bright_data:
+            return self._extract_metadata_bright_data(url)
+        else:
+            return self._extract_metadata(url)
+
     def process(
         self, input_data: Any, dry_run: bool = False, **kwargs: Any
     ) -> ProcessorResult:
-        """Process YouTube URLs and extract metadata using YT-DLP with WebShare proxy."""
+        """Process YouTube URLs and extract metadata using Bright Data API Scraper or WebShare+yt-dlp fallback."""
         start_time = time.time()
 
         try:
@@ -364,7 +510,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
                     logger.info(f"DRY RUN: Would extract metadata for {url}")
                     continue
 
-                metadata = self._extract_metadata(url)
+                metadata = self._extract_metadata_unified(url)
                 if metadata:
                     all_metadata.append(metadata)
                     logger.info(f"✓ Successfully extracted metadata for {video_id}")

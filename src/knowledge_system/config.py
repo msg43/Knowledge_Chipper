@@ -260,6 +260,47 @@ class APIKeysConfig(BaseModel):
     # HuggingFace for local models
     huggingface_token: str | None = Field(default=None, alias="hf_token")
 
+    # Bright Data API Key (for YouTube processing)
+    bright_data_api_key: str | None = Field(
+        default=None,
+        description="Bright Data API key for YouTube metadata, transcripts, and audio downloads",
+    )
+
+    # Bright Data Proxy Credentials (for residential proxy sessions)
+    bright_data_customer_id: str | None = Field(
+        default=None,
+        description="Bright Data customer ID for proxy sessions (BD_CUST environment variable)",
+    )
+    bright_data_zone_id: str | None = Field(
+        default=None,
+        description="Bright Data zone ID for residential proxies (BD_ZONE environment variable)",
+    )
+    bright_data_password: str | None = Field(
+        default=None,
+        description="Bright Data zone password for proxy authentication (BD_PASS environment variable)",
+    )
+
+    @field_validator("bright_data_api_key")
+    @classmethod
+    def validate_bright_data_api_key(cls, v: str | None) -> str | None:
+        """Validate Bright Data API key format."""
+        if v is None or v == "":
+            return v
+
+        # Basic format validation - Bright Data API keys typically start with specific prefixes
+        if not v.startswith(
+            ("bd_", "brd_", "2")
+        ):  # Common Bright Data API key prefixes
+            raise ValueError(
+                "Bright Data API key should start with 'bd_', 'brd_', or be numeric"
+            )
+
+        # Minimum length check
+        if len(v) < 10:
+            raise ValueError("Bright Data API key is too short")
+
+        return v
+
     class Config:
         """Pydantic model configuration."""
 

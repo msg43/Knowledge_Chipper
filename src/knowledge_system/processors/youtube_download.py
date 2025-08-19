@@ -153,6 +153,44 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 success=False, errors=["No valid YouTube URLs found in input"]
             )
 
+        # Apply deduplication to save costs and prevent reprocessing
+        if progress_callback:
+            progress_callback("🔍 Checking for duplicate videos...")
+
+        original_count = len(urls)
+        unique_urls, duplicate_results = dedup_service.check_batch_duplicates(
+            urls,
+            DuplicationPolicy.SKIP_ALL,  # Default policy - can be made configurable
+        )
+
+        if duplicate_results:
+            logger.info(
+                f"Deduplication: {len(duplicate_results)} duplicates found, {len(unique_urls)} unique videos to process"
+            )
+            if progress_callback:
+                progress_callback(
+                    f"💾 Skipped {len(duplicate_results)} duplicate videos (already processed)"
+                )
+                for dup in duplicate_results[:3]:  # Show first 3 duplicates
+                    progress_callback(f"   • {dup.video_id}: {dup.skip_reason}")
+                if len(duplicate_results) > 3:
+                    progress_callback(f"   • ... and {len(duplicate_results) - 3} more")
+
+        # Update URLs to only process unique ones
+        urls = unique_urls
+        if not urls:
+            return ProcessorResult(
+                success=True,
+                data={
+                    "downloaded_files": [],
+                    "downloaded_thumbnails": [],
+                    "errors": [],
+                    "duplicates_skipped": len(duplicate_results),
+                    "message": "All videos were duplicates - no new downloads needed",
+                },
+                metadata={"duplicates_skipped": len(duplicate_results)},
+            )
+
         # Expand any playlist URLs into individual video URLs with metadata
         from ..utils.youtube_utils import expand_playlist_urls_with_metadata
 
@@ -184,70 +222,162 @@ class YouTubeDownloadProcessor(BaseProcessor):
         thumbnails_dir = output_dir / "Thumbnails"
         thumbnails_dir.mkdir(exist_ok=True)
 
-        # ENFORCE WebShare proxy ONLY - no fallback authentication strategies
+        # PROXY CONFIGURATION - Bright Data (preferred) or WebShare (legacy)
         from ..config import get_settings
+        from ..database import DatabaseService
+        from ..utils.bright_data import BrightDataSessionManager
+        from ..utils.deduplication import DuplicationPolicy, VideoDeduplicationService
 
         settings = get_settings()
-        webshare_username = settings.api_keys.webshare_username
-        webshare_password = settings.api_keys.webshare_password
 
-        if not webshare_username or not webshare_password:
-            return ProcessorResult(
-                success=False,
-                errors=[
-                    "WebShare proxy credentials are required for YouTube processing. Please configure WebShare Username and Password in Settings. This system only uses WebShare rotating residential proxies for YouTube access."
-                ],
-            )
+        # Initialize deduplication service for cost optimization
+        dedup_service = VideoDeduplicationService()
 
-        # Test WebShare credentials before proceeding
-        logger.info("Testing WebShare proxy credentials...")
-        if progress_callback:
-            progress_callback("🔐 Testing WebShare proxy credentials...")
+        # Try Bright Data first (preferred)
+        bright_data_api_key = getattr(settings.api_keys, "bright_data_api_key", None)
+        use_bright_data = False
+        proxy_url = None
+        session_manager = None
 
-        try:
-            import requests
+        if bright_data_api_key:
+            try:
+                # Initialize Bright Data session manager
+                db_service = DatabaseService()
+                session_manager = BrightDataSessionManager(db_service)
 
-            proxy_url_for_test = (
-                f"http://{webshare_username}:{webshare_password}@p.webshare.io:80/"
-            )
-            test_response = requests.get(
-                "https://httpbin.org/ip",
-                proxies={"http": proxy_url_for_test, "https": proxy_url_for_test},
-                timeout=15,
-            )
-            if test_response.status_code == 200:
-                proxy_ip = test_response.json().get("origin", "unknown")
-                logger.info(f"✅ WebShare proxy working - connected via IP: {proxy_ip}")
-                if progress_callback:
-                    progress_callback(f"✅ WebShare proxy working - IP: {proxy_ip}")
-            else:
-                logger.warning(
-                    f"WebShare proxy test returned status {test_response.status_code}"
-                )
-                if progress_callback:
-                    progress_callback(
-                        f"⚠️ WebShare proxy test: unexpected status {test_response.status_code}"
+                # Validate credentials
+                if session_manager._validate_credentials():
+                    use_bright_data = True
+                    logger.info(
+                        "Using Bright Data residential proxies for YouTube processing"
                     )
-        except Exception as proxy_test_error:
-            error_msg = str(proxy_test_error)
-            logger.error(f"❌ WebShare proxy test failed: {error_msg}")
-            if progress_callback:
-                if "407" in error_msg or "authentication" in error_msg.lower():
-                    progress_callback(
-                        "❌ WebShare authentication failed - check username/password"
-                    )
-                elif "timeout" in error_msg.lower():
-                    progress_callback("❌ WebShare proxy timeout - check account status")
+                    if progress_callback:
+                        progress_callback("🌐 Using Bright Data residential proxies...")
                 else:
-                    progress_callback(f"❌ WebShare proxy test failed: {error_msg}")
-                progress_callback(
-                    "   Continuing anyway - may work for YouTube specifically..."
+                    logger.warning(
+                        "Bright Data credentials incomplete, falling back to WebShare"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Bright Data initialization failed: {e}, falling back to WebShare"
                 )
-            # Continue anyway as proxy might work for YouTube even if test fails
 
-        # Configure WebShare proxy with dynamic concurrency
-        proxy_url = f"http://{webshare_username}:{webshare_password}@p.webshare.io:80/"
-        ydl_opts = {**self.ydl_opts_base, "proxy": proxy_url}
+        # Fallback to WebShare if Bright Data not available
+        if not use_bright_data:
+            webshare_username = settings.api_keys.webshare_username
+            webshare_password = settings.api_keys.webshare_password
+
+            if not webshare_username or not webshare_password:
+                return ProcessorResult(
+                    success=False,
+                    errors=[
+                        "Proxy credentials are required for YouTube processing. Please configure either:\n"
+                        "• Bright Data API Key (recommended) - pay per request with better reliability\n"
+                        "• WebShare Username and Password (legacy) - will be deprecated\n\n"
+                        "Configure credentials in the API Keys tab. Bright Data is preferred for cost efficiency."
+                    ],
+                )
+
+        # PROXY TESTING AND CONFIGURATION
+        if use_bright_data:
+            # Test Bright Data proxy by creating a session for first URL
+            logger.info("Testing Bright Data proxy connectivity...")
+            if progress_callback:
+                progress_callback("🔐 Testing Bright Data proxy...")
+
+            try:
+                # Extract first video ID for session creation
+                test_video_id = "test_connection"  # We'll use a generic test ID
+                proxy_url = session_manager.get_proxy_url_for_file(
+                    test_video_id, "audio_download"
+                )
+
+                if proxy_url:
+                    # Test proxy connectivity
+                    import requests
+
+                    test_response = requests.get(
+                        "https://httpbin.org/ip",
+                        proxies={"http": proxy_url, "https": proxy_url},
+                        timeout=15,
+                    )
+                    if test_response.status_code == 200:
+                        proxy_ip = test_response.json().get("origin", "unknown")
+                        logger.info(
+                            f"✅ Bright Data proxy working - connected via IP: {proxy_ip}"
+                        )
+                        if progress_callback:
+                            progress_callback(
+                                f"✅ Bright Data proxy working - IP: {proxy_ip}"
+                            )
+                    else:
+                        logger.warning(
+                            f"Bright Data proxy test returned status {test_response.status_code}"
+                        )
+                else:
+                    logger.error("Failed to generate Bright Data proxy URL")
+                    use_bright_data = False
+
+            except Exception as proxy_test_error:
+                error_msg = str(proxy_test_error)
+                logger.error(f"❌ Bright Data proxy test failed: {error_msg}")
+                if progress_callback:
+                    progress_callback(f"❌ Bright Data proxy test failed: {error_msg}")
+                    progress_callback("   Falling back to WebShare...")
+                use_bright_data = False
+
+        # WebShare fallback configuration
+        if not use_bright_data:
+            logger.info("Testing WebShare proxy credentials...")
+            if progress_callback:
+                progress_callback("🔐 Testing WebShare proxy credentials...")
+
+            try:
+                import requests
+
+                proxy_url = (
+                    f"http://{webshare_username}:{webshare_password}@p.webshare.io:80/"
+                )
+                test_response = requests.get(
+                    "https://httpbin.org/ip",
+                    proxies={"http": proxy_url, "https": proxy_url},
+                    timeout=15,
+                )
+                if test_response.status_code == 200:
+                    proxy_ip = test_response.json().get("origin", "unknown")
+                    logger.info(
+                        f"✅ WebShare proxy working - connected via IP: {proxy_ip}"
+                    )
+                    if progress_callback:
+                        progress_callback(f"✅ WebShare proxy working - IP: {proxy_ip}")
+                else:
+                    logger.warning(
+                        f"WebShare proxy test returned status {test_response.status_code}"
+                    )
+                    if progress_callback:
+                        progress_callback(
+                            f"⚠️ WebShare proxy test: unexpected status {test_response.status_code}"
+                        )
+            except Exception as proxy_test_error:
+                error_msg = str(proxy_test_error)
+                logger.error(f"❌ WebShare proxy test failed: {error_msg}")
+                if progress_callback:
+                    if "407" in error_msg or "authentication" in error_msg.lower():
+                        progress_callback(
+                            "❌ WebShare authentication failed - check username/password"
+                        )
+                    elif "timeout" in error_msg.lower():
+                        progress_callback(
+                            "❌ WebShare proxy timeout - check account status"
+                        )
+                    else:
+                        progress_callback(f"❌ WebShare proxy test failed: {error_msg}")
+                    progress_callback(
+                        "   Continuing anyway - may work for YouTube specifically..."
+                    )
+
+        # Configure base yt-dlp options
+        ydl_opts = {**self.ydl_opts_base}
 
         # Dynamic concurrency based on expected file size and connection count
         def calculate_optimal_concurrency(estimated_size_mb: float) -> int:
@@ -368,25 +498,61 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         playlist_context = f" [Playlist: {playlist['title'][:40]}{'...' if len(playlist['title']) > 40 else ''} - Video {playlist_position}/{playlist['total_videos']}]"
                         break
 
+                # Extract video ID for Bright Data session management
+                video_id = None
+                current_proxy_url = proxy_url  # Default to existing proxy_url
+                current_session_id = None
+
+                if use_bright_data:
+                    # Extract video ID from URL
+                    import re
+
+                    youtube_id_match = re.search(
+                        r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url
+                    )
+                    if youtube_id_match:
+                        video_id = youtube_id_match.group(1)
+
+                        # Create specific session for this video
+                        current_session_id = session_manager.create_session_for_file(
+                            video_id, "audio_download"
+                        )
+                        current_proxy_url = session_manager.get_proxy_url_for_file(
+                            video_id, "audio_download"
+                        )
+
+                        if current_proxy_url:
+                            logger.info(
+                                f"Created Bright Data session {current_session_id} for video {video_id}"
+                            )
+                        else:
+                            logger.warning(
+                                f"Failed to create Bright Data session for {video_id}, using fallback"
+                            )
+                            current_proxy_url = proxy_url
+
                 # First, extract metadata to get actual duration for better concurrency calculation
                 if progress_callback:
                     progress_callback(f"🔍 Extracting video metadata for: {url}")
 
                 try:
-                    # Test WebShare proxy connectivity first
+                    # Test proxy connectivity first
                     test_opts = {
-                        "proxy": proxy_url,
+                        "proxy": current_proxy_url,
                         "quiet": True,
                         "no_warnings": True,
                         "extract_flat": True,
                         "socket_timeout": 30,
                     }
 
+                    proxy_type = "Bright Data" if use_bright_data else "WebShare"
                     with yt_dlp.YoutubeDL(test_opts) as ydl_test:
-                        logger.info(f"Testing WebShare proxy connectivity for: {url}")
+                        logger.info(
+                            f"Testing {proxy_type} proxy connectivity for: {url}"
+                        )
                         if progress_callback:
                             progress_callback(
-                                f"🔗 Testing WebShare proxy connectivity..."
+                                f"🔗 Testing {proxy_type} proxy connectivity..."
                             )
 
                         # Quick connectivity test
@@ -396,10 +562,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                 "Proxy connectivity test failed - no video info returned"
                             )
 
-                        logger.info("✅ WebShare proxy connectivity test passed")
+                        logger.info(f"✅ {proxy_type} proxy connectivity test passed")
                         if progress_callback:
                             progress_callback(
-                                f"✅ WebShare proxy working - extracting full metadata..."
+                                f"✅ {proxy_type} proxy working - extracting full metadata..."
                             )
 
                     # Now extract full metadata
@@ -446,11 +612,11 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             progress_callback(f"❌ Video not found or private: {url}")
                         elif "timeout" in error_msg.lower():
                             progress_callback(
-                                f"❌ Proxy connection timeout - WebShare may have connectivity issues"
+                                f"❌ Proxy connection timeout - Proxy service may have connectivity issues"
                             )
                         elif "proxy" in error_msg.lower():
                             progress_callback(
-                                f"❌ Proxy error: Check WebShare credentials and account status"
+                                f"❌ Proxy error: Check proxy credentials and account status"
                             )
                         else:
                             progress_callback(
@@ -472,9 +638,20 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         f"🚀 Starting download with {optimal_concurrency} parallel connections..."
                     )
 
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # Configure yt-dlp options with the specific proxy for this video
+                final_ydl_opts = {**ydl_opts, "proxy": current_proxy_url}
+
+                with yt_dlp.YoutubeDL(final_ydl_opts) as ydl:
                     logger.info(f"Downloading audio for: {url}{playlist_context}")
+                    if use_bright_data and video_id:
+                        logger.info(
+                            f"Using Bright Data session {current_session_id} for video {video_id}"
+                        )
+
                     try:
+                        # Track download start time for cost calculation
+                        download_start_time = datetime.now()
+
                         info = ydl.extract_info(url, download=True)
 
                         if info is None:
@@ -484,6 +661,64 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     f"⚠️ No video information returned - video may be unavailable"
                                 )
                             continue
+
+                        # Calculate download metrics for cost tracking
+                        download_end_time = datetime.now()
+                        download_duration = (
+                            download_end_time - download_start_time
+                        ).total_seconds()
+
+                        # Track usage for Bright Data sessions
+                        if use_bright_data and current_session_id and session_manager:
+                            try:
+                                # Estimate data downloaded (rough calculation based on duration)
+                                estimated_bytes = int(
+                                    estimated_size_mb * 1024 * 1024
+                                )  # Convert MB to bytes
+                                estimated_cost = 0.01 * (
+                                    estimated_size_mb / 100
+                                )  # Rough cost estimate
+
+                                # Update session usage in database
+                                session_manager.update_session_usage(
+                                    current_session_id,
+                                    requests_count=1,
+                                    data_downloaded_bytes=estimated_bytes,
+                                    cost=estimated_cost,
+                                )
+
+                                logger.info(
+                                    f"Tracked Bright Data usage: {estimated_size_mb:.1f}MB, ~${estimated_cost:.4f}"
+                                )
+                            except Exception as cost_error:
+                                logger.warning(
+                                    f"Failed to track Bright Data costs: {cost_error}"
+                                )
+
+                        # Register video in database for future deduplication
+                        if video_id and db_service:
+                            try:
+                                video_title = (
+                                    info.get("title", "Unknown Title")
+                                    if info
+                                    else "Unknown Title"
+                                )
+                                db_service.create_video(
+                                    video_id=video_id,
+                                    title=video_title,
+                                    url=url,
+                                    status="completed",
+                                    extraction_method="bright_data"
+                                    if use_bright_data
+                                    else "webshare",
+                                )
+                                logger.debug(
+                                    f"Registered video {video_id} in database for deduplication"
+                                )
+                            except Exception as db_error:
+                                logger.warning(
+                                    f"Failed to register video in database: {db_error}"
+                                )
 
                         logger.info(f"✅ Successfully downloaded audio for: {url}")
                         if progress_callback:
@@ -503,7 +738,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     f"❌ Download blocked (403) - YouTube detected proxy"
                                 )
                                 progress_callback(
-                                    f"   Try again later or check WebShare IP rotation"
+                                    f"   Try again later or check proxy IP rotation"
                                 )
                             elif "HTTP Error 429" in download_error_msg:
                                 progress_callback(
@@ -521,12 +756,12 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     f"❌ Download timeout - connection too slow"
                                 )
                                 progress_callback(
-                                    f"   Try reducing concurrent connections or check WebShare speed"
+                                    f"   Try reducing concurrent connections or check proxy service status"
                                 )
                             elif "proxy" in download_error_msg.lower():
                                 progress_callback(f"❌ Proxy connection failed")
                                 progress_callback(
-                                    f"   Check WebShare account status and credentials"
+                                    f"   Check proxy account status and credentials"
                                 )
                             elif "certificate" in download_error_msg.lower():
                                 progress_callback(f"❌ SSL certificate issue with proxy")
@@ -564,10 +799,21 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 # Check for specific payment required error
                 if "402 Payment Required" in error_msg:
                     errors.append(
-                        f"💰 WebShare payment required for {url}: Your WebShare account is out of funds. Please add payment at https://panel.webshare.io/"
+                        f"💰 Payment required for {url}: Your proxy account is out of funds. Please add payment to your proxy service account."
                     )
                 else:
                     errors.append(f"Failed to download {url}: {error_msg}")
+
+            finally:
+                # Clean up Bright Data session for this video
+                if use_bright_data and video_id and session_manager:
+                    try:
+                        session_manager.end_session_for_file(video_id)
+                        logger.debug(f"Ended Bright Data session for video {video_id}")
+                    except Exception as cleanup_error:
+                        logger.warning(
+                            f"Failed to cleanup session for {video_id}: {cleanup_error}"
+                        )
 
         return ProcessorResult(
             success=len(errors) == 0,
@@ -580,6 +826,12 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 "count": len(all_files),
                 "thumbnail_count": len(all_thumbnails),
                 "urls_processed": len(urls),
+                "duplicates_skipped": len(duplicate_results)
+                if "duplicate_results" in locals()
+                else 0,
+                "total_urls_input": original_count
+                if "original_count" in locals()
+                else len(urls),
             },
             errors=errors if errors else None,
             metadata={
@@ -587,6 +839,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 "thumbnails_downloaded": len(all_thumbnails),
                 "errors_count": len(errors),
                 "urls_processed": len(urls),
+                "duplicates_skipped": len(duplicate_results)
+                if "duplicate_results" in locals()
+                else 0,
+                "deduplication_enabled": True,
                 "timestamp": datetime.now().isoformat(),
             },
         )

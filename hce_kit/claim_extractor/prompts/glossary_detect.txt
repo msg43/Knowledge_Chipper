@@ -1,0 +1,2 @@
+Extract jargon/key terms whose meaning may be non-obvious.
+Return JSON list: term, category (domain), definition (1–2 sentences), t0, t1, evidence[] (verbatim).

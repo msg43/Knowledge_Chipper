@@ -14,7 +14,7 @@ import click
 from rich.console import Console
 
 # Import modular commands
-from .commands import moc, process, summarize, transcribe
+from .commands import database, moc, process, summarize, transcribe
 from .config import Settings, get_settings
 from .errors import KnowledgeSystemError
 from .logger import get_logger, log_system_event
@@ -149,6 +149,7 @@ main.add_command(transcribe)
 main.add_command(summarize)
 main.add_command(moc)
 main.add_command(process)
+main.add_command(database)
 
 
 # Models subcommands

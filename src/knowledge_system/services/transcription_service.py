@@ -109,19 +109,50 @@ class TranscriptionService:
         logger.info(f"Starting transcript extraction from YouTube URL: {url}")
 
         try:
-            # Check for WebShare credentials first - REQUIRED for YouTube operations
+            # Check for proxy credentials - prefer Bright Data, fallback to WebShare
             from ..config import get_settings
+            from ..database import DatabaseService
+            from ..utils.bright_data import BrightDataSessionManager
 
             settings = get_settings()
-            webshare_username = settings.api_keys.webshare_username
-            webshare_password = settings.api_keys.webshare_password
 
-            if not webshare_username or not webshare_password:
-                return {
-                    "success": False,
-                    "error": "WebShare proxy credentials are required for YouTube processing. Please configure WebShare Username and Password in Settings. This system only uses WebShare rotating residential proxies for YouTube access.",
-                    "source": url,
-                }
+            # Try Bright Data first (preferred)
+            bright_data_api_key = getattr(
+                settings.api_keys, "bright_data_api_key", None
+            )
+            use_bright_data = False
+
+            if bright_data_api_key:
+                try:
+                    # Validate Bright Data credentials
+                    db_service = DatabaseService()
+                    session_manager = BrightDataSessionManager(db_service)
+
+                    if session_manager._validate_credentials():
+                        use_bright_data = True
+                        logger.info("Using Bright Data for YouTube transcription")
+                    else:
+                        logger.warning(
+                            "Bright Data credentials incomplete, checking WebShare fallback"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Bright Data initialization failed: {e}, checking WebShare fallback"
+                    )
+
+            # Fallback to WebShare if Bright Data not available
+            if not use_bright_data:
+                webshare_username = settings.api_keys.webshare_username
+                webshare_password = settings.api_keys.webshare_password
+
+                if not webshare_username or not webshare_password:
+                    return {
+                        "success": False,
+                        "error": "Proxy credentials are required for YouTube processing. Please configure either Bright Data API Key or WebShare credentials in Settings. Bright Data is recommended for better cost efficiency and reliability.",
+                        "source": url,
+                    }
+                else:
+                    logger.info("Using WebShare for YouTube transcription")
 
             # If diarization is required, skip YouTube transcript API and use audio processing
             if enable_diarization:
@@ -214,7 +245,9 @@ class TranscriptionService:
                         "source": url,
                         "output_files": output_files,
                         "metadata": transcript_result.metadata,
-                        "method": "webshare_proxy_only",
+                        "method": "bright_data_proxy"
+                        if use_bright_data
+                        else "webshare_proxy",
                         "thumbnails": thumbnails,
                     }
 
@@ -226,17 +259,23 @@ class TranscriptionService:
             )
             error_msg = "; ".join(errors)
 
+            proxy_service = "Bright Data" if use_bright_data else "WebShare"
             return {
                 "success": False,
-                "error": f"YouTube transcript extraction failed with WebShare proxy: {error_msg}. This system only uses WebShare rotating residential proxies for YouTube access.",
+                "error": f"YouTube transcript extraction failed with {proxy_service} proxy: {error_msg}. Using {proxy_service} for residential proxy access.",
                 "source": url,
             }
 
         except Exception as e:
             logger.error(f"YouTube transcript extraction failed for {url}: {e}")
+            proxy_service = (
+                "Bright Data"
+                if "use_bright_data" in locals() and use_bright_data
+                else "WebShare"
+            )
             return {
                 "success": False,
-                "error": f"YouTube processing error with WebShare proxy: {str(e)}. This system only uses WebShare rotating residential proxies for YouTube access.",
+                "error": f"YouTube processing error with {proxy_service} proxy: {str(e)}. Using {proxy_service} for residential proxy access.",
                 "source": url,
             }
 

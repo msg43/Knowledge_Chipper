@@ -384,28 +384,91 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
         import yt_dlp
 
         from ..config import get_settings
+        from ..database import DatabaseService
+        from ..utils.bright_data import BrightDataSessionManager
 
         settings = get_settings()
-        username = settings.api_keys.webshare_username
-        password = settings.api_keys.webshare_password
 
-        if not username or not password:
-            logger.error("WebShare credentials required for playlist expansion")
-            return {"expanded_urls": urls, "playlist_info": []}
+        # Try Bright Data first (preferred)
+        bright_data_api_key = getattr(settings.api_keys, "bright_data_api_key", None)
+        use_bright_data = False
+        proxy_url = None
+        session_manager = None
+
+        if bright_data_api_key:
+            try:
+                # Initialize Bright Data session manager
+                db_service = DatabaseService()
+                session_manager = BrightDataSessionManager(db_service)
+
+                # Validate credentials
+                if session_manager._validate_credentials():
+                    use_bright_data = True
+                    logger.info("Using Bright Data for playlist expansion")
+                else:
+                    logger.warning(
+                        "Bright Data credentials incomplete, falling back to WebShare"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Bright Data initialization failed: {e}, falling back to WebShare"
+                )
+
+        # Fallback to WebShare if Bright Data not available
+        if not use_bright_data:
+            username = settings.api_keys.webshare_username
+            password = settings.api_keys.webshare_password
+
+            if not username or not password:
+                logger.error(
+                    "Proxy credentials required for playlist expansion. Please configure either Bright Data API Key or WebShare credentials."
+                )
+                return {"expanded_urls": urls, "playlist_info": []}
+
+            proxy_url = f"http://{username}:{password}@p.webshare.io:80/"
+            logger.info("Using WebShare for playlist expansion")
 
         expanded_urls = []
         playlist_info = []
-        proxy_url = f"http://{username}:{password}@p.webshare.io:80/"
 
         for url in urls:
             if is_playlist_url(url):
                 logger.info(f"Expanding playlist: {url}")
 
+                # Create Bright Data session for this playlist if using Bright Data
+                current_proxy_url = proxy_url
+                session_id = None
+                playlist_id = None
+
+                if use_bright_data:
+                    # Extract playlist ID for session
+                    import re
+
+                    playlist_match = re.search(r"list=([a-zA-Z0-9_-]+)", url)
+                    if playlist_match:
+                        playlist_id = playlist_match.group(1)
+                        session_id = session_manager.create_session_for_file(
+                            playlist_id, "metadata_scrape"
+                        )
+                        current_proxy_url = session_manager.get_proxy_url_for_file(
+                            playlist_id, "metadata_scrape"
+                        )
+
+                        if current_proxy_url:
+                            logger.info(
+                                f"Created Bright Data session for playlist {playlist_id}"
+                            )
+                        else:
+                            logger.warning(
+                                f"Failed to create Bright Data session for playlist, using fallback"
+                            )
+                            current_proxy_url = proxy_url
+
                 ydl_opts = {
                     "quiet": True,
                     "no_warnings": True,
                     "extract_flat": True,  # Only extract URLs, don't download
-                    "proxy": proxy_url,
+                    "proxy": current_proxy_url,
                     "socket_timeout": 30,
                     "retries": 3,
                 }
@@ -441,12 +504,44 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
                             logger.info(
                                 f"Expanded playlist '{playlist_title}' to {playlist_count} videos"
                             )
+
+                            # Track usage for Bright Data
+                            if use_bright_data and session_id and session_manager:
+                                try:
+                                    # Track playlist expansion cost (lightweight operation)
+                                    session_manager.update_session_usage(
+                                        session_id,
+                                        requests_count=1,
+                                        data_downloaded_bytes=1024,  # Minimal data for metadata
+                                        cost=0.001,  # Small cost for metadata scraping
+                                    )
+                                    logger.debug(
+                                        f"Tracked Bright Data usage for playlist expansion"
+                                    )
+                                except Exception as cost_error:
+                                    logger.warning(
+                                        f"Failed to track Bright Data costs: {cost_error}"
+                                    )
+
                         else:
                             logger.warning(f"No entries found in playlist: {url}")
 
                 except Exception as e:
                     logger.error(f"Failed to expand playlist {url}: {e}")
                     expanded_urls.append(url)  # Keep original if expansion fails
+
+                finally:
+                    # Clean up Bright Data session for this playlist
+                    if use_bright_data and playlist_id and session_manager:
+                        try:
+                            session_manager.end_session_for_file(playlist_id)
+                            logger.debug(
+                                f"Ended Bright Data session for playlist {playlist_id}"
+                            )
+                        except Exception as cleanup_error:
+                            logger.warning(
+                                f"Failed to cleanup session for playlist: {cleanup_error}"
+                            )
             else:
                 expanded_urls.append(url)
 

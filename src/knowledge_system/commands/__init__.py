@@ -7,9 +7,18 @@ to improve maintainability and organization.
 """
 
 from .common import CLIContext, pass_context
+from .database import database
 from .moc import moc
 from .process import process
 from .summarize import summarize
 from .transcribe import transcribe
 
-__all__ = ["transcribe", "summarize", "moc", "process", "CLIContext", "pass_context"]
+__all__ = [
+    "transcribe",
+    "summarize",
+    "moc",
+    "process",
+    "database",
+    "CLIContext",
+    "pass_context",
+]
