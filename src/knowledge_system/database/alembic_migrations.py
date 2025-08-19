@@ -7,7 +7,7 @@ This allows for safe schema updates and rollbacks in future versions.
 
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 try:
     from alembic import command

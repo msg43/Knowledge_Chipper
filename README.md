@@ -1,12 +1,24 @@
 # Knowledge_Chipper
 
-A comprehensive knowledge management system for macOS that transforms videos, audio files, and documents into organized, searchable knowledge. Perfect for researchers, students, and professionals who work with lots of media content.
+A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 
-**What it does:** Transcribes videos → Generates summaries with intelligent chunking → Creates knowledge maps → Organizes everything automatically.
+**What it does:** Transcribes videos → Extracts structured claims with confidence tiers → Maps relationships and contradictions → Creates knowledge maps → Organizes everything automatically.
 
-**✨ Key Features:** Smart model-aware chunking (95% efficiency vs 25% hardcoded limits) + enhanced real-time progress tracking with ETAs + automatic quality detection with smart retry + advanced process control with pause/resume/cancellation + comprehensive desktop and CLI interfaces.
+**🔍 HCE Features:** Advanced claim extraction with A/B/C confidence tiers + real-time contradiction detection + semantic deduplication + entity recognition (people/concepts) + relationship mapping + evidence citations + Obsidian integration with auto-tagging + comprehensive search and filtering.
 
 ## 🎉 What's New (Latest Updates)
+
+### 🔍 **HCE (Hybrid Claim Extractor) System - Revolutionary Upgrade**
+- **Structured Claim Analysis**: Extract claims with A/B/C confidence tiers instead of basic summaries
+- **Real-Time Analytics**: Live display of claim counts, contradictions, relations, and top findings
+- **Smart Filtering**: Filter by confidence tier, claim type, or limit results for focused analysis  
+- **Contradiction Detection**: Automatically identify conflicting claims within and across documents
+- **Relationship Mapping**: Map connections between claims, entities, and concepts
+- **Entity Recognition**: Automatic extraction of people, concepts, and jargon with descriptions
+- **Evidence Citations**: Every claim backed by extracted evidence with confidence scores
+- **Obsidian Integration**: Auto-generated tags and wikilinks for seamless knowledge management
+- **Professional Output**: Beautiful markdown with executive summaries, categorized claims, and evidence
+- **Performance Optimized**: Semantic deduplication, embedding cache, and database optimization
 
 ### 🧠 Context-Driven Long‑Form Analysis (New Synthesis Engine)
 - **Purpose**: Deliver faithful, scalable analysis for very long inputs (multi‑hour transcripts, large PDFs) without dumping entire texts into a single prompt.

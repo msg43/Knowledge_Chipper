@@ -1,6 +1,7 @@
 """ GUI tabs package."""
 
 from .api_keys_tab import APIKeysTab
+from .claim_search_tab import ClaimSearchTab
 from .introduction_tab import IntroductionTab
 from .process_tab import ProcessTab
 from .summarization_tab import SummarizationTab
@@ -15,5 +16,6 @@ __all__ = [
     "YouTubeTab",
     "TranscriptionTab",
     "SummarizationTab",
+    "ClaimSearchTab",
     "APIKeysTab",
 ]

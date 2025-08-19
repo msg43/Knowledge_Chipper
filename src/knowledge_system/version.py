@@ -1,4 +1,4 @@
 # Auto-generated version info
-VERSION = "2.0.0"
-BRANCH = "Summarizer-V3"
+VERSION = "3.0.0"
+BRANCH = "feature/hce-replacement"
 BUILD_DATE = "2025-01-19"

@@ -8,10 +8,10 @@ for the SQLite database with comprehensive video processing tracking.
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from sqlalchemy import and_, desc, func, or_
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy import desc, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..logger import get_logger
@@ -717,4 +717,66 @@ class DatabaseService:
             return True
         except Exception as e:
             logger.error(f"Failed to vacuum database: {e}")
+            return False
+
+    def optimize_database(self) -> bool:
+        """Optimize database performance by adding indexes and running maintenance.
+
+        Returns:
+            True if optimization was successful
+        """
+        try:
+            with self.engine.connect() as connection:
+                # Create performance indexes for common queries
+                indexes = [
+                    # Video table indexes
+                    "CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(status)",
+                    "CREATE INDEX IF NOT EXISTS idx_videos_uploader ON videos(uploader)",
+                    "CREATE INDEX IF NOT EXISTS idx_videos_created_at ON videos(created_at)",
+                    "CREATE INDEX IF NOT EXISTS idx_videos_title_search ON videos(title)",
+                    # Transcript table indexes
+                    "CREATE INDEX IF NOT EXISTS idx_transcripts_video_id ON transcripts(video_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_transcripts_created_at ON transcripts(created_at)",
+                    # Summary table indexes
+                    "CREATE INDEX IF NOT EXISTS idx_summaries_video_id ON summaries(video_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_summaries_processing_type ON summaries(processing_type)",
+                    "CREATE INDEX IF NOT EXISTS idx_summaries_llm_provider ON summaries(llm_provider)",
+                    "CREATE INDEX IF NOT EXISTS idx_summaries_created_at ON summaries(created_at)",
+                    # BrightData session indexes
+                    "CREATE INDEX IF NOT EXISTS idx_brightdata_created_at ON bright_data_sessions(created_at)",
+                    "CREATE INDEX IF NOT EXISTS idx_brightdata_status ON bright_data_sessions(status)",
+                    # Processing job indexes
+                    "CREATE INDEX IF NOT EXISTS idx_processing_jobs_status ON processing_jobs(status)",
+                    "CREATE INDEX IF NOT EXISTS idx_processing_jobs_created_at ON processing_jobs(created_at)",
+                    # HCE-specific indexes for claim searches
+                    "CREATE INDEX IF NOT EXISTS idx_claims_video_id ON claims(video_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_claims_tier ON claims(tier)",
+                    "CREATE INDEX IF NOT EXISTS idx_claims_claim_type ON claims(claim_type)",
+                    "CREATE INDEX IF NOT EXISTS idx_people_video_id ON people(video_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_concepts_video_id ON concepts(video_id)",
+                ]
+
+                # Execute index creation
+                for index_sql in indexes:
+                    try:
+                        connection.execute(index_sql)
+                    except Exception as e:
+                        # Some indexes might fail if tables don't exist yet (HCE tables)
+                        logger.debug(f"Index creation skipped: {e}")
+
+                # Run SQLite optimization commands
+                optimization_commands = [
+                    "PRAGMA optimize",  # SQLite query planner optimization
+                    "PRAGMA analysis_limit=1000",  # Analyze table statistics
+                    "ANALYZE",  # Update table statistics for query planner
+                ]
+
+                for command in optimization_commands:
+                    connection.execute(command)
+
+                logger.info("Database optimization completed successfully")
+                return True
+
+        except Exception as e:
+            logger.error(f"Database optimization failed: {e}")
             return False

@@ -39,6 +39,7 @@ from .core.settings_manager import get_gui_settings_manager
 # Import modular tabs
 from .tabs import (
     APIKeysTab,
+    ClaimSearchTab,
     IntroductionTab,
     ProcessTab,
     SummarizationTab,
@@ -175,6 +176,10 @@ class MainWindow(QMainWindow):
 
         summarization_tab = SummarizationTab(self)
         self.tabs.addTab(summarization_tab, "Summarization")
+
+        # Claim search tab for exploring extracted claims
+        claim_search_tab = ClaimSearchTab(self)
+        self.tabs.addTab(claim_search_tab, "🔍 Claim Search")
 
         # Only add Process Management tab if enabled in settings
         settings = get_settings()

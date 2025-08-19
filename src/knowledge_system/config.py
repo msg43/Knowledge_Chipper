@@ -486,7 +486,6 @@ class Settings(BaseSettings):
     hce: HCEConfig = Field(default_factory=HCEConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
     gui_features: GUIFeaturesConfig = Field(default_factory=GUIFeaturesConfig)
-    summarization: LLMConfig = Field(default_factory=LLMConfig)
 
     def __init__(self, config_path: str | Path | None = None, **kwargs) -> None:
         """Initialize settings from YAML file and environment variables."""

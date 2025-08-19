@@ -55,6 +55,7 @@ class EnhancedSummarizationWorker(QThread):
         int, int, int
     )  # success_count, failure_count, total_count
     processing_error = pyqtSignal(str)
+    hce_analytics_updated = pyqtSignal(dict)  # HCE analytics data
 
     def __init__(
         self, files: Any, settings: Any, gui_settings: Any, parent: Any = None
@@ -69,6 +70,63 @@ class EnhancedSummarizationWorker(QThread):
         from ...utils.cancellation import CancellationToken
 
         self.cancellation_token = CancellationToken()
+
+    def _extract_hce_analytics(self, hce_data: dict, filename: str) -> dict:
+        """Extract analytics from HCE data for display."""
+        claims = hce_data.get("claims", [])
+        people = hce_data.get("people", [])
+        concepts = hce_data.get("concepts", [])
+        relations = hce_data.get("relations", [])
+        contradictions = hce_data.get("contradictions", [])
+
+        # Categorize claims by tier
+        tier_a_claims = [c for c in claims if c.get("tier") == "A"]
+        tier_b_claims = [c for c in claims if c.get("tier") == "B"]
+        tier_c_claims = [c for c in claims if c.get("tier") == "C"]
+
+        # Get top claims for display
+        top_claims = []
+        for claim in (tier_a_claims + tier_b_claims)[:3]:  # Top 3 claims
+            canonical = claim.get("canonical", "")
+            if canonical:
+                top_claims.append(
+                    {
+                        "text": canonical[:150] + "..."
+                        if len(canonical) > 150
+                        else canonical,
+                        "tier": claim.get("tier", "C"),
+                        "type": claim.get("claim_type", "General"),
+                    }
+                )
+
+        # Get sample contradictions
+        sample_contradictions = []
+        for contradiction in contradictions[:2]:  # Top 2 contradictions
+            claim1 = contradiction.get("claim1", {}).get("canonical", "")
+            claim2 = contradiction.get("claim2", {}).get("canonical", "")
+            if claim1 and claim2:
+                sample_contradictions.append(
+                    {
+                        "claim1": claim1[:100] + "..." if len(claim1) > 100 else claim1,
+                        "claim2": claim2[:100] + "..." if len(claim2) > 100 else claim2,
+                    }
+                )
+
+        return {
+            "filename": filename,
+            "total_claims": len(claims),
+            "tier_a_count": len(tier_a_claims),
+            "tier_b_count": len(tier_b_claims),
+            "tier_c_count": len(tier_c_claims),
+            "people_count": len(people),
+            "concepts_count": len(concepts),
+            "relations_count": len(relations),
+            "contradictions_count": len(contradictions),
+            "top_claims": top_claims,
+            "sample_contradictions": sample_contradictions,
+            "top_people": [p.get("name", "") for p in people[:5] if p.get("name")],
+            "top_concepts": [c.get("name", "") for c in concepts[:5] if c.get("name")],
+        }
 
     def run(self) -> None:
         """Run the summarization process."""
@@ -335,6 +393,19 @@ class EnhancedSummarizationWorker(QThread):
                 if result.success:
                     # File completed successfully - update character counter
                     characters_completed += current_file_size
+
+                    # Extract and emit HCE analytics if available
+                    if (
+                        hasattr(result, "data")
+                        and result.data
+                        and isinstance(result.data, dict)
+                    ):
+                        hce_data = result.data.get("hce_data")
+                        if hce_data and isinstance(hce_data, dict):
+                            analytics = self._extract_hce_analytics(
+                                hce_data, file_path_obj.name
+                            )
+                            self.hce_analytics_updated.emit(analytics)
 
                     # Save the summary to file(s) based on user selection
                     try:
@@ -1099,6 +1170,103 @@ class SummarizationTab(BaseTab):
         )
         layout.addWidget(settings_group)
 
+        # HCE Claim Analysis Settings
+        hce_group = QGroupBox("🔍 Claim Analysis Settings")
+        hce_layout = QGridLayout()
+
+        # Claim tier filter
+        tier_label = QLabel("Minimum Claim Tier:")
+        tier_label.setToolTip(
+            "Select minimum claim tier to include:\n"
+            "• Tier A: High-confidence, core claims (85%+ confidence)\n"
+            "• Tier B: Medium-confidence claims (65%+ confidence)\n"
+            "• Tier C: Lower-confidence, supporting claims\n"
+            "• All: Include all tiers"
+        )
+        self.claim_tier_combo = QComboBox()
+        self.claim_tier_combo.addItems(["All", "Tier A", "Tier B", "Tier C"])
+        self.claim_tier_combo.setCurrentText("All")
+        self.claim_tier_combo.currentTextChanged.connect(self._on_setting_changed)
+        self.claim_tier_combo.setToolTip(
+            "Select minimum claim tier to include:\n"
+            "• Tier A: High-confidence, core claims (85%+ confidence)\n"
+            "• Tier B: Medium-confidence claims (65%+ confidence)\n"
+            "• Tier C: Lower-confidence, supporting claims\n"
+            "• All: Include all tiers"
+        )
+        hce_layout.addWidget(tier_label, 0, 0)
+        hce_layout.addWidget(self.claim_tier_combo, 0, 1)
+
+        # Max claims limit
+        max_claims_label = QLabel("Max Claims per Document:")
+        max_claims_label.setToolTip(
+            "Maximum number of claims to extract per document.\n"
+            "Leave empty for no limit. Higher values provide more detail but take longer."
+        )
+        self.max_claims_spin = QSpinBox()
+        self.max_claims_spin.setRange(0, 1000)
+        self.max_claims_spin.setValue(0)  # 0 means unlimited
+        self.max_claims_spin.setSpecialValueText("Unlimited")
+        self.max_claims_spin.valueChanged.connect(self._on_setting_changed)
+        self.max_claims_spin.setToolTip(
+            "Maximum number of claims to extract per document.\n"
+            "Set to 0 for unlimited. Higher values provide more detail but take longer."
+        )
+        hce_layout.addWidget(max_claims_label, 0, 2)
+        hce_layout.addWidget(self.max_claims_spin, 0, 3)
+
+        # Analysis options
+        self.include_contradictions_checkbox = QCheckBox(
+            "Include Contradiction Analysis"
+        )
+        self.include_contradictions_checkbox.setChecked(True)
+        self.include_contradictions_checkbox.setToolTip(
+            "Analyze contradictions between claims within and across documents.\n"
+            "Helps identify conflicting information and inconsistencies."
+        )
+        self.include_contradictions_checkbox.toggled.connect(self._on_setting_changed)
+        hce_layout.addWidget(self.include_contradictions_checkbox, 1, 0, 1, 2)
+
+        self.include_relations_checkbox = QCheckBox("Include Relationship Mapping")
+        self.include_relations_checkbox.setChecked(True)
+        self.include_relations_checkbox.setToolTip(
+            "Map relationships between claims, entities, and concepts.\n"
+            "Creates connections that help understand how ideas relate."
+        )
+        self.include_relations_checkbox.toggled.connect(self._on_setting_changed)
+        hce_layout.addWidget(self.include_relations_checkbox, 1, 2, 1, 2)
+
+        # Confidence thresholds
+        tier_a_label = QLabel("Tier A Threshold:")
+        tier_a_label.setToolTip("Confidence threshold for Tier A claims (0.0-1.0)")
+        self.tier_a_threshold_spin = QSpinBox()
+        self.tier_a_threshold_spin.setRange(0, 100)
+        self.tier_a_threshold_spin.setValue(85)
+        self.tier_a_threshold_spin.setSuffix("%")
+        self.tier_a_threshold_spin.setToolTip(
+            "Confidence threshold for Tier A claims (0-100%)"
+        )
+        self.tier_a_threshold_spin.valueChanged.connect(self._on_setting_changed)
+        hce_layout.addWidget(tier_a_label, 2, 0)
+        hce_layout.addWidget(self.tier_a_threshold_spin, 2, 1)
+
+        tier_b_label = QLabel("Tier B Threshold:")
+        tier_b_label.setToolTip("Confidence threshold for Tier B claims (0.0-1.0)")
+        self.tier_b_threshold_spin = QSpinBox()
+        self.tier_b_threshold_spin.setRange(0, 100)
+        self.tier_b_threshold_spin.setValue(65)
+        self.tier_b_threshold_spin.setSuffix("%")
+        self.tier_b_threshold_spin.setToolTip(
+            "Confidence threshold for Tier B claims (0-100%)"
+        )
+        self.tier_b_threshold_spin.valueChanged.connect(self._on_setting_changed)
+        hce_layout.addWidget(tier_b_label, 2, 2)
+        hce_layout.addWidget(self.tier_b_threshold_spin, 2, 3)
+
+        hce_group.setLayout(hce_layout)
+        hce_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        layout.addWidget(hce_group)
+
         # Action buttons
         action_layout = self._create_action_layout()
         layout.addLayout(action_layout)
@@ -1198,6 +1366,9 @@ class SummarizationTab(BaseTab):
             self._on_processing_finished
         )
         self.summarization_worker.processing_error.connect(self._on_processing_error)
+        self.summarization_worker.hce_analytics_updated.connect(
+            self._on_hce_analytics_updated
+        )
 
         self.active_workers.append(self.summarization_worker)
         self.set_processing_state(True)
@@ -1495,6 +1666,9 @@ class SummarizationTab(BaseTab):
             self._on_processing_finished
         )
         self.summarization_worker.processing_error.connect(self._on_processing_error)
+        self.summarization_worker.hce_analytics_updated.connect(
+            self._on_hce_analytics_updated
+        )
 
         self.active_workers.append(self.summarization_worker)
         self.set_processing_state(True)
@@ -2175,6 +2349,73 @@ class SummarizationTab(BaseTab):
         self.append_log(f"Error: {error}")
         self.show_error("Processing Error", error)
 
+    def _on_hce_analytics_updated(self, analytics: dict) -> None:
+        """Handle HCE analytics updates to show relations and contradictions."""
+        filename = analytics.get("filename", "Unknown file")
+
+        # Display claim analytics
+        total_claims = analytics.get("total_claims", 0)
+        if total_claims > 0:
+            tier_a = analytics.get("tier_a_count", 0)
+            tier_b = analytics.get("tier_b_count", 0)
+            tier_c = analytics.get("tier_c_count", 0)
+
+            self.append_log(f"\n🔍 Analysis Results for {filename}:")
+            self.append_log(f"   📊 Total Claims: {total_claims}")
+            if tier_a > 0:
+                self.append_log(f"   🥇 Tier A (High Confidence): {tier_a}")
+            if tier_b > 0:
+                self.append_log(f"   🥈 Tier B (Medium Confidence): {tier_b}")
+            if tier_c > 0:
+                self.append_log(f"   🥉 Tier C (Supporting): {tier_c}")
+
+            # Show people and concepts
+            people_count = analytics.get("people_count", 0)
+            concepts_count = analytics.get("concepts_count", 0)
+            if people_count > 0:
+                self.append_log(f"   👥 People Identified: {people_count}")
+                top_people = analytics.get("top_people", [])
+                if top_people:
+                    people_str = ", ".join(top_people[:3])
+                    if len(top_people) > 3:
+                        people_str += f" (and {len(top_people) - 3} more)"
+                    self.append_log(f"      Key People: {people_str}")
+
+            if concepts_count > 0:
+                self.append_log(f"   💡 Concepts Found: {concepts_count}")
+                top_concepts = analytics.get("top_concepts", [])
+                if top_concepts:
+                    concepts_str = ", ".join(top_concepts[:3])
+                    if len(top_concepts) > 3:
+                        concepts_str += f" (and {len(top_concepts) - 3} more)"
+                    self.append_log(f"      Key Concepts: {concepts_str}")
+
+            # Show relations and contradictions
+            relations_count = analytics.get("relations_count", 0)
+            contradictions_count = analytics.get("contradictions_count", 0)
+
+            if relations_count > 0:
+                self.append_log(f"   🔗 Relations Mapped: {relations_count}")
+
+            if contradictions_count > 0:
+                self.append_log(f"   ⚠️ Contradictions Found: {contradictions_count}")
+                sample_contradictions = analytics.get("sample_contradictions", [])
+                for i, contradiction in enumerate(sample_contradictions, 1):
+                    self.append_log(f"      {i}. \"{contradiction['claim1']}\"")
+                    self.append_log(f"         vs. \"{contradiction['claim2']}\"")
+
+            # Show top claims
+            top_claims = analytics.get("top_claims", [])
+            if top_claims:
+                self.append_log(f"   🏆 Top Claims:")
+                for i, claim in enumerate(top_claims, 1):
+                    tier_icon = "🥇" if claim["tier"] == "A" else "🥈"
+                    self.append_log(
+                        f"      {tier_icon} {claim['text']} ({claim['type']})"
+                    )
+
+            self.append_log("")  # Add blank line for readability
+
     def _stop_processing(self):
         """Stop the summarization process."""
         if self.summarization_worker and self.summarization_worker.isRunning():
@@ -2205,6 +2446,12 @@ class SummarizationTab(BaseTab):
                 self.force_regenerate_checkbox,
                 self.progress_checkbox,
                 self.resume_checkbox,
+                self.claim_tier_combo,
+                self.max_claims_spin,
+                self.include_contradictions_checkbox,
+                self.include_relations_checkbox,
+                self.tier_a_threshold_spin,
+                self.tier_b_threshold_spin,
             ]
 
             # Block all signals
@@ -2275,6 +2522,40 @@ class SummarizationTab(BaseTab):
                     )
                 )
 
+                # Load HCE settings
+                saved_claim_tier = self.gui_settings.get_combo_selection(
+                    self.tab_name, "claim_tier", "All"
+                )
+                index = self.claim_tier_combo.findText(saved_claim_tier)
+                if index >= 0:
+                    self.claim_tier_combo.setCurrentIndex(index)
+
+                saved_max_claims = self.gui_settings.get_spinbox_value(
+                    self.tab_name, "max_claims", 0
+                )
+                self.max_claims_spin.setValue(saved_max_claims)
+
+                self.include_contradictions_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(
+                        self.tab_name, "include_contradictions", True
+                    )
+                )
+                self.include_relations_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(
+                        self.tab_name, "include_relations", True
+                    )
+                )
+
+                saved_tier_a_threshold = self.gui_settings.get_spinbox_value(
+                    self.tab_name, "tier_a_threshold", 85
+                )
+                self.tier_a_threshold_spin.setValue(saved_tier_a_threshold)
+
+                saved_tier_b_threshold = self.gui_settings.get_spinbox_value(
+                    self.tab_name, "tier_b_threshold", 65
+                )
+                self.tier_b_threshold_spin.setValue(saved_tier_b_threshold)
+
                 # Update output visibility based on checkbox state
                 self._toggle_output_options()
 
@@ -2331,6 +2612,30 @@ class SummarizationTab(BaseTab):
             )
             self.gui_settings.set_checkbox_state(
                 self.tab_name, "resume_checkpoint", self.resume_checkbox.isChecked()
+            )
+
+            # Save HCE settings
+            self.gui_settings.set_combo_selection(
+                self.tab_name, "claim_tier", self.claim_tier_combo.currentText()
+            )
+            self.gui_settings.set_spinbox_value(
+                self.tab_name, "max_claims", self.max_claims_spin.value()
+            )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name,
+                "include_contradictions",
+                self.include_contradictions_checkbox.isChecked(),
+            )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name,
+                "include_relations",
+                self.include_relations_checkbox.isChecked(),
+            )
+            self.gui_settings.set_spinbox_value(
+                self.tab_name, "tier_a_threshold", self.tier_a_threshold_spin.value()
+            )
+            self.gui_settings.set_spinbox_value(
+                self.tab_name, "tier_b_threshold", self.tier_b_threshold_spin.value()
             )
 
             logger.info(f"✅ Successfully saved settings for {self.tab_name} tab")
