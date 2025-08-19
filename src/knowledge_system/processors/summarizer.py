@@ -118,11 +118,13 @@ class SummarizerProcessor(BaseProcessor):
         provider: str = "openai",
         model: str | None = None,
         max_tokens: int = 500,
+        hce_options: dict[str, Any] | None = None,
     ) -> None:
         super().__init__()
         self.provider = provider
         self.model = model
         self.max_tokens = max_tokens
+        self.hce_options = hce_options or {}
         self.settings = get_settings()
 
         # Set default model based on provider
@@ -195,9 +197,26 @@ class SummarizerProcessor(BaseProcessor):
 
     def _format_claims_as_summary(self, outputs: PipelineOutputs) -> str:
         """Format HCE claims as a readable summary."""
+        # Filter claims based on tier
+        min_tier = self.hce_options.get("min_claim_tier", "all")
+        if min_tier == "all":
+            filtered_claims = outputs.claims
+        else:
+            # Filter by minimum tier (A > B > C)
+            tier_order = {"A": 3, "B": 2, "C": 1}
+            min_tier_value = tier_order.get(min_tier, 0)
+            filtered_claims = [
+                c for c in outputs.claims if tier_order.get(c.tier, 0) >= min_tier_value
+            ]
+
+        # Apply max claims limit
+        max_claims = self.hce_options.get("max_claims")
+        if max_claims and len(filtered_claims) > max_claims:
+            filtered_claims = filtered_claims[:max_claims]
+
         # Group claims by tier
-        tier_a_claims = [c for c in outputs.claims if c.tier == "A"]
-        tier_b_claims = [c for c in outputs.claims if c.tier == "B"]
+        tier_a_claims = [c for c in filtered_claims if c.tier == "A"]
+        tier_b_claims = [c for c in filtered_claims if c.tier == "B"]
 
         summary_parts = []
 
@@ -244,9 +263,37 @@ class SummarizerProcessor(BaseProcessor):
                 )
             summary_parts.append("")
 
+        # Relations (if enabled)
+        if self.hce_options.get("include_relations", True) and outputs.relations:
+            summary_parts.append("## Relationships\n")
+            for rel in outputs.relations[:10]:
+                summary_parts.append(
+                    f"- {rel.subject} → {rel.predicate} → {rel.object}"
+                )
+            summary_parts.append("")
+
+        # Contradictions (if enabled)
+        if self.hce_options.get("include_contradictions", True):
+            # Check for contradicting claims
+            contradictions = []
+            for i, claim1 in enumerate(outputs.claims):
+                for claim2 in outputs.claims[i + 1 :]:
+                    if (
+                        hasattr(claim1, "contradicts")
+                        and claim1.contradicts == claim2.claim_id
+                    ):
+                        contradictions.append((claim1, claim2))
+
+            if contradictions:
+                summary_parts.append("## Potential Contradictions\n")
+                for c1, c2 in contradictions[:5]:
+                    summary_parts.append(f"- **Claim 1**: {c1.canonical}")
+                    summary_parts.append(f"  **Claim 2**: {c2.canonical}")
+                    summary_parts.append("")
+
         # Metadata
         summary_parts.append(
-            f"\n---\n*Extracted {len(outputs.claims)} claims using HCE analysis*"
+            f"\n---\n*Extracted {len(filtered_claims)} claims using HCE analysis*"
         )
 
         return "\n".join(summary_parts)

@@ -14,6 +14,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
     String,
     Text,
@@ -107,7 +108,7 @@ class EvidenceSpan(Base):
     quote = Column(Text)
 
     __table_args__ = (
-        ForeignKey(
+        ForeignKeyConstraint(
             ["episode_id", "claim_id"], ["claims.episode_id", "claims.claim_id"]
         ),
     )

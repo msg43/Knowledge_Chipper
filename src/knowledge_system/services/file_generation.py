@@ -216,12 +216,19 @@ class FileGenerationService:
                 logger.error(f"Summary {summary_id} not found")
                 return None
 
+            # Check if this is HCE-processed summary
+            is_hce = summary.processing_type == "hce"
+            hce_data = (
+                json.loads(summary.hce_data_json) if summary.hce_data_json else None
+            )
+
             # Generate YAML frontmatter
             frontmatter = {
                 "title": f"Summary of {video.title}",
                 "video_id": video.video_id,
                 "url": video.url,
                 "summary_id": summary.summary_id,
+                "processing_type": summary.processing_type,
                 "llm_provider": summary.llm_provider,
                 "llm_model": summary.llm_model,
                 "processing_cost": summary.processing_cost,
@@ -232,6 +239,13 @@ class FileGenerationService:
                 else None,
                 "template_used": summary.template_used,
             }
+
+            # Add HCE-specific metadata
+            if is_hce and hce_data:
+                frontmatter["claims_extracted"] = len(hce_data.get("claims", []))
+                frontmatter["people_found"] = len(hce_data.get("people", []))
+                frontmatter["concepts_found"] = len(hce_data.get("concepts", []))
+                frontmatter["relations_found"] = len(hce_data.get("relations", []))
 
             # Add summary metadata if available
             if summary.summary_metadata_json:
@@ -788,6 +802,317 @@ class FileGenerationService:
         milliseconds = int((seconds % 1) * 1000)
 
         return f"{hours:02d}:{minutes:02d}:{secs:02d}.{milliseconds:03d}"
+
+    def generate_claims_report(
+        self, video_id: str, summary_id: str | None = None
+    ) -> Path | None:
+        """
+        Generate claims report from HCE data.
+
+        Args:
+            video_id: YouTube video ID
+            summary_id: Specific summary ID (uses latest HCE summary if None)
+
+        Returns:
+            Path to generated claims report, or None if failed
+        """
+        try:
+            # Get video and HCE summary data
+            video = self.db.get_video(video_id)
+            if not video:
+                logger.error(f"Video {video_id} not found in database")
+                return None
+
+            summaries = self.db.get_summaries_for_video(video_id)
+            # Filter for HCE summaries
+            hce_summaries = [s for s in summaries if s.processing_type == "hce"]
+
+            if not hce_summaries:
+                logger.error(f"No HCE summaries found for video {video_id}")
+                return None
+
+            # Use specific summary or latest HCE summary
+            if summary_id:
+                summary = next(
+                    (s for s in hce_summaries if s.summary_id == summary_id), None
+                )
+            else:
+                summary = hce_summaries[0]
+
+            if not summary or not summary.hce_data_json:
+                logger.error(f"HCE data not found for summary {summary_id}")
+                return None
+
+            hce_data = json.loads(summary.hce_data_json)
+            claims = hce_data.get("claims", [])
+
+            # Generate markdown content
+            markdown_content = f"""# Claims Report: {video.title}
+
+**Source:** [{video.url}]({video.url})
+**Processing Type:** HCE Claim Extraction
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Total Claims:** {len(claims)}
+
+## Claims by Tier
+
+"""
+
+            # Group claims by tier
+            tier_groups = {"A": [], "B": [], "C": []}
+            for claim in claims:
+                tier = claim.get("tier", "C")
+                tier_groups[tier].append(claim)
+
+            # Add claims by tier
+            for tier, tier_claims in tier_groups.items():
+                if tier_claims:
+                    markdown_content += (
+                        f"### Tier {tier} Claims ({len(tier_claims)})\n\n"
+                    )
+
+                    for claim in tier_claims:
+                        canonical = claim.get("canonical", "")
+                        claim_type = claim.get("claim_type", "descriptive")
+                        confidence = claim.get("confidence", 0)
+
+                        markdown_content += (
+                            f"- **[{claim_type.upper()}]** {canonical}\n"
+                        )
+                        markdown_content += f"  - Confidence: {confidence:.2f}\n"
+
+                        # Add evidence if available
+                        evidence = claim.get("evidence", [])
+                        if evidence:
+                            markdown_content += "  - Evidence:\n"
+                            for ev in evidence[:2]:  # Show max 2 evidence items
+                                markdown_content += f"    - \"{ev.get('text', '')}\"\n"
+
+                        markdown_content += "\n"
+
+                    markdown_content += "\n"
+
+            # Add statistics
+            markdown_content += f"""## Statistics
+
+- **Tier A (High Quality):** {len(tier_groups['A'])} claims
+- **Tier B (Medium Quality):** {len(tier_groups['B'])} claims
+- **Tier C (Low Quality):** {len(tier_groups['C'])} claims
+
+### Claim Types
+"""
+
+            # Count claim types
+            claim_types = {}
+            for claim in claims:
+                ct = claim.get("claim_type", "descriptive")
+                claim_types[ct] = claim_types.get(ct, 0) + 1
+
+            for ct, count in sorted(
+                claim_types.items(), key=lambda x: x[1], reverse=True
+            ):
+                markdown_content += f"- **{ct.title()}:** {count} claims\n"
+
+            markdown_content += f"\n---\n*Generated from HCE analysis*"
+
+            # Save to file
+            filename = self._sanitize_filename(
+                f"Claims_{video.title}_{video.video_id}.md"
+            )
+            file_path = self.exports_dir / filename
+
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(markdown_content)
+
+            # Track generated file in database
+            self.db.track_generated_file(
+                video_id=video_id,
+                file_path=str(file_path),
+                file_type="claims_report",
+                file_format="md",
+                summary_id=summary.summary_id,
+            )
+
+            logger.info(f"Generated claims report: {file_path}")
+            return file_path
+
+        except Exception as e:
+            logger.error(f"Failed to generate claims report for {video_id}: {e}")
+            return None
+
+    def generate_contradiction_analysis(
+        self, video_id: str, summary_id: str | None = None
+    ) -> Path | None:
+        """
+        Generate contradiction analysis report from HCE data.
+
+        Args:
+            video_id: YouTube video ID
+            summary_id: Specific summary ID (uses latest HCE summary if None)
+
+        Returns:
+            Path to generated contradiction report, or None if failed
+        """
+        try:
+            # Get video and HCE summary data
+            video = self.db.get_video(video_id)
+            if not video:
+                return None
+
+            summaries = self.db.get_summaries_for_video(video_id)
+            hce_summaries = [s for s in summaries if s.processing_type == "hce"]
+
+            if not hce_summaries:
+                return None
+
+            summary = (
+                hce_summaries[0]
+                if not summary_id
+                else next(
+                    (s for s in hce_summaries if s.summary_id == summary_id), None
+                )
+            )
+
+            if not summary or not summary.hce_data_json:
+                return None
+
+            hce_data = json.loads(summary.hce_data_json)
+            claims = hce_data.get("claims", [])
+
+            # Find contradictions
+            contradictions = []
+            for i, claim1 in enumerate(claims):
+                for claim2 in claims[i + 1 :]:
+                    # Check if claims contradict (would need NLI info)
+                    if claim1.get("contradicts") == claim2.get("claim_id"):
+                        contradictions.append((claim1, claim2))
+
+            # Generate report
+            markdown_content = f"""# Contradiction Analysis: {video.title}
+
+**Source:** [{video.url}]({video.url})
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Total Claims Analyzed:** {len(claims)}
+**Contradictions Found:** {len(contradictions)}
+
+"""
+
+            if contradictions:
+                markdown_content += "## Contradictions\n\n"
+
+                for i, (c1, c2) in enumerate(contradictions, 1):
+                    markdown_content += f"### Contradiction {i}\n\n"
+                    markdown_content += f"**Claim 1:** {c1.get('canonical', '')}\n"
+                    markdown_content += f"- Type: {c1.get('claim_type', 'unknown')}\n"
+                    markdown_content += f"- Tier: {c1.get('tier', 'unknown')}\n\n"
+
+                    markdown_content += f"**Claim 2:** {c2.get('canonical', '')}\n"
+                    markdown_content += f"- Type: {c2.get('claim_type', 'unknown')}\n"
+                    markdown_content += f"- Tier: {c2.get('tier', 'unknown')}\n\n"
+
+                    markdown_content += "---\n\n"
+            else:
+                markdown_content += "*No contradictions detected in the claims.*\n"
+
+            # Save to file
+            filename = self._sanitize_filename(
+                f"Contradictions_{video.title}_{video.video_id}.md"
+            )
+            file_path = self.exports_dir / filename
+
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(markdown_content)
+
+            logger.info(f"Generated contradiction analysis: {file_path}")
+            return file_path
+
+        except Exception as e:
+            logger.error(f"Failed to generate contradiction analysis: {e}")
+            return None
+
+    def generate_evidence_mapping(
+        self, video_id: str, summary_id: str | None = None
+    ) -> Path | None:
+        """
+        Generate evidence mapping file from HCE data.
+
+        Args:
+            video_id: YouTube video ID
+            summary_id: Specific summary ID (uses latest HCE summary if None)
+
+        Returns:
+            Path to generated evidence mapping, or None if failed
+        """
+        try:
+            # Get video and HCE summary data
+            video = self.db.get_video(video_id)
+            if not video:
+                return None
+
+            summaries = self.db.get_summaries_for_video(video_id)
+            hce_summaries = [s for s in summaries if s.processing_type == "hce"]
+
+            if not hce_summaries:
+                return None
+
+            summary = (
+                hce_summaries[0]
+                if not summary_id
+                else next(
+                    (s for s in hce_summaries if s.summary_id == summary_id), None
+                )
+            )
+
+            if not summary or not summary.hce_data_json:
+                return None
+
+            hce_data = json.loads(summary.hce_data_json)
+            claims = hce_data.get("claims", [])
+
+            # Generate evidence mapping
+            markdown_content = f"""# Evidence Mapping: {video.title}
+
+**Source:** [{video.url}]({video.url})
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## Claims with Evidence
+
+"""
+
+            # Only include claims with evidence
+            claims_with_evidence = [c for c in claims if c.get("evidence")]
+
+            for claim in claims_with_evidence:
+                canonical = claim.get("canonical", "")
+                tier = claim.get("tier", "C")
+
+                markdown_content += f"### Claim: {canonical}\n"
+                markdown_content += f"**Tier:** {tier} | **Type:** {claim.get('claim_type', 'unknown')}\n\n"
+
+                markdown_content += "**Supporting Evidence:**\n"
+                for i, ev in enumerate(claim.get("evidence", []), 1):
+                    text = ev.get("text", "")
+                    segment_id = ev.get("segment_id", "unknown")
+                    markdown_content += f'{i}. "{text}"\n'
+                    markdown_content += f"   - Source: Segment {segment_id}\n"
+
+                markdown_content += "\n---\n\n"
+
+            # Save to file
+            filename = self._sanitize_filename(
+                f"Evidence_{video.title}_{video.video_id}.md"
+            )
+            file_path = self.exports_dir / filename
+
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(markdown_content)
+
+            logger.info(f"Generated evidence mapping: {file_path}")
+            return file_path
+
+        except Exception as e:
+            logger.error(f"Failed to generate evidence mapping: {e}")
+            return None
 
 
 # Convenience functions

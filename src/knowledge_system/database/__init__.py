@@ -5,16 +5,29 @@ This module provides SQLAlchemy models and database services for storing
 YouTube video records, transcripts, summaries, MOC data, and processing tracking.
 """
 
-from .hce_models import (
-    Claim,
-    Concept,
-    Episode,
-    EvidenceSpan,
-    JargonTerm,
-    Person,
-    Relation,
-    extend_video_model,
-)
+# HCE models are optional and imported separately to avoid SQLAlchemy issues
+try:
+    from .hce_models import (
+        Claim,
+        Concept,
+        Episode,
+        EvidenceSpan,
+        JargonTerm,
+        Person,
+        Relation,
+        extend_video_model,
+    )
+
+    HCE_AVAILABLE = True
+except Exception:
+    # If HCE models fail to import, continue without them
+    HCE_AVAILABLE = False
+
+    # Define dummy function to avoid errors
+    def extend_video_model():
+        pass
+
+
 from .models import (
     Base,
     BrightDataSession,
@@ -40,12 +53,18 @@ __all__ = [
     "BrightDataSession",
     "Base",
     "DatabaseService",
-    # HCE models
-    "Episode",
-    "Claim",
-    "EvidenceSpan",
-    "Relation",
-    "Person",
-    "Concept",
-    "JargonTerm",
 ]
+
+# Add HCE models to exports if available
+if HCE_AVAILABLE:
+    __all__.extend(
+        [
+            "Episode",
+            "Claim",
+            "EvidenceSpan",
+            "Relation",
+            "Person",
+            "Concept",
+            "JargonTerm",
+        ]
+    )

@@ -210,6 +210,7 @@ class MOCProcessor(BaseProcessor):
         theme = kwargs.get("theme", "topical")
         depth = kwargs.get("depth", 3)
         include_beliefs = kwargs.get("include_beliefs", True)
+        use_database_entities = kwargs.get("use_database_entities", True)
 
         try:
             # Convert single input to list
@@ -244,7 +245,7 @@ class MOCProcessor(BaseProcessor):
 
             # Check if files have HCE data in database
             has_hce_data = False
-            if self.db_service:
+            if use_database_entities and self.db_service:
                 try:
                     # Try to load HCE data from database
                     for file_path in input_files:

@@ -2,21 +2,20 @@
 
 # Import only the cache management for now to avoid circular import issues
 try:
-    # Temporarily disabled due to circular import issues
-    # from .bright_data_adapters import (
-    #     BrightDataAdapter,
-    #     adapt_bright_data_metadata,
-    #     adapt_bright_data_transcript,
-    #     validate_bright_data_response,
-    # )
+    from .bright_data_adapters import (
+        BrightDataAdapter,
+        get_youtube_metadata_class,
+        get_youtube_transcript_class,
+        validate_bright_data_response,
+    )
     from .cache_management import clear_python_cache, should_clear_cache_on_startup
 
     __all__ = [
         "clear_python_cache",
         "should_clear_cache_on_startup",
         "BrightDataAdapter",
-        "adapt_bright_data_metadata",
-        "adapt_bright_data_transcript",
+        "get_youtube_metadata_class",
+        "get_youtube_transcript_class",
         "validate_bright_data_response",
     ]
 except ImportError:

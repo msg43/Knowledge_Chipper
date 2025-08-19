@@ -37,9 +37,7 @@ class BrightDataAdapter:
     """
 
     @staticmethod
-    def adapt_metadata_response(
-        bright_data_response: dict[str, Any], video_url: str
-    ) -> YouTubeMetadata:
+    def adapt_metadata_response(bright_data_response: dict[str, Any], video_url: str):
         """
         Convert Bright Data YouTube metadata response to YouTubeMetadata model.
 
@@ -50,6 +48,9 @@ class BrightDataAdapter:
         Returns:
             YouTubeMetadata instance compatible with existing processors
         """
+        # Use runtime import to avoid circular dependency
+        YouTubeMetadata = get_youtube_metadata_class()
+
         try:
             # Extract video ID from URL or response
             video_id = BrightDataAdapter._extract_video_id(
@@ -104,7 +105,7 @@ class BrightDataAdapter:
     @staticmethod
     def adapt_transcript_response(
         bright_data_response: dict[str, Any], video_url: str, language: str = "en"
-    ) -> YouTubeTranscript:
+    ):
         """
         Convert Bright Data YouTube transcript response to YouTubeTranscript model.
 
@@ -116,6 +117,9 @@ class BrightDataAdapter:
         Returns:
             YouTubeTranscript instance compatible with existing processors
         """
+        # Use runtime import to avoid circular dependency
+        YouTubeTranscript = get_youtube_transcript_class()
+
         try:
             # Extract video ID from URL or response
             video_id = BrightDataAdapter._extract_video_id(
@@ -497,10 +501,11 @@ class BrightDataAdapter:
         return None
 
     @staticmethod
-    def _create_fallback_metadata(
-        url: str, response: dict[str, Any]
-    ) -> YouTubeMetadata:
+    def _create_fallback_metadata(url: str, response: dict[str, Any]):
         """Create minimal fallback metadata when adaptation fails."""
+        # Use runtime import to avoid circular dependency
+        YouTubeMetadata = get_youtube_metadata_class()
+
         try:
             video_id = BrightDataAdapter._extract_video_id(url, response)
         except ValueError:
@@ -515,10 +520,11 @@ class BrightDataAdapter:
         )
 
     @staticmethod
-    def _create_fallback_transcript(
-        url: str, response: dict[str, Any]
-    ) -> YouTubeTranscript:
+    def _create_fallback_transcript(url: str, response: dict[str, Any]):
         """Create minimal fallback transcript when adaptation fails."""
+        # Use runtime import to avoid circular dependency
+        YouTubeTranscript = get_youtube_transcript_class()
+
         try:
             video_id = BrightDataAdapter._extract_video_id(url, response)
         except ValueError:
@@ -537,14 +543,14 @@ class BrightDataAdapter:
 
 
 # Convenience functions
-def adapt_bright_data_metadata(response: dict[str, Any], url: str) -> YouTubeMetadata:
+def adapt_bright_data_metadata(response: dict[str, Any], url: str):
     """Convenience function to adapt Bright Data metadata response."""
     return BrightDataAdapter.adapt_metadata_response(response, url)
 
 
 def adapt_bright_data_transcript(
     response: dict[str, Any], url: str, language: str = "en"
-) -> YouTubeTranscript:
+):
     """Convenience function to adapt Bright Data transcript response."""
     return BrightDataAdapter.adapt_transcript_response(response, url, language)
 

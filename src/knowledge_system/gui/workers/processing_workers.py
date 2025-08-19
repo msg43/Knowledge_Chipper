@@ -36,9 +36,13 @@ class EnhancedSummarizationWorker(QThread):
         """Run the summarization process with progress tracking."""
         try:
             from ...processors.summarizer import SummarizerProcessor
+            from ..adapters.hce_adapter import HCEAdapter
 
-            # Create processor with GUI settings
-            processor = SummarizerProcessor(
+            # Create HCE adapter for progress tracking
+            hce_adapter = HCEAdapter()
+
+            # Create processor with GUI settings via adapter
+            processor = hce_adapter.create_summarizer(
                 provider=self.gui_settings["provider"],
                 model=self.gui_settings["model"],
                 max_tokens=self.gui_settings["max_tokens"],
@@ -47,13 +51,25 @@ class EnhancedSummarizationWorker(QThread):
             for i, file_path in enumerate(self.files):
                 try:
 
-                    def progress_callback(progress: SummarizationProgress):
-                        """Progress callback."""
+                    def progress_callback(stage: str, percentage: int):
+                        """HCE progress callback."""
+                        # Convert HCE progress to SummarizationProgress format
+                        from ...utils.progress import SummarizationProgress
+
+                        progress = SummarizationProgress(
+                            file_path=str(file_path),
+                            stage=stage,
+                            percentage=percentage,
+                            current_chunk=1,
+                            total_chunks=1,
+                            status=f"{stage} ({percentage}%)",
+                        )
                         self.progress_updated.emit(progress)
 
-                    # Process file with progress tracking
-                    result = processor.process(
-                        input_data=file_path,
+                    # Process file with HCE progress tracking
+                    result = hce_adapter.process_with_progress(
+                        processor,
+                        file_path,
                         progress_callback=progress_callback,
                         **self.gui_settings.get("kwargs", {}),
                     )

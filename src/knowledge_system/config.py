@@ -372,6 +372,61 @@ class MOCConfig(BaseModel):
     min_belief_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
+class HCEConfig(BaseModel):
+    """HCE (Hybrid Claim Extractor) configuration."""
+
+    # Pipeline model configuration
+    miner_model: str = Field(
+        default="gpt-4o-mini-2024-07-18", description="Model for claim mining stage"
+    )
+    judge_model: str = Field(
+        default="gpt-4o-mini-2024-07-18", description="Model for claim judging stage"
+    )
+    embedder_model: str = Field(
+        default="all-MiniLM-L6-v2", description="Model for embedding generation"
+    )
+    reranker_model: str = Field(
+        default="ms-marco-MiniLM-L-6-v2", description="Model for reranking claims"
+    )
+
+    # Claim extraction settings
+    default_min_claim_tier: str = Field(
+        default="all",
+        pattern="^(A|B|C|all)$",
+        description="Minimum claim tier to include",
+    )
+    max_claims_per_document: int | None = Field(
+        default=None,
+        ge=1,
+        le=1000,
+        description="Maximum claims to extract per document",
+    )
+
+    # Analysis settings
+    include_contradictions: bool = Field(
+        default=True, description="Include contradiction analysis"
+    )
+    include_relations: bool = Field(
+        default=True, description="Include relationship mapping"
+    )
+
+    # Tier thresholds (confidence scores)
+    tier_a_threshold: float = Field(
+        default=0.85, ge=0.0, le=1.0, description="Minimum confidence for Tier A claims"
+    )
+    tier_b_threshold: float = Field(
+        default=0.65, ge=0.0, le=1.0, description="Minimum confidence for Tier B claims"
+    )
+
+    # Performance settings
+    enable_embedding_cache: bool = Field(
+        default=True, description="Use embedding cache for performance"
+    )
+    max_concurrent_stages: int = Field(
+        default=1, ge=1, le=4, description="Maximum concurrent HCE pipeline stages"
+    )
+
+
 class MonitoringConfig(BaseModel):
     """Monitoring and logging configuration."""
 
@@ -428,6 +483,7 @@ class Settings(BaseSettings):
         default_factory=YouTubeProcessingConfig
     )
     moc: MOCConfig = Field(default_factory=MOCConfig)
+    hce: HCEConfig = Field(default_factory=HCEConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
     gui_features: GUIFeaturesConfig = Field(default_factory=GUIFeaturesConfig)
     summarization: LLMConfig = Field(default_factory=LLMConfig)
