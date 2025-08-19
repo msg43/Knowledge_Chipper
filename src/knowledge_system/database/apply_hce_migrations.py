@@ -44,7 +44,11 @@ def main():
     migrations_dir = Path(__file__).parent / "migrations"
 
     # Apply migrations in order
-    migrations = ["2025_08_18_hce.sql", "2025_08_18_hce_compat.sql"]
+    migrations = [
+        "2025_08_18_hce.sql",
+        "2025_08_18_hce_compat.sql",
+        "2025_08_18_hce_columns.sql",
+    ]
 
     success = True
     for migration_name in migrations:

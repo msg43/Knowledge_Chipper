@@ -327,7 +327,7 @@ class SummarizerProcessor(BaseProcessor):
             estimated_tokens = len(text.split()) + len(summary.split())
             estimated_cost = estimated_tokens * 0.00001  # Rough estimate
 
-            # Save to database if available
+            # Prepare metadata
             metadata = {
                 "model": self.model,
                 "provider": self.provider,
@@ -343,6 +343,43 @@ class SummarizerProcessor(BaseProcessor):
                     "relations": [r.model_dump() for r in outputs.relations],
                 },
             }
+
+            # Save to database if available
+            video_id = kwargs.get("video_id")
+            if video_id:
+                try:
+                    from ..database import DatabaseService
+
+                    db = DatabaseService()
+
+                    # Generate summary ID
+                    import uuid
+
+                    summary_id = str(uuid.uuid4())
+
+                    # Save summary with HCE data
+                    db.create_summary(
+                        summary_id=summary_id,
+                        video_id=video_id,
+                        transcript_id=kwargs.get("transcript_id"),
+                        summary_text=summary,
+                        llm_provider=self.provider,
+                        llm_model=self.model,
+                        processing_type="hce",
+                        hce_data_json=metadata["hce_data"],
+                        total_tokens=estimated_tokens,
+                        total_cost=estimated_cost,
+                        metadata=metadata,
+                    )
+
+                    # Save HCE entities to separate tables
+                    if hasattr(db, "save_hce_data"):
+                        db.save_hce_data(video_id, outputs)
+
+                    metadata["summary_id"] = summary_id
+
+                except Exception as e:
+                    logger.warning(f"Failed to save HCE data to database: {e}")
 
             return ProcessorResult(
                 success=True,

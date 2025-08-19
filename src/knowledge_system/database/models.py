@@ -180,6 +180,12 @@ class Summary(Base):
     summary_text = Column(Text, nullable=False)
     summary_metadata_json = Column(JSONEncodedType)  # YAML frontmatter data as JSON
 
+    # Processing type - legacy or HCE
+    processing_type = Column(String(10), default="legacy")  # 'legacy' or 'hce'
+    hce_data_json = Column(
+        JSONEncodedType
+    )  # HCE structured output (claims, entities, etc.)
+
     # LLM processing details
     llm_provider = Column(String(20), nullable=False)  # 'openai', 'anthropic', 'local'
     llm_model = Column(String(50), nullable=False)  # 'gpt-4o-mini', 'claude-3', etc.
