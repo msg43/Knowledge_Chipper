@@ -116,10 +116,13 @@ def moc(
     )
 
     try:
-        # Create MOC processor
+        # Create MOC processor with HCE entity extraction
         processor = MOCProcessor()
 
-        # Process the input files
+        # Add option to use database entities if available
+        use_db_entities = settings.get("use_hce_database", True)
+
+        # Process the input files with HCE entity extraction
         result = processor.process(
             [str(path) for path in input_paths],
             theme=theme,
@@ -127,6 +130,7 @@ def moc(
             include_beliefs=include_beliefs,
             dry_run=dry_run,
             template=template,
+            use_database_entities=use_db_entities,
         )
 
         if result.success:

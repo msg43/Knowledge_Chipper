@@ -107,7 +107,6 @@ def _extract_youtube_url_from_file(file_path: Path) -> str | None:
 @click.option(
     "--max-tokens", "-t", type=int, default=1000, help="Maximum tokens in summary"
 )
-@click.option("--focus", "-f", help="Focus area for summarization")
 @click.option(
     "--template",
     type=click.Path(exists=True, path_type=Path),
@@ -145,6 +144,27 @@ def _extract_youtube_url_from_file(file_path: Path) -> str | None:
     is_flag=True,
     help="Force re-summarization of all files (ignore modification times)",
 )
+@click.option(
+    "--min-claim-tier",
+    type=click.Choice(["A", "B", "C", "all"]),
+    default="all",
+    help="Minimum claim tier to include in output (A=highest quality)",
+)
+@click.option(
+    "--include-contradictions/--no-contradictions",
+    default=True,
+    help="Include contradiction analysis in output",
+)
+@click.option(
+    "--include-relations/--no-relations",
+    default=True,
+    help="Include relationship mapping in output",
+)
+@click.option(
+    "--max-claims",
+    type=int,
+    help="Maximum number of claims to extract per document",
+)
 @pass_context
 def summarize(
     ctx: CLIContext,
@@ -153,7 +173,6 @@ def summarize(
     model: str,
     provider: str,
     max_tokens: int,
-    focus: str | None,
     template: Path | None,
     dry_run: bool,
     update_md: bool,
@@ -163,6 +182,10 @@ def summarize(
     checkpoint: Path | None,
     resume: bool,
     force: bool,
+    min_claim_tier: str,
+    include_contradictions: bool,
+    include_relations: bool,
+    max_claims: int | None,
 ) -> None:
     """
     Summarize transcripts or documents using LLM
@@ -296,7 +319,15 @@ def summarize(
     # Use provider from CLI option if provided, otherwise from settings
     effective_provider = provider if provider else settings.summarization.provider
     processor = SummarizerProcessor(
-        provider=effective_provider, model=model, max_tokens=max_tokens
+        provider=effective_provider,
+        model=model,
+        max_tokens=max_tokens,
+        hce_options={
+            "min_claim_tier": min_claim_tier,
+            "include_contradictions": include_contradictions,
+            "include_relations": include_relations,
+            "max_claims": max_claims,
+        },
     )
 
     # If no template provided, default to document summary template

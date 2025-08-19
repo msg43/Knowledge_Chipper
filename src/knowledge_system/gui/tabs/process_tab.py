@@ -53,15 +53,17 @@ class ProcessPipelineWorker(QThread):
                 "total_files": len(self.files),
             }
 
-            # Import processors
+            # Import processors and adapter
             from ...processors.audio_processor import AudioProcessor
             from ...processors.moc import MOCProcessor
             from ...processors.summarizer import SummarizerProcessor
+            from ..adapters.hce_adapter import HCEAdapter
 
             # Initialize processors
             audio_processor = None
             summarizer_processor = None
             moc_processor = None
+            hce_adapter = HCEAdapter()
 
             if self.config["transcribe"]:
                 audio_processor = AudioProcessor(
@@ -70,14 +72,16 @@ class ProcessPipelineWorker(QThread):
                 )
 
             if self.config["summarize"]:
-                summarizer_processor = SummarizerProcessor(
+                # Use HCE adapter to create summarizer with progress tracking
+                summarizer_processor = hce_adapter.create_summarizer(
                     provider=self.config["summarization_provider"],
                     model=self.config["summarization_model"],
                     max_tokens=self.config["max_tokens"],
                 )
 
             if self.config["moc"]:
-                moc_processor = MOCProcessor()
+                # Use HCE adapter to create MOC processor
+                moc_processor = hce_adapter.create_moc_processor()
 
             # Track files for MOC generation
             moc_input_files = []
@@ -154,7 +158,16 @@ class ProcessPipelineWorker(QThread):
                         )
 
                         try:
-                            result = summarizer_processor.process(summarize_file)
+                            # Process with HCE progress tracking
+                            result = hce_adapter.process_with_progress(
+                                summarizer_processor,
+                                summarize_file,
+                                progress_callback=lambda stage, pct: self.progress_updated.emit(
+                                    i + 1,
+                                    len(self.files),
+                                    f"{file_path_obj.name}: {stage} ({pct}%)",
+                                ),
+                            )
                             if result.success:
                                 results["summarized"].append(str(file_path_obj))
                                 # Add summary file to MOC inputs
@@ -222,11 +235,18 @@ class ProcessPipelineWorker(QThread):
                             unique_files.append(str(file_path))
 
                     if unique_files:
-                        result = moc_processor.process(
+                        # Process with HCE progress tracking
+                        result = hce_adapter.process_with_progress(
+                            moc_processor,
                             unique_files,
                             theme=self.config.get("moc_theme", "topical"),
                             depth=self.config.get("moc_depth", 3),
                             include_beliefs=self.config.get("include_beliefs", True),
+                            progress_callback=lambda stage, pct: self.progress_updated.emit(
+                                len(self.files),
+                                len(self.files),
+                                f"MOC Generation: {stage} ({pct}%)",
+                            ),
                         )
 
                         if result.success:

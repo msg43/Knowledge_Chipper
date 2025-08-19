@@ -66,22 +66,48 @@ class HCEAdapter:
         """
         self.progress_callback = progress_callback
 
+        # Track current statistics
+        self._current_stats = {}
+
         # Map HCE stages to progress updates
-        def hce_progress_wrapper(stage: str, progress: float):
+        def hce_progress_wrapper(
+            stage: str, progress: float, stats: dict | None = None
+        ):
+            # Update statistics if provided
+            if stats:
+                self._current_stats.update(stats)
+
             if progress_callback:
                 if isinstance(processor, SummarizerProcessor):
                     # Map HCE stages to summarization progress
                     stage_mapping = {
                         "skim": "Analyzing document structure...",
-                        "mine": "Extracting claims...",
+                        "miner": "Extracting claims...",
                         "evidence": "Linking evidence...",
                         "dedupe": "Deduplicating claims...",
                         "rerank": "Ranking claims...",
                         "judge": "Validating claims...",
+                        "nli": "Checking contradictions...",
+                        "relations": "Finding relationships...",
+                        "people": "Identifying people...",
+                        "concepts": "Extracting concepts...",
+                        "glossary": "Building glossary...",
                         "export": "Formatting output...",
                     }
 
                     status = stage_mapping.get(stage, f"Processing {stage}...")
+
+                    # Add statistics to status if available
+                    if self._current_stats:
+                        stat_parts = []
+                        if "claims" in self._current_stats:
+                            stat_parts.append(f"{self._current_stats['claims']} claims")
+                        if "tier1_claims" in self._current_stats:
+                            stat_parts.append(
+                                f"{self._current_stats['tier1_claims']} high-quality"
+                            )
+                        if stat_parts:
+                            status += f" ({', '.join(stat_parts)})"
 
                     progress_obj = SummarizationProgress(
                         current_chunk=int(progress * 100),

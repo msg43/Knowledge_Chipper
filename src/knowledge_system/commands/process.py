@@ -310,9 +310,7 @@ def process(
                             f"[blue]Summarizing: {input_for_summary.name}[/blue]"
                         )
 
-                    result = summarizer_processor.process(
-                        input_for_summary, style="structured"
-                    )
+                    result = summarizer_processor.process(input_for_summary)
                     if result.success:
                         # Save summary
                         # Clean filename by removing hyphens for better readability
@@ -332,11 +330,15 @@ def process(
                         # Clean filename for title by removing hyphens and file extension
                         clean_filename = input_for_summary.stem.replace("-", " ")
                         content = f"# Summary of {clean_filename}\n\n"
-                        content += "**Style:** structured\n"
+                        content += "**Processing:** HCE Claim Extraction\n"
                         content += f"**Model:** {summarization_model}\n"
                         content += f"**Provider:** {result.metadata.get('provider', 'unknown')}\n"
-                        content += f"**Generated:** {result.metadata.get('timestamp', 'unknown')}\n\n"
-                        content += "---\n\n"
+                        content += f"**Generated:** {result.metadata.get('timestamp', 'unknown')}\n"
+                        if result.metadata.get("claims_extracted"):
+                            content += f"**Claims Extracted:** {result.metadata['claims_extracted']}\n"
+                        if result.metadata.get("tier1_claims"):
+                            content += f"**High-Quality Claims:** {result.metadata['tier1_claims']}\n"
+                        content += "\n---\n\n"
 
                         # Add link to corresponding transcript
                         base_filename = input_for_summary.stem
