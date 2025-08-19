@@ -53,10 +53,13 @@ class BatchResult:
     transcription_result: Any | None = None
     error_message: str | None = None
     metadata: dict[str, Any] = None
+    hce_analytics: dict[str, Any] = None
 
     def __post_init__(self):
         if self.metadata is None:
             self.metadata = {}
+        if self.hce_analytics is None:
+            self.hce_analytics = {}
 
 
 class BatchProcessor:
@@ -600,6 +603,100 @@ def calculate_memory_safe_concurrency(
     )
 
     return max(1, final_max)
+
+
+def aggregate_hce_analytics(batch_results: list[BatchResult]) -> dict[str, Any]:
+    """Aggregate HCE analytics across batch results for comprehensive reporting.
+
+    Args:
+        batch_results: List of batch processing results with HCE analytics
+
+    Returns:
+        Aggregated HCE analytics across the entire batch
+    """
+    aggregated = {
+        "total_files_processed": len(batch_results),
+        "successful_files": sum(1 for r in batch_results if r.success),
+        "total_claims": 0,
+        "tier_a_claims": 0,
+        "tier_b_claims": 0,
+        "tier_c_claims": 0,
+        "total_people": 0,
+        "total_concepts": 0,
+        "total_relations": 0,
+        "total_contradictions": 0,
+        "unique_people": set(),
+        "unique_concepts": set(),
+        "cross_file_patterns": [],
+        "processing_time_total": sum(r.processing_time for r in batch_results),
+        "files_with_contradictions": 0,
+        "avg_claims_per_file": 0,
+    }
+
+    # Aggregate analytics from successful results
+    successful_results = [r for r in batch_results if r.success and r.hce_analytics]
+
+    for result in successful_results:
+        analytics = result.hce_analytics
+
+        # Aggregate claim counts
+        aggregated["total_claims"] += analytics.get("total_claims", 0)
+        aggregated["tier_a_claims"] += analytics.get("tier_a_count", 0)
+        aggregated["tier_b_claims"] += analytics.get("tier_b_count", 0)
+        aggregated["tier_c_claims"] += analytics.get("tier_c_count", 0)
+
+        # Aggregate entity counts
+        aggregated["total_people"] += analytics.get("people_count", 0)
+        aggregated["total_concepts"] += analytics.get("concepts_count", 0)
+        aggregated["total_relations"] += analytics.get("relations_count", 0)
+        aggregated["total_contradictions"] += analytics.get("contradictions_count", 0)
+
+        # Track unique entities across files
+        for person in analytics.get("top_people", []):
+            if person:
+                aggregated["unique_people"].add(person)
+
+        for concept in analytics.get("top_concepts", []):
+            if concept:
+                aggregated["unique_concepts"].add(concept)
+
+        # Track files with contradictions
+        if analytics.get("contradictions_count", 0) > 0:
+            aggregated["files_with_contradictions"] += 1
+
+    # Calculate derived metrics
+    if successful_results:
+        aggregated["avg_claims_per_file"] = aggregated["total_claims"] / len(
+            successful_results
+        )
+        aggregated["avg_processing_time"] = aggregated["processing_time_total"] / len(
+            successful_results
+        )
+
+    # Convert sets to lists for JSON serialization
+    aggregated["unique_people"] = list(aggregated["unique_people"])
+    aggregated["unique_concepts"] = list(aggregated["unique_concepts"])
+
+    # Identify cross-file patterns
+    if len(aggregated["unique_people"]) < aggregated["total_people"]:
+        aggregated["cross_file_patterns"].append(
+            "People mentioned across multiple files"
+        )
+
+    if len(aggregated["unique_concepts"]) < aggregated["total_concepts"]:
+        aggregated["cross_file_patterns"].append(
+            "Concepts discussed across multiple files"
+        )
+
+    if aggregated["files_with_contradictions"] > 1:
+        aggregated["cross_file_patterns"].append(
+            "Contradictions found in multiple files"
+        )
+
+    logger.info(
+        f"Aggregated HCE analytics: {aggregated['total_claims']} claims across {len(successful_results)} files"
+    )
+    return aggregated
 
 
 # Testing

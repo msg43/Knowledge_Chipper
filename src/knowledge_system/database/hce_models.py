@@ -5,10 +5,8 @@ Adds claim extraction, evidence tracking, and entity resolution tables to the da
 """
 
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
-    Boolean,
     CheckConstraint,
     Column,
     DateTime,
@@ -18,7 +16,6 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 

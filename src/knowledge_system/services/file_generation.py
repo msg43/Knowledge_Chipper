@@ -252,7 +252,14 @@ class FileGenerationService:
                 frontmatter.update(summary.summary_metadata_json)
 
             # Generate markdown content
-            markdown_content = f"""---
+            if is_hce and hce_data:
+                # Enhanced HCE-specific markdown format
+                markdown_content = self._generate_hce_markdown(
+                    video, summary, hce_data, frontmatter
+                )
+            else:
+                # Legacy format for non-HCE summaries
+                markdown_content = f"""---
 {yaml.dump(frontmatter, default_flow_style=False)}---
 
 # Summary: {video.title}
@@ -492,6 +499,189 @@ class FileGenerationService:
             return results
 
     # Helper methods
+    def _generate_hce_markdown(self, video, summary, hce_data, frontmatter) -> str:
+        """Generate enhanced HCE-specific markdown content."""
+        from datetime import datetime
+
+        import yaml
+
+        # Extract claim data
+        claims = hce_data.get("claims", [])
+        people = hce_data.get("people", [])
+        concepts = hce_data.get("concepts", [])
+        relations = hce_data.get("relations", [])
+        contradictions = hce_data.get("contradictions", [])
+
+        # Categorize claims by tier
+        tier_a_claims = [c for c in claims if c.get("tier") == "A"]
+        tier_b_claims = [c for c in claims if c.get("tier") == "B"]
+        tier_c_claims = [c for c in claims if c.get("tier") == "C"]
+
+        # Generate markdown content
+        markdown_content = f"""---
+{yaml.dump(frontmatter, default_flow_style=False)}---
+
+# Claim Analysis: {video.title}
+
+**Original Video:** [{video.url}]({video.url})
+**Analyzed by:** {summary.llm_model} ({summary.llm_provider})
+**Processing Cost:** ${summary.processing_cost:.4f} ({summary.total_tokens:,} tokens)
+**Claims Extracted:** {len(claims)} | **Relations Mapped:** {len(relations)} | **Contradictions:** {len(contradictions)}
+
+## Executive Summary
+
+"""
+
+        # Generate executive summary from A-tier claims
+        if tier_a_claims:
+            markdown_content += "**Key High-Confidence Claims:**\n\n"
+            for i, claim in enumerate(tier_a_claims[:5], 1):  # Top 5 A-tier claims
+                canonical = claim.get("canonical", "")
+                markdown_content += f"{i}. {canonical}\n"
+
+            markdown_content += "\n"
+        else:
+            markdown_content += (
+                "*No high-confidence (Tier A) claims were identified.*\n\n"
+            )
+
+        # Add traditional summary if available
+        if summary.summary_text:
+            markdown_content += f"**Generated Summary:** {summary.summary_text}\n\n"
+
+        markdown_content += "## Key Claims by Category\n\n"
+
+        # Tier A Claims
+        if tier_a_claims:
+            markdown_content += "### 🥇 Tier A Claims (High Confidence)\n\n"
+            for claim in tier_a_claims:
+                canonical = claim.get("canonical", "")
+                claim_type = claim.get("claim_type", "General")
+                evidence = claim.get("evidence", [])
+
+                markdown_content += f"**{canonical}**\n"
+                markdown_content += f"- *Type:* {claim_type}\n"
+                if evidence:
+                    markdown_content += (
+                        f"- *Evidence:* {len(evidence)} supporting points\n"
+                    )
+                markdown_content += "\n"
+
+        # Tier B Claims
+        if tier_b_claims:
+            markdown_content += "### 🥈 Tier B Claims (Medium Confidence)\n\n"
+            for claim in tier_b_claims[:10]:  # Limit to 10 for readability
+                canonical = claim.get("canonical", "")
+                claim_type = claim.get("claim_type", "General")
+                markdown_content += f"- **{canonical}** *(Type: {claim_type})*\n"
+
+            if len(tier_b_claims) > 10:
+                markdown_content += (
+                    f"\n*...and {len(tier_b_claims) - 10} more Tier B claims*\n"
+                )
+            markdown_content += "\n"
+
+        # People, Concepts, and Jargon sections
+        if people:
+            markdown_content += "## People\n\n"
+            for person in people[:20]:  # Limit for readability
+                name = person.get("name", "")
+                description = person.get("description", "")
+                markdown_content += f"- **{name}**"
+                if description:
+                    markdown_content += f": {description}"
+                markdown_content += "\n"
+            markdown_content += "\n"
+
+        if concepts:
+            markdown_content += "## Concepts\n\n"
+            for concept in concepts[:20]:
+                name = concept.get("name", "")
+                description = concept.get("description", "")
+                markdown_content += f"- **{name}**"
+                if description:
+                    markdown_content += f": {description}"
+                markdown_content += "\n"
+            markdown_content += "\n"
+
+        # Evidence Citations
+        if any(claim.get("evidence") for claim in claims):
+            markdown_content += "## Evidence Citations\n\n"
+            claims_with_evidence = [
+                c for c in tier_a_claims + tier_b_claims if c.get("evidence")
+            ]
+
+            for claim in claims_with_evidence[:10]:  # Top 10 claims with evidence
+                canonical = claim.get("canonical", "")
+                evidence = claim.get("evidence", [])
+
+                markdown_content += f"**{canonical}**\n"
+                for i, ev in enumerate(evidence[:3], 1):  # Top 3 evidence points
+                    markdown_content += f"{i}. {ev}\n"
+                markdown_content += "\n"
+
+        # Relations and Contradictions
+        if contradictions:
+            markdown_content += "## Contradictions Detected\n\n"
+            for i, contradiction in enumerate(contradictions[:5], 1):
+                claim1 = contradiction.get("claim1", {}).get("canonical", "")
+                claim2 = contradiction.get("claim2", {}).get("canonical", "")
+                markdown_content += f"{i}. **Claim:** {claim1}\n"
+                markdown_content += f"   **Contradicts:** {claim2}\n\n"
+
+        # Add Obsidian-compatible tags and links
+        markdown_content += "## Tags\n\n"
+
+        # Generate Obsidian tags from concepts and claim types
+        obsidian_tags = set()
+
+        # Add video-related tags
+        obsidian_tags.add(f"#video/{video.video_id}")
+        obsidian_tags.add("#claim-analysis")
+        obsidian_tags.add("#hce-processed")
+
+        # Add concept tags
+        for concept in concepts[:15]:  # Limit to prevent tag overload
+            name = concept.get("name", "").strip()
+            if name:
+                # Clean tag name for Obsidian compatibility
+                tag_name = name.replace(" ", "-").replace("/", "-").lower()
+                tag_name = "".join(c for c in tag_name if c.isalnum() or c in "-_")
+                if tag_name:
+                    obsidian_tags.add(f"#concept/{tag_name}")
+
+        # Add tier tags based on what was found
+        if tier_a_claims:
+            obsidian_tags.add("#high-confidence")
+        if tier_b_claims:
+            obsidian_tags.add("#medium-confidence")
+        if contradictions:
+            obsidian_tags.add("#contradictions")
+        if relations:
+            obsidian_tags.add("#relations")
+
+        # Output tags
+        for tag in sorted(obsidian_tags):
+            markdown_content += f"{tag} "
+        markdown_content += "\n\n"
+
+        # Add Obsidian-style wikilinks for people
+        if people:
+            markdown_content += "## Related People\n\n"
+            for person in people[:10]:
+                name = person.get("name", "").strip()
+                if name:
+                    # Create Obsidian wikilink
+                    markdown_content += f"- [[{name}]]\n"
+            markdown_content += "\n"
+
+        markdown_content += f"""---
+*Generated from Knowledge System database on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
+*Processed using HCE (Hybrid Claim Extractor) v2.0*
+"""
+
+        return markdown_content
+
     def _sanitize_filename(self, filename: str) -> str:
         """Sanitize filename for filesystem compatibility."""
         import re

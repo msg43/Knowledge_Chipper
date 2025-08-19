@@ -1,3 +1,8 @@
+"""Comprehensive tests for HCE-based SummarizerProcessor.
+
+This replaces the legacy test_summarizer.py with HCE-specific functionality tests.
+"""
+
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -7,7 +12,11 @@ from knowledge_system.processors.summarizer import SummarizerProcessor
 
 
 class TestHCESummarizerProcessor:
-    """Test HCE-based summarizer processor."""
+    """Comprehensive test suite for HCE-based summarizer processor.
+
+    This test suite validates the complete HCE summarization pipeline,
+    replacing the legacy summarizer tests with HCE-specific functionality.
+    """
 
     def test_init_with_defaults(self):
         with patch(

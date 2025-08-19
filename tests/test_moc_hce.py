@@ -1,5 +1,7 @@
 """
-Tests for HCE-based MOC (Maps of Content) processor.
+Comprehensive tests for HCE-based MOC (Maps of Content) processor.
+
+This replaces the legacy test_moc.py with HCE-specific MOC generation tests.
 """
 from pathlib import Path
 from unittest.mock import MagicMock, patch

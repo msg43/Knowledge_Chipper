@@ -51,6 +51,13 @@ class ProcessPipelineWorker(QThread):
                 "moc_generated": [],
                 "errors": [],
                 "total_files": len(self.files),
+                "claims_extracted": 0,
+                "tier_a_claims": 0,
+                "tier_b_claims": 0,
+                "tier_c_claims": 0,
+                "top_claims": [],
+                "contradictions_found": 0,
+                "relations_mapped": 0,
             }
 
             # Import processors and adapter
@@ -170,19 +177,84 @@ class ProcessPipelineWorker(QThread):
                             )
                             if result.success:
                                 results["summarized"].append(str(file_path_obj))
-                                # Add summary file to MOC inputs
+
+                                # Extract claim analytics from HCE data
                                 if hasattr(result, "data") and result.data:
-                                    if (
-                                        isinstance(result.data, dict)
-                                        and "output_file" in result.data
-                                    ):
-                                        summary_path = Path(result.data["output_file"])
-                                        moc_input_files.append(summary_path)
+                                    if isinstance(result.data, dict):
+                                        # Add summary file to MOC inputs
+                                        if "output_file" in result.data:
+                                            summary_path = Path(
+                                                result.data["output_file"]
+                                            )
+                                            moc_input_files.append(summary_path)
+
+                                        # Extract HCE claim data for analytics
+                                        if "hce_data" in result.data:
+                                            hce_data = result.data["hce_data"]
+                                            if isinstance(hce_data, dict):
+                                                # Count claims by tier
+                                                claims = hce_data.get("claims", [])
+                                                tier_a = tier_b = tier_c = 0
+                                                top_file_claims = []
+
+                                                for claim in claims:
+                                                    if isinstance(claim, dict):
+                                                        tier = claim.get("tier", "C")
+                                                        canonical = claim.get(
+                                                            "canonical", ""
+                                                        )
+
+                                                        if tier == "A":
+                                                            tier_a += 1
+                                                        elif tier == "B":
+                                                            tier_b += 1
+                                                        else:
+                                                            tier_c += 1
+
+                                                        # Collect top claims (A and B tier)
+                                                        if (
+                                                            tier in ["A", "B"]
+                                                            and canonical
+                                                        ):
+                                                            top_file_claims.append(
+                                                                {
+                                                                    "claim": canonical,
+                                                                    "tier": tier,
+                                                                    "file": file_path_obj.name,
+                                                                }
+                                                            )
+
+                                                # Update totals
+                                                results["claims_extracted"] += len(
+                                                    claims
+                                                )
+                                                results["tier_a_claims"] += tier_a
+                                                results["tier_b_claims"] += tier_b
+                                                results["tier_c_claims"] += tier_c
+
+                                                # Add top claims (limit to prevent overflow)
+                                                results["top_claims"].extend(
+                                                    top_file_claims[:5]
+                                                )
+
+                                                # Count contradictions and relations
+                                                contradictions = hce_data.get(
+                                                    "contradictions", []
+                                                )
+                                                relations = hce_data.get(
+                                                    "relations", []
+                                                )
+                                                results["contradictions_found"] += len(
+                                                    contradictions
+                                                )
+                                                results["relations_mapped"] += len(
+                                                    relations
+                                                )
 
                                 self.file_completed.emit(
                                     str(file_path_obj),
                                     True,
-                                    f"✅ Summarized: {file_path_obj.name}",
+                                    f"✅ Analyzed: {file_path_obj.name}",
                                 )
                             else:
                                 error_msg = (
@@ -423,26 +495,25 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         )
         layout.addWidget(transcription_btn, 2, 3)
 
-        # Summarization settings
-        summarization_label = QLabel("Summarization:")
-        summarization_label.setStyleSheet("font-weight: bold;")
-        layout.addWidget(summarization_label, 3, 0)
+        # Claim Analysis settings
+        analysis_label = QLabel("Claim Analysis:")
+        analysis_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(analysis_label, 3, 0)
 
-        self.summarization_settings_label = QLabel("Loading...")
-        self.summarization_settings_label.setStyleSheet("color: #888;")
-        layout.addWidget(self.summarization_settings_label, 3, 1, 1, 2)
+        self.analysis_settings_label = QLabel("Loading...")
+        self.analysis_settings_label.setStyleSheet("color: #888;")
+        layout.addWidget(self.analysis_settings_label, 3, 1, 1, 2)
 
-        summarization_btn = QPushButton("Change")
-        summarization_btn.clicked.connect(
-            lambda: self._switch_to_tab("Document Summarization")
-        )
-        summarization_btn.setMaximumWidth(80)
-        summarization_btn.setToolTip(
-            "Switch to Document Summarization tab to modify AI summarization settings.\n"
+        analysis_btn = QPushButton("Change")
+        analysis_btn.clicked.connect(lambda: self._switch_to_tab("Content Analysis"))
+        analysis_btn.setMaximumWidth(80)
+        analysis_btn.setToolTip(
+            "Switch to Content Analysis tab to modify HCE claim extraction settings.\n"
             "• Choose AI provider (OpenAI, Anthropic, or Local)\n"
-            "• Select model, max tokens, and custom prompts"
+            "• Select model, claim tiers, and analysis depth\n"
+            "• Configure contradiction and relationship analysis"
         )
-        layout.addWidget(summarization_btn, 3, 3)
+        layout.addWidget(analysis_btn, 3, 3)
 
         # MOC settings
         moc_label = QLabel("MOC Generation:")
@@ -475,8 +546,64 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         )
         layout.addWidget(refresh_btn, 5, 0, 1, 2)
 
+        # HCE Analysis Settings
+        hce_label = QLabel("🔍 Analysis Settings:")
+        hce_label.setStyleSheet("font-weight: bold; color: #1976d2;")
+        layout.addWidget(hce_label, 6, 0)
+
+        # Analysis Depth Slider
+        depth_label = QLabel("Analysis Depth:")
+        depth_label.setToolTip("Adjust the depth of claim extraction analysis")
+        layout.addWidget(depth_label, 7, 0)
+
+        from PyQt6.QtWidgets import QSlider
+
+        self.analysis_depth_slider = QSlider()
+        self.analysis_depth_slider.setOrientation(Qt.Orientation.Horizontal)
+        self.analysis_depth_slider.setRange(1, 5)
+        self.analysis_depth_slider.setValue(3)
+        self.analysis_depth_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.analysis_depth_slider.setTickInterval(1)
+        self.analysis_depth_slider.valueChanged.connect(self._on_setting_changed)
+        self.analysis_depth_slider.setToolTip(
+            "Analysis depth level (1-5):\n"
+            "• 1: Quick extraction (surface-level claims)\n"
+            "• 2: Standard extraction (key claims)\n"
+            "• 3: Balanced extraction (recommended)\n"
+            "• 4: Deep extraction (detailed claims)\n"
+            "• 5: Comprehensive extraction (all possible claims)"
+        )
+        layout.addWidget(self.analysis_depth_slider, 7, 1, 1, 2)
+
+        self.depth_value_label = QLabel("Balanced (3)")
+        self.depth_value_label.setStyleSheet("color: #666;")
+        layout.addWidget(self.depth_value_label, 7, 3)
+
+        # Connect slider to update label
+        self.analysis_depth_slider.valueChanged.connect(self._update_depth_label)
+
+        # Claim Tier Selection
+        tier_label = QLabel("Minimum Claim Tier:")
+        tier_label.setToolTip("Select minimum tier of claims to include in results")
+        layout.addWidget(tier_label, 8, 0)
+
+        from PyQt6.QtWidgets import QComboBox
+
+        self.claim_tier_combo = QComboBox()
+        self.claim_tier_combo.addItems(["All Tiers", "Tier A+", "Tier B+", "Tier C+"])
+        self.claim_tier_combo.setCurrentText("All Tiers")
+        self.claim_tier_combo.currentTextChanged.connect(self._on_setting_changed)
+        self.claim_tier_combo.setToolTip(
+            "Minimum claim tier to include:\n"
+            "• All Tiers: Include all confidence levels\n"
+            "• Tier A+: High-confidence claims only (85%+)\n"
+            "• Tier B+: Medium+ confidence claims (65%+)\n"
+            "• Tier C+: All confidence levels (no filtering)"
+        )
+        layout.addWidget(self.claim_tier_combo, 8, 1, 1, 2)
+
         # Output directory
-        layout.addWidget(QLabel("Output Directory:"), 6, 0)
+        layout.addWidget(QLabel("Output Directory:"), 9, 0)
         self.output_directory = QLineEdit()
         self.output_directory.setPlaceholderText(
             "Click Browse to select output directory (required)"
@@ -489,7 +616,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             "• Ensure you have write permissions to this location\n"
             "• Required before starting processing"
         )
-        layout.addWidget(self.output_directory, 6, 1, 1, 2)
+        layout.addWidget(self.output_directory, 9, 1, 1, 2)
 
         browse_output_btn = QPushButton("Browse")
         browse_output_btn.clicked.connect(self._select_output_directory)
@@ -498,7 +625,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             "• Choose a directory with sufficient space\n"
             "• All output files will be organized in subdirectories"
         )
-        layout.addWidget(browse_output_btn, 6, 3)
+        layout.addWidget(browse_output_btn, 9, 3)
 
         # Load initial settings
         QTimer.singleShot(100, self._refresh_inherited_settings)
@@ -645,17 +772,15 @@ class ProcessTab(BaseTab, FileOperationsMixin):
                 max_tokens = getattr(summarization_tab, "max_tokens_spin", None)
                 if provider and model:
                     tokens_text = f", {max_tokens.value()} tokens" if max_tokens else ""
-                    self.summarization_settings_label.setText(
+                    self.analysis_settings_label.setText(
                         f"{provider.currentText()}: {model.currentText()}{tokens_text}"
                     )
                 else:
-                    self.summarization_settings_label.setText(
+                    self.analysis_settings_label.setText(
                         "openai: gpt-4o-mini-2024-07-18"
                     )
             else:
-                self.summarization_settings_label.setText(
-                    "openai: gpt-4o-mini-2024-07-18"
-                )
+                self.analysis_settings_label.setText("openai: gpt-4o-mini-2024-07-18")
 
             # MOC settings (using defaults since MOC tab was consolidated into Content Analysis)
             self.moc_settings_label.setText("Knowledge Map: Enabled (Default settings)")
@@ -890,30 +1015,72 @@ class ProcessTab(BaseTab, FileOperationsMixin):
 
         # Show summary
         self.append_log("\n=== Processing Summary ===")
-        self.append_log(f"Total files: {results['total_files']}")
-        self.append_log(f"Transcribed: {len(results['transcribed'])}")
-        self.append_log(f"Summarized: {len(results['summarized'])}")
+        self.append_log(f"📁 Total files: {results['total_files']}")
+        self.append_log(f"🎤 Transcribed: {len(results['transcribed'])}")
+        self.append_log(f"🔍 Analyzed: {len(results['summarized'])}")
+
+        # HCE Claim Analytics
+        if results.get("claims_extracted", 0) > 0:
+            self.append_log(f"\n📊 Claim Extraction Results:")
+            self.append_log(
+                f"   • Total claims extracted: {results['claims_extracted']}"
+            )
+            if results.get("tier_a_claims", 0) > 0:
+                self.append_log(
+                    f"   • Tier A claims (high confidence): {results['tier_a_claims']}"
+                )
+            if results.get("tier_b_claims", 0) > 0:
+                self.append_log(
+                    f"   • Tier B claims (medium confidence): {results['tier_b_claims']}"
+                )
+            if results.get("tier_c_claims", 0) > 0:
+                self.append_log(
+                    f"   • Tier C claims (supporting): {results['tier_c_claims']}"
+                )
+
+            if results.get("contradictions_found", 0) > 0:
+                self.append_log(
+                    f"   • Contradictions identified: {results['contradictions_found']}"
+                )
+            if results.get("relations_mapped", 0) > 0:
+                self.append_log(f"   • Relations mapped: {results['relations_mapped']}")
+
+            # Show top claims
+            top_claims = results.get("top_claims", [])
+            if top_claims:
+                self.append_log(f"\n🏆 Top Claims:")
+                for i, claim_info in enumerate(top_claims[:5]):  # Show max 5
+                    tier_icon = "🥇" if claim_info["tier"] == "A" else "🥈"
+                    self.append_log(
+                        f"   {tier_icon} [{claim_info['file']}] {claim_info['claim'][:100]}{'...' if len(claim_info['claim']) > 100 else ''}"
+                    )
+
         if results["moc_generated"]:
             self.append_log(
-                f"MOC generated from: {len(results['moc_generated'])} files"
+                f"🗺️ MOC generated from: {len(results['moc_generated'])} files"
             )
         if results["errors"]:
-            self.append_log(f"Errors: {len(results['errors'])}")
+            self.append_log(f"\n❌ Errors: {len(results['errors'])}")
             for error in results["errors"]:
-                self.append_log(f"  - {error}")
+                self.append_log(f"     - {error}")
         self.append_log("=== End Summary ===")
 
         # Show completion message
+        claims_count = results.get("claims_extracted", 0)
         if results["errors"]:
-            self.show_info(
-                "Processing Completed with Errors",
-                f"Processed {results['total_files']} files with {len(results['errors'])} errors. Check the output log for details.",
-            )
+            message = f"Processed {results['total_files']} files with {len(results['errors'])} errors."
+            if claims_count > 0:
+                message += f" Extracted {claims_count} claims total."
+            message += " Check the output log for details."
+            self.show_info("Processing Completed with Errors", message)
         else:
-            self.show_info(
-                "Processing Completed Successfully",
-                f"Successfully processed all {results['total_files']} files!",
-            )
+            message = f"Successfully processed all {results['total_files']} files!"
+            if claims_count > 0:
+                tier_a = results.get("tier_a_claims", 0)
+                message += (
+                    f" Extracted {claims_count} claims ({tier_a} high-confidence)."
+                )
+            self.show_info("Processing Completed Successfully", message)
 
     def _processing_error(self, error: str) -> None:
         """Handle processing error."""
@@ -1008,3 +1175,14 @@ class ProcessTab(BaseTab, FileOperationsMixin):
     def _on_setting_changed(self) -> None:
         """Called when any setting changes to automatically save."""
         self._save_settings()
+
+    def _update_depth_label(self, value: int) -> None:
+        """Update the analysis depth label based on slider value."""
+        depth_labels = {
+            1: "Quick (1)",
+            2: "Standard (2)",
+            3: "Balanced (3)",
+            4: "Deep (4)",
+            5: "Comprehensive (5)",
+        }
+        self.depth_value_label.setText(depth_labels.get(value, f"Level {value}"))
