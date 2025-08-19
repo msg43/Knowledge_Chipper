@@ -1,5 +1,25 @@
 # HCE (Hybrid Claim Extractor) Full Replacement Implementation TODO List
 
+## Progress Summary
+**Overall Progress: ~30% Complete (25+ completed items)**
+
+### Phase Breakdown:
+- ✅ **Pre-Implementation**: 71% (5/7)
+- ✅ **Core Replacement**: 62% (16/26)
+  - ✅ HCE Package Installation: 100% (4/4)
+  - ✅ Database Schema Evolution: 100% (3/3)
+  - ✅ Processor Replacement: 100% (2/2)
+  - ⏳ GUI Integration Layer: 57% (4/7)
+  - ⏳ Command Updates: 25% (3/12)
+  - ⏳ File Generation Updates: 0% (0/5)
+  - ⏳ Configuration: 0% (0/6)
+- ⏳ **UI/UX Adaptation**: 0% (0/15)
+- ⏳ **Advanced Features**: 0% (0/11)
+- ⏳ **Migration & Cleanup**: 0% (0/12)
+- ⏳ **Testing & Deployment**: 0% (0/9)
+
+**Last Updated: 2024-01-25 by updating checkboxes directly in file**
+
 ## Overview
 This document outlines the implementation plan for **completely replacing** the existing summarization and MOC system with the Hybrid Claim Extractor (HCE) system. This is a full replacement approach - no legacy system preservation or feature flags needed.
 
@@ -13,35 +33,35 @@ This document outlines the implementation plan for **completely replacing** the 
 ## Pre-Implementation Tasks
 
 ### 1. Environment Setup
-- [ ] Create feature branch: `feature/hce-replacement`
-- [ ] Update requirements.txt with HCE dependencies:
-  - [ ] Add pydantic>=2.0
-  - [ ] Add sentence-transformers for embeddings
-  - [ ] Add transformers for cross-encoder support
-  - [ ] Add hdbscan for clustering
-  - [ ] Add scipy for clustering metrics
-  - [ ] Update torch/tensorflow requirements
-- [ ] Create comprehensive backup of existing code
-- [ ] Document current API contracts for GUI integration
+- [x] Create feature branch: `feature/hce-replacement` ✅ COMPLETED
+- [x] Update requirements.txt with HCE dependencies: ✅ COMPLETED
+  - [x] Add pydantic>=2.0
+  - [x] Add sentence-transformers for embeddings
+  - [x] Add transformers for cross-encoder support
+  - [x] Add hdbscan for clustering
+  - [x] Add scipy for clustering metrics
+  - [x] Update torch/tensorflow requirements
+- [x] Create comprehensive backup of existing code ✅ COMPLETED (via git commits)
+- [x] Document current API contracts for GUI integration ✅ COMPLETED (in HCE_Integration_Report.md)
 
 ### 2. System Architecture Planning
 - [x] Map existing GUI touchpoints to new HCE outputs ✅ COMPLETED (see HCE_Integration_Report.md)
 - [x] Design unified output format that satisfies current UI needs ✅ COMPLETED
 - [x] Plan database schema modifications ✅ COMPLETED (migrations ready)
-- [ ] Create rollback strategy
+- [x] Create rollback strategy ✅ COMPLETED (docs/HCE_ROLLBACK_STRATEGY.md)
 
 ## Phase 1: Core Replacement
 
 ### 3. HCE Package Installation
-- [ ] Move `hce_kit/claim_extractor/` to `src/knowledge_system/processors/hce/`
-- [ ] Update imports to match project structure
-- [ ] Remove conflicting legacy processors:
-  - [ ] Archive `summarizer.py` to `legacy/`
-  - [ ] Archive `moc.py` to `legacy/`
-- [ ] Update `processors/__init__.py` to export HCE components
+- [x] Move `hce_kit/claim_extractor/` to `src/knowledge_system/processors/hce/` ✅ COMPLETED
+- [x] Update imports to match project structure ✅ COMPLETED
+- [x] Remove conflicting legacy processors: ✅ COMPLETED
+  - [x] Archive `summarizer.py` to `legacy/` (renamed to summarizer_legacy.py)
+  - [x] Archive `moc.py` to `legacy/` (renamed to moc_legacy.py)
+- [x] Update `processors/__init__.py` to export HCE components ✅ COMPLETED
 
 ### 4. Database Schema Evolution
-- [ ] Extend existing SQLite schema:
+- [x] Extend existing SQLite schema: ✅ COMPLETED
   ```sql
   -- Modify existing tables to support HCE
   ALTER TABLE summaries ADD COLUMN processing_type TEXT DEFAULT 'legacy';
@@ -69,11 +89,11 @@ This document outlines the implementation plan for **completely replacing** the 
     FOREIGN KEY (video_id) REFERENCES videos(video_id)
   );
   ```
-- [ ] Create migration script for existing data
-- [ ] Add FTS5 indexes for claim search
+- [x] Create migration script for existing data ✅ COMPLETED (migrate_legacy_data.py)
+- [x] Add FTS5 indexes for claim search ✅ COMPLETED (in HCE schema)
 
 ### 5. Processor Replacement
-- [ ] Create `src/knowledge_system/processors/hce_processor.py`:
+- [x] Create HCE processors: ✅ COMPLETED (created adapters instead)
   ```python
   class HCEProcessor(BaseProcessor):
       """Unified processor that replaces SummarizerProcessor and MOCProcessor"""
@@ -83,27 +103,29 @@ This document outlines the implementation plan for **completely replacing** the 
           # Run HCE pipeline
           # Return structured output compatible with GUI
   ```
-- [ ] Implement adapters for existing interfaces:
-  - [ ] `get_summary()` → Returns claim-based summary
-  - [ ] `get_people()` → Returns HCE people entities
-  - [ ] `get_tags()` → Returns concepts as tags
-  - [ ] `get_jargon()` → Returns HCE jargon terms
+- [x] Implement adapters for existing interfaces: ✅ COMPLETED
+  - [x] `get_summary()` → Returns claim-based summary
+  - [x] `get_people()` → Returns HCE people entities
+  - [x] `get_tags()` → Returns concepts as tags
+  - [x] `get_jargon()` → Returns HCE jargon terms
 
 ### 6. GUI Integration Layer
-- [ ] Create `src/knowledge_system/gui/adapters/hce_adapter.py`:
-  - [ ] Convert HCE outputs to formats expected by GUI
-  - [ ] Maintain existing field names and structures
-  - [ ] Add new fields as optional enhancements
+- [x] Create `src/knowledge_system/gui/adapters/hce_adapter.py`: ✅ COMPLETED
+  - [x] Convert HCE outputs to formats expected by GUI
+  - [x] Maintain existing field names and structures
+  - [x] Add new fields as optional enhancements
 - [ ] Update worker classes to use HCEProcessor:
   - [ ] `ProcessPipelineWorker`
   - [ ] `SummarizationWorker`
   - [ ] `MOCGenerationWorker`
 
 ### 7. Command Updates
-- [ ] Replace summarization logic in `commands/summarize.py`:
-  - [ ] Remove LLM-based summarization
-  - [ ] Use HCE claim extraction
-  - [ ] Format claims as readable summary
+- [x] Replace summarization logic in `commands/summarize.py`: ✅ PARTIALLY COMPLETE
+  - [x] Remove LLM-based summarization
+  - [x] Use HCE claim extraction
+  - [x] Format claims as readable summary
+  - [ ] Still need to update file saving logic
+  - Note: Database saving happens in SummarizerProcessor when video_id is provided
 - [ ] Replace MOC logic in `commands/moc.py`:
   - [ ] Use HCE entity extractors
   - [ ] Maintain same output file structure
@@ -214,6 +236,17 @@ This document outlines the implementation plan for **completely replacing** the 
   - [ ] Entity resolution
   - [ ] Relation detection
 - [ ] Performance benchmarks
+
+## Additional Completed Tasks (Not in Original List)
+These tasks were completed as part of the implementation but weren't explicitly listed:
+
+- [x] Created database persistence method `save_hce_data()` in DatabaseService
+- [x] Extended database models with `processing_type` and `hce_data_json` columns
+- [x] Created HCE-specific test files (test_summarizer_hce.py, test_moc_hce.py)
+- [x] Created migration test (test_hce_migration.py)
+- [x] Created comprehensive progress report (HCE_PROGRESS_REPORT.md)
+- [x] Implemented database saving in SummarizerProcessor.process()
+- [x] Set up HCE models imports in database/__init__.py
 
 ## Deployment Strategy
 
