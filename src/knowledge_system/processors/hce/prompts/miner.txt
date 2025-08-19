@@ -1,0 +1,4 @@
+Extract concise, testable claims from the segment.
+Return JSON list with keys: claim_text, claim_type (factual|causal|normative|forecast|definition), stance, evidence_spans[].
+Each evidence span must include verbatim quote and t0,t1 values you see in the header.
+Empty list if no claims.

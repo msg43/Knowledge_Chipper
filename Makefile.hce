@@ -1,0 +1,51 @@
+# HCE Replacement Test Makefile
+
+.PHONY: hce-smoketest hce-test-summarizer hce-test-moc hce-test-acceptance hce-test-all
+
+# Run HCE smoke test to verify file generation
+hce-smoketest:
+	@echo "Running HCE smoke test..."
+	@echo "Creating test input..."
+	@mkdir -p test_output/hce_smoke
+	@echo "# Test Document\n\nThis is a test document for HCE processing. John Smith wrote this framework." > test_output/hce_smoke/input.md
+
+	@echo "\nTesting summarizer..."
+	python -m knowledge_system.cli summarize test_output/hce_smoke/input.md -o test_output/hce_smoke/
+
+	@echo "\nTesting MOC generation..."
+	python -m knowledge_system.cli moc test_output/hce_smoke/*_summary.md -o test_output/hce_smoke/
+
+	@echo "\nChecking generated files..."
+	@ls -la test_output/hce_smoke/
+
+	@echo "\nVerifying expected files exist:"
+	@test -f test_output/hce_smoke/*_summary.md && echo "✅ Summary file created" || echo "❌ Summary file missing"
+	@test -f test_output/hce_smoke/People.md && echo "✅ People.md created" || echo "❌ People.md missing"
+	@test -f test_output/hce_smoke/Tags.md && echo "✅ Tags.md created" || echo "❌ Tags.md missing"
+	@test -f test_output/hce_smoke/Mental_Models.md && echo "✅ Mental_Models.md created" || echo "❌ Mental_Models.md missing"
+	@test -f test_output/hce_smoke/Jargon.md && echo "✅ Jargon.md created" || echo "❌ Jargon.md missing"
+
+# Run HCE summarizer tests
+hce-test-summarizer:
+	python -m pytest tests/test_summarizer_hce.py -v
+
+# Run HCE MOC tests
+hce-test-moc:
+	python -m pytest tests/test_moc_hce.py -v
+
+# Run HCE acceptance tests
+hce-test-acceptance:
+	python -m pytest tests/test_hce_acceptance.py -v
+
+# Run all HCE tests
+hce-test-all:
+	python tests/run_hce_tests.py
+
+# Apply HCE database migrations
+hce-migrate:
+	@echo "Applying HCE database migrations..."
+	python src/knowledge_system/database/apply_hce_migrations.py
+
+# Clean up test outputs
+hce-clean:
+	rm -rf test_output/hce_smoke

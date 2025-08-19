@@ -437,12 +437,6 @@ Key integration points:
 - [ ] Schedule security reviews
 - [ ] Establish support channels
 
-### 31. Future Enhancements
-- [ ] Research model distillation (Upgrade F)
-- [ ] Explore active learning loops with database feedback
-- [ ] Add more language support
-- [ ] Implement collaborative features using SQLite
-- [ ] Plan mobile/web versions with API access to HCE data
 
 ## Notes
 

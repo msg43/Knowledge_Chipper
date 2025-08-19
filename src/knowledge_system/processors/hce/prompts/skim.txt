@@ -1,0 +1,5 @@
+You are creating 5–10 milestone markers from a transcript. For each chunk, return:
+- milestone_id
+- t0, t1
+- summary (one sentence)
+Return JSON list only.

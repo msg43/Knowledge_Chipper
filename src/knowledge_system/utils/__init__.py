@@ -2,12 +2,13 @@
 
 # Import only the cache management for now to avoid circular import issues
 try:
-    from .bright_data_adapters import (
-        BrightDataAdapter,
-        adapt_bright_data_metadata,
-        adapt_bright_data_transcript,
-        validate_bright_data_response,
-    )
+    # Temporarily disabled due to circular import issues
+    # from .bright_data_adapters import (
+    #     BrightDataAdapter,
+    #     adapt_bright_data_metadata,
+    #     adapt_bright_data_transcript,
+    #     validate_bright_data_response,
+    # )
     from .cache_management import clear_python_cache, should_clear_cache_on_startup
 
     __all__ = [
