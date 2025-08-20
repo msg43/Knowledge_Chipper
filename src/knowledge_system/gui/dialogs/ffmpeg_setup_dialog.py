@@ -1,0 +1,221 @@
+"""FFmpeg setup dialog for enhanced user experience."""
+
+from pathlib import Path
+from typing import Any
+
+from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QProgressBar,
+    QTextEdit,
+    QMessageBox,
+    QFrame,
+)
+
+from ...logger import get_logger
+from ..workers.ffmpeg_installer import FFmpegInstaller
+
+logger = get_logger(__name__)
+
+
+class FFmpegSetupDialog(QDialog):
+    """Friendly first-run FFmpeg setup dialog."""
+
+    installation_completed = pyqtSignal(bool)  # success/failure
+    
+    def __init__(self, parent: Any = None) -> None:
+        super().__init__(parent)
+        self.ffmpeg_worker: FFmpegInstaller | None = None
+        self._setup_ui()
+        
+    def _setup_ui(self) -> None:
+        """Setup the dialog UI."""
+        self.setWindowTitle("Optional Setup - FFmpeg")
+        self.setModal(True)
+        self.resize(500, 400)
+        
+        layout = QVBoxLayout(self)
+        
+        # Header
+        title = QLabel("🎬 Enable YouTube Transcription Features")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; margin: 10px;")
+        layout.addWidget(title)
+        
+        # Description
+        description = QLabel(
+            "FFmpeg enables powerful YouTube video processing capabilities.\n"
+            "Install now for the best experience, or skip and install later from Settings."
+        )
+        description.setStyleSheet("font-size: 14px; margin: 10px; color: #666;")
+        description.setWordWrap(True)
+        layout.addWidget(description)
+        
+        # Features section
+        features_frame = QFrame()
+        features_frame.setFrameStyle(QFrame.Shape.Box)
+        features_frame.setStyleSheet("QFrame { background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 8px; padding: 10px; }")
+        features_layout = QVBoxLayout(features_frame)
+        
+        features_title = QLabel("✅ Features enabled with FFmpeg:")
+        features_title.setStyleSheet("font-weight: bold; margin-bottom: 5px;")
+        features_layout.addWidget(features_title)
+        
+        features_list = QLabel(
+            "• YouTube video downloads and transcription\n"
+            "• Audio format conversions (MP3, WAV, etc.)\n"
+            "• Video file audio extraction\n"
+            "• Audio metadata and duration detection"
+        )
+        features_list.setStyleSheet("margin-left: 10px; line-height: 1.4;")
+        features_layout.addWidget(features_list)
+        
+        without_title = QLabel("⚠️ Available without FFmpeg:")
+        without_title.setStyleSheet("font-weight: bold; margin-bottom: 5px; margin-top: 10px;")
+        features_layout.addWidget(without_title)
+        
+        without_list = QLabel(
+            "• PDF processing and summarization\n"
+            "• Text file processing\n"
+            "• Local audio transcription (compatible formats)\n"
+            "• All MOC generation features"
+        )
+        without_list.setStyleSheet("margin-left: 10px; line-height: 1.4; color: #666;")
+        features_layout.addWidget(without_list)
+        
+        layout.addWidget(features_frame)
+        
+        # Progress section (initially hidden)
+        self.progress_frame = QFrame()
+        self.progress_frame.setVisible(False)
+        progress_layout = QVBoxLayout(self.progress_frame)
+        
+        self.progress_label = QLabel("Installing FFmpeg...")
+        self.progress_label.setStyleSheet("font-weight: bold;")
+        progress_layout.addWidget(self.progress_label)
+        
+        self.progress_bar = QProgressBar()
+        progress_layout.addWidget(self.progress_bar)
+        
+        self.progress_text = QTextEdit()
+        self.progress_text.setMaximumHeight(100)
+        self.progress_text.setStyleSheet("font-family: monospace; font-size: 11px;")
+        progress_layout.addWidget(self.progress_text)
+        
+        layout.addWidget(self.progress_frame)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        self.skip_button = QPushButton("⏭️ Skip for Now")
+        self.skip_button.clicked.connect(self._skip_setup)
+        self.skip_button.setStyleSheet("""
+            QPushButton {
+                padding: 10px 20px;
+                font-size: 14px;
+                background-color: #f5f5f5;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #e5e5e5;
+            }
+        """)
+        button_layout.addWidget(self.skip_button)
+        
+        self.install_button = QPushButton("📥 Install FFmpeg Now")
+        self.install_button.clicked.connect(self._start_installation)
+        self.install_button.setStyleSheet("""
+            QPushButton {
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #0D47A1;
+            }
+        """)
+        button_layout.addWidget(self.install_button)
+        
+        layout.addLayout(button_layout)
+        
+    def _skip_setup(self) -> None:
+        """User chose to skip FFmpeg setup."""
+        self.reject()
+        
+    def _start_installation(self) -> None:
+        """Start FFmpeg installation."""
+        self.progress_frame.setVisible(True)
+        self.install_button.setEnabled(False)
+        self.skip_button.setText("Cancel")
+        self.skip_button.clicked.disconnect()
+        self.skip_button.clicked.connect(self._cancel_installation)
+        
+        # Start installation
+        self.ffmpeg_worker = FFmpegInstaller()
+        self.ffmpeg_worker.progress_updated.connect(self._update_progress)
+        self.ffmpeg_worker.installation_finished.connect(self._installation_finished)
+        self.ffmpeg_worker.start()
+        
+    def _update_progress(self, message: str, percentage: int = -1) -> None:
+        """Update installation progress."""
+        self.progress_label.setText(message)
+        if percentage >= 0:
+            self.progress_bar.setValue(percentage)
+        else:
+            self.progress_bar.setRange(0, 0)  # Indeterminate
+            
+        # Add to progress text
+        self.progress_text.append(message)
+        self.progress_text.verticalScrollBar().setValue(
+            self.progress_text.verticalScrollBar().maximum()
+        )
+        
+    def _installation_finished(self, success: bool, message: str) -> None:
+        """Handle installation completion."""
+        if success:
+            self.progress_label.setText("✅ FFmpeg installed successfully!")
+            self.progress_bar.setValue(100)
+            QMessageBox.information(
+                self,
+                "Installation Complete",
+                "FFmpeg has been installed successfully!\n\n"
+                "You can now use all YouTube transcription features."
+            )
+            self.installation_completed.emit(True)
+            self.accept()
+        else:
+            self.progress_label.setText("❌ Installation failed")
+            QMessageBox.warning(
+                self,
+                "Installation Failed", 
+                f"FFmpeg installation failed:\n\n{message}\n\n"
+                "You can try again later from Settings → Install/Update FFmpeg."
+            )
+            self.installation_completed.emit(False)
+            self._reset_ui()
+            
+    def _cancel_installation(self) -> None:
+        """Cancel ongoing installation."""
+        if self.ffmpeg_worker and self.ffmpeg_worker.isRunning():
+            self.ffmpeg_worker.terminate()
+            self.ffmpeg_worker.wait()
+        self._reset_ui()
+        
+    def _reset_ui(self) -> None:
+        """Reset UI to initial state."""
+        self.progress_frame.setVisible(False)
+        self.install_button.setEnabled(True)
+        self.skip_button.setText("⏭️ Skip for Now")
+        self.skip_button.clicked.disconnect()
+        self.skip_button.clicked.connect(self._skip_setup)

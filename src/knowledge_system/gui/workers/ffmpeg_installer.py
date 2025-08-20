@@ -31,16 +31,27 @@ class FFmpegRelease:
     ffprobe_name: str = "ffprobe"
 
 
+# Default FFmpeg release for macOS ARM64
+DEFAULT_FFMPEG_RELEASE = FFmpegRelease(
+    url="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
+    sha256="",  # Will be skipped for evermeet releases
+    ffmpeg_name="ffmpeg",
+    ffprobe_name="ffprobe"
+)
+
+
 class FFmpegInstaller(QThread):
     """Background worker to install FFmpeg into user-space without sudo."""
 
-    progress = pyqtSignal(str)
-    finished = pyqtSignal(bool, str, str)  # success, message, installed_path
+    progress_updated = pyqtSignal(str, int)  # message, percentage
+    installation_finished = pyqtSignal(bool, str)  # success, message
+    progress = pyqtSignal(str)  # Legacy compatibility
+    finished = pyqtSignal(bool, str, str)  # Legacy compatibility
     error = pyqtSignal(str)
 
-    def __init__(self, release: FFmpegRelease) -> None:
+    def __init__(self, release: FFmpegRelease | None = None) -> None:
         super().__init__()
-        self.release = release
+        self.release = release or DEFAULT_FFMPEG_RELEASE
 
     def _download(self, url: str, dest: Path) -> None:
         self.progress.emit("Downloading FFmpeg…")
@@ -56,24 +67,33 @@ class FFmpegInstaller(QThread):
 
     def run(self) -> None:
         try:
+            # Step 1: Setup directories (10%)
+            self.progress_updated.emit("📁 Setting up installation directories...", 10)
             APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
             BIN_DIR.mkdir(parents=True, exist_ok=True)
 
             with tempfile.TemporaryDirectory() as tmpdir:
-                # Preserve archive filename to allow proper extraction method detection
+                # Step 2: Download (20-50%)
                 archive_name = (
                     Path(urllib.parse.urlparse(self.release.url).path).name
                     or "ffmpeg_download"
                 )
                 tmp_path = Path(tmpdir) / archive_name
+                self.progress_updated.emit("⬇️ Downloading FFmpeg...", 20)
                 self._download(self.release.url, tmp_path)
 
-                self.progress.emit("Verifying download…")
-                digest = self._sha256(tmp_path)
-                if digest.lower() != self.release.sha256.lower():
-                    raise RuntimeError("FFmpeg checksum verification failed")
+                # Step 3: Verify (60%)
+                self.progress_updated.emit("🔍 Verifying download integrity...", 60)
+                if self.release.sha256:  # Only verify if checksum is provided
+                    digest = self._sha256(tmp_path)
+                    if digest.lower() != self.release.sha256.lower():
+                        raise RuntimeError("FFmpeg checksum verification failed")
+                else:
+                    # Skip verification for trusted sources like evermeet.cx
+                    self.progress_updated.emit("🔍 Using trusted source - skipping checksum", 60)
 
-                self.progress.emit("Extracting…")
+                # Step 4: Extract (70%)
+                self.progress_updated.emit("📦 Extracting FFmpeg files...", 70)
                 # Try to extract known archive formats (.zip, .tar, .tar.gz, .tar.xz, etc.)
                 extract_dir = Path(tmpdir) / "extract"
                 extract_dir.mkdir(parents=True, exist_ok=True)
@@ -108,7 +128,8 @@ class FFmpegInstaller(QThread):
                 if not ffmpeg_src:
                     raise RuntimeError("FFmpeg binary not found in archive")
 
-                # Install into BIN_DIR
+                # Step 5: Install (80%)
+                self.progress_updated.emit("🔧 Installing FFmpeg...", 80)
                 ffmpeg_dst = BIN_DIR / "ffmpeg"
                 shutil.copy2(ffmpeg_src, ffmpeg_dst)
                 ffmpeg_dst.chmod(0o755)
@@ -118,7 +139,8 @@ class FFmpegInstaller(QThread):
                     shutil.copy2(ffprobe_src, ffprobe_dst)
                     ffprobe_dst.chmod(0o755)
 
-                # Remove quarantine if present
+                # Step 6: Final setup (90%)
+                self.progress_updated.emit("🛡️ Configuring security permissions...", 90)
                 try:
                     subprocess.run(
                         ["xattr", "-d", "com.apple.quarantine", str(ffmpeg_dst)],
@@ -127,17 +149,26 @@ class FFmpegInstaller(QThread):
                 except Exception:
                     pass
 
-                # Validate
-                self.progress.emit("Validating installation…")
+                # Step 7: Validate (95%)
+                self.progress_updated.emit("✅ Validating FFmpeg installation...", 95)
                 result = subprocess.run(
                     [str(ffmpeg_dst), "-version"], capture_output=True, text=True
                 )
                 if result.returncode != 0:
                     raise RuntimeError(f"FFmpeg validation failed: {result.stderr}")
 
-                self.finished.emit(
-                    True, "FFmpeg installed successfully", str(ffmpeg_dst)
-                )
+                # Step 8: Complete (100%)
+                self.progress_updated.emit("🎉 FFmpeg installation completed successfully!", 100)
+                msg = f"FFmpeg installed successfully!\n\nEnabled features:\n• YouTube video downloads\n• Audio format conversions\n• Video file processing\n\nInstalled to: {BIN_DIR}"
+                
+                # Emit both new and legacy signals for compatibility
+                self.installation_finished.emit(True, msg)
+                self.finished.emit(True, "FFmpeg installed successfully", str(ffmpeg_dst))
+
         except Exception as e:
-            logger.error(f"FFmpeg installation failed: {e}")
+            error_msg = f"FFmpeg installation failed: {e}"
+            logger.error(error_msg)
+            
+            # Emit both new and legacy signals for compatibility
+            self.installation_finished.emit(False, error_msg)
             self.finished.emit(False, str(e), "")

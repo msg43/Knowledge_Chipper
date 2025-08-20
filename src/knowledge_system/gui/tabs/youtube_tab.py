@@ -8,6 +8,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDialog,
     QFileDialog,
     QGridLayout,
     QGroupBox,
@@ -26,6 +27,7 @@ from ...logger import get_logger
 from ...utils.cancellation import CancellationToken
 from ..components.base_tab import BaseTab
 from ..core.settings_manager import get_gui_settings_manager
+from ..dialogs.ffmpeg_prompt_dialog import FFmpegPromptDialog
 from ..workers.youtube_batch_worker import YouTubeBatchWorker
 
 logger = get_logger(__name__)
@@ -1136,6 +1138,11 @@ class YouTubeTab(BaseTab):
 
         QApplication.processEvents()
 
+        # Check for FFmpeg first (required for YouTube video downloads)
+        if not self._check_ffmpeg_availability():
+            self._reset_button_state()
+            return
+
         # Check Bright Data API key from settings
         self.append_log("🔐 Checking Bright Data API credentials...")
         bright_data_api_key = getattr(self.settings.api_keys, "bright_data_api_key", None)
@@ -2015,6 +2022,34 @@ class YouTubeTab(BaseTab):
                 # Don't return False here, just warn - let the user proceed if they want
 
         return True
+
+    def _check_ffmpeg_availability(self) -> bool:
+        """Check if FFmpeg is available and prompt for installation if needed."""
+        import shutil
+        
+        # Check if FFmpeg is available
+        if shutil.which("ffmpeg"):
+            self.append_log("✅ FFmpeg found - YouTube processing ready")
+            return True
+            
+        # FFmpeg not found - show prompt
+        self.append_log("⚠️ FFmpeg not found - required for YouTube transcription")
+        
+        prompt_dialog = FFmpegPromptDialog("YouTube transcription", self)
+        result = prompt_dialog.exec()
+        
+        if result == QDialog.DialogCode.Accepted:
+            # User chose to install - check again after installation dialog closes
+            if shutil.which("ffmpeg"):
+                self.append_log("✅ FFmpeg installed successfully!")
+                return True
+            else:
+                self.append_log("❌ FFmpeg installation was not completed")
+                return False
+        else:
+            # User chose not to install
+            self.append_log("❌ YouTube processing cancelled - FFmpeg required")
+            return False
 
     def cleanup_workers(self):
         """Clean up any active workers."""

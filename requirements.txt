@@ -36,6 +36,23 @@ aiohttp>=3.8.0
 pandas>=2.0.0
 numpy>=1.24.0
 
+# Database
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+
+# System monitoring
+psutil>=6.0.0
+
+# Web scraping and processing
+beautifulsoup4>=4.12.0
+youtube-transcript-api>=1.2.0
+
+# Settings management
+pydantic-settings>=2.0.0
+
+# AI/ML APIs
+openai>=1.0.0
+
 # Utilities
 python-dotenv>=0.19.0
 tqdm>=4.65.0

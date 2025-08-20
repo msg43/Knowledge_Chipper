@@ -73,10 +73,27 @@ fi
 rm -rf "$BUILD_MACOS_PATH/venv"
 "$PYTHON_BIN" -m venv "$BUILD_MACOS_PATH/venv"
 
-# Install packages in the venv
+# Install packages in the venv with proper path handling
+echo "📦 Installing Python dependencies..."
 "$BUILD_MACOS_PATH/venv/bin/python" -m pip install --upgrade pip
 "$BUILD_MACOS_PATH/venv/bin/python" -m pip install -r "$BUILD_MACOS_PATH/requirements.txt"
-"$BUILD_MACOS_PATH/venv/bin/python" -m pip install beautifulsoup4 youtube-transcript-api pydantic-settings
+
+# Verify critical dependencies are installed
+echo "🔍 Verifying critical dependencies..."
+"$BUILD_MACOS_PATH/venv/bin/python" -c "import sqlalchemy; print('✅ SQLAlchemy:', sqlalchemy.__version__)" || {
+    echo "❌ SQLAlchemy missing, installing..."
+    "$BUILD_MACOS_PATH/venv/bin/python" -m pip install sqlalchemy alembic
+}
+
+"$BUILD_MACOS_PATH/venv/bin/python" -c "import psutil; print('✅ psutil:', psutil.__version__)" || {
+    echo "❌ psutil missing, installing..."
+    "$BUILD_MACOS_PATH/venv/bin/python" -m pip install psutil
+}
+
+"$BUILD_MACOS_PATH/venv/bin/python" -c "import openai; print('✅ OpenAI:', openai.__version__)" || {
+    echo "❌ OpenAI missing, installing..."
+    "$BUILD_MACOS_PATH/venv/bin/python" -m pip install openai
+}
 
 # Create pyproject.toml for editable install
 cat > "/tmp/pyproject.toml" << EOF
@@ -181,7 +198,12 @@ echo "Architecture: \$(arch)" >> "\$LOG_FILE"
 echo "Launching GUI..." >> "\$LOG_FILE"
 
 # Force native ARM64 execution using the venv python explicitly
-exec arch -arm64 "\$APP_DIR/venv/bin/python" -m knowledge_system.gui.__main__ 2>&1 | tee -a "\$LOG_FILE"
+# First check if we're on Apple Silicon
+if [[ "\$(uname -m)" == "arm64" ]]; then
+    exec arch -arm64 "\$APP_DIR/venv/bin/python" -m knowledge_system.gui.__main__ 2>&1 | tee -a "\$LOG_FILE"
+else
+    exec "\$APP_DIR/venv/bin/python" -m knowledge_system.gui.__main__ 2>&1 | tee -a "\$LOG_FILE"
+fi
 EOF
 mv "/tmp/launch" "$BUILD_MACOS_PATH/launch"
 chmod +x "$BUILD_MACOS_PATH/launch"

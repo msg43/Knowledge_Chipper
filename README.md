@@ -1,6 +1,6 @@
 # Knowledge_Chipper
 
-**Version:** 3.0.1 | **Build Date:** 2025-08-19 | **Branch:** main
+**Version:** 3.0.1 | **Build Date:** 2025-08-20 | **Branch:** main
 
 A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 
