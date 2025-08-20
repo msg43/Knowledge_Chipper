@@ -1,4 +1,4 @@
-""" Processors for the Knowledge System."""
+"""Processors for the Knowledge System."""
 
 from .audio_processor import AudioProcessor
 from .base import BaseProcessor, ProcessorResult

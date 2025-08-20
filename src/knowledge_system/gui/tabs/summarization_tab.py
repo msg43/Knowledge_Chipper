@@ -1,7 +1,7 @@
-""" Content analysis tab for document analysis using AI models with various analysis types."""
+"""Content analysis tab for document analysis using AI models with various analysis types."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
@@ -16,11 +16,9 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
-    QMessageBox,
     QPushButton,
     QSizePolicy,
     QSpinBox,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -91,9 +89,11 @@ class EnhancedSummarizationWorker(QThread):
             if canonical:
                 top_claims.append(
                     {
-                        "text": canonical[:150] + "..."
-                        if len(canonical) > 150
-                        else canonical,
+                        "text": (
+                            canonical[:150] + "..."
+                            if len(canonical) > 150
+                            else canonical
+                        ),
                         "tier": claim.get("tier", "C"),
                         "type": claim.get("claim_type", "General"),
                     }
@@ -131,7 +131,6 @@ class EnhancedSummarizationWorker(QThread):
     def run(self) -> None:
         """Run the summarization process."""
         try:
-            from datetime import datetime
             from datetime import datetime as _dt
             from pathlib import Path
 
@@ -318,7 +317,9 @@ class EnhancedSummarizationWorker(QThread):
                         f"🔧 DEBUG: template_path absolute: '{template_path.absolute()}'"
                     )
                     if not template_path.exists():
-                        logger.error(f"❌ Template path does not exist: {template_path}")
+                        logger.error(
+                            f"❌ Template path does not exist: {template_path}"
+                        )
                         template_path = None
                     else:
                         logger.info(f"✅ Template path exists: {template_path}")
@@ -886,7 +887,7 @@ class SummarizationTab(BaseTab):
 
         # Add supported file types info
         supported_types_label = QLabel(
-            "📁 Supported formats: PDF (.pdf), Text (.txt), Markdown (.md), HTML (.html, .htm), JSON (.json)"
+            "Supported formats: PDF (.pdf), Text (.txt), Markdown (.md), HTML (.html, .htm), JSON (.json)"
         )
         supported_types_label.setStyleSheet(
             "color: #666; font-style: italic; margin-bottom: 8px;"
@@ -1328,9 +1329,11 @@ class SummarizationTab(BaseTab):
                 "model": model,
                 "max_tokens": self.max_tokens_spin.value(),
                 "template_path": self.template_path_edit.text(),
-                "output_dir": self.output_edit.text()
-                if self.separate_file_checkbox.isChecked()
-                else None,
+                "output_dir": (
+                    self.output_edit.text()
+                    if self.separate_file_checkbox.isChecked()
+                    else None
+                ),
                 "update_in_place": self.update_md_checkbox.isChecked(),
                 "create_separate_file": self.separate_file_checkbox.isChecked(),
                 "force_regenerate": self.force_regenerate_checkbox.isChecked(),
@@ -1347,9 +1350,11 @@ class SummarizationTab(BaseTab):
             "model": model,
             "max_tokens": self.max_tokens_spin.value(),
             "template_path": self.template_path_edit.text(),
-            "output_dir": self.output_edit.text()
-            if self.separate_file_checkbox.isChecked()
-            else None,
+            "output_dir": (
+                self.output_edit.text()
+                if self.separate_file_checkbox.isChecked()
+                else None
+            ),
             "update_in_place": self.update_md_checkbox.isChecked(),
             "create_separate_file": self.separate_file_checkbox.isChecked(),
             "force_regenerate": self.force_regenerate_checkbox.isChecked(),
@@ -1619,7 +1624,9 @@ class SummarizationTab(BaseTab):
             # If download succeeded, continue processing
             dialog_result = dialog.result()
             if dialog_result == QDialog.DialogCode.Accepted:
-                self.append_log(f"✅ Model '{clean_model_name}' downloaded successfully")
+                self.append_log(
+                    f"✅ Model '{clean_model_name}' downloaded successfully"
+                )
                 self._continue_processing_after_model_check()
             else:
                 self.append_log(f"❌ Model download cancelled or failed")

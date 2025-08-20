@@ -1,6 +1,6 @@
 """Progress dialog for HCE pipeline stages."""
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
     QGroupBox,
@@ -18,7 +18,7 @@ class HCEProgressDialog(QDialog):
 
     cancelled = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Claim Extraction Progress")
         self.setMinimumWidth(600)
@@ -109,7 +109,7 @@ class HCEProgressDialog(QDialog):
         # Reset all progress bars
         self.reset_progress()
 
-    def reset_progress(self):
+    def reset_progress(self) -> None:
         """Reset all progress bars to 0."""
         self.overall_progress.setValue(0)
         for bar in self.stage_bars.values():
@@ -117,18 +117,20 @@ class HCEProgressDialog(QDialog):
             bar.setStyleSheet("")
         self.stats_text.clear()
 
-    def update_overall_progress(self, current: int, total: int):
+    def update_overall_progress(self, current: int, total: int) -> None:
         """Update overall file progress."""
         if total > 0:
             percentage = int((current / total) * 100)
             self.overall_progress.setValue(percentage)
             self.overall_label.setText(f"{current} of {total} files processed")
 
-    def update_file(self, filename: str):
+    def update_file(self, filename: str) -> None:
         """Update current file being processed."""
         self.file_label.setText(f"Processing: {filename}")
 
-    def update_stage_progress(self, stage: str, percentage: int, status: str = ""):
+    def update_stage_progress(
+        self, stage: str, percentage: int, status: str = ""
+    ) -> None:
         """Update progress for a specific HCE stage."""
         if stage in self.stage_bars:
             bar = self.stage_bars[stage]
@@ -146,7 +148,7 @@ class HCEProgressDialog(QDialog):
                     f"{self.stage_labels[stage].text().split(':')[0]}: {status}"
                 )
 
-    def update_statistics(self, stats: dict):
+    def update_statistics(self, stats: dict) -> None:
         """Update extraction statistics."""
         stats_text = []
 
@@ -165,13 +167,13 @@ class HCEProgressDialog(QDialog):
 
         self.stats_text.setPlainText("\n".join(stats_text))
 
-    def on_cancel(self):
+    def on_cancel(self) -> None:
         """Handle cancel button click."""
         self.cancelled.emit()
         self.cancel_button.setEnabled(False)
         self.cancel_button.setText("Cancelling...")
 
-    def set_finished(self):
+    def set_finished(self) -> None:
         """Set dialog to finished state."""
         self.cancel_button.setText("Close")
         self.cancel_button.setEnabled(True)

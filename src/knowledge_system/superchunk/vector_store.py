@@ -5,7 +5,6 @@ import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple
 
 
 def cosine(a: list[float], b: list[float]) -> float:
@@ -43,20 +42,10 @@ class VectorStore:
         embeddings: Iterable[list[float]],
     ) -> None:
         with sqlite3.connect(self.path) as conn:
-            rows = []
-            for vid, txt, vec in zip(ids, texts, embeddings):
-                rows.append(
-                    (
-                        vid,
-                        txt,
-                        sqlite3.Binary(
-                            memoryview(bytearray(float(x).hex().encode() for x in vec))
-                        ),
-                    )
-                )
-            # Simpler: store as JSON string for portability
-            rows = []
+            # Store as JSON string for portability
             import json
+
+            rows = []
 
             for vid, txt, vec in zip(ids, texts, embeddings):
                 rows.append((vid, txt, json.dumps(vec)))

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Optional, Type, TypeVar
+from typing import Any, TypeVar
 
 from ..utils.llm_providers import UnifiedLLMClient
 from .config import SuperChunkConfig

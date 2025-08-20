@@ -9,7 +9,7 @@ import json
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..database import DatabaseService
 from ..logger import get_logger
@@ -275,7 +275,7 @@ class StateMigrator:
                 gui_session = json.load(f)
 
             # Store GUI session as a special processing job for tracking
-            job_id = str(uuid.uuid4())
+            str(uuid.uuid4())
             job = self.db.create_processing_job(
                 job_type="gui_session_migration",
                 input_urls=[],

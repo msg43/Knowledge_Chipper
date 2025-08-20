@@ -1,4 +1,4 @@
-""" Enhanced worker threads for background processing operations."""
+"""Enhanced worker threads for background processing operations."""
 
 from pathlib import Path
 from typing import Any
@@ -6,7 +6,6 @@ from typing import Any
 from PyQt6.QtCore import QDateTime, QThread, pyqtSignal
 
 from ...logger import get_logger
-from ...utils.progress import SummarizationProgress
 
 logger = get_logger(__name__)
 
@@ -35,7 +34,6 @@ class EnhancedSummarizationWorker(QThread):
     def run(self):
         """Run the summarization process with progress tracking."""
         try:
-            from ...processors.summarizer import SummarizerProcessor
             from ..adapters.hce_adapter import HCEAdapter
 
             # Create HCE adapter for progress tracking
@@ -128,8 +126,6 @@ class EnhancedTranscriptionWorker(QThread):
             )
 
             # Track completion
-            completed_files = 0
-            failed_files = []
 
             if max_concurrent == 1:
                 # Sequential processing

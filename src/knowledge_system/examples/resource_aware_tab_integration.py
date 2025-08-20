@@ -5,7 +5,6 @@ This shows how transcription_tab.py would be modified to use
 the queuing and authorization system.
 """
 
-from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QLabel
 
 from ..gui.components.base_tab import BaseTab
@@ -194,5 +193,3 @@ def example_concurrent_scenario():
     # → Queue processor wakes up
     # → Summarization tab authorized with 4 concurrent processes
     # → User sees: "✅ Authorized! Starting summarization with 4 concurrent processes"
-
-    pass

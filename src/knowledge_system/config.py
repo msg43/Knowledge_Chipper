@@ -546,7 +546,7 @@ class Settings(BaseSettings):
                             if key != "api_keys":  # api_keys already handled above
                                 kwargs[key] = value
                         break
-                except Exception:
+                except (FileNotFoundError, PermissionError, yaml.YAMLError, KeyError):
                     pass  # Silently continue if credentials file can't be loaded
 
         # Load API keys from environment if not provided
@@ -628,9 +628,9 @@ class Settings(BaseSettings):
         if self.performance.override_batch_size:
             profile_config["batch_size"] = self.performance.override_batch_size
         if self.performance.override_max_concurrent:
-            profile_config[
-                "max_concurrent_files"
-            ] = self.performance.override_max_concurrent
+            profile_config["max_concurrent_files"] = (
+                self.performance.override_max_concurrent
+            )
 
         # Apply force settings
         if self.performance.force_mps:

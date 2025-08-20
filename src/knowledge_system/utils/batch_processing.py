@@ -8,11 +8,11 @@ reusing loaded models and optimizing resource utilization across the batch.
 import threading
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from knowledge_system.logger import get_logger
 

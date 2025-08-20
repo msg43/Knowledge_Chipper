@@ -7,8 +7,7 @@ and Neural Engine capabilities.
 """
 
 import platform
-from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import psutil
 
@@ -74,46 +73,46 @@ def get_apple_silicon_whisper_config(
         "large": 4.0,  # ~4GB
     }
 
-    model_memory = model_memory_requirements.get(model_size, 1.0)
+    model_memory_requirements.get(model_size, 1.0)
 
     # Calculate batch size based on available memory and file duration
     # Longer files need smaller batch sizes to avoid memory pressure
     # Note: whisper.cpp beam size is limited to max 8, so cap batch sizes accordingly
     if memory_gb >= 32:  # High-end systems (M3 Ultra, etc.)
         if file_duration_minutes <= 30:
-            config[
-                "batch_size"
-            ] = 8  # Reduced from 32 to stay within whisper.cpp limits
+            config["batch_size"] = (
+                8  # Reduced from 32 to stay within whisper.cpp limits
+            )
         elif file_duration_minutes <= 60:
-            config[
-                "batch_size"
-            ] = 8  # Reduced from 24 to stay within whisper.cpp limits
+            config["batch_size"] = (
+                8  # Reduced from 24 to stay within whisper.cpp limits
+            )
         else:
-            config[
-                "batch_size"
-            ] = 8  # Reduced from 16 to stay within whisper.cpp limits
+            config["batch_size"] = (
+                8  # Reduced from 16 to stay within whisper.cpp limits
+            )
     elif memory_gb >= 16:  # Mid-range systems (M2 Pro, M3)
         if file_duration_minutes <= 30:
-            config[
-                "batch_size"
-            ] = 8  # Reduced from 24 to stay within whisper.cpp limits
+            config["batch_size"] = (
+                8  # Reduced from 24 to stay within whisper.cpp limits
+            )
         elif file_duration_minutes <= 60:
-            config[
-                "batch_size"
-            ] = 8  # Reduced from 16 to stay within whisper.cpp limits
+            config["batch_size"] = (
+                8  # Reduced from 16 to stay within whisper.cpp limits
+            )
         else:
-            config[
-                "batch_size"
-            ] = 8  # Reduced from 12 to stay within whisper.cpp limits
+            config["batch_size"] = (
+                8  # Reduced from 12 to stay within whisper.cpp limits
+            )
     else:  # Base systems (M1, M2 base)
         if file_duration_minutes <= 30:
-            config[
-                "batch_size"
-            ] = 8  # Reduced from 16 to stay within whisper.cpp limits
+            config["batch_size"] = (
+                8  # Reduced from 16 to stay within whisper.cpp limits
+            )
         elif file_duration_minutes <= 60:
-            config[
-                "batch_size"
-            ] = 8  # Reduced from 12 to stay within whisper.cpp limits
+            config["batch_size"] = (
+                8  # Reduced from 12 to stay within whisper.cpp limits
+            )
         else:
             config["batch_size"] = 8  # Already compliant
 

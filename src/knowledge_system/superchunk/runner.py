@@ -24,7 +24,6 @@ class Runner:
     def run(self, paragraphs: Iterable[str]) -> None:
         self.artifacts_dir.mkdir(parents=True, exist_ok=True)
         decision_log = []
-        llm_calls_log = []
 
         # Phase 0: guide map
         mapper = Mapper()

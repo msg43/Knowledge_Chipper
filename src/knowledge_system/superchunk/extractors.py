@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
 from ..logger import get_logger
 from .config import SuperChunkConfig

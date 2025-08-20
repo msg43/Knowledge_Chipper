@@ -1,4 +1,4 @@
 # Auto-generated version info
 VERSION = "3.0.0"
 BRANCH = "feature/hce-replacement"
-BUILD_DATE = "2025-01-19"
+BUILD_DATE = "2025-08-19"

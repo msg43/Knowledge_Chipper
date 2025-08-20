@@ -9,9 +9,6 @@ must be manually maintained in the cache file.
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-
-import requests
 
 from ..config import get_settings
 from ..logger import get_logger
