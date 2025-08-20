@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import QLabel
 
 from ..gui.components.base_tab import BaseTab
 from ..gui.mixins.resource_aware_tab import ResourceAwareTabMixin
+from ..gui.workers.processing_workers import EnhancedTranscriptionWorker
 from ..utils.resource_coordinator import ProcessingType
 
 
