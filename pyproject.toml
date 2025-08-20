@@ -50,8 +50,8 @@ dependencies = [
     "yt-dlp>=2023.12.0",
     "requests>=2.31.0",
 
-    # ML and transcription (core)
-    "openai-whisper>=20231117",
+    # ML and transcription (core) - using whisper.cpp instead of openai-whisper to save ~400MB
+    # "openai-whisper>=20231117",  # Removed - pulls in torch, using whisper.cpp binary instead
 
     # LLM APIs
     "openai>=1.3.0",
@@ -95,9 +95,16 @@ diarization = [
     "pyannote.audio>=3.1.0",
 ]
 
+# HCE (Hybrid Claim Extractor) heavy ML dependencies (saves ~500MB initial install)
+hce = [
+    "torch>=2.1.0",
+    "transformers>=4.35.0",
+    "sentence-transformers>=2.2.0",
+]
+
 # Full installation including all optional features
 full = [
-    "knowledge-system[gui,diarization,cuda]",
+    "knowledge-system[gui,diarization,hce,cuda]",
 ]
 
 [project.scripts]

@@ -62,12 +62,13 @@ colorama>=0.4.6
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
 
-# HCE (Hybrid Claim Extractor) dependencies
-sentence-transformers>=2.2.0
-transformers>=4.35.0
-torch>=2.1.0
+# HCE (Hybrid Claim Extractor) - lightweight core only
+# Heavy ML dependencies moved to optional install: pip install -e ".[hce]"
 hdbscan>=0.8.33
 scipy>=1.10.0
 
 # Optional: Diarization dependencies (install with: pip install -e ".[diarization]")
 # pyannote.audio>=3.1.0
+# torch>=2.1.0
+# transformers>=4.35.0
+# sentence-transformers>=2.2.0
