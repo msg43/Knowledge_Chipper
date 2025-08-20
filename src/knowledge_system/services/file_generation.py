@@ -9,7 +9,6 @@ existing file structures.
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Union
 
 import yaml
 
@@ -109,9 +108,9 @@ class FileGenerationService:
                 "transcript_type": transcript.transcript_type,
                 "is_manual": transcript.is_manual,
                 "diarization_enabled": transcript.diarization_enabled,
-                "processed_at": transcript.created_at.isoformat()
-                if transcript.created_at
-                else None,
+                "processed_at": (
+                    transcript.created_at.isoformat() if transcript.created_at else None
+                ),
                 "tags": video.tags_json if video.tags_json else [],
                 "categories": video.categories_json if video.categories_json else [],
             }
@@ -234,9 +233,9 @@ class FileGenerationService:
                 "processing_cost": summary.processing_cost,
                 "total_tokens": summary.total_tokens,
                 "compression_ratio": summary.compression_ratio,
-                "created_at": summary.created_at.isoformat()
-                if summary.created_at
-                else None,
+                "created_at": (
+                    summary.created_at.isoformat() if summary.created_at else None
+                ),
                 "template_used": summary.template_used,
             }
 
@@ -953,9 +952,11 @@ class FileGenerationService:
                     "transcript_type": transcript.transcript_type,
                     "text": transcript.transcript_text,
                     "segments": transcript.transcript_segments_json,
-                    "diarization_segments": transcript.diarization_segments_json
-                    if transcript.diarization_enabled
-                    else None,
+                    "diarization_segments": (
+                        transcript.diarization_segments_json
+                        if transcript.diarization_enabled
+                        else None
+                    ),
                 },
                 "metadata": {
                     "generated_at": datetime.now().isoformat(),

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
 
 from .embeddings import EmbeddingsBackend, FallbackEmbeddings, OpenAIEmbeddings
 from .vector_store import VectorStore

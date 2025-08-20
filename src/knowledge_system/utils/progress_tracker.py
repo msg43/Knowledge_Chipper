@@ -5,10 +5,9 @@ Replaces JSON-based progress tracking with database-backed tracking for better
 resume capabilities, job management, and progress persistence.
 """
 
-import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..database import DatabaseService
 from ..logger import get_logger
@@ -371,15 +370,15 @@ class ProgressTracker:
                     "job_id": job.job_id,
                     "job_type": job.job_type,
                     "status": job.status,
-                    "created_at": job.created_at.isoformat()
-                    if job.created_at
-                    else None,
-                    "started_at": job.started_at.isoformat()
-                    if job.started_at
-                    else None,
-                    "completed_at": job.completed_at.isoformat()
-                    if job.completed_at
-                    else None,
+                    "created_at": (
+                        job.created_at.isoformat() if job.created_at else None
+                    ),
+                    "started_at": (
+                        job.started_at.isoformat() if job.started_at else None
+                    ),
+                    "completed_at": (
+                        job.completed_at.isoformat() if job.completed_at else None
+                    ),
                     "total_items": job.total_items,
                     "completed_items": job.completed_items,
                     "failed_items": job.failed_items,

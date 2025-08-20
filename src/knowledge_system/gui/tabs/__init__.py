@@ -1,4 +1,4 @@
-""" GUI tabs package."""
+"""GUI tabs package."""
 
 from .api_keys_tab import APIKeysTab
 from .claim_search_tab import ClaimSearchTab

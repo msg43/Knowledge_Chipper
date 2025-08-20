@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import List
 
 from .validators import ClaimItem
 

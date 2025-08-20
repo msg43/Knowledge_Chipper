@@ -6,7 +6,6 @@ viewing statistics, and performing maintenance operations.
 """
 
 from pathlib import Path
-from typing import Optional
 
 import click
 
@@ -28,7 +27,6 @@ logger = get_logger(__name__)
 @pass_context
 def database(ctx: CLIContext):
     """Database management and file regeneration commands."""
-    pass
 
 
 @database.command()
@@ -302,9 +300,11 @@ def jobs(ctx: CLIContext, limit: int):
 
             click.echo(f"🆔 {job['job_id'][:8]}... ({job['job_type']})")
             click.echo(f"   Status: {status_display}")
-            click.echo(
-                f"   Progress: {job['completed_items']}/{job['total_items']} ({job['progress_percentage']:.1f}%)"
+            progress_text = (
+                f"   Progress: {job['completed_items']}/{job['total_items']} "
+                f"({job['progress_percentage']:.1f}%)"
             )
+            click.echo(progress_text)
             click.echo(
                 f"   Created: {job['created_at'][:19] if job['created_at'] else 'Unknown'}"
             )

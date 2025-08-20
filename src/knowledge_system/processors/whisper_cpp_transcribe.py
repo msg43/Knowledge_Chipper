@@ -6,7 +6,7 @@ from typing import Any
 
 from knowledge_system.logger import get_logger
 from knowledge_system.processors.base import BaseProcessor, ProcessorResult
-from knowledge_system.utils.model_cache import ModelType, cache_whisper_model
+from knowledge_system.utils.model_cache import cache_whisper_model
 
 logger = get_logger(__name__)
 
@@ -382,7 +382,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         self, input_data: Any, dry_run: bool = False, **kwargs: Any
     ) -> ProcessorResult:
         # Extract parameters from kwargs for backwards compatibility
-        device = kwargs.get("device", None)
+        kwargs.get("device", None)
 
         # Handle input_data as input_path for backwards compatibility
         input_path = input_data
@@ -493,7 +493,9 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 )
 
                 if self.progress_callback:
-                    self.progress_callback("🎯 Running whisper.cpp transcription...", 50)
+                    self.progress_callback(
+                        "🎯 Running whisper.cpp transcription...", 50
+                    )
 
                 logger.info(f"Running command: {' '.join(cmd)}")
 
@@ -751,7 +753,6 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 except (OSError, UnicodeDecodeError) as e:
                     # Handle any read errors gracefully
                     logger.debug(f"Error reading stderr: {e}")
-                    pass
 
                 # Estimate progress based on elapsed time (fallback)
                 # Rough estimate: most audio files take 0.1x - 0.3x real-time to process
@@ -778,7 +779,6 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 except (subprocess.SubprocessError, ValueError, OSError) as e:
                     # Fallback to default if ffprobe fails
                     logger.debug(f"Failed to get audio duration with ffprobe: {e}")
-                    pass
 
                 # Estimate progress: assume processing takes 0.2x real-time on average
                 processing_speed = 0.2  # 20% of real-time

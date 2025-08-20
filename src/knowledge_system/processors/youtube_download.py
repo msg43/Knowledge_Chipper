@@ -226,7 +226,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
         from ..config import get_settings
         from ..database import DatabaseService
         from ..utils.bright_data import BrightDataSessionManager
-        from ..utils.deduplication import DuplicationPolicy, VideoDeduplicationService
+        from ..utils.deduplication import VideoDeduplicationService
 
         settings = get_settings()
 
@@ -601,7 +601,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                 except Exception as e:
                     error_msg = str(e)
-                    logger.error(f"❌ Metadata extraction failed for {url}: {error_msg}")
+                    logger.error(
+                        f"❌ Metadata extraction failed for {url}: {error_msg}"
+                    )
 
                     if progress_callback:
                         if "403" in error_msg or "forbidden" in error_msg.lower():
@@ -708,9 +710,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     title=video_title,
                                     url=url,
                                     status="completed",
-                                    extraction_method="bright_data"
-                                    if use_bright_data
-                                    else "webshare",
+                                    extraction_method=(
+                                        "bright_data" if use_bright_data else "webshare"
+                                    ),
                                 )
                                 logger.debug(
                                     f"Registered video {video_id} in database for deduplication"
@@ -764,7 +766,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     f"   Check proxy account status and credentials"
                                 )
                             elif "certificate" in download_error_msg.lower():
-                                progress_callback(f"❌ SSL certificate issue with proxy")
+                                progress_callback(
+                                    f"❌ SSL certificate issue with proxy"
+                                )
                             else:
                                 progress_callback(
                                     f"❌ Download error: {download_error_msg}"
@@ -826,12 +830,12 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 "count": len(all_files),
                 "thumbnail_count": len(all_thumbnails),
                 "urls_processed": len(urls),
-                "duplicates_skipped": len(duplicate_results)
-                if "duplicate_results" in locals()
-                else 0,
-                "total_urls_input": original_count
-                if "original_count" in locals()
-                else len(urls),
+                "duplicates_skipped": (
+                    len(duplicate_results) if "duplicate_results" in locals() else 0
+                ),
+                "total_urls_input": (
+                    original_count if "original_count" in locals() else len(urls)
+                ),
             },
             errors=errors if errors else None,
             metadata={
@@ -839,9 +843,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 "thumbnails_downloaded": len(all_thumbnails),
                 "errors_count": len(errors),
                 "urls_processed": len(urls),
-                "duplicates_skipped": len(duplicate_results)
-                if "duplicate_results" in locals()
-                else 0,
+                "duplicates_skipped": (
+                    len(duplicate_results) if "duplicate_results" in locals() else 0
+                ),
                 "deduplication_enabled": True,
                 "timestamp": datetime.now().isoformat(),
             },

@@ -1,4 +1,4 @@
-""" Process pipeline tab for comprehensive file processing with transcription, summarization, and MOC generation."""
+"""Process pipeline tab for comprehensive file processing with transcription, summarization, and MOC generation."""
 
 from pathlib import Path
 from typing import Any
@@ -62,8 +62,6 @@ class ProcessPipelineWorker(QThread):
 
             # Import processors and adapter
             from ...processors.audio_processor import AudioProcessor
-            from ...processors.moc import MOCProcessor
-            from ...processors.summarizer import SummarizerProcessor
             from ..adapters.hce_adapter import HCEAdapter
 
             # Initialize processors

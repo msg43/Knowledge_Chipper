@@ -1,4 +1,4 @@
-""" File watcher tab for monitoring directories and auto-processing files."""
+"""File watcher tab for monitoring directories and auto-processing files."""
 
 from pathlib import Path
 from typing import Any

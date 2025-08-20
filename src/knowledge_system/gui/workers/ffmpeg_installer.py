@@ -1,4 +1,4 @@
-""" Worker to download, verify, and install a user-space FFmpeg for macOS."""
+"""Worker to download, verify, and install a user-space FFmpeg for macOS."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from PyQt6.QtCore import QThread, pyqtSignal
 

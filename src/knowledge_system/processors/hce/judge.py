@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List
 
 from .models.llm_any import AnyLLM
 from .types import ScoredClaim

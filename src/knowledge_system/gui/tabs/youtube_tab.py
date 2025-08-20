@@ -1,4 +1,4 @@
-""" YouTube extraction tab for downloading and processing YouTube transcripts."""
+"""YouTube extraction tab for downloading and processing YouTube transcripts."""
 
 import os  # Added for os.access
 from pathlib import Path
@@ -461,7 +461,6 @@ class YouTubeExtractionWorker(QThread):
                     self.url_completed.emit(url, False, exception_msg)
 
             # Final progress update
-            final_percent = 100
             completion_msg = f"🎉 Extraction complete! ✅ {results['successful']} successful, ❌ {results['failed']} failed out of {total_urls} total URLs"
             self.progress_updated.emit(total_urls, total_urls, completion_msg)
 
@@ -472,7 +471,9 @@ class YouTubeExtractionWorker(QThread):
             error_msg = f"YouTube extraction failed: {str(e)}"
             logger.error(error_msg)
             self.extraction_error.emit(error_msg)
-            self.progress_updated.emit(0, len(self.urls), f"💥 Fatal error: {error_msg}")
+            self.progress_updated.emit(
+                0, len(self.urls), f"💥 Fatal error: {error_msg}"
+            )
 
     def stop(self) -> None:
         """Stop the extraction process."""
@@ -620,10 +621,7 @@ class YouTubeTab(BaseTab):
         self.url_radio.setChecked(True)  # Default selection
         self.url_radio.toggled.connect(self._on_input_method_changed)
         self.url_radio.setToolTip(
-            "Select this option to enter YouTube URLs directly.\n"
-            "• Supports individual videos and playlists\n"
-            "• Enter one URL per line in the text area below\n"
-            "• Automatically detects and counts total videos"
+            "Enter YouTube URLs directly in the text area below"
         )
         layout.addWidget(self.url_radio)
 
@@ -1050,7 +1048,9 @@ class YouTubeTab(BaseTab):
         """Handle the result of async diarization dependency check."""
         try:
             if success:
-                self.append_log("✅ Diarization dependencies (pyannote.audio) available")
+                self.append_log(
+                    "✅ Diarization dependencies (pyannote.audio) available"
+                )
 
                 # Check for HuggingFace token
                 hf_token = getattr(self.settings.api_keys, "huggingface_token", None)
@@ -1069,7 +1069,9 @@ class YouTubeTab(BaseTab):
                             "✅ Apple Silicon GPU (MPS) available for diarization"
                         )
                     elif backend == "cuda":
-                        self.append_log("✅ NVIDIA GPU (CUDA) available for diarization")
+                        self.append_log(
+                            "✅ NVIDIA GPU (CUDA) available for diarization"
+                        )
                     else:
                         self.append_log(
                             "ℹ️ Using CPU for diarization (slower but functional)"
@@ -1134,22 +1136,21 @@ class YouTubeTab(BaseTab):
 
         QApplication.processEvents()
 
-        # Check WebShare credentials from settings
-        self.append_log("🔐 Checking WebShare proxy credentials...")
-        webshare_username = self.settings.api_keys.webshare_username
-        webshare_password = self.settings.api_keys.webshare_password
+        # Check Bright Data API key from settings
+        self.append_log("🔐 Checking Bright Data API credentials...")
+        bright_data_api_key = getattr(self.settings.api_keys, "bright_data_api_key", None)
 
-        if not webshare_username or not webshare_password:
-            self.append_log("❌ WebShare credentials missing!")
+        if not bright_data_api_key:
+            self.append_log("❌ Bright Data API key missing!")
             self._reset_button_state()
             self.show_warning(
                 "Missing Credentials",
-                "WebShare proxy credentials are required for YouTube processing.\n\n"
-                "Please go to the Settings tab and enter your WebShare Username and Password.",
+                "Bright Data API key is required for YouTube processing.\n\n"
+                "Please go to the Settings tab and enter your Bright Data API Key.",
             )
             return
 
-        self.append_log(f"✅ WebShare credentials found for user: {webshare_username}")
+        self.append_log("✅ Bright Data API key found")
 
         # Use async URL collection to prevent GUI blocking
         self.append_log("📋 Collecting URLs from input...")
@@ -1304,18 +1305,17 @@ class YouTubeTab(BaseTab):
 
     def _validate_non_filesystem_inputs(self) -> bool:
         """Validate inputs that don't require filesystem access."""
-        # Check WebShare proxy credentials (required for YouTube processing)
-        webshare_username = getattr(self.settings.api_keys, "webshare_username", None)
-        webshare_password = getattr(self.settings.api_keys, "webshare_password", None)
+        # Check Bright Data API key (required for YouTube processing)
+        bright_data_api_key = getattr(self.settings.api_keys, "bright_data_api_key", None)
 
-        if not webshare_username or not webshare_password:
-            self.append_log("❌ WebShare credentials missing!")
+        if not bright_data_api_key:
+            self.append_log("❌ Bright Data API key missing!")
             self.show_error(
-                "Missing WebShare Credentials",
-                "YouTube processing requires WebShare rotating residential proxy credentials.\n\n"
-                "Please configure your WebShare Username and Password in the Settings tab.\n\n"
-                "This system uses only WebShare proxies for YouTube access - no other methods are supported.\n\n"
-                "Sign up at: https://www.webshare.io/",
+                "Missing Bright Data API Key",
+                "YouTube processing requires a Bright Data API key for reliable access.\n\n"
+                "Please configure your Bright Data API Key in the Settings tab.\n\n"
+                "Bright Data provides pay-per-request residential proxies for YouTube access.\n\n"
+                "Sign up at: https://brightdata.com/",
             )
             self._reset_button_state()
             return False
@@ -1383,7 +1383,9 @@ class YouTubeTab(BaseTab):
                     "📥 Download-all mode: Will download all audio files first"
                 )
             else:
-                self.append_log("🔄 Conveyor belt mode: Processing in optimized batches")
+                self.append_log(
+                    "🔄 Conveyor belt mode: Processing in optimized batches"
+                )
             self.append_log("-" * 50)
             self._start_batch_processing(urls, config)
         else:
@@ -1662,7 +1664,7 @@ class YouTubeTab(BaseTab):
             self.append_log(f"🔧 Processing mode: {processing_mode}")
 
         # Calculate files that were extracted but not saved (partial failures)
-        total_attempted = results["successful"] + results["failed"] + skipped_count
+        results["successful"] + results["failed"] + skipped_count
 
         # Show where files were saved
         output_dir = self.output_dir_input.text().strip()
@@ -1676,9 +1678,7 @@ class YouTubeTab(BaseTab):
                 f"\n🎉 Successfully processed and saved {results['successful']} video(s)!"
             )
             self.append_log("📝 Check the output directory for .md transcript files")
-            self.append_log(
-                "🖼️  Check the Thumbnails subdirectory for thumbnail images"
-            )
+            self.append_log("🖼️  Check the Thumbnails subdirectory for thumbnail images")
 
         if skipped_count > 0:
             self.append_log(f"\n⏭️ Skipped {skipped_count} existing file(s):")
@@ -1737,7 +1737,9 @@ class YouTubeTab(BaseTab):
                     f"\n📊 Summary: {skipped_count} files already existed (no new files created)"
                 )
         else:
-            self.append_log("\n📊 Summary: No files were saved. Check the issues above.")
+            self.append_log(
+                "\n📊 Summary: No files were saved. Check the issues above."
+            )
 
         # Reset UI
         self.start_btn.setEnabled(True)
@@ -1815,8 +1817,8 @@ class YouTubeTab(BaseTab):
         playlists = playlist_data.get("playlists", [])
         total_playlists = playlist_data.get("total_playlists", 0)
         total_videos = playlist_data.get("total_videos", 0)
-        playlist_videos = playlist_data.get("playlist_videos", 0)
-        individual_videos = playlist_data.get("individual_videos", 0)
+        playlist_data.get("playlist_videos", 0)
+        playlist_data.get("individual_videos", 0)
         summary = playlist_data.get("summary", "")
 
         # Show comprehensive content summary
@@ -1963,17 +1965,16 @@ class YouTubeTab(BaseTab):
             )
             return False
 
-        # Check WebShare proxy credentials (required for YouTube processing)
-        webshare_username = getattr(self.settings.api_keys, "webshare_username", None)
-        webshare_password = getattr(self.settings.api_keys, "webshare_password", None)
+        # Check Bright Data API key (required for YouTube processing)
+        bright_data_api_key = getattr(self.settings.api_keys, "bright_data_api_key", None)
 
-        if not webshare_username or not webshare_password:
+        if not bright_data_api_key:
             self.show_error(
-                "Missing WebShare Credentials",
-                "YouTube processing requires WebShare rotating residential proxy credentials.\n\n"
-                "Please configure your WebShare Username and Password in the Settings tab.\n\n"
-                "This system uses only WebShare proxies for YouTube access - no other methods are supported.\n\n"
-                "Sign up at: https://www.webshare.io/",
+                "Missing Bright Data API Key",
+                "YouTube processing requires a Bright Data API key for reliable access.\n\n"
+                "Please configure your Bright Data API Key in the Settings tab.\n\n"
+                "Bright Data provides pay-per-request residential proxies for YouTube access.\n\n"
+                "Sign up at: https://brightdata.com/",
             )
             return False
 

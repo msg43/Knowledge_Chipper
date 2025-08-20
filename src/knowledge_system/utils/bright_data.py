@@ -7,7 +7,6 @@ cost tracking, and integration with the SQLite database for analytics.
 
 import os
 import uuid
-from typing import Dict, Optional, Tuple
 from urllib.parse import quote
 
 from ..config import get_settings

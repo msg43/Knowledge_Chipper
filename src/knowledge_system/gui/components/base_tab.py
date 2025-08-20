@@ -1,4 +1,4 @@
-""" Base tab class for consistent tab interface and shared functionality."""
+"""Base tab class for consistent tab interface and shared functionality."""
 
 from pathlib import Path
 from typing import Any
@@ -49,7 +49,6 @@ class BaseTab(QWidget):
 
     def _connect_signals(self) -> None:
         """Connect internal signals. Can be overridden by subclasses."""
-        pass
 
     def _create_action_layout(self) -> QHBoxLayout:
         """Create a standard action button layout."""
@@ -185,7 +184,6 @@ class BaseTab(QWidget):
             self.output_text.repaint()
             self.output_text.ensureCursorVisible()
             # Process events multiple times to ensure immediate visual update
-            from PyQt6.QtCore import QCoreApplication
             from PyQt6.QtWidgets import QApplication
 
             # Process events immediately to update GUI
@@ -607,7 +605,9 @@ class BaseTab(QWidget):
             if success:
                 self.append_log(f"📄 Opened {file_description}: {Path(file_path).name}")
             else:
-                self.append_log(f"❌ Failed to open {file_description}: {error_message}")
+                self.append_log(
+                    f"❌ Failed to open {file_description}: {error_message}"
+                )
                 if "not found" in error_message.lower():
                     self.show_error("File Not Found", error_message)
                 else:

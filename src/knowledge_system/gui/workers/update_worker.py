@@ -1,4 +1,4 @@
-""" Worker for handling app updates."""
+"""Worker for handling app updates."""
 
 import os
 import subprocess

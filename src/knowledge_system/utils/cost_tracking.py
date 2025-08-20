@@ -7,7 +7,6 @@ for Bright Data API and proxy services integrated with SQLite database.
 
 import json
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
 
 from ..database import DatabaseService
 from ..logger import get_logger

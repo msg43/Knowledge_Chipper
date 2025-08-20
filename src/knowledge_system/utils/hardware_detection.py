@@ -470,7 +470,7 @@ class HardwareDetector:
         """Calculate optimal performance characteristics based on hardware."""
 
         # Base calculations
-        base_concurrent = max(1, cpu_cores // 2)
+        max(1, cpu_cores // 2)
         base_batch_size = max(
             8, min(8, memory_gb * 2)
         )  # Capped at 8 for whisper.cpp compatibility

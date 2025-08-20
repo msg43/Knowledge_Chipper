@@ -5,7 +5,6 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -280,9 +279,11 @@ class EntityCache:
             "total_entities": len(self._entities),
             "people": people_count,
             "concepts": concepts_count,
-            "cache_size_mb": self.cache_file.stat().st_size / 1024 / 1024
-            if self.cache_file.exists()
-            else 0,
+            "cache_size_mb": (
+                int(self.cache_file.stat().st_size / 1024 / 1024)
+                if self.cache_file.exists()
+                else 0
+            ),
         }
 
     def save(self) -> None:

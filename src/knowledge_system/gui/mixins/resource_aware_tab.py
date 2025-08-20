@@ -5,9 +5,6 @@ This mixin provides tabs with the ability to request resources from the
 ResourceCoordinator and handle queuing gracefully.
 """
 
-from collections.abc import Callable
-from typing import Optional
-
 from PyQt6.QtCore import QTimer, pyqtSignal
 from PyQt6.QtWidgets import QLabel
 
