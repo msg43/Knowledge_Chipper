@@ -1,12 +1,17 @@
-name: Auto Version Bump on Merge to Main
+name: Auto Version Bump on Push to Main
 
 on:
   pull_request:
     types: [closed]
+  push:
+    branches:
+      - main
 
 jobs:
   version_bump:
-    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    if: >
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -24,14 +29,30 @@ jobs:
       - name: Determine bump level
         id: bump
         run: |
-          TITLE="${{ github.event.pull_request.title }}"
-          BODY="${{ github.event.pull_request.body }}"
-          LABELS=$(jq -r '[.pull_request.labels[].name] | join(",")' <<< "${{ toJson(github.event) }}")
           BUMP="patch"
-          if echo "$LABELS" | grep -iq "major"; then BUMP="major"; fi
-          if echo "$LABELS" | grep -iq "minor"; then BUMP="minor"; fi
-          if echo "$BODY" | grep -iq "BREAKING CHANGE"; then BUMP="major"; fi
-          if echo "$TITLE" | grep -iq "feat" && [ "$BUMP" = "patch" ]; then BUMP="minor"; fi
+          
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PR-based bump determination
+            TITLE="${{ github.event.pull_request.title }}"
+            BODY="${{ github.event.pull_request.body }}"
+            LABELS=$(jq -r '[.pull_request.labels[].name] | join(",")' <<< "${{ toJson(github.event) }}")
+            
+            if echo "$LABELS" | grep -iq "major"; then BUMP="major"; fi
+            if echo "$LABELS" | grep -iq "minor"; then BUMP="minor"; fi
+            if echo "$BODY" | grep -iq "BREAKING CHANGE"; then BUMP="major"; fi
+            if echo "$TITLE" | grep -iq "feat" && [ "$BUMP" = "patch" ]; then BUMP="minor"; fi
+          else
+            # Direct push - analyze commit messages
+            COMMIT_MSG="${{ github.event.head_commit.message }}"
+            
+            if echo "$COMMIT_MSG" | grep -iq "BREAKING CHANGE"; then BUMP="major"; fi
+            if echo "$COMMIT_MSG" | grep -iqE "^feat(\(.+\))?:"; then BUMP="minor"; fi
+            if echo "$COMMIT_MSG" | grep -iqE "^(fix|feat|docs|style|refactor|perf|test|chore)(\(.+\))?:"; then 
+              # Keep current bump level (minor if feat, patch otherwise)
+              :
+            fi
+          fi
+          
           echo "bump_level=$BUMP" >> $GITHUB_OUTPUT
 
       - name: Bump version in pyproject.toml

@@ -14,6 +14,7 @@ import yt_dlp
 
 from ..errors import YouTubeAPIError
 from ..logger import get_logger
+from ..utils.deduplication import DuplicationPolicy, VideoDeduplicationService
 from ..utils.youtube_utils import extract_urls, is_youtube_url
 from .base import BaseProcessor, ProcessorResult
 
@@ -157,6 +158,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
         if progress_callback:
             progress_callback("🔍 Checking for duplicate videos...")
 
+        # Initialize deduplication service
+        dedup_service = VideoDeduplicationService()
+        
         original_count = len(urls)
         unique_urls, duplicate_results = dedup_service.check_batch_duplicates(
             urls,

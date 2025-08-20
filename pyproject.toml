@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "knowledge-system"
-version = "3.0.0"
+version = "3.0.1"
 description = "A comprehensive knowledge management system for macOS that transforms videos, audio files, and documents into organized, searchable knowledge."
 readme = "README.md"
 requires-python = ">=3.13"
