@@ -1,4 +1,4 @@
-""" API Keys configuration tab for managing all API credentials."""
+"""API Keys configuration tab for managing all API credentials."""
 
 from pathlib import Path
 from typing import Any
@@ -60,8 +60,8 @@ class APIKeysTab(BaseTab):
             """
             🔑 API Key Configuration Guide:
 
-• WebShare Proxy: Required for YouTube access. The system uses only WebShare rotating residential proxies.
-  Sign up at: https://www.webshare.io/
+• Bright Data API Key: Required for YouTube access. Uses pay-per-request model with residential proxies.
+  Sign up at: https://brightdata.com/
 
 • OpenAI API Key: Required for GPT-based summarization.
   Get your key at: https://platform.openai.com/api-keys
@@ -167,46 +167,7 @@ class APIKeysTab(BaseTab):
             0,
         )
 
-        # WebShare Proxy Credentials (DEPRECATED - use Bright Data instead)
-        webshare_header = QLabel("⚠️ WebShare Proxy Credentials (DEPRECATED)")
-        webshare_header.setStyleSheet(
-            "color: #FFA500; font-weight: bold;"
-        )  # Orange warning color
-        layout.addWidget(webshare_header, 6, 0, 1, 2)
 
-        # WebShare Username
-        self.webshare_username_edit = QLineEdit()
-        self.webshare_username_edit.setPlaceholderText("username")
-        self._add_field_with_info(
-            layout,
-            "WebShare Username:",
-            self.webshare_username_edit,
-            "⚠️ DEPRECATED: Use Bright Data API Key instead (see above).\n"
-            "• WebShare will be removed in a future version\n"
-            "• Bright Data offers better cost efficiency (pay-per-request)\n"
-            "• Still supported for backward compatibility\n"
-            "• Sign up at: https://www.webshare.io/ (if still needed)\n"
-            "• Note: Only required if you plan to process YouTube content",
-            7,
-            0,
-        )
-
-        # WebShare Password
-        self.webshare_password_edit = QLineEdit()
-        self.webshare_password_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.webshare_password_edit.setPlaceholderText("password")
-        self._add_field_with_info(
-            layout,
-            "WebShare Password:",
-            self.webshare_password_edit,
-            "⚠️ DEPRECATED: Use Bright Data API Key instead (see above).\n"
-            "• WebShare will be removed in a future version\n"
-            "• Bright Data is more cost-effective and reliable\n"
-            "• Still supported for backward compatibility\n"
-            "• Tip: Use a dedicated password for API services",
-            8,
-            0,
-        )
 
         # Load existing values and set up change handlers
         self._load_existing_values()
@@ -324,27 +285,27 @@ class APIKeysTab(BaseTab):
         """Load existing API key values from settings."""
         # Load OpenAI key
         if self.settings.api_keys.openai_api_key:
-            self._actual_api_keys[
-                "openai_api_key"
-            ] = self.settings.api_keys.openai_api_key
+            self._actual_api_keys["openai_api_key"] = (
+                self.settings.api_keys.openai_api_key
+            )
             self.openai_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
 
         # Load Anthropic key
         if self.settings.api_keys.anthropic_api_key:
-            self._actual_api_keys[
-                "anthropic_api_key"
-            ] = self.settings.api_keys.anthropic_api_key
+            self._actual_api_keys["anthropic_api_key"] = (
+                self.settings.api_keys.anthropic_api_key
+            )
             self.anthropic_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
 
         # Load HuggingFace token
         if self.settings.api_keys.huggingface_token:
-            self._actual_api_keys[
-                "huggingface_token"
-            ] = self.settings.api_keys.huggingface_token
+            self._actual_api_keys["huggingface_token"] = (
+                self.settings.api_keys.huggingface_token
+            )
             self.huggingface_token_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
@@ -354,24 +315,14 @@ class APIKeysTab(BaseTab):
             hasattr(self.settings.api_keys, "bright_data_api_key")
             and self.settings.api_keys.bright_data_api_key
         ):
-            self._actual_api_keys[
-                "bright_data_api_key"
-            ] = self.settings.api_keys.bright_data_api_key
+            self._actual_api_keys["bright_data_api_key"] = (
+                self.settings.api_keys.bright_data_api_key
+            )
             self.bright_data_api_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
 
-        # Load WebShare credentials
-        if self.settings.api_keys.webshare_username:
-            self.webshare_username_edit.setText(
-                self.settings.api_keys.webshare_username
-            )
 
-        if self.settings.api_keys.webshare_password:
-            self._actual_api_keys[
-                "webshare_password"
-            ] = self.settings.api_keys.webshare_password
-            self.webshare_password_edit.setText("••••••••••••••••")
 
     def _setup_change_handlers(self) -> None:
         """Set up change handlers for password/key fields."""
@@ -387,10 +338,6 @@ class APIKeysTab(BaseTab):
         self.bright_data_api_key_edit.textChanged.connect(
             lambda text: self._handle_key_change("bright_data_api_key", text)
         )
-        self.webshare_password_edit.textChanged.connect(
-            lambda text: self._handle_password_change("webshare_password", text)
-        )
-        self.webshare_username_edit.textChanged.connect(self._on_setting_changed)
 
     def _handle_key_change(self, key_name: str, new_text: str) -> None:
         """Handle changes to API key fields."""
@@ -409,18 +356,9 @@ class APIKeysTab(BaseTab):
     def _on_setting_changed(self) -> None:
         """Called when any setting changes to automatically save to session."""
         try:
-            # Save to GUI session (for UI state persistence)
-            self.gui_settings.set_line_edit_text(
-                self.tab_name, "webshare_username", self.webshare_username_edit.text()
-            )
-
             # Save masked indicators for fields that have actual keys stored
             for key_name in self._actual_api_keys:
-                if key_name == "webshare_password":
-                    self.gui_settings.set_line_edit_text(
-                        self.tab_name, "webshare_password_masked", "••••••••••••••••"
-                    )
-                elif key_name == "openai_api_key":
+                if key_name == "openai_api_key":
                     self.gui_settings.set_line_edit_text(
                         self.tab_name,
                         "openai_key_masked",
@@ -451,12 +389,7 @@ class APIKeysTab(BaseTab):
             # First load from the credential files (like the existing _load_existing_values)
             self._load_existing_values()
 
-            # Then overlay any session-specific UI state
-            saved_username = self.gui_settings.get_line_edit_text(
-                self.tab_name, "webshare_username", ""
-            )
-            if saved_username and not self.webshare_username_edit.text():
-                self.webshare_username_edit.setText(saved_username)
+
 
             # Note: We don't restore actual API keys from session for security,
             # only restore the masked display indicators to show fields that were previously filled
@@ -479,30 +412,7 @@ class APIKeysTab(BaseTab):
             logger.info("🔧 DEBUG: _save_settings() called")
             self.append_log("🔧 DEBUG: Save button clicked - starting save process...")
 
-            # DEBUG: Show current state
-            username_text = self.webshare_username_edit.text().strip()
-            password_text = self.webshare_password_edit.text().strip()
-            actual_password = self._actual_api_keys.get("webshare_password", "NOT_SET")
-
-            debug_msg = f"""🔧 DEBUG STATE:
-Username field: '{username_text}'
-Password field: '{password_text}'
-Actual password stored: '{actual_password}'
-_actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
-
-            self.append_log(debug_msg)
-            logger.info(debug_msg)
-            # Update settings object with actual values or form values
-            self.settings.api_keys.webshare_username = (
-                self.webshare_username_edit.text().strip()
-            )
-
             # For password/key fields, use actual stored values if available, otherwise use form input
-            webshare_password = self._actual_api_keys.get(
-                "webshare_password", self.webshare_password_edit.text().strip()
-            )
-            if not webshare_password.startswith("••"):
-                self.settings.api_keys.webshare_password = webshare_password
 
             openai_key = self._actual_api_keys.get(
                 "openai_api_key", self.openai_key_edit.text().strip()
@@ -563,19 +473,9 @@ _actual_api_keys keys: {list(self._actual_api_keys.keys())}"""
 
             import yaml  # type: ignore
 
-            # Debug: Log current settings values
-            logger.info(
-                f"🔧 DEBUG: webshare_username = '{self.settings.api_keys.webshare_username}'"
-            )
-            logger.info(
-                f"🔧 DEBUG: webshare_password = {'*' * len(self.settings.api_keys.webshare_password) if self.settings.api_keys.webshare_password else 'None'}"
-            )
-
             # Create credentials data structure using correct field names (Pydantic aliases)
             credentials_data = {
                 "api_keys": {
-                    "webshare_username": self.settings.api_keys.webshare_username or "",
-                    "webshare_password": self.settings.api_keys.webshare_password or "",
                     "openai": self.settings.api_keys.openai_api_key
                     or "",  # Use alias 'openai'
                     "anthropic": self.settings.api_keys.anthropic_api_key

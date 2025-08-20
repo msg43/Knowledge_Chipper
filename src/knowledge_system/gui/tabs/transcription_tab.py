@@ -1,4 +1,4 @@
-""" Audio transcription tab for processing audio and video files using Whisper."""
+"""Audio transcription tab for processing audio and video files using Whisper."""
 
 import os
 from pathlib import Path
@@ -306,9 +306,19 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
     def _create_input_section(self) -> QGroupBox:
         """Create the input files section."""
-        group = QGroupBox("Input Files")
+        group = QGroupBox("Input files")
         layout = QVBoxLayout()
         layout.setSpacing(8)  # Add spacing between elements
+
+        # Add supported file types info
+        supported_types_label = QLabel(
+            "Supported formats: Audio/Video files (*.mp4 *.mp3 *.wav *.webm *.m4a *.flac *.ogg)"
+        )
+        supported_types_label.setStyleSheet(
+            "color: #666; font-style: italic; margin-bottom: 8px;"
+        )
+        supported_types_label.setWordWrap(True)
+        layout.addWidget(supported_types_label)
 
         # File list with improved size policy
         self.transcription_files = QListWidget()
@@ -359,7 +369,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         main_layout.setSpacing(10)
 
         # Left side: Use Recommended Settings button
-        self.use_recommended_btn = QPushButton("⚡ Get & Apply Recommended Settings")
+        self.use_recommended_btn = QPushButton("⚡ Apply Recommended Settings")
         self.use_recommended_btn.setMinimumHeight(35)
         self.use_recommended_btn.setMaximumHeight(35)
         self.use_recommended_btn.clicked.connect(self._apply_recommended_settings)
@@ -398,7 +408,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         # Initially show placeholder text
         placeholder_label = QLabel(
-            "Click 'Get & Apply Recommended Settings' to automatically detect and configure optimal settings for your hardware."
+            "Click 'Apply Recommended Settings' to automatically detect and configure optimal settings for your hardware."
         )
         placeholder_label.setWordWrap(True)
         placeholder_label.setStyleSheet("font-size: 11px; color: #666;")
@@ -615,7 +625,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             "• Recommended: 4-8 threads for most systems "
             "• Lower values: Preserve CPU for other applications "
             "• Higher values: May not improve speed beyond 8-12 threads "
-            "💡 Use 'Get & Apply Recommended Settings' for optimal configuration"
+            "💡 Use 'Apply Recommended Settings' for optimal configuration"
         )
         self.omp_threads.valueChanged.connect(self._on_setting_changed)
         layout.addWidget(self.omp_threads, 0, 1)
@@ -632,7 +642,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             "• CAUTION: Each file can use 2-10GB RAM depending on model size "
             "• Memory usage = Files × Model RAM requirement "
             "• Reduce if experiencing memory issues, crashes, or system slowdown "
-            "💡 Use 'Get & Apply Recommended Settings' for optimal configuration"
+            "💡 Use 'Apply Recommended Settings' for optimal configuration"
         )
         self.max_concurrent.valueChanged.connect(self._on_setting_changed)
         layout.addWidget(self.max_concurrent, 0, 3)
@@ -705,6 +715,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
     def _add_files(
         self,
+        checked: bool = False,  # Qt signal parameter (ignored)
         file_list_attr: str = "transcription_files",
         file_patterns: str = "Audio/Video files (*.mp4 *.mp3 *.wav *.webm *.m4a *.flac *.ogg);;All files (*.*)",
     ):

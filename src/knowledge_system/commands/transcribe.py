@@ -157,11 +157,9 @@ def _generate_obsidian_link(
     # Check if target file exists (optional validation)
     if output_dir:
         # Check for common extensions
-        target_exists = False
         for ext in [".md", ".txt"]:
             target_path = output_dir / f"{target_filename}{ext}"
             if target_path.exists():
-                target_exists = True
                 break
 
         # If we're creating the transcript, the summary might not exist yet
@@ -474,8 +472,8 @@ def transcribe(
         knowledge-system transcribe audio.wav --format srt --no-timestamps
         knowledge-system transcribe --batch-urls urls.csv --output ./transcripts/
     """
-    settings = ctx.get_settings()
-    settings = ctx.get_settings()
+    ctx.get_settings()
+    ctx.get_settings()
 
     # Handle batch URL processing
     if batch_urls:

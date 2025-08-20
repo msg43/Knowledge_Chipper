@@ -245,9 +245,9 @@ class TranscriptionService:
                         "source": url,
                         "output_files": output_files,
                         "metadata": transcript_result.metadata,
-                        "method": "bright_data_proxy"
-                        if use_bright_data
-                        else "webshare_proxy",
+                        "method": (
+                            "bright_data_proxy" if use_bright_data else "webshare_proxy"
+                        ),
                         "thumbnails": thumbnails,
                     }
 

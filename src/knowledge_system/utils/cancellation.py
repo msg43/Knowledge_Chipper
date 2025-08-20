@@ -80,5 +80,3 @@ class CancellationToken:
 
 class CancellationError(Exception):
     """Exception raised when an operation is cancelled."""
-
-    pass

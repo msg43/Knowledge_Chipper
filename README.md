@@ -1,5 +1,7 @@
 # Knowledge_Chipper
 
+**Version:** 3.0.0 | **Build Date:** 2025-08-19 | **Branch:** feature/hce-replacement
+
 A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 
 **What it does:** Transcribes videos → Extracts structured claims with confidence tiers → Maps relationships and contradictions → Creates knowledge maps → Organizes everything automatically.

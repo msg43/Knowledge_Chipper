@@ -3,7 +3,7 @@ from typing import Any
 
 from knowledge_system.logger import get_logger
 from knowledge_system.processors.base import BaseProcessor, ProcessorResult
-from knowledge_system.utils.model_cache import ModelType, cache_diarization_model
+from knowledge_system.utils.model_cache import cache_diarization_model
 from knowledge_system.utils.validation import validate_audio_input
 
 logger = get_logger(__name__)
@@ -190,7 +190,7 @@ class SpeakerDiarizationProcessor(BaseProcessor):
         self, input_data: Any, dry_run: bool = False, **kwargs: Any
     ) -> ProcessorResult:
         # Extract parameters from kwargs for backwards compatibility
-        device = kwargs.get("device", None)
+        kwargs.get("device", None)
 
         # Handle input_data as input_path for backwards compatibility
         input_path = input_data

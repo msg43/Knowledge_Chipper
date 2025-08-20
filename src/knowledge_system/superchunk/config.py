@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..config import get_settings
 from ..utils.text_utils import get_model_context_window
@@ -160,9 +160,11 @@ class SuperChunkConfig:
         Converts Enum and nested dataclasses to plain Python types that json can handle.
         """
         return {
-            "preset": self.preset.value
-            if isinstance(self.preset, WindowPreset)
-            else str(self.preset),
+            "preset": (
+                self.preset.value
+                if isinstance(self.preset, WindowPreset)
+                else str(self.preset)
+            ),
             "adaptive_switching": bool(self.adaptive_switching),
             "provider": self.provider,
             "model": self.model,

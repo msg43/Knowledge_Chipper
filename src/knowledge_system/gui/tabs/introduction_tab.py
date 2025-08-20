@@ -1,19 +1,13 @@
-""" Introduction tab providing comprehensive guidance for new users."""
+"""Introduction tab providing comprehensive guidance for new users."""
 
-import sys
 from pathlib import Path
 from typing import Any
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QGridLayout,
-    QGroupBox,
-    QHBoxLayout,
     QLabel,
-    QPushButton,
     QScrollArea,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )

@@ -16,7 +16,7 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import psutil
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -314,9 +314,9 @@ class YouTubeBatchWorker(QThread):
                 "urls_processed": self.successful_urls,
                 "failed_urls": self.failed_urls,
                 "total_urls": len(self.urls),
-                "processing_mode": "download-all"
-                if self.download_all_mode
-                else "conveyor-belt",
+                "processing_mode": (
+                    "download-all" if self.download_all_mode else "conveyor-belt"
+                ),
             }
 
             logger.info(
@@ -691,16 +691,9 @@ class YouTubeBatchWorker(QThread):
                 "progress_hooks": [progress_hook],
             }
 
-            # Add Webshare proxy configuration
-            webshare_username = getattr(settings.api_keys, "webshare_username", None)
-            webshare_password = getattr(settings.api_keys, "webshare_password", None)
-
-            if webshare_username and webshare_password:
-                # Use rotating residential proxy
-                proxy_url = (
-                    f"http://{webshare_username}:{webshare_password}@p.webshare.io:80"
-                )
-                ydl_opts["proxy"] = proxy_url
+            # Note: Proxy configuration is now handled by the main YouTube processors
+            # which use Bright Data API when available. Direct yt-dlp usage here
+            # should be minimal and rely on the processor layer for proper proxy handling.
 
             # Download
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:

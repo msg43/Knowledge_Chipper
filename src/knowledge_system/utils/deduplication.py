@@ -7,7 +7,6 @@ exist in the SQLite database, optimizing costs and reducing redundant work.
 
 import re
 from enum import Enum
-from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import parse_qs, urlparse
 
 from ..database import DatabaseService
@@ -268,7 +267,7 @@ class VideoDeduplicationService:
 
             # Calculate potential cost savings from deduplication
             total_videos = stats.get("total_videos", 0)
-            completed_videos = stats.get("completed_videos", 0)
+            stats.get("completed_videos", 0)
             avg_cost_per_video = stats.get("average_cost_per_video", 0)
 
             # Estimate savings (this would be more accurate with actual duplicate counts)

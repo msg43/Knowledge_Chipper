@@ -14,7 +14,6 @@ import yaml
 from pydantic import BaseModel, Field
 
 from ..database import DatabaseService
-from ..errors import MOCGenerationError
 from ..logger import get_logger
 from .base import BaseProcessor, ProcessorResult
 from .hce.config_flex import PipelineConfigFlex, StageModelConfig

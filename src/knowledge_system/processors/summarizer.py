@@ -6,19 +6,16 @@ Maintains identical API while providing structured claim extraction instead of s
 """
 
 import hashlib
-import json
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from ..config import get_settings
-from ..errors import SummarizationError
 from ..logger import get_logger
-from ..utils.llm_providers import UnifiedLLMClient
 from .base import BaseProcessor, ProcessorResult
 from .hce.config_flex import PipelineConfigFlex, StageModelConfig
-from .hce.types import EpisodeBundle, PipelineOutputs, ScoredClaim, Segment
+from .hce.types import EpisodeBundle, PipelineOutputs, Segment
 
 logger = get_logger(__name__)
 

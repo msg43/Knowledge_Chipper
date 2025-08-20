@@ -1,12 +1,10 @@
 """Claim search and exploration tab for HCE system."""
 
 import json
-from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QGroupBox,
     QHBoxLayout,

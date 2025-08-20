@@ -55,7 +55,6 @@ class BaseLLMProvider(ABC):
         self, prompt: str, progress_callback: Callable | None = None
     ) -> LLMResponse:
         """Make API call to the LLM provider."""
-        pass
 
     def _estimate_tokens(self, text: str) -> int:
         """Estimate token count for text (rough approximation)."""

@@ -26,7 +26,6 @@ from knowledge_system.utils.audio_utils import (
     get_audio_duration,
 )
 from knowledge_system.utils.batch_processing import (
-    BatchItem,
     BatchProcessor,
     create_batch_from_files,
     determine_optimal_batch_strategy,
@@ -579,7 +578,7 @@ class AudioProcessor(BaseProcessor):
 
         # Get audio metadata including duration for validation
         audio_metadata = self._get_audio_metadata(path)
-        audio_duration = audio_metadata.get("duration_seconds")
+        audio_metadata.get("duration_seconds")
 
         # Try transcription with retry logic
         return self._transcribe_with_retry(path, audio_metadata, device, **kwargs)

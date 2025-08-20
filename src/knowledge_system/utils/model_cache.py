@@ -8,12 +8,10 @@ multiple processing sessions.
 
 import threading
 import time
-import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from knowledge_system.logger import get_logger
 
@@ -123,8 +121,8 @@ class ModelCache:
             # Try to explicitly delete the model (may not work for all model types)
             try:
                 del model.model_instance
-            except:
-                pass
+            except (AttributeError, TypeError):
+                pass  # Model instance already freed or doesn't support deletion
 
         logger.info(f"Freed {freed_memory:.1f}MB of model cache memory")
 
@@ -250,9 +248,11 @@ class ModelCache:
                 "total_models": len(self.cache),
                 "total_memory_mb": self._total_memory_mb,
                 "max_memory_mb": self.max_memory_mb,
-                "memory_utilization": self._total_memory_mb / self.max_memory_mb
-                if self.max_memory_mb > 0
-                else 0,
+                "memory_utilization": (
+                    self._total_memory_mb / self.max_memory_mb
+                    if self.max_memory_mb > 0
+                    else 0
+                ),
                 "models_by_type": {},
                 "oldest_model_age": 0,
                 "most_used_count": 0,
