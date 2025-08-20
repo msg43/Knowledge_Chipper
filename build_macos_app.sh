@@ -60,6 +60,16 @@ cp -r config "$BUILD_MACOS_PATH/"
 cp requirements.txt "$BUILD_MACOS_PATH/"
 cp build_macos_app.sh "$BUILD_MACOS_PATH/"
 
+# Explicitly exclude large model files from the app bundle
+echo "🚫 Excluding large model files from app bundle..."
+# Models will be downloaded at runtime to ~/.cache/whisper-cpp/
+# This significantly reduces DMG size (models can be 75MB-3GB each)
+if [ -d "models" ]; then
+    echo "ℹ️  Found local models/ directory - excluding from app bundle ($(du -sh models | cut -f1) would be saved)"
+fi
+# Ensure no .bin files are accidentally copied
+find "$BUILD_MACOS_PATH" -name "*.bin" -delete 2>/dev/null || true
+
 # Set up virtual environment
 echo "🐍 Setting up Python virtual environment..."
 # Prefer Python 3.13 from Homebrew
@@ -74,9 +84,12 @@ rm -rf "$BUILD_MACOS_PATH/venv"
 "$PYTHON_BIN" -m venv "$BUILD_MACOS_PATH/venv"
 
 # Install packages in the venv with proper path handling
-echo "📦 Installing Python dependencies..."
+echo "📦 Installing Python dependencies (lightweight core)..."
 "$BUILD_MACOS_PATH/venv/bin/python" -m pip install --upgrade pip
 "$BUILD_MACOS_PATH/venv/bin/python" -m pip install -r "$BUILD_MACOS_PATH/requirements.txt"
+
+echo "🎯 Excluding heavy ML dependencies (torch, transformers, etc.) from app bundle"
+echo "ℹ️  Heavy dependencies will be installed automatically when needed"
 
 # Verify critical dependencies are installed
 echo "🔍 Verifying critical dependencies..."
@@ -233,19 +246,44 @@ sudo chmod 777 "$MACOS_PATH/logs"
 sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/build_macos_app.sh"
 sudo chmod 755 "$MACOS_PATH/build_macos_app.sh"
 
-# Create version file from src/knowledge_system/version.py for user-facing display
+# Update version file and Python version.py with current build date
 echo "📝 Adding version information..."
 PY_VER_FILE="$SCRIPT_DIR/src/knowledge_system/version.py"
-if [ -f "$PY_VER_FILE" ]; then
-  CURRENT_VERSION=$(grep '^VERSION\s*=\s*"' "$PY_VER_FILE" | sed -E 's/.*"([^"]+)".*/\1/')
-  CURRENT_BRANCH=$(git branch --show-current)
-  CURRENT_DATE=$(grep '^BUILD_DATE\s*=\s*"' "$PY_VER_FILE" | sed -E 's/.*"([^"]+)".*/\1/')
+CURRENT_DATE=$(date +"%Y-%m-%d")
+
+# Generate clean version for display (user wants just base version)
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
+
+# Get the base version from pyproject.toml if available
+if [ -f "pyproject.toml" ]; then
+  CURRENT_VERSION=$(grep '^version\s*=\s*"' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
+  echo "📋 Using version from pyproject.toml: $CURRENT_VERSION"
 else
-  # Fallback to git if the file is missing
-  CURRENT_VERSION=$(git describe --tags --always)
-  CURRENT_BRANCH=$(git branch --show-current)
-  CURRENT_DATE=$(date +"%Y-%m-%d")
+  # Fallback to git tags but clean it up for display
+  if git describe --tags --match "v*" >/dev/null 2>&1; then
+    GIT_VERSION=$(git describe --tags --match "v*" 2>/dev/null)
+    # Extract just the base version (3.0.0 from v3.0.0-4-g707477f)
+    CURRENT_VERSION=$(echo "$GIT_VERSION" | sed 's/^v//' | sed 's/-[0-9]*-g[a-f0-9]*$//')
+    echo "📋 Using cleaned version from git: $CURRENT_VERSION"
+  else
+    # Fallback to version.py file
+    if [ -f "$PY_VER_FILE" ]; then
+      CURRENT_VERSION=$(grep '^VERSION\s*=\s*"' "$PY_VER_FILE" | sed -E 's/.*"([^"]+)".*/\1/')
+    else
+      CURRENT_VERSION="3.0.1"
+    fi
+  fi
 fi
+
+# Update the Python version.py file in the app bundle with current date
+cat > "$BUILD_MACOS_PATH/src/knowledge_system/version.py" << EOF
+# Auto-generated version info
+VERSION = "$CURRENT_VERSION"
+BRANCH = "$CURRENT_BRANCH"
+BUILD_DATE = "$CURRENT_DATE"
+EOF
+
+# Also create version.txt for logging
 cat > "/tmp/version.txt" << EOF
 VERSION=$CURRENT_VERSION
 BRANCH=$CURRENT_BRANCH
@@ -255,4 +293,5 @@ sudo mv "/tmp/version.txt" "$MACOS_PATH/version.txt"
 
 # Get current version for final echo
 echo "✨ App bundle created successfully! Version: $CURRENT_VERSION"
+echo "🎯 Large model files excluded - they'll download automatically when needed"
 echo "🚀 You can now launch Knowledge Chipper from your Applications folder"

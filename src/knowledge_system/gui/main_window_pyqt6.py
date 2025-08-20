@@ -23,14 +23,16 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from .. import __version__
 from ..config import get_settings
 from ..logger import get_logger
-from ..version import BUILD_DATE
+from ..version import BUILD_DATE, VERSION
 from .assets.icons import get_app_icon, get_icon_path
 
 # Import workers and components
 from .components.progress_tracking import EnhancedProgressBar
+
+# Import dialogs
+from .dialogs.first_run_setup_dialog import FirstRunSetupDialog
 
 # Import core GUI components
 from .core.session_manager import get_session_manager
@@ -96,6 +98,9 @@ class MainWindow(QMainWindow):
         
         # First-run FFmpeg setup (if needed)
         self._check_first_run_ffmpeg_setup()
+        
+        # First-run model setup (if needed)
+        self._check_first_run_model_setup()
 
     def _set_window_icon(self) -> None:
         """Set the custom window icon."""
@@ -113,7 +118,7 @@ class MainWindow(QMainWindow):
     def _setup_ui(self) -> None:
         """Set up the streamlined main UI."""
         self.setWindowTitle(
-            f"Knowledge Chipper v{__version__} - Your Personal Knowledge Assistant"
+            f"Knowledge Chipper v{VERSION} - Your Personal Knowledge Assistant"
         )
         # Make window resizable with reasonable default size and minimum size
         self.resize(1200, 800)  # Default size
@@ -147,7 +152,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
 
         # Add version label to the right side (show semantic version, not commit hash)
-        version_msg = f"Knowledge Chipper v{__version__} • Built: {BUILD_DATE}"
+        version_msg = f"Knowledge Chipper v{VERSION} • Built: {BUILD_DATE}"
 
         version_label = QLabel(version_msg)
         version_label.setStyleSheet("color: #666;")
@@ -458,6 +463,74 @@ class MainWindow(QMainWindow):
             dialog.exec()
         except Exception as e:
             logger.warning(f"Failed to show first-run FFmpeg dialog: {e}")
+
+    def _check_first_run_model_setup(self) -> None:
+        """Check if this is first run and offer model download setup."""
+        try:
+            from pathlib import Path
+            from .core.settings_manager import get_gui_settings_manager
+
+            gui = get_gui_settings_manager()
+            
+            # Check if we've already shown the first-run model dialog
+            model_first_run_shown = gui.get_value("⚙️ Settings", "model_first_run_shown", False)
+            
+            if model_first_run_shown:
+                return  # Already shown, don't show again
+                
+            # Check if any Whisper models are already available
+            models_dir = Path.home() / ".cache" / "whisper-cpp"
+            local_models_dir = Path("models")
+            
+            has_models = False
+            if models_dir.exists():
+                # Check for common model files
+                for model_file in ["ggml-tiny.bin", "ggml-base.bin", "ggml-small.bin"]:
+                    if (models_dir / model_file).exists():
+                        has_models = True
+                        break
+                        
+            if local_models_dir.exists():
+                # Check local models directory
+                for model_file in local_models_dir.glob("*.bin"):
+                    has_models = True
+                    break
+                    
+            if has_models:
+                # Models already available, mark first-run as shown and skip
+                gui.set_value("⚙️ Settings", "model_first_run_shown", True)
+                gui.save()
+                return
+                
+            # Show first-run model setup dialog
+            gui.set_value("⚙️ Settings", "model_first_run_shown", True)
+            gui.save()
+            
+            # Use QTimer to show dialog after main window is fully loaded (after FFmpeg dialog)
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(2000, self._show_first_run_model_dialog)
+            
+        except (ImportError, AttributeError) as e:
+            logger.warning(f"First-run model setup failed: {e}")
+
+    def _show_first_run_model_dialog(self) -> None:
+        """Show the first-run model setup dialog."""
+        try:
+            dialog = FirstRunSetupDialog(self)
+            
+            def on_setup_completed(success: bool):
+                if success:
+                    logger.info("First-run model setup completed successfully")
+                    self.status_bar.showMessage("Model setup complete - ready to transcribe!", 5000)
+                else:
+                    logger.info("First-run model setup skipped or cancelled")
+                    self.status_bar.showMessage("Model setup skipped - you can download models later", 3000)
+            
+            dialog.setup_completed.connect(on_setup_completed)
+            dialog.exec()
+            
+        except Exception as e:
+            logger.warning(f"Failed to show first-run model dialog: {e}")
 
     def closeEvent(self, event: QCloseEvent | None) -> None:
         """Handle window close event."""

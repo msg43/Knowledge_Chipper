@@ -312,12 +312,23 @@ jobs:
         iconutil -c icns icon.iconset -o "$RESOURCES_PATH/AppIcon.icns"
         rm -rf icon.iconset
 
-        # Create version file
+        # Update version file and Python version.py with current build date
         echo "📝 Adding version information..."
+        CURRENT_DATE=$(date +"%Y-%m-%d")
+        
+        # Update the Python version.py file in the app bundle with current date
+        cat > "$MACOS_PATH/src/knowledge_system/version.py" << EOF
+        # Auto-generated version info
+        VERSION = "${{ steps.version.outputs.version }}"
+        BRANCH = "${{ github.ref_name }}"
+        BUILD_DATE = "$CURRENT_DATE"
+        EOF
+        
+        # Also create version.txt for logging
         cat > "$MACOS_PATH/version.txt" << EOF
         VERSION=${{ steps.version.outputs.version }}
         BRANCH=${{ github.ref_name }}
-        BUILD_DATE=$(date +"%Y-%m-%d")
+        BUILD_DATE=$CURRENT_DATE
         BUILD_TYPE=Release
         EOF
 
