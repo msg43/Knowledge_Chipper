@@ -93,6 +93,9 @@ class MainWindow(QMainWindow):
 
         # Monthly FFmpeg check (lightweight)
         self._ffmpeg_monthly_check()
+        
+        # First-run FFmpeg setup (if needed)
+        self._check_first_run_ffmpeg_setup()
 
     def _set_window_icon(self) -> None:
         """Set the custom window icon."""
@@ -412,6 +415,49 @@ class MainWindow(QMainWindow):
             )
         except (ImportError, AttributeError):
             pass  # FFmpeg check failed
+
+    def _check_first_run_ffmpeg_setup(self) -> None:
+        """Check if this is first run and offer FFmpeg setup."""
+        try:
+            import shutil
+            from .core.settings_manager import get_gui_settings_manager
+            from .dialogs.ffmpeg_setup_dialog import FFmpegSetupDialog
+
+            gui = get_gui_settings_manager()
+            
+            # Check if we've already shown the first-run dialog
+            first_run_shown = gui.get_value("⚙️ Settings", "ffmpeg_first_run_shown", False)
+            
+            if first_run_shown:
+                return  # Already shown, don't show again
+                
+            # Check if FFmpeg is already available
+            if shutil.which("ffmpeg"):
+                # FFmpeg already available, mark first-run as shown and skip
+                gui.set_value("⚙️ Settings", "ffmpeg_first_run_shown", True)
+                gui.save()
+                return
+                
+            # Show first-run setup dialog
+            gui.set_value("⚙️ Settings", "ffmpeg_first_run_shown", True)
+            gui.save()
+            
+            # Use QTimer to show dialog after main window is fully loaded
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(1000, self._show_first_run_ffmpeg_dialog)
+            
+        except (ImportError, AttributeError) as e:
+            logger.warning(f"First-run FFmpeg setup failed: {e}")
+
+    def _show_first_run_ffmpeg_dialog(self) -> None:
+        """Show the first-run FFmpeg setup dialog."""
+        try:
+            from .dialogs.ffmpeg_setup_dialog import FFmpegSetupDialog
+            
+            dialog = FFmpegSetupDialog(self)
+            dialog.exec()
+        except Exception as e:
+            logger.warning(f"Failed to show first-run FFmpeg dialog: {e}")
 
     def closeEvent(self, event: QCloseEvent | None) -> None:
         """Handle window close event."""

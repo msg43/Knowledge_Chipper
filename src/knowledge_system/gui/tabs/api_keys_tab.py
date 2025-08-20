@@ -239,10 +239,17 @@ class APIKeysTab(BaseTab):
         ffmpeg_btn = QPushButton("📥 Install/Update FFmpeg")
         ffmpeg_btn.clicked.connect(self._install_ffmpeg)
         ffmpeg_btn.setToolTip(
-            "Install FFmpeg for video/audio processing (no admin privileges required). "
-            "FFmpeg is needed for: YouTube video downloads, audio format conversions, "
-            "and video file transcription. If FFmpeg is already installed system-wide, "
-            "that version will be used unless you install this managed version. "
+            "Install FFmpeg for YouTube transcription features (no admin privileges required).\n\n"
+            "✅ Features enabled with FFmpeg:\n"
+            "• YouTube video downloads and transcription\n"
+            "• Audio format conversions (MP3, WAV, etc.)\n"
+            "• Video file audio extraction\n"
+            "• Audio metadata and duration detection\n\n"
+            "⚠️ Available without FFmpeg:\n"
+            "• PDF processing and summarization\n"
+            "• Text file processing\n"
+            "• Local audio transcription (compatible formats)\n"
+            "• All MOC generation features\n\n"
             "Safe to install - creates a user-space binary that doesn't affect your system."
         )
         update_section.addWidget(ffmpeg_btn)
