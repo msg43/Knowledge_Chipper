@@ -229,7 +229,7 @@ def get_single_working_strategy() -> dict[str, Any]:
 
     # Strategy 3: Attempt to load cookies from browsers, stopping at the first success
     try:
-        import http.cookiejar
+        pass
 
         from yt_dlp.cookies import load_cookies
 

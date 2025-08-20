@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from queue import Empty, Queue
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from ..logger import get_logger
 

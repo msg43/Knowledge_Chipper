@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import List, Optional
 
 from .config import SuperChunkConfig, WindowPreset
 from .signals import compute_signals

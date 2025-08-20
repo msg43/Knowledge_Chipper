@@ -1,12 +1,10 @@
 """Caching layer for HCE embeddings to improve performance."""
 
 import hashlib
-import json
 import logging
-import os
 import pickle
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 

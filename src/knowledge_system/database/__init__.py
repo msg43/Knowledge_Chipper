@@ -8,13 +8,6 @@ YouTube video records, transcripts, summaries, MOC data, and processing tracking
 # HCE models are optional and imported separately to avoid SQLAlchemy issues
 try:
     from .hce_models import (
-        Claim,
-        Concept,
-        Episode,
-        EvidenceSpan,
-        JargonTerm,
-        Person,
-        Relation,
         extend_video_model,
     )
 

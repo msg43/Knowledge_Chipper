@@ -1,7 +1,6 @@
 """
-Command Line Interface for Knowledge System
-
 Command Line Interface for Knowledge System.
+
 Provides comprehensive CLI commands for all system operations.
 """
 
@@ -156,7 +155,6 @@ main.add_command(database)
 @main.group()
 def models() -> None:
     """Model management commands (providers and overrides)."""
-    pass
 
 
 @models.command("list")
@@ -303,9 +301,8 @@ def watch(
         console.print(f"[dim]Auto-process: {auto_process}, Debounce: {debounce}s[/dim]")
 
     if dry_run:
-        console.print(
-            "[yellow][DRY RUN] Would start file watcher with the above settings.[/yellow]"
-        )
+        dry_run_msg = "[yellow][DRY RUN] Would start file watcher with the above settings.[/yellow]"
+        console.print(dry_run_msg)
         console.print(f"[dim]Would watch for patterns: {', '.join(patterns)}[/dim]")
         if auto_process:
             console.print("[dim]Would auto-process new files[/dim]")
@@ -348,9 +345,8 @@ def watch(
                     if result.success:
                         console.print(f"[green]✓ Transcribed: {file_path}[/green]")
                     else:
-                        console.print(
-                            f"[red]✗ Transcription failed for {file_path}: {'; '.join(result.errors)}[/red]"
-                        )
+                        error_msg = f"✗ Transcription failed for {file_path}: {'; '.join(result.errors)}"
+                        console.print(f"[red]{error_msg}[/red]")
                 # Summarization for markdown/text
                 if summarize and file_path.suffix.lower() in [".md", ".txt"]:
                     from .processors.summarizer import SummarizerProcessor
@@ -365,9 +361,8 @@ def watch(
                     if result.success:
                         console.print(f"[green]✓ Summarized: {file_path}[/green]")
                     else:
-                        console.print(
-                            f"[red]✗ Summarization failed for {file_path}: {'; '.join(result.errors)}[/red]"
-                        )
+                        error_msg = f"✗ Summarization failed for {file_path}: {'; '.join(result.errors)}"
+                        console.print(f"[red]{error_msg}[/red]")
                 # Log the processing
                 log_system_event(
                     event="file_processed",
@@ -664,7 +659,6 @@ def gui(ctx: CLIContext) -> None:
 @click.group()
 def youtube() -> None:
     """YouTube-specific commands for troubleshooting and authentication."""
-    pass
 
 
 # Add youtube command group to main CLI
@@ -674,7 +668,6 @@ main.add_command(youtube)
 @main.group()
 def cache() -> None:
     """Cache management commands."""
-    pass
 
 
 @cache.command()
@@ -712,7 +705,9 @@ def flag() -> None:
     from .utils.cache_management import create_manual_clear_flag
 
     create_manual_clear_flag()
-    click.echo("✅ Created cache clear flag. Cache will be cleared on next app startup.")
+    click.echo(
+        "✅ Created cache clear flag. Cache will be cleared on next app startup."
+    )
 
 
 # Add the cache command group to main CLI
@@ -755,7 +750,8 @@ def auth_status() -> None:
     click.echo("\nRecommendations:")
     if not status["has_cached_strategy"] and not status["manual_cookie_file"]:
         click.echo(
-            "- Create a manual cookie file (run 'knowledge-system youtube cookie-instructions')"
+            "- Create a manual cookie file "
+            "(run 'knowledge-system youtube cookie-instructions')"
         )
         click.echo("- Visit YouTube videos in your browser first")
         click.echo("- Try a different network connection")
@@ -798,7 +794,8 @@ def test_auth(url: str) -> None:
         else:
             click.echo("✗ No authentication strategy available!")
             click.echo(
-                "Consider creating a manual cookie file or visiting YouTube in your browser first."
+                "Consider creating a manual cookie file or visiting YouTube "
+                "in your browser first."
             )
 
     except Exception as e:

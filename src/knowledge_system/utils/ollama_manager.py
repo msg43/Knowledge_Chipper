@@ -1,4 +1,4 @@
-""" Ollama service and model management utilities."""
+"""Ollama service and model management utilities."""
 
 import json
 import shutil

@@ -749,7 +749,9 @@ def summarize(
             console.print(
                 f"💰 Total cost: [yellow]${session_stats['total_cost']:.4f} USD[/yellow]"
             )
-            console.print(f"⚡ Average speed: {avg_tokens_per_second:.1f} tokens/second")
+            console.print(
+                f"⚡ Average speed: {avg_tokens_per_second:.1f} tokens/second"
+            )
 
             # Content statistics
             console.print("\n[bold]Content Analysis:[/bold]")
@@ -900,8 +902,8 @@ def summarize(
             try:
                 index_file.unlink()
                 logger.debug(f"Cleaned up session index file: {index_file.name}")
-            except Exception:
-                pass
+            except (OSError, PermissionError):
+                pass  # Ignore cleanup failures
 
     except Exception as e:
         console.print(f"[red]✗ Unexpected error during summarization:[/red] {e}")

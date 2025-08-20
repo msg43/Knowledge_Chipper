@@ -619,15 +619,15 @@ class DatabaseService:
                 return {
                     "total_videos": total_videos,
                     "completed_videos": completed_videos,
-                    "completion_rate": completed_videos / total_videos
-                    if total_videos > 0
-                    else 0,
+                    "completion_rate": (
+                        completed_videos / total_videos if total_videos > 0 else 0
+                    ),
                     "total_bright_data_cost": total_cost,
                     "total_tokens_consumed": total_tokens,
                     "total_processing_time_hours": total_processing_time / 3600,
-                    "average_cost_per_video": total_cost / completed_videos
-                    if completed_videos > 0
-                    else 0,
+                    "average_cost_per_video": (
+                        total_cost / completed_videos if completed_videos > 0 else 0
+                    ),
                 }
         except Exception as e:
             logger.error(f"Failed to get processing stats: {e}")

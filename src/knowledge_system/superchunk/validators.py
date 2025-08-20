@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional
-
-from pydantic import BaseModel, Field, confloat, conlist, constr
+from pydantic import BaseModel, Field
 
 
 class GuideMap(BaseModel):
@@ -10,8 +8,8 @@ class GuideMap(BaseModel):
     entities: list[str]
     tensions: list[str]
     # Paragraph ranges expressed as inclusive indices: [start, end]
-    hotspots: list[conlist(int, min_length=2, max_length=2)] = Field(
-        default_factory=list
+    hotspots: list[list[int]] = Field(
+        default_factory=list, description="List of [start, end] pairs"
     )
     notes: str | None = None
 
@@ -23,14 +21,14 @@ class Chunk(BaseModel):
     para_start: int
     para_end: int
     text: str
-    preset_used: constr(strip_whitespace=True)
+    preset_used: str
 
 
 class Landmarks(BaseModel):
     section_title: str | None = None
     key_facts: list[str] = Field(default_factory=list)
     numbered_claims: list[str] = Field(default_factory=list)
-    anchors: list[conlist(int, min_length=2, max_length=2)] = Field(
+    anchors: list[list[int]] = Field(
         default_factory=list, description="List of [span_start, span_end] for anchors"
     )
 
@@ -38,8 +36,8 @@ class Landmarks(BaseModel):
 class ClaimItem(BaseModel):
     text: str
     why_nonobvious: str
-    rarity: confloat(ge=0.0, le=1.0)
-    confidence: confloat(ge=0.0, le=1.0)
+    rarity: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(ge=0.0, le=1.0)
     quote: str
     span_start: int
     span_end: int
@@ -64,5 +62,5 @@ class JargonItem(BaseModel):
 
 class VerificationItem(BaseModel):
     supported_bool: bool
-    confidence_delta: confloat(ge=-1.0, le=1.0)
+    confidence_delta: float = Field(ge=-1.0, le=1.0)
     reason: str

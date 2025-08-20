@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Iterator, Tuple
 
 
 def _approx_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-def _sliding_windows(tokens: list[str], window_size: int, stride: int):
+def _sliding_windows(
+    tokens: list[str], window_size: int, stride: int
+) -> Iterator[Tuple[int, list[str]]]:
     for start in range(0, max(1, len(tokens) - window_size + 1), stride):
         yield start, tokens[start : start + window_size]
 

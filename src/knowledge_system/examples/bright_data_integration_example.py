@@ -5,8 +5,7 @@ Demonstrates how to use Bright Data JSON responses with existing YouTubeMetadata
 and YouTubeTranscript models for seamless compatibility.
 """
 
-import json
-from typing import Any, Dict
+from typing import Any
 
 from ..database import DatabaseService
 from ..logger import get_logger

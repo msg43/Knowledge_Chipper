@@ -25,10 +25,6 @@ except ImportError:
 from pydantic import BaseModel, Field
 
 from ..logger import get_logger
-from ..utils.bright_data_adapters import (
-    adapt_bright_data_transcript,
-    validate_bright_data_response,
-)
 from ..utils.cancellation import CancellationError, CancellationToken
 from ..utils.text_utils import strip_bracketed_content
 from ..utils.youtube_utils import extract_urls, is_youtube_url
@@ -1850,9 +1846,7 @@ Diarization processing failed for this video. The transcript was not saved to al
             if index_file and index_file.exists():
                 try:
                     index_file.unlink()
-                    logger.debug(
-                        f"🗑️  Cleaned up session index file: {index_file.name}"
-                    )
+                    logger.debug(f"🗑️  Cleaned up session index file: {index_file.name}")
                 except Exception as e:
                     logger.debug(f"Could not delete index file: {e}")
 

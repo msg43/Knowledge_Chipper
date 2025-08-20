@@ -1,5 +1,4 @@
 """
-Knowledge_Chipper - A comprehensive knowledge management system for macOS
 Knowledge_Chipper - A comprehensive knowledge management system for macOS.
 
 This package provides AI-powered tools for transcribing, summarizing, and organizing
@@ -24,7 +23,7 @@ def _resolve_version() -> str:
     # 1) Distribution metadata (works for pip install -e . and wheels)
     try:
         return metadata.version("knowledge-system")
-    except Exception:
+    except (metadata.PackageNotFoundError, ImportError):
         pass
 
     # 2) Fallback: read pyproject.toml
@@ -39,7 +38,7 @@ def _resolve_version() -> str:
                 if match:
                     return match.group(1)
                 break
-    except Exception:
+    except (FileNotFoundError, PermissionError, ValueError):
         pass
 
     # 3) Safe default
@@ -87,7 +86,8 @@ def gui_main() -> None:
         app.setApplicationDisplayName("Knowledge_Chipper")
         app.setApplicationVersion("1.0")
 
-        # Import and create main window (no circular import since we're in the parent package)
+        # Import and create main window
+        # (no circular import since we're in the parent package)
         from .gui.main_window_pyqt6 import MainWindow
 
         window = MainWindow()

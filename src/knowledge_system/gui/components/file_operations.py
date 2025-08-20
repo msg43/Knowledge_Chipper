@@ -1,4 +1,4 @@
-""" File operations mixin for common file handling functionality."""
+"""File operations mixin for common file handling functionality."""
 
 from collections.abc import Callable
 from pathlib import Path
@@ -83,7 +83,7 @@ class FileOperationsMixin:
 
         return field, browse_btn
 
-    def _add_files(self, file_list_attr: str, file_patterns: str):
+    def _add_files(self, file_list_attr: str, file_patterns: str) -> None:
         """Add files to the specified file list."""
         file_list = getattr(self, file_list_attr)
         files, _ = QFileDialog.getOpenFileNames(
@@ -93,7 +93,7 @@ class FileOperationsMixin:
             if file not in self._get_file_list_items(file_list):
                 file_list.addItem(file)
 
-    def _add_folder(self, file_list_attr: str, file_patterns: str):
+    def _add_folder(self, file_list_attr: str, file_patterns: str) -> None:
         """Add all matching files from a folder to the file list."""
         file_list = getattr(self, file_list_attr)
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")  # type: ignore
@@ -111,12 +111,12 @@ class FileOperationsMixin:
                     if file_str not in self._get_file_list_items(file_list):
                         file_list.addItem(file_str)
 
-    def _clear_files(self, file_list_attr: str):
+    def _clear_files(self, file_list_attr: str) -> None:
         """Clear the specified file list."""
         file_list = getattr(self, file_list_attr)
         file_list.clear()
 
-    def _select_output_directory(self, field_attr: str):
+    def _select_output_directory(self, field_attr: str) -> None:
         """Select output directory for the specified field."""
         field = getattr(self, field_attr)
         folder = QFileDialog.getExistingDirectory(self, "Select Output Directory")  # type: ignore
@@ -168,7 +168,7 @@ class FileOperationsMixin:
             return False
         return True
 
-    def add_files_from_list(self, file_list_attr: str, file_paths: list[str]):
+    def add_files_from_list(self, file_list_attr: str, file_paths: list[str]) -> None:
         """Add files from a list to the file list widget."""
         file_list = getattr(self, file_list_attr)
         existing_items = self._get_file_list_items(file_list)

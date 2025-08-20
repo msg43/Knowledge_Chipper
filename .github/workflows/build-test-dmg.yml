@@ -1,0 +1,200 @@
+name: Build Test DMG
+
+on:
+  workflow_dispatch:  # Allow manual triggering
+    inputs:
+      branch:
+        description: 'Branch to build from'
+        required: false
+        default: 'main'
+        type: string
+
+env:
+  PYTHON_VERSION: '3.13'
+  APP_NAME: 'Knowledge_Chipper'
+
+jobs:
+  build-test-dmg:
+    name: Build Test DMG
+    runs-on: macos-14
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.branch || 'main' }}
+        fetch-depth: 0
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install system dependencies
+      run: |
+        brew install --quiet ffmpeg
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -e .
+
+    - name: Get version info
+      id: version
+      run: |
+        if [ -f "src/knowledge_system/version.py" ]; then
+          VERSION=$(grep '^VERSION\s*=\s*"' src/knowledge_system/version.py | sed -E 's/.*"([^"]+)".*/\1/')
+        else
+          VERSION=$(git describe --tags --always)
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "📋 Building version: $VERSION"
+
+    - name: Build macOS app
+      run: |
+        echo "🏗️ Building Knowledge Chipper.app..."
+
+        # Create build directory
+        mkdir -p build_output
+        APP_NAME="Knowledge_Chipper"
+        APP_PATH="build_output/$APP_NAME.app"
+        CONTENTS_PATH="$APP_PATH/Contents"
+        MACOS_PATH="$CONTENTS_PATH/MacOS"
+        RESOURCES_PATH="$CONTENTS_PATH/Resources"
+
+        # Create app bundle structure
+        mkdir -p "$MACOS_PATH" "$RESOURCES_PATH"
+
+        # Copy project files
+        cp -r src "$MACOS_PATH/"
+        cp -r config "$MACOS_PATH/"
+        cp requirements.txt "$MACOS_PATH/"
+
+        # Create virtual environment inside app bundle
+        python -m venv "$MACOS_PATH/venv"
+        "$MACOS_PATH/venv/bin/python" -m pip install --upgrade pip
+        "$MACOS_PATH/venv/bin/python" -m pip install -r requirements.txt
+        
+        # Install the package in editable mode
+        cp pyproject.toml "$MACOS_PATH/" || true
+        cd "$MACOS_PATH" && "$MACOS_PATH/venv/bin/python" -m pip install -e . && cd -
+
+        # Create Info.plist
+        cat > "$CONTENTS_PATH/Info.plist" << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>launch</string>
+            <key>CFBundleIconFile</key>
+            <string>AppIcon</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.knowledgechipper.app</string>
+            <key>CFBundleName</key>
+            <string>Knowledge Chipper</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>${{ steps.version.outputs.version }}</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>10.12</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+            <key>LSRequiresNativeExecution</key>
+            <true/>
+        </dict>
+        </plist>
+        EOF
+
+        # Create launch script
+        cat > "$MACOS_PATH/launch" << 'EOF'
+        #!/bin/bash
+        APP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+        
+        # Create logs directory if it doesn't exist
+        mkdir -p "$APP_DIR/logs"
+        LOG_FILE="$APP_DIR/logs/knowledge_system.log"
+        
+        # Activate virtual environment
+        source "$APP_DIR/venv/bin/activate"
+        
+        # Set PYTHONPATH
+        export PYTHONPATH="$APP_DIR/src:$PYTHONPATH"
+        
+        # Launch GUI
+        cd "$APP_DIR"
+        exec python -m knowledge_system.gui.__main__ 2>&1 | tee -a "$LOG_FILE"
+        EOF
+        chmod +x "$MACOS_PATH/launch"
+
+        # Create app icon
+        mkdir -p icon.iconset
+        for size in 16 32 128 256 512; do
+            sips -z $size $size chipper.png --out icon.iconset/icon_${size}x${size}.png
+            sips -z $((size*2)) $((size*2)) chipper.png --out icon.iconset/icon_${size}x${size}@2x.png
+        done
+        iconutil -c icns icon.iconset -o "$RESOURCES_PATH/AppIcon.icns"
+        rm -rf icon.iconset
+
+        echo "✅ App bundle created successfully"
+
+    - name: Verify build output
+      run: |
+        if [ -d "build_output/${{ env.APP_NAME }}.app" ]; then
+          echo "✅ App bundle created successfully"
+          ls -la "build_output/${{ env.APP_NAME }}.app/Contents/"
+
+          # Check icon
+          if [ -f "build_output/${{ env.APP_NAME }}.app/Contents/Resources/AppIcon.icns" ]; then
+            echo "✅ App icon included"
+            file "build_output/${{ env.APP_NAME }}.app/Contents/Resources/AppIcon.icns"
+          else
+            echo "❌ App icon missing"
+            exit 1
+          fi
+
+          # Check executable
+          if [ -f "build_output/${{ env.APP_NAME }}.app/Contents/MacOS/launch" ]; then
+            echo "✅ Launch script included"
+          else
+            echo "❌ Launch script missing"
+            exit 1
+          fi
+        else
+          echo "❌ App bundle not created"
+          exit 1
+        fi
+
+    - name: Create DMG archive
+      run: |
+        cd build_output
+
+        # Create professional DMG disk image
+        hdiutil create \
+          -volname "${{ env.APP_NAME }}" \
+          -srcfolder "${{ env.APP_NAME }}.app" \
+          -ov \
+          -format UDZO \
+          -imagekey zlib-level=9 \
+          "${{ env.APP_NAME }}-test-v${{ steps.version.outputs.version }}-macOS.dmg"
+
+        echo "📦 Created test DMG archive:"
+        ls -la *.dmg
+
+        # Verify DMG was created successfully
+        if [ ! -f "${{ env.APP_NAME }}-test-v${{ steps.version.outputs.version }}-macOS.dmg" ]; then
+          echo "❌ DMG creation failed"
+          exit 1
+        fi
+
+        echo "✅ DMG created successfully"
+        hdiutil imageinfo "${{ env.APP_NAME }}-test-v${{ steps.version.outputs.version }}-macOS.dmg"
+
+    - name: Upload test DMG as artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-dmg-v${{ steps.version.outputs.version }}
+        path: build_output/${{ env.APP_NAME }}-test-v${{ steps.version.outputs.version }}-macOS.dmg
+        retention-days: 7

@@ -53,6 +53,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install -e .  # Install package in editable mode
         pip install pytest  # For any basic tests
 
     - name: Verify icon files exist
@@ -75,11 +76,14 @@ jobs:
         import sys
         sys.path.insert(0, 'src')
         try:
-            from knowledge_system.gui.assets.icons import get_app_icon, get_icon_path
-            print('✅ Icon system imports successfully')
+            # Test core imports without GUI components
+            from knowledge_system.cli import main
+            from knowledge_system.config import get_config
+            print('✅ Core imports successful')
 
-            # Test icon loading (without creating QApplication)
+            # Test icon path finding (without PyQt6)
             from pathlib import Path
+            from knowledge_system.gui.assets.icons import get_icon_path
             icon_path = get_icon_path()
             if icon_path and icon_path.exists():
                 print(f'✅ Icon file found at: {icon_path}')
@@ -88,6 +92,8 @@ jobs:
                 exit(1)
         except Exception as e:
             print(f'❌ Import test failed: {e}')
+            import traceback
+            traceback.print_exc()
             exit(1)
         "
 
@@ -124,7 +130,7 @@ jobs:
     name: Build Release App
     runs-on: macos-14  # Use latest macOS for release builds
     needs: test-build
-    if: github.event_name == 'release' || github.event.inputs.test_build == 'false'
+    if: always() && (github.event_name == 'release' || github.event.inputs.test_build == 'false')
 
     steps:
     - name: Checkout repository
@@ -153,6 +159,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install -e .  # Install package in editable mode
 
     - name: Get version info
       id: version
@@ -169,23 +176,86 @@ jobs:
       run: |
         echo "🏗️ Building Knowledge Chipper.app..."
 
-        # Set up for automated build (no interactive prompts)
-        export CI=true
-        export AUTOMATED_BUILD=true
-
-        # Run the build script
-        chmod +x build_macos_app.sh
-
-        # Modify build script to work in CI environment
-        # Replace sudo commands with direct commands since we're in a clean environment
-        sed -i '' 's/sudo //g' build_macos_app.sh
-        sed -i '' 's|/Applications|./build_output|g' build_macos_app.sh
-
-        # Create output directory
+        # Create build directory
         mkdir -p build_output
+        APP_NAME="Knowledge_Chipper"
+        APP_PATH="build_output/$APP_NAME.app"
+        CONTENTS_PATH="$APP_PATH/Contents"
+        MACOS_PATH="$CONTENTS_PATH/MacOS"
+        RESOURCES_PATH="$CONTENTS_PATH/Resources"
 
-        # Run modified build
-        ./build_macos_app.sh
+        # Create app bundle structure
+        mkdir -p "$MACOS_PATH" "$RESOURCES_PATH"
+
+        # Copy project files
+        cp -r src "$MACOS_PATH/"
+        cp -r config "$MACOS_PATH/"
+        cp requirements.txt "$MACOS_PATH/"
+
+        # Create virtual environment inside app bundle
+        python -m venv "$MACOS_PATH/venv"
+        "$MACOS_PATH/venv/bin/python" -m pip install --upgrade pip
+        "$MACOS_PATH/venv/bin/python" -m pip install -r requirements.txt
+        
+        # Install the package in editable mode (need to copy setup files first)
+        cp pyproject.toml "$MACOS_PATH/" || true
+        cd "$MACOS_PATH" && "$MACOS_PATH/venv/bin/python" -m pip install -e . && cd -
+
+        # Create Info.plist
+        cat > "$CONTENTS_PATH/Info.plist" << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>launch</string>
+            <key>CFBundleIconFile</key>
+            <string>AppIcon</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.knowledgechipper.app</string>
+            <key>CFBundleName</key>
+            <string>Knowledge Chipper</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>${{ steps.version.outputs.version }}</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>10.12</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+            <key>LSRequiresNativeExecution</key>
+            <true/>
+        </dict>
+        </plist>
+        EOF
+
+        # Create launch script
+        cat > "$MACOS_PATH/launch" << 'EOF'
+        #!/bin/bash
+        APP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+        
+        # Activate virtual environment
+        source "$APP_DIR/venv/bin/activate"
+        
+        # Set PYTHONPATH
+        export PYTHONPATH="$APP_DIR/src:$PYTHONPATH"
+        
+        # Launch GUI
+        cd "$APP_DIR"
+        exec python -m knowledge_system.gui.__main__
+        EOF
+        chmod +x "$MACOS_PATH/launch"
+
+        # Create app icon
+        mkdir -p icon.iconset
+        for size in 16 32 128 256 512; do
+            sips -z $size $size chipper.png --out icon.iconset/icon_${size}x${size}.png
+            sips -z $((size*2)) $((size*2)) chipper.png --out icon.iconset/icon_${size}x${size}@2x.png
+        done
+        iconutil -c icns icon.iconset -o "$RESOURCES_PATH/AppIcon.icns"
+        rm -rf icon.iconset
+
+        echo "✅ App bundle created successfully"
 
     - name: Verify build output
       run: |

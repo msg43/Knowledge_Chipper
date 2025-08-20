@@ -7,7 +7,12 @@ Provides centralized access to application icons.
 
 from pathlib import Path
 
-from PyQt6.QtGui import QIcon, QPixmap
+try:
+    from PyQt6.QtGui import QIcon, QPixmap
+except ImportError:
+    # Handle case where PyQt6 is not available (e.g., in CI environments)
+    QIcon = None
+    QPixmap = None
 
 
 def get_icon_paths() -> list[Path]:
@@ -32,6 +37,9 @@ def get_icon_paths() -> list[Path]:
 
 def get_app_icon() -> QIcon | None:
     """Get the application icon as a QIcon."""
+    if QIcon is None:
+        return None
+    
     for icon_path in get_icon_paths():
         if icon_path.exists():
             try:
@@ -43,6 +51,9 @@ def get_app_icon() -> QIcon | None:
 
 def get_app_pixmap(size: tuple[int, int] | None = None) -> QPixmap | None:
     """Get the application icon as a QPixmap."""
+    if QPixmap is None:
+        return None
+        
     for icon_path in get_icon_paths():
         if icon_path.exists():
             try:

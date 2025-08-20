@@ -6,14 +6,11 @@ allowing transcription and diarization to work on segments simultaneously
 instead of waiting for complete files.
 """
 
-import asyncio
-import threading
-import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from knowledge_system.logger import get_logger
 from knowledge_system.processors.base import ProcessorResult

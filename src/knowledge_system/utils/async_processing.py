@@ -6,12 +6,10 @@ on Apple Silicon, taking advantage of the Neural Engine for transcription
 and GPU for diarization simultaneously.
 """
 
-import asyncio
-import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from knowledge_system.logger import get_logger
 from knowledge_system.processors.base import ProcessorResult

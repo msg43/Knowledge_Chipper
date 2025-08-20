@@ -322,9 +322,9 @@ class MainWindow(QMainWindow):
 
             # Set Anthropic API key
             if self.settings.api_keys.anthropic_api_key:
-                os.environ[
-                    "ANTHROPIC_API_KEY"
-                ] = self.settings.api_keys.anthropic_api_key
+                os.environ["ANTHROPIC_API_KEY"] = (
+                    self.settings.api_keys.anthropic_api_key
+                )
 
             logger.debug("API keys loaded to environment variables")
 
@@ -392,8 +392,8 @@ class MainWindow(QMainWindow):
                     last = datetime.fromisoformat(last_check_iso)
                     if now - last < timedelta(days=30):
                         do_check = False
-                except Exception:
-                    pass
+                except (ValueError, TypeError):
+                    pass  # Invalid datetime format
 
             if not do_check:
                 return
@@ -410,8 +410,8 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(
                 "FFmpeg not found. You can install it from Settings → Install/Update FFmpeg."
             )
-        except Exception:
-            pass
+        except (ImportError, AttributeError):
+            pass  # FFmpeg check failed
 
     def closeEvent(self, event: QCloseEvent | None) -> None:
         """Handle window close event."""
@@ -464,7 +464,6 @@ def launch_gui() -> None:
         if sys.platform == "darwin":
             try:
                 # Set the activation policy to regular application
-                import objc
                 from AppKit import NSApplication, NSApplicationActivationPolicyRegular
 
                 ns_app = NSApplication.sharedApplication()
@@ -478,8 +477,8 @@ def launch_gui() -> None:
 
                     libc = ctypes.CDLL("libc.dylib")
                     libc.setproctitle(c_char_p(b"Knowledge Chipper"))
-                except:
-                    pass
+                except (OSError, AttributeError, ImportError):
+                    pass  # Process title setting failed
 
         # Set application properties
         app.setApplicationName("Knowledge_Chipper")
