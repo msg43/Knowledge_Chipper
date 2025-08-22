@@ -7,7 +7,9 @@ echo "🔄 Checking for updates..."
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-cd "$SCRIPT_DIR"
+# Go to the project root (parent of scripts directory)
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_ROOT"
 
 # Determine current user early for ownership adjustments
 CURRENT_USER=$(whoami)
@@ -248,7 +250,7 @@ sudo chmod 755 "$MACOS_PATH/scripts/build_macos_app.sh"
 
 # Update version file and Python version.py with current build date
 echo "📝 Adding version information..."
-PY_VER_FILE="$SCRIPT_DIR/src/knowledge_system/version.py"
+PY_VER_FILE="$PROJECT_ROOT/src/knowledge_system/version.py"
 CURRENT_DATE=$(date +"%Y-%m-%d")
 
 # Generate clean version for display (user wants just base version)
