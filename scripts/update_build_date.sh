@@ -2,6 +2,7 @@
 # Script to manually update build dates and sync version info across all relevant files
 # Usage: bash scripts/update_build_date.sh [date]
 # If no date provided, uses current date
+# Note: Since version.py was eliminated, this script now only updates README.md
 
 # Get date (use provided date or current date)
 if [ -n "$1" ]; then
@@ -19,13 +20,9 @@ if [[ ! $BUILD_DATE =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
 fi
 
 # Files to update
-VERSION_FILE="src/knowledge_system/version.py"
 README_FILE="README.md"
 
 echo "📝 Updating build dates to $BUILD_DATE..."
-
-# Extract version from pyproject.toml (source of truth) and branch from version.py
-VERSION_FILE="src/knowledge_system/version.py"
 
 # Get version from pyproject.toml (source of truth)
 if [ -f "pyproject.toml" ]; then
@@ -36,24 +33,11 @@ else
     exit 1
 fi
 
-# Get branch from version.py or default to main
-if [ -f "$VERSION_FILE" ]; then
-    CURRENT_BRANCH=$(grep 'BRANCH = ' "$VERSION_FILE" | sed 's/BRANCH = "\(.*\)"/\1/')
-    echo "📋 Found branch: $CURRENT_BRANCH"
-else
-    CURRENT_BRANCH="main"
-    echo "📋 Using default branch: $CURRENT_BRANCH"
-fi
+# Use current git branch
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+echo "📋 Using current git branch: $CURRENT_BRANCH"
 
-# Update version.py to match pyproject.toml
-cat > "$VERSION_FILE" << EOF
-# Auto-generated version info
-VERSION = "$CURRENT_VERSION"
-BRANCH = "$CURRENT_BRANCH"
-BUILD_DATE = "$BUILD_DATE"
-EOF
-
-echo "✅ Updated $VERSION_FILE (synced with pyproject.toml)"
+echo "✅ Version info: $CURRENT_VERSION on $CURRENT_BRANCH (no version.py needed)"
 
 # Update README.md with version, build date, and branch
 if [ -f "$README_FILE" ]; then
@@ -76,5 +60,5 @@ echo "🎉 Build date update complete!"
 if [ -d ".git" ]; then
     echo ""
     echo "📊 Git status:"
-    git status --porcelain "$VERSION_FILE" "$README_FILE"
+    git status --porcelain "$README_FILE"
 fi
