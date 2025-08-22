@@ -594,6 +594,9 @@ class APIKeysTab(BaseTab):
             self.update_worker.update_finished.connect(self._handle_update_finished)
             self.update_worker.update_error.connect(self._handle_update_error)
             
+            # Initialize completion tracking
+            self._update_completed = False
+            
             # Add worker failure detection
             self.update_worker.finished.connect(self._on_worker_finished)
 
@@ -657,6 +660,9 @@ class APIKeysTab(BaseTab):
 
     def _handle_update_finished(self, success: bool, message: str) -> None:
         """Handle update completion."""
+        # Mark update as completed to prevent false crash detection
+        self._update_completed = True
+        
         # Close progress dialog
         if self.update_progress_dialog:
             self.update_progress_dialog.close()
@@ -745,26 +751,28 @@ class APIKeysTab(BaseTab):
 
     def _on_worker_finished(self) -> None:
         """Handle worker thread finishing (for crash detection)."""
-        if self.update_worker and not self.update_worker.isFinished():
-            # Worker finished unexpectedly
-            self.append_log("⚠️  Update worker finished unexpectedly")
-            if self.update_progress_dialog:
-                self.update_progress_dialog.close()
-                self.update_progress_dialog = None
-            
-            # Offer fallback option
-            from PyQt6.QtWidgets import QMessageBox
-            reply = QMessageBox.question(
-                self,
-                "Update Issue",
-                "The update process encountered an issue. Would you like to try the fallback update method?\n\n"
-                "This will open Terminal where you can run the update manually.",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes
-            )
-            
-            if reply == QMessageBox.StandardButton.Yes:
-                self._fallback_update()
+        if self.update_worker:
+            # Check if worker finished without calling our completion handlers
+            # This indicates the worker crashed or was terminated unexpectedly
+            if (not hasattr(self, '_update_completed') or not self._update_completed) and self.update_worker.isFinished():
+                self.append_log("⚠️  Update worker finished unexpectedly")
+                if self.update_progress_dialog:
+                    self.update_progress_dialog.close()
+                    self.update_progress_dialog = None
+                
+                # Offer fallback option
+                from PyQt6.QtWidgets import QMessageBox
+                reply = QMessageBox.question(
+                    self,
+                    "Update Issue",
+                    "The update process encountered an issue. Would you like to try the fallback update method?\n\n"
+                    "This will open Terminal where you can run the update manually.",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
+                
+                if reply == QMessageBox.StandardButton.Yes:
+                    self._fallback_update()
 
     def _fallback_update(self) -> None:
         """Fallback update method using Terminal."""
@@ -799,6 +807,9 @@ end tell
 
     def _handle_update_error(self, error: str) -> None:
         """Handle update errors."""
+        # Mark update as completed (even though failed) to prevent false crash detection
+        self._update_completed = True
+        
         # Close progress dialog
         if self.update_progress_dialog:
             self.update_progress_dialog.close()
