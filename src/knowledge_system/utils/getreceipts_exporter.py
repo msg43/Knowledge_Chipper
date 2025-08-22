@@ -6,13 +6,23 @@ Maps HCE PipelineOutputs to GetReceipts RF-1 format with rich knowledge artifact
 import json
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from urllib.parse import urlparse
 
 import requests
 from pydantic import BaseModel
 
 from ..logger import get_logger
+
+if TYPE_CHECKING:
+    from ..processors.hce.types import (
+        PipelineOutputs, 
+        ScoredClaim, 
+        Relation, 
+        PersonMention, 
+        JargonTerm, 
+        MentalModel
+    )
 
 logger = get_logger(__name__)
 

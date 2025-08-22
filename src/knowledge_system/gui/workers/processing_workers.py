@@ -6,6 +6,7 @@ from typing import Any
 from PyQt6.QtCore import QDateTime, QThread, pyqtSignal
 
 from ...logger import get_logger
+from ...utils.progress import SummarizationProgress
 
 logger = get_logger(__name__)
 
@@ -52,14 +53,10 @@ class EnhancedSummarizationWorker(QThread):
                     def progress_callback(stage: str, percentage: int):
                         """HCE progress callback."""
                         # Convert HCE progress to SummarizationProgress format
-                        from ...utils.progress import SummarizationProgress
-
                         progress = SummarizationProgress(
-                            file_path=str(file_path),
-                            stage=stage,
-                            percentage=percentage,
-                            current_chunk=1,
-                            total_chunks=1,
+                            current_file=str(file_path),
+                            current_step=stage,
+                            file_percent=float(percentage),
                             status=f"{stage} ({percentage}%)",
                         )
                         self.progress_updated.emit(progress)
