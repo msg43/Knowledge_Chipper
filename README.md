@@ -146,14 +146,14 @@ A revolutionary knowledge management system for macOS that transforms videos, au
 ```bash
 git clone https://github.com/msg43/Knowledge_Chipper.git
 cd Knowledge_Chipper
-bash setup.sh
+bash scripts/setup.sh
 ```
 
 **Quick setup (no prompts):**
 ```bash
 git clone https://github.com/msg43/Knowledge_Chipper.git
 cd Knowledge_Chipper
-bash quick_setup.sh
+bash scripts/quick_setup.sh
 ```
 
 ### Manual Installation
