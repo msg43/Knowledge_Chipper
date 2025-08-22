@@ -30,16 +30,16 @@ class UpdateWorker(QThread):
         """Find the build_macos_app.sh script."""
         try:
             # Always use the main repository path for updates
-            # This avoids permission issues with the app bundle
+            # This avoids permission issues and path confusion with the app bundle
             main_repo_path = Path.home() / "Projects" / "Knowledge_Chipper"
 
-            # Look for the script in the main repository
+            # Look for the script in the main repository (preferred)
             script_path = main_repo_path / "scripts" / "build_macos_app.sh"
             if script_path.exists():
                 logger.info(f"Found update script at: {script_path}")
                 return script_path
 
-            # Fallback to checking relative to current file location
+            # Fallback to checking relative to current file location (running from source)
             if not getattr(sys, "frozen", False):
                 # Running from source
                 fallback_dir = Path(
@@ -47,6 +47,15 @@ class UpdateWorker(QThread):
                 ).parents[3]
                 script_path = fallback_dir / "scripts" / "build_macos_app.sh"
                 if script_path.exists():
+                    logger.info(f"Found update script at: {script_path}")
+                    return script_path
+
+            # Last resort: try to find the repository by looking for typical Git project structure
+            # This helps when running from an app bundle
+            current_path = Path.cwd()
+            for potential_repo in [current_path, current_path.parent, current_path.parent.parent]:
+                script_path = potential_repo / "scripts" / "build_macos_app.sh"
+                if script_path.exists() and (potential_repo / ".git").exists():
                     logger.info(f"Found update script at: {script_path}")
                     return script_path
 
