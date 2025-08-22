@@ -243,11 +243,11 @@ fi'''
                 'sudo chmod 777 "$MACOS_PATH/logs"',
                 'chmod 777 "$MACOS_PATH/logs" || true'
             ).replace(
-                'sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/scripts/build_macos_app.sh"',
-                'chown "$CURRENT_USER:staff" "$MACOS_PATH/scripts/build_macos_app.sh" || true'
+                'sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/build_macos_app.sh"',
+                'chown "$CURRENT_USER:staff" "$MACOS_PATH/build_macos_app.sh" || true'
             ).replace(
-                'sudo chmod 755 "$MACOS_PATH/scripts/build_macos_app.sh"',
-                'chmod 755 "$MACOS_PATH/scripts/build_macos_app.sh" || true'
+                'sudo chmod 755 "$MACOS_PATH/build_macos_app.sh"',
+                'chmod 755 "$MACOS_PATH/build_macos_app.sh" || true'
             ).replace(
                 'sudo mv "/tmp/version.txt" "$MACOS_PATH/version.txt"',
                 'mv "/tmp/version.txt" "$MACOS_PATH/version.txt"'
