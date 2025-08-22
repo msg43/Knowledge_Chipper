@@ -163,6 +163,8 @@ class UpdateWorker(QThread):
                         error = "Permission error. Please check file permissions."
                     elif "No such file or directory" in full_output:
                         error = "Missing dependency. Please check your development environment."
+                    elif "sudo" in full_output.lower() and "password" in full_output.lower():
+                        error = "Update requires admin privileges. Please run from Terminal: bash scripts/build_macos_app.sh"
                     else:
                         error = f"Update failed with exit code {process.returncode}. Check logs for details."
 
@@ -235,6 +237,9 @@ fi'''
             ).replace(
                 'sudo mv "/tmp/version.txt" "$MACOS_PATH/version.txt"',
                 'mv "/tmp/version.txt" "$MACOS_PATH/version.txt"'
+            ).replace(
+                'sudo mv "/tmp/version.py" "$MACOS_PATH/src/knowledge_system/version.py"',
+                'mv "/tmp/version.py" "$MACOS_PATH/src/knowledge_system/version.py"'
             )
             
             logger.debug(f"Modified script size: {len(modified_content)} bytes")
