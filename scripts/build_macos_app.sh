@@ -245,8 +245,8 @@ sudo chmod -R 755 "$APP_PATH"
 # Ensure logs directory exists and is writable
 sudo mkdir -p "$MACOS_PATH/logs"
 sudo chmod 777 "$MACOS_PATH/logs"
-sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/scripts/build_macos_app.sh"
-sudo chmod 755 "$MACOS_PATH/scripts/build_macos_app.sh"
+sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/build_macos_app.sh"
+sudo chmod 755 "$MACOS_PATH/build_macos_app.sh"
 
 # Update version file and Python version.py with current build date
 echo "📝 Adding version information..."
