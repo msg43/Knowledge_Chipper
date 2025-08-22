@@ -368,3 +368,27 @@ def transcribe_youtube(
         url, output_dir=output_dir, include_timestamps=include_timestamps
     )
     return result.get("transcript") if result["success"] else None
+
+
+def transcribe_file(
+    input_path: str | Path,
+    model: str = "base",
+    normalize: bool = True,
+    download_thumbnails: bool | None = None,
+    output_dir: str | Path | None = None,
+    include_timestamps: bool = True,
+    temp_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """Convenience function to transcribe any supported input (audio file or YouTube URL)."""
+    service = TranscriptionService(
+        whisper_model=model,
+        normalize_audio=normalize,
+        download_thumbnails=download_thumbnails if download_thumbnails is not None else True,
+        temp_dir=temp_dir,
+    )
+    return service.transcribe_input(
+        input_path, 
+        download_thumbnails=download_thumbnails,
+        output_dir=output_dir,
+        include_timestamps=include_timestamps
+    )

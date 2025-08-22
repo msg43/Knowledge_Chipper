@@ -1,17 +1,44 @@
-# Documentation
+# Knowledge Chipper Documentation
 
-This directory contains all project documentation files.
+This directory contains documentation for Knowledge Chipper organized by audience.
 
-## Files
+## 📁 Documentation Structure
 
-- `implementation_summary.md` - Overview of the implementation details
-- `knowledge_system_architecture_plan.md` - Architecture and design plan
-- `INTERJECTION_STRIPPING.md` - Documentation on interjection stripping functionality
-- `native_macos_comparison.md` - macOS-specific implementation notes
-- `whisper.md` - Whisper integration documentation
-- `YOUTUBE_API_SETUP.md` - YouTube API setup instructions
-- `YOUTUBE_OAUTH2_SETUP.md` - YouTube OAuth2 setup instructions
+### 🌐 `public/` - User-Facing Documentation
+Documentation that's essential for third-party users, contributors, and anyone setting up or using Knowledge Chipper:
 
-## Organization
+- **Setup & Configuration**: API setup guides, installation instructions
+- **Architecture & Design**: System architecture, implementation details
+- **User Guides**: Feature documentation, optimization tips
+- **Migration Guides**: Upgrade and migration instructions
 
-Documentation is organized by functional area and setup instructions. For API-specific documentation, see the files prefixed with the service name (e.g., `YOUTUBE_*`). 
+### 🔒 `internal/` - Development Documentation 
+Internal development files, progress tracking, and planning documents that are kept in the workspace but excluded from public distribution via `.gitignore`:
+
+- **TODO Lists**: Development planning and task tracking
+- **Progress Reports**: Internal project status updates  
+- **Build Process**: Internal build automation documentation
+- **Code Quality**: Internal code quality tracking and audits
+
+## 📋 Quick Reference
+
+**For Users**:
+- Start with files in `public/` folder
+- Check `public/README.md` for setup instructions
+- See architecture docs for understanding the system
+
+**For Contributors**:
+- Access to both `public/` and `internal/` folders
+- `internal/` contains development planning and progress tracking
+- Follow contribution guidelines in root `CONTRIBUTING.md`
+
+## 🔄 Organization Benefits
+
+1. **Clean public distribution** - Third parties only see relevant documentation
+2. **Preserved development context** - Internal docs remain accessible to developers
+3. **Clear separation** - Easy to distinguish user vs. development documentation
+4. **Maintained history** - All documentation remains in version control locally
+
+## 📞 Questions?
+
+If you can't find what you're looking for, check the main project README or open an issue.

@@ -1134,6 +1134,16 @@ class SummarizationTab(BaseTab):
         self.resume_checkbox.toggled.connect(self._on_setting_changed)
         settings_layout.addWidget(self.resume_checkbox, 2, 4, 1, 2)
 
+        self.export_getreceipts_checkbox = QCheckBox("Export to GetReceipts")
+        self.export_getreceipts_checkbox.setToolTip(
+            "Export extracted claims to GetReceipts platform (getreceipts-web.vercel.app)\n"
+            "• Automatically publishes claims with evidence and timestamps\n"
+            "• Includes people, jargon, and mental models as knowledge artifacts\n"
+            "• Creates shareable claim pages for community discussion"
+        )
+        self.export_getreceipts_checkbox.toggled.connect(self._on_setting_changed)
+        settings_layout.addWidget(self.export_getreceipts_checkbox, 3, 4, 1, 2)
+
         # Output folder (only shown when not updating in-place)
         self.output_label = QLabel("Output:")
         settings_layout.addWidget(self.output_label, 4, 0)
@@ -1359,6 +1369,7 @@ class SummarizationTab(BaseTab):
             "create_separate_file": self.separate_file_checkbox.isChecked(),
             "force_regenerate": self.force_regenerate_checkbox.isChecked(),
             "analysis_type": self.analysis_type_combo.currentText(),
+            "export_getreceipts": self.export_getreceipts_checkbox.isChecked(),
         }
 
         # Start worker
@@ -2453,6 +2464,7 @@ class SummarizationTab(BaseTab):
                 self.force_regenerate_checkbox,
                 self.progress_checkbox,
                 self.resume_checkbox,
+                self.export_getreceipts_checkbox,
                 self.claim_tier_combo,
                 self.max_claims_spin,
                 self.include_contradictions_checkbox,
@@ -2526,6 +2538,11 @@ class SummarizationTab(BaseTab):
                 self.resume_checkbox.setChecked(
                     self.gui_settings.get_checkbox_state(
                         self.tab_name, "resume_checkpoint", False
+                    )
+                )
+                self.export_getreceipts_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(
+                        self.tab_name, "export_getreceipts", False
                     )
                 )
 

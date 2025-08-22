@@ -1,6 +1,6 @@
 # Knowledge_Chipper
 
-**Version:** 3.0.1 | **Build Date:** 2025-08-21 | **Branch:** main
+**Version:** 3.0.1 | **Build Date:** 2025-08-22 | **Branch:** main
 
 A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 
@@ -146,14 +146,14 @@ A revolutionary knowledge management system for macOS that transforms videos, au
 ```bash
 git clone https://github.com/msg43/Knowledge_Chipper.git
 cd Knowledge_Chipper
-bash setup.sh
+bash scripts/setup.sh
 ```
 
 **Quick setup (no prompts):**
 ```bash
 git clone https://github.com/msg43/Knowledge_Chipper.git
 cd Knowledge_Chipper
-bash quick_setup.sh
+bash scripts/quick_setup.sh
 ```
 
 ### Manual Installation

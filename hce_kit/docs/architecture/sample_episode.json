@@ -1,7 +1,0 @@
-{
-  "episode_id": "ep_sample",
-  "segments": [
-    {"episode_id":"ep_sample","segment_id":"s1","speaker":"HOST","t0":"00:00:00.000","t1":"00:00:05.000","text":"Welcome to the show."},
-    {"episode_id":"ep_sample","segment_id":"s2","speaker":"GUEST","t0":"00:00:05.000","t1":"00:00:45.000","text":"I believe adoption will double by next year due to policy changes."}
-  ]
-}

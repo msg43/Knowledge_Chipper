@@ -6,6 +6,7 @@ from typing import Any
 from PyQt6.QtCore import QDateTime, QThread, pyqtSignal
 
 from ...logger import get_logger
+from ...utils.progress import SummarizationProgress
 
 logger = get_logger(__name__)
 
@@ -52,14 +53,10 @@ class EnhancedSummarizationWorker(QThread):
                     def progress_callback(stage: str, percentage: int):
                         """HCE progress callback."""
                         # Convert HCE progress to SummarizationProgress format
-                        from ...utils.progress import SummarizationProgress
-
                         progress = SummarizationProgress(
-                            file_path=str(file_path),
-                            stage=stage,
-                            percentage=percentage,
-                            current_chunk=1,
-                            total_chunks=1,
+                            current_file=str(file_path),
+                            current_step=stage,
+                            file_percent=float(percentage),
                             status=f"{stage} ({percentage}%)",
                         )
                         self.progress_updated.emit(progress)
@@ -74,6 +71,89 @@ class EnhancedSummarizationWorker(QThread):
 
                     if result.success:
                         logger.info(f"Successfully summarized: {file_path}")
+                        
+                        # Export to GetReceipts if enabled and successful
+                        if (
+                            self.gui_settings.get("export_getreceipts", False)
+                            and result.metadata.get("hce_data")
+                        ):
+                            try:
+                                from ...utils.getreceipts_exporter import create_exporter_from_settings
+                                from ...config import get_settings
+                                
+                                # Create exporter from settings
+                                settings = get_settings()
+                                exporter = create_exporter_from_settings(settings)
+                                
+                                # Get HCE pipeline outputs from result metadata
+                                hce_data = result.metadata["hce_data"]
+                                
+                                # Build source info for the claim
+                                source_info = {
+                                    "title": file_path.stem,
+                                    "url": getattr(file_path, "url", None),
+                                    "date": result.metadata.get("timestamp"),
+                                    "duration": None
+                                }
+                                
+                                # Emit GetReceipts export starting signal
+                                progress = SummarizationProgress(
+                                    current_file=str(file_path),
+                                    current_step="Exporting to GetReceipts",
+                                    status="🔗 Exporting claims to GetReceipts platform...",
+                                    file_percent=95.0,
+                                )
+                                self.progress_updated.emit(progress)
+                                
+                                # Export to GetReceipts
+                                export_result = exporter.export_hce_pipeline_outputs(
+                                    hce_data,
+                                    source_info=source_info,
+                                    episode_context=str(file_path)[:1000]
+                                )
+                                
+                                if export_result["success"]:
+                                    claims_exported = export_result["claims_exported"]
+                                    logger.info(f"✅ Exported {claims_exported} claims to GetReceipts for {file_path}")
+                                    
+                                    # Emit success signal with GetReceipts info
+                                    progress = SummarizationProgress(
+                                        current_file=str(file_path),
+                                        current_step=f"GetReceipts Export Complete",
+                                        status=f"✅ Exported {claims_exported} claims to GetReceipts",
+                                        file_percent=100.0,
+                                    )
+                                    self.progress_updated.emit(progress)
+                                    
+                                    # Log claim URLs for user reference
+                                    for result_item in export_result.get("results", [])[:3]:  # Show first 3
+                                        if result_item.get("success") and result_item.get("url"):
+                                            claim_url = f"https://getreceipts-web.vercel.app/claim/{result_item['url']}"
+                                            logger.info(f"📄 View claim: {claim_url}")
+                                else:
+                                    error_msg = export_result.get("error", "Unknown export error")
+                                    logger.warning(f"⚠ GetReceipts export failed for {file_path}: {error_msg}")
+                                    
+                                    # Emit warning signal
+                                    progress = SummarizationProgress(
+                                        current_file=str(file_path),
+                                        current_step="GetReceipts Export Failed",
+                                        status=f"⚠ Export failed: {error_msg}",
+                                        file_percent=100.0,
+                                    )
+                                    self.progress_updated.emit(progress)
+                                    
+                            except Exception as e:
+                                logger.error(f"GetReceipts export error for {file_path}: {e}")
+                                # Don't fail the entire operation for export errors
+                                progress = SummarizationProgress(
+                                    current_file=str(file_path),
+                                    current_step="GetReceipts Export Error",
+                                    status=f"⚠ Export error: {str(e)}",
+                                    file_percent=100.0,
+                                )
+                                self.progress_updated.emit(progress)
+                        
                     else:
                         logger.error(
                             f"Failed to summarize {file_path}: {result.errors}"

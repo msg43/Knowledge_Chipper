@@ -30,6 +30,8 @@ def get_icon_paths() -> list[Path]:
     paths = []
     for base in base_paths:
         for name in icon_names:
+            # Check in Assets folder first, then root
+            paths.append(base / "Assets" / name)
             paths.append(base / name)
 
     return paths
