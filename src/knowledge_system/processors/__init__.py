@@ -6,6 +6,7 @@ from .diarization import SpeakerDiarizationProcessor
 from .html import HTMLProcessor
 from .moc import MOCProcessor
 from .pdf import PDFProcessor
+from .rss_processor import RSSProcessor
 from .summarizer import SummarizerProcessor
 
 # Keep WhisperCppTranscribeProcessor internal - users should use AudioProcessor
@@ -26,5 +27,6 @@ __all__ = [
     "MOCProcessor",
     "PDFProcessor",
     "HTMLProcessor",
+    "RSSProcessor",
     "SpeakerDiarizationProcessor",
 ]

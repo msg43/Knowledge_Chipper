@@ -1,0 +1,8 @@
+[
+    {
+        "key": "cmd+shift+r",
+        "command": "workbench.action.tasks.runTask",
+        "args": "Launch Knowledge Chipper",
+        "when": "editorTextFocus || terminalFocus || explorerViewletFocus"
+    }
+]

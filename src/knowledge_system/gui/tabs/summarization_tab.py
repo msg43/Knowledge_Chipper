@@ -28,7 +28,7 @@ from ...utils.model_registry import get_provider_models
 from ...utils.ollama_manager import get_ollama_manager
 from ..components.base_tab import BaseTab
 from ..core.settings_manager import get_gui_settings_manager
-from ..dialogs import ModelDownloadDialog, OllamaServiceDialog
+from ..legacy_dialogs import ModelDownloadDialog, OllamaServiceDialog
 
 logger = get_logger(__name__)
 
@@ -1542,7 +1542,7 @@ class SummarizationTab(BaseTab):
             # Show service dialog
             from PyQt6.QtWidgets import QDialog
 
-            from ..dialogs import OllamaServiceDialog
+            from ..legacy_dialogs import OllamaServiceDialog
 
             dialog = OllamaServiceDialog(self)
 
@@ -1604,7 +1604,7 @@ class SummarizationTab(BaseTab):
 
         from PyQt6.QtWidgets import QDialog
 
-        from ..dialogs import ModelDownloadDialog
+        from ..legacy_dialogs import ModelDownloadDialog
 
         clean_model_name = model.replace(" (Installed)", "")
         clean_model_name = re.sub(r" \(\d+ GB\)$", "", clean_model_name)

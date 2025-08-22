@@ -4,6 +4,7 @@ from pathlib import Path
 from knowledge_system.processors.base import BaseProcessor
 from knowledge_system.processors.html import HTMLProcessor
 from knowledge_system.processors.pdf import PDFProcessor
+from knowledge_system.processors.rss_processor import RSSProcessor
 from knowledge_system.processors.youtube_download import YouTubeDownloadProcessor
 from knowledge_system.processors.youtube_metadata import YouTubeMetadataProcessor
 
@@ -78,3 +79,16 @@ register_processor(
 )
 register_processor(PDFProcessor, extensions=[".pdf"], name="PDFProcessor")
 register_processor(HTMLProcessor, extensions=[".html", ".htm"], name="HTMLProcessor")
+register_processor(
+    RSSProcessor,
+    url_patterns=[
+        r".*\.rss$",
+        r".*rss\.xml$", 
+        r".*/rss/?$",
+        r".*/feed/?$",
+        r".*feeds?\..*",
+        r".*/atom\.xml$",
+        r".*/index\.xml$",
+    ],
+    name="RSSProcessor",
+)

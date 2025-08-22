@@ -177,7 +177,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(introduction_tab, "Introduction")
 
         youtube_tab = YouTubeTab(self)
-        self.tabs.addTab(youtube_tab, "YouTube")
+        self.tabs.addTab(youtube_tab, "Extraction")
 
         transcription_tab = TranscriptionTab(self)
         self.tabs.addTab(transcription_tab, "Transcription")
