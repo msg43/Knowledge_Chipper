@@ -248,6 +248,8 @@ sudo chmod 777 "$MACOS_PATH/logs"
 sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/build_macos_app.sh"
 sudo chmod 755 "$MACOS_PATH/build_macos_app.sh"
 
+# No version.py file to set permissions on since it was eliminated
+
 # Update version file and Python version.py with current build date
 echo "📝 Adding version information..."
 PY_VER_FILE="$PROJECT_ROOT/src/knowledge_system/version.py"
@@ -268,23 +270,12 @@ else
     CURRENT_VERSION=$(echo "$GIT_VERSION" | sed 's/^v//' | sed 's/-[0-9]*-g[a-f0-9]*$//')
     echo "📋 Using cleaned version from git: $CURRENT_VERSION"
   else
-    # Fallback to version.py file
-    if [ -f "$PY_VER_FILE" ]; then
-      CURRENT_VERSION=$(grep '^VERSION\s*=\s*"' "$PY_VER_FILE" | sed -E 's/.*"([^"]+)".*/\1/')
-    else
-      CURRENT_VERSION="3.0.1"
-    fi
+    CURRENT_VERSION="3.0.3"
+    echo "📋 Using fallback version: $CURRENT_VERSION"
   fi
 fi
 
-# Update the Python version.py file in the app bundle with current date
-cat > "/tmp/version.py" << EOF
-# Auto-generated version info
-VERSION = "$CURRENT_VERSION"
-BRANCH = "$CURRENT_BRANCH"
-BUILD_DATE = "$CURRENT_DATE"
-EOF
-sudo mv "/tmp/version.py" "$MACOS_PATH/src/knowledge_system/version.py"
+# Note: version.py eliminated - app now reads version directly from pyproject.toml via __init__.py
 
 # Also create version.txt for logging
 cat > "/tmp/version.txt" << EOF
