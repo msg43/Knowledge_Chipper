@@ -24,31 +24,36 @@ README_FILE="README.md"
 
 echo "📝 Updating build dates to $BUILD_DATE..."
 
-# Extract version and branch from version.py
+# Extract version from pyproject.toml (source of truth) and branch from version.py
 VERSION_FILE="src/knowledge_system/version.py"
-if [ -f "$VERSION_FILE" ]; then
-    CURRENT_VERSION=$(grep 'VERSION = ' "$VERSION_FILE" | sed 's/VERSION = "\(.*\)"/\1/')
-    CURRENT_BRANCH=$(grep 'BRANCH = ' "$VERSION_FILE" | sed 's/BRANCH = "\(.*\)"/\1/')
-    echo "📋 Found version: $CURRENT_VERSION, branch: $CURRENT_BRANCH"
+
+# Get version from pyproject.toml (source of truth)
+if [ -f "pyproject.toml" ]; then
+    CURRENT_VERSION=$(grep '^version\s*=\s*"' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
+    echo "📋 Using version from pyproject.toml: $CURRENT_VERSION"
 else
-    echo "❌ Error: $VERSION_FILE not found"
+    echo "❌ Error: pyproject.toml not found"
     exit 1
 fi
 
-# Update version.py
+# Get branch from version.py or default to main
 if [ -f "$VERSION_FILE" ]; then
-    # Use sed to replace the BUILD_DATE line
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
-        sed -i '' "s/BUILD_DATE = \"[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\"/BUILD_DATE = \"$BUILD_DATE\"/" "$VERSION_FILE"
-    else
-        # Linux
-        sed -i "s/BUILD_DATE = \"[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\"/BUILD_DATE = \"$BUILD_DATE\"/" "$VERSION_FILE"
-    fi
-    echo "✅ Updated $VERSION_FILE"
+    CURRENT_BRANCH=$(grep 'BRANCH = ' "$VERSION_FILE" | sed 's/BRANCH = "\(.*\)"/\1/')
+    echo "📋 Found branch: $CURRENT_BRANCH"
 else
-    echo "⚠️  Warning: $VERSION_FILE not found"
+    CURRENT_BRANCH="main"
+    echo "📋 Using default branch: $CURRENT_BRANCH"
 fi
+
+# Update version.py to match pyproject.toml
+cat > "$VERSION_FILE" << EOF
+# Auto-generated version info
+VERSION = "$CURRENT_VERSION"
+BRANCH = "$CURRENT_BRANCH"
+BUILD_DATE = "$BUILD_DATE"
+EOF
+
+echo "✅ Updated $VERSION_FILE (synced with pyproject.toml)"
 
 # Update README.md with version, build date, and branch
 if [ -f "$README_FILE" ]; then
