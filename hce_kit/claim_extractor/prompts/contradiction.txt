@@ -1,2 +1,0 @@
-Given two accepted claims A and B, decide if they contradict, support, are independent, or refine.
-Return JSON: {relation, rationale, strength}.
