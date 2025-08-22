@@ -248,12 +248,6 @@ fi'''
             ).replace(
                 'sudo chmod 755 "$MACOS_PATH/build_macos_app.sh"',
                 'chmod 755 "$MACOS_PATH/build_macos_app.sh" || true'
-            ).replace(
-                'sudo mv "/tmp/version.txt" "$MACOS_PATH/version.txt"',
-                'mv "/tmp/version.txt" "$MACOS_PATH/version.txt"'
-            ).replace(
-                'sudo mv "/tmp/version.py" "$MACOS_PATH/src/knowledge_system/version.py"',
-                'mv "/tmp/version.py" "$MACOS_PATH/src/knowledge_system/version.py"'
             )
             
             logger.debug(f"Modified script size: {len(modified_content)} bytes")
