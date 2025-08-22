@@ -72,8 +72,8 @@ find "$BUILD_MACOS_PATH" -name "*.bin" -delete 2>/dev/null || true
 
 # Set up virtual environment
 echo "🐍 Setting up Python virtual environment..."
-# Prefer Python 3.13 from Homebrew
-PYTHON_BIN="$(command -v python3.13 || command -v /opt/homebrew/bin/python3.13 || true)"
+# Prefer Python 3.13 from Homebrew (ARM64 native)
+PYTHON_BIN="$(command -v /opt/homebrew/bin/python3.13 || command -v python3.13 || true)"
 if [ -z "$PYTHON_BIN" ]; then
     echo "❌ Python 3.13 not found. Please install with: brew install python@3.13"
     exit 1
@@ -276,12 +276,13 @@ else
 fi
 
 # Update the Python version.py file in the app bundle with current date
-cat > "$BUILD_MACOS_PATH/src/knowledge_system/version.py" << EOF
+cat > "/tmp/version.py" << EOF
 # Auto-generated version info
 VERSION = "$CURRENT_VERSION"
 BRANCH = "$CURRENT_BRANCH"
 BUILD_DATE = "$CURRENT_DATE"
 EOF
+sudo mv "/tmp/version.py" "$MACOS_PATH/src/knowledge_system/version.py"
 
 # Also create version.txt for logging
 cat > "/tmp/version.txt" << EOF

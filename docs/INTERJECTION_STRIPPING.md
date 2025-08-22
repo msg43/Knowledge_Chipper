@@ -9,7 +9,7 @@ The YouTube transcript processor now includes an option to strip out common inte
 ### In the GUI
 
 1. Open the Knowledge System GUI
-2. Go to the "YouTube Extraction" tab
+2. Go to the "Extraction" tab
 3. Check the "Strip interjections" checkbox in the Transcript Settings section
 4. Process your YouTube videos as usual
 

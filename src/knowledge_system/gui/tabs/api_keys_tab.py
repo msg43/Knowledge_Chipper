@@ -593,6 +593,9 @@ class APIKeysTab(BaseTab):
             self.update_worker.update_progress.connect(self._handle_update_progress)
             self.update_worker.update_finished.connect(self._handle_update_finished)
             self.update_worker.update_error.connect(self._handle_update_error)
+            
+            # Add worker failure detection
+            self.update_worker.finished.connect(self._on_worker_finished)
 
             # Create and show progress dialog
             self.update_progress_dialog = QProgressDialog(
@@ -663,13 +666,28 @@ class APIKeysTab(BaseTab):
             self.status_label.setText("✨ Update completed! Please restart the app.")
             self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
 
-            # Show restart dialog
-            QMessageBox.information(
-                self,
-                "Update Complete",
-                "The app has been updated successfully!\n\nPlease restart Knowledge Chipper to use the new version.",
-                QMessageBox.StandardButton.Ok,
-            )
+            # Show restart dialog with auto-restart option
+            from PyQt6.QtWidgets import QMessageBox, QPushButton
+            
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("Update Complete")
+            msg_box.setText("The app has been updated successfully!")
+            msg_box.setInformativeText("Would you like to restart Knowledge Chipper now to use the new version?")
+            msg_box.setIcon(QMessageBox.Icon.Information)
+            
+            # Add custom buttons
+            restart_button = msg_box.addButton("Restart Now", QMessageBox.ButtonRole.AcceptRole)
+            later_button = msg_box.addButton("Restart Later", QMessageBox.ButtonRole.RejectRole)
+            msg_box.setDefaultButton(restart_button)
+            
+            # Show the dialog and handle response
+            msg_box.exec()
+            
+            if msg_box.clickedButton() == restart_button:
+                self._restart_application()
+            else:
+                # Just close the dialog - user will restart manually later
+                pass
         else:
             self.status_label.setText(f"❌ Update failed: {message}")
             self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
@@ -684,6 +702,100 @@ class APIKeysTab(BaseTab):
 
         self.append_log(message)
         self.update_worker = None
+
+    def _restart_application(self) -> None:
+        """Restart the application after an update."""
+        import sys
+        import os
+        from PyQt6.QtWidgets import QApplication
+        
+        try:
+            # Get the current application path
+            if getattr(sys, 'frozen', False):
+                # Running as packaged app
+                app_path = sys.executable
+            else:
+                # Running from source - find the app bundle or start script
+                app_bundle_path = "/Applications/Knowledge_Chipper.app"
+                user_app_path = os.path.expanduser("~/Applications/Knowledge_Chipper.app")
+                
+                if os.path.exists(app_bundle_path):
+                    app_path = app_bundle_path
+                elif os.path.exists(user_app_path):
+                    app_path = user_app_path
+                else:
+                    # Fallback to running from source
+                    app_path = sys.executable + " -m knowledge_system.gui.__main__"
+            
+            self.append_log("🔄 Restarting application...")
+            
+            # Close current application and start new one
+            QApplication.quit()
+            
+            # Use subprocess to start the new instance
+            import subprocess
+            if app_path.endswith(".app"):
+                subprocess.Popen(["open", app_path])
+            else:
+                subprocess.Popen(app_path.split())
+                
+        except Exception as e:
+            self.append_log(f"❌ Failed to restart automatically: {e}")
+            self.append_log("Please restart Knowledge Chipper manually.")
+
+    def _on_worker_finished(self) -> None:
+        """Handle worker thread finishing (for crash detection)."""
+        if self.update_worker and not self.update_worker.isFinished():
+            # Worker finished unexpectedly
+            self.append_log("⚠️  Update worker finished unexpectedly")
+            if self.update_progress_dialog:
+                self.update_progress_dialog.close()
+                self.update_progress_dialog = None
+            
+            # Offer fallback option
+            from PyQt6.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                self,
+                "Update Issue",
+                "The update process encountered an issue. Would you like to try the fallback update method?\n\n"
+                "This will open Terminal where you can run the update manually.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                self._fallback_update()
+
+    def _fallback_update(self) -> None:
+        """Fallback update method using Terminal."""
+        try:
+            import subprocess
+            from pathlib import Path
+            
+            # Find the script
+            script_path = Path.home() / "Projects" / "Knowledge_Chipper" / "build_macos_app.sh"
+            if not script_path.exists():
+                self.append_log("❌ Could not find build script for fallback update")
+                return
+            
+            # Open Terminal and run the original script
+            script_dir = str(script_path.parent)
+            script_name = script_path.name
+            
+            apple_script = f"""
+tell application "Terminal"
+  activate
+  do script "cd {script_dir}; echo '🏗️ Running fallback updater…'; bash {script_name}; echo ''; echo '✅ Update finished. Please restart Knowledge Chipper and close this window.'"
+end tell
+"""
+            
+            subprocess.run(["osascript", "-e", apple_script], check=True)
+            self.append_log("🔄 Opened Terminal for fallback update")
+            self.append_log("Please follow the prompts in Terminal, then restart the app")
+            
+        except Exception as e:
+            self.append_log(f"❌ Fallback update failed: {e}")
+            self.append_log("Please run 'bash build_macos_app.sh' manually from Terminal")
 
     def _handle_update_error(self, error: str) -> None:
         """Handle update errors."""

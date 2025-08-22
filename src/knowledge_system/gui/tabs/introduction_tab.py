@@ -125,8 +125,8 @@ class IntroductionTab(BaseTab):
 • For speaker diarization: Add HuggingFace token (optional)
 
 <br><br><b>2. Extract YouTube metadata and full transcript with optional diarization</b> 📺
-• Go to the <b>YouTube</b> tab
-• Enter YouTube URLs or upload a file with URLs
+• Go to the <b>Extraction</b> tab
+• Enter YouTube URLs or RSS feeds, or upload a file with URLs
 • Enable speaker diarization for multi-speaker content
 • Click "Extract Transcripts"
 
@@ -178,7 +178,7 @@ class IntroductionTab(BaseTab):
 • Perfect for ongoing projects or regular content
 
 <br><br><b>📺 YouTube</b> - Video content processing
-• Download videos directly from YouTube URLs with proxy support
+• Download videos directly from YouTube URLs or RSS feeds with proxy support
 • Process entire playlists or channels automatically
 • Speaker diarization for multi-speaker content
 • Automatic metadata extraction and organization

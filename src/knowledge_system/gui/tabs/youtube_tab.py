@@ -546,7 +546,7 @@ class YouTubeExtractionWorker(QThread):
                 csvfile.write("#\n")
                 csvfile.write("# Instructions:\n")
                 csvfile.write(
-                    "# 1. You can load this file directly into the YouTube tab\n"
+                    "# 1. You can load this file directly into the Extraction tab\n"
                 )
                 csvfile.write(
                     "# 2. Select 'Or Select File' option and browse to this CSV\n"
@@ -581,7 +581,7 @@ class YouTubeTab(BaseTab):
     def __init__(self, parent: Any = None) -> None:
         self.extraction_worker = None
         self.gui_settings = get_gui_settings_manager()
-        self.tab_name = "YouTube"
+        self.tab_name = "Extraction"
         super().__init__(parent)
 
     def _setup_ui(self) -> None:
@@ -615,25 +615,26 @@ class YouTubeTab(BaseTab):
 
     def _create_input_section(self) -> QGroupBox:
         """Create the URL input section."""
-        group = QGroupBox("YouTube URLs")
+        group = QGroupBox("YouTube or RSS URLs")
         layout = QVBoxLayout()
 
         # Radio button for URL input
-        self.url_radio = QRadioButton("YouTube URLs")
+        self.url_radio = QRadioButton("YouTube or RSS URLs")
         self.url_radio.setChecked(True)  # Default selection
         self.url_radio.toggled.connect(self._on_input_method_changed)
         self.url_radio.setToolTip(
-            "Enter YouTube URLs directly in the text area below"
+            "Enter YouTube URLs or RSS feeds directly in the text area below"
         )
         layout.addWidget(self.url_radio)
 
         # URL input
         self.url_input = QTextEdit()
         self.url_input.setPlaceholderText(
-            "Enter YouTube URLs or Playlist URLs (one per line) - shows total video count across all playlists:\n"
+            "Enter YouTube URLs, Playlist URLs, or RSS feeds (one per line) - shows total video count across all playlists:\n"
             "https://www.youtube.com/watch?v=...\n"
             "https://youtu.be/...\n"
-            "https://www.youtube.com/playlist?list=..."
+            "https://www.youtube.com/playlist?list=...\n"
+            "https://example.com/feed.rss"
         )
         self.url_input.setMinimumHeight(150)
         self.url_input.setMaximumHeight(200)  # Prevent it from growing too large
@@ -643,13 +644,14 @@ class YouTubeTab(BaseTab):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
         self.url_input.setToolTip(
-            "Enter YouTube URLs to process (one per line).\n"
+            "Enter YouTube URLs or RSS feeds to process (one per line).\n"
             "• Individual videos: https://www.youtube.com/watch?v=...\n"
             "• Short URLs: https://youtu.be/...\n"
             "• Playlists: https://www.youtube.com/playlist?list=...\n"
-            "• Mix any combination of videos and playlists\n"
+            "• RSS feeds: https://example.com/feed.rss\n"
+            "• Mix any combination of videos, playlists, and RSS feeds\n"
             "• Total video count will be calculated automatically\n"
-            "• Private or unavailable videos will be skipped with warnings"
+            "• Private or unavailable content will be skipped with warnings"
         )
         layout.addWidget(self.url_input)
 
@@ -659,7 +661,7 @@ class YouTubeTab(BaseTab):
         self.file_radio.setToolTip(
             "Select this option to load URLs from a file.\n"
             "• Supports .TXT, .RTF, and .CSV files\n"
-            "• File should contain one URL per line\n"
+            "• File should contain one URL per line (YouTube or RSS)\n"
             "• Useful for large collections of URLs"
         )
         layout.addWidget(self.file_radio)
@@ -668,7 +670,7 @@ class YouTubeTab(BaseTab):
         file_layout = QHBoxLayout()
         file_layout.addWidget(
             QLabel(
-                "Select a .TXT, .RTF, or .CSV file with YouTube URLs/Playlists (shows total video count across all):"
+                "Select a .TXT, .RTF, or .CSV file with YouTube URLs/Playlists or RSS feeds (shows total video count across all):"
             )
         )
 
@@ -676,7 +678,7 @@ class YouTubeTab(BaseTab):
         self.file_input.setPlaceholderText("Select a file containing URLs...")
         self.file_input.setEnabled(False)  # Start disabled
         self.file_input.setToolTip(
-            "Path to file containing YouTube URLs.\n"
+            "Path to file containing YouTube URLs or RSS feeds.\n"
             "• Supported formats: .TXT, .RTF, .CSV\n"
             "• One URL per line in the file\n"
             "• Comments starting with # are ignored\n"
@@ -689,7 +691,7 @@ class YouTubeTab(BaseTab):
         self.browse_btn.clicked.connect(self._select_url_file)
         self.browse_btn.setEnabled(False)  # Start disabled
         self.browse_btn.setToolTip(
-            "Browse and select a file containing YouTube URLs.\n"
+            "Browse and select a file containing YouTube URLs or RSS feeds.\n"
             "• Choose a .TXT, .RTF, or .CSV file\n"
             "• File should have one URL per line\n"
             "• Will automatically count total videos"
@@ -974,7 +976,7 @@ class YouTubeTab(BaseTab):
         return layout
 
     def _select_url_file(self) -> None:
-        """Select file containing YouTube URLs."""
+        """Select file containing YouTube URLs or RSS feeds."""
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Select URL File", "", "Text files (*.txt *.csv);;All files (*.*)"
         )
@@ -1180,7 +1182,7 @@ class YouTubeTab(BaseTab):
                 self._reset_button_state()
                 self.show_warning(
                     "No URLs",
-                    "Please enter YouTube URLs or select a file containing URLs.",
+                    "Please enter YouTube URLs or RSS feeds, or select a file containing URLs.",
                 )
                 return
 
@@ -1241,7 +1243,7 @@ class YouTubeTab(BaseTab):
             self.async_validate_directory(
                 output_dir,
                 self._handle_directory_validation_result,
-                check_writable=True,  # YouTube tab needs writable directory
+                check_writable=True,  # Extraction tab needs writable directory
                 check_parent=False,
             )
 
@@ -1278,7 +1280,7 @@ class YouTubeTab(BaseTab):
             del self._pending_output_dir
 
             logger.info(
-                f"Starting extraction of {len(urls)} YouTube URLs to {output_dir}"
+                f"Starting extraction of {len(urls)} URLs to {output_dir}"
             )
 
             # Schedule diarization check asynchronously if needed
@@ -1526,7 +1528,7 @@ class YouTubeTab(BaseTab):
             if text_urls:
                 for line in text_urls.split("\n"):
                     line = line.strip()
-                    if line and ("youtube.com" in line or "youtu.be" in line):
+                    if line and self._is_supported_url(line):
                         urls.append(line)
                 logger.debug(f"Found {len(urls)} URLs in text input")
             else:
@@ -1551,7 +1553,7 @@ class YouTubeTab(BaseTab):
                         found_urls = re.findall(url_pattern, content)
                         for url in found_urls:
                             url = url.rstrip("\\,}")
-                            if "youtube.com" in url or "youtu.be" in url:
+                            if self._is_supported_url(url):
                                 urls.append(url)
                     else:
                         # Plain text/CSV file
@@ -1563,13 +1565,11 @@ class YouTubeTab(BaseTab):
                                     # CSV format: split by comma
                                     for url in line.split(","):
                                         url = url.strip()
-                                        if url and (
-                                            "youtube.com" in url or "youtu.be" in url
-                                        ):
+                                        if url and self._is_supported_url(url):
                                             urls.append(url)
                                 else:
                                     # Plain text format: one URL per line
-                                    if "youtube.com" in line or "youtu.be" in line:
+                                    if self._is_supported_url(line):
                                         urls.append(line)
                     logger.debug(f"Found {len(urls)} URLs in file: {file_path}")
                 except Exception as e:
@@ -1590,6 +1590,16 @@ class YouTubeTab(BaseTab):
             logger.debug(f"Removed {len(urls) - len(unique_urls)} duplicate URLs")
 
         return unique_urls
+
+    def _is_supported_url(self, url: str) -> bool:
+        """Check if URL is supported by any registered processor."""
+        try:
+            from knowledge_system.processors.registry import get_processor_for_input
+            return get_processor_for_input(url) is not None
+        except Exception as e:
+            logger.debug(f"Error checking URL support for {url}: {e}")
+            # Fallback to YouTube check for backwards compatibility
+            return "youtube.com" in url or "youtu.be" in url
 
     def _update_extraction_progress(self, current: int, total: int, status: str):
         """Update extraction progress with enhanced messaging."""

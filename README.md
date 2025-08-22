@@ -1,6 +1,6 @@
 # Knowledge_Chipper
 
-**Version:** 3.0.1 | **Build Date:** 2025-08-20 | **Branch:** main
+**Version:** 3.0.1 | **Build Date:** 2025-08-21 | **Branch:** main
 
 A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 
@@ -237,7 +237,7 @@ python -m knowledge_system.gui
 Let's transcribe a YouTube video to get you started:
 
 1. **Open the desktop app** (see [First Run](#first-run) above)
-2. **Go to the "YouTube Extraction" tab**
+2. **Go to the "Extraction" tab**
 3. **Paste a YouTube URL** (try: `https://www.youtube.com/watch?v=dQw4w9WgXcQ`)
 4. **Click "Start Processing"**
 5. **Wait for completion** - you'll see progress updates
@@ -753,7 +753,7 @@ knowledge-system transcribe --batch-urls urls.csv
 knowledge-system transcribe --batch-urls logs/youtube_extraction_failures.csv
 ```
 
-**GUI:** Use the "YouTube Extraction" tab for the easiest experience.
+**GUI:** Use the "Extraction" tab for the easiest experience.
 
 #### 🚀 **NEW: Intelligent Batch Processing with Resource Management**
 
@@ -1279,7 +1279,7 @@ Content to analyze:
 
 **YouTube Extraction Failures:**
 - **Check failure log**: `logs/youtube_extraction_failures.log` for detailed error messages
-- **Retry failed URLs**: Load `logs/youtube_extraction_failures.csv` directly into YouTube tab
+- **Retry failed URLs**: Load `logs/youtube_extraction_failures.csv` directly into Extraction tab
 - **Common failures**: 
   - 🔐 Proxy authentication → Check WebShare credentials
   - 💰 Payment required → Add funds to WebShare account
@@ -1503,7 +1503,7 @@ The system now includes intelligent caching to avoid reprocessing unchanged cont
 **YouTube Extraction Failures:**
 - **Detailed Logging**: All failed extractions logged to `logs/youtube_extraction_failures.log`
 - **CSV Export**: Failed URLs automatically saved to `logs/youtube_extraction_failures.csv`
-- **Easy Retry**: Load the CSV file directly into YouTube tab to retry failed videos
+- **Easy Retry**: Load the CSV file directly into Extraction tab to retry failed videos
 - **Error Categories**: Proxy auth issues, payment required, video unavailable, etc.
 
 **Performance Statistics:**
