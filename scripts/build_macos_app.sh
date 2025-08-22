@@ -225,8 +225,8 @@ chmod +x "$BUILD_MACOS_PATH/launch"
 echo "🎨 Creating app icon..."
 mkdir -p icon.iconset
 for size in 16 32 128 256 512; do
-    sips -z $size $size chipper.png --out icon.iconset/icon_${size}x${size}.png
-    sips -z $((size*2)) $((size*2)) chipper.png --out icon.iconset/icon_${size}x${size}@2x.png
+    sips -z $size $size Assets/chipper.png --out icon.iconset/icon_${size}x${size}.png
+    sips -z $((size*2)) $((size*2)) Assets/chipper.png --out icon.iconset/icon_${size}x${size}@2x.png
 done
 iconutil -c icns icon.iconset -o "/tmp/AppIcon.icns"
 mv "/tmp/AppIcon.icns" "$BUILD_RESOURCES_PATH/AppIcon.icns"
