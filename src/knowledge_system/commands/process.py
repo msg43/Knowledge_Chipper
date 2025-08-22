@@ -105,6 +105,11 @@ from .transcribe import _generate_obsidian_link, format_transcript_content
     required=False,
     help="SuperChunk max concurrent calls",
 )
+@click.option(
+    "--export-getreceipts",
+    is_flag=True,
+    help="Export extracted claims to GetReceipts platform",
+)
 @pass_context
 def process(
     ctx: CLIContext,
@@ -125,6 +130,7 @@ def process(
     sc_verify_top: float | None,
     sc_quote_cap: int | None,
     sc_max_concurrent: int | None,
+    export_getreceipts: bool,
 ) -> None:
     """
     Process files or folders with transcription, summarization, and MOC generation
@@ -150,7 +156,7 @@ def process(
                 f"[dim]Directory processing: {'recursive' if recursive else 'non-recursive'}, Patterns: {', '.join(patterns)}[/dim]"
             )
         console.print(
-            f"[dim]Operations: Transcribe={transcribe}, Summarize={summarize}, MOC={moc}[/dim]"
+            f"[dim]Operations: Transcribe={transcribe}, Summarize={summarize}, MOC={moc}, GetReceipts={export_getreceipts}[/dim]"
         )
         console.print(
             f"[dim]Models: Transcription={transcription_model}, Summarization={summarization_model}[/dim]"
@@ -363,6 +369,66 @@ def process(
                             console.print(
                                 f"[green]✓ Summarized: {input_for_summary.name}[/green]"
                             )
+
+                        # Export to GetReceipts if enabled and summarization succeeded
+                        if export_getreceipts and result.success and result.metadata.get("hce_data"):
+                            if not ctx.quiet:
+                                console.print(
+                                    f"[blue]Exporting to GetReceipts: {input_for_summary.name}[/blue]"
+                                )
+                            
+                            try:
+                                from ..utils.getreceipts_exporter import create_exporter_from_settings
+                                
+                                # Create exporter from settings
+                                exporter = create_exporter_from_settings(settings)
+                                
+                                # Get HCE pipeline outputs from result metadata
+                                hce_data = result.metadata["hce_data"]
+                                
+                                # Build source info for the claim
+                                source_info = {
+                                    "title": input_for_summary.stem,
+                                    "url": None,  # Will be set for YouTube videos
+                                    "date": result.metadata.get("timestamp"),
+                                    "duration": None
+                                }
+                                
+                                # Check if this was a YouTube video
+                                if hasattr(input_for_summary, 'url'):
+                                    source_info["url"] = input_for_summary.url
+                                
+                                # Export to GetReceipts
+                                export_result = exporter.export_hce_pipeline_outputs(
+                                    hce_data,
+                                    source_info=source_info,
+                                    episode_context=str(input_for_summary)[:1000]
+                                )
+                                
+                                if export_result["success"]:
+                                    claims_exported = export_result["claims_exported"]
+                                    if not ctx.quiet:
+                                        console.print(
+                                            f"[green]✓ Exported {claims_exported} claims to GetReceipts[/green]"
+                                        )
+                                        
+                                        # Show claim URLs if available
+                                        for result_item in export_result.get("results", []):
+                                            if result_item.get("success") and result_item.get("url"):
+                                                claim_url = f"https://getreceipts-web.vercel.app/claim/{result_item['url']}"
+                                                console.print(f"[dim]📄 View claim: {claim_url}[/dim]")
+                                else:
+                                    error_msg = export_result.get("error", "Unknown export error")
+                                    if not ctx.quiet:
+                                        console.print(
+                                            f"[yellow]⚠ GetReceipts export failed: {error_msg}[/yellow]"
+                                        )
+                                    
+                            except Exception as e:
+                                error_msg = f"GetReceipts export error: {str(e)}"
+                                if not ctx.quiet:
+                                    console.print(f"[yellow]⚠ {error_msg}[/yellow]")
+                                    
                     else:
                         results["errors"].append(
                             f"Summarization failed for {input_for_summary.name}: {result.errors}"

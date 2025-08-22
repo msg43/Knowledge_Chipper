@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from knowledge_system.database import DatabaseService
-from knowledge_system.database.models import BrightDataSession, VideoRecord
+from knowledge_system.database.models import BrightDataSession, Video
 from knowledge_system.utils.bright_data import BrightDataSessionManager
 from knowledge_system.utils.bright_data_adapters import (
     BrightDataAdapter,
@@ -39,7 +39,7 @@ class TestBrightDataSessionManager:
             db_path = f.name
 
         db_service = DatabaseService(database_url=f"sqlite:///{db_path}")
-        db_service.create_all_tables()
+        # Tables are created automatically during initialization
 
         yield db_service
 
@@ -190,7 +190,7 @@ class TestBrightDataCostTracking:
             db_path = f.name
 
         db_service = DatabaseService(database_url=f"sqlite:///{db_path}")
-        db_service.create_all_tables()
+        # Tables are created automatically during initialization
 
         yield db_service
 
@@ -303,7 +303,7 @@ class TestBrightDataDeduplication:
             db_path = f.name
 
         db_service = DatabaseService(database_url=f"sqlite:///{db_path}")
-        db_service.create_all_tables()
+        # Tables are created automatically during initialization
 
         yield db_service
 
@@ -461,7 +461,7 @@ class TestBrightDataIntegrationWorkflow:
             db_path = f.name
 
         db_service = DatabaseService(database_url=f"sqlite:///{db_path}")
-        db_service.create_all_tables()
+        # Tables are created automatically during initialization
 
         yield db_service
 

@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 
-class TestWindow(QMainWindow):
+class GuiTestWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Knowledge System GUI Test")
@@ -80,7 +80,7 @@ def main():
         app.setStyle("Fusion")
         print("Using Fusion style for non-macOS platform")
 
-    window = TestWindow()
+    window = GuiTestWindow()
 
     # Force window to be visible and active
     if platform.system() == "Darwin":

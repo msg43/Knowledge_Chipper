@@ -161,6 +161,28 @@ summarization:
   max_tokens: 10000  # Increased for better summaries
   temperature: 0.1
 
+# GetReceipts Integration Settings
+getreceipts:
+  # Enable GetReceipts integration
+  enabled: false
+  
+  # GetReceipts API settings
+  base_url: "https://getreceipts-web.vercel.app"
+  timeout_seconds: 30
+  max_retries: 3
+  retry_delay: 1.0
+  
+  # Export filtering settings
+  min_confidence: 0.6          # Only export claims above this confidence
+  max_claims_per_export: 20    # Limit claims per session to avoid spam
+  include_all_tiers: true      # Export all claim tiers (A, B, C)
+  include_tier_c: true         # Include Tier C claims (set false for only A+B)
+  include_evidence_timestamps: true  # Include YouTube timestamp links
+  
+  # Auto-export settings
+  auto_export_after_processing: false  # Auto-export after successful HCE processing
+  export_only_on_success: true         # Only export if processing was successful
+
 # =============================================================================
 # PERFORMANCE PROFILES EXPLANATION
 # =============================================================================

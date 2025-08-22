@@ -1,8 +1,0 @@
-Given a claim + quoted evidence + small context, return:
-- importance (0–1)
-- novelty (0–1)
-- controversy (0–1)
-- fragility (0–1)
-- confidence_final (0–1)
-- decision: accept|reject
-JSON only.

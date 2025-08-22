@@ -773,7 +773,7 @@ class APIKeysTab(BaseTab):
             from pathlib import Path
             
             # Find the script
-            script_path = Path.home() / "Projects" / "Knowledge_Chipper" / "build_macos_app.sh"
+            script_path = Path.home() / "Projects" / "Knowledge_Chipper" / "scripts" / "build_macos_app.sh"
             if not script_path.exists():
                 self.append_log("❌ Could not find build script for fallback update")
                 return
@@ -795,7 +795,7 @@ end tell
             
         except Exception as e:
             self.append_log(f"❌ Fallback update failed: {e}")
-            self.append_log("Please run 'bash build_macos_app.sh' manually from Terminal")
+            self.append_log("Please run 'bash scripts/build_macos_app.sh' manually from Terminal")
 
     def _handle_update_error(self, error: str) -> None:
         """Handle update errors."""

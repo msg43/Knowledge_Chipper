@@ -34,7 +34,7 @@ class UpdateWorker(QThread):
             main_repo_path = Path.home() / "Projects" / "Knowledge_Chipper"
 
             # Look for the script in the main repository
-            script_path = main_repo_path / "build_macos_app.sh"
+            script_path = main_repo_path / "scripts" / "build_macos_app.sh"
             if script_path.exists():
                 logger.info(f"Found update script at: {script_path}")
                 return script_path
@@ -45,7 +45,7 @@ class UpdateWorker(QThread):
                 fallback_dir = Path(
                     os.path.dirname(os.path.realpath(__file__))
                 ).parents[3]
-                script_path = fallback_dir / "build_macos_app.sh"
+                script_path = fallback_dir / "scripts" / "build_macos_app.sh"
                 if script_path.exists():
                     logger.info(f"Found update script at: {script_path}")
                     return script_path
@@ -61,7 +61,7 @@ class UpdateWorker(QThread):
         """Run the update process."""
         try:
             if not self.script_path:
-                raise FileNotFoundError("Could not find build_macos_app.sh")
+                raise FileNotFoundError("Could not find scripts/build_macos_app.sh")
 
             # Make script executable
             os.chmod(self.script_path, 0o755)
@@ -158,7 +158,7 @@ class UpdateWorker(QThread):
                         "fatal: bad object" in full_output
                         or "fatal: bad object refs/stash" in full_output
                     ):
-                        error = "Git stash error. Try running the update from Terminal: bash build_macos_app.sh"
+                        error = "Git stash error. Try running the update from Terminal: bash scripts/build_macos_app.sh"
                     elif "Permission denied" in full_output:
                         error = "Permission error. Please check file permissions."
                     elif "No such file or directory" in full_output:
@@ -227,11 +227,11 @@ fi'''
                 'sudo chmod 777 "$MACOS_PATH/logs"',
                 'chmod 777 "$MACOS_PATH/logs" || true'
             ).replace(
-                'sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/build_macos_app.sh"',
-                'chown "$CURRENT_USER:staff" "$MACOS_PATH/build_macos_app.sh" || true'
+                'sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/scripts/build_macos_app.sh"',
+                'chown "$CURRENT_USER:staff" "$MACOS_PATH/scripts/build_macos_app.sh" || true'
             ).replace(
-                'sudo chmod 755 "$MACOS_PATH/build_macos_app.sh"',
-                'chmod 755 "$MACOS_PATH/build_macos_app.sh" || true'
+                'sudo chmod 755 "$MACOS_PATH/scripts/build_macos_app.sh"',
+                'chmod 755 "$MACOS_PATH/scripts/build_macos_app.sh" || true'
             ).replace(
                 'sudo mv "/tmp/version.txt" "$MACOS_PATH/version.txt"',
                 'mv "/tmp/version.txt" "$MACOS_PATH/version.txt"'
