@@ -97,6 +97,11 @@ class UpdateWorker(QThread):
                 
                 # Use bash explicitly for consistent behavior
                 self.update_progress.emit("🚀 Starting update process...")
+                
+                # Determine correct working directory - use the repository root, not script directory
+                repo_root = self.script_path.parent.parent if self.script_path.name == "build_macos_app.sh" and self.script_path.parent.name == "scripts" else self.script_path.parent
+                logger.info(f"Using repository root: {repo_root}")
+                
                 try:
                     process = subprocess.Popen(
                         ["/bin/bash", str(sudo_free_script)],
@@ -105,7 +110,7 @@ class UpdateWorker(QThread):
                         text=True,
                         bufsize=1,
                         universal_newlines=True,
-                        cwd=str(script_dir),  # Run from the repository directory
+                        cwd=str(repo_root),  # Run from the repository root directory
                     )
                     logger.info(f"Started subprocess with PID: {process.pid}")
                 except Exception as e:
