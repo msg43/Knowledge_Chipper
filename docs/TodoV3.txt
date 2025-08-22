@@ -1,0 +1,5 @@
+TodoV3.txt
+
+1.  Change YT from Timestamps to "Diarization" and make it actuall implement that.  Timestamps as currently implmented is useless.
+2.  Change from Superchunk V2 to V3:  Optimized for diarization, claims extracted per paragraph.
+3.  V3 will make use of probably 2 models. User will seelct a cheap model and a flagship model.
