@@ -436,13 +436,13 @@ class SummarizerProcessor(BaseProcessor):
                 dry_run=False,
             )
 
-    except Exception as e:
-        logger.error(f"Summarization failed: {e}")
-        return ProcessorResult(
-            success=False,
-            errors=[str(e)],
-            dry_run=dry_run,
-        )
+        except Exception as e:
+            logger.error(f"Summarization failed: {e}")
+            return ProcessorResult(
+                success=False,
+                errors=[str(e)],
+                dry_run=dry_run,
+            )
 
     def _build_summary_index(self, output_dir: Path) -> dict[str, Any]:
         """
