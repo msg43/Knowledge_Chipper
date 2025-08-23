@@ -28,9 +28,11 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
+        pip install -r requirements.txt
         pip install -r requirements-dev.txt
-        pip install -r requirements.txt  # Ensure main requirements are also installed
         pip install -e .
+        # Ensure pytest-cov is available
+        pip install pytest-cov
 
     - name: Lint with flake8
       run: |
@@ -66,21 +68,29 @@ jobs:
         EOF
         fi
         
-        # Run tests with fallback to basic tests if specific ones don't exist
-        if [ -f "tests/test_audio_processor.py" ]; then
-          pytest \
-            tests/test_audio_processor.py \
-            tests/integration/test_input_pipeline.py \
-            tests/test_errors.py \
-            tests/test_logger.py \
-            -k "not proxy and not youtube and not network" \
-            --cov=knowledge_system --cov-report=xml -v
+        # Run tests with coverage if pytest-cov is available, otherwise run without
+        echo "Testing pytest-cov availability..."
+        if python -c "import pytest_cov" 2>/dev/null; then
+          echo "pytest-cov available, running with coverage..."
+          if [ -f "tests/test_audio_processor.py" ]; then
+            pytest \
+              tests/test_audio_processor.py \
+              tests/integration/test_input_pipeline.py \
+              tests/test_errors.py \
+              tests/test_logger.py \
+              -k "not proxy and not youtube and not network" \
+              --cov=knowledge_system --cov-report=xml -v
+          else
+            echo "Running basic tests with coverage..."
+            pytest tests/ -v --cov=knowledge_system --cov-report=xml
+          fi
         else
-          echo "Running basic tests since full test suite not found..."
-          pytest tests/ -v --cov=knowledge_system --cov-report=xml
+          echo "pytest-cov not available, running tests without coverage..."
+          pytest tests/ -v
         fi
 
     - name: Upload coverage reports
+      if: hashFiles('coverage.xml') != ''
       uses: codecov/codecov-action@v3
       with:
         file: ./coverage.xml
