@@ -1,11 +1,14 @@
-name: Auto Version Bump on Push to Main
+name: Auto Version Bump on Push to Main (DISABLED)
 
+# DISABLED: Version bumping is now handled by local push_to_github.sh script
+# to avoid conflicts and circular triggers
 on:
-  pull_request:
-    types: [closed]
-  push:
-    branches:
-      - main
+  workflow_dispatch:  # Only allow manual trigger
+  # pull_request:
+  #   types: [closed]
+  # push:
+  #   branches:
+  #     - main
 
 jobs:
   version_bump:

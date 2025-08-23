@@ -426,15 +426,15 @@ class SummarizerProcessor(BaseProcessor):
                     logger.warning(f"Failed to save HCE data to database: {e}")
 
             return ProcessorResult(
-            success=True,
-            data=summary,
-            metadata=metadata,
-            usage={
-                "total_tokens": estimated_tokens,
-                "total_cost": estimated_cost,
-            },
-            dry_run=False,
-        )
+                success=True,
+                data=summary,
+                metadata=metadata,
+                usage={
+                    "total_tokens": estimated_tokens,
+                    "total_cost": estimated_cost,
+                },
+                dry_run=False,
+            )
 
     except Exception as e:
         logger.error(f"Summarization failed: {e}")
