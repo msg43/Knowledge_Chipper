@@ -426,20 +426,154 @@ class SummarizerProcessor(BaseProcessor):
                     logger.warning(f"Failed to save HCE data to database: {e}")
 
             return ProcessorResult(
-                success=True,
-                data=summary,
-                metadata=metadata,
-                usage={
-                    "total_tokens": estimated_tokens,
-                    "total_cost": estimated_cost,
-                },
-                dry_run=False,
-            )
+            success=True,
+            data=summary,
+            metadata=metadata,
+            usage={
+                "total_tokens": estimated_tokens,
+                "total_cost": estimated_cost,
+            },
+            dry_run=False,
+        )
 
+    except Exception as e:
+        logger.error(f"Summarization failed: {e}")
+        return ProcessorResult(
+            success=False,
+            errors=[str(e)],
+            dry_run=dry_run,
+        )
+
+    def _build_summary_index(self, output_dir: Path) -> dict[str, Any]:
+        """
+        Build an index of existing summary files for skip detection.
+        
+        Scans the output directory for existing summary files and builds
+        a mapping of source files to their summary metadata.
+        
+        Args:
+            output_dir: Directory to scan for existing summaries
+            
+        Returns:
+            Dictionary mapping source file paths to summary metadata
+        """
+        import json
+        import os
+        from datetime import datetime
+        
+        summary_index = {}
+        
+        if not output_dir.exists():
+            return summary_index
+            
+        try:
+            # Look for summary files (both .md and .txt)
+            summary_extensions = [".md", ".txt"]
+            
+            for root, dirs, files in os.walk(output_dir):
+                for file in files:
+                    if any(file.endswith(ext) for ext in summary_extensions):
+                        summary_path = Path(root) / file
+                        
+                        try:
+                            # Get file modification time
+                            mtime = summary_path.stat().st_mtime
+                            
+                            # Try to determine the source file from the summary filename
+                            # Remove common summary suffixes
+                            base_name = file
+                            for suffix in ["_summary", "_Summary", "-summary", "-Summary"]:
+                                if suffix in base_name:
+                                    base_name = base_name.replace(suffix, "")
+                                    break
+                            
+                            # Remove extension and add back original extension possibilities
+                            name_without_ext = Path(base_name).stem
+                            
+                            # Store in index
+                            summary_index[str(summary_path)] = {
+                                "source_file_stem": name_without_ext,
+                                "summary_path": str(summary_path),
+                                "modification_time": mtime,
+                                "creation_date": datetime.fromtimestamp(mtime).isoformat(),
+                            }
+                            
+                        except (OSError, ValueError) as e:
+                            logger.warning(f"Could not process summary file {summary_path}: {e}")
+                            continue
+                            
         except Exception as e:
-            logger.error(f"Summarization failed: {e}")
-            return ProcessorResult(
-                success=False,
-                errors=[str(e)],
-                dry_run=dry_run,
-            )
+            logger.warning(f"Error building summary index: {e}")
+            
+        return summary_index
+
+    def _save_index_to_file(self, index_file: Path, summary_index: dict[str, Any]) -> None:
+        """
+        Save the summary index to a JSON file.
+        
+        Args:
+            index_file: Path where to save the index
+            summary_index: Index data to save
+        """
+        import json
+        
+        try:
+            index_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(index_file, "w", encoding="utf-8") as f:
+                json.dump(summary_index, f, indent=2, ensure_ascii=False)
+                
+            logger.debug(f"Saved summary index with {len(summary_index)} entries to {index_file}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save summary index to {index_file}: {e}")
+
+    def _check_needs_summarization(
+        self, file_path: Path, summary_index: dict[str, Any]
+    ) -> tuple[bool, str]:
+        """
+        Check if a file needs to be summarized based on existing summaries.
+        
+        Args:
+            file_path: Path to the source file to check
+            summary_index: Index of existing summaries
+            
+        Returns:
+            Tuple of (needs_summary: bool, reason: str)
+        """
+        try:
+            # If no index, always summarize
+            if not summary_index:
+                return True, "No existing summary index"
+                
+            # Get file modification time
+            if not file_path.exists():
+                return True, "Source file does not exist"
+                
+            source_mtime = file_path.stat().st_mtime
+            file_stem = file_path.stem
+            
+            # Look for existing summaries that match this file
+            matching_summaries = []
+            for summary_path, summary_info in summary_index.items():
+                if summary_info.get("source_file_stem") == file_stem:
+                    matching_summaries.append((summary_path, summary_info))
+            
+            if not matching_summaries:
+                return True, "No existing summary found"
+                
+            # Check if any existing summary is newer than the source file
+            for summary_path, summary_info in matching_summaries:
+                summary_mtime = summary_info.get("modification_time", 0)
+                
+                # If summary is newer than source, no need to re-summarize
+                if summary_mtime > source_mtime:
+                    return False, f"Up-to-date summary exists: {Path(summary_path).name}"
+                    
+            # All existing summaries are older than source file
+            return True, "Source file is newer than existing summaries"
+            
+        except Exception as e:
+            logger.warning(f"Error checking summarization needs for {file_path}: {e}")
+            # On error, err on the side of caution and summarize
+            return True, f"Error checking summary status: {e}"

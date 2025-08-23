@@ -378,50 +378,123 @@ def process(
                                 )
                             
                             try:
-                                from ..utils.getreceipts_exporter import create_exporter_from_settings
+                                # Import our knowledge_chipper_integration function
+                                import sys
+                                from pathlib import Path
                                 
-                                # Create exporter from settings
-                                exporter = create_exporter_from_settings(settings)
+                                # Add the project root to Python path to import our integration
+                                project_root = Path(__file__).parent.parent.parent.parent
+                                if str(project_root) not in sys.path:
+                                    sys.path.insert(0, str(project_root))
+                                
+                                from knowledge_chipper_integration import publish_to_getreceipts
                                 
                                 # Get HCE pipeline outputs from result metadata
                                 hce_data = result.metadata["hce_data"]
                                 
-                                # Build source info for the claim
-                                source_info = {
-                                    "title": input_for_summary.stem,
-                                    "url": None,  # Will be set for YouTube videos
-                                    "date": result.metadata.get("timestamp"),
-                                    "duration": None
-                                }
+                                # Read transcript content for GetReceipts
+                                transcript_text = ""
+                                if transcript_path and transcript_path.exists():
+                                    transcript_text = transcript_path.read_text(encoding="utf-8")
+                                elif input_for_summary.suffix.lower() in [".md", ".txt"]:
+                                    transcript_text = input_for_summary.read_text(encoding="utf-8")
                                 
-                                # Check if this was a YouTube video
+                                # Convert HCE data to GetReceipts format
+                                claims = []
+                                people = []
+                                jargon = []
+                                mental_models = []
+                                
+                                # Extract claims (only high-quality ones)
+                                for claim in hce_data.get("claims", []):
+                                    if claim.get("tier") in ["A", "B"]:  # Only high-quality claims
+                                        claims.append(claim.get("canonical", ""))
+                                
+                                # Extract people 
+                                for person in hce_data.get("people", []):
+                                    people.append({
+                                        "name": person.get("normalized", person.get("surface", "")),
+                                        "bio": None,  # HCE doesn't provide bio
+                                        "expertise": None,  # HCE doesn't provide expertise
+                                        "credibility_score": person.get("confidence", 0.5),
+                                        "sources": []  # HCE doesn't provide sources
+                                    })
+                                
+                                # Extract jargon terms
+                                for term in hce_data.get("jargon", []):
+                                    jargon.append({
+                                        "term": term.get("term", ""),
+                                        "definition": term.get("definition", ""),
+                                        "domain": term.get("category"),
+                                        "related_terms": [],
+                                        "examples": []
+                                    })
+                                
+                                # Extract mental models (concepts)
+                                for concept in hce_data.get("concepts", []):
+                                    # Convert HCE relations to GetReceipts format
+                                    concept_relations = []
+                                    for relation in hce_data.get("relations", []):
+                                        if relation.get("source_claim_id") == concept.get("model_id"):
+                                            rel_type = relation.get("type", "")
+                                            # Map HCE relation types to GetReceipts types
+                                            if rel_type == "supports":
+                                                gr_type = "enables"
+                                            elif rel_type == "depends_on":
+                                                gr_type = "requires"
+                                            elif rel_type == "contradicts":
+                                                gr_type = "conflicts_with"
+                                            else:
+                                                gr_type = "causes"
+                                            
+                                            concept_relations.append({
+                                                "from": concept.get("name", ""),
+                                                "to": relation.get("target_claim_id", ""),
+                                                "type": gr_type
+                                            })
+                                    
+                                    mental_models.append({
+                                        "name": concept.get("name", ""),
+                                        "description": concept.get("definition", ""),
+                                        "domain": None,  # HCE doesn't provide domain
+                                        "key_concepts": concept.get("aliases", []),
+                                        "relationships": concept_relations
+                                    })
+                                
+                                # Determine video URL if available
+                                video_url = "unknown"
                                 if hasattr(input_for_summary, 'url'):
-                                    source_info["url"] = input_for_summary.url
+                                    video_url = input_for_summary.url
+                                elif transcript_path:
+                                    # Try to extract URL from transcript metadata
+                                    video_url = f"file://{str(input_for_summary)}"
                                 
-                                # Export to GetReceipts
-                                export_result = exporter.export_hce_pipeline_outputs(
-                                    hce_data,
-                                    source_info=source_info,
-                                    episode_context=str(input_for_summary)[:1000]
+                                # Call our GetReceipts integration function
+                                getreceipts_result = publish_to_getreceipts(
+                                    transcript=transcript_text[:5000],  # Limit to first 5000 chars
+                                    video_url=video_url,
+                                    claims=claims,
+                                    people=people,
+                                    jargon=jargon,
+                                    mental_models=mental_models,
+                                    topics=[input_for_summary.stem, "knowledge_chipper", "video_content"]
                                 )
                                 
-                                if export_result["success"]:
-                                    claims_exported = export_result["claims_exported"]
+                                if getreceipts_result["success"]:
+                                    claims_exported = getreceipts_result["published_claims"]
                                     if not ctx.quiet:
                                         console.print(
-                                            f"[green]✓ Exported {claims_exported} claims to GetReceipts[/green]"
+                                            f"[green]✓ Published {claims_exported} claims to GetReceipts[/green]"
                                         )
                                         
-                                        # Show claim URLs if available
-                                        for result_item in export_result.get("results", []):
-                                            if result_item.get("success") and result_item.get("url"):
-                                                claim_url = f"https://getreceipts-web.vercel.app/claim/{result_item['url']}"
-                                                console.print(f"[dim]📄 View claim: {claim_url}[/dim]")
+                                        # Show claim URLs
+                                        for url in getreceipts_result.get("claim_urls", []):
+                                            console.print(f"[dim]📄 View claim: {url}[/dim]")
                                 else:
-                                    error_msg = export_result.get("error", "Unknown export error")
+                                    errors = getreceipts_result.get("errors", ["Unknown error"])
                                     if not ctx.quiet:
                                         console.print(
-                                            f"[yellow]⚠ GetReceipts export failed: {error_msg}[/yellow]"
+                                            f"[yellow]⚠ GetReceipts export failed: {'; '.join(errors)}[/yellow]"
                                         )
                                     
                             except Exception as e:

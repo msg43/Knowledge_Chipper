@@ -390,6 +390,109 @@ class BrightDataSession(Base):
         return f"<BrightDataSession(session_id='{self.session_id}', session_type='{self.session_type}', total_cost={self.total_cost})>"
 
 
+class ClaimTierValidation(Base):
+    """User validation of HCE claim tier assignments."""
+
+    __tablename__ = "claim_tier_validations"
+
+    # Primary key
+    validation_id = Column(String(50), primary_key=True)
+
+    # Claim identification
+    claim_id = Column(String(50), nullable=False)        # HCE claim ID
+    episode_id = Column(String(50))                      # Episode/content ID
+    
+    # Tier validation
+    original_tier = Column(String(1), nullable=False)    # Original LLM-assigned tier (A, B, C)
+    validated_tier = Column(String(1), nullable=False)   # User-validated tier (A, B, C)
+    is_modified = Column(Boolean, default=False)         # Whether user changed the tier
+    
+    # Claim content
+    claim_text = Column(Text, nullable=False)            # The actual claim text
+    claim_type = Column(String(30))                      # Type of claim (factual, causal, etc.)
+    
+    # Validation context
+    validated_by_user = Column(String(100))              # User identifier
+    validated_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Original LLM scoring context
+    original_scores = Column(JSONEncodedType)            # Original confidence scores
+    model_used = Column(String(50))                      # HCE model/version used
+    
+    # Evidence and context
+    evidence_spans = Column(JSONEncodedType)             # Evidence that supported the claim
+    validation_session_id = Column(String(50))          # Group validations by session
+    
+    def __repr__(self) -> str:
+        return f"<ClaimTierValidation(claim_id='{self.claim_id}', {self.original_tier}->{self.validated_tier}, modified={self.is_modified})>"
+
+
+class QualityRating(Base):
+    """Legacy quality ratings table - kept for backward compatibility."""
+
+    __tablename__ = "quality_ratings"
+
+    # Primary key
+    rating_id = Column(String(50), primary_key=True)
+
+    # What's being rated
+    content_type = Column(String(30), nullable=False)  # 'summary', 'transcript', 'moc_extraction', 'claim_tier'
+    content_id = Column(String(50), nullable=False)    # ID of the rated content
+
+    # Rating details
+    llm_rating = Column(Float)           # Original LLM-assigned rating (0.0-1.0)
+    user_rating = Column(Float)          # User-corrected rating (0.0-1.0)
+    is_user_corrected = Column(Boolean, default=False)
+
+    # Rating criteria (JSON object with detailed scores)
+    criteria_scores = Column(JSONEncodedType)  # {"accuracy": 0.8, "completeness": 0.9, "relevance": 0.7}
+
+    # Feedback details
+    user_feedback = Column(Text)         # Optional text feedback from user
+    rating_reason = Column(Text)         # Why this rating was given
+
+    # Context
+    rated_by_user = Column(String(100))  # User identifier
+    rated_at = Column(DateTime, default=datetime.utcnow)
+
+    # Model context for learning
+    model_used = Column(String(50))      # Which model generated the content
+    prompt_template = Column(String(200)) # Which template was used
+    input_characteristics = Column(JSONEncodedType)  # Input length, complexity, etc.
+
+    def __repr__(self) -> str:
+        return f"<QualityRating(rating_id='{self.rating_id}', content_type='{self.content_type}', user_rating={self.user_rating})>"
+
+
+class QualityMetrics(Base):
+    """Aggregated quality metrics for model performance tracking."""
+
+    __tablename__ = "quality_metrics"
+
+    # Primary key
+    metric_id = Column(String(50), primary_key=True)
+    model_name = Column(String(50), nullable=False)
+    content_type = Column(String(30), nullable=False)
+
+    # Aggregated statistics
+    total_ratings = Column(Integer, default=0)
+    user_corrected_count = Column(Integer, default=0)
+    avg_llm_rating = Column(Float)
+    avg_user_rating = Column(Float)
+    rating_drift = Column(Float)  # Difference between LLM and user ratings
+
+    # Performance by criteria
+    criteria_performance = Column(JSONEncodedType)  # Detailed breakdown
+
+    # Time window
+    period_start = Column(DateTime)
+    period_end = Column(DateTime)
+    last_updated = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        return f"<QualityMetrics(metric_id='{self.metric_id}', model_name='{self.model_name}', avg_user_rating={self.avg_user_rating})>"
+
+
 # Database initialization functions
 def create_database_engine(database_url: str = "sqlite:///knowledge_system.db"):
     """Create SQLAlchemy engine for the database."""

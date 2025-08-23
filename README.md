@@ -12,6 +12,8 @@ A revolutionary knowledge management system for macOS that transforms videos, au
 
 ### 🔍 **HCE (Hybrid Claim Extractor) System - Revolutionary Upgrade**
 - **Structured Claim Analysis**: Extract claims with A/B/C confidence tiers instead of basic summaries
+- **🎯 Claim Tier Validation**: Interactive popup dialog to review and correct AI-assigned A/B/C tiers
+- **🔍 Claim Search & Exploration**: Dedicated search interface to explore extracted claims across all content
 - **Real-Time Analytics**: Live display of claim counts, contradictions, relations, and top findings
 - **Smart Filtering**: Filter by confidence tier, claim type, or limit results for focused analysis  
 - **Contradiction Detection**: Automatically identify conflicting claims within and across documents
@@ -21,6 +23,7 @@ A revolutionary knowledge management system for macOS that transforms videos, au
 - **Obsidian Integration**: Auto-generated tags and wikilinks for seamless knowledge management
 - **Professional Output**: Beautiful markdown with executive summaries, categorized claims, and evidence
 - **Performance Optimized**: Semantic deduplication, embedding cache, and database optimization
+- **Gold Standard Dataset**: Build human-validated training data to improve AI accuracy over time
 
 ### 🧠 Context-Driven Long‑Form Analysis (New Synthesis Engine)
 - **Purpose**: Deliver faithful, scalable analysis for very long inputs (multi‑hour transcripts, large PDFs) without dumping entire texts into a single prompt.
@@ -89,6 +92,10 @@ A revolutionary knowledge management system for macOS that transforms videos, au
 - [⭐ Core Features](#-core-features)
   - [What Can It Process?](#what-can-it-process)
   - [Main Operations](#main-operations)
+  - [Summarization - Deep Dive](#summarization---deep-dive)
+  - [Claim Search & Exploration](#-claim-search--exploration)
+  - [Process Management - Full Pipeline Processing](#-process-management---full-pipeline-processing)
+  - [File Watcher - Automated Processing](#️-file-watcher---automated-processing)
   - [Document Summary Header-to-YAML Extraction](#-document-summary-special-feature-header-to-yaml-extraction)
   - [Output Types](#output-types)
   - [Intelligent Text Chunking](#-intelligent-text-chunking)
@@ -98,6 +105,8 @@ A revolutionary knowledge management system for macOS that transforms videos, au
   - [Local File Processing](#local-file-processing)
   - [Batch Processing](#batch-processing)
   - [Automated Monitoring](#automated-monitoring)
+  - [Claim Analysis & Research](#claim-analysis--research)
+  - [Full Pipeline Processing](#full-pipeline-processing)
 - [⚙️ Configuration & Settings](#️-configuration--settings)
   - [Essential Settings](#essential-settings)
   - [API Keys Setup](#api-keys-setup)
@@ -278,12 +287,13 @@ Your_Output_Folder/
 
 The desktop app has tabs for different operations:
 
-- **🎬 YouTube Extraction**: Process YouTube videos and playlists
-- **🎵 Audio Transcription**: Process local audio/video files
-- **📝 Summarization**: Create summaries from transcripts
-- **📊 Content Analysis**: Generate summaries, knowledge maps, entity extraction, and relationship analysis
-- **👁️ File Watcher**: Automatically process new files
-- **⚙️ Settings**: Configure API keys, hardware performance options, and preferences
+- **🎬 YouTube Extraction**: Process YouTube videos and playlists with speaker diarization support
+- **🎵 Audio Transcription**: Process local audio/video files with quality retry and GPU acceleration
+- **📝 Summarization**: Create summaries from transcripts with claim tier validation
+- **📊 Process Management**: Full pipeline processing with transcription, summarization, and MOC generation
+- **🔍 Claim Search**: Explore and search extracted claims across all processed content
+- **👁️ File Watcher**: Automatically process new files as they're added to watched folders
+- **⚙️ API Keys**: Configure API keys, hardware performance options, and preferences
 
 **Navigation:** Click tabs to switch between operations. All settings are saved automatically.
 
@@ -322,12 +332,13 @@ knowledge-system --help
 
 ### Main Operations
 
-1. **🎯 Transcription**: Convert speech to text using AI
-2. **📝 Summarization**: Generate structured summaries
-3. **📊 Content Analysis**: Create summaries, knowledge maps, entity extraction, and relationship analysis
-4. **👁️ Monitoring**: Watch folders for automatic processing
+1. **🎯 Transcription**: Convert speech to text using AI with speaker diarization
+2. **📝 Summarization**: Generate structured summaries with HCE claim extraction
+3. **📊 Process Management**: Full pipeline processing with transcription, summarization, and MOC generation
+4. **🔍 Claim Search**: Explore and analyze extracted claims across all content
+5. **👁️ Monitoring**: Watch folders for automatic processing
 
-### Content Analysis - Deep Dive
+### Summarization - Deep Dive
 
 **What it does:** Transforms your documents using AI-powered analysis with multiple specialized approaches: comprehensive summaries, structured knowledge maps, entity extraction, and relationship analysis.
 
@@ -338,7 +349,7 @@ knowledge-system --help
 - Configure depth (1-5), theme, and optional custom templates
 - Choose whether to extract beliefs and claims
 
-**Phase 2: Content Analysis** 
+**Phase 2: Summarization** 
 For each file, the system runs **5 parallel extraction processes**:
 
 1. **👥 People Extraction**
@@ -433,12 +444,12 @@ Generated: {generated_at} | Files: {source_files_count}
 
 #### **🚀 Usage Examples**
 
-**GUI:** Content Analysis tab
+**GUI:** Summarization tab
 1. Add documents or folders
 2. Choose Analysis Type from dropdown (Document Summary, Knowledge Map, Entity Extraction, or Relationship Analysis)
 3. Template auto-populates based on selection (customize if desired)
 4. Configure provider and model (use 🔄 to refresh available models)
-5. Click "Start Content Analysis"
+5. Click "Start Analysis"
 
 **CLI:**
 ```bash
@@ -453,6 +464,131 @@ knowledge-system moc files/*.md --no-include-beliefs
 ```
 
 **Perfect for:** Research notes, meeting transcripts, knowledge bases, documentation collections, academic papers, interview transcripts.
+
+### 🔍 Claim Search & Exploration
+
+**Comprehensive Search Interface for Extracted Claims**
+
+The Claim Search tab provides a powerful interface to explore, filter, and analyze all claims extracted from your processed content:
+
+**🎯 Search Capabilities:**
+- **Text Search**: Find claims containing specific keywords or phrases
+- **Tier Filtering**: Filter by confidence tier (A, B, C, or All)
+- **Content Type**: Filter by claim type (factual, causal, normative, forecast, definition)
+- **Source Filtering**: Search within specific videos or documents
+- **Advanced Queries**: Combine multiple filters for precise results
+
+**📊 Rich Display Format:**
+- **Claim Details**: Full claim text with confidence scores and evidence
+- **Source Context**: Video title, URL, and processing metadata
+- **Tier Indicators**: Visual A/B/C tier badges with color coding
+- **Evidence Preview**: Supporting evidence spans with timestamps
+- **Quick Actions**: Direct links to source content and validation options
+
+**🔧 Interactive Features:**
+- **Real-time Search**: Results update as you type
+- **Sortable Results**: Sort by relevance, confidence, date, or tier
+- **Export Options**: Export search results to CSV or JSON
+- **Batch Operations**: Select multiple claims for bulk actions
+- **Validation Integration**: Direct access to tier validation from search results
+
+**Sample Search Interface:**
+```
+Search: "artificial intelligence" | Tier: All | Type: Forecast
+
+Results: 47 claims found
+
+┌─────────────────────────────────────────────────────────┐
+│ [A] AI will transform healthcare within 5 years        │
+│ Source: "Future of Medicine" (youtube.com/watch?v=...)  │
+│ Evidence: "Recent breakthroughs in diagnostic AI..."    │
+│ Confidence: 0.89 • Type: Forecast                      │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ [B] Machine learning requires large datasets           │
+│ Source: "ML Fundamentals" (youtube.com/watch?v=...)    │
+│ Evidence: "Training effective models typically..."      │
+│ Confidence: 0.72 • Type: Factual                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+**🎯 Perfect For:**
+- **Research Analysis**: Find all claims related to specific topics
+- **Fact Checking**: Verify claims across multiple sources
+- **Content Curation**: Identify high-confidence claims for reports
+- **Knowledge Discovery**: Explore connections between different claims
+- **Quality Assurance**: Review and validate claim accuracy
+
+### 📊 Process Management - Full Pipeline Processing
+
+**Comprehensive Workflow Management for Multiple Files**
+
+The Process Management tab provides a unified interface for running complete processing pipelines on multiple files simultaneously:
+
+**🔄 Full Pipeline Capabilities:**
+- **Transcription**: Convert audio/video files to text with speaker diarization
+- **Summarization**: Generate AI-powered summaries with HCE claim extraction
+- **MOC Generation**: Create knowledge maps from processed content
+- **Batch Processing**: Handle multiple files with progress tracking
+- **Settings Inheritance**: Automatically uses settings from other tabs
+
+**⚙️ Configuration Options:**
+- **Input Selection**: Add individual files or entire folders
+- **Processing Steps**: Enable/disable transcription, summarization, and MOC generation
+- **Output Management**: Configurable output directory and file organization
+- **Progress Monitoring**: Real-time progress tracking with detailed status updates
+- **Error Handling**: Comprehensive error reporting and recovery options
+
+**🎯 Workflow Benefits:**
+- **One-Click Processing**: Complete pipeline from raw files to knowledge maps
+- **Consistent Settings**: Uses your configured models and preferences from other tabs
+- **Parallel Processing**: Efficient handling of multiple files simultaneously
+- **Progress Transparency**: Clear visibility into each processing stage
+- **Flexible Output**: Choose which processing steps to include
+
+### 👁️ File Watcher - Automated Processing
+
+**Intelligent Folder Monitoring for Continuous Processing**
+
+The File Watcher tab enables automated processing of new files as they're added to monitored directories:
+
+**🔍 Monitoring Features:**
+- **Real-time Detection**: Instantly detects new files added to watched folders
+- **Pattern Matching**: Configurable file patterns (*.mp4, *.pdf, etc.)
+- **Recursive Watching**: Monitor subdirectories automatically
+- **Debounce Control**: Prevents duplicate processing during file operations
+- **Multiple Patterns**: Support for multiple file types simultaneously
+
+**⚡ Processing Options:**
+- **Auto-Processing**: Automatically process detected files
+- **Dry Run Mode**: Preview what would be processed without actual processing
+- **Custom Delays**: Configurable debounce delays for stable file detection
+- **Selective Processing**: Choose which file types to process automatically
+- **Manual Override**: Option to manually trigger processing for detected files
+
+**🎛️ Configuration:**
+- **Watch Directory**: Select any folder to monitor
+- **File Patterns**: Comma-separated patterns (e.g., "*.mp4,*.mp3,*.pdf")
+- **Processing Pipeline**: Uses settings from other tabs for consistency
+- **Status Monitoring**: Real-time display of watched files and processing status
+- **Start/Stop Control**: Easy enable/disable of monitoring
+
+**Sample Configuration:**
+```
+Watch Directory: ~/Documents/Research/
+File Patterns: *.mp4,*.mp3,*.pdf,*.txt
+Recursive: ✓ (monitor subdirectories)
+Auto-Process: ✓ (process files automatically)
+Debounce Delay: 5 seconds
+```
+
+**🎯 Perfect For:**
+- **Research Workflows**: Automatically process new research materials
+- **Content Creation**: Monitor download folders for new videos/audio
+- **Document Management**: Process new documents as they're added
+- **Batch Operations**: Set up overnight processing of large collections
+- **Team Collaboration**: Monitor shared folders for new content
 
 #### **📋 Document Summary Special Feature: Header-to-YAML Extraction**
 
@@ -809,6 +945,54 @@ knowledge-system transcribe --input "https://youtube.com/watch?v=VIDEO_ID" --ena
 **(SPEAKER_00):** Let's start with the basics. Can you explain...
 ```
 
+#### 🎯 **Claim Tier Validation System**
+
+**Interactive Quality Assurance for HCE Claims**
+
+After HCE processing extracts claims with A/B/C confidence tiers, users can validate and correct the AI's tier assignments through an intuitive card-based interface:
+
+**🔍 Validation Workflow:**
+1. **Process content** with HCE claim extraction enabled
+2. **Click "Validate Claim Tiers"** button after processing completes
+3. **Review each claim** in a beautiful card-based popup dialog
+4. **Confirm or modify** tier assignments (A → B, B → C, etc.)
+5. **Build gold standard dataset** for improving AI accuracy over time
+
+**✨ Key Features:**
+- **Card-Based Interface**: Each claim displayed as an individual card with evidence
+- **Quick Workflow**: Click tier → Click confirm → Move to next claim
+- **Visual Feedback**: Cards change color based on validation state
+- **Progress Tracking**: Real-time progress with "X of Y claims validated"
+- **Batch Operations**: "Confirm All Remaining" for efficiency
+- **Analytics Dashboard**: Track AI accuracy rates and improvement over time
+
+**📊 Validation Analytics:**
+- **Overall Accuracy**: System-wide AI accuracy rates
+- **Tier-Specific Performance**: Separate accuracy for A, B, C tiers
+- **Correction Patterns**: Common A→B, B→C corrections identified
+- **Model Performance**: Track accuracy across different AI models
+- **Training Data**: Build human-validated dataset for model improvement
+
+**Sample Validation Interface:**
+```
+┌─────────────────────────────────────────────────────────┐
+│ Claim: AI will significantly impact job markets         │
+│ Type: Forecast • Evidence: 2 spans • Confidence: 0.85  │
+│                                                         │
+│ Tier: ○ A  ● B  ○ C    [✓ Confirm] [Skip]             │
+│                                                         │
+│ Evidence: "Studies show 40% of jobs could be automated │
+│ within the next decade according to McKinsey..."       │
+└─────────────────────────────────────────────────────────┘
+Progress: 3 of 12 claims validated (1 modified)
+```
+
+**🎯 Perfect For:**
+- **Researchers**: Building reliable claim databases
+- **Content Creators**: Ensuring claim accuracy in analysis
+- **Academics**: Creating validated datasets for research
+- **Organizations**: Quality assurance for knowledge management
+
 #### ⚡ **Performance & Reliability**
 
 - **80-90% Faster Re-runs**: Automatically skips already processed videos
@@ -851,6 +1035,34 @@ knowledge-system process ./content/ --patterns "*.mp4" "*.pdf"
 **Perfect for:** Ongoing content processing
 
 **GUI:** Use "File Watcher" tab to set up automated processing that monitors folders and automatically processes new files as they appear.
+
+### Claim Analysis & Research
+
+**Perfect for:** Research analysis, fact-checking, knowledge discovery
+
+```bash
+# Process research materials with HCE claim extraction
+knowledge-system summarize research_papers/ --analysis-type "HCE Analysis"
+
+# Search extracted claims
+# Use GUI: Claim Search tab to explore and filter claims
+```
+
+**GUI Workflow:**
+1. **Process content** with HCE enabled in Summarization tab
+2. **Validate claim tiers** using the popup validation dialog
+3. **Search and explore** claims in the Claim Search tab
+4. **Export results** for further analysis or reporting
+
+### Full Pipeline Processing
+
+**Perfect for:** Complete end-to-end workflows
+
+**GUI:** Use "Process Management" tab for one-click processing:
+1. **Add files or folders** to process
+2. **Configure pipeline** (transcription + summarization + MOC)
+3. **Start processing** and monitor progress
+4. **Review results** with integrated validation tools
 
 ## ⚙️ Configuration & Settings
 

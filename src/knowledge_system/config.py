@@ -443,6 +443,70 @@ class MonitoringConfig(BaseModel):
     track_resource_usage: bool = True
 
 
+class SpeakerIdentificationConfig(BaseModel):
+    """Speaker identification and diarization configuration."""
+
+    # Core speaker identification settings
+    enable_speaker_assignment: bool = Field(
+        default=True, description="Enable interactive speaker assignment dialog"
+    )
+    auto_show_assignment_dialog: bool = Field(
+        default=True, description="Automatically show speaker assignment dialog after diarization"
+    )
+    enable_voice_learning: bool = Field(
+        default=True, description="Learn voice patterns for future automatic suggestions"
+    )
+    confidence_threshold: float = Field(
+        default=0.7, ge=0.0, le=1.0, description="Minimum confidence threshold for speaker suggestions"
+    )
+    max_speaker_suggestions: int = Field(
+        default=5, ge=1, le=10, description="Maximum number of speaker name suggestions to show"
+    )
+    
+    # Color-coded transcript settings
+    enable_color_coded_transcripts: bool = Field(
+        default=True, description="Generate color-coded HTML and enhanced markdown transcripts"
+    )
+    color_coded_by_default: bool = Field(
+        default=True, description="Enable color coding by default in transcription settings"
+    )
+    
+    # Batch processing settings
+    batch_processing_enabled: bool = Field(
+        default=True, description="Enable batch speaker assignment for multiple recordings"
+    )
+    maintain_speaker_consistency: bool = Field(
+        default=True, description="Try to maintain consistent speaker names across recordings in the same folder"
+    )
+    
+    # Integration settings
+    integrate_with_people_moc: bool = Field(
+        default=True, description="Automatically add identified speakers to People MOC files"
+    )
+    update_people_yaml: bool = Field(
+        default=True, description="Update People.yaml files with speaker information"
+    )
+    
+    # Advanced settings
+    enable_audio_playback: bool = Field(
+        default=False, description="Enable audio playback in speaker assignment dialog (future feature)"
+    )
+    voice_fingerprinting_enabled: bool = Field(
+        default=False, description="Enable advanced voice fingerprinting for speaker recognition (future feature)"
+    )
+    
+    # Learning and suggestion settings
+    learn_from_corrections: bool = Field(
+        default=True, description="Learn from user corrections to improve future suggestions"
+    )
+    suggestion_learning_weight: float = Field(
+        default=1.0, ge=0.1, le=2.0, description="Weight for learning from user corrections"
+    )
+    cleanup_old_patterns_days: int = Field(
+        default=90, ge=7, le=365, description="Days after which to clean up old, unused voice patterns"
+    )
+
+
 class GUIFeaturesConfig(BaseModel):
     """GUI feature toggles configuration."""
 
@@ -485,6 +549,7 @@ class Settings(BaseSettings):
     moc: MOCConfig = Field(default_factory=MOCConfig)
     hce: HCEConfig = Field(default_factory=HCEConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
+    speaker_identification: SpeakerIdentificationConfig = Field(default_factory=SpeakerIdentificationConfig)
     gui_features: GUIFeaturesConfig = Field(default_factory=GUIFeaturesConfig)
 
     def __init__(self, config_path: str | Path | None = None, **kwargs) -> None:

@@ -32,7 +32,7 @@ A comprehensive Knowledge System for macOS that processes YouTube videos, audio 
 - **Markdown Integration**: In-place summary updates with metadata preservation
 
 #### 5. Maps of Content (MOC) Generation
-- **Content Analysis**: Extract people, tags, mental models, and jargon
+- **Summarization**: Extract people, tags, mental models, and jargon
 - **Belief Extraction**: Identify and categorize beliefs from content
 - **YAML Output**: Structured data export for further processing
 - **Theme Support**: Multiple organizational themes (topical, chronological, hierarchical)

@@ -176,6 +176,16 @@ class EnhancedTranscriptionWorker(QThread):
                         )
 
                     processing_kwargs_with_output["output_dir"] = output_dir
+                    
+                    # Enable GUI mode for speaker assignment dialog
+                    processing_kwargs_with_output["gui_mode"] = True
+                    processing_kwargs_with_output["show_speaker_dialog"] = (
+                        enable_diarization and 
+                        self.gui_settings.get("enable_speaker_assignment", True)
+                    )
+                    processing_kwargs_with_output["enable_color_coding"] = (
+                        self.gui_settings.get("enable_color_coding", True)
+                    )
 
                     result = processor.process(
                         Path(file_path), **processing_kwargs_with_output
@@ -566,7 +576,27 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             "Useful for meetings, interviews, or conversations with multiple speakers."
         )
         self.diarization_checkbox.toggled.connect(self._on_setting_changed)
+        self.diarization_checkbox.toggled.connect(self._on_diarization_toggled)
         layout.addWidget(self.diarization_checkbox, 3, 2, 1, 2)
+        
+        # Speaker assignment options (shown when diarization is enabled)
+        self.speaker_assignment_checkbox = QCheckBox("Enable speaker assignment dialog")
+        self.speaker_assignment_checkbox.setChecked(True)
+        self.speaker_assignment_checkbox.setToolTip(
+            "Show interactive dialog to assign real names to detected speakers. "
+            "Allows you to identify speakers and create color-coded transcripts."
+        )
+        self.speaker_assignment_checkbox.toggled.connect(self._on_setting_changed)
+        layout.addWidget(self.speaker_assignment_checkbox, 5, 2, 1, 2)
+        
+        self.color_coded_checkbox = QCheckBox("Generate color-coded transcripts")
+        self.color_coded_checkbox.setChecked(True)
+        self.color_coded_checkbox.setToolTip(
+            "Generate HTML and enhanced markdown transcripts with color-coded speakers. "
+            "Creates visually appealing transcripts for easy speaker identification."
+        )
+        self.color_coded_checkbox.toggled.connect(self._on_setting_changed)
+        layout.addWidget(self.color_coded_checkbox, 6, 0, 1, 2)
 
         self.overwrite_checkbox = QCheckBox("Overwrite existing transcripts")
         self.overwrite_checkbox.setToolTip(
@@ -1203,6 +1233,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             "timestamps": self.timestamps_checkbox.isChecked(),
             "diarization": self.diarization_checkbox.isChecked(),
             "overwrite": self.overwrite_checkbox.isChecked(),
+            "enable_speaker_assignment": self.speaker_assignment_checkbox.isChecked(),
+            "enable_color_coding": self.color_coded_checkbox.isChecked(),
             "output_dir": self.output_dir_input.text().strip() or None,
             "batch_size": self.batch_size.value(),
             "omp_threads": self.omp_threads.value(),
@@ -1297,6 +1329,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.format_combo,
                 self.timestamps_checkbox,
                 self.diarization_checkbox,
+                self.speaker_assignment_checkbox,
+                self.color_coded_checkbox,
             ]
 
             # Block all signals
@@ -1353,6 +1387,18 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                         self.tab_name, "enable_diarization", False
                     )
                 )
+                
+                # Load speaker assignment settings
+                self.speaker_assignment_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(
+                        self.tab_name, "enable_speaker_assignment", True
+                    )
+                )
+                self.color_coded_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(
+                        self.tab_name, "enable_color_coding", True
+                    )
+                )
 
             finally:
                 # Always restore signals
@@ -1395,6 +1441,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
             # Ensure quality retry state is properly reflected in UI
             self._on_quality_retry_toggled(self.quality_retry_checkbox.isChecked())
+            
+            # Ensure diarization state is properly reflected in UI
+            self._on_diarization_toggled(self.diarization_checkbox.isChecked())
 
             logger.debug(f"Loaded settings for {self.tab_name} tab")
         except Exception as e:
@@ -1435,6 +1484,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.tab_name,
                 "enable_diarization",
                 self.diarization_checkbox.isChecked(),
+            )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name,
+                "enable_speaker_assignment",
+                self.speaker_assignment_checkbox.isChecked(),
+            )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name,
+                "enable_color_coding",
+                self.color_coded_checkbox.isChecked(),
             )
             self.gui_settings.set_checkbox_state(
                 self.tab_name, "overwrite_existing", self.overwrite_checkbox.isChecked()
@@ -1482,3 +1541,14 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.max_retry_attempts.setToolTip(
                 "Disabled because automatic quality retry is turned off"
             )
+    
+    def _on_diarization_toggled(self, checked: bool):
+        """Handle toggling of diarization checkbox."""
+        # Enable/disable speaker assignment options based on diarization setting
+        self.speaker_assignment_checkbox.setEnabled(checked)
+        self.color_coded_checkbox.setEnabled(checked)
+        
+        if not checked:
+            # If diarization is disabled, also disable speaker assignment features
+            self.speaker_assignment_checkbox.setChecked(False)
+            self.color_coded_checkbox.setChecked(False)

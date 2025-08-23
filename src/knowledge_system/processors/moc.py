@@ -22,6 +22,17 @@ from .hce.types import EpisodeBundle, PipelineOutputs, Segment
 logger = get_logger(__name__)
 
 
+class SpeakerAppearance(BaseModel):
+    """Represents a speaker appearance in a recording."""
+    
+    recording_file: str = Field(..., description="Recording file path")
+    speaker_id: str = Field(..., description="Original speaker ID (e.g., SPEAKER_00)")
+    total_duration: float = Field(default=0.0, description="Total speaking time in seconds")
+    segment_count: int = Field(default=0, description="Number of speaking segments")
+    confidence: float = Field(default=1.0, description="Confidence in speaker identification")
+    assigned_date: datetime = Field(default_factory=datetime.now, description="When assignment was made")
+
+
 class Person(BaseModel):
     """Represents a person mentioned in documents."""
 
@@ -33,6 +44,34 @@ class Person(BaseModel):
         default=None, description="First file where person appears"
     )
     mention_count: int = Field(default=0, description="Total number of mentions")
+    
+    # Speaker-related fields
+    speaker_appearances: list[SpeakerAppearance] = Field(
+        default_factory=list, description="Appearances as identified speaker in recordings"
+    )
+    voice_learned: bool = Field(default=False, description="Whether voice characteristics have been learned")
+    speaker_confidence: float = Field(default=0.0, description="Overall confidence in speaker identification")
+    total_speaking_time: float = Field(default=0.0, description="Total speaking time across all recordings (seconds)")
+    
+    def add_speaker_appearance(self, appearance: SpeakerAppearance) -> None:
+        """Add a new speaker appearance."""
+        self.speaker_appearances.append(appearance)
+        self.total_speaking_time += appearance.total_duration
+        
+        # Update overall confidence (weighted average)
+        if self.speaker_appearances:
+            total_confidence = sum(app.confidence for app in self.speaker_appearances)
+            self.speaker_confidence = total_confidence / len(self.speaker_appearances)
+    
+    def get_recording_count(self) -> int:
+        """Get the number of recordings this person appears in as a speaker."""
+        return len(self.speaker_appearances)
+    
+    def get_average_speaking_time(self) -> float:
+        """Get average speaking time per recording."""
+        if not self.speaker_appearances:
+            return 0.0
+        return self.total_speaking_time / len(self.speaker_appearances)
 
 
 class Tag(BaseModel):
@@ -529,3 +568,206 @@ class MOCProcessor(BaseProcessor):
             files["beliefs.yaml"] = yaml.dump(beliefs_data, default_flow_style=False)
 
         return files
+    
+    def add_speakers_to_people_database(
+        self, 
+        speaker_assignments: dict[str, str], 
+        source_file: str,
+        speaker_data_list: list = None
+    ) -> None:
+        """
+        Add identified speakers to People database.
+        
+        Args:
+            speaker_assignments: Dictionary mapping speaker IDs to names
+            source_file: Source recording file path
+            speaker_data_list: Optional list of SpeakerData objects with timing info
+        """
+        try:
+            from ..database.speaker_models import get_speaker_db_service
+            
+            # Load existing MOC data or create new
+            moc_data = MOCData()
+            
+            # Add each speaker to the people database
+            for speaker_id, assigned_name in speaker_assignments.items():
+                # Find speaker data if available
+                speaker_data = None
+                if speaker_data_list:
+                    speaker_data = next(
+                        (s for s in speaker_data_list if s.speaker_id == speaker_id),
+                        None
+                    )
+                
+                # Create or update person entry
+                if assigned_name not in moc_data.people:
+                    moc_data.people[assigned_name] = Person(
+                        name=assigned_name,
+                        first_mention=Path(source_file).name
+                    )
+                
+                person = moc_data.people[assigned_name]
+                
+                # Add speaker appearance
+                appearance = SpeakerAppearance(
+                    recording_file=source_file,
+                    speaker_id=speaker_id,
+                    total_duration=speaker_data.total_duration if speaker_data else 0.0,
+                    segment_count=speaker_data.segment_count if speaker_data else 0,
+                    confidence=speaker_data.confidence_score if speaker_data else 1.0
+                )
+                
+                person.add_speaker_appearance(appearance)
+                
+                # Mark voice as learned if confidence is high
+                if appearance.confidence > 0.8:
+                    person.voice_learned = True
+                
+                # Add to mentions if not already there
+                if source_file not in person.mentions:
+                    person.mentions.append(source_file)
+                    person.mention_count += 1
+            
+            logger.info(f"Added {len(speaker_assignments)} speakers to People database")
+            
+        except Exception as e:
+            logger.error(f"Error adding speakers to People database: {e}")
+    
+    def update_people_yaml_with_speakers(
+        self, 
+        people_data: dict, 
+        speaker_assignments: dict[str, str], 
+        source_file: str
+    ) -> dict:
+        """
+        Update People.md and YAML with speaker information.
+        
+        Args:
+            people_data: Existing people data dictionary
+            speaker_assignments: Dictionary mapping speaker IDs to names  
+            source_file: Source recording file path
+            
+        Returns:
+            Updated people data dictionary
+        """
+        try:
+            updated_people = people_data.copy()
+            
+            for speaker_id, assigned_name in speaker_assignments.items():
+                # Create or update person entry
+                if assigned_name not in updated_people:
+                    updated_people[assigned_name] = {
+                        'name': assigned_name,
+                        'mentions': [],
+                        'first_mention': Path(source_file).name,
+                        'mention_count': 0,
+                        'speaker_appearances': [],
+                        'voice_learned': False,
+                        'speaker_confidence': 0.0,
+                        'total_speaking_time': 0.0
+                    }
+                
+                person = updated_people[assigned_name]
+                
+                # Add recording to mentions if not already there
+                if source_file not in person['mentions']:
+                    person['mentions'].append(source_file)
+                    person['mention_count'] += 1
+                
+                # Add speaker appearance
+                appearance = {
+                    'recording_file': source_file,
+                    'speaker_id': speaker_id,
+                    'assigned_date': datetime.now().isoformat()
+                }
+                
+                if 'speaker_appearances' not in person:
+                    person['speaker_appearances'] = []
+                
+                person['speaker_appearances'].append(appearance)
+                
+                logger.debug(f"Updated person '{assigned_name}' with speaker appearance")
+            
+            return updated_people
+            
+        except Exception as e:
+            logger.error(f"Error updating people YAML with speakers: {e}")
+            return people_data
+    
+    def generate_speaker_enhanced_people_md(self, moc_data: MOCData) -> str:
+        """
+        Generate enhanced People.md with speaker information.
+        
+        Args:
+            moc_data: MOC data containing people with speaker info
+            
+        Returns:
+            Enhanced People.md content as string
+        """
+        try:
+            content = ["# People\n\n"]
+            content.append(
+                f"*Generated from {len(moc_data.source_files)} source files on {moc_data.generated_at.strftime('%Y-%m-%d')}*\n\n"
+            )
+            
+            # Sort people by total speaking time (most active speakers first)
+            sorted_people = sorted(
+                moc_data.people.items(),
+                key=lambda x: x[1].total_speaking_time,
+                reverse=True
+            )
+            
+            for name, person in sorted_people:
+                content.append(f"## {name}\n\n")
+                
+                # Basic information
+                content.append(f"- **First mentioned in:** {person.first_mention}\n")
+                content.append(f"- **Total mentions:** {person.mention_count}\n")
+                
+                # Speaker information
+                if person.speaker_appearances:
+                    content.append(f"- **Recordings as speaker:** {person.get_recording_count()}\n")
+                    
+                    # Format total speaking time
+                    total_minutes = int(person.total_speaking_time // 60)
+                    total_seconds = int(person.total_speaking_time % 60)
+                    content.append(f"- **Total speaking time:** {total_minutes}:{total_seconds:02d}\n")
+                    
+                    if person.get_recording_count() > 1:
+                        avg_time = person.get_average_speaking_time()
+                        avg_minutes = int(avg_time // 60)
+                        avg_seconds = int(avg_time % 60)
+                        content.append(f"- **Average speaking time:** {avg_minutes}:{avg_seconds:02d} per recording\n")
+                    
+                    content.append(f"- **Speaker confidence:** {person.speaker_confidence:.1%}\n")
+                    
+                    if person.voice_learned:
+                        content.append("- **Voice learned:** ✅ Yes\n")
+                    else:
+                        content.append("- **Voice learned:** ❌ No\n")
+                
+                # File appearances
+                content.append("\n### Appears in:\n")
+                for file in person.mentions:
+                    content.append(f"- [[{Path(file).stem}]]\n")
+                
+                # Speaker appearances details
+                if person.speaker_appearances:
+                    content.append("\n### Speaker Appearances:\n")
+                    for appearance in person.speaker_appearances:
+                        recording_name = Path(appearance.recording_file).stem
+                        duration_min = int(appearance.total_duration // 60)
+                        duration_sec = int(appearance.total_duration % 60)
+                        
+                        content.append(
+                            f"- **[[{recording_name}]]**: {duration_min}:{duration_sec:02d} "
+                            f"({appearance.segment_count} segments, {appearance.confidence:.1%} confidence)\n"
+                        )
+                
+                content.append("\n")
+            
+            return "".join(content)
+            
+        except Exception as e:
+            logger.error(f"Error generating speaker-enhanced People.md: {e}")
+            return "# People\n\nError generating content."

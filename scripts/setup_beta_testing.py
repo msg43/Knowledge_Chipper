@@ -105,7 +105,7 @@ Thank you for helping test the new HCE (Hybrid Claim Extractor) system! This gui
 
 ### 1. **User Interface Testing**
 Please test:
-- [ ] Claim filtering controls in Content Analysis tab
+- [ ] Claim filtering controls in Summarization tab
 - [ ] Analysis depth slider in Process tab
 - [ ] Search functionality in Claim Search tab
 - [ ] Real-time analytics display during processing
@@ -180,7 +180,7 @@ Describe:
 4. Review extracted claims and relationships
 5. Check Obsidian integration
 
-### **Scenario 2: Video Content Analysis**
+### **Scenario 2: Video Summarization**
 1. Process a YouTube video or local video file
 2. Use "Balanced (3)" analysis depth
 3. Filter results to show only Tier A claims

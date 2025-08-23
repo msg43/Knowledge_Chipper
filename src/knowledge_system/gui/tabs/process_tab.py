@@ -503,10 +503,10 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         layout.addWidget(self.analysis_settings_label, 3, 1, 1, 2)
 
         analysis_btn = QPushButton("Change")
-        analysis_btn.clicked.connect(lambda: self._switch_to_tab("Content Analysis"))
+        analysis_btn.clicked.connect(lambda: self._switch_to_tab("Summarization"))
         analysis_btn.setMaximumWidth(80)
         analysis_btn.setToolTip(
-            "Switch to Content Analysis tab to modify HCE claim extraction settings.\n"
+            "Switch to Summarization tab to modify HCE claim extraction settings.\n"
             "• Choose AI provider (OpenAI, Anthropic, or Local)\n"
             "• Select model, claim tiers, and analysis depth\n"
             "• Configure contradiction and relationship analysis"
@@ -780,7 +780,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             else:
                 self.analysis_settings_label.setText("openai: gpt-4o-mini-2024-07-18")
 
-            # MOC settings (using defaults since MOC tab was consolidated into Content Analysis)
+            # MOC settings (using defaults since MOC tab was consolidated into Summarization)
             self.moc_settings_label.setText("Knowledge Map: Enabled (Default settings)")
 
         except Exception as e:

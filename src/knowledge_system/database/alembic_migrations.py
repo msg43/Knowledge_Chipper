@@ -394,3 +394,93 @@ def check_schema_compatibility(
     """Check database schema compatibility."""
     manager = DatabaseMigrationManager(db_service)
     return manager.check_schema_compatibility()
+
+
+def apply_quality_rating_migration(db_service: DatabaseService | None = None) -> bool:
+    """Apply the quality rating migration to add quality rating tables."""
+    if db_service is None:
+        db_service = DatabaseService()
+
+    # Check if SQLAlchemy text is available
+    if text is None:
+        try:
+            from sqlalchemy import text as sql_text
+        except ImportError:
+            logger.error("SQLAlchemy not available - cannot apply migration")
+            return False
+    else:
+        sql_text = text
+
+    try:
+        # Read and execute the quality rating migration SQL
+        migration_path = Path(__file__).parent / "migrations" / "2025_01_15_quality_ratings.sql"
+
+        if not migration_path.exists():
+            logger.error(f"Quality rating migration file not found: {migration_path}")
+            return False
+
+        with open(migration_path, 'r', encoding='utf-8') as f:
+            migration_sql = f.read()
+
+        # Execute the migration
+        with db_service.get_session() as session:
+            # Split by semicolon and execute each statement
+            statements = [stmt.strip() for stmt in migration_sql.split(';') if stmt.strip()]
+
+            for statement in statements:
+                if statement:
+                    session.execute(sql_text(statement))
+
+            session.commit()
+
+        logger.info("Successfully applied quality rating migration")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to apply quality rating migration: {e}")
+        return False
+
+
+def apply_claim_tier_validation_migration(db_service: DatabaseService | None = None) -> bool:
+    """Apply the claim tier validation migration to add claim validation tables."""
+    if db_service is None:
+        db_service = DatabaseService()
+
+    # Check if SQLAlchemy text is available
+    if text is None:
+        try:
+            from sqlalchemy import text as sql_text
+        except ImportError:
+            logger.error("SQLAlchemy not available - cannot apply migration")
+            return False
+    else:
+        sql_text = text
+
+    try:
+        # Read and execute the claim tier validation migration SQL
+        migration_path = Path(__file__).parent / "migrations" / "2025_01_15_claim_tier_validation.sql"
+
+        if not migration_path.exists():
+            logger.error(f"Claim tier validation migration file not found: {migration_path}")
+            return False
+
+        with open(migration_path, 'r', encoding='utf-8') as f:
+            migration_sql = f.read()
+
+        # Execute the migration
+        with db_service.get_session() as session:
+            # Split by semicolon and execute each statement
+            statements = [stmt.strip() for stmt in migration_sql.split(';') if stmt.strip()]
+
+            for statement in statements:
+                if statement:
+                    session.execute(sql_text(statement))
+
+            session.commit()
+
+        logger.info("Successfully applied claim tier validation migration")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to apply claim tier validation migration: {e}")
+        return False
