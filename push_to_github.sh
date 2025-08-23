@@ -1,11 +1,11 @@
 #!/bin/bash
-# push_to_github.sh - Setup and push Knowledge_Chipper to GitHub
-# Simple script for msg43's Knowledge_Chipper repository
+# push_to_github.sh - Auto-increment version and push Knowledge_Chipper to GitHub
+# Automatically increments patch version and pushes to current branch
 
 set -e
 
-echo "🚀 Setting up Knowledge_Chipper on GitHub"
-echo "==========================================="
+echo "🚀 Pushing Knowledge_Chipper to GitHub"
+echo "======================================"
 echo "Repository: https://github.com/msg43/Knowledge_Chipper"
 echo
 
@@ -19,14 +19,17 @@ fi
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
 echo "📋 Current branch: $CURRENT_BRANCH"
 
-# Remove old origin if it exists
-echo "🔧 Configuring Git remote..."
-git remote remove origin 2>/dev/null || true
-
-# Add new origin
-git remote add origin https://github.com/msg43/Knowledge_Chipper.git
-
-echo "✅ Git remote configured"
+# Ensure correct remote is configured
+echo "🔧 Checking Git remote..."
+if ! git remote get-url origin >/dev/null 2>&1; then
+    echo "📝 Adding GitHub remote..."
+    git remote add origin https://github.com/msg43/Knowledge_Chipper.git
+elif [ "$(git remote get-url origin)" != "https://github.com/msg43/Knowledge_Chipper.git" ]; then
+    echo "📝 Updating GitHub remote URL..."
+    git remote set-url origin https://github.com/msg43/Knowledge_Chipper.git
+else
+    echo "✅ GitHub remote already configured correctly"
+fi
 
 # Auto-increment version in pyproject.toml
 echo "📈 Auto-incrementing version..."
@@ -68,18 +71,15 @@ if git diff --staged --quiet; then
 else
     # Commit with version increment message
     if [ "$NEW_VERSION" != "unknown" ]; then
-        git commit -m "Version bump to $NEW_VERSION and repository updates
+        git commit -m "Version bump to $NEW_VERSION
 
 - Incremented version from $CURRENT_VERSION to $NEW_VERSION
-- Updated all repository references to Knowledge_Chipper
-- Updated URLs in README, CONTRIBUTING, pyproject.toml
-- Prepared for GitHub push"
+- Latest code changes and improvements"
     else
-        git commit -m "Update repository URLs for GitHub migration
+        git commit -m "Code updates and improvements
 
-- Updated all repository references to Knowledge_Chipper
-- Updated URLs in README, CONTRIBUTING, pyproject.toml
-- Prepared for GitHub push"
+- Latest development changes
+- Bug fixes and enhancements"
     fi
     echo "✅ Committed changes with version increment"
 fi
@@ -100,34 +100,25 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
 
     echo "🎉 Successfully pushed to GitHub!"
     echo ""
-    echo "📍 Your repository is now available at:"
-    echo "   https://github.com/msg43/Knowledge_Chipper"
-    echo ""
-    echo "🔐 Repository is private as requested"
-    echo ""
+    echo "📍 Repository: https://github.com/msg43/Knowledge_Chipper"
+    echo "🌿 Branch: $CURRENT_BRANCH"
     if [ "$NEW_VERSION" != "unknown" ]; then
-        echo "📈 Version successfully incremented to: $NEW_VERSION"
-        echo ""
+        echo "📈 Version: $NEW_VERSION"
     fi
-    echo "📋 Next steps:"
-    echo "1. Visit your repository on GitHub to verify everything looks correct"
-    echo "2. Update any team members or collaborators in GitHub settings"
-    echo "3. Consider setting up branch protection rules in Settings → Branches"
+    echo ""
+    echo "✨ Changes are now live on GitHub!"
     echo ""
 else
     echo "❌ Push cancelled"
     exit 1
 fi
 
-# Verify the setup
-echo "🧪 Verifying Git configuration..."
-echo "Current remote:"
-git remote -v
-echo ""
-echo "Current branch and version:"
-git branch -v
+# Verify the push
+echo "🔍 Verifying push status..."
+echo "Remote: $(git remote get-url origin)"
+echo "Branch: $(git branch --show-current) ($(git log --oneline -1 | cut -d' ' -f1))"
 if [ "$NEW_VERSION" != "unknown" ]; then
-    echo "App version: $NEW_VERSION"
+    echo "Version: $NEW_VERSION"
 fi
 echo ""
-echo "✅ Setup complete!"
+echo "✅ Push complete!"
