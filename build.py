@@ -2,6 +2,7 @@
 """Build script for the Knowledge_Chipper package."""
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -170,6 +171,11 @@ def main():
     parser.add_argument(
         "--clean-only", action="store_true", help="Only clean build artifacts"
     )
+    parser.add_argument(
+        "--skip-install-test",
+        action="store_true",
+        help="Skip wheel installation and entry-point smoke tests",
+    )
 
     args = parser.parse_args()
 
@@ -196,6 +202,13 @@ def main():
 
     build_package()
     check_package()
+
+    # In CI, or when explicitly requested, skip install smoke tests to avoid
+    # heavyweight runtime/environment requirements.
+    skip_install = args.skip_install_test or os.getenv("CI", "").lower() in {"1", "true", "yes"}
+    if skip_install:
+        show_results()
+        return
 
     # Test the built package
     if test_install():

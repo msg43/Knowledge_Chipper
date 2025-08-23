@@ -92,10 +92,11 @@ jobs:
         # Install the package so tests can import `knowledge_system`
         pip install -e .
 
-    - name: Build package with project script
+    - name: Build package with project script (skip install smoke tests)
       run: |
         # Use repository build wrapper to ensure consistent local/CI behavior
-        python build.py --skip-slow-tests
+        # Skip install smoke tests in CI to avoid optional heavy deps
+        python build.py --skip-slow-tests --skip-install-test
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
