@@ -31,8 +31,6 @@ jobs:
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
         pip install -e .
-        # Ensure pytest-cov is available
-        pip install pytest-cov
 
     - name: Lint with flake8
       run: |
@@ -68,34 +66,29 @@ jobs:
         EOF
         fi
         
-        # Run tests with coverage if pytest-cov is available, otherwise run without
-        echo "Testing pytest-cov availability..."
-        if python -c "import pytest_cov" 2>/dev/null; then
-          echo "pytest-cov available, running with coverage..."
-          if [ -f "tests/test_audio_processor.py" ]; then
-            pytest \
-              tests/test_audio_processor.py \
-              tests/integration/test_input_pipeline.py \
-              tests/test_errors.py \
-              tests/test_logger.py \
-              -k "not proxy and not youtube and not network" \
-              --cov=knowledge_system --cov-report=xml -v
-          else
-            echo "Running basic tests with coverage..."
-            pytest tests/ -v --cov=knowledge_system --cov-report=xml
-          fi
+        # Run tests without coverage to avoid pytest-cov issues
+        echo "Running tests without coverage (simplified for CI reliability)..."
+        if [ -f "tests/test_audio_processor.py" ]; then
+          pytest \
+            tests/test_audio_processor.py \
+            tests/integration/test_input_pipeline.py \
+            tests/test_errors.py \
+            tests/test_logger.py \
+            -k "not proxy and not youtube and not network" \
+            -v
         else
-          echo "pytest-cov not available, running tests without coverage..."
+          echo "Running basic tests..."
           pytest tests/ -v
         fi
 
-    - name: Upload coverage reports
-      if: hashFiles('coverage.xml') != ''
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
+    # Coverage upload disabled - running tests without coverage for CI reliability
+    # - name: Upload coverage reports
+    #   if: hashFiles('coverage.xml') != ''
+    #   uses: codecov/codecov-action@v3
+    #   with:
+    #     file: ./coverage.xml
+    #     flags: unittests
+    #     name: codecov-umbrella
 
   build:
     runs-on: macos-latest
