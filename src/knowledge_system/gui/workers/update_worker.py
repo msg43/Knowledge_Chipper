@@ -215,8 +215,22 @@ class UpdateWorker(QThread):
             
             logger.debug(f"Original script size: {len(original_content)} bytes")
             
+            # Fix the script directory and project root paths to use the original script location
+            # instead of the temporary script location
+            original_script_dir = str(self.script_path.parent)
+            original_project_root = str(self.script_path.parent.parent)
+            
+            # Replace the dynamic path detection with fixed paths
+            path_fixed_content = original_content.replace(
+                'SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"',
+                f'SCRIPT_DIR="{original_script_dir}"'
+            ).replace(
+                'PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"',
+                f'PROJECT_ROOT="{original_project_root}"'
+            )
+            
             # Create a modified version that builds in user space and uses cp instead of sudo mv
-            modified_content = original_content.replace(
+            modified_content = path_fixed_content.replace(
                 'sudo rm -rf "$APP_PATH"',
                 'rm -rf "$APP_PATH" || true'  # Don't fail if app doesn't exist
             ).replace(
@@ -248,6 +262,9 @@ fi'''
             ).replace(
                 'sudo chmod 755 "$MACOS_PATH/build_macos_app.sh"',
                 'chmod 755 "$MACOS_PATH/build_macos_app.sh" || true'
+            ).replace(
+                'sudo mv "/tmp/version.txt" "$MACOS_PATH/version.txt"',
+                'mv "/tmp/version.txt" "$MACOS_PATH/version.txt" || true'
             )
             
             logger.debug(f"Modified script size: {len(modified_content)} bytes")

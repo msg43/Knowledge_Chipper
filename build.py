@@ -75,7 +75,7 @@ def install_build_deps():
 
 def run_tests(skip_slow=False):
     """Run installation tests."""
-    test_cmd = [sys.executable, "-m", "pytest", "tests/test_installation.py", "-v"]
+    test_cmd = [sys.executable, "-m", "pytest", "tests/test_basic.py", "-v"]
 
     if skip_slow:
         test_cmd.extend(["-m", "not slow"])
