@@ -1,12 +1,12 @@
 """Test input pipeline integration."""
 import pytest
 from pathlib import Path
-from knowledge_system.config import KnowledgeSystemConfig
+from knowledge_system.config import Settings
 
 
 def test_config_loading():
     """Test that configuration can be loaded."""
-    config = KnowledgeSystemConfig()
+    config = Settings()
     assert config is not None
 
 
