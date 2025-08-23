@@ -27,7 +27,7 @@ Knowledge Chipper has been upgraded from basic summarization to advanced **Claim
 Your existing summary files remain unchanged. New processing will use the HCE format automatically.
 
 ### 2. **Updated Tabs**
-- **"Document Summarization"** → **"Content Analysis"**
+- **"Document Summarization"** → **"Summarization"**
 - New claim filtering controls added
 - Real-time analytics display during processing
 

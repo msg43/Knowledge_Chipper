@@ -1839,7 +1839,7 @@ class YouTubeTab(BaseTab):
         summary = playlist_data.get("summary", "")
 
         # Show comprehensive content summary
-        self.append_log("\n📊 Content Analysis:")
+        self.append_log("\n📊 Summarization:")
         if summary:
             self.append_log(f"   • {summary}")
             self.append_log(f"   • Grand Total: {total_videos} videos to process")

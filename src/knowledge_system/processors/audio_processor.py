@@ -332,6 +332,255 @@ class AudioProcessor(BaseProcessor):
             return max(speaker_overlaps, key=speaker_overlaps.get)
         return None
 
+    def _handle_speaker_assignment(
+        self, 
+        transcript_data: dict, 
+        diarization_segments: list, 
+        recording_path: str, 
+        kwargs: dict
+    ) -> dict:
+        """
+        Handle speaker assignment workflow after diarization completion.
+        
+        Args:
+            transcript_data: Transcription data with speaker segments
+            diarization_segments: Raw diarization segments
+            recording_path: Path to the recording file
+            kwargs: Processing kwargs that may contain GUI settings
+            
+        Returns:
+            Updated transcript data with real speaker names
+        """
+        try:
+            # Check if speaker assignment is enabled
+            enable_speaker_assignment = kwargs.get("enable_speaker_assignment", True)
+            if not enable_speaker_assignment:
+                logger.info("Speaker assignment disabled, keeping generic speaker IDs")
+                return transcript_data
+            
+            # Import speaker processing components
+            from .speaker_processor import SpeakerProcessor
+            
+            # Prepare speaker data for assignment
+            speaker_processor = SpeakerProcessor()
+            
+            # Extract transcript segments for processing
+            transcript_segments = transcript_data.get("segments", [])
+            
+            # Prepare speaker data
+            speaker_data_list = speaker_processor.prepare_speaker_data(
+                diarization_segments, transcript_segments
+            )
+            
+            if not speaker_data_list:
+                logger.warning("No speaker data prepared for assignment")
+                return transcript_data
+            
+            logger.info(f"🎭 Found {len(speaker_data_list)} speakers for assignment")
+            
+            # Check if we're in GUI mode and can show dialog
+            show_dialog = kwargs.get("show_speaker_dialog", True)
+            gui_mode = kwargs.get("gui_mode", False)
+            
+            if show_dialog and gui_mode:
+                # Show speaker assignment dialog
+                assignments = self._show_speaker_assignment_dialog(
+                    speaker_data_list, recording_path
+                )
+                
+                if assignments:
+                    # Apply assignments to transcript data
+                    updated_data = speaker_processor.apply_speaker_assignments(
+                        transcript_data, assignments
+                    )
+                    
+                    logger.info(f"✅ Applied speaker assignments: {assignments}")
+                    return updated_data
+                else:
+                    logger.info("Speaker assignment cancelled or no assignments made")
+                    return transcript_data
+            else:
+                # Non-GUI mode: try to load existing assignments or use suggestions
+                assignments = self._get_automatic_speaker_assignments(
+                    speaker_data_list, recording_path
+                )
+                
+                if assignments:
+                    updated_data = speaker_processor.apply_speaker_assignments(
+                        transcript_data, assignments
+                    )
+                    logger.info(f"Applied automatic speaker assignments: {assignments}")
+                    return updated_data
+                else:
+                    logger.info("No automatic speaker assignments available")
+                    return transcript_data
+            
+        except Exception as e:
+            logger.error(f"Error in speaker assignment workflow: {e}")
+            # Return original data if speaker assignment fails
+            return transcript_data
+    
+    def _show_speaker_assignment_dialog(
+        self, 
+        speaker_data_list: list, 
+        recording_path: str
+    ) -> dict | None:
+        """
+        Show the speaker assignment dialog.
+        
+        Args:
+            speaker_data_list: List of SpeakerData objects
+            recording_path: Path to the recording file
+            
+        Returns:
+            Dictionary of speaker assignments or None if cancelled
+        """
+        try:
+            from ..gui.dialogs.speaker_assignment_dialog import show_speaker_assignment_dialog
+            
+            # Show the dialog
+            assignments = show_speaker_assignment_dialog(
+                speaker_data_list, recording_path
+            )
+            
+            return assignments
+            
+        except ImportError as e:
+            logger.warning(f"Speaker assignment dialog not available: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error showing speaker assignment dialog: {e}")
+            return None
+    
+    def _get_automatic_speaker_assignments(
+        self, 
+        speaker_data_list: list, 
+        recording_path: str
+    ) -> dict | None:
+        """
+        Get automatic speaker assignments for non-GUI mode.
+        
+        Args:
+            speaker_data_list: List of SpeakerData objects
+            recording_path: Path to the recording file
+            
+        Returns:
+            Dictionary of automatic assignments or None
+        """
+        try:
+            from ..database.speaker_models import get_speaker_db_service
+            
+            # Check for existing assignments in database
+            db_service = get_speaker_db_service()
+            existing_assignments = db_service.get_assignments_for_recording(recording_path)
+            
+            if existing_assignments:
+                # Use existing assignments
+                assignments = {}
+                for assignment in existing_assignments:
+                    assignments[assignment.speaker_id] = assignment.assigned_name
+                
+                logger.info(f"Found existing speaker assignments: {assignments}")
+                return assignments
+            
+            # Use AI suggestions as fallback
+            assignments = {}
+            for speaker_data in speaker_data_list:
+                if speaker_data.suggested_name and speaker_data.confidence_score > 0.6:
+                    assignments[speaker_data.speaker_id] = speaker_data.suggested_name
+                else:
+                    # Generate generic name
+                    speaker_num = speaker_data.speaker_id.replace("SPEAKER_", "")
+                    try:
+                        num = int(speaker_num) + 1
+                        assignments[speaker_data.speaker_id] = f"Speaker {num}"
+                    except ValueError:
+                        assignments[speaker_data.speaker_id] = speaker_data.speaker_id
+            
+            if assignments:
+                logger.info(f"Generated automatic speaker assignments: {assignments}")
+                return assignments
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting automatic speaker assignments: {e}")
+            return None
+    
+    def _save_color_coded_transcript(
+        self,
+        transcript_data: dict,
+        audio_path: Path,
+        output_dir: Path,
+        include_timestamps: bool = True
+    ) -> Path | None:
+        """
+        Save color-coded transcript with speaker identification.
+        
+        Args:
+            transcript_data: Transcript data with speaker assignments
+            audio_path: Original audio file path
+            output_dir: Output directory
+            include_timestamps: Whether to include timestamps
+            
+        Returns:
+            Path to saved color-coded transcript or None if failed
+        """
+        try:
+            from ..utils.color_transcript import save_color_coded_transcript
+            
+            # Create output filename for color-coded transcript
+            base_name = audio_path.stem
+            safe_name = "".join(
+                c for c in base_name if c.isalnum() or c in (" ", "-", "_")
+            ).rstrip()
+            safe_name = safe_name.replace(" ", "_")
+            
+            # Save both HTML and enhanced markdown versions
+            html_path = output_dir / f"{safe_name}_transcript_color_coded.html"
+            md_path = output_dir / f"{safe_name}_transcript_enhanced.md"
+            
+            # Get speaker assignments from transcript data
+            speaker_assignments = transcript_data.get("speaker_assignments", {})
+            
+            # Prepare kwargs for transcript generation
+            transcript_kwargs = {
+                "source_name": audio_path.name,
+                "model": transcript_data.get("transcription_model", "unknown"),
+                "device": "auto",  # Could be extracted from metadata
+                "include_timestamps": include_timestamps,
+                "use_html_colors": True
+            }
+            
+            # Save HTML version
+            html_success = save_color_coded_transcript(
+                transcript_data,
+                html_path,
+                speaker_assignments,
+                **transcript_kwargs
+            )
+            
+            # Save enhanced markdown version
+            md_success = save_color_coded_transcript(
+                transcript_data,
+                md_path,
+                speaker_assignments,
+                **transcript_kwargs
+            )
+            
+            if html_success:
+                logger.info(f"✅ Color-coded HTML transcript saved: {html_path}")
+                
+            if md_success:
+                logger.info(f"✅ Enhanced markdown transcript saved: {md_path}")
+            
+            # Return the HTML path as primary color-coded transcript
+            return html_path if html_success else (md_path if md_success else None)
+            
+        except Exception as e:
+            logger.error(f"Error saving color-coded transcript: {e}")
+            return None
+
     def _log_transcription_failure(
         self,
         file_path: Path,
@@ -842,11 +1091,14 @@ class AudioProcessor(BaseProcessor):
 
                         # Process diarization results
                         final_data = transcription_result.data
+                        diarization_segments = None
 
                         if diarization_enabled:
                             diarization_successful = False
 
                             if diarization_result and diarization_result.success:
+                                # Store diarization segments for speaker assignment
+                                diarization_segments = diarization_result.data
                                 # Merge parallel diarization results
                                 final_data = self._merge_diarization(
                                     transcription_result.data, diarization_result.data
@@ -867,11 +1119,18 @@ class AudioProcessor(BaseProcessor):
                                     output_path, **diarization_kwargs
                                 )
                                 if sequential_diarization:
+                                    diarization_segments = sequential_diarization
                                     final_data = self._merge_diarization(
                                         transcription_result.data,
                                         sequential_diarization,
                                     )
                                     diarization_successful = True
+
+                            # Trigger speaker assignment dialog if diarization was successful
+                            if diarization_successful and diarization_segments:
+                                final_data = self._handle_speaker_assignment(
+                                    final_data, diarization_segments, str(path), kwargs
+                                )
 
                             # Check if diarization was required but failed
                             if self.require_diarization and not diarization_successful:
@@ -910,23 +1169,38 @@ class AudioProcessor(BaseProcessor):
                         # Save to markdown if output directory is specified
                         output_dir = kwargs.get("output_dir")
                         include_timestamps = kwargs.get("timestamps", True)
+                        enable_color_coding = kwargs.get("enable_color_coding", True)
                         saved_file = None
+                        
                         if output_dir:
                             temp_result = ProcessorResult(
                                 success=True,
                                 data=final_data,
                                 metadata=enhanced_metadata,
                             )
+                            
+                            # Save regular markdown transcript
                             saved_file = self.save_transcript_to_markdown(
                                 temp_result,
                                 path,
                                 output_dir,
                                 include_timestamps=include_timestamps,
                             )
-                            if saved_file:
-                                enhanced_metadata["saved_markdown_file"] = str(
-                                    saved_file
+                            
+                            # Save color-coded transcript if speakers are identified and color coding is enabled
+                            if (enable_color_coding and 
+                                diarization_successful and 
+                                final_data.get("speaker_assignments")):
+                                
+                                color_coded_file = self._save_color_coded_transcript(
+                                    final_data, path, output_dir, include_timestamps
                                 )
+                                
+                                if color_coded_file:
+                                    enhanced_metadata["saved_color_coded_file"] = str(color_coded_file)
+                            
+                            if saved_file:
+                                enhanced_metadata["saved_markdown_file"] = str(saved_file)
 
                         return ProcessorResult(
                             success=True,

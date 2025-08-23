@@ -598,7 +598,7 @@ def summarize(
                             f.write("\n")
 
                             # Content analysis
-                            f.write("**Content Analysis:**\n")
+                            f.write("**Summarization:**\n")
                             input_length = metadata.get("input_length", 0)
                             summary_length = metadata.get("summary_length", 0)
                             f.write(
@@ -754,7 +754,7 @@ def summarize(
             )
 
             # Content statistics
-            console.print("\n[bold]Content Analysis:[/bold]")
+            console.print("\n[bold]Summarization:[/bold]")
             console.print(
                 f"📝 Total input: {session_stats['total_input_length']:,} characters"
             )
@@ -821,7 +821,7 @@ def summarize(
             )
 
             # Content analysis
-            f.write("## Content Analysis\n\n")
+            f.write("## Summarization\n\n")
             f.write(
                 f"- **Total Input:** {session_stats['total_input_length']:,} characters\n"
             )

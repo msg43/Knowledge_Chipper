@@ -17,9 +17,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from ..logger import get_logger
 from .models import (
     BrightDataSession,
+    ClaimTierValidation,
     GeneratedFile,
     MOCExtraction,
     ProcessingJob,
+    QualityMetrics,
+    QualityRating,
     Summary,
     Transcript,
     Video,
@@ -779,4 +782,656 @@ class DatabaseService:
 
         except Exception as e:
             logger.error(f"Database optimization failed: {e}")
+            return False
+
+    # =============================================================================
+    # QUALITY RATING OPERATIONS
+    # =============================================================================
+
+    def save_quality_rating(
+        self,
+        content_type: str,
+        content_id: str,
+        user_rating: float,
+        criteria_scores: dict,
+        user_feedback: str = "",
+        llm_rating: float | None = None,
+        is_user_corrected: bool = True,
+        model_used: str | None = None,
+        prompt_template: str | None = None,
+        input_characteristics: dict | None = None,
+        rated_by_user: str = "default_user"
+    ) -> str:
+        """Save a quality rating to the database.
+        
+        Args:
+            content_type: Type of content ('summary', 'transcript', 'moc_extraction')
+            content_id: Unique identifier for the content
+            user_rating: User's overall rating (0.0-1.0)
+            criteria_scores: Dictionary of criteria scores
+            user_feedback: Optional text feedback
+            llm_rating: Original LLM rating (optional)
+            is_user_corrected: Whether this is a user correction
+            model_used: Model that generated the content
+            prompt_template: Template used for generation
+            input_characteristics: Input metadata
+            rated_by_user: User identifier
+            
+        Returns:
+            Rating ID of the saved rating
+        """
+        try:
+            with self.get_session() as session:
+                # Generate unique rating ID
+                rating_id = f"rating_{content_type}_{content_id}_{int(datetime.now().timestamp())}"
+                
+                # Create rating record
+                rating = QualityRating(
+                    rating_id=rating_id,
+                    content_type=content_type,
+                    content_id=content_id,
+                    llm_rating=llm_rating,
+                    user_rating=user_rating,
+                    is_user_corrected=is_user_corrected,
+                    criteria_scores=criteria_scores,
+                    user_feedback=user_feedback,
+                    rating_reason="",  # Could be added as parameter
+                    rated_by_user=rated_by_user,
+                    model_used=model_used,
+                    prompt_template=prompt_template,
+                    input_characteristics=input_characteristics or {}
+                )
+                
+                session.add(rating)
+                session.commit()
+                
+                # Update aggregated metrics
+                self._update_quality_metrics(session, content_type, model_used or "unknown")
+                
+                logger.info(f"Saved quality rating: {rating_id}")
+                return rating_id
+                
+        except Exception as e:
+            logger.error(f"Failed to save quality rating: {e}")
+            raise
+
+    def get_quality_rating(self, rating_id: str) -> QualityRating | None:
+        """Get a quality rating by ID."""
+        try:
+            with self.get_session() as session:
+                return session.query(QualityRating).filter(
+                    QualityRating.rating_id == rating_id
+                ).first()
+        except Exception as e:
+            logger.error(f"Failed to get quality rating {rating_id}: {e}")
+            return None
+
+    def get_ratings_for_content(self, content_type: str, content_id: str) -> list[QualityRating]:
+        """Get all ratings for specific content."""
+        try:
+            with self.get_session() as session:
+                return session.query(QualityRating).filter(
+                    QualityRating.content_type == content_type,
+                    QualityRating.content_id == content_id
+                ).order_by(desc(QualityRating.rated_at)).all()
+        except Exception as e:
+            logger.error(f"Failed to get ratings for {content_type} {content_id}: {e}")
+            return []
+
+    def get_quality_statistics(self) -> dict[str, Any]:
+        """Get overall quality rating statistics."""
+        try:
+            with self.get_session() as session:
+                # Total ratings
+                total_ratings = session.query(QualityRating).count()
+                
+                # User corrections
+                user_corrections = session.query(QualityRating).filter(
+                    QualityRating.is_user_corrected == True
+                ).count()
+                
+                # Calculate average drift where both ratings exist
+                ratings_with_both = session.query(QualityRating).filter(
+                    QualityRating.llm_rating.isnot(None),
+                    QualityRating.user_rating.isnot(None)
+                ).all()
+                
+                if ratings_with_both:
+                    drifts = [abs(r.user_rating - r.llm_rating) for r in ratings_with_both]
+                    avg_drift = sum(drifts) / len(drifts)
+                else:
+                    avg_drift = 0.0
+                
+                # Average ratings
+                avg_user_rating = session.query(func.avg(QualityRating.user_rating)).filter(
+                    QualityRating.user_rating.isnot(None)
+                ).scalar() or 0.0
+                
+                avg_llm_rating = session.query(func.avg(QualityRating.llm_rating)).filter(
+                    QualityRating.llm_rating.isnot(None)
+                ).scalar() or 0.0
+                
+                return {
+                    "total_ratings": total_ratings,
+                    "user_corrections": user_corrections,
+                    "correction_percentage": (user_corrections / total_ratings * 100) if total_ratings > 0 else 0,
+                    "avg_drift": avg_drift,
+                    "avg_user_rating": avg_user_rating,
+                    "avg_llm_rating": avg_llm_rating,
+                    "ratings_with_both": len(ratings_with_both)
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to get quality statistics: {e}")
+            return {
+                "total_ratings": 0,
+                "user_corrections": 0,
+                "correction_percentage": 0,
+                "avg_drift": 0.0,
+                "avg_user_rating": 0.0,
+                "avg_llm_rating": 0.0,
+                "ratings_with_both": 0
+            }
+
+    def get_model_performance_metrics(self) -> list[dict[str, Any]]:
+        """Get performance metrics by model and content type."""
+        try:
+            with self.get_session() as session:
+                # Query ratings grouped by model and content type
+                results = session.query(
+                    QualityRating.model_used,
+                    QualityRating.content_type,
+                    func.count(QualityRating.rating_id).label('total_ratings'),
+                    func.count(QualityRating.user_rating).label('user_ratings'),
+                    func.avg(QualityRating.llm_rating).label('avg_llm_rating'),
+                    func.avg(QualityRating.user_rating).label('avg_user_rating')
+                ).filter(
+                    QualityRating.model_used.isnot(None)
+                ).group_by(
+                    QualityRating.model_used,
+                    QualityRating.content_type
+                ).all()
+                
+                metrics = []
+                for result in results:
+                    avg_llm = result.avg_llm_rating or 0.0
+                    avg_user = result.avg_user_rating or 0.0
+                    drift = abs(avg_user - avg_llm) if avg_llm > 0 and avg_user > 0 else 0.0
+                    
+                    metrics.append({
+                        "model": result.model_used or "unknown",
+                        "content_type": result.content_type,
+                        "total_ratings": result.total_ratings,
+                        "user_ratings": result.user_ratings,
+                        "avg_llm_rating": avg_llm,
+                        "avg_user_rating": avg_user,
+                        "drift": drift,
+                        "sample_size": result.user_ratings
+                    })
+                
+                return metrics
+                
+        except Exception as e:
+            logger.error(f"Failed to get model performance metrics: {e}")
+            return []
+
+    def get_quality_trends(self, days: int = 30) -> dict[str, Any]:
+        """Get quality trends over time."""
+        try:
+            with self.get_session() as session:
+                # Get ratings from the last N days
+                cutoff_date = datetime.now() - timedelta(days=days)
+                
+                ratings = session.query(QualityRating).filter(
+                    QualityRating.rated_at >= cutoff_date
+                ).order_by(QualityRating.rated_at).all()
+                
+                # Group by day
+                daily_stats = {}
+                for rating in ratings:
+                    day = rating.rated_at.date()
+                    if day not in daily_stats:
+                        daily_stats[day] = {
+                            "count": 0,
+                            "user_ratings": [],
+                            "llm_ratings": [],
+                            "drifts": []
+                        }
+                    
+                    daily_stats[day]["count"] += 1
+                    if rating.user_rating is not None:
+                        daily_stats[day]["user_ratings"].append(rating.user_rating)
+                    if rating.llm_rating is not None:
+                        daily_stats[day]["llm_ratings"].append(rating.llm_rating)
+                    if rating.user_rating is not None and rating.llm_rating is not None:
+                        daily_stats[day]["drifts"].append(abs(rating.user_rating - rating.llm_rating))
+                
+                # Calculate daily averages
+                trends = []
+                for day, stats in sorted(daily_stats.items()):
+                    avg_user = sum(stats["user_ratings"]) / len(stats["user_ratings"]) if stats["user_ratings"] else 0
+                    avg_llm = sum(stats["llm_ratings"]) / len(stats["llm_ratings"]) if stats["llm_ratings"] else 0
+                    avg_drift = sum(stats["drifts"]) / len(stats["drifts"]) if stats["drifts"] else 0
+                    
+                    trends.append({
+                        "date": day.isoformat(),
+                        "count": stats["count"],
+                        "avg_user_rating": avg_user,
+                        "avg_llm_rating": avg_llm,
+                        "avg_drift": avg_drift
+                    })
+                
+                return {
+                    "period_days": days,
+                    "total_ratings": len(ratings),
+                    "daily_trends": trends
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to get quality trends: {e}")
+            return {"period_days": days, "total_ratings": 0, "daily_trends": []}
+
+    def export_quality_data(self, format: str = "dict") -> list[dict[str, Any]] | str:
+        """Export quality rating data for analysis."""
+        try:
+            with self.get_session() as session:
+                ratings = session.query(QualityRating).order_by(
+                    desc(QualityRating.rated_at)
+                ).all()
+                
+                data = []
+                for rating in ratings:
+                    data.append({
+                        "rating_id": rating.rating_id,
+                        "content_type": rating.content_type,
+                        "content_id": rating.content_id,
+                        "llm_rating": rating.llm_rating,
+                        "user_rating": rating.user_rating,
+                        "is_user_corrected": rating.is_user_corrected,
+                        "criteria_scores": rating.criteria_scores,
+                        "user_feedback": rating.user_feedback,
+                        "rated_by_user": rating.rated_by_user,
+                        "rated_at": rating.rated_at.isoformat() if rating.rated_at else None,
+                        "model_used": rating.model_used,
+                        "prompt_template": rating.prompt_template,
+                        "input_characteristics": rating.input_characteristics
+                    })
+                
+                if format == "csv":
+                    import csv
+                    import io
+                    
+                    output = io.StringIO()
+                    if data:
+                        writer = csv.DictWriter(output, fieldnames=data[0].keys())
+                        writer.writeheader()
+                        writer.writerows(data)
+                    return output.getvalue()
+                
+                return data
+                
+        except Exception as e:
+            logger.error(f"Failed to export quality data: {e}")
+            return [] if format == "dict" else ""
+
+    def _update_quality_metrics(self, session: Session, content_type: str, model_name: str):
+        """Update aggregated quality metrics for a model/content type combination."""
+        try:
+            # Calculate metrics for this model/content type
+            ratings = session.query(QualityRating).filter(
+                QualityRating.content_type == content_type,
+                QualityRating.model_used == model_name
+            ).all()
+            
+            if not ratings:
+                return
+            
+            # Calculate aggregated statistics
+            total_ratings = len(ratings)
+            user_corrected_count = sum(1 for r in ratings if r.is_user_corrected)
+            
+            user_ratings = [r.user_rating for r in ratings if r.user_rating is not None]
+            llm_ratings = [r.llm_rating for r in ratings if r.llm_rating is not None]
+            
+            avg_user_rating = sum(user_ratings) / len(user_ratings) if user_ratings else None
+            avg_llm_rating = sum(llm_ratings) / len(llm_ratings) if llm_ratings else None
+            
+            # Calculate drift for ratings that have both
+            drifts = []
+            for rating in ratings:
+                if rating.user_rating is not None and rating.llm_rating is not None:
+                    drifts.append(abs(rating.user_rating - rating.llm_rating))
+            
+            rating_drift = sum(drifts) / len(drifts) if drifts else None
+            
+            # Calculate criteria performance
+            criteria_performance = {}
+            for rating in ratings:
+                if rating.criteria_scores:
+                    for criterion, score in rating.criteria_scores.items():
+                        if criterion not in criteria_performance:
+                            criteria_performance[criterion] = []
+                        criteria_performance[criterion].append(score)
+            
+            # Average criteria scores
+            for criterion in criteria_performance:
+                scores = criteria_performance[criterion]
+                criteria_performance[criterion] = sum(scores) / len(scores)
+            
+            # Create or update metrics record
+            metric_id = f"metrics_{model_name}_{content_type}"
+            
+            existing_metric = session.query(QualityMetrics).filter(
+                QualityMetrics.metric_id == metric_id
+            ).first()
+            
+            if existing_metric:
+                # Update existing
+                existing_metric.total_ratings = total_ratings
+                existing_metric.user_corrected_count = user_corrected_count
+                existing_metric.avg_llm_rating = avg_llm_rating
+                existing_metric.avg_user_rating = avg_user_rating
+                existing_metric.rating_drift = rating_drift
+                existing_metric.criteria_performance = criteria_performance
+                existing_metric.last_updated = datetime.now()
+            else:
+                # Create new
+                metric = QualityMetrics(
+                    metric_id=metric_id,
+                    model_name=model_name,
+                    content_type=content_type,
+                    total_ratings=total_ratings,
+                    user_corrected_count=user_corrected_count,
+                    avg_llm_rating=avg_llm_rating,
+                    avg_user_rating=avg_user_rating,
+                    rating_drift=rating_drift,
+                    criteria_performance=criteria_performance,
+                    period_start=min(r.rated_at for r in ratings if r.rated_at),
+                    period_end=max(r.rated_at for r in ratings if r.rated_at)
+                )
+                session.add(metric)
+            
+            session.commit()
+            
+        except Exception as e:
+            logger.error(f"Failed to update quality metrics: {e}")
+
+    def delete_quality_rating(self, rating_id: str) -> bool:
+        """Delete a quality rating."""
+        try:
+            with self.get_session() as session:
+                rating = session.query(QualityRating).filter(
+                    QualityRating.rating_id == rating_id
+                ).first()
+                
+                if rating:
+                    session.delete(rating)
+                    session.commit()
+                    logger.info(f"Deleted quality rating: {rating_id}")
+                    return True
+                
+                return False
+                
+        except Exception as e:
+            logger.error(f"Failed to delete quality rating {rating_id}: {e}")
+            return False
+
+    # Claim Tier Validation Methods
+    
+    def save_claim_tier_validation(
+        self,
+        claim_id: str,
+        episode_id: str,
+        original_tier: str,
+        validated_tier: str,
+        claim_text: str,
+        claim_type: str = None,
+        validated_by_user: str = None,
+        original_scores: dict = None,
+        model_used: str = None,
+        evidence_spans: list = None,
+        validation_session_id: str = None,
+    ) -> str:
+        """Save a claim tier validation."""
+        try:
+            validation_id = str(uuid.uuid4())
+            is_modified = original_tier != validated_tier
+            
+            validation = ClaimTierValidation(
+                validation_id=validation_id,
+                claim_id=claim_id,
+                episode_id=episode_id,
+                original_tier=original_tier,
+                validated_tier=validated_tier,
+                is_modified=is_modified,
+                claim_text=claim_text,
+                claim_type=claim_type,
+                validated_by_user=validated_by_user,
+                original_scores=original_scores,
+                model_used=model_used,
+                evidence_spans=evidence_spans,
+                validation_session_id=validation_session_id,
+            )
+            
+            with self.get_session() as session:
+                session.add(validation)
+                session.commit()
+                
+            logger.info(f"Saved claim tier validation: {validation_id}")
+            return validation_id
+            
+        except Exception as e:
+            logger.error(f"Failed to save claim tier validation: {e}")
+            raise
+
+    def get_claim_tier_validation(self, validation_id: str) -> dict | None:
+        """Get a specific claim tier validation."""
+        try:
+            with self.get_session() as session:
+                validation = session.query(ClaimTierValidation).filter_by(
+                    validation_id=validation_id
+                ).first()
+                
+                if validation:
+                    return {
+                        "validation_id": validation.validation_id,
+                        "claim_id": validation.claim_id,
+                        "episode_id": validation.episode_id,
+                        "original_tier": validation.original_tier,
+                        "validated_tier": validation.validated_tier,
+                        "is_modified": validation.is_modified,
+                        "claim_text": validation.claim_text,
+                        "claim_type": validation.claim_type,
+                        "validated_by_user": validation.validated_by_user,
+                        "validated_at": validation.validated_at,
+                        "original_scores": validation.original_scores,
+                        "model_used": validation.model_used,
+                        "evidence_spans": validation.evidence_spans,
+                        "validation_session_id": validation.validation_session_id,
+                    }
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to get claim tier validation {validation_id}: {e}")
+            return None
+
+    def get_validations_for_claim(self, claim_id: str) -> list[dict]:
+        """Get all validations for a specific claim."""
+        try:
+            with self.get_session() as session:
+                validations = session.query(ClaimTierValidation).filter_by(
+                    claim_id=claim_id
+                ).order_by(desc(ClaimTierValidation.validated_at)).all()
+                
+                return [
+                    {
+                        "validation_id": v.validation_id,
+                        "original_tier": v.original_tier,
+                        "validated_tier": v.validated_tier,
+                        "is_modified": v.is_modified,
+                        "validated_by_user": v.validated_by_user,
+                        "validated_at": v.validated_at,
+                        "validation_session_id": v.validation_session_id,
+                    }
+                    for v in validations
+                ]
+                
+        except Exception as e:
+            logger.error(f"Failed to get validations for claim {claim_id}: {e}")
+            return []
+
+    def get_validation_session_summary(self, session_id: str) -> dict:
+        """Get summary statistics for a validation session."""
+        try:
+            with self.get_session() as session:
+                validations = session.query(ClaimTierValidation).filter_by(
+                    validation_session_id=session_id
+                ).all()
+                
+                if not validations:
+                    return {}
+                
+                total_validations = len(validations)
+                modified_count = sum(1 for v in validations if v.is_modified)
+                confirmed_count = total_validations - modified_count
+                
+                # Tier-specific statistics
+                tier_stats = {}
+                for tier in ['A', 'B', 'C']:
+                    tier_validations = [v for v in validations if v.original_tier == tier]
+                    tier_correct = sum(1 for v in tier_validations if not v.is_modified)
+                    tier_stats[f"tier_{tier.lower()}"] = {
+                        "total": len(tier_validations),
+                        "correct": tier_correct,
+                        "accuracy": tier_correct / len(tier_validations) if tier_validations else 0
+                    }
+                
+                return {
+                    "session_id": session_id,
+                    "total_validations": total_validations,
+                    "confirmed_count": confirmed_count,
+                    "modified_count": modified_count,
+                    "accuracy_rate": confirmed_count / total_validations if total_validations else 0,
+                    "tier_statistics": tier_stats,
+                    "session_start": min(v.validated_at for v in validations),
+                    "session_end": max(v.validated_at for v in validations),
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to get validation session summary {session_id}: {e}")
+            return {}
+
+    def get_claim_validation_analytics(self, days: int = 30) -> dict:
+        """Get claim validation analytics for the specified time period."""
+        try:
+            cutoff_date = datetime.utcnow() - timedelta(days=days)
+            
+            with self.get_session() as session:
+                validations = session.query(ClaimTierValidation).filter(
+                    ClaimTierValidation.validated_at >= cutoff_date
+                ).all()
+                
+                if not validations:
+                    return {"total_validations": 0}
+                
+                total_validations = len(validations)
+                modified_count = sum(1 for v in validations if v.is_modified)
+                
+                # Overall accuracy
+                accuracy_rate = (total_validations - modified_count) / total_validations
+                
+                # Tier-specific accuracy
+                tier_accuracy = {}
+                for tier in ['A', 'B', 'C']:
+                    tier_validations = [v for v in validations if v.original_tier == tier]
+                    if tier_validations:
+                        tier_correct = sum(1 for v in tier_validations if not v.is_modified)
+                        tier_accuracy[tier] = {
+                            "total": len(tier_validations),
+                            "correct": tier_correct,
+                            "accuracy": tier_correct / len(tier_validations)
+                        }
+                
+                # Common correction patterns
+                correction_patterns = {}
+                for v in validations:
+                    if v.is_modified:
+                        pattern = f"{v.original_tier}_to_{v.validated_tier}"
+                        correction_patterns[pattern] = correction_patterns.get(pattern, 0) + 1
+                
+                # Model performance
+                model_performance = {}
+                for v in validations:
+                    if v.model_used:
+                        if v.model_used not in model_performance:
+                            model_performance[v.model_used] = {"total": 0, "correct": 0}
+                        model_performance[v.model_used]["total"] += 1
+                        if not v.is_modified:
+                            model_performance[v.model_used]["correct"] += 1
+                
+                # Calculate accuracy for each model
+                for model_data in model_performance.values():
+                    model_data["accuracy"] = model_data["correct"] / model_data["total"]
+                
+                return {
+                    "total_validations": total_validations,
+                    "modified_count": modified_count,
+                    "confirmed_count": total_validations - modified_count,
+                    "overall_accuracy": accuracy_rate,
+                    "tier_accuracy": tier_accuracy,
+                    "correction_patterns": correction_patterns,
+                    "model_performance": model_performance,
+                    "period_days": days,
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to get claim validation analytics: {e}")
+            return {"error": str(e)}
+
+    def export_claim_validation_data(self, output_path: Path, days: int = None) -> bool:
+        """Export claim validation data to CSV."""
+        try:
+            import csv
+            
+            with self.get_session() as session:
+                query = session.query(ClaimTierValidation)
+                
+                if days:
+                    cutoff_date = datetime.utcnow() - timedelta(days=days)
+                    query = query.filter(ClaimTierValidation.validated_at >= cutoff_date)
+                
+                validations = query.order_by(desc(ClaimTierValidation.validated_at)).all()
+                
+                with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
+                    fieldnames = [
+                        'validation_id', 'claim_id', 'episode_id', 'original_tier',
+                        'validated_tier', 'is_modified', 'claim_text', 'claim_type',
+                        'validated_by_user', 'validated_at', 'model_used',
+                        'validation_session_id'
+                    ]
+                    
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                    writer.writeheader()
+                    
+                    for v in validations:
+                        writer.writerow({
+                            'validation_id': v.validation_id,
+                            'claim_id': v.claim_id,
+                            'episode_id': v.episode_id,
+                            'original_tier': v.original_tier,
+                            'validated_tier': v.validated_tier,
+                            'is_modified': v.is_modified,
+                            'claim_text': v.claim_text,
+                            'claim_type': v.claim_type,
+                            'validated_by_user': v.validated_by_user,
+                            'validated_at': v.validated_at.isoformat() if v.validated_at else None,
+                            'model_used': v.model_used,
+                            'validation_session_id': v.validation_session_id,
+                        })
+                
+                logger.info(f"Exported {len(validations)} claim validations to {output_path}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to export claim validation data: {e}")
             return False
