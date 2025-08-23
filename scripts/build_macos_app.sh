@@ -95,6 +95,16 @@ echo "ℹ️  Heavy dependencies will be installed automatically when needed"
 
 # Verify critical dependencies are installed
 echo "🔍 Verifying critical dependencies..."
+"$BUILD_MACOS_PATH/venv/bin/python" -c "import yaml; print('✅ PyYAML:', yaml.__version__)" || {
+    echo "❌ PyYAML missing, installing..."
+    "$BUILD_MACOS_PATH/venv/bin/python" -m pip install pyyaml
+}
+
+"$BUILD_MACOS_PATH/venv/bin/python" -c "import pydantic; print('✅ Pydantic:', pydantic.__version__)" || {
+    echo "❌ Pydantic missing, installing..."
+    "$BUILD_MACOS_PATH/venv/bin/python" -m pip install pydantic pydantic-settings
+}
+
 "$BUILD_MACOS_PATH/venv/bin/python" -c "import sqlalchemy; print('✅ SQLAlchemy:', sqlalchemy.__version__)" || {
     echo "❌ SQLAlchemy missing, installing..."
     "$BUILD_MACOS_PATH/venv/bin/python" -m pip install sqlalchemy alembic
@@ -240,8 +250,12 @@ sudo rm -rf "$APP_PATH"
 sudo mv "$BUILD_APP_PATH" "$APP_PATH"
 
 echo "🔒 Setting permissions..."
+# Set app bundle permissions but preserve venv structure
 sudo chown -R root:wheel "$APP_PATH"
 sudo chmod -R 755 "$APP_PATH"
+# Fix virtual environment permissions to preserve functionality
+sudo chown -R "$CURRENT_USER:staff" "$MACOS_PATH/venv"
+sudo chmod -R 755 "$MACOS_PATH/venv"
 # Ensure logs directory exists and is writable
 sudo mkdir -p "$MACOS_PATH/logs"
 sudo chmod 777 "$MACOS_PATH/logs"
