@@ -127,7 +127,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --cov=knowledge_system --cov-report=html --cov-report=term-missing"
+addopts = "-v"
 
 [tool.black]
 line-length = 88
