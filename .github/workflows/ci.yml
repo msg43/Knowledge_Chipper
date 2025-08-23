@@ -31,6 +31,8 @@ jobs:
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
         pip install -e .
+        # Verify pytest-cov is installed
+        python -c "import pytest_cov; print('pytest-cov successfully installed')"
 
     - name: Lint with flake8
       run: |
@@ -66,8 +68,8 @@ jobs:
         EOF
         fi
         
-        # Run tests without coverage to avoid pytest-cov issues
-        echo "Running tests without coverage (simplified for CI reliability)..."
+        # Run tests with coverage (now that pytest-cov is properly configured)
+        echo "Running tests with coverage..."
         if [ -f "tests/test_audio_processor.py" ]; then
           pytest \
             tests/test_audio_processor.py \
@@ -75,20 +77,19 @@ jobs:
             tests/test_errors.py \
             tests/test_logger.py \
             -k "not proxy and not youtube and not network" \
-            -v
+            --cov=knowledge_system --cov-report=xml -v
         else
-          echo "Running basic tests..."
-          pytest tests/ -v
+          echo "Running basic tests with coverage..."
+          pytest tests/ --cov=knowledge_system --cov-report=xml -v
         fi
 
-    # Coverage upload disabled - running tests without coverage for CI reliability
-    # - name: Upload coverage reports
-    #   if: hashFiles('coverage.xml') != ''
-    #   uses: codecov/codecov-action@v3
-    #   with:
-    #     file: ./coverage.xml
-    #     flags: unittests
-    #     name: codecov-umbrella
+    - name: Upload coverage reports
+      if: hashFiles('coverage.xml') != ''
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
 
   build:
     runs-on: macos-latest
