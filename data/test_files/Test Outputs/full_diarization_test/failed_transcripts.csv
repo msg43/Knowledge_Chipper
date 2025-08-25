@@ -1,0 +1,2 @@
+timestamp,url,reason
+2025-08-24T20:42:26.257236,https://www.youtube.com/watch?v=dQw4w9WgXcQ,Error: YouTube transcript extraction failed with WebShare proxy: No transcript available for https://www.youtube.com/watch?v=dQw4w9WgXcQ. Using WebShare for residential proxy access.

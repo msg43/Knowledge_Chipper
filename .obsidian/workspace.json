@@ -1,0 +1,186 @@
+{
+  "main": {
+    "id": "0885595d7bc537c6",
+    "type": "split",
+    "children": [
+      {
+        "id": "e0ef5ea116b4cd51",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "012fe1ae2cece1a4",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "KNOWLEDGE_CHIPPER_REFACTOR_TODO.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "KNOWLEDGE_CHIPPER_REFACTOR_TODO"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "fb58f81ac11cd4f0",
+    "type": "split",
+    "children": [
+      {
+        "id": "61df252222e4ace5",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "2541f28b9e10fd13",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "437218f43bb935a2",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "8edb7890589c1cdb",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "60f7573b8e06ba5b",
+    "type": "split",
+    "children": [
+      {
+        "id": "f2b222d5503d2c3b",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "a4ec01b62b393359",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "KNOWLEDGE_CHIPPER_REFACTOR_TODO.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for KNOWLEDGE_CHIPPER_REFACTOR_TODO"
+            }
+          },
+          {
+            "id": "f7f8706c763d3e8b",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "KNOWLEDGE_CHIPPER_REFACTOR_TODO.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from KNOWLEDGE_CHIPPER_REFACTOR_TODO"
+            }
+          },
+          {
+            "id": "a2b0fe80a289e481",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "b01a241c25ceec59",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "KNOWLEDGE_CHIPPER_REFACTOR_TODO.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of KNOWLEDGE_CHIPPER_REFACTOR_TODO"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "012fe1ae2cece1a4",
+  "lastOpenFiles": [
+    "src/knowledge_system/database/migrations/001_rename_videos_to_media_sources.py",
+    "KNOWLEDGE_CHIPPER_REFACTOR_TODO_ENHANCED.md",
+    "scripts/project_build.py",
+    "data/test_files/Test Outputs/Jordan_Peterson_Sam_Harris_Debate_Moments_Diarized_Transcript.md",
+    "create_diarized_transcript.py",
+    "data/test_files/Test Outputs/Jordan Peterson and Sam Harris' EPIC TOP 5 DEBATE MOMENTS ｜ Must-See Clips.wav",
+    "data/test_files/Test Outputs/Jordan Peterson and Sam Harris' EPIC TOP 5 DEBATE MOMENTS ｜ Must-See Clips.webm",
+    "data/test_files/Test Outputs/Jordan Peterson and Sam Harris' EPIC TOP 5 DEBATE MOMENTS ｜ Must-See Clips.webm.part",
+    "data/test_files/Test Outputs/Jordan Peterson and Sam Harris' EPIC TOP 5 DEBATE MOMENTS ｜ Must-See Clips.en.vtt",
+    "data/test_files/Test Outputs/failed_transcripts.csv",
+    "data/test_files/Test Outputs/Thumbnails"
+  ]
+}

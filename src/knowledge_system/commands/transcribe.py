@@ -582,7 +582,7 @@ def transcribe(
                     output_dir=output,
                     include_timestamps=timestamps,
                     enable_diarization=speaker_labels,
-                    require_diarization=speaker_labels,
+                    require_diarization=False,  # Allow fallback when diarization fails
                     overwrite=overwrite,
                 )
 
@@ -721,7 +721,7 @@ def transcribe(
                 output_dir=output,
                 include_timestamps=timestamps,
                 enable_diarization=speaker_labels,
-                require_diarization=speaker_labels,
+                require_diarization=False,  # Allow fallback when diarization fails
                 overwrite=overwrite,
             )
 
@@ -812,19 +812,23 @@ def transcribe(
             # Import the audio processor
             from ..processors.audio_processor import AudioProcessor
 
+            # Get HuggingFace token for diarization
+            hf_token = getattr(ctx.settings.api_keys, "huggingface_token", None)
+            
             # Create audio processor
             processor = AudioProcessor(
                 device=device,
                 model=model,
                 use_whisper_cpp=use_whisper_cpp,
                 enable_diarization=speaker_labels,
-                require_diarization=speaker_labels,  # Strict mode: if diarization enabled, require it
+                require_diarization=False,  # Allow fallback when diarization fails
+                hf_token=hf_token,
             )
 
             # Process the input
             from ..processors.base import ProcessorResult
 
-            result: ProcessorResult = processor.process(input_path_obj, device=device)
+            result: ProcessorResult = processor.process(input_path_obj)
 
             if result.success:
                 if not ctx.quiet:

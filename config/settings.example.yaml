@@ -93,6 +93,7 @@ api_keys:
   youtube_api_key: "${YOUTUBE_API_KEY}"
   webshare_username: "${WEBSHARE_USERNAME}"
   webshare_password: "${WEBSHARE_PASSWORD}"
+  huggingface_token: "${HUGGINGFACE_HUB_TOKEN}"  # Required for pyannote diarization
 
 # Processing Options
 processing:

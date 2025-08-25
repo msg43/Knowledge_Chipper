@@ -238,9 +238,9 @@ def process(
         # Create processors
         audio_processor = AudioProcessor(device=device)
         summarizer_processor = SummarizerProcessor(
-            provider=settings.summarization.provider,
+            provider=settings.llm.provider,
             model=summarization_model,
-            max_tokens=settings.summarization.max_tokens,
+            max_tokens=settings.llm.max_tokens,
         )
         moc_processor = MOCProcessor()
 

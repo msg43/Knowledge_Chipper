@@ -317,7 +317,7 @@ def summarize(
     from ..processors.summarizer import SummarizerProcessor
 
     # Use provider from CLI option if provided, otherwise from settings
-    effective_provider = provider if provider else settings.summarization.provider
+    effective_provider = provider if provider else settings.llm.provider
     processor = SummarizerProcessor(
         provider=effective_provider,
         model=model,
