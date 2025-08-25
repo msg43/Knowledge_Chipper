@@ -96,7 +96,7 @@ jobs:
       run: |
         # Use repository build wrapper to ensure consistent local/CI behavior
         # Skip install smoke tests in CI to avoid optional heavy deps
-        python build.py --skip-slow-tests --skip-install-test
+        python scripts/project_build.py --skip-slow-tests --skip-install-test
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
