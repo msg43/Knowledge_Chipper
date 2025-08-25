@@ -473,9 +473,9 @@ class WatcherTab(BaseTab, FileOperationsMixin):
             elif file_path.suffix.lower() in [".md", ".txt"]:
                 try:
                     processor = SummarizerProcessor(
-                        provider=self.settings.summarization.provider,
+                        provider=self.settings.llm.provider,
                         model="gpt-4o-mini-2024-07-18",  # Use default model
-                        max_tokens=self.settings.summarization.max_tokens,
+                        max_tokens=self.settings.llm.max_tokens,
                     )
                     result = processor.process(file_path)
 
