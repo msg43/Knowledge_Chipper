@@ -80,14 +80,31 @@ def run_tests(skip_slow=False):
 
 
 def build_package():
-    # Use --no-isolation so build reuses the environment prepared by CI
+    # Avoid `python -m build` to prevent shadowing by any local build.py files.
+    # Build a wheel using pip directly (PEP 517) without build isolation.
     run_command(
-        [sys.executable, "-m", "build", "--no-isolation"],
-        "Building wheel and source distribution",
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "wheel",
+            "--no-build-isolation",
+            "--no-deps",
+            "-w",
+            "dist",
+            ".",
+        ],
+        "Building wheel (pip wheel)",
     )
 
 
 def check_package():
+    # Use twine to validate metadata of built distributions.
+    # Since we use pip wheel, ensure sdist is optional. Only check if files exist.
+    dist = Path("dist")
+    if not dist.exists():
+        print("⚠️  dist/ not found; skipping twine check")
+        return
     run_command([sys.executable, "-m", "twine", "check", "dist/*"], "Checking package quality")
 
 

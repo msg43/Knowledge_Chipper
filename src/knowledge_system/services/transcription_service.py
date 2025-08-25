@@ -49,12 +49,18 @@ class TranscriptionService:
         self.temp_dir = temp_dir
         self.use_whisper_cpp = use_whisper_cpp
 
+        # Get HuggingFace token for diarization
+        from ..config import get_settings
+        settings = get_settings()
+        hf_token = getattr(settings.api_keys, "huggingface_token", None)
+        
         # Initialize processors
         self.audio_processor = AudioProcessor(
             normalize_audio=normalize_audio,
             temp_dir=temp_dir,
             use_whisper_cpp=use_whisper_cpp,
             model=whisper_model,
+            hf_token=hf_token,
         )
         self.youtube_downloader = YouTubeDownloadProcessor()
         self.youtube_transcript_processor = YouTubeTranscriptProcessor()

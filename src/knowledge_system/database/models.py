@@ -49,13 +49,14 @@ class JSONEncodedType(TypeDecorator):
             return value
 
 
-class Video(Base):
-    """Core video records with complete metadata."""
+class MediaSource(Base):
+    """Core media source records with complete metadata."""
 
-    __tablename__ = "videos"
+    __tablename__ = "media_sources"
 
     # Primary key
-    video_id = Column(String(20), primary_key=True)
+    media_id = Column(String(20), primary_key=True)
+    source_type = Column(String(50), nullable=False, default="youtube")  # 'youtube', 'upload', 'rss'
     title = Column(String(500), nullable=False)
     url = Column(String(200), nullable=False)
 

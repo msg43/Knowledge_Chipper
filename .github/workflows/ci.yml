@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - '**'   # run on all branches, including feature branches
   pull_request:
-    branches: [ main, develop ]
+    branches:
+      - '**'
+  workflow_dispatch:
 
 jobs:
   test:

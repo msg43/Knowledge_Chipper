@@ -354,9 +354,9 @@ def watch(
 
                     # Use SummarizerProcessor
                     summarizer = SummarizerProcessor(
-                        provider=settings.summarization.provider,
-                        model=settings.summarization.model,
-                        max_tokens=settings.summarization.max_tokens,
+                        provider=settings.llm.provider,
+                        model=settings.llm.model,
+                        max_tokens=settings.llm.max_tokens,
                     )
                     result = summarizer.process(file_path, dry_run=False)
                     if result.success:
