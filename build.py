@@ -70,6 +70,11 @@ def install_build_deps():
     """Install build dependencies."""
     build_deps = ["build", "twine", "pytest"]
 
+    # Skip dependency installation in CI; workflow sets these up already.
+    if os.getenv("CI", "").lower() in {"1", "true", "yes"}:
+        print("ℹ️  CI environment detected: skipping install of build deps (provided by workflow)")
+        return
+
     for dep in build_deps:
         run_command([sys.executable, "-m", "pip", "install", dep], f"Installing {dep}")
 
