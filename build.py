@@ -91,8 +91,11 @@ def run_tests(skip_slow=False):
 
 def build_package():
     """Build the package."""
+    # Use --no-isolation so build reuses the existing environment prepared by CI
+    # (faster and avoids unnecessary dependency resolution/downloads).
     run_command(
-        [sys.executable, "-m", "build"], "Building wheel and source distribution"
+        [sys.executable, "-m", "build", "--no-isolation"],
+        "Building wheel and source distribution",
     )
 
 
