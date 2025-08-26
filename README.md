@@ -37,6 +37,45 @@ The Knowledge Chipper has undergone a comprehensive refactor, transforming it in
 
 See [KNOWLEDGE_CHIPPER_REFACTOR_COMPLETED.md](KNOWLEDGE_CHIPPER_REFACTOR_COMPLETED.md) for full details.
 
+## 🏗️ Architecture Overview
+
+### Core Design Principles
+- **📱 SQLite-First**: All processing results stored in local database before optional file exports
+- **🔄 Unified Processing**: Single LLM call extracts all entity types (70% reduction in API calls)
+- **🧩 Modular Components**: Clean separation of processors, services, and UI layers
+- **⚡ Performance Optimized**: Intelligent chunking, caching, and batch operations
+- **☁️ Offline-First**: Full functionality without internet, optional cloud sync
+
+### Key Components
+
+#### 📊 Database Schema (SQLAlchemy ORM)
+```
+media_sources (formerly videos)
+├── transcripts
+├── summaries
+├── claims
+├── claim_sources
+├── supporting_evidence
+├── people
+├── concepts
+├── jargon
+├── mental_models
+└── [All tables include sync_status columns]
+```
+
+#### 🔧 Processing Pipeline
+1. **Input Processing** → Media files, documents, YouTube URLs
+2. **Transcription** → Whisper with speaker diarization
+3. **Entity Extraction** → Unified LLM call for all entities
+4. **Storage** → SQLite database with relationships
+5. **Export** → Optional file generation (MD, JSON, YAML)
+6. **Sync** → Optional Supabase cloud backup
+
+#### 🎨 User Interfaces
+- **PyQt6 Desktop GUI**: Full-featured tabbed interface
+- **Command Line Interface**: Scriptable operations
+- **Web API** (planned): RESTful access to all features
+
 ## 🎉 What's New (Previous Updates)
 
 ### 🔍 **HCE (Hybrid Claim Extractor) System - Revolutionary Upgrade**
@@ -103,6 +142,43 @@ See [KNOWLEDGE_CHIPPER_REFACTOR_COMPLETED.md](KNOWLEDGE_CHIPPER_REFACTOR_COMPLET
 - **Clear Error Messages**: Specific, actionable feedback like "Model requires GPT-4 access" or "Run 'ollama pull llama3.2'"
 - **Intelligent Fallbacks**: Automatically suggests alternatives for deprecated models
 - **Zero Manual Configuration**: Model lists update automatically, validation happens transparently
+
+## 📋 Feature Matrix
+
+### Input Formats
+| Type | Formats | Features |
+|------|---------|----------|
+| **Video/Audio** | MP4, MOV, MP3, WAV, M4A | Whisper transcription, speaker diarization |
+| **Documents** | PDF, DOCX, DOC, RTF, TXT, MD | Author attribution, metadata extraction |
+| **YouTube** | URLs, playlists | Auto-download, metadata extraction |
+| **Markdown** | MD files | In-place summary updates |
+
+### Processing Capabilities
+| Feature | Description | Performance |
+|---------|-------------|-------------|
+| **Transcription** | OpenAI Whisper (local/API) | GPU accelerated, quality retry |
+| **Speaker ID** | Diarization + LLM validation | 90-95% accuracy |
+| **Entity Extraction** | Claims, people, concepts, jargon | Single LLM call |
+| **Chunking** | Semantic, structural, sliding window | Model-aware sizing |
+| **Summarization** | Multiple analysis types | Custom prompts |
+
+### Output Options
+| Format | Contents | Use Case |
+|--------|----------|----------|
+| **Markdown** | Structured summaries, MOCs | Obsidian, note-taking |
+| **YAML** | Claims, entities, metadata | Structured data |
+| **JSON** | Full processing results | API integration |
+| **CSV** | Tabular exports | Spreadsheet analysis |
+
+### Advanced Features
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Cloud Sync** | ✅ | Supabase bidirectional sync |
+| **Batch Processing** | ✅ | Process multiple files/folders |
+| **File Watching** | ✅ | Auto-process new files |
+| **API Keys Management** | ✅ | Secure credential storage |
+| **Custom Prompts** | ✅ | User-defined templates |
+| **Export Control** | ✅ | SQLite-first with optional files |
 
 ## Table of Contents
 
@@ -791,7 +867,35 @@ generated: "2025-01-02T16:30:00Z"
 
 **Smart Model-Aware Processing for Documents of Any Size**
 
-The system automatically handles documents that exceed AI model context windows through intelligent chunking with **model-aware thresholds** that maximize your hardware capabilities:
+The system automatically handles documents that exceed AI model context windows through intelligent chunking with **model-aware thresholds** that maximize your hardware capabilities.
+
+#### Chunking Strategies
+
+1. **Semantic Chunking**
+   - Groups related content based on meaning
+   - Uses embeddings to identify topic boundaries
+   - Preserves context across chunk boundaries
+   - Ideal for: Research papers, technical documents
+
+2. **Structural Chunking**
+   - Respects document structure (headers, sections)
+   - Maintains hierarchical relationships
+   - Preserves formatting and layout
+   - Ideal for: Books, reports, documentation
+
+3. **Sliding Window**
+   - Fixed-size chunks with configurable overlap
+   - Ensures no information loss at boundaries
+   - Consistent chunk sizes for processing
+   - Ideal for: Transcripts, continuous text
+
+4. **Hybrid Approach**
+   - Combines multiple strategies dynamically
+   - Adapts based on content type and structure
+   - Optimizes for both coherence and efficiency
+   - Ideal for: Mixed-format documents
+
+#### Advanced Features:
 
 **🚀 Smart Model-Aware Chunking (ENHANCED):**
 - **Model-Specific Thresholds**: Automatically uses 95% of each model's actual capacity
@@ -990,6 +1094,81 @@ Enhanced Summarization Progress Example:
 - **Early Problem Detection**: Spot issues before they become failures
 - **Performance Optimization**: Identify bottlenecks and optimization opportunities
 
+## 💡 Examples & Recipes
+
+### Quick Examples
+
+#### Process a Podcast with Speaker Identification
+```bash
+# Download and process with diarization
+knowledge-system youtube "https://youtube.com/watch?v=..." \
+  --enable-diarization \
+  --summarize \
+  --analysis-type "Interview Analysis"
+```
+
+#### Batch Process Research Papers
+```bash
+# Process all PDFs in a folder
+knowledge-system process papers/*.pdf \
+  --analysis-type "Academic Paper" \
+  --extract-claims \
+  --output-dir analyzed/
+```
+
+#### Create Knowledge Map from Notes
+```bash
+# Generate MOC from markdown files
+knowledge-system moc notes/ \
+  --include-claims \
+  --theme hierarchical \
+  --depth 3
+```
+
+### Advanced Recipes
+
+#### Multi-Stage Processing Pipeline
+```python
+# Process video → Extract claims → Generate report
+from src.knowledge_system import pipeline
+
+results = pipeline.run([
+    ("transcribe", {"enable_diarization": True}),
+    ("summarize", {"analysis_type": "Document Summary"}),
+    ("extract_claims", {"min_confidence": 0.7}),
+    ("generate_report", {"format": "obsidian"})
+], input_file="lecture.mp4")
+```
+
+#### Custom Analysis Template
+```toml
+# custom_prompts.toml
+[prompts.research_interview]
+template = """
+Analyze this research interview focusing on:
+1. Key hypotheses presented
+2. Methodology discussed
+3. Findings and implications
+4. Future research directions
+
+Extract all claims with evidence.
+"""
+```
+
+#### Automated Podcast Processing
+```python
+# watch_podcasts.py
+from src.knowledge_system import FileWatcher
+
+watcher = FileWatcher(
+    watch_dirs=["~/Downloads/podcasts"],
+    file_patterns=["*.mp3", "*.m4a"],
+    processors=["transcribe", "diarize", "summarize"],
+    auto_start=True
+)
+watcher.run()
+```
+
 ## 🎯 Common Use Cases
 
 ### YouTube Video Processing with Advanced Batch Management
@@ -1185,7 +1364,65 @@ knowledge-system summarize research_papers/ --analysis-type "HCE Analysis"
 3. **Start processing** and monitor progress
 4. **Review results** with integrated validation tools
 
-## ⚙️ Configuration & Settings
+## ⚙️ Configuration
+
+### Configuration Files
+
+The Knowledge Chipper uses a flexible configuration system with multiple layers:
+
+1. **Default Configuration** (`config_default.toml`)
+   - System defaults (do not modify)
+   - Defines all available settings
+
+2. **User Configuration** (`config_user.toml`)
+   - Your personal overrides
+   - Only include settings you want to change
+
+3. **Environment Variables**
+   - Override any setting via environment
+   - Format: `KC_SECTION__SETTING` (e.g., `KC_API__OPENAI_KEY`)
+
+### Key Configuration Sections
+
+#### API Settings
+```toml
+[api]
+openai_key = "sk-..."              # OpenAI API key
+openai_base_url = ""               # Custom endpoint (optional)
+anthropic_key = "sk-ant-..."       # Anthropic API key
+google_api_key = ""                # Google API key
+ollama_base_url = "http://localhost:11434"  # Ollama endpoint
+```
+
+#### Processing Options
+```toml
+[processing]
+extract_claims = true              # Extract claims during summarization
+min_claim_confidence = 0.5         # Minimum confidence threshold
+enable_speaker_diarization = true  # Speaker identification
+chunk_strategy = "hybrid"          # Chunking method
+max_chunk_size = 95000            # Maximum tokens per chunk
+```
+
+#### Database Settings
+```toml
+[database]
+db_path = "~/.knowledge_system/knowledge.db"  # SQLite location
+enable_cloud_sync = false          # Supabase sync
+sync_interval = 300               # Sync frequency (seconds)
+```
+
+#### UI Preferences
+```toml
+[gui]
+theme = "dark"                    # UI theme
+show_process_tab = true           # Show process management
+default_tab = "introduction"      # Startup tab
+window_width = 1200              # Default window size
+window_height = 800
+```
+
+### Advanced Configuration & Settings
 
 ### Essential Settings
 
@@ -1823,6 +2060,73 @@ pytest --cov=knowledge_system
 pytest tests/unit/test_config.py -v
 ```
 
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### Installation Problems
+
+**Issue**: `ModuleNotFoundError: No module named 'whisper'`
+- **Solution**: Run `pip install -r requirements.txt` in your virtual environment
+
+**Issue**: `FFmpeg not found`
+- **Solution**: Install FFmpeg: `brew install ffmpeg` (macOS) or download from ffmpeg.org
+
+**Issue**: PyQt6 import errors
+- **Solution**: Ensure you're using Python 3.9+ and run `pip install PyQt6`
+
+#### Processing Errors
+
+**Issue**: "Model not found" errors
+- **Solution**: Check API keys in Settings tab, ensure model access (GPT-4, Claude, etc.)
+
+**Issue**: Transcription fails with GPU errors
+- **Solution**: Disable GPU in Settings or install CUDA drivers for GPU support
+
+**Issue**: "Context length exceeded" errors
+- **Solution**: Reduce "Max tokens" setting or enable chunking for large documents
+
+#### Database Issues
+
+**Issue**: "Database locked" errors
+- **Solution**: Close other instances of Knowledge Chipper, check file permissions
+
+**Issue**: Migration failures
+- **Solution**: Back up database, run migrations manually with `--debug` flag
+
+#### Performance Issues
+
+**Issue**: Slow processing speeds
+- **Solution**: 
+  - Enable GPU acceleration for Whisper
+  - Use smaller Whisper models (base, small)
+  - Process files in smaller batches
+
+**Issue**: High memory usage
+- **Solution**:
+  - Reduce chunk sizes in configuration
+  - Process fewer files simultaneously
+  - Use streaming mode for large files
+
+### Debug Mode
+
+Enable detailed logging for troubleshooting:
+
+```bash
+# Set debug environment variable
+export KC_DEBUG=true
+
+# Or use debug flag
+knowledge-system --debug process file.mp3
+```
+
+### Getting Help
+
+1. **Check Logs**: `~/.knowledge_system/logs/`
+2. **Run Tests**: `python comprehensive_test_suite.py`
+3. **GitHub Issues**: Report bugs with logs and system info
+4. **Discord Community**: Join for real-time support
+
 ### Contributing
 
 1. Fork the repository
@@ -2030,6 +2334,132 @@ MOC_GENERATION: 240 seconds (4 minutes)
 - **Atomic operations** for cancellation state changes
 - **Queue-based communication** between UI and worker threads
 - **Memory barriers** for cross-thread variable access
+
+## 🔄 Migration Guide
+
+### Upgrading from v2.x to v3.x
+
+The v3.x refactor includes significant database schema changes. Follow these steps:
+
+1. **Backup Your Database**
+   ```bash
+   cp ~/.knowledge_system/knowledge.db ~/.knowledge_system/knowledge.db.backup
+   ```
+
+2. **Run Migrations**
+   ```bash
+   knowledge-system migrate
+   ```
+
+3. **Update Configuration**
+   - Rename `video_id` references to `media_source_id` in custom scripts
+   - Update `beliefs` to `claims` in any custom prompts
+
+4. **Verify Migration**
+   ```bash
+   knowledge-system verify-db
+   ```
+
+### Breaking Changes
+
+- **Database Schema**: `videos` table renamed to `media_sources`
+- **Terminology**: `belief statements` → `claims`
+- **API Changes**: Some processor methods have new signatures
+- **Configuration**: New sections for chunking and sync
+
+See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for detailed instructions.
+
+## 📖 API Reference
+
+### Python API
+
+The Knowledge Chipper provides a comprehensive Python API for integration:
+
+```python
+from src.knowledge_system import KnowledgeSystem
+from src.knowledge_system.processors import TranscriptionProcessor, SummarizationProcessor
+
+# Initialize system
+ks = KnowledgeSystem()
+
+# Process a video file
+result = ks.process_file(
+    "lecture.mp4",
+    processors=["transcription", "summarization"],
+    options={
+        "enable_diarization": True,
+        "analysis_type": "Document Summary",
+        "extract_claims": True
+    }
+)
+
+# Access results
+transcript = result.transcription.text
+summary = result.summarization.summary
+claims = result.summarization.claims
+```
+
+### Database API
+
+Direct database access via SQLAlchemy:
+
+```python
+from src.knowledge_system.database import DatabaseService, MediaSource, Claim
+
+db = DatabaseService()
+
+# Query claims
+high_confidence_claims = db.session.query(Claim).filter(
+    Claim.confidence >= 0.8,
+    Claim.tier == 'A'
+).all()
+
+# Add new media source
+media = MediaSource(
+    title="Important Lecture",
+    source_type="local_file",
+    file_path="/path/to/file.mp4"
+)
+db.session.add(media)
+db.session.commit()
+```
+
+### Processor API
+
+Create custom processors:
+
+```python
+from src.knowledge_system.processors.base import BaseProcessor, ProcessorResult
+
+class CustomProcessor(BaseProcessor):
+    def process(self, input_data, **kwargs) -> ProcessorResult:
+        # Your processing logic
+        result = self.analyze(input_data)
+        
+        return ProcessorResult(
+            success=True,
+            data=result,
+            metadata={"processor": "custom"}
+        )
+```
+
+### Event System
+
+Subscribe to processing events:
+
+```python
+from src.knowledge_system.events import EventBus
+
+bus = EventBus()
+
+@bus.on("processing.started")
+def on_start(event):
+    print(f"Processing {event.file_path}")
+
+@bus.on("processing.completed")
+def on_complete(event):
+    print(f"Completed with {len(event.claims)} claims")
+```
 
 ## 📄 License & Credits
 
