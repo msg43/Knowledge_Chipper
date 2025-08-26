@@ -16,20 +16,13 @@ def _resolve_version() -> str:
     """Resolve package version with robust fallbacks.
 
     Order:
-    1) importlib.metadata.version for installed/editable installs
-    2) Read pyproject.toml nearby (source tree)
+    1) Read nearby pyproject.toml (source/bundle truth during app builds)
+    2) importlib.metadata.version for installed/editable installs
     3) Fallback to "0.0.0"
     """
-    # 1) Distribution metadata (works for pip install -e . and wheels)
-    try:
-        return metadata.version("knowledge-system")
-    except (metadata.PackageNotFoundError, ImportError):
-        pass
-
-    # 2) Fallback: read pyproject.toml
+    # 1) Prefer pyproject.toml nearby (avoids stale egg-info overriding during app bundle runtime)
     try:
         current = Path(__file__).resolve()
-        # Walk up to find pyproject.toml
         for ancestor in [current.parent, *current.parents]:
             candidate = ancestor / "pyproject.toml"
             if candidate.exists():
@@ -39,6 +32,12 @@ def _resolve_version() -> str:
                     return match.group(1)
                 break
     except (FileNotFoundError, PermissionError, ValueError):
+        pass
+
+    # 2) Distribution metadata (pip installs / wheels)
+    try:
+        return metadata.version("knowledge-system")
+    except (metadata.PackageNotFoundError, ImportError):
         pass
 
     # 3) Safe default

@@ -5,6 +5,16 @@ Comprehensive Test Suite for Knowledge Chipper CLI
 This script systematically tests all combinations of extraction, transcription, 
 and summarization available in the Knowledge Chipper CLI using the test files 
 in Test Inputs/ and outputs results to Test Outputs/.
+
+Test Categories:
+1. Audio/Video Transcription - Tests Whisper transcription with/without diarization
+2. YouTube Extraction - Tests YouTube URL processing from multiple file formats
+3. Document Processing - Tests document processing with author attribution
+4. Document Summarization - Tests AI summarization of various document types
+5. Markdown In-Place - Tests updating markdown files with summaries
+6. Combined Processing - Tests full pipeline (transcribe + summarize + MOC)
+7. Summary Cleanup UI - Tests post-summary editing interface availability
+8. Cloud Sync - Tests Supabase configuration and connectivity
 """
 
 import os
@@ -261,6 +271,58 @@ class ComprehensiveTestSuite:
             error=error,
             duration=duration,
             output_files=output_files
+        )
+        
+        self.results.append(result)
+        print(f"  {'✅' if success else '❌'} {test_name} ({duration:.1f}s)")
+        if not success:
+            print(f"    Error: {error}")
+    
+    def test_document_processing_with_attribution(self):
+        """Test document processing with author attribution and metadata extraction."""
+        print("\n📚 Testing Document Processing with Author Attribution...")
+        
+        # Test files for document processing
+        test_files = [
+            ("Transcript for Terence Tao_ Hardest Problems in Mathematics, Physics & the Future of AI _ Lex Fridman Podcast #472 - Lex Fridman.pdf", "document"),
+            ("Dwarkesh_arthur-kroeber.txt", "document"), 
+            ("Dwarkesh_arthur-kroeber.md", "document"),
+        ]
+        
+        for test_file, doc_type in test_files:
+            if not (TEST_INPUTS_DIR / test_file).exists():
+                continue
+                
+            self._test_document_processing(test_file, doc_type)
+    
+    def _test_document_processing(self, input_file: str, doc_type: str):
+        """Test processing a document with author attribution."""
+        safe_filename = self._sanitize_filename(input_file)
+        test_name = f"process_document_{safe_filename}"
+        
+        output_dir = TEST_OUTPUTS_DIR / "document_processing"
+        
+        cmd = CLI_CMD + [
+            "process",
+            "--input", str(TEST_INPUTS_DIR / input_file),
+            "--output", str(output_dir),
+            "--overwrite"
+        ]
+        
+        success, output, error, duration = self.run_command(cmd, timeout=180)
+        
+        # Check for metadata extraction in output
+        if success and "authors:" in output.lower():
+            print(f"    📖 Extracted author metadata from {input_file}")
+        
+        result = TestResult(
+            test_name=test_name,
+            command=cmd,
+            success=success,
+            output=output,
+            error=error,
+            duration=duration,
+            output_files=list(output_dir.glob(f"*{Path(input_file).stem}*"))
         )
         
         self.results.append(result)
@@ -576,6 +638,77 @@ class ComprehensiveTestSuite:
                 
                 f.write("\n")
     
+    def test_summary_cleanup_ui(self):
+        """Test summary cleanup UI availability."""
+        print("\n✏️ Testing Summary Cleanup UI...")
+        
+        test_name = "summary_cleanup_ui_test"
+        
+        # Check if the UI component loads
+        try:
+            from src.knowledge_system.gui.tabs.summary_cleanup_tab import SummaryCleanupTab
+            # Tab should be importable
+            print("  ✅ Summary Cleanup tab is available")
+            success = True
+            output = "Summary Cleanup UI component loaded successfully"
+        except Exception as e:
+            success = False
+            output = f"Failed to load Summary Cleanup UI: {e}"
+        
+        result = TestResult(
+            test_name=test_name,
+            command=["check_summary_cleanup_ui"],
+            success=success,
+            output=output,
+            duration=0.1
+        )
+        
+        self.results.append(result)
+        print(f"  {'✅' if success else '❌'} {test_name}")
+    
+    def test_cloud_sync_configuration(self):
+        """Test cloud sync configuration and basic connectivity."""
+        print("\n☁️ Testing Cloud Sync Configuration...")
+        
+        test_name = "cloud_sync_config_test"
+        
+        # Check if sync is configured
+        try:
+            from src.knowledge_system.services.supabase_sync import SupabaseSyncService
+            sync_service = SupabaseSyncService()
+            
+            if sync_service.is_configured():
+                print("  ✅ Supabase is configured")
+                
+                # Test sync status retrieval
+                try:
+                    status = sync_service.get_sync_status()
+                    print(f"  📊 Sync status retrieved for {len(status)} tables")
+                    success = True
+                    output = f"Configured and accessible. Tables: {list(status.keys())}"
+                except Exception as e:
+                    success = False
+                    output = f"Configuration valid but connection failed: {e}"
+            else:
+                print("  ⚠️ Supabase not configured (skipping sync tests)")
+                success = True  # Not a failure, just not configured
+                output = "Supabase sync not configured"
+                
+        except Exception as e:
+            success = False
+            output = f"Failed to initialize sync service: {e}"
+        
+        result = TestResult(
+            test_name=test_name,
+            command=["check_sync_config"],
+            success=success,
+            output=output,
+            duration=0.1
+        )
+        
+        self.results.append(result)
+        print(f"  {'✅' if success else '❌'} {test_name}")
+    
     def run_all_tests(self):
         """Run the complete test suite."""
         print("🚀 Starting Knowledge Chipper Comprehensive Test Suite")
@@ -589,9 +722,12 @@ class ComprehensiveTestSuite:
             # Run all test categories
             self.test_audio_transcription()
             self.test_youtube_extraction()
+            self.test_document_processing_with_attribution()
             self.test_document_summarization()
             self.test_markdown_inplace_summarization()
             self.test_combined_processing()
+            self.test_summary_cleanup_ui()
+            self.test_cloud_sync_configuration()
             
             # Generate comprehensive report
             self.generate_report()

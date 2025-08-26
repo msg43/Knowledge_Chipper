@@ -28,6 +28,7 @@ from ..logger import get_logger
 from .. import __version__
 from .assets.icons import get_app_icon, get_icon_path
 
+
 def _get_build_date() -> str:
     """Get build date from current date (when running) or app bundle info."""
     from datetime import datetime
@@ -49,13 +50,35 @@ from .tabs import (
     ClaimSearchTab,
     IntroductionTab,
     ProcessTab,
+    SpeakerAttributionTab,
     SummarizationTab,
+    SummaryCleanupTab,
+    SyncStatusTab,
     TranscriptionTab,
     WatcherTab,
     YouTubeTab,
 )
 
 logger = get_logger(__name__)
+
+
+def _update_state_version(version: str) -> None:
+    """Write the current version into state/application_state.json if present."""
+    try:
+        import json
+        from pathlib import Path
+        state_path = Path(__file__).resolve().parents[3] / "state" / "application_state.json"
+        if not state_path.exists():
+            return
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+        # Update top-level version
+        data["version"] = version
+        # Update nested session version if present
+        if isinstance(data.get("session"), dict):
+            data["session"]["version"] = version
+        state_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception as e:
+        logger.debug(f"State version update skipped: {e}")
 
 
 class MainWindow(QMainWindow):
@@ -76,6 +99,9 @@ class MainWindow(QMainWindow):
 
         # Load API keys into environment variables immediately
         self._load_api_keys_to_environment()
+
+        # Ensure state file reflects current version
+        _update_state_version(__version__)
 
         # Initialize other attributes
         self.message_queue: queue.Queue[Any] = queue.Queue()
@@ -193,6 +219,14 @@ class MainWindow(QMainWindow):
         # Claim search tab for exploring extracted claims
         claim_search_tab = ClaimSearchTab(self)
         self.tabs.addTab(claim_search_tab, "🔍 Claim Search")
+        
+        # Speaker attribution tab for managing speaker identification
+        speaker_attribution_tab = SpeakerAttributionTab(self)
+        self.tabs.addTab(speaker_attribution_tab, "🎙️ Speaker Attribution")
+        
+        # Summary cleanup tab for post-processing review
+        summary_cleanup_tab = SummaryCleanupTab(self)
+        self.tabs.addTab(summary_cleanup_tab, "✏️ Summary Cleanup")
 
         # Only add Process Management tab if enabled in settings
         settings = get_settings()
@@ -208,6 +242,14 @@ class MainWindow(QMainWindow):
         # Settings tab (far right)
         self.api_keys_tab = APIKeysTab(self)
         self.tabs.addTab(self.api_keys_tab, "⚙️ Settings")
+        
+        # Cloud sync status tab
+        if SyncStatusTab is not None:
+            try:
+                sync_status_tab = SyncStatusTab(self)
+                self.tabs.addTab(sync_status_tab, "☁️ Sync Status")
+            except Exception as e:
+                logger.warning(f"Sync Status tab disabled: {e}")
 
     def _navigate_to_tab(self, tab_name: str) -> None:
         """Navigate to a specific tab by name."""

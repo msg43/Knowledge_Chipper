@@ -21,7 +21,7 @@ from sqlalchemy import (
     create_engine,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker, synonym
 from sqlalchemy.types import TypeDecorator
 
 Base = declarative_base()
@@ -50,12 +50,14 @@ class JSONEncodedType(TypeDecorator):
 
 
 class MediaSource(Base):
-    """Core media source records with complete metadata."""
+    """Core media source records with complete metadata (replaces legacy 'videos')."""
 
     __tablename__ = "media_sources"
 
     # Primary key
     media_id = Column(String(20), primary_key=True)
+    # Back-compat attribute: many modules still expect 'video_id'
+    video_id = synonym("media_id")
     source_type = Column(String(50), nullable=False, default="youtube")  # 'youtube', 'upload', 'rss'
     title = Column(String(500), nullable=False)
     url = Column(String(200), nullable=False)
@@ -110,7 +112,11 @@ class MediaSource(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Video(video_id='{self.video_id}', title='{self.title[:50]}...')>"
+        return f"<MediaSource(media_id='{self.media_id}', title='{self.title[:50]}...')>"
+
+# Backward-compatibility: many modules still import/use `Video`
+# Map the legacy symbol to the new class to avoid breaking imports
+Video = MediaSource
 
 
 class Transcript(Base):
@@ -120,7 +126,7 @@ class Transcript(Base):
 
     # Primary key
     transcript_id = Column(String(50), primary_key=True)
-    video_id = Column(String(20), ForeignKey("videos.video_id"), nullable=False)
+    video_id = Column(String(20), ForeignKey("media_sources.media_id"), nullable=False)
 
     # Transcript metadata
     language = Column(String(10), nullable=False)
@@ -159,7 +165,7 @@ class Transcript(Base):
     processing_time_seconds = Column(Float)
 
     # Relationships
-    video = relationship("Video", back_populates="transcripts")
+    video = relationship("MediaSource", back_populates="transcripts")
     summaries = relationship("Summary", back_populates="transcript")
     generated_files = relationship("GeneratedFile", back_populates="transcript")
 
@@ -174,7 +180,7 @@ class Summary(Base):
 
     # Primary key
     summary_id = Column(String(50), primary_key=True)
-    video_id = Column(String(20), ForeignKey("videos.video_id"), nullable=False)
+    video_id = Column(String(20), ForeignKey("media_sources.media_id"), nullable=False)
     transcript_id = Column(String(50), ForeignKey("transcripts.transcript_id"))
 
     # Summary content
@@ -210,7 +216,7 @@ class Summary(Base):
     template_used = Column(String(100))
 
     # Relationships
-    video = relationship("Video", back_populates="summaries")
+    video = relationship("MediaSource", back_populates="summaries")
     transcript = relationship("Transcript", back_populates="summaries")
     moc_extractions = relationship("MOCExtraction", back_populates="summary")
     generated_files = relationship("GeneratedFile", back_populates="summary")
@@ -226,7 +232,7 @@ class MOCExtraction(Base):
 
     # Primary key
     moc_id = Column(String(50), primary_key=True)
-    video_id = Column(String(20), ForeignKey("videos.video_id"), nullable=False)
+    video_id = Column(String(20), ForeignKey("media_sources.media_id"), nullable=False)
     summary_id = Column(String(50), ForeignKey("summaries.summary_id"))
 
     # Extracted entities (JSON arrays)
@@ -256,7 +262,7 @@ class MOCExtraction(Base):
     extraction_method = Column(String(30))
 
     # Relationships
-    video = relationship("Video", back_populates="moc_extractions")
+    video = relationship("MediaSource", back_populates="moc_extractions")
     summary = relationship("Summary", back_populates="moc_extractions")
     generated_files = relationship("GeneratedFile", back_populates="moc_extraction")
 
@@ -271,7 +277,7 @@ class GeneratedFile(Base):
 
     # Primary key
     file_id = Column(String(50), primary_key=True)
-    video_id = Column(String(20), ForeignKey("videos.video_id"), nullable=False)
+    video_id = Column(String(20), ForeignKey("media_sources.media_id"), nullable=False)
     transcript_id = Column(String(50), ForeignKey("transcripts.transcript_id"))
     summary_id = Column(String(50), ForeignKey("summaries.summary_id"))
     moc_id = Column(String(50), ForeignKey("moc_extractions.moc_id"))
@@ -299,7 +305,7 @@ class GeneratedFile(Base):
     last_modified = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    video = relationship("Video", back_populates="generated_files")
+    video = relationship("MediaSource", back_populates="generated_files")
     transcript = relationship("Transcript", back_populates="generated_files")
     summary = relationship("Summary", back_populates="generated_files")
     moc_extraction = relationship("MOCExtraction", back_populates="generated_files")
@@ -359,7 +365,7 @@ class BrightDataSession(Base):
 
     # Primary key
     session_id = Column(String(100), primary_key=True)
-    video_id = Column(String(20), ForeignKey("videos.video_id"), nullable=False)
+    video_id = Column(String(20), ForeignKey("media_sources.media_id"), nullable=False)
 
     # Session details
     session_type = Column(
@@ -385,7 +391,7 @@ class BrightDataSession(Base):
     ip_address = Column(String(45))  # Assigned IP for session (supports IPv6)
 
     # Relationships
-    video = relationship("Video", back_populates="bright_data_sessions")
+    video = relationship("MediaSource", back_populates="bright_data_sessions")
 
     def __repr__(self) -> str:
         return f"<BrightDataSession(session_id='{self.session_id}', session_type='{self.session_type}', total_cost={self.total_cost})>"

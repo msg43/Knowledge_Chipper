@@ -36,6 +36,7 @@ class SpeakerData(BaseModel):
     total_duration: float = Field(default=0.0, description="Total speaking time in seconds")
     segment_count: int = Field(default=0, description="Number of segments")
     sample_texts: List[str] = Field(default_factory=list, description="Representative text samples")
+    first_five_segments: List[Dict] = Field(default_factory=list, description="First 5 speaking segments with timestamps")
     suggested_name: Optional[str] = Field(default=None, description="AI-suggested name")
     confidence_score: float = Field(default=0.0, description="Confidence in suggestion")
     
@@ -189,6 +190,7 @@ class SpeakerProcessor(BaseProcessor):
             # Generate sample texts and suggestions for each speaker
             for speaker_data in speaker_map.values():
                 speaker_data.sample_texts = self._extract_sample_texts(speaker_data.segments)
+                speaker_data.first_five_segments = self._extract_first_five_segments(speaker_data.segments)
                 speaker_data.suggested_name, speaker_data.confidence_score = self._suggest_speaker_name(speaker_data)
             
             # Sort speakers by total speaking time (most active first)
@@ -244,6 +246,21 @@ class SpeakerProcessor(BaseProcessor):
                 break
         
         return samples
+    
+    def _extract_first_five_segments(self, segments: List[SpeakerSegment]) -> List[Dict]:
+        """Extract first 5 speaking segments with timestamps for identification."""
+        first_five = []
+        
+        for i, segment in enumerate(segments[:5]):
+            segment_dict = {
+                'text': segment.text,
+                'start': segment.start_time,
+                'end': segment.end_time,
+                'sequence': i + 1
+            }
+            first_five.append(segment_dict)
+        
+        return first_five
     
     def _suggest_speaker_name(self, speaker_data: SpeakerData) -> Tuple[Optional[str], float]:
         """Generate AI-powered name suggestion for a speaker."""

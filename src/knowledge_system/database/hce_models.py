@@ -28,7 +28,8 @@ class Episode(Base):
     __tablename__ = "episodes"
 
     episode_id = Column(String(100), primary_key=True)
-    video_id = Column(String(20), ForeignKey("videos.video_id"), unique=True)
+    # Point to new canonical table name while keeping relationship to Video alias
+    video_id = Column(String(20), ForeignKey("media_sources.media_id"), unique=True)
     title = Column(Text)
     recorded_at = Column(String(20))
     inserted_at = Column(DateTime, default=datetime.utcnow)

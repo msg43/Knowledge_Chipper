@@ -7,6 +7,7 @@ from knowledge_system.processors.pdf import PDFProcessor
 from knowledge_system.processors.rss_processor import RSSProcessor
 from knowledge_system.processors.youtube_download import YouTubeDownloadProcessor
 from knowledge_system.processors.youtube_metadata import YouTubeMetadataProcessor
+from knowledge_system.processors.document_processor import DocumentProcessor
 
 # Registry maps extension or pattern to processor class
 _PROCESSOR_REGISTRY: list[dict] = []
@@ -79,6 +80,11 @@ register_processor(
 )
 register_processor(PDFProcessor, extensions=[".pdf"], name="PDFProcessor")
 register_processor(HTMLProcessor, extensions=[".html", ".htm"], name="HTMLProcessor")
+register_processor(
+    DocumentProcessor,
+    extensions=[".txt", ".md", ".docx", ".doc", ".rtf"],
+    name="DocumentProcessor"
+)
 register_processor(
     RSSProcessor,
     url_patterns=[

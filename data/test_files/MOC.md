@@ -19,4 +19,4 @@ See [[Tags]] for detailed list.
 See [[Jargon]] for detailed list.
 
 ## Beliefs
-See `beliefs.yaml` for detailed beliefs with epistemic weight.
+See `claims.yaml` for detailed claims with epistemic weight.

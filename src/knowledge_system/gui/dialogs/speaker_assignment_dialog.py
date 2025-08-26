@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
 from ...logger import get_logger
 from ...processors.speaker_processor import SpeakerData, SpeakerAssignment
 from ...utils.speaker_intelligence import SpeakerNameSuggester
+from ...utils.llm_speaker_validator import LLMSpeakerValidator
 from ...database.speaker_models import get_speaker_db_service, SpeakerAssignmentModel
 
 logger = get_logger(__name__)
@@ -131,22 +132,32 @@ class SpeakerCard(QFrame):
         
         layout.addLayout(name_layout)
         
-        # Sample text display
-        samples_group = QGroupBox("Sample Speech")
+        # Sample text display - First 5 speaking segments for identification
+        samples_group = QGroupBox("First 5 Speaking Segments")
         samples_layout = QVBoxLayout(samples_group)
         
         self.samples_text = QTextEdit()
-        self.samples_text.setMaximumHeight(120)
+        self.samples_text.setMaximumHeight(160)  # Increased height for 5 segments
         self.samples_text.setFont(QFont("Arial", 9))
         self.samples_text.setReadOnly(True)
         
-        # Add sample texts
+        # Add first 5 speaking segments with timestamps for better identification
         sample_content = ""
-        for i, sample in enumerate(self.speaker_data.sample_texts[:3]):
-            sample_content += f"• {sample}\n\n"
+        segments_to_show = getattr(self.speaker_data, 'first_five_segments', self.speaker_data.sample_texts[:5])
+        
+        for i, segment in enumerate(segments_to_show[:5]):
+            if isinstance(segment, dict) and 'text' in segment:
+                # If segment has timestamp info
+                timestamp = segment.get('start', 0)
+                mins, secs = divmod(int(timestamp), 60)
+                text = segment['text'].strip()
+                sample_content += f"[{mins:02d}:{secs:02d}] {text}\n\n"
+            else:
+                # Fallback to text-only
+                sample_content += f"{i+1}. {str(segment).strip()}\n\n"
         
         if not sample_content:
-            sample_content = "No substantial speech samples available."
+            sample_content = "No speech segments available for this speaker."
         
         self.samples_text.setPlainText(sample_content.strip())
         samples_layout.addWidget(self.samples_text)
@@ -247,29 +258,40 @@ class SpeakerAssignmentDialog(QDialog):
     speaker_assignments_completed = pyqtSignal(dict)  # {speaker_id: name}
     assignment_cancelled = pyqtSignal()
     
-    def __init__(self, speaker_data_list: List[SpeakerData], recording_path: str = "", parent=None):
+    def __init__(self, speaker_data_list: List[SpeakerData], recording_path: str = "", metadata: Optional[Dict] = None, parent=None):
         """
         Initialize the speaker assignment dialog.
         
         Args:
             speaker_data_list: List of speaker data objects
             recording_path: Path to the recording file
+            metadata: Optional YouTube/podcast metadata for auto-assignment
             parent: Parent widget
         """
         super().__init__(parent)
         self.speaker_data_list = speaker_data_list
         self.recording_path = recording_path
+        self.metadata = metadata or {}
         self.speaker_cards: Dict[str, SpeakerCard] = {}
         self.current_focus_index = 0
         self.assignments: Dict[str, str] = {}
         
         self.name_suggester = SpeakerNameSuggester()
         self.db_service = get_speaker_db_service()
+        self.llm_validator = LLMSpeakerValidator()
+        
+        # LLM validation state
+        self.llm_validation_result = None
+        self.pending_validation = False
         
         self._setup_ui()
         self._setup_keyboard_shortcuts()
         self._connect_signals()
         self._load_existing_assignments()
+        
+        # Automatically trigger LLM validation if metadata is available
+        if self.metadata:
+            self._trigger_llm_validation()
     
     def _setup_ui(self):
         """Setup the main dialog UI."""
@@ -289,6 +311,10 @@ class SpeakerAssignmentDialog(QDialog):
         # Speaker cards section (scrollable)
         cards_section = self._create_speaker_cards_section()
         main_layout.addWidget(cards_section)
+        
+        # LLM Validation section
+        validation_section = self._create_llm_validation_section()
+        main_layout.addWidget(validation_section)
         
         # Options section
         options_section = self._create_options_section()
@@ -324,13 +350,19 @@ class SpeakerAssignmentDialog(QDialog):
         layout.addLayout(title_layout)
         layout.addStretch()
         
-        # Help text
+        # Help text - Enhanced for fast batch processing with LLM validation
         help_text = QLabel(
-            "💡 Use Tab to move between speakers, Enter to confirm and move to next\n"
-            "🎯 Ctrl+S to switch speakers, Ctrl+P to play audio (coming soon)"
+            "⚡ FAST REVIEW SHORTCUTS:\n"
+            "• Tab/Shift+Tab: Navigate speakers\n"
+            "• Enter: Confirm current and move to next\n"
+            "• Ctrl+Enter: Accept all and finish\n"
+            "• Ctrl+S: Switch current with next\n"
+            "• Ctrl+R: Auto-assign from metadata\n"
+            "• Ctrl+L: Trigger LLM validation\n"
+            "• Ctrl+1,2,3...: Quick assign to Speaker 1,2,3..."
         )
-        help_text.setFont(QFont("Arial", 9))
-        help_text.setStyleSheet("color: #888; background-color: #f5f5f5; padding: 8px; border-radius: 4px;")
+        help_text.setFont(QFont("Arial", 8))
+        help_text.setStyleSheet("color: #666; background-color: #f0f8ff; padding: 8px; border-radius: 4px; border: 1px solid #d0e8ff;")
         help_text.setAlignment(Qt.AlignmentFlag.AlignRight)
         layout.addWidget(help_text)
         
@@ -373,6 +405,42 @@ class SpeakerAssignmentDialog(QDialog):
         scroll_area.setWidget(container)
         return scroll_area
     
+    def _create_llm_validation_section(self) -> QGroupBox:
+        """Create the LLM validation status section."""
+        group = QGroupBox("🤖 AI Validation")
+        layout = QVBoxLayout(group)
+        
+        # Status display
+        self.validation_status_label = QLabel("⏳ Preparing LLM validation...")
+        self.validation_status_label.setFont(QFont("Arial", 10))
+        self.validation_status_label.setStyleSheet("color: #666; padding: 8px;")
+        layout.addWidget(self.validation_status_label)
+        
+        # Detailed validation info (initially hidden)
+        self.validation_details = QTextEdit()
+        self.validation_details.setMaximumHeight(80)
+        self.validation_details.setFont(QFont("Arial", 9))
+        self.validation_details.setReadOnly(True)
+        self.validation_details.setVisible(False)
+        layout.addWidget(self.validation_details)
+        
+        # Validation actions
+        actions_layout = QHBoxLayout()
+        
+        self.apply_llm_suggestions_btn = QPushButton("✨ Apply LLM Suggestions")
+        self.apply_llm_suggestions_btn.setEnabled(False)
+        self.apply_llm_suggestions_btn.clicked.connect(self._apply_llm_suggestions)
+        actions_layout.addWidget(self.apply_llm_suggestions_btn)
+        
+        self.retry_validation_btn = QPushButton("🔄 Retry Validation")
+        self.retry_validation_btn.clicked.connect(self._trigger_llm_validation)
+        actions_layout.addWidget(self.retry_validation_btn)
+        
+        actions_layout.addStretch()
+        layout.addLayout(actions_layout)
+        
+        return group
+    
     def _create_options_section(self) -> QGroupBox:
         """Create the options section."""
         group = QGroupBox("Options")
@@ -414,7 +482,7 @@ class SpeakerAssignmentDialog(QDialog):
         return button_box
     
     def _setup_keyboard_shortcuts(self):
-        """Setup keyboard shortcuts."""
+        """Setup keyboard shortcuts for efficient navigation and fast batch processing."""
         # Tab to move to next speaker
         tab_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Tab), self)
         tab_shortcut.activated.connect(self._move_to_next_speaker)
@@ -434,6 +502,23 @@ class SpeakerAssignmentDialog(QDialog):
         # Enter to confirm and move to next
         enter_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Return), self)
         enter_shortcut.activated.connect(self._confirm_current_and_next)
+        
+        # NEW: Ctrl+Enter to accept all and finish (fast batch processing)
+        ctrl_enter_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self)
+        ctrl_enter_shortcut.activated.connect(self._accept_all_and_finish)
+        
+        # NEW: Auto-assign from metadata
+        auto_assign_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
+        auto_assign_shortcut.activated.connect(self._auto_assign_from_metadata)
+        
+        # NEW: LLM validation trigger
+        llm_validation_shortcut = QShortcut(QKeySequence("Ctrl+L"), self)
+        llm_validation_shortcut.activated.connect(self._trigger_llm_validation)
+        
+        # NEW: Quick number assignments (Ctrl+1, Ctrl+2, etc.)
+        for i in range(1, 10):
+            shortcut = QShortcut(QKeySequence(f"Ctrl+{i}"), self)
+            shortcut.activated.connect(lambda checked, num=i: self._quick_assign_speaker(num))
     
     def _connect_signals(self):
         """Connect widget signals."""
@@ -558,6 +643,232 @@ class SpeakerAssignmentDialog(QDialog):
             "Audio playback feature coming soon!\n\nThis will play a sample of the selected speaker's voice."
         )
     
+    def _accept_all_and_finish(self):
+        """Accept all current assignments and finish (fast batch processing)."""
+        try:
+            # Collect all current assignments
+            for speaker_id, card in self.speaker_cards.items():
+                name = card.get_assigned_name()
+                if name:
+                    self.assignments[speaker_id] = name
+            
+            logger.info(f"Fast batch completion: {len(self.assignments)} speakers assigned")
+            self.accept()
+            
+        except Exception as e:
+            logger.error(f"Error in accept all and finish: {e}")
+            QMessageBox.warning(self, "Error", f"Failed to complete assignments: {e}")
+    
+    def _auto_assign_from_metadata(self):
+        """Auto-assign speakers based on metadata suggestions."""
+        try:
+            if not hasattr(self, 'metadata') or not self.metadata:
+                QMessageBox.information(
+                    self, 
+                    "No Metadata", 
+                    "No metadata available for auto-assignment.\nTry manual assignment using the first 5 segments shown."
+                )
+                return
+            
+            # Use metadata to suggest names
+            metadata_suggestions = self.name_suggester._extract_names_from_metadata(self.metadata)
+            
+            if not metadata_suggestions:
+                QMessageBox.information(
+                    self, 
+                    "No Suggestions", 
+                    "No speaker names could be extracted from metadata.\nPlease assign manually using the speech samples."
+                )
+                return
+            
+            # Auto-assign to speakers in order of confidence
+            speaker_ids = list(self.speaker_cards.keys())
+            assigned_count = 0
+            
+            for i, (suggested_name, confidence) in enumerate(metadata_suggestions[:len(speaker_ids)]):
+                if i < len(speaker_ids):
+                    speaker_id = speaker_ids[i]
+                    card = self.speaker_cards[speaker_id]
+                    card.set_assigned_name(suggested_name)
+                    self.assignments[speaker_id] = suggested_name
+                    assigned_count += 1
+            
+            QMessageBox.information(
+                self,
+                "Auto-Assignment Complete",
+                f"Assigned {assigned_count} speakers from metadata.\nReview and adjust as needed, then press Ctrl+Enter to finish."
+            )
+            
+            logger.info(f"Auto-assigned {assigned_count} speakers from metadata")
+            
+        except Exception as e:
+            logger.error(f"Error in auto-assign from metadata: {e}")
+            QMessageBox.warning(self, "Auto-Assignment Error", f"Failed to auto-assign: {e}")
+    
+    def _quick_assign_speaker(self, target_speaker_num: int):
+        """Quick assign current speaker to target speaker number (Ctrl+1,2,3...)."""
+        try:
+            current_speaker_ids = list(self.speaker_cards.keys())
+            if self.current_focus_index >= len(current_speaker_ids):
+                return
+                
+            current_speaker_id = current_speaker_ids[self.current_focus_index]
+            current_card = self.speaker_cards[current_speaker_id]
+            
+            # Set name to "Speaker X"
+            speaker_name = f"Speaker {target_speaker_num}"
+            current_card.set_assigned_name(speaker_name)
+            self.assignments[current_speaker_id] = speaker_name
+            
+            logger.debug(f"Quick assigned {current_speaker_id} to {speaker_name}")
+            
+            # Move to next speaker for continued fast processing
+            self._move_to_next_speaker()
+            
+        except Exception as e:
+            logger.error(f"Error in quick assign speaker: {e}")
+    
+    def _trigger_llm_validation(self):
+        """Trigger LLM validation of current speaker assignments."""
+        try:
+            self.pending_validation = True
+            self.validation_status_label.setText("⏳ Running LLM validation...")
+            self.apply_llm_suggestions_btn.setEnabled(False)
+            self.validation_details.setVisible(False)
+            
+            # Collect current assignments and segments
+            current_assignments = {}
+            speaker_segments = {}
+            
+            for speaker_id, card in self.speaker_cards.items():
+                assigned_name = card.get_assigned_name()
+                if assigned_name:
+                    current_assignments[speaker_id] = assigned_name
+                
+                # Get speaker data
+                speaker_data = next(
+                    (data for data in self.speaker_data_list if data.speaker_id == speaker_id), 
+                    None
+                )
+                if speaker_data:
+                    speaker_segments[speaker_id] = [
+                        {
+                            'text': seg.text,
+                            'start': seg.start_time,
+                            'end': seg.end_time
+                        }
+                        for seg in speaker_data.segments
+                    ]
+            
+            if not current_assignments:
+                self.validation_status_label.setText("❌ No assignments to validate")
+                self.pending_validation = False
+                return
+            
+            # Run LLM validation in a separate thread (simplified for now)
+            self._run_llm_validation(current_assignments, speaker_segments)
+            
+        except Exception as e:
+            logger.error(f"Error triggering LLM validation: {e}")
+            self.validation_status_label.setText(f"❌ Validation error: {str(e)}")
+            self.pending_validation = False
+    
+    def _run_llm_validation(self, assignments: Dict[str, str], segments: Dict[str, List[Dict]]):
+        """Run LLM validation (blocking for now, could be threaded)."""
+        try:
+            # Perform LLM validation
+            self.llm_validation_result = self.llm_validator.validate_speaker_assignments(
+                assignments, segments, self.metadata
+            )
+            
+            # Update UI with results
+            self._display_llm_validation_results()
+            
+        except Exception as e:
+            logger.error(f"Error in LLM validation: {e}")
+            self.validation_status_label.setText(f"❌ LLM validation failed: {str(e)}")
+            self.pending_validation = False
+    
+    def _display_llm_validation_results(self):
+        """Display LLM validation results in the UI."""
+        try:
+            if not self.llm_validation_result:
+                return
+            
+            # Update status
+            summary = self.llm_validator.create_validation_summary_for_user(self.llm_validation_result)
+            self.validation_status_label.setText(summary)
+            
+            # Show detailed validation info
+            validations = self.llm_validation_result.get("validations", {})
+            details_text = ""
+            
+            for speaker_id, validation in validations.items():
+                recommendation = validation.get("recommendation", "UNCERTAIN")
+                reasoning = validation.get("reasoning", "No reasoning provided")
+                confidence = validation.get("llm_confidence", 0.5)
+                
+                emoji = "✅" if recommendation == "ACCEPT" else "❌" if recommendation == "REJECT" else "❓"
+                details_text += f"{emoji} {validation.get('original_assignment', 'Unknown')} ({confidence:.0%}): {reasoning}\n"
+            
+            if details_text:
+                self.validation_details.setPlainText(details_text.strip())
+                self.validation_details.setVisible(True)
+            
+            # Enable apply suggestions if there are recommendations
+            recommendations = self.llm_validation_result.get("recommendations", {})
+            has_changes = any(
+                recommendations.get(sid) != assignments.get(sid) 
+                for sid in recommendations.keys()
+                for assignments in [self._get_current_assignments()]
+            )
+            
+            self.apply_llm_suggestions_btn.setEnabled(has_changes)
+            self.pending_validation = False
+            
+            logger.info("LLM validation results displayed successfully")
+            
+        except Exception as e:
+            logger.error(f"Error displaying LLM validation results: {e}")
+            self.validation_status_label.setText("❌ Error displaying validation results")
+            self.pending_validation = False
+    
+    def _apply_llm_suggestions(self):
+        """Apply LLM validation suggestions to speaker assignments."""
+        try:
+            if not self.llm_validation_result:
+                return
+            
+            recommendations = self.llm_validation_result.get("recommendations", {})
+            applied_count = 0
+            
+            for speaker_id, recommended_name in recommendations.items():
+                if speaker_id in self.speaker_cards:
+                    current_name = self.speaker_cards[speaker_id].get_assigned_name()
+                    if current_name != recommended_name:
+                        self.speaker_cards[speaker_id].set_assigned_name(recommended_name)
+                        self.assignments[speaker_id] = recommended_name
+                        applied_count += 1
+            
+            if applied_count > 0:
+                self.validation_status_label.setText(f"✅ Applied {applied_count} LLM suggestions")
+                self.apply_llm_suggestions_btn.setEnabled(False)
+                logger.info(f"Applied {applied_count} LLM validation suggestions")
+            else:
+                self.validation_status_label.setText("ℹ️ No changes needed")
+            
+        except Exception as e:
+            logger.error(f"Error applying LLM suggestions: {e}")
+            self.validation_status_label.setText(f"❌ Error applying suggestions: {str(e)}")
+    
+    def _get_current_assignments(self) -> Dict[str, str]:
+        """Get current speaker assignments from UI."""
+        return {
+            speaker_id: card.get_assigned_name() 
+            for speaker_id, card in self.speaker_cards.items() 
+            if card.get_assigned_name()
+        }
+    
     def _on_speaker_name_changed(self, speaker_id: str, name: str):
         """Handle speaker name changes."""
         self.assignments[speaker_id] = name
@@ -681,6 +992,7 @@ class SpeakerAssignmentDialog(QDialog):
 def show_speaker_assignment_dialog(
     speaker_data_list: List[SpeakerData],
     recording_path: str = "",
+    metadata: Optional[Dict] = None,
     parent=None
 ) -> Optional[Dict[str, str]]:
     """
@@ -689,12 +1001,13 @@ def show_speaker_assignment_dialog(
     Args:
         speaker_data_list: List of speaker data objects
         recording_path: Path to the recording file
+        metadata: Optional YouTube/podcast metadata for auto-assignment
         parent: Parent widget
         
     Returns:
         Dictionary of speaker assignments or None if cancelled
     """
-    dialog = SpeakerAssignmentDialog(speaker_data_list, recording_path, parent)
+    dialog = SpeakerAssignmentDialog(speaker_data_list, recording_path, metadata, parent)
     
     if dialog.exec() == QDialog.DialogCode.Accepted:
         return dialog.get_assignments()

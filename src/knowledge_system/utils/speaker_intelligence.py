@@ -112,12 +112,13 @@ class SpeakerNameSuggester:
             'support': ['HR', 'Admin', 'Assistant', 'Coordinator', 'Representative']
         }
     
-    def suggest_names_from_context(self, speaker_texts: List[str]) -> List[Tuple[str, float]]:
+    def suggest_names_from_context(self, speaker_texts: List[str], metadata: Optional[Dict] = None) -> List[Tuple[str, float]]:
         """
         Analyze speech patterns and content for name suggestions.
         
         Args:
             speaker_texts: List of text segments from the speaker
+            metadata: Optional YouTube/podcast metadata (title, description, channel)
             
         Returns:
             List of (suggested_name, confidence_score) tuples
@@ -125,6 +126,11 @@ class SpeakerNameSuggester:
         try:
             all_text = ' '.join(speaker_texts)
             suggestions = []
+            
+            # NEW: Try metadata-based extraction first (highest priority for podcasts)
+            if metadata:
+                metadata_names = self._extract_names_from_metadata(metadata)
+                suggestions.extend(metadata_names)
             
             # Try direct name extraction
             direct_names = self._extract_direct_names(all_text)
@@ -151,6 +157,133 @@ class SpeakerNameSuggester:
         except Exception as e:
             logger.error(f"Error generating name suggestions: {e}")
             return []
+    
+    def _extract_names_from_metadata(self, metadata: Dict) -> List[Tuple[str, float]]:
+        """
+        Extract speaker names from YouTube/podcast metadata.
+        Optimized for informal interviews like Joe Rogan podcasts.
+        
+        Args:
+            metadata: Dictionary containing title, description, uploader, etc.
+            
+        Returns:
+            List of (suggested_name, confidence_score) tuples
+        """
+        suggestions = []
+        
+        try:
+            title = metadata.get('title', '').lower()
+            description = metadata.get('description', '').lower()
+            uploader = metadata.get('uploader', '').lower()
+            
+            # Common podcast patterns
+            podcast_hosts = {
+                'joe rogan': ['joe rogan', 'jre'],
+                'lex fridman': ['lex fridman', 'lex'],
+                'jordan peterson': ['jordan peterson', 'peterson'],
+                'sam harris': ['sam harris', 'harris'],
+                'tim ferriss': ['tim ferriss', 'tim ferris'],
+                'naval ravikant': ['naval', 'ravikant'],
+                'andrew huberman': ['huberman', 'andrew huberman'],
+                'dan carlin': ['dan carlin', 'hardcore history'],
+                'ben shapiro': ['ben shapiro', 'shapiro'],
+                'dave rubin': ['dave rubin', 'rubin'],
+                'eric weinstein': ['eric weinstein', 'weinstein'],
+                'bret weinstein': ['bret weinstein'],
+                'jordan harbinger': ['jordan harbinger'],
+                'rogan': ['joe rogan']  # Common shorthand
+            }
+            
+            # Extract channel-based host identification
+            for host_name, identifiers in podcast_hosts.items():
+                for identifier in identifiers:
+                    if identifier in uploader:
+                        suggestions.append((host_name.title(), 0.9))
+                        break
+            
+            # Pattern: "Host with Guest" or "Guest on Host"
+            # Examples: "Jordan Peterson with Sam Harris", "Sam Harris on Joe Rogan"
+            interview_patterns = [
+                r'(\w+\s+\w+)\s+with\s+(\w+\s+\w+)',  # "Peterson with Harris"
+                r'(\w+\s+\w+)\s+on\s+(\w+\s+\w+)',    # "Harris on Rogan" 
+                r'(\w+\s+\w+)\s+interviews?\s+(\w+\s+\w+)',  # "Rogan interviews Peterson"
+                r'(\w+\s+\w+)\s+talks?\s+with\s+(\w+\s+\w+)',  # "Peterson talks with Harris"
+                r'(\w+\s+\w+)\s+&\s+(\w+\s+\w+)',     # "Peterson & Harris"
+                r'(\w+\s+\w+)\s+and\s+(\w+\s+\w+)',   # "Peterson and Harris"
+                r'(\w+\s+\w+)\s+vs\.?\s+(\w+\s+\w+)', # "Peterson vs Harris"
+            ]
+            
+            search_text = f"{title} {description}"
+            
+            for pattern in interview_patterns:
+                matches = re.finditer(pattern, search_text, re.IGNORECASE)
+                for match in matches:
+                    name1 = self._clean_name(match.group(1))
+                    name2 = self._clean_name(match.group(2))
+                    
+                    if name1 and len(name1.split()) == 2:
+                        suggestions.append((name1, 0.85))
+                    if name2 and len(name2.split()) == 2:
+                        suggestions.append((name2, 0.85))
+            
+            # Extract names from title using common name patterns
+            # Look for capitalized first + last names
+            name_pattern = r'\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b'
+            title_names = re.findall(name_pattern, metadata.get('title', ''))
+            
+            for name in title_names:
+                clean_name = self._clean_name(name)
+                if clean_name and self._is_likely_person_name(clean_name):
+                    suggestions.append((clean_name, 0.75))
+            
+            # Guest identification from description
+            guest_patterns = [
+                r'guest:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)',
+                r'featuring\s+([A-Z][a-z]+\s+[A-Z][a-z]+)',
+                r'with\s+guest\s+([A-Z][a-z]+\s+[A-Z][a-z]+)',
+            ]
+            
+            for pattern in guest_patterns:
+                matches = re.findall(pattern, description, re.IGNORECASE)
+                for match in matches:
+                    clean_name = self._clean_name(match)
+                    if clean_name:
+                        suggestions.append((clean_name, 0.8))
+            
+            logger.debug(f"Metadata extraction found {len(suggestions)} suggestions")
+            return suggestions
+            
+        except Exception as e:
+            logger.warning(f"Error extracting names from metadata: {e}")
+            return []
+    
+    def _clean_name(self, name: str) -> str:
+        """Clean and normalize a name."""
+        if not name:
+            return ""
+        
+        # Remove common prefixes/suffixes
+        name = re.sub(r'\b(dr\.?|mr\.?|ms\.?|mrs\.?|prof\.?)\s+', '', name, flags=re.IGNORECASE)
+        name = re.sub(r'\s+(jr\.?|sr\.?|ii|iii)$', '', name, flags=re.IGNORECASE)
+        
+        # Title case
+        return ' '.join(word.capitalize() for word in name.split())
+    
+    def _is_likely_person_name(self, name: str) -> bool:
+        """Check if a string is likely a person's name."""
+        words = name.split()
+        if len(words) != 2:
+            return False
+        
+        # Exclude common non-name patterns
+        excluded_words = {
+            'youtube', 'podcast', 'show', 'episode', 'part', 'season',
+            'channel', 'media', 'news', 'radio', 'tv', 'network',
+            'joe rogan', 'experience'  # Avoid duplicating known hosts
+        }
+        
+        name_lower = name.lower()
+        return not any(excluded in name_lower for excluded in excluded_words)
     
     def _extract_direct_names(self, text: str) -> List[Tuple[str, float]]:
         """Extract names directly mentioned in the text."""
