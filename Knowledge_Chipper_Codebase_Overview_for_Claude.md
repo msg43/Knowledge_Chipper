@@ -4,7 +4,7 @@
 
 Knowledge Chipper is a sophisticated knowledge management system for macOS that transforms videos, audio files, and documents into structured, searchable knowledge. It's designed for researchers, students, and professionals who need to extract evidence-based insights from media content.
 
-**Version**: 3.0.3  
+\1 3.1.1
 **Language**: Python 3.13+  
 **Primary Platform**: macOS (optimized for Apple Silicon)  
 **License**: MIT

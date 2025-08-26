@@ -31,33 +31,21 @@ else
     echo "✅ GitHub remote already configured correctly"
 fi
 
-# Auto-increment version in pyproject.toml
-echo "📈 Auto-incrementing version..."
-if [ -f "pyproject.toml" ]; then
-    CURRENT_VERSION=$(grep '^version\s*=\s*"' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
-    echo "📋 Current version: $CURRENT_VERSION"
-    
-    # Parse version components (assuming semantic versioning: major.minor.patch)
-    IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
-    
-    # Increment patch version
-    new_patch=$((patch + 1))
-    NEW_VERSION="${major}.${minor}.${new_patch}"
-    
-    echo "📈 Incrementing version: $CURRENT_VERSION → $NEW_VERSION"
-    
-    # Update version in pyproject.toml
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
-        sed -i '' "s/^version\s*=\s*\"[^\"]*\"/version = \"$NEW_VERSION\"/" pyproject.toml
-    else
-        # Linux
-        sed -i "s/^version\s*=\s*\"[^\"]*\"/version = \"$NEW_VERSION\"/" pyproject.toml
+echo "📈 Auto-incrementing version via scripts/bump_version.py (patch)..."
+if [ -f "scripts/bump_version.py" ]; then
+    # Capture current version before bump
+    if [ -f "pyproject.toml" ]; then
+        CURRENT_VERSION=$(grep '^version\s*=\s*"' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
     fi
-    
-    echo "✅ Version updated to $NEW_VERSION in pyproject.toml"
+    python3 scripts/bump_version.py --part patch | cat
+    if [ -f "pyproject.toml" ]; then
+        NEW_VERSION=$(grep '^version\s*=\s*"' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
+        echo "✅ Version now: $NEW_VERSION (was ${CURRENT_VERSION:-unknown})"
+    else
+        NEW_VERSION="unknown"
+    fi
 else
-    echo "⚠️  Warning: pyproject.toml not found, skipping version increment"
+    echo "❌ scripts/bump_version.py not found; cannot bump version"
     NEW_VERSION="unknown"
 fi
 

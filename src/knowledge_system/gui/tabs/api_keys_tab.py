@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import QTimer, pyqtSignal
+from PyQt6.QtCore import QTimer, pyqtSignal, Qt
 from PyQt6.QtWidgets import (
     QCheckBox,
     QFrame,
@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QVBoxLayout,
+    QLayout,
 )
 
 from ...logger import get_logger
@@ -39,6 +40,8 @@ class APIKeysTab(BaseTab):
         self.update_progress_dialog: QProgressDialog | None = None
         self._update_log_buffer: list[str] = []
         self.ffmpeg_worker: FFmpegInstaller | None = None
+        self.update_btn: QPushButton | None = None
+        self.admin_install_btn: QPushButton | None = None
 
         # Initialize settings manager for session persistence
         from ..core.settings_manager import get_gui_settings_manager
@@ -206,9 +209,9 @@ class APIKeysTab(BaseTab):
         update_section = QVBoxLayout()
 
         # Update button
-        update_btn = QPushButton("🔄 Check for Updates")
-        update_btn.clicked.connect(self._check_for_updates)
-        update_btn.setStyleSheet(
+        self.update_btn = QPushButton("🔄 Check for Updates")
+        self.update_btn.clicked.connect(self._check_for_updates)
+        self.update_btn.setStyleSheet(
             """
             QPushButton {
                 background-color: #2196F3;
@@ -226,14 +229,14 @@ class APIKeysTab(BaseTab):
             }
         """
         )
-        update_btn.setToolTip(
+        self.update_btn.setToolTip(
             "Check for and install the latest version.\n"
             "• Pulls latest code from GitHub\n"
             "• Updates the app bundle\n"
             "• Preserves your settings and configuration\n"
             "• Requires an active internet connection"
         )
-        update_section.addWidget(update_btn)
+        update_section.addWidget(self.update_btn)
 
         # FFmpeg section
         ffmpeg_btn = QPushButton("📥 Install/Update FFmpeg")
@@ -285,6 +288,22 @@ class APIKeysTab(BaseTab):
         # Status label
         self.status_label = QLabel("")
         main_layout.addWidget(self.status_label)
+
+        # Admin Install link (lower right)
+        admin_row = QHBoxLayout()
+        admin_row.addStretch()
+        self.admin_install_btn = QPushButton("Admin Install")
+        self.admin_install_btn.setFlat(True)
+        self.admin_install_btn.setStyleSheet(
+            "QPushButton { color: #2196F3; background: transparent; border: none; font-weight: bold; }\n"
+            "QPushButton:hover { text-decoration: underline; }"
+        )
+        self.admin_install_btn.setToolTip(
+            "Install to /Applications (requires admin). Your macOS password will be requested in Terminal."
+        )
+        self.admin_install_btn.clicked.connect(self._admin_install)
+        admin_row.addWidget(self.admin_install_btn)
+        main_layout.addLayout(admin_row)
 
         main_layout.addStretch()
 
@@ -591,6 +610,11 @@ class APIKeysTab(BaseTab):
             # Always create a fresh worker instance to avoid restarting finished QThreads
             self.update_worker = UpdateWorker()
             self.update_worker.update_progress.connect(self._handle_update_progress)
+            # New: determinate progress support
+            try:
+                self.update_worker.update_progress_percent.connect(self._handle_update_progress_percent)  # type: ignore[attr-defined]
+            except Exception:
+                pass
             self.update_worker.update_finished.connect(self._handle_update_finished)
             self.update_worker.update_error.connect(self._handle_update_error)
             
@@ -611,7 +635,19 @@ class APIKeysTab(BaseTab):
             )  # Show immediately for auto-updates
             self.update_progress_dialog.canceled.connect(self._cancel_update)
             self.update_progress_dialog.setAutoClose(False)
+            # Lock dialog size to prevent jumpy resizing
             self.update_progress_dialog.setMinimumWidth(520)
+            self.update_progress_dialog.setMaximumWidth(520)
+            self.update_progress_dialog.setFixedHeight(160)
+            try:
+                # Prevent layout from recalculating size on label changes
+                if self.update_progress_dialog.layout():
+                    self.update_progress_dialog.layout().setSizeConstraint(
+                        QLayout.SizeConstraint.SetFixedSize
+                    )
+            except Exception:
+                pass
+            self.update_progress_dialog.setSizeGripEnabled(False)
             # Subtle styling and monospace label for better readability of logs
             self.update_progress_dialog.setStyleSheet(
                 "QProgressDialog QLabel { font-family: Menlo, Monaco, monospace; font-size: 12px; }"
@@ -653,10 +689,24 @@ class APIKeysTab(BaseTab):
             last_line = "…" + last_line[-140:]
 
         if self.update_progress_dialog:
-            self.update_progress_dialog.setLabelText(last_line)
+            self._set_update_dialog_text(last_line)
         self.status_label.setText(message)
         self.status_label.setStyleSheet("color: #2196F3; font-weight: bold;")
         self.append_log(message)
+
+    def _handle_update_progress_percent(self, percent: int, message: str) -> None:
+        """Handle determinate progress updates."""
+        if self.update_progress_dialog:
+            # Switch from indeterminate to determinate on first percent
+            if self.update_progress_dialog.maximum() == 0:
+                self.update_progress_dialog.setMaximum(100)
+            self.update_progress_dialog.setValue(max(0, min(100, int(percent))))
+            if message:
+                self._set_update_dialog_text(message)
+        # Mirror to status label/log
+        self.status_label.setText(f"{message} ({percent}%)" if message else f"{percent}%")
+        self.status_label.setStyleSheet("color: #2196F3; font-weight: bold;")
+        self.append_log(f"{percent}% - {message}" if message else f"{percent}%")
 
     def _handle_update_finished(self, success: bool, message: str) -> None:
         """Handle update completion."""
@@ -805,6 +855,60 @@ end tell
             self.append_log(f"❌ Fallback update failed: {e}")
             self.append_log("Please run 'bash scripts/build_macos_app.sh' manually from Terminal")
 
+    def _admin_install(self) -> None:
+        """Perform an admin install to /Applications via Terminal, removing user-space copy first.
+        This will prompt for the macOS password in Terminal (not inside the app)."""
+        try:
+            import subprocess
+            from pathlib import Path
+
+            script_path = Path.home() / "Projects" / "Knowledge_Chipper" / "scripts" / "build_macos_app.sh"
+            if not script_path.exists():
+                self.append_log("❌ Could not find build script for admin install")
+                QMessageBox.critical(self, "Admin Install", "Build script not found. Ensure the repository exists at ~/Projects/Knowledge_Chipper.")
+                return
+
+            script_dir = str(script_path.parent)
+            script_name = script_path.name
+
+            self.append_log("🔐 Admin install requested. A Terminal window will open and may prompt for your macOS password.")
+
+            # Disable update actions during admin install to avoid conflicts
+            self._set_admin_install_in_progress(True)
+
+            apple_script = f"""
+tell application "Terminal"
+  activate
+  do script "cd {script_dir}; echo '🧹 Removing user-space copy (if any)...'; rm -rf \"$HOME/Applications/Knowledge_Chipper.app\"; echo '🏗️ Running admin installer to /Applications...'; bash {script_name}; echo ''; echo '✅ Admin install complete. You can close this window.'"
+end tell
+"""
+
+            subprocess.run(["osascript", "-e", apple_script], check=True)
+            self.append_log("🔄 Opened Terminal for admin install")
+        except Exception as e:
+            self.append_log(f"❌ Admin install failed to launch: {e}")
+            QMessageBox.critical(self, "Admin Install", f"Failed to start admin install: {e}")
+            # Re-enable on failure to launch
+            self._set_admin_install_in_progress(False)
+
+    def _set_admin_install_in_progress(self, in_progress: bool) -> None:
+        """Enable/disable update controls while admin install runs externally."""
+        try:
+            if self.admin_install_btn:
+                self.admin_install_btn.setEnabled(not in_progress)
+                self.admin_install_btn.setToolTip(
+                    "Admin install in progress…" if in_progress else
+                    "Install to /Applications (requires admin). Your macOS password will be requested in Terminal."
+                )
+            if self.update_btn:
+                self.update_btn.setEnabled(not in_progress)
+                self.update_btn.setToolTip(
+                    "Disabled during Admin Install" if in_progress else
+                    "Check for and install the latest version.\n• Pulls latest code from GitHub\n• Updates the app bundle\n• Preserves your settings and configuration\n• Requires an active internet connection"
+                )
+        except Exception:
+            pass
+
     def _handle_update_error(self, error: str) -> None:
         """Handle update errors."""
         # Mark update as completed (even though failed) to prevent false crash detection
@@ -872,8 +976,37 @@ end tell
 
     def _handle_ffmpeg_progress(self, message: str) -> None:
         if self.update_progress_dialog:
-            self.update_progress_dialog.setLabelText(message)
+            self._set_update_dialog_text(message)
         self.append_log(message)
+
+    def _set_update_dialog_text(self, text: str) -> None:
+        """Set progress dialog label text without resizing the dialog.
+
+        - Replaces newlines with spaces
+        - Elides text in the middle to fit the fixed dialog width
+        """
+        try:
+            if not self.update_progress_dialog:
+                return
+            clean = (text or "").replace("\n", " ").strip()
+            # Find the internal QLabel and set elided text
+            label = self.update_progress_dialog.findChild(QLabel)
+            if label is None:
+                # Fallback to dialog API
+                self.update_progress_dialog.setLabelText(clean)
+                return
+            fm = label.fontMetrics()
+            # Approximate available width inside dialog (account for margins)
+            available = max(100, self.update_progress_dialog.width() - 60)
+            elided = fm.elidedText(clean, Qt.TextElideMode.ElideMiddle, available)
+            label.setText(elided)
+        except Exception:
+            # Safe fallback
+            try:
+                if self.update_progress_dialog:
+                    self.update_progress_dialog.setLabelText(clean)
+            except Exception:
+                pass
 
     def _handle_ffmpeg_finished(
         self, success: bool, message: str, installed_path: str

@@ -3,6 +3,7 @@
 from .audio_processor import AudioProcessor
 from .base import BaseProcessor, ProcessorResult
 from .diarization import SpeakerDiarizationProcessor
+from .document_processor import DocumentProcessor
 from .html import HTMLProcessor
 from .moc import MOCProcessor
 from .pdf import PDFProcessor
@@ -20,6 +21,7 @@ __all__ = [
     "ProcessorResult",
     "AudioProcessor",
     # "WhisperCppTranscribeProcessor",  # Internal use only
+    "DocumentProcessor",
     "YouTubeDownloadProcessor",
     "YouTubeTranscriptProcessor",
     "YouTubeMetadataProcessor",

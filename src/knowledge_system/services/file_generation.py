@@ -376,7 +376,7 @@ class FileGenerationService:
                 if jargon_path:
                     generated_files["jargon"] = jargon_path
 
-            # Generate beliefs.yaml
+            # Generate claims.yaml
             if all_beliefs:
                 beliefs_path = self._generate_beliefs_file(all_beliefs)
                 if beliefs_path:
@@ -831,19 +831,19 @@ class FileGenerationService:
             return None
 
     def _generate_beliefs_file(self, beliefs_data: list[dict]) -> Path | None:
-        """Generate beliefs.yaml file."""
+        """Generate claims.yaml file."""
         try:
             # Convert to YAML format
             beliefs_yaml = {"beliefs": beliefs_data}
 
-            file_path = self.moc_dir / "beliefs.yaml"
+            file_path = self.moc_dir / "claims.yaml"
             with open(file_path, "w", encoding="utf-8") as f:
                 yaml.dump(beliefs_yaml, f, default_flow_style=False, allow_unicode=True)
 
             return file_path
 
         except Exception as e:
-            logger.error(f"Failed to generate beliefs.yaml: {e}")
+            logger.error(f"Failed to generate claims.yaml: {e}")
             return None
 
     def _generate_srt_file(self, video, transcript) -> Path | None:

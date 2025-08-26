@@ -109,13 +109,13 @@ class JargonEntry(BaseModel):
     )
 
 
-class Belief(BaseModel):
-    """Represents a belief or claim extracted from content."""
+class Claim(BaseModel):
+    """Represents a claim extracted from content."""
 
-    statement: str = Field(..., description="The belief statement")
+    statement: str = Field(..., description="The claim statement")
     sources: list[str] = Field(default_factory=list, description="Source files")
     epistemic_weight: float = Field(
-        default=0.5, ge=0.0, le=1.0, description="Confidence in belief"
+        default=0.5, ge=0.0, le=1.0, description="Confidence in claim"
     )
     contradictions: list[str] = Field(
         default_factory=list, description="Contradicting statements"
@@ -132,7 +132,7 @@ class MOCData(BaseModel):
     tags: dict[str, Tag] = Field(default_factory=dict)
     mental_models: dict[str, MentalModel] = Field(default_factory=dict)
     jargon: dict[str, JargonEntry] = Field(default_factory=dict)
-    beliefs: list[Belief] = Field(default_factory=list)
+    claims: list[Claim] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=datetime.now)
     source_files: list[str] = Field(default_factory=list)
 
@@ -247,7 +247,7 @@ class MOCProcessor(BaseProcessor):
         """Process input files to generate Maps of Content using HCE."""
         theme = kwargs.get("theme", "topical")
         depth = kwargs.get("depth", 3)
-        include_beliefs = kwargs.get("include_beliefs", True)
+        include_claims = kwargs.get("include_claims", True)
         use_database_entities = kwargs.get("use_database_entities", True)
 
         try:
@@ -266,12 +266,12 @@ class MOCProcessor(BaseProcessor):
                 template_info = f" with template '{template}'" if template else ""
                 return ProcessorResult(
                     success=True,
-                    data=f"[DRY RUN] Would generate MOC from {len(input_files)} files with theme '{theme}', depth {depth}, beliefs {include_beliefs}{template_info}.",
+                    data=f"[DRY RUN] Would generate MOC from {len(input_files)} files with theme '{theme}', depth {depth}, claims {include_claims}{template_info}.",
                     metadata={
                         "files_count": len(input_files),
                         "theme": theme,
                         "depth": depth,
-                        "include_beliefs": include_beliefs,
+                        "include_claims": include_claims,
                         "template": str(template) if template else None,
                         "dry_run": True,
                     },
@@ -343,18 +343,18 @@ class MOCProcessor(BaseProcessor):
                                     str(file_path.name)
                                 )
 
-                            # Extract beliefs from claims
-                            if include_beliefs:
+                            # Extract claims from HCE data
+                            if include_claims:
                                 for claim in hce_data.get("claims", []):
                                     if claim.get("tier") in ["A", "B"]:
-                                        belief = Belief(
+                                        claim_obj = Claim(
                                             statement=claim.get("canonical"),
                                             sources=[str(file_path.name)],
                                             epistemic_weight=claim.get(
                                                 "scores", {}
                                             ).get("confidence", 0.5),
                                         )
-                                        moc_data.beliefs.append(belief)
+                                        moc_data.claims.append(claim_obj)
 
                 except Exception as e:
                     logger.warning(f"Could not load HCE data from database: {e}")
@@ -408,18 +408,18 @@ class MOCProcessor(BaseProcessor):
                                 str(file_path.name)
                             )
 
-                        # Extract beliefs from claims
-                        if include_beliefs:
+                        # Extract claims from outputs
+                        if include_claims:
                             for claim in outputs.claims:
                                 if claim.tier in ["A", "B"]:
-                                    belief = Belief(
+                                    claim_obj = Claim(
                                         statement=claim.canonical,
                                         sources=[str(file_path.name)],
                                         epistemic_weight=claim.scores.get(
                                             "confidence", 0.5
                                         ),
                                     )
-                                    moc_data.beliefs.append(belief)
+                                    moc_data.claims.append(claim_obj)
 
                     except Exception as e:
                         logger.warning(
@@ -442,7 +442,7 @@ class MOCProcessor(BaseProcessor):
                     "tags_found": len(moc_data.tags),
                     "mental_models_found": len(moc_data.mental_models),
                     "jargon_found": len(moc_data.jargon),
-                    "beliefs_found": len(moc_data.beliefs),
+                    "claims_found": len(moc_data.claims),
                     "files_processed": len(input_files),
                 },
                 dry_run=False,
@@ -546,10 +546,10 @@ class MOCProcessor(BaseProcessor):
 
         files["Jargon.md"] = "".join(jargon_content)
 
-        # beliefs.yaml
-        if moc_data.beliefs:
-            beliefs_data = {
-                "beliefs": [
+        # claims.yaml
+        if moc_data.claims:
+            claims_data = {
+                "claims": [
                     {
                         "statement": belief.statement,
                         "sources": belief.sources,
@@ -557,15 +557,15 @@ class MOCProcessor(BaseProcessor):
                         "supporting_evidence": belief.supporting_evidence,
                         "contradictions": belief.contradictions,
                     }
-                    for belief in moc_data.beliefs
+                    for belief in moc_data.claims
                 ],
                 "metadata": {
                     "generated_at": moc_data.generated_at.isoformat(),
                     "source_files": moc_data.source_files,
-                    "total_beliefs": len(moc_data.beliefs),
+                    "total_claims": len(moc_data.claims),
                 },
             }
-            files["beliefs.yaml"] = yaml.dump(beliefs_data, default_flow_style=False)
+            files["claims.yaml"] = yaml.dump(claims_data, default_flow_style=False)
 
         return files
     

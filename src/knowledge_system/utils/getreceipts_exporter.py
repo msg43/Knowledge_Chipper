@@ -13,6 +13,7 @@ import requests
 from pydantic import BaseModel
 
 from ..logger import get_logger
+from .. import __version__
 
 if TYPE_CHECKING:
     from ..processors.hce.types import (
@@ -49,7 +50,7 @@ class GetReceiptsExporter:
         self.session = requests.Session()
         self.session.headers.update({
             "Content-Type": "application/json",
-            "User-Agent": "Knowledge_Chipper/3.0.1 GetReceipts-Integration"
+            "User-Agent": f"Knowledge_Chipper/{__version__} GetReceipts-Integration"
         })
         
         logger.info(f"Initialized GetReceipts exporter for {self.config.base_url}")
@@ -219,7 +220,7 @@ class GetReceiptsExporter:
             "opponents": [],  # HCE doesn't extract explicit counterarguments yet
             "provenance": {
                 "producer_app": "Knowledge_Chipper",
-                "version": "3.0.1",
+                "version": __version__,
                 "hce_system": "enabled",
                 "episode_id": pipeline_outputs.episode_id,
                 "claim_id": claim.claim_id,

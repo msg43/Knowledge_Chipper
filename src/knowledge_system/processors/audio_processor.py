@@ -383,9 +383,10 @@ class AudioProcessor(BaseProcessor):
             gui_mode = kwargs.get("gui_mode", False)
             
             if show_dialog and gui_mode:
-                # Show speaker assignment dialog
+                # Show speaker assignment dialog with metadata for auto-assignment
+                metadata = kwargs.get("metadata", {})
                 assignments = self._show_speaker_assignment_dialog(
-                    speaker_data_list, recording_path
+                    speaker_data_list, recording_path, metadata
                 )
                 
                 if assignments:
@@ -423,7 +424,8 @@ class AudioProcessor(BaseProcessor):
     def _show_speaker_assignment_dialog(
         self, 
         speaker_data_list: list, 
-        recording_path: str
+        recording_path: str,
+        metadata: dict = None
     ) -> dict | None:
         """
         Show the speaker assignment dialog.
@@ -431,6 +433,7 @@ class AudioProcessor(BaseProcessor):
         Args:
             speaker_data_list: List of SpeakerData objects
             recording_path: Path to the recording file
+            metadata: Optional metadata for auto-assignment
             
         Returns:
             Dictionary of speaker assignments or None if cancelled
@@ -438,9 +441,9 @@ class AudioProcessor(BaseProcessor):
         try:
             from ..gui.dialogs.speaker_assignment_dialog import show_speaker_assignment_dialog
             
-            # Show the dialog
+            # Show the dialog with metadata for podcast auto-assignment
             assignments = show_speaker_assignment_dialog(
-                speaker_data_list, recording_path
+                speaker_data_list, recording_path, metadata
             )
             
             return assignments

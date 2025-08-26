@@ -43,11 +43,20 @@ jobs:
     - name: Get version info
       id: version
       run: |
-        if [ -f "src/knowledge_system/version.py" ]; then
-          VERSION=$(grep '^VERSION\s*=\s*"' src/knowledge_system/version.py | sed -E 's/.*"([^"]+)".*/\1/')
-        else
-          VERSION=$(git describe --tags --always)
-        fi
+        VERSION=$(python - <<'PY'
+        import sys
+        try:
+            import tomllib
+        except Exception:
+            sys.exit(2)
+        with open('pyproject.toml', 'rb') as f:
+            data = tomllib.load(f)
+        ver = (data.get('project') or {}).get('version')
+        if not ver:
+            sys.exit(3)
+        print(ver)
+        PY
+        )
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "📋 Building version: $VERSION"
 
@@ -191,19 +200,11 @@ jobs:
         iconutil -c icns icon.iconset -o "$RESOURCES_PATH/AppIcon.icns"
         rm -rf icon.iconset
 
-        # Update version file and Python version.py with current build date
+        # Add version information file for logging
         echo "📝 Adding version information..."
         CURRENT_DATE=$(date +"%Y-%m-%d")
-        
-        # Update the Python version.py file in the app bundle with current date
-        cat > "$MACOS_PATH/src/knowledge_system/version.py" << EOF
-        # Auto-generated version info
-        VERSION = "${{ steps.version.outputs.version }}"
-        BRANCH = "${{ github.event.inputs.branch || 'main' }}"
-        BUILD_DATE = "$CURRENT_DATE"
-        EOF
-        
-        # Also create version.txt for logging
+
+        # Create version.txt for logging
         cat > "$MACOS_PATH/version.txt" << EOF
         VERSION=${{ steps.version.outputs.version }}
         BRANCH=${{ github.event.inputs.branch || 'main' }}

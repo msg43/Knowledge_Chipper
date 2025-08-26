@@ -1,0 +1,12 @@
+{
+  "exclude": [
+    "dist",
+    "scripts/.app_build",
+    "venv",
+    "htmlcov",
+    "output",
+    "logs",
+    "state",
+    "**/__pycache__"
+  ]
+}

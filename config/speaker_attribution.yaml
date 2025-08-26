@@ -1,0 +1,51 @@
+content_detection:
+  keywords:
+    harris_indicators:
+    - moral landscape
+    - consciousness
+    - meditation
+    - free will
+    - neuroscience
+    - rationality
+    - illusion
+    - mindfulness
+    - secular
+    - dharma
+    peterson_indicators:
+    - roughly speaking
+    - clean up your room
+    - archetypal
+    - hierarchies
+    - dominance hierarchy
+    - responsibility
+    - meaning
+    - chaos
+    - order
+    - lobster
+    - bucko
+speaker_profiles:
+  Jordan Peterson:
+    aliases:
+    - Peterson
+    - JP
+    - Jordan B Peterson
+    characteristics:
+    - canadian accent
+    - deeper voice
+    - measured speech
+  Sam Harris:
+    aliases:
+    - Harris
+    - SH
+    - Sam
+    characteristics:
+    - american accent
+    - precise diction
+    - analytical tone
+video_mappings:
+  COtibNznlP4:
+    speakers:
+      Speaker_1: Jordan Peterson
+      Speaker_2: Sam Harris
+      Speaker_3: Moderator
+    title: Peterson Harris Debate Moments

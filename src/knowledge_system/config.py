@@ -364,12 +364,12 @@ class MOCConfig(BaseModel):
     extract_tags: bool = True
     extract_mental_models: bool = True
     extract_jargon: bool = True
-    extract_beliefs: bool = True
+    extract_claims: bool = True
 
     # Minimum thresholds
     min_people_mentions: int = Field(default=2, ge=1, le=10)
     min_tag_occurrences: int = Field(default=3, ge=1, le=10)
-    min_belief_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+    min_claim_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
 class HCEConfig(BaseModel):
