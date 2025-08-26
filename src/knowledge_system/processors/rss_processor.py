@@ -13,7 +13,10 @@ from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import requests
-from bs4 import BeautifulSoup
+try:
+    from bs4 import BeautifulSoup  # type: ignore
+except Exception:  # pragma: no cover - optional in minimal CI installs
+    BeautifulSoup = None  # type: ignore
 
 from ..errors import ProcessingError
 from ..logger import get_logger
@@ -260,6 +263,8 @@ class RSSProcessor(BaseProcessor):
             response.raise_for_status()
             
             # Parse HTML and extract main content
+            if BeautifulSoup is None:
+                raise ProcessingError("BeautifulSoup4 is required. Install with: pip install beautifulsoup4")
             soup = BeautifulSoup(response.content, 'html.parser')
             
             # Remove unwanted elements
@@ -285,6 +290,8 @@ class RSSProcessor(BaseProcessor):
     def _clean_html_content(self, html_content: str) -> str:
         """Clean HTML content and extract plain text."""
         try:
+            if BeautifulSoup is None:
+                return html_content
             soup = BeautifulSoup(html_content, 'html.parser')
             
             # Remove unwanted elements
