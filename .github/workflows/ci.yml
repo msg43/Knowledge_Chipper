@@ -102,6 +102,11 @@ jobs:
         # Use repository build wrapper to ensure consistent local/CI behavior
         # Skip install smoke tests in CI to avoid optional heavy deps
         python scripts/project_build.py --skip-slow-tests --skip-install-test
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: dist/
 
   crash_catcher:
     runs-on: macos-latest
@@ -122,8 +127,3 @@ jobs:
           ffmpeg -version | head -n 1 | cat
           python -c "import yt_dlp; print('yt_dlp OK')"
 
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: dist
-        path: dist/
