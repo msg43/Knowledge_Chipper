@@ -5,6 +5,8 @@ Implements Alembic-based database schema versioning for the Knowledge System SQL
 This allows for safe schema updates and rollbacks in future versions.
 """
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
 from typing import Any
