@@ -103,6 +103,25 @@ jobs:
         # Skip install smoke tests in CI to avoid optional heavy deps
         python scripts/project_build.py --skip-slow-tests --skip-install-test
 
+  crash_catcher:
+    runs-on: macos-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.13
+      - name: Install light runtime deps
+        run: |
+          python -m pip install -U pip
+          pip install -e .
+      - name: Sanity checks (entry-points, imports, tools)
+        run: |
+          knowledge-system --version
+          python -c "import knowledge_system.gui as g; print('GUI import OK')"
+          ffmpeg -version | head -n 1 | cat
+          python -c "import yt_dlp; print('yt_dlp OK')"
+
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:

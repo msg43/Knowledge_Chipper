@@ -18,6 +18,16 @@ from .dialogs.ffmpeg_setup_dialog import FFmpegSetupDialog
 from .dialogs.first_run_setup_dialog import FirstRunSetupDialog
 from .main_window_pyqt6 import MainWindow, launch_gui
 
+# Lightweight preflight on import (do not crash GUI if it fails)
+import os as _os
+if _os.getenv("KC_SKIP_PREFLIGHT", "0").lower() not in ("1", "true", "yes"):
+    try:  # pragma: no cover - environment specific
+        from ..utils.preflight import quick_preflight as _qp
+
+        _qp()
+    except Exception:
+        pass
+
 # Use the proper GUI launcher instead of the deprecated redirect
 main = launch_gui
 

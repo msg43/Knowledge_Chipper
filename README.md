@@ -10,6 +10,20 @@ A revolutionary knowledge management system for macOS that transforms videos, au
 
 ## 🎉 What's New (Latest Updates)
 
+### 🚀 **Major Architecture Refactor Completed (Dec 2024)**
+The Knowledge Chipper has undergone a comprehensive refactor, transforming it into a modern, multi-format knowledge management platform:
+
+- **📚 Multi-Format Support**: Now processes PDFs, Word docs, Markdown, and more with author attribution
+- **☁️ Cloud Sync**: Full Supabase integration for backup and multi-device access
+- **🎙️ Speaker Attribution**: New UI for managing speaker identification in transcripts
+- **🧠 Intelligent Chunking**: Advanced strategies for optimal document processing
+- **💾 SQLite-First**: All data stored locally first, with optional cloud sync
+- **🔄 Unified Processing**: Single LLM call extracts all entities (70% fewer API calls)
+
+See [KNOWLEDGE_CHIPPER_REFACTOR_COMPLETED.md](KNOWLEDGE_CHIPPER_REFACTOR_COMPLETED.md) for full details.
+
+## 🎉 What's New (Previous Updates)
+
 ### 🔍 **HCE (Hybrid Claim Extractor) System - Revolutionary Upgrade**
 - **Structured Claim Analysis**: Extract claims with A/B/C confidence tiers instead of basic summaries
 - **🎯 Claim Tier Validation**: Interactive popup dialog to review and correct AI-assigned A/B/C tiers
@@ -292,8 +306,11 @@ The desktop app has tabs for different operations:
 - **📝 Summarization**: Create summaries from transcripts with claim tier validation
 - **📊 Process Management**: Full pipeline processing with transcription, summarization, and MOC generation
 - **🔍 Claim Search**: Explore and search extracted claims across all processed content
+- **🎙️ Speaker Attribution**: Manage speaker identification and assign names to diarized transcripts
+- **✏️ Summary Cleanup**: Review and edit summaries, claims, and entities post-generation
 - **👁️ File Watcher**: Automatically process new files as they're added to watched folders
 - **⚙️ API Keys**: Configure API keys, hardware performance options, and preferences
+- **☁️ Sync Status**: Monitor and manage cloud synchronization with Supabase
 
 **Navigation:** Click tabs to switch between operations. All settings are saved automatically.
 
@@ -326,9 +343,12 @@ knowledge-system --help
 - Any audio/video format supported by FFmpeg
 
 **📄 Documents:**
-- PDF files
+- PDF files with author attribution
+- Word documents (DOCX, DOC)
 - Markdown files
-- Plain text files
+- Plain text files  
+- RTF documents
+- Academic papers and whitepapers with metadata extraction
 
 ### Main Operations
 
@@ -337,6 +357,28 @@ knowledge-system --help
 3. **📊 Process Management**: Full pipeline processing with transcription, summarization, and MOC generation
 4. **🔍 Claim Search**: Explore and analyze extracted claims across all content
 5. **👁️ Monitoring**: Watch folders for automatic processing
+6. **📚 Document Processing**: Extract author attribution and metadata from academic papers
+7. **☁️ Cloud Sync**: Bidirectional synchronization with Supabase for backup and sharing
+
+### Document Processing with Author Attribution
+
+**What it does:** Intelligently extracts metadata from documents including author names, publication dates, abstracts, and keywords. Perfect for academic papers, whitepapers, and research documents.
+
+#### **📑 Automatic Metadata Extraction**
+
+The system analyzes document structure to extract:
+- **Authors**: Names, affiliations, and roles
+- **Publication Date**: In various formats
+- **Abstract**: Summary or executive summary sections
+- **Keywords**: Explicitly listed or intelligently extracted
+- **Document Type**: Paper, whitepaper, report, or article
+- **DOI/URLs**: Digital identifiers and links
+
+**Example**: Processing "Smith et al. 2024 - AI Research.pdf" automatically extracts:
+- Authors: John Smith, Jane Doe, Robert Johnson
+- Date: March 15, 2024
+- Type: Academic Paper
+- Keywords: artificial intelligence, machine learning, neural networks
 
 ### Summarization - Deep Dive
 
@@ -392,7 +434,7 @@ Creates **6 interconnected files**:
 - **`Tags.md`** - Topic taxonomy: "#ai (used in 5 files)"
 - **`Mental Models.md`** - Framework definitions and applications
 - **`Jargon.md`** - Terminology glossary with context
-- **`beliefs.yaml`** - Structured belief data with confidence scores
+- **`claims.yaml`** - Structured claims data with confidence scores
 
 #### **🎯 What Gets Analyzed**
 
@@ -476,6 +518,27 @@ The Claim Search tab provides a powerful interface to explore, filter, and analy
 - **Tier Filtering**: Filter by confidence tier (A, B, C, or All)
 - **Content Type**: Filter by claim type (factual, causal, normative, forecast, definition)
 - **Source Filtering**: Search within specific videos or documents
+
+### ✏️ Summary Cleanup & Review
+
+**Post-process your AI-generated summaries for perfection.**
+
+The Summary Cleanup tab provides powerful editing tools to refine AI-generated content:
+
+**🛠️ Features:**
+- **Multi-section editing**: Edit summary, key points, and claims separately
+- **Entity management**: Add, edit, delete, or merge people, concepts, jargon
+- **Claim tier adjustment**: Change A/B/C tiers and confidence scores
+- **Duplicate merging**: Combine duplicate people entries
+- **Export options**: Save cleaned versions separately
+- **Backup creation**: Automatic backups before saving
+
+**📋 Workflow:**
+1. Load a generated summary (`.md` or `.json`)
+2. Review and edit the summary text
+3. Clean up entity lists (merge duplicates, fix names)
+4. Adjust claim tiers and confidence
+5. Save changes or export clean version
 - **Advanced Queries**: Combine multiple filters for precise results
 
 **📊 Rich Display Format:**
@@ -675,11 +738,14 @@ generated: "2025-01-02T16:30:00Z"
 
 The system automatically handles documents that exceed AI model context windows through intelligent chunking with **model-aware thresholds** that maximize your hardware capabilities:
 
-**🚀 Smart Model-Aware Chunking (NEW):**
+**🚀 Smart Model-Aware Chunking (ENHANCED):**
 - **Model-Specific Thresholds**: Automatically uses 95% of each model's actual capacity
 - **User-Controlled Response Size**: Your "Max tokens" setting controls both chunking decisions AND summary length
 - **Dynamic Token Budgeting**: Calculates available space accounting for prompt overhead and expected response size
 - **Massive Efficiency Gains**: 3.4x more input capacity vs previous hardcoded limits
+- **Multiple Chunking Strategies**: Semantic, Structural, Sliding Window, or Hybrid approaches
+- **Topic Coherence**: Preserves semantic boundaries and maintains context between chunks
+- **Intelligent Boundaries**: Respects document structure (sections, paragraphs, sentences)
 
 **📊 Real-World Performance Improvements:**
 ```
@@ -1511,6 +1577,40 @@ Content to analyze:
 5. **Review failure logs** in `logs/` directory for specific errors
 
 ## 🚀 Advanced Features
+
+### ☁️ Cloud Synchronization with Supabase
+
+**Automatic backup and sync of your knowledge base to the cloud.**
+
+#### Features
+- **Bidirectional Sync**: Changes sync both ways between local and cloud
+- **Conflict Resolution**: Smart handling of concurrent edits
+- **Selective Sync**: Choose which tables to sync
+- **Offline Support**: Work offline and sync when connected
+- **Multi-Device**: Access your knowledge from any device
+
+#### Setup
+1. **Create a Supabase Project** at [supabase.com](https://supabase.com)
+2. **Get your credentials**:
+   - Project URL: `https://[project-id].supabase.co`
+   - Anon Key: Found in project settings
+3. **Configure in Settings tab** or `config/settings.yaml`:
+   ```yaml
+   supabase_url: "https://your-project.supabase.co"
+   supabase_key: "your-anon-key"
+   ```
+
+#### Sync Status Indicators
+- **✅ Synced**: Data is up-to-date in cloud
+- **📤 Pending**: Local changes waiting to sync
+- **⚠️ Conflict**: Manual resolution needed
+- **❌ Error**: Sync failed (check logs)
+
+#### Conflict Resolution Options
+- **Local Wins**: Keep your local version
+- **Remote Wins**: Use the cloud version
+- **Manual**: Review and choose per conflict
+- **Merge**: Combine changes (coming soon)
 
 ### Custom Templates
 

@@ -89,6 +89,16 @@ def main(
     A powerful tool for processing YouTube videos, PDFs, and other content
     into structured knowledge with transcription, summarization, and MOC generation.
     """
+    # Optional lightweight preflight
+    if os.getenv("KC_SKIP_PREFLIGHT", "0").lower() not in ("1", "true", "yes"):
+        try:
+            from .utils.preflight import quick_preflight
+
+            quick_preflight()
+        except Exception as e:
+            console.print(f"[yellow]Preflight warning:[/yellow] {e}")
+            # continue; do not hard fail here
+
     # Configure threading and resource management based on user settings
 
     # Ensure context object exists
