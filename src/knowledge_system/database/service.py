@@ -8,6 +8,8 @@ for the SQLite database with comprehensive video processing tracking.
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
+import os
+import sys
 from typing import Any
 
 from sqlalchemy import desc, func, or_
@@ -25,7 +27,7 @@ from .models import (
     QualityRating,
     Summary,
     Transcript,
-    Video,
+    MediaSource as Video,  # Back-compat alias
     create_all_tables,
     create_database_engine,
 )
@@ -37,16 +39,57 @@ class DatabaseService:
     """High-level database service for Knowledge System operations."""
 
     def __init__(self, database_url: str = "sqlite:///knowledge_system.db"):
-        """Initialize database service with connection."""
-        self.database_url = database_url
-        self.engine = create_database_engine(database_url)
+        """Initialize database service with connection.
+
+        Defaults to a per-user writable SQLite database location to avoid
+        permission issues when launching from /Applications.
+        """
+        # Resolve default/writable database path for SQLite
+        resolved_url = database_url
+        db_path: Path | None = None
+
+        def _user_data_dir() -> Path:
+            if sys.platform == "darwin":
+                return Path.home() / "Library" / "Application Support" / "KnowledgeChipper"
+            elif os.name == "nt":
+                appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
+                return Path(appdata) / "KnowledgeChipper"
+            else:
+                return Path.home() / ".knowledge_chipper"
+
+        if database_url.startswith("sqlite:///"):
+            raw_path = Path(database_url[10:])  # after 'sqlite:///'
+            if not raw_path.is_absolute():
+                # Use per-user app data directory for relative defaults
+                db_path = _user_data_dir() / "knowledge_system.db"
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+                resolved_url = f"sqlite:///{db_path}"
+            else:
+                db_path = raw_path
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+        elif database_url.startswith("sqlite://"):
+            raw_path = Path(database_url[9:])  # after 'sqlite://'
+            if not raw_path.is_absolute():
+                db_path = _user_data_dir() / "knowledge_system.db"
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+                resolved_url = f"sqlite:///{db_path}"
+            else:
+                db_path = raw_path
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            # Non-sqlite URLs: leave as-is
+            db_path = None
+
+        self.database_url = resolved_url
+        logger.info(f"Resolved database location: url={self.database_url} path={db_path}")
+        self.engine = create_database_engine(self.database_url)
         self.Session = sessionmaker(bind=self.engine)
 
         # Extract database path for SQLite URLs
-        if database_url.startswith("sqlite:///"):
-            self.db_path = Path(database_url[10:])  # Remove 'sqlite:///' prefix
-        elif database_url.startswith("sqlite://"):
-            self.db_path = Path(database_url[9:])  # Remove 'sqlite://' prefix
+        if self.database_url.startswith("sqlite:///"):
+            self.db_path = Path(self.database_url[10:])  # Remove 'sqlite:///' prefix
+        elif self.database_url.startswith("sqlite://"):
+            self.db_path = Path(self.database_url[9:])  # Remove 'sqlite://' prefix
         else:
             self.db_path = Path("knowledge_system.db")  # Default fallback
 
