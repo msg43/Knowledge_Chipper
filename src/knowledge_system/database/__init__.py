@@ -26,11 +26,13 @@ from .models import (
     BrightDataSession,
     GeneratedFile,
     MOCExtraction,
+    MediaSource,
     ProcessingJob,
     Summary,
     Transcript,
-    Video,
 )
+# Backward-compatibility: export legacy symbol `Video` even if models renamed
+Video = MediaSource
 from .service import DatabaseService
 
 # Extend Video model with HCE relationship
