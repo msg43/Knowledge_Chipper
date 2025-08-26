@@ -116,10 +116,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.13
+      - name: Ensure system tools
+        run: |
+          brew install ffmpeg || true
       - name: Install light runtime deps
         run: |
           python -m pip install -U pip
           pip install -e .
+          # Optional deps required for import checks
+          pip install feedparser PyQt6
       - name: Sanity checks (entry-points, imports, tools)
         run: |
           knowledge-system --version
