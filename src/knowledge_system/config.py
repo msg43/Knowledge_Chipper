@@ -524,6 +524,14 @@ class GUIFeaturesConfig(BaseModel):
     )
 
 
+class CloudConfig(BaseModel):
+    """Cloud configuration for Supabase access and storage."""
+
+    supabase_url: str | None = Field(default=None, description="Supabase project URL")
+    supabase_key: str | None = Field(default=None, description="Supabase service role or anon key")
+    supabase_bucket: str | None = Field(default=None, description="Default storage bucket name")
+
+
 class Settings(BaseSettings):
     """Main settings class with YAML support and validation."""
 
@@ -551,6 +559,7 @@ class Settings(BaseSettings):
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
     speaker_identification: SpeakerIdentificationConfig = Field(default_factory=SpeakerIdentificationConfig)
     gui_features: GUIFeaturesConfig = Field(default_factory=GUIFeaturesConfig)
+    cloud: CloudConfig = Field(default_factory=CloudConfig)
 
     def __init__(self, config_path: str | Path | None = None, **kwargs) -> None:
         """Initialize settings from YAML file and environment variables."""
@@ -606,9 +615,14 @@ class Settings(BaseSettings):
                             # Merge api_keys data, giving priority to credentials file
                             kwargs["api_keys"].update(cred_data["api_keys"])
 
-                        # Merge other sections if they exist
+                        # Merge other sections if they exist (deep-merge dict sections)
                         for key, value in cred_data.items():
-                            if key != "api_keys":  # api_keys already handled above
+                            if key == "api_keys":
+                                continue  # handled above
+                            if key in kwargs and isinstance(kwargs[key], dict) and isinstance(value, dict):
+                                # Deep merge for dict sections like 'cloud'
+                                kwargs[key].update(value)
+                            else:
                                 kwargs[key] = value
                         break
                 except (FileNotFoundError, PermissionError, yaml.YAMLError, KeyError):

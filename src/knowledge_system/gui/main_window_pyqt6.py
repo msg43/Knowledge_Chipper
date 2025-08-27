@@ -242,7 +242,16 @@ class MainWindow(QMainWindow):
         # Settings tab (far right)
         self.api_keys_tab = APIKeysTab(self)
         self.tabs.addTab(self.api_keys_tab, "⚙️ Settings")
-        
+
+        # Cloud uploads (manual) tab
+        try:
+            from .tabs import CloudUploadsTab
+            if CloudUploadsTab is not None:
+                cloud_uploads_tab = CloudUploadsTab(self)
+                self.tabs.addTab(cloud_uploads_tab, "☁️ Cloud Uploads")
+        except Exception as e:
+            logger.warning(f"Cloud Uploads tab disabled: {e}")
+
         # Cloud sync status tab
         if SyncStatusTab is not None:
             try:
@@ -491,8 +500,10 @@ class MainWindow(QMainWindow):
                 return
                 
             # Show first-run setup dialog
-            gui.set_value("⚙️ Settings", "ffmpeg_first_run_shown", True)
-            gui.save()
+            # Use an in-memory guard to prevent duplicate dialogs during startup
+            if getattr(self, "_ffmpeg_first_run_dialog_open", False):
+                return
+            setattr(self, "_ffmpeg_first_run_dialog_open", True)
             
             # Use QTimer to show dialog after main window is fully loaded
             from PyQt6.QtCore import QTimer
@@ -507,7 +518,17 @@ class MainWindow(QMainWindow):
             from .dialogs.ffmpeg_setup_dialog import FFmpegSetupDialog
             
             dialog = FFmpegSetupDialog(self)
-            dialog.exec()
+            result = dialog.exec()
+            # Persist the flag after the user has seen the dialog once
+            try:
+                from .core.settings_manager import get_gui_settings_manager
+                gui = get_gui_settings_manager()
+                gui.set_value("⚙️ Settings", "ffmpeg_first_run_shown", True)
+                gui.save()
+            except Exception:
+                pass
+            # Clear the guard regardless of result
+            setattr(self, "_ffmpeg_first_run_dialog_open", False)
         except Exception as e:
             logger.warning(f"Failed to show first-run FFmpeg dialog: {e}")
 

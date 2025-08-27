@@ -14,6 +14,12 @@ try:
 except Exception:
 	SyncStatusTab = None  # type: ignore
 
+# Make CloudUploadsTab optional at import time
+try:
+	from .cloud_uploads_tab import CloudUploadsTab
+except Exception:
+	CloudUploadsTab = None  # type: ignore
+
 from .transcription_tab import TranscriptionTab
 from .watcher_tab import WatcherTab
 from .youtube_tab import YouTubeTab
@@ -29,5 +35,6 @@ __all__ = [
 	"SpeakerAttributionTab",
 	"SummaryCleanupTab",
 	"SyncStatusTab",
+	"CloudUploadsTab",
 	"APIKeysTab",
 ]

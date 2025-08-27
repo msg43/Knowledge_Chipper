@@ -936,14 +936,45 @@ end tell
     def _install_ffmpeg(self) -> None:
         """Start FFmpeg installation in background."""
         try:
-            # Static build vetted source and checksum
-            # Reference: https://www.osxexperts.net/ffmpeg711arm.zip
-            release = FFmpegRelease(
-                url="https://www.osxexperts.net/ffmpeg711arm.zip",
-                sha256="011221d75eae36943b5a6a28f70e25928cfb5602fe616d06da0a3b9b55ff6b75",
-                ffmpeg_name="ffmpeg",
-                ffprobe_name="ffprobe",
-            )
+            # Fast path: if ffmpeg already exists on PATH, configure and return
+            import shutil as _shutil
+            existing = _shutil.which("ffmpeg")
+            if existing:
+                import os as _os
+                _os.environ["FFMPEG_PATH"] = existing
+                ffprobe_existing = _shutil.which("ffprobe")
+                if ffprobe_existing:
+                    _os.environ["FFPROBE_PATH"] = ffprobe_existing
+                self.status_label.setText("✅ FFmpeg already installed and configured")
+                self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
+                self.append_log(f"Using existing ffmpeg at: {existing}")
+                return
+            # Probe common install paths when PATH is not inherited in GUI env
+            for candidate in ("/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"):
+                try:
+                    from pathlib import Path as _Path
+                    if _Path(candidate).exists() and _Path(candidate).is_file():
+                        import os as _os
+                        _os.environ["FFMPEG_PATH"] = candidate
+                        # Also set PATH for this process so shutil.which will work later
+                        current_path = _os.environ.get("PATH", "")
+                        bin_dir = str(_Path(candidate).parent)
+                        if bin_dir not in current_path:
+                            _os.environ["PATH"] = f"{bin_dir}:{current_path}" if current_path else bin_dir
+                        # Try ffprobe next to it
+                        probe = _Path(candidate).parent / "ffprobe"
+                        if probe.exists():
+                            _os.environ["FFPROBE_PATH"] = str(probe)
+                        self.status_label.setText("✅ FFmpeg already installed and configured")
+                        self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
+                        self.append_log(f"Using existing ffmpeg at: {candidate}")
+                        return
+                except Exception:
+                    pass
+
+            # Use the same arch-aware default selection as the first-run installer
+            from ..workers.ffmpeg_installer import get_default_ffmpeg_release
+            release = get_default_ffmpeg_release()
 
             self.ffmpeg_worker = FFmpegInstaller(release)
             self.ffmpeg_worker.progress.connect(self._handle_ffmpeg_progress)
@@ -952,7 +983,8 @@ end tell
             self.update_progress_dialog = QProgressDialog(
                 "Installing FFmpeg…", "Cancel", 0, 0, self
             )
-            self.update_progress_dialog.setModal(True)
+            # Non-modal so the rest of the app remains responsive
+            self.update_progress_dialog.setModal(False)
             self.update_progress_dialog.setMinimumDuration(0)
             self.update_progress_dialog.setMinimumWidth(520)
             self.update_progress_dialog.setStyleSheet(
