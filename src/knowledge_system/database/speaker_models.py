@@ -7,6 +7,9 @@ voice patterns, assignments, and learning history.
 
 import json
 from datetime import datetime, timedelta
+from pathlib import Path
+import os
+import sys
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -192,8 +195,58 @@ class SpeakerDatabaseService:
     """Service class for managing speaker database operations."""
     
     def __init__(self, database_url: str = "sqlite:///knowledge_system.db"):
-        """Initialize the database service."""
-        self.engine = create_engine(database_url)
+        """Initialize the database service.
+
+        Resolves SQLite paths to a per-user writable directory when a relative
+        path is provided, mirroring the behavior of the primary DatabaseService.
+        This avoids permission errors when running from /Applications.
+        """
+
+        # Resolve default/writable database path for SQLite
+        resolved_url = database_url
+        db_path: Path | None = None
+
+        def _user_data_dir() -> Path:
+            if sys.platform == "darwin":
+                return Path.home() / "Library" / "Application Support" / "KnowledgeChipper"
+            elif os.name == "nt":
+                appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
+                return Path(appdata) / "KnowledgeChipper"
+            else:
+                return Path.home() / ".knowledge_chipper"
+
+        if database_url.startswith("sqlite:///"):
+            raw_path = Path(database_url[10:])  # after 'sqlite:///'
+            if not raw_path.is_absolute():
+                # Use per-user app data directory for relative defaults
+                # Keep the same filename from the URL to align with main DB by default
+                filename = raw_path.name if raw_path.name else "knowledge_system.db"
+                db_path = _user_data_dir() / filename
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+                resolved_url = f"sqlite:///{db_path}"
+            else:
+                db_path = raw_path
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+        elif database_url.startswith("sqlite://"):
+            raw_path = Path(database_url[9:])  # after 'sqlite://'
+            if not raw_path.is_absolute():
+                filename = raw_path.name if raw_path.name else "knowledge_system.db"
+                db_path = _user_data_dir() / filename
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+                resolved_url = f"sqlite:///{db_path}"
+            else:
+                db_path = raw_path
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            db_path = None
+
+        self.database_url = resolved_url
+        if db_path is not None:
+            logger.info(f"Resolved speaker database location: url={self.database_url} path={db_path}")
+        else:
+            logger.info(f"Resolved speaker database location: url={self.database_url} path=None")
+
+        self.engine = create_engine(self.database_url)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self._create_tables()
     

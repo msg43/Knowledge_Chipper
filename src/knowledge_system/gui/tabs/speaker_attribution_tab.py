@@ -16,12 +16,16 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QPushButton, QLabel, QTextEdit, QTreeWidget, QTreeWidgetItem,
     QLineEdit, QListWidget, QFileDialog, QMessageBox,
-    QProgressBar, QFrame, QGroupBox
+    QProgressBar, QFrame, QGroupBox, QScrollArea
 )
 from PyQt6.QtGui import QTextCharFormat, QColor, QFont
 
 from ...database import DatabaseService
 from ...logger import get_logger
+from ...database.speaker_models import (
+    get_speaker_db_service,
+    SpeakerAssignmentModel,
+)
 
 logger = get_logger(__name__)
 
@@ -46,13 +50,25 @@ class SpeakerAttributionTab(QWidget):
         super().__init__(parent)
         
         self.db = DatabaseService()
+        self.db_speakers = get_speaker_db_service()
         self.current_transcript_path: Optional[Path] = None
         self.speaker_segments: List[SpeakerSegment] = []
         self.speaker_mappings: Dict[str, str] = {}  # speaker_id -> assigned_name
         self.known_speakers: Dict[str, Dict] = {}  # name -> voice characteristics
+        self.unconfirmed_queue: List[Path] = []
+        self.queue_index: int = -1
         
         self.setup_ui()
         self.load_known_speakers()
+        # Auto-build queue of transcripts needing confirmation and load first
+        try:
+            self.build_unconfirmed_queue()
+            if self.unconfirmed_queue:
+                self.queue_index = 0
+                self.load_transcript_from_path(self.unconfirmed_queue[0])
+                self.update_queue_label()
+        except Exception as e:
+            logger.warning(f"Failed to initialize unconfirmed transcript queue: {e}")
     
     def setup_ui(self):
         """Set up the user interface."""
@@ -71,6 +87,31 @@ class SpeakerAttributionTab(QWidget):
         self.load_btn = QPushButton("Load Transcript")
         self.load_btn.clicked.connect(self.load_transcript)
         header_layout.addWidget(self.load_btn)
+
+        # Queue/navigation controls
+        self.queue_label = QLabel("")
+        self.queue_label.setStyleSheet("font-size: 12px; color: #666;")
+        header_layout.addWidget(self.queue_label)
+
+        self.prev_btn = QPushButton("Previous")
+        self.prev_btn.clicked.connect(self.on_prev_in_queue)
+        self.prev_btn.setEnabled(False)
+        header_layout.addWidget(self.prev_btn)
+
+        self.confirm_next_btn = QPushButton("Confirm & Next")
+        self.confirm_next_btn.clicked.connect(self.on_confirm_and_next)
+        self.confirm_next_btn.setEnabled(False)
+        header_layout.addWidget(self.confirm_next_btn)
+
+        self.next_btn = QPushButton("Next")
+        self.next_btn.clicked.connect(self.on_next_in_queue)
+        self.next_btn.setEnabled(False)
+        header_layout.addWidget(self.next_btn)
+
+        # Batch preview button
+        self.preview_all_btn = QPushButton("Preview All Unconfirmed")
+        self.preview_all_btn.clicked.connect(self.show_batch_preview_all)
+        header_layout.addWidget(self.preview_all_btn)
         
         layout.addLayout(header_layout)
         
@@ -165,6 +206,25 @@ class SpeakerAttributionTab(QWidget):
         speaker_layout.addLayout(assign_layout)
         layout.addWidget(speaker_group)
         
+        # All speakers samples (current transcript)
+        all_group = QGroupBox("All Speakers (first five per speaker)")
+        all_layout = QVBoxLayout(all_group)
+        self.all_speakers_scroll = QScrollArea()
+        self.all_speakers_scroll.setWidgetResizable(True)
+        all_layout.addWidget(self.all_speakers_scroll)
+        layout.addWidget(all_group)
+        
+        # Speaker samples panel
+        samples_group = QGroupBox("Speaker Samples (first five)")
+        samples_layout = QVBoxLayout(samples_group)
+        self.speaker_samples_text = QTextEdit()
+        self.speaker_samples_text.setReadOnly(True)
+        self.speaker_samples_text.setStyleSheet(
+            "QTextEdit { font-family: Consolas, monospace; font-size: 10pt; }"
+        )
+        samples_layout.addWidget(self.speaker_samples_text)
+        layout.addWidget(samples_group)
+        
         # Known speakers
         known_group = QGroupBox("Known Speakers")
         known_layout = QVBoxLayout(known_group)
@@ -193,6 +253,45 @@ class SpeakerAttributionTab(QWidget):
         status_layout.addWidget(self.progress_bar)
         
         parent_layout.addWidget(status_frame)
+
+    def show_batch_preview_all(self):
+        """Show a quick preview list of all unconfirmed transcripts in the queue.
+
+        This provides a lightweight, non-blocking overview so users can see
+        what will be processed without starting the confirmation flow.
+        """
+        try:
+            if not self.unconfirmed_queue:
+                QMessageBox.information(
+                    self,
+                    "Batch Preview",
+                    "No pending transcripts to preview."
+                )
+                return
+
+            # Build a concise preview (limit to first 20 items to keep dialog readable)
+            max_items = 20
+            items = [
+                f"{idx+1}. {p.name} — {p.parent}"
+                for idx, p in enumerate(self.unconfirmed_queue[:max_items])
+            ]
+            if len(self.unconfirmed_queue) > max_items:
+                items.append(f"… and {len(self.unconfirmed_queue) - max_items} more")
+
+            preview_text = "\n".join(items)
+
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("Batch Preview - Unconfirmed Transcripts")
+            dlg.setIcon(QMessageBox.Icon.Information)
+            dlg.setText(
+                f"Pending transcripts: {len(self.unconfirmed_queue)}\n\n"
+                "This is a preview of files awaiting speaker confirmation."
+            )
+            dlg.setDetailedText(preview_text)
+            dlg.addButton(QMessageBox.StandardButton.Ok)
+            dlg.exec()
+        except Exception as e:
+            logger.warning(f"Failed to show batch preview: {e}")
     
     def load_transcript(self):
         """Load a transcript file for speaker attribution."""
@@ -207,29 +306,72 @@ class SpeakerAttributionTab(QWidget):
             return
         
         try:
-            self.current_transcript_path = Path(file_path)
-            self.update_status(f"Loading {self.current_transcript_path.name}...")
-            
-            # Parse transcript
-            self.speaker_segments = self.parse_transcript(self.current_transcript_path)
-            
-            # Display transcript
-            self.display_transcript()
-            
-            # Update speaker list
-            self.update_speaker_list()
-            
-            # Update UI
-            self.transcript_label.setText(f"Transcript: {self.current_transcript_path.name}")
-            
-            self.update_status(
-                f"Loaded {len(self.speaker_segments)} segments with "
-                f"{len(self.get_unique_speakers())} speakers"
-            )
+            self.load_transcript_from_path(Path(file_path))
             
         except Exception as e:
             logger.error(f"Failed to load transcript: {e}")
             QMessageBox.critical(self, "Error", f"Failed to load transcript: {str(e)}")
+
+    def load_transcript_from_path(self, file_path: Path):
+        """Load transcript from a given path and pre-apply any existing assignments."""
+        self.current_transcript_path = file_path
+        self.update_status(f"Loading {self.current_transcript_path.name}...")
+
+        # Reset current mappings before load
+        self.speaker_mappings = {}
+
+        # If JSON transcript, try to extract existing assignments
+        pre_assignments: Dict[str, str] = {}
+        if file_path.suffix.lower() == ".json" and file_path.exists():
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    # Prefer explicit speaker_assignments if present
+                    pre_assignments = data.get("speaker_assignments", {}) or {}
+                    # If not present, attempt to derive mapping from segments preserving original ids
+                    if not pre_assignments and "segments" in data:
+                        for seg in data["segments"]:
+                            orig_id = seg.get("original_speaker_id") or seg.get("speaker")
+                            name = seg.get("speaker")
+                            if orig_id and name:
+                                pre_assignments.setdefault(str(orig_id), str(name))
+            except Exception as e:
+                logger.debug(f"No pre-assignments available from JSON: {e}")
+
+        # Also check sidecar assignments file
+        sidecar = file_path.with_suffix(".speaker_assignments.json")
+        if sidecar.exists():
+            try:
+                with open(sidecar, 'r', encoding='utf-8') as f:
+                    sidecar_data = json.load(f)
+                if isinstance(sidecar_data, dict):
+                    sidecar_assign = sidecar_data.get("assignments") or {}
+                    if sidecar_assign:
+                        pre_assignments.update(sidecar_assign)
+            except Exception as e:
+                logger.debug(f"Failed reading sidecar assignments: {e}")
+
+        # Parse transcript into segments
+        self.speaker_segments = self.parse_transcript(self.current_transcript_path)
+
+        # Apply pre-assignments if available
+        if pre_assignments:
+            self.speaker_mappings.update(pre_assignments)
+
+        # Render UI
+        self.display_transcript()
+        self.update_speaker_list()
+        self.transcript_label.setText(self._make_source_header_text())
+        self._update_all_speakers_samples()
+        self.update_status(
+            f"Loaded {len(self.speaker_segments)} segments with {len(self.get_unique_speakers())} speakers"
+        )
+        # Enable queue controls if we have a queue
+        has_queue = len(self.unconfirmed_queue) > 0
+        self.prev_btn.setEnabled(has_queue and self.queue_index > 0)
+        self.next_btn.setEnabled(has_queue and self.queue_index < len(self.unconfirmed_queue) - 1)
+        self.confirm_next_btn.setEnabled(True if self.speaker_segments else False)
     
     def parse_transcript(self, file_path: Path) -> List[SpeakerSegment]:
         """Parse transcript file and extract speaker segments."""
@@ -364,6 +506,7 @@ class SpeakerAttributionTab(QWidget):
         if selected_items:
             speaker_id = selected_items[0].text(0)
             self.highlight_speaker_segments(speaker_id)
+            self._populate_speaker_samples(speaker_id)
     
     def highlight_speaker_segments(self, speaker_id: str):
         """Highlight all segments for a specific speaker."""
@@ -452,6 +595,7 @@ class SpeakerAttributionTab(QWidget):
                 "transcript": str(self.current_transcript_path),
                 "assignments": self.speaker_mappings,
                 "timestamp": datetime.now().isoformat(),
+                "user_confirmed": False,
                 "segments": [
                     {
                         "start": seg.start_time,
@@ -472,6 +616,212 @@ class SpeakerAttributionTab(QWidget):
         except Exception as e:
             logger.error(f"Failed to save assignments: {e}")
             QMessageBox.critical(self, "Error", f"Failed to save: {str(e)}")
+
+    # ===== Queue and confirmation workflow =====
+    def find_default_transcript_dirs(self) -> List[Path]:
+        """Return plausible transcript directories to scan."""
+        candidates = [
+            Path("output/transcripts"),
+            Path("Output/Transcripts"),
+            Path("output"),
+            Path("Output"),
+        ]
+        return [p for p in candidates if p.exists() and p.is_dir()]
+
+    def build_unconfirmed_queue(self):
+        """Build list of transcripts that have assignments but are not confirmed."""
+        queue: List[Path] = []
+        scanned = set()
+        for base in self.find_default_transcript_dirs():
+            for path in base.rglob("*.json"):
+                if path in scanned:
+                    continue
+                scanned.add(path)
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    # Candidate if it has segments and either speaker_assignments exist without confirmation,
+                    # or a sidecar exists without confirmed flag
+                    has_segments = isinstance(data, dict) and bool(data.get("segments"))
+                    has_assignments = bool((data.get("speaker_assignments") or {}))
+                    if has_segments and has_assignments:
+                        sidecar = path.with_suffix(".speaker_assignments.json")
+                        confirmed = False
+                        if sidecar.exists():
+                            try:
+                                with open(sidecar, 'r', encoding='utf-8') as sf:
+                                    sdata = json.load(sf)
+                                confirmed = bool(sdata.get("user_confirmed"))
+                            except Exception:
+                                confirmed = False
+                        # If no sidecar, treat as unconfirmed
+                        if not confirmed:
+                            queue.append(path)
+                            continue
+                except Exception:
+                    continue
+            # Also include any sidecar files explicitly unconfirmed
+            for sc in base.rglob("*.speaker_assignments.json"):
+                try:
+                    with open(sc, 'r', encoding='utf-8') as f:
+                        sdata = json.load(f)
+                    if not sdata.get("user_confirmed"):
+                        tpath = Path(sdata.get("transcript")) if sdata.get("transcript") else sc.with_suffix("")
+                        if tpath.exists() and tpath.suffix.lower() == ".json" and tpath not in queue:
+                            queue.append(tpath)
+                except Exception:
+                    continue
+        self.unconfirmed_queue = queue
+        # Update controls
+        self.update_queue_label()
+        self.prev_btn.setEnabled(False)
+        self.next_btn.setEnabled(len(self.unconfirmed_queue) > 1)
+        self.confirm_next_btn.setEnabled(len(self.unconfirmed_queue) > 0)
+
+    def update_queue_label(self):
+        """Update the queue status label."""
+        if not self.unconfirmed_queue:
+            self.queue_label.setText("No pending confirmations")
+        else:
+            self.queue_label.setText(
+                f"Pending: {self.queue_index + 1}/{len(self.unconfirmed_queue)}"
+            )
+
+    def on_prev_in_queue(self):
+        if not self.unconfirmed_queue:
+            return
+        if self.queue_index > 0:
+            self.queue_index -= 1
+            self.load_transcript_from_path(self.unconfirmed_queue[self.queue_index])
+            self.update_queue_label()
+
+    def on_next_in_queue(self):
+        if not self.unconfirmed_queue:
+            return
+        if self.queue_index < len(self.unconfirmed_queue) - 1:
+            self.queue_index += 1
+            self.load_transcript_from_path(self.unconfirmed_queue[self.queue_index])
+            self.update_queue_label()
+
+    def on_confirm_and_next(self):
+        """Mark current transcript as confirmed and move to next."""
+        try:
+            self._save_confirmation(True)
+        except Exception as e:
+            logger.error(f"Failed to save confirmation: {e}")
+            QMessageBox.warning(self, "Warning", f"Failed to save confirmation: {e}")
+        # Remove from queue
+        if self.unconfirmed_queue and 0 <= self.queue_index < len(self.unconfirmed_queue):
+            del self.unconfirmed_queue[self.queue_index]
+            # Adjust index and navigate
+            if self.queue_index >= len(self.unconfirmed_queue):
+                self.queue_index = max(0, len(self.unconfirmed_queue) - 1)
+        # Load next or clear
+        if self.unconfirmed_queue:
+            self.load_transcript_from_path(self.unconfirmed_queue[self.queue_index])
+        else:
+            self.transcript_label.setText("All speaker attributions confirmed ✅")
+            self.transcript_text.clear()
+            self.speaker_tree.clear()
+            self.confirm_next_btn.setEnabled(False)
+            self.prev_btn.setEnabled(False)
+            self.next_btn.setEnabled(False)
+        self.update_queue_label()
+
+    def _save_confirmation(self, confirmed: bool):
+        """Persist confirmation to sidecar and speaker DB."""
+        if not self.current_transcript_path:
+            return
+        # Ensure assignments saved with confirmation flag
+        sidecar = self.current_transcript_path.with_suffix(".speaker_assignments.json")
+        payload = {
+            "transcript": str(self.current_transcript_path),
+            "assignments": self.speaker_mappings,
+            "timestamp": datetime.now().isoformat(),
+            "user_confirmed": bool(confirmed),
+        }
+        # Try to include brief segments sample for context
+        try:
+            payload["segments"] = [
+                {
+                    "start": seg.start_time,
+                    "end": seg.end_time,
+                    "speaker_id": seg.speaker_id,
+                    "assigned_name": self.speaker_mappings.get(seg.speaker_id),
+                }
+                for seg in self.speaker_segments[:10]
+            ]
+        except Exception:
+            pass
+        try:
+            with open(sidecar, 'w', encoding='utf-8') as f:
+                json.dump(payload, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Could not write confirmation sidecar: {e}")
+
+        # Persist to speaker assignment DB
+        try:
+            for spk_id, name in self.speaker_mappings.items():
+                assignment = SpeakerAssignmentModel(
+                    recording_path=str(self.current_transcript_path),
+                    speaker_id=str(spk_id),
+                    assigned_name=str(name),
+                    confidence=1.0,
+                    user_confirmed=bool(confirmed),
+                )
+                self.db_speakers.create_speaker_assignment(assignment)
+        except Exception as e:
+            logger.debug(f"Speaker DB persistence skipped/failed: {e}")
+
+    # ===== Utilities =====
+    def _make_source_header_text(self) -> str:
+        """Build a header showing a friendly source name."""
+        source_name = self._get_sanitized_source_name()
+        return f"Source: {source_name}  •  File: {self.current_transcript_path.name}"
+
+    def _get_sanitized_source_name(self) -> str:
+        """Derive a sanitized source/episode/document name from metadata or filename."""
+        try:
+            if self.current_transcript_path and self.current_transcript_path.suffix.lower() == ".json":
+                with open(self.current_transcript_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                original = None
+                if isinstance(data, dict):
+                    original = data.get("original_file_path") or data.get("source_file")
+                if original:
+                    return self._sanitize_name(Path(original).stem)
+        except Exception:
+            pass
+        # Fallback to transcript filename stem
+        return self._sanitize_name(self.current_transcript_path.stem if self.current_transcript_path else "Unknown")
+
+    def _sanitize_name(self, name: str) -> str:
+        """Sanitize a name: keep alnum, space, dash, underscore; convert spaces to underscores for clarity."""
+        safe = "".join(c for c in name if c.isalnum() or c in (" ", "-", "_"))
+        return safe.strip().replace("  ", " ").replace(" ", "_")
+
+    def _populate_speaker_samples(self, speaker_id: str):
+        """Show the first five snippets for the selected speaker with timestamps."""
+        if not self.speaker_segments:
+            self.speaker_samples_text.clear()
+            return
+        # Collect segments for this speaker in chronological order
+        segs = [s for s in self.speaker_segments if s.speaker_id == speaker_id]
+        # Sort by start_time to ensure order
+        segs.sort(key=lambda s: s.start_time)
+        samples = []
+        for seg in segs[:5]:
+            ts = self.format_timestamp(seg.start_time)
+            text = seg.text.strip()
+            if len(text) > 200:
+                text = text[:197] + "..."
+            # Map to assigned display name if available
+            disp_name = self.speaker_mappings.get(speaker_id, speaker_id)
+            samples.append(f"[{disp_name}] ({ts})\n{text}")
+        if not samples:
+            self.speaker_samples_text.setPlainText("No samples available for this speaker.")
+        else:
+            self.speaker_samples_text.setPlainText("\n\n".join(samples))
     
     def export_attributed_transcript(self):
         """Export transcript with speaker names."""

@@ -36,13 +36,15 @@ class FFmpegSetupDialog(QDialog):
         """Setup the dialog UI."""
         self.setWindowTitle("Optional Setup - FFmpeg")
         self.setModal(True)
-        self.resize(500, 400)
+        self.resize(500, 360)
         
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(6)
         
         # Header
         title = QLabel("🎬 Enable YouTube Transcription Features")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; margin: 10px;")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; margin: 4px 0;")
         layout.addWidget(title)
         
         # Description
@@ -50,43 +52,36 @@ class FFmpegSetupDialog(QDialog):
             "FFmpeg enables powerful YouTube video processing capabilities.\n"
             "Install now for the best experience, or skip and install later from Settings."
         )
-        description.setStyleSheet("font-size: 14px; margin: 10px; color: #666;")
+        description.setStyleSheet("font-size: 14px; margin: 4px 0; color: #666;")
         description.setWordWrap(True)
         layout.addWidget(description)
         
-        # Features section
-        features_frame = QFrame()
-        features_frame.setFrameStyle(QFrame.Shape.Box)
-        features_frame.setStyleSheet("QFrame { background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 8px; padding: 10px; }")
-        features_layout = QVBoxLayout(features_frame)
-        
+        # Features section (compact, no white box)
         features_title = QLabel("✅ Features enabled with FFmpeg:")
-        features_title.setStyleSheet("font-weight: bold; margin-bottom: 5px;")
-        features_layout.addWidget(features_title)
-        
+        features_title.setStyleSheet("font-weight: bold; margin: 6px 0 2px 0;")
+        layout.addWidget(features_title)
+
         features_list = QLabel(
             "• YouTube video downloads and transcription\n"
             "• Audio format conversions (MP3, WAV, etc.)\n"
             "• Video file audio extraction\n"
             "• Audio metadata and duration detection"
         )
-        features_list.setStyleSheet("margin-left: 10px; line-height: 1.4;")
-        features_layout.addWidget(features_list)
-        
+        features_list.setStyleSheet("margin-left: 10px; line-height: 1.3;")
+        layout.addWidget(features_list)
+
         without_title = QLabel("⚠️ Available without FFmpeg:")
-        without_title.setStyleSheet("font-weight: bold; margin-bottom: 5px; margin-top: 10px;")
-        features_layout.addWidget(without_title)
-        
+        without_title.setStyleSheet("font-weight: bold; margin: 8px 0 2px 0;")
+        layout.addWidget(without_title)
+
         without_list = QLabel(
             "• PDF processing and summarization\n"
             "• Text file processing\n"
             "• Local audio transcription (compatible formats)\n"
             "• All MOC generation features"
         )
-        without_list.setStyleSheet("margin-left: 10px; line-height: 1.4; color: #666;")
-        features_layout.addWidget(without_list)
-        
-        layout.addWidget(features_frame)
+        without_list.setStyleSheet("margin-left: 10px; line-height: 1.3; color: #666;")
+        layout.addWidget(without_list)
         
         # Progress section (initially hidden)
         self.progress_frame = QFrame()
@@ -119,9 +114,11 @@ class FFmpegSetupDialog(QDialog):
                 background-color: #f5f5f5;
                 border: 1px solid #ddd;
                 border-radius: 4px;
+                color: #000000;
             }
             QPushButton:hover {
                 background-color: #e5e5e5;
+                color: #000000;
             }
         """)
         button_layout.addWidget(self.skip_button)
@@ -161,6 +158,23 @@ class FFmpegSetupDialog(QDialog):
         self.skip_button.clicked.disconnect()
         self.skip_button.clicked.connect(self._cancel_installation)
         
+        # If ffmpeg already available, just set env and return quickly
+        try:
+            import shutil as _shutil, os as _os
+            existing = _shutil.which("ffmpeg")
+            if existing:
+                _os.environ["FFMPEG_PATH"] = existing
+                ffprobe_existing = _shutil.which("ffprobe")
+                if ffprobe_existing:
+                    _os.environ["FFPROBE_PATH"] = ffprobe_existing
+                self.progress_label.setText("✅ FFmpeg already installed - configuring…")
+                self.progress_bar.setValue(100)
+                self.installation_completed.emit(True)
+                self.accept()
+                return
+        except Exception:
+            pass
+        
         # Start installation
         self.ffmpeg_worker = FFmpegInstaller()
         self.ffmpeg_worker.progress_updated.connect(self._update_progress)
@@ -186,6 +200,23 @@ class FFmpegSetupDialog(QDialog):
         if success:
             self.progress_label.setText("✅ FFmpeg installed successfully!")
             self.progress_bar.setValue(100)
+            # Best-effort: expose installed paths for this app session so
+            # components that rely on environment variables can discover FFmpeg
+            try:
+                import os
+                bin_dir = Path.home() / "Library" / "Application Support" / "Knowledge_Chipper" / "bin"
+                ffmpeg_path = bin_dir / "ffmpeg"
+                ffprobe_path = bin_dir / "ffprobe"
+                if ffmpeg_path.exists():
+                    os.environ["FFMPEG_PATH"] = str(ffmpeg_path)
+                if ffprobe_path.exists():
+                    os.environ["FFPROBE_PATH"] = str(ffprobe_path)
+                # Also prepend to PATH for subprocess-based which() checks
+                current_path = os.environ.get("PATH", "")
+                if str(bin_dir) not in current_path:
+                    os.environ["PATH"] = f"{bin_dir}:{current_path}" if current_path else str(bin_dir)
+            except Exception:
+                pass
             QMessageBox.information(
                 self,
                 "Installation Complete",

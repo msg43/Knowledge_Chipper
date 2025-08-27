@@ -355,9 +355,9 @@ if [ "$SKIP_INSTALL" -eq 0 ]; then
   fi
   sudo "$PYTHON_BIN_INSTALL" -m venv "$MACOS_PATH/venv"
   next_step "Upgrade pip (final)"
-  sudo "$MACOS_PATH/venv/bin/python" -m pip install --upgrade pip
+  sudo -H "$MACOS_PATH/venv/bin/python" -m pip install --upgrade pip
   next_step "Install requirements (final)"
-  sudo "$MACOS_PATH/venv/bin/python" -m pip install -r "$MACOS_PATH/requirements.txt"
+  sudo -H "$MACOS_PATH/venv/bin/python" -m pip install -r "$MACOS_PATH/requirements.txt"
   # Post-install preflight
   next_step "Final verification"
   if ! PYTHONPATH="$MACOS_PATH/src:${PYTHONPATH}" "$MACOS_PATH/venv/bin/python" -c "import knowledge_system.gui.__main__"; then

@@ -10,6 +10,7 @@ import tempfile
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+import platform
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -31,13 +32,35 @@ class FFmpegRelease:
     ffprobe_name: str = "ffprobe"
 
 
-# Default FFmpeg release for macOS ARM64
-DEFAULT_FFMPEG_RELEASE = FFmpegRelease(
-    url="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
-    sha256="",  # Will be skipped for evermeet releases
-    ffmpeg_name="ffmpeg",
-    ffprobe_name="ffprobe"
-)
+def get_default_ffmpeg_release() -> FFmpegRelease:
+    """Return an appropriate FFmpeg release for the current platform/arch.
+
+    Rationale:
+    - On Apple Silicon (arm64), some sources serve Intel/x86_64 builds which
+      can cause "Exec format error" when executed from an arm64-only process.
+      We prefer a vetted static ARM build.
+    - On other macOS architectures, fall back to a trusted universal/zip
+      release that we can extract without codesign prompts.
+    """
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+
+    if system == "darwin" and machine in {"arm64", "aarch64"}:
+        # Static ARM build with known checksum
+        return FFmpegRelease(
+            url="https://www.osxexperts.net/ffmpeg711arm.zip",
+            sha256="59e39a5cec2e5d2307ed079c53227a9181e64b87454ed4de998349e044bfdc70",
+            ffmpeg_name="ffmpeg",
+            ffprobe_name="ffprobe",
+        )
+
+    # Fallback: Evermeet provides recent macOS builds as a zip containing the binary
+    return FFmpegRelease(
+        url="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
+        sha256="",  # Skip checksum for trusted source
+        ffmpeg_name="ffmpeg",
+        ffprobe_name="ffprobe",
+    )
 
 
 class FFmpegInstaller(QThread):
@@ -51,12 +74,35 @@ class FFmpegInstaller(QThread):
 
     def __init__(self, release: FFmpegRelease | None = None) -> None:
         super().__init__()
-        self.release = release or DEFAULT_FFMPEG_RELEASE
+        # Choose a sensible default per-arch if none explicitly provided
+        self.release = release or get_default_ffmpeg_release()
 
     def _download(self, url: str, dest: Path) -> None:
-        self.progress.emit("Downloading FFmpeg…")
-        with urllib.request.urlopen(url) as r, open(dest, "wb") as f:
-            shutil.copyfileobj(r, f)
+        """Download a URL to dest with timeouts and lightweight progress updates."""
+        self.progress_updated.emit("⬇️ Downloading FFmpeg…", 20)
+        req = urllib.request.Request(url, headers={"User-Agent": "Knowledge-Chipper/3.x (macOS)"})
+        with urllib.request.urlopen(req, timeout=60) as response, open(dest, "wb") as out:
+            total_str = response.headers.get("Content-Length") or response.headers.get("content-length")
+            total = int(total_str) if (total_str and total_str.isdigit()) else 0
+            downloaded = 0
+            chunk_size = 1024 * 1024  # 1 MiB
+            next_emit = 0
+            while True:
+                chunk = response.read(chunk_size)
+                if not chunk:
+                    break
+                out.write(chunk)
+                downloaded += len(chunk)
+                # Emit at most ~once per 5% or every 8 MiB if size unknown
+                if total > 0:
+                    pct = int(20 + (30 * downloaded / total))  # map into 20-50 range
+                    if pct >= next_emit:
+                        self.progress_updated.emit(f"⬇️ Downloading FFmpeg… ({downloaded // (1024*1024)} MiB)", min(pct, 50))
+                        next_emit = pct + 5
+                else:
+                    if downloaded - next_emit >= 8 * 1024 * 1024:
+                        self.progress_updated.emit(f"⬇️ Downloading FFmpeg… ({downloaded // (1024*1024)} MiB)", 30)
+                        next_emit = downloaded
 
     def _sha256(self, path: Path) -> str:
         h = hashlib.sha256()
@@ -72,98 +118,157 @@ class FFmpegInstaller(QThread):
             APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
             BIN_DIR.mkdir(parents=True, exist_ok=True)
 
-            with tempfile.TemporaryDirectory() as tmpdir:
-                # Step 2: Download (20-50%)
-                archive_name = (
-                    Path(urllib.parse.urlparse(self.release.url).path).name
-                    or "ffmpeg_download"
+            # Prepare candidate releases (primary + fallback)
+            releases: list[FFmpegRelease] = [self.release]
+            system = platform.system().lower()
+            machine = platform.machine().lower()
+            # Only consider Evermeet for non-ARM macOS (x86_64), since it's x86_64-only
+            if system == "darwin" and machine != "arm64":
+                evermeet = FFmpegRelease(
+                    url="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
+                    sha256="",
+                    ffmpeg_name="ffmpeg",
+                    ffprobe_name="ffprobe",
                 )
-                tmp_path = Path(tmpdir) / archive_name
-                self.progress_updated.emit("⬇️ Downloading FFmpeg...", 20)
-                self._download(self.release.url, tmp_path)
+                if self.release.url != evermeet.url:
+                    releases.append(evermeet)
 
-                # Step 3: Verify (60%)
-                self.progress_updated.emit("🔍 Verifying download integrity...", 60)
-                if self.release.sha256:  # Only verify if checksum is provided
-                    digest = self._sha256(tmp_path)
-                    if digest.lower() != self.release.sha256.lower():
-                        raise RuntimeError("FFmpeg checksum verification failed")
-                else:
-                    # Skip verification for trusted sources like evermeet.cx
-                    self.progress_updated.emit("🔍 Using trusted source - skipping checksum", 60)
+            # Add cross-arch static alternative to handle Exec format errors automatically
+            # Do not add the osxexperts Intel URL — it is unreliable and often returns HTML
 
-                # Step 4: Extract (70%)
-                self.progress_updated.emit("📦 Extracting FFmpeg files...", 70)
-                # Try to extract known archive formats (.zip, .tar, .tar.gz, .tar.xz, etc.)
-                extract_dir = Path(tmpdir) / "extract"
-                extract_dir.mkdir(parents=True, exist_ok=True)
+            last_error: Exception | None = None
+
+            for idx, release in enumerate(releases):
                 try:
-                    shutil.unpack_archive(str(tmp_path), str(extract_dir))
-                except Exception:
-                    # Not a recognized archive - treat as raw binary
-                    shutil.copy2(tmp_path, extract_dir / self.release.ffmpeg_name)
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        # Step 2: Download (20-50%)
+                        archive_name = (
+                            Path(urllib.parse.urlparse(release.url).path).name
+                            or "ffmpeg_download"
+                        )
+                        tmp_path = Path(tmpdir) / archive_name
+                        phase = "⬇️ Downloading FFmpeg..." if idx == 0 else "⬇️ Downloading FFmpeg (fallback source)..."
+                        self.progress_updated.emit(phase, 20)
+                        self._download(release.url, tmp_path)
 
-                # Find ffmpeg and ffprobe in extracted content
-                ffmpeg_src: Path | None = None
-                ffprobe_src: Path | None = None
-                for p in extract_dir.rglob("*"):
-                    if p.is_file():
-                        if p.name == self.release.ffmpeg_name and os.access(p, os.X_OK):
-                            ffmpeg_src = p
-                        elif p.name == self.release.ffprobe_name and os.access(
-                            p, os.X_OK
-                        ):
-                            ffprobe_src = p
+                        # Step 3: Verify (60%)
+                        self.progress_updated.emit("🔍 Verifying download integrity...", 60)
+                        if release.sha256:
+                            digest = self._sha256(tmp_path)
+                            if digest.lower() != release.sha256.lower():
+                                raise RuntimeError("FFmpeg checksum verification failed")
+                        else:
+                            self.progress_updated.emit("🔍 Using trusted source - skipping checksum", 60)
 
-                if not ffmpeg_src:
-                    # Make binaries executable if necessary and select likely files
-                    for p in extract_dir.rglob("ffmpeg"):
+                        # Step 4: Extract (70%)
+                        self.progress_updated.emit("📦 Extracting FFmpeg files...", 70)
+                        extract_dir = Path(tmpdir) / "extract"
+                        extract_dir.mkdir(parents=True, exist_ok=True)
                         try:
-                            p.chmod(0o755)
-                            ffmpeg_src = p
-                            break
+                            shutil.unpack_archive(str(tmp_path), str(extract_dir))
+                        except Exception:
+                            shutil.copy2(tmp_path, extract_dir / release.ffmpeg_name)
+
+                        # Find ffmpeg and ffprobe in extracted content
+                        ffmpeg_src: Path | None = None
+                        ffprobe_src: Path | None = None
+                        for p in extract_dir.rglob("*"):
+                            if p.is_file():
+                                if p.name == release.ffmpeg_name and os.access(p, os.X_OK):
+                                    ffmpeg_src = p
+                                elif p.name == release.ffprobe_name and os.access(p, os.X_OK):
+                                    ffprobe_src = p
+
+                        if not ffmpeg_src:
+                            for p in extract_dir.rglob("ffmpeg"):
+                                try:
+                                    p.chmod(0o755)
+                                    ffmpeg_src = p
+                                    break
+                                except Exception:
+                                    pass
+
+                        if not ffmpeg_src:
+                            raise RuntimeError("FFmpeg binary not found in archive")
+
+                        # Optional: ensure architecture compatibility before install (macOS only)
+                        if system == "darwin":
+                            try:
+                                archs = subprocess.run(
+                                    ["lipo", "-archs", str(ffmpeg_src)],
+                                    capture_output=True,
+                                    text=True,
+                                )
+                                archs_out = (archs.stdout or archs.stderr or "").strip().lower()
+                                if machine == "arm64" and "arm64" not in archs_out:
+                                    raise RuntimeError("Incompatible architecture: x86_64-only candidate on arm64")
+                            except FileNotFoundError:
+                                # lipo not available; rely on run-time validation below
+                                pass
+
+                        # Step 5: Install (80%)
+                        self.progress_updated.emit("🔧 Installing FFmpeg...", 80)
+                        ffmpeg_dst = BIN_DIR / "ffmpeg"
+                        # Copy without metadata to avoid quarantine propagation or slow xattrs
+                        self.progress_updated.emit("📄 Copying binary...", 80)
+                        with open(ffmpeg_src, "rb") as _src, open(ffmpeg_dst, "wb") as _dst:
+                            shutil.copyfileobj(_src, _dst, length=1024 * 1024)
+                        # Permissions
+                        self.progress_updated.emit("🔑 Setting permissions...", 82)
+                        ffmpeg_dst.chmod(0o755)
+
+                        if ffprobe_src:
+                            ffprobe_dst = BIN_DIR / "ffprobe"
+                            with open(ffprobe_src, "rb") as _src, open(ffprobe_dst, "wb") as _dst:
+                                shutil.copyfileobj(_src, _dst, length=1024 * 1024)
+                            ffprobe_dst.chmod(0o755)
+
+                        # Step 6: Final setup (90%)
+                        self.progress_updated.emit("🛡️ Configuring security permissions...", 90)
+                        try:
+                            subprocess.run(["xattr", "-d", "com.apple.quarantine", str(ffmpeg_dst)], check=False, timeout=5)
                         except Exception:
                             pass
 
-                if not ffmpeg_src:
-                    raise RuntimeError("FFmpeg binary not found in archive")
+                        # Step 7: Validate (95%)
+                        self.progress_updated.emit("✅ Validating FFmpeg installation...", 95)
+                        # Report process architecture for troubleshooting
+                        try:
+                            self.progress_updated.emit(
+                                f"🔎 Process arch: {platform.system()} {platform.machine()}",
+                                95,
+                            )
+                        except Exception:
+                            pass
 
-                # Step 5: Install (80%)
-                self.progress_updated.emit("🔧 Installing FFmpeg...", 80)
-                ffmpeg_dst = BIN_DIR / "ffmpeg"
-                shutil.copy2(ffmpeg_src, ffmpeg_dst)
-                ffmpeg_dst.chmod(0o755)
+                        result = subprocess.run([str(ffmpeg_dst), "-version"], capture_output=True, text=True, timeout=10)
+                        if result.returncode != 0:
+                            # If we hit Exec format error or bad CPU type, try the next candidate
+                            err = (result.stderr or result.stdout or "").lower()
+                            if "exec format error" in err or "bad cpu type" in err:
+                                raise RuntimeError("Architecture mismatch while validating binary")
+                            raise RuntimeError(f"FFmpeg validation failed: {result.stderr}")
 
-                if ffprobe_src:
-                    ffprobe_dst = BIN_DIR / "ffprobe"
-                    shutil.copy2(ffprobe_src, ffprobe_dst)
-                    ffprobe_dst.chmod(0o755)
-
-                # Step 6: Final setup (90%)
-                self.progress_updated.emit("🛡️ Configuring security permissions...", 90)
-                try:
-                    subprocess.run(
-                        ["xattr", "-d", "com.apple.quarantine", str(ffmpeg_dst)],
-                        check=False,
+                        # Step 8: Complete (100%)
+                        self.progress_updated.emit("🎉 FFmpeg installation completed successfully!", 100)
+                        msg = (
+                            "FFmpeg installed successfully!\n\nEnabled features:\n• YouTube video downloads\n• Audio format conversions\n• Video file processing\n\nInstalled to: "
+                            f"{BIN_DIR}"
+                        )
+                        self.installation_finished.emit(True, msg)
+                        self.finished.emit(True, "FFmpeg installed successfully", str(ffmpeg_dst))
+                        return
+                except Exception as e:  # Try next release
+                    last_error = e
+                    if idx < len(releases) - 1:
+                        self.progress_updated.emit("↩️ Candidate failed, trying next source…", 60)
+                        continue
+                    # All candidates failed; present a clear, user-friendly message
+                    friendly = (
+                        "Source temporarily unavailable. You can download and install FFmpeg yourself "
+                        "and then retry extraction, or wait and retry this download link later."
                     )
-                except Exception:
-                    pass
-
-                # Step 7: Validate (95%)
-                self.progress_updated.emit("✅ Validating FFmpeg installation...", 95)
-                result = subprocess.run(
-                    [str(ffmpeg_dst), "-version"], capture_output=True, text=True
-                )
-                if result.returncode != 0:
-                    raise RuntimeError(f"FFmpeg validation failed: {result.stderr}")
-
-                # Step 8: Complete (100%)
-                self.progress_updated.emit("🎉 FFmpeg installation completed successfully!", 100)
-                msg = f"FFmpeg installed successfully!\n\nEnabled features:\n• YouTube video downloads\n• Audio format conversions\n• Video file processing\n\nInstalled to: {BIN_DIR}"
-                
-                # Emit both new and legacy signals for compatibility
-                self.installation_finished.emit(True, msg)
-                self.finished.emit(True, "FFmpeg installed successfully", str(ffmpeg_dst))
+                    raise RuntimeError(friendly) from last_error
 
         except Exception as e:
             error_msg = f"FFmpeg installation failed: {e}"
