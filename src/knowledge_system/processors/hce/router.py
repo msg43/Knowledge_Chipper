@@ -16,3 +16,11 @@ class Router:
         for c in claims:
             (to_flagship if self.needs_flagship(c) else keep_local).append(c)
         return to_flagship, keep_local
+
+
+def route_claims(scored: list[ScoredClaim]):
+    """Compatibility wrapper used by HCEPipeline."""
+    r = Router()
+    to_flagship, keep_local = r.split(scored)
+    # For now, return combined (flagship routing can be integrated later)
+    return keep_local + to_flagship

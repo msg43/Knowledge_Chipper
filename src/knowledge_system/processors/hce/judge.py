@@ -2,6 +2,7 @@ from pathlib import Path
 
 from .models.llm_any import AnyLLM
 from .types import ScoredClaim
+from ..config import get_settings
 
 
 class Judge:
@@ -35,3 +36,13 @@ class Judge:
             c.scores = s
             out.append(c)
         return out
+
+
+def judge_claims(claims: list[ScoredClaim], judge_model_uri: str) -> list[ScoredClaim]:
+    """Compatibility wrapper used by HCEPipeline."""
+    settings = get_settings()
+    llm = AnyLLM(judge_model_uri)
+    prompt_path = Path(__file__).parent / "prompts" / "judge.txt"
+    j = Judge(llm, prompt_path)
+    # Minimal episode context: join top segments (not available here), so pass empty
+    return j.judge("", claims)

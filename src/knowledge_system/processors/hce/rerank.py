@@ -24,3 +24,40 @@ class Reranker:
                 )
             )
         return out
+
+
+def rerank_claims(
+    consolidated: list[ConsolidatedClaim], policy, reranker_model: str
+) -> list[ScoredClaim]:
+    """Compatibility wrapper used by HCEPipeline: score then apply policy."""
+    # Minimal scoring: importance based on length as placeholder
+    pairs = [("", c.consolidated) for c in consolidated]
+    # Fallback CrossEncoder scoring
+    try:
+        ce = CrossEncoder(reranker_model)
+        scores = ce.score(pairs)
+    except Exception:
+        scores = [min(1.0, max(0.0, len(c.consolidated) / 400.0)) for c in consolidated]
+
+    scored = []
+    for c, s in zip(consolidated, scores):
+        scored.append(
+            ScoredClaim(
+                episode_id=c.episode_id,
+                claim_id=c.claim_id,
+                canonical=c.consolidated,
+                claim_type=c.claim_type,
+                evidence=c.evidence,
+                scores={"importance": float(s)},
+            )
+        )
+
+    # Apply policy to assign tiers and filter
+    try:
+        from .rerank_policy import adaptive_keep
+
+        duration_minutes = max(5.0, len(pairs) / 12.0)
+        kept = adaptive_keep(scored, duration_minutes)
+        return kept
+    except Exception:
+        return scored

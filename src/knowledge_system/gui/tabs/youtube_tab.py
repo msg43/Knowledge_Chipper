@@ -1087,14 +1087,28 @@ class YouTubeTab(BaseTab):
             else:
                 if "Dependencies missing" in message:
                     self.append_log("❌ Diarization dependencies missing!")
-                    self.append_log("   Install with: pip install -e '.[diarization]'")
-                    self.show_warning(
-                        "Diarization Dependencies Missing",
-                        "Speaker diarization requires additional dependencies.\n\n"
-                        "Please install with:\n"
-                        "pip install -e '.[diarization]'\n\n"
-                        "Or disable diarization to continue.",
-                    )
+                    try:
+                        from ..dialogs.diarization_setup_dialog import DiarizationSetupDialog
+
+                        # Offer guided installation
+                        install_dialog = DiarizationSetupDialog(self)
+                        def _after_install(success: bool):
+                            if success:
+                                self.append_log("✅ Diarization dependencies installed. Continuing...")
+                            else:
+                                self.append_log("❌ Diarization installation failed. You can retry later.")
+                        install_dialog.installation_completed.connect(_after_install)
+                        install_dialog.exec()
+                    except Exception:
+                        # Fallback to simple warning if dialog import fails
+                        self.append_log("   Install with: pip install -e '.[diarization]'")
+                        self.show_warning(
+                            "Diarization Dependencies Missing",
+                            "Speaker diarization requires additional dependencies.\n\n"
+                            "Please install with:\n"
+                            "pip install -e '.[diarization]'\n\n"
+                            "Or disable diarization to continue.",
+                        )
                 else:
                     self.append_log(
                         f"⚠️ Error checking diarization dependencies: {message}"
@@ -2036,11 +2050,50 @@ class YouTubeTab(BaseTab):
     def _check_ffmpeg_availability(self) -> bool:
         """Check if FFmpeg is available and prompt for installation if needed."""
         import shutil
-        
-        # Check if FFmpeg is available
-        if shutil.which("ffmpeg"):
-            self.append_log("✅ FFmpeg found - YouTube processing ready")
-            return True
+        import os
+        from pathlib import Path
+
+        # Try multiple resolution strategies consistent with Settings page
+        candidates: list[str] = []
+
+        # 1) Environment override set by Settings/installer
+        env_ffmpeg = os.environ.get("FFMPEG_PATH")
+        if env_ffmpeg:
+            candidates.append(env_ffmpeg)
+
+        # 2) PATH lookup
+        which_ffmpeg = shutil.which("ffmpeg")
+        if which_ffmpeg:
+            candidates.append(which_ffmpeg)
+
+        # 3) App-managed bin dir (where our installer drops binaries)
+        app_bin = Path.home() / "Library" / "Application Support" / "Knowledge_Chipper" / "bin" / "ffmpeg"
+        candidates.append(str(app_bin))
+
+        # 4) Common Homebrew locations
+        candidates.extend(["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"])
+
+        # Return true on first runnable candidate
+        for candidate in candidates:
+            try:
+                if not candidate:
+                    continue
+                p = Path(candidate)
+                if p.exists() and os.access(p, os.X_OK):
+                    # Verify it's runnable
+                    import subprocess
+
+                    result = subprocess.run([str(p), "-version"], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        # Best-effort: expose to environment for downstream tools
+                        os.environ.setdefault("FFMPEG_PATH", str(p))
+                        probe_guess = str(p).replace("ffmpeg", "ffprobe")
+                        if Path(probe_guess).exists():
+                            os.environ.setdefault("FFPROBE_PATH", probe_guess)
+                        self.append_log("✅ FFmpeg found - YouTube processing ready")
+                        return True
+            except Exception:
+                continue
             
         # FFmpeg not found - show prompt
         self.append_log("⚠️ FFmpeg not found - required for YouTube transcription")

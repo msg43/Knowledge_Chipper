@@ -16,6 +16,9 @@ from ..logger import get_logger
 from .base import BaseProcessor, ProcessorResult
 from .hce.config_flex import PipelineConfigFlex, StageModelConfig
 from .hce.types import EpisodeBundle, PipelineOutputs, Segment
+from .hce.health import validate_hce_or_raise, HCEValidationError
+from ..processors.html import fetch_html_text
+from ..utils.llm_providers import UnifiedLLMClient
 
 logger = get_logger(__name__)
 
@@ -318,7 +321,17 @@ class SummarizerProcessor(BaseProcessor):
 
             # Read text content
             if isinstance(input_data, Path):
-                text = input_data.read_text(encoding="utf-8")
+                # If HTML, extract readable text instead of raw markup
+                if input_data.suffix.lower() in {".html", ".htm"}:
+                    try:
+                        text = fetch_html_text(input_data)
+                    except Exception as e:
+                        logger.warning(
+                            f"HTML extraction failed, using raw file text: {e}"
+                        )
+                        text = input_data.read_text(encoding="utf-8")
+                else:
+                    text = input_data.read_text(encoding="utf-8")
                 source_file = input_data
             else:
                 text = input_data
@@ -345,6 +358,20 @@ class SummarizerProcessor(BaseProcessor):
                     )
                 )
 
+            # Enforce HCE availability
+            try:
+                validate_hce_or_raise()
+            except HCEValidationError as e:
+                return ProcessorResult(
+                    success=False,
+                    errors=[
+                        "HCE is required for summarization and is not fully available.",
+                        str(e),
+                    ],
+                    metadata={"provider": self.provider, "model": self.model},
+                    dry_run=dry_run,
+                )
+
             # Convert to HCE format
             episode = self._convert_to_episode(text, source_file)
 
@@ -364,8 +391,50 @@ class SummarizerProcessor(BaseProcessor):
                     jargon=[],
                 )
 
-            # Format as summary
+            # Format as summary (HCE). If empty, still try LLM summary ONLY if explicitly allowed
             summary = self._format_claims_as_summary(outputs)
+
+            def _build_prompt(template_path: Path | None, body_text: str) -> str:
+                # Load template if provided; otherwise use a generic instruction
+                try:
+                    if template_path and Path(template_path).exists():
+                        tmpl = Path(template_path).read_text(encoding="utf-8").strip()
+                    else:
+                        tmpl = (
+                            "Summarize the document into key sections: Executive Summary, Key Claims, Key People, "
+                            "Key Concepts, and Notable Relationships. Be concise and faithful to the source."
+                        )
+                except Exception:
+                    tmpl = (
+                        "Summarize the document into key sections: Executive Summary, Key Claims, Key People, "
+                        "Key Concepts, and Notable Relationships. Be concise and faithful to the source."
+                    )
+
+                # Trim very long inputs for local models (smaller to avoid timeouts)
+                max_chars = 8000
+                body = body_text if len(body_text) <= max_chars else body_text[:max_chars]
+                # If template contains {text}, substitute directly; otherwise append content block
+                if "{text}" in tmpl:
+                    try:
+                        return tmpl.replace("{text}", body)
+                    except Exception:
+                        return f"{tmpl}\n\n---\nCONTENT:\n{body}"
+                return f"{tmpl}\n\n---\nCONTENT:\n{body}"
+
+            # If HCE produced no content, use LLM fallback
+            used_llm_fallback = False
+            allow_llm_fallback = bool(kwargs.get("allow_llm_fallback", False))
+            if allow_llm_fallback and (
+                (not summary.strip()) or ("Extracted 0 claims" in summary)
+            ):
+                try:
+                    prompt = _build_prompt(kwargs.get("prompt_template"), text)
+                    client = UnifiedLLMClient(provider=self.provider, model=self.model)
+                    llm_resp = client.generate(prompt)
+                    summary = llm_resp.content.strip()
+                    used_llm_fallback = True
+                except Exception as e:
+                    logger.error(f"LLM fallback summarization failed: {e}")
 
             # Calculate token usage (approximate)
             estimated_tokens = len(text.split()) + len(summary.split())
@@ -425,14 +494,20 @@ class SummarizerProcessor(BaseProcessor):
                 except Exception as e:
                     logger.warning(f"Failed to save HCE data to database: {e}")
 
+            # Prefer actual usage from LLM fallback if available
+            usage_block = {
+                "total_tokens": estimated_tokens,
+                "total_cost": estimated_cost,
+            }
+            if used_llm_fallback:
+                # We don't have exact tokens from local provider API; keep estimates
+                metadata["fallback"] = "llm"
+
             return ProcessorResult(
                 success=True,
                 data=summary,
                 metadata=metadata,
-                usage={
-                    "total_tokens": estimated_tokens,
-                    "total_cost": estimated_cost,
-                },
+                usage=usage_block,
                 dry_run=False,
             )
 

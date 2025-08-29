@@ -1,12 +1,14 @@
 """Ollama service and model management utilities."""
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 
 import requests
 
@@ -222,20 +224,44 @@ class OllamaManager:
             return False, "OLLAMA_NOT_INSTALLED"
 
         try:
-            # Start Ollama service in background
-            subprocess.Popen(
-                [ollama_cmd, "serve"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            # Prefer launching the macOS app so it appears in the Dock/menu bar
+            launched_via_app = False
+            if sys.platform == "darwin":
+                app_path = Path("/Applications/Ollama.app")
+                if app_path.exists():
+                    try:
+                        subprocess.Popen(
+                            ["open", "-a", str(app_path)],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            start_new_session=True,
+                        )
+                        launched_via_app = True
+                    except Exception as e:
+                        logger.warning(f"Failed to launch Ollama.app, falling back to CLI: {e}")
 
-            # Wait for service to start
-            for _ in range(10):  # Wait up to 10 seconds
+            if not launched_via_app:
+                # Start headless CLI service in background (may not show in Dock)
+                subprocess.Popen(
+                    [ollama_cmd, "serve"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+
+            # Wait for service to start (allow extra time on first boot)
+            for _ in range(30):  # Wait up to 30 seconds
                 if self.is_service_running():
-                    return True, "Ollama service started successfully"
+                    if launched_via_app:
+                        return True, "Ollama service started (via app)"
+                    else:
+                        return True, (
+                            "Ollama service started in background (headless). "
+                            "It may not appear in the Dock."
+                        )
                 time.sleep(1)
 
-            return False, "Ollama service failed to start within 10 seconds"
+            return False, "Ollama service failed to start within 30 seconds"
 
         except Exception as e:
             logger.error(f"Failed to start Ollama service: {e}")

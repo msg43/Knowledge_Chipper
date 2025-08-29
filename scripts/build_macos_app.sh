@@ -200,6 +200,10 @@ else
   "$VENV_DIR/bin/python" -m pip check || true
 fi
 
+# Install HCE optional dependencies into the app bundle venv
+next_step "Install HCE optional dependencies"
+"$VENV_DIR/bin/python" -m pip install sentence-transformers scikit-learn || true
+
 echo "🎯 Excluding heavy ML dependencies (torch, transformers, etc.) from app bundle"
 echo "ℹ️  Heavy dependencies will be installed automatically when needed"
 
@@ -378,7 +382,9 @@ else
 fi
 
 # Optionally create a DMG from the staged app
-if [ "$MAKE_DMG" -eq 1 ] || [ "$SKIP_INSTALL" -eq 1 ]; then
+# Skip DMG creation during in-app updates (IN_APP_UPDATER=1) to significantly reduce update time
+# Still allow DMG when explicitly requested with --make-dmg, or when running manually with --skip-install outside the app
+if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-0}" != "1" ]; }; then
   echo "📦 Creating DMG..."
   mkdir -p "$DMG_STAGING/root" "$DIST_DIR"
   rm -rf "$DMG_STAGING/root"/*
