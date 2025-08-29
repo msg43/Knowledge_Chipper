@@ -27,6 +27,7 @@ class ProcessorResult:
         errors: list[str] | None = None,
         warnings: list[str] | None = None,
         dry_run: bool = False,
+        usage: dict[str, Any] | None = None,
     ) -> None:
         """
         Initialize processor result
@@ -47,6 +48,8 @@ class ProcessorResult:
         self.errors = errors or []
         self.warnings = warnings or []
         self.dry_run = dry_run
+        # Optional usage statistics (tokens, cost, etc.)
+        self.usage = usage or {}
         self.timestamp = time.time()
 
     def __bool__(self) -> bool:

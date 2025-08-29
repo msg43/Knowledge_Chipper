@@ -290,6 +290,10 @@ class LocalLLMProvider(BaseLLMProvider):
 
             url = f"{self.local_config.base_url}/api/generate"
 
+            # Limit generation to avoid timeouts and runaway outputs on local models
+            from ..config import get_settings
+            settings = get_settings()
+            max_predict_tokens = settings.local_config.num_predict
             payload = {
                 "model": self.model,
                 "prompt": prompt,
@@ -299,6 +303,9 @@ class LocalLLMProvider(BaseLLMProvider):
                     "top_k": 40,
                     "top_p": 0.9,
                     "repeat_penalty": 1.1,
+                    "num_predict": max_predict_tokens,
+                    # Keep context modest for small models to improve latency
+                    "num_ctx": settings.local_config.num_ctx,
                 },
             }
 

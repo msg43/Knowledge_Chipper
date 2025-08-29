@@ -229,6 +229,13 @@ class LLMConfig(BaseModel):
         default="qwen2.5-coder:7b-instruct",
         description="Local model name for local provider",
     )
+    # Summarization prompt controls
+    summarization_prompt_max_chars: int = Field(
+        default=8000,
+        ge=1000,
+        le=120000,
+        description="Max characters of source text inserted into summarization prompts",
+    )
 
 
 class LocalLLMConfig(BaseModel):
@@ -243,6 +250,22 @@ class LocalLLMConfig(BaseModel):
     )
     backend: str = Field(
         default="ollama", description="Local LLM backend (ollama, lmstudio, etc.)"
+    )
+    # Generation caps for local providers
+    num_predict: int = Field(
+        default=600,
+        ge=64,
+        le=8192,
+        description="Maximum tokens to generate in local model responses",
+    )
+    num_ctx: int = Field(
+        default=4096,
+        ge=1024,
+        le=131072,
+        description="Context window to request for local models (if applicable)",
+    )
+    use_stream: bool = Field(
+        default=True, description="Use streaming responses for local providers when available"
     )
 
 

@@ -1,4 +1,6 @@
 from pathlib import Path
+from ..config import get_settings
+from .types import EpisodeBundle, ConsolidatedClaim
 
 from .models.llm_any import AnyLLM
 from .types import CandidateClaim, EvidenceSpan, Segment
@@ -31,3 +33,26 @@ class Miner:
                 )
             )
         return out
+
+
+def mine_claims(episode: EpisodeBundle, miner_model_uri: str) -> list[ConsolidatedClaim]:
+    """Compatibility wrapper used by HCEPipeline to mine and dedupe claims."""
+    from .dedupe import Deduper
+    from .models.embedder import Embedder
+
+    # Build LLM from provided miner model URI
+    llm = AnyLLM(miner_model_uri)
+    prompt_path = Path(__file__).parent / "prompts" / "miner.txt"
+    m = Miner(llm, prompt_path)
+
+    # Mine candidates per segment
+    candidates = []
+    for seg in episode.segments:
+        candidates.extend(m.mine_segment(seg))
+
+    # Deduplicate to consolidated claims
+    settings = get_settings()
+    embedder = Embedder(settings.hce.embedder_model)
+    deduper = Deduper(embedder)
+    consolidated = deduper.cluster(candidates)
+    return consolidated

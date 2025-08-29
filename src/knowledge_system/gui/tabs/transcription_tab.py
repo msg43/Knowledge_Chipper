@@ -1279,12 +1279,31 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 )
 
                 if not is_diarization_available():
-                    self.show_error(
-                        "Missing Diarization Dependencies",
-                        "Speaker diarization requires additional dependencies.\n\n"
-                        + get_diarization_installation_instructions(),
-                    )
-                    return False
+                    try:
+                        from ..dialogs.diarization_setup_dialog import DiarizationSetupDialog
+
+                        # Offer guided installation flow
+                        install_dialog = DiarizationSetupDialog(self)
+                        install_dialog.exec()
+                    except Exception:
+                        self.show_error(
+                            "Missing Diarization Dependencies",
+                            "Speaker diarization requires additional dependencies.\n\n"
+                            + get_diarization_installation_instructions(),
+                        )
+                        return False
+                if not is_diarization_available():
+                    try:
+                        from ..dialogs.diarization_setup_dialog import DiarizationSetupDialog
+                        install_dialog = DiarizationSetupDialog(self)
+                        install_dialog.exec()
+                    except Exception:
+                        self.show_error(
+                            "Missing Diarization Dependencies",
+                            "Speaker diarization requires additional dependencies.\n\n"
+                            + get_diarization_installation_instructions(),
+                        )
+                        return False
             except ImportError:
                 self.show_error(
                     "Missing Dependency",
