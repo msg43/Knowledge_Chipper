@@ -238,3 +238,16 @@ settings.yaml
 # Internal documentation (development only)
 docs/internal/
 
+# Test data files created by test file creation scripts
+tests/fixtures/sample_files/audio/
+tests/fixtures/sample_files/video/
+tests/fixtures/sample_files/documents/
+tests/fixtures/sample_files/_work/
+tests/fixtures/sample_files/working_audio/
+tests/fixtures/sample_files/README_generated.md
+
+# Test suite output directories
+tests/reports/
+tests/data/test_files/Test Outputs/
+tests/real_speech_pack/
+
