@@ -151,7 +151,7 @@ class YouTubeErrorHandler:
                 "407 Proxy Authentication Required",
                 "Proxy authentication failed",
             ],
-            "message": "🔐 Proxy authentication failed: Please check your WebShare Username and Password in Settings",
+            "message": "🔐 Proxy authentication failed: Please check your proxy credentials in Settings",
             "category": "authentication",
         },
         "proxy_connection": {
@@ -160,7 +160,7 @@ class YouTubeErrorHandler:
                 "Tunnel connection failed",
                 "ProxyError",
             ],
-            "message": "🌐 Proxy connection failed: WebShare proxy may be unavailable or blocked",
+            "message": "🌐 Proxy connection failed: Proxy may be unavailable or blocked",
             "category": "network",
         },
         "bot_detection": {

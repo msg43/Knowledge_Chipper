@@ -150,28 +150,146 @@ class ClaimSearchTab(BaseTab):
         search_layout = QVBoxLayout()
 
         # Search input
+        search_text_layout = QHBoxLayout()
+        search_text_layout.addWidget(QLabel("Search Text:"))
+        
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Enter search terms...")
         self.search_input.returnPressed.connect(self._start_search)
-        search_layout.addWidget(QLabel("Search Text:"))
-        search_layout.addWidget(self.search_input)
+        self.search_input.setToolTip(
+            "Search for claims containing specific text or keywords.\n"
+            "• Search across claim text, evidence, and related metadata\n"
+            "• Use specific terms for better results\n"
+            "• Press Enter or click Search button to execute\n"
+            "• Results are ranked by relevance and confidence tier"
+        )
+        search_text_layout.addWidget(self.search_input)
+        
+        # Add info indicator for search input
+        search_info_label = QLabel("ⓘ")
+        search_info_label.setFixedSize(16, 16)
+        search_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        search_info_label.setToolTip(
+            "<b>Search Text:</b><br/><br/>"
+            "Search for claims containing specific text or keywords.<br/>"
+            "• Search across claim text, evidence, and related metadata<br/>"
+            "• Use specific terms for better results<br/>"
+            "• Press Enter or click Search button to execute<br/>"
+            "• Results are ranked by relevance and confidence tier"
+        )
+        search_info_label.setStyleSheet(
+            """
+            QLabel {
+                color: #007AFF;
+                font-size: 12px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+            }
+            QLabel:hover {
+                color: #0051D5;
+            }
+        """
+        )
+        search_text_layout.addWidget(search_info_label)
+        search_layout.addLayout(search_text_layout)
 
         # Filters
         filters_layout = QHBoxLayout()
 
         # Tier filter
-        filters_layout.addWidget(QLabel("Tier:"))
+        tier_filter_layout = QHBoxLayout()
+        tier_filter_layout.addWidget(QLabel("Tier:"))
         self.tier_filter = QComboBox()
         self.tier_filter.addItems(["All", "Tier A", "Tier B+", "Tier C+"])
-        filters_layout.addWidget(self.tier_filter)
+        self.tier_filter.setToolTip(
+            "Filter claims by confidence tier:\n"
+            "• All: Show claims from all tiers\n"
+            "• Tier A: High-confidence, core claims (85%+ confidence)\n"
+            "• Tier B+: Medium+ confidence claims (includes A and B tiers)\n"
+            "• Tier C+: All claims (includes A, B, and C tiers)\n"
+            "Higher tiers indicate more reliable and important claims"
+        )
+        tier_filter_layout.addWidget(self.tier_filter)
+        
+        # Add info indicator for tier filter
+        tier_info_label = QLabel("ⓘ")
+        tier_info_label.setFixedSize(16, 16)
+        tier_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        tier_info_label.setToolTip(
+            "<b>Tier Filter:</b><br/><br/>"
+            "Filter claims by confidence tier:<br/>"
+            "• All: Show claims from all tiers<br/>"
+            "• Tier A: High-confidence, core claims (85%+ confidence)<br/>"
+            "• Tier B+: Medium+ confidence claims (includes A and B tiers)<br/>"
+            "• Tier C+: All claims (includes A, B, and C tiers)<br/>"
+            "Higher tiers indicate more reliable and important claims"
+        )
+        tier_info_label.setStyleSheet(
+            """
+            QLabel {
+                color: #007AFF;
+                font-size: 12px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+            }
+            QLabel:hover {
+                color: #0051D5;
+            }
+        """
+        )
+        tier_filter_layout.addWidget(tier_info_label)
+        filters_layout.addLayout(tier_filter_layout)
 
         # Type filter
-        filters_layout.addWidget(QLabel("Type:"))
+        type_filter_layout = QHBoxLayout()
+        type_filter_layout.addWidget(QLabel("Type:"))
         self.type_filter = QComboBox()
         self.type_filter.addItems(
             ["All", "factual", "opinion", "prediction", "causal", "definition"]
         )
-        filters_layout.addWidget(self.type_filter)
+        self.type_filter.setToolTip(
+            "Filter claims by type:\n"
+            "• All: Show all claim types\n"
+            "• Factual: Objective, verifiable statements\n"
+            "• Opinion: Subjective viewpoints and interpretations\n"
+            "• Prediction: Future-oriented claims and forecasts\n"
+            "• Causal: Cause-and-effect relationships\n"
+            "• Definition: Explanations and terminology"
+        )
+        type_filter_layout.addWidget(self.type_filter)
+        
+        # Add info indicator for type filter
+        type_info_label = QLabel("ⓘ")
+        type_info_label.setFixedSize(16, 16)
+        type_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        type_info_label.setToolTip(
+            "<b>Type Filter:</b><br/><br/>"
+            "Filter claims by type:<br/>"
+            "• All: Show all claim types<br/>"
+            "• Factual: Objective, verifiable statements<br/>"
+            "• Opinion: Subjective viewpoints and interpretations<br/>"
+            "• Prediction: Future-oriented claims and forecasts<br/>"
+            "• Causal: Cause-and-effect relationships<br/>"
+            "• Definition: Explanations and terminology"
+        )
+        type_info_label.setStyleSheet(
+            """
+            QLabel {
+                color: #007AFF;
+                font-size: 12px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+            }
+            QLabel:hover {
+                color: #0051D5;
+            }
+        """
+        )
+        type_filter_layout.addWidget(type_info_label)
+        filters_layout.addLayout(type_filter_layout)
 
         search_layout.addLayout(filters_layout)
 
@@ -179,6 +297,13 @@ class ClaimSearchTab(BaseTab):
         self.search_btn = QPushButton("🔍 Search Claims")
         self.search_btn.clicked.connect(self._start_search)
         self.search_btn.setStyleSheet("background-color: #1976d2; font-weight: bold;")
+        self.search_btn.setToolTip(
+            "Execute claim search with current filters and query.\n"
+            "• Searches across all processed HCE summaries\n"
+            "• Results are grouped by tier (A, B, C) for easy review\n"
+            "• Select any result to view detailed claim information\n"
+            "• Shows claim relationships and evidence when available"
+        )
         search_layout.addWidget(self.search_btn)
 
         search_group.setLayout(search_layout)

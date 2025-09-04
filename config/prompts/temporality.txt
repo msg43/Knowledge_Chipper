@@ -1,0 +1,53 @@
+You are an expert analyst tasked with determining the temporal characteristics of claims. Analyze each claim to classify it as one of four types:
+
+**TEMPORALITY SCALE (1-5):**
+
+**5 - TIMELESS**: Universal truths, mathematical facts, scientific laws, fundamental principles that remain valid indefinitely
+   - Examples: "Gravity exists", "2+2=4", "Water boils at 100°C at sea level", "Human beings are social creatures"
+   - Relevance: Decades to centuries+
+
+**4 - LONG-TERM**: Fundamental trends, institutional knowledge, major technological shifts with decade+ relevance
+   - Examples: "AI will transform healthcare", "Climate change requires urgent action", "Digital transformation is reshaping business"
+   - Relevance: 10+ years
+
+**3 - MEDIUM-TERM**: Policy cycles, technology adoption patterns, generational changes with multi-year relevance
+   - Examples: "Remote work is becoming permanent", "Electric vehicles are gaining market share", "Inflation is affecting consumer behavior"
+   - Relevance: 1-10 years
+
+**2 - SHORT-TERM**: Current events, market conditions, seasonal trends with month-to-year relevance
+   - Examples: "Interest rates are rising", "Supply chain disruptions are affecting production", "Housing market is cooling"
+   - Relevance: Weeks to months
+
+**1 - IMMEDIATE**: Breaking news, daily events, sports scores, real-time data that becomes outdated within days
+   - Examples: "Tesla stock hit $200 today", "The Orioles won last night's game", "Traffic is heavy on I-95"
+   - Relevance: Days to weeks
+
+**ANALYSIS CRITERIA:**
+- Look for temporal indicators (dates, time words, current events)
+- Consider if the claim depends on rapidly changing circumstances
+- Evaluate whether the claim expresses universal vs. contextual truth
+- Assess if verification of the claim will remain possible over time
+
+**CLAIM TO ANALYZE:**
+Claim: "{claim_text}"
+Type: {claim_type}
+Evidence: {evidence_text}
+
+**INSTRUCTIONS:**
+Return a JSON array with exactly one object containing:
+- "temporality_score": integer from 1-5 (as defined above)
+- "confidence": float between 0.0-1.0 indicating how certain you are
+- "rationale": string explaining your reasoning (50-150 words)
+
+**EXAMPLES:**
+
+Claim: "Artificial intelligence will transform healthcare"
+Response: [{{"temporality_score": 4, "confidence": 0.8, "rationale": "This claim expresses a fundamental technological transformation with long-term implications spanning decades. While specific AI applications may evolve, the core trend of AI transforming healthcare represents a major shift with 10+ year relevance, making it long-term rather than timeless."}}]
+
+Claim: "Apple's stock price hit a new high today"
+Response: [{{"temporality_score": 1, "confidence": 0.95, "rationale": "This claim is explicitly tied to a specific day ('today') and refers to rapidly changing financial data. Stock prices fluctuate constantly, making this information relevant only for days before it becomes historical data with no practical relevance."}}]
+
+Claim: "The speed of light is constant"
+Response: [{{"temporality_score": 5, "confidence": 0.99, "rationale": "This represents a fundamental physical law that has been consistent across all observations and is expected to remain true indefinitely. It's a universal truth that forms the basis for our understanding of physics and will remain relevant across centuries."}}]
+
+Return only the JSON array, no additional text.

@@ -546,20 +546,29 @@ class BatchSpeakerAssignmentDialog(QDialog):
     
     def _show_speaker_assignment_dialog(self):
         """Show the speaker assignment dialog for the current recording."""
+        # Critical safety check: Never show dialog during testing mode
+        from ...utils.testing import is_testing_mode
+        if is_testing_mode():
+            from ...logger import get_logger
+            logger = get_logger(__name__)
+            logger.error("🧪 CRITICAL: Attempted to show BatchSpeakerAssignmentDialog during testing mode - BLOCKED!")
+            return
+            
         if not (0 <= self.current_index < len(self.recordings)):
             return
         
         recording = self.recordings[self.current_index]
         
-        # Show speaker assignment dialog
-        dialog = SpeakerAssignmentDialog(
+        # Show speaker assignment dialog using safe wrapper function
+        from .speaker_assignment_dialog import show_speaker_assignment_dialog
+        assignments = show_speaker_assignment_dialog(
             recording.speaker_data_list,
             str(recording.file_path),
-            self
+            None,  # metadata
+            self   # parent
         )
         
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            assignments = dialog.get_assignments()
+        if assignments:
             recording.assignments = assignments
             recording.processed = True
             

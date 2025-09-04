@@ -1,0 +1,70 @@
+You are an expert knowledge categorization analyst. Analyze this episode to determine what structured categories it covers, following Wikidata's approach to organizing knowledge domains.
+
+**STRUCTURED CATEGORIES APPROACH:**
+Based on Wikidata's structured categories methodology (https://www.wikidata.org/wiki/Wikidata:Structured_Categories), identify the main knowledge domains, fields, and topics that this episode substantially covers.
+
+**ANALYSIS FACTORS:**
+- Claims and their subject matter
+- Entities (people, organizations) and their domains  
+- Concepts and mental models discussed
+- Technical jargon and specialized terminology
+- Depth and frequency of coverage for each topic
+
+**EPISODE DATA:**
+Episode ID: {episode_id}
+Number of Claims: {num_claims}
+
+**SAMPLE CLAIMS:**
+{claims_sample}
+
+**KEY ENTITIES:** {entities}
+**CONCEPTS DISCUSSED:** {concepts} 
+**TECHNICAL TERMS:** {jargon}
+**ENTITY TYPES:** {entity_types}
+**CLAIM TYPES:** {claim_types}
+
+**INSTRUCTIONS:**
+Identify 3-8 structured categories that best represent what this episode covers. For each category:
+
+1. **category_name**: Clear, specific category name (e.g., "Artificial Intelligence", "Climate Science", "Economic Policy")
+2. **confidence**: 0.0-1.0 how strongly this episode covers this category
+3. **wikidata_qid**: Wikidata Q-identifier if you know it (e.g., "Q11660" for AI), or null
+4. **frequency_score**: 0.0-1.0 how often category-related content appears
+5. **supporting_claim_ids**: Array of claim indices that support this categorization
+
+**CATEGORY SELECTION CRITERIA:**
+- Focus on substantial coverage, not brief mentions
+- Prefer specific over general categories when possible
+- Include interdisciplinary categories if episode bridges fields
+- Consider both explicit topics and implicit themes
+
+**COMMON WIKIDATA CATEGORIES:**
+- Artificial Intelligence (Q11660)
+- Economics (Q8134) 
+- Technology (Q11016)
+- Science (Q336)
+- Philosophy (Q5891)
+- Politics (Q7163)
+- Business (Q4830453)
+- Health (Q12136)
+- Climate Change (Q125928)
+
+**EXAMPLE OUTPUT:**
+[
+  {{
+    "category_name": "Artificial Intelligence",
+    "confidence": 0.9,
+    "wikidata_qid": "Q11660",
+    "frequency_score": 0.8,
+    "supporting_claim_ids": ["claim_001", "claim_003", "claim_007"]
+  }},
+  {{
+    "category_name": "Technology Ethics", 
+    "confidence": 0.7,
+    "wikidata_qid": null,
+    "frequency_score": 0.4,
+    "supporting_claim_ids": ["claim_002", "claim_008"]
+  }}
+]
+
+Return only the JSON array of categories, no additional text.

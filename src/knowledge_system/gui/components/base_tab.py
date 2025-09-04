@@ -176,29 +176,50 @@ class BaseTab(QWidget):
         layout.addWidget(label, row, col)
         layout.addWidget(widget_container, row, col + 1)
 
-    def append_log(self, message: str) -> None:
+    def append_log(self, message: str, force_update: bool = True) -> None:
         """Append a message to the output log with immediate GUI update."""
         if hasattr(self, "output_text"):
             self.output_text.append(message)
-            # Force immediate GUI update and scroll to bottom
-            self.output_text.repaint()
-            self.output_text.ensureCursorVisible()
-            # Process events multiple times to ensure immediate visual update
-            from PyQt6.QtWidgets import QApplication
+            
+            if force_update:
+                # Force immediate GUI update and scroll to bottom
+                self.output_text.repaint()
+                self.output_text.ensureCursorVisible()
+                # Process events multiple times to ensure immediate visual update
+                from PyQt6.QtWidgets import QApplication
 
-            # Process events immediately to update GUI
-            QApplication.processEvents()
-            # Force another repaint cycle
-            self.output_text.update()
-            # Process events again for any pending redraws
-            QApplication.processEvents()
+                # Process events immediately to update GUI
+                QApplication.processEvents()
+                # Force another repaint cycle
+                self.output_text.update()
+                # Process events again for any pending redraws
+                QApplication.processEvents()
 
         self.log_message.emit(message)
 
-        # Process events one more time after signal emission
-        from PyQt6.QtWidgets import QApplication
+        if force_update:
+            # Process events one more time after signal emission
+            from PyQt6.QtWidgets import QApplication
+            QApplication.processEvents()
 
-        QApplication.processEvents()
+    def update_last_log_line(self, message: str) -> None:
+        """Update the last line in the output log instead of adding a new line."""
+        if hasattr(self, "output_text"):
+            # Get current content and remove the last line
+            current_content = self.output_text.toPlainText()
+            lines = current_content.split('\n')
+            if lines:
+                lines[-1] = message  # Replace last line
+                self.output_text.setPlainText('\n'.join(lines))
+            else:
+                self.output_text.setPlainText(message)
+            
+            # Force immediate GUI update and scroll to bottom
+            self.output_text.repaint()
+            self.output_text.ensureCursorVisible()
+            # Process events for immediate visual update
+            from PyQt6.QtWidgets import QApplication
+            QApplication.processEvents()
 
     def clear_log(self) -> None:
         """Clear the output log."""

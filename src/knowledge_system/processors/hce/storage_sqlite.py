@@ -101,14 +101,19 @@ def upsert_pipeline_outputs(
 
             cur.execute(
                 """
-                INSERT INTO claims(episode_id, claim_id, canonical, claim_type, tier, first_mention_ts, scores_json)
-                VALUES(?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO claims(episode_id, claim_id, canonical, claim_type, tier, first_mention_ts, scores_json, temporality_score, temporality_confidence, temporality_rationale, structured_categories_json, category_relevance_scores_json)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(episode_id, claim_id) DO UPDATE SET
                     canonical = excluded.canonical,
                     claim_type = excluded.claim_type,
                     tier = excluded.tier,
                     first_mention_ts = excluded.first_mention_ts,
-                    scores_json = excluded.scores_json
+                    scores_json = excluded.scores_json,
+                    temporality_score = excluded.temporality_score,
+                    temporality_confidence = excluded.temporality_confidence,
+                    temporality_rationale = excluded.temporality_rationale,
+                    structured_categories_json = excluded.structured_categories_json,
+                    category_relevance_scores_json = excluded.category_relevance_scores_json
             """,
                 (
                     out.episode_id,
@@ -118,6 +123,11 @@ def upsert_pipeline_outputs(
                     claim.tier,
                     first_mention_ts,
                     json.dumps(claim.scores),
+                    claim.temporality_score,
+                    claim.temporality_confidence,
+                    claim.temporality_rationale,
+                    json.dumps(claim.structured_categories),
+                    json.dumps(claim.category_relevance_scores),
                 ),
             )
 
@@ -130,12 +140,12 @@ def upsert_pipeline_outputs(
                 (out.episode_id, claim.claim_id),
             )
 
-            # Insert evidence spans
+            # Insert evidence spans with dual-level context
             for i, evidence in enumerate(claim.evidence):
                 cur.execute(
                     """
-                    INSERT INTO evidence_spans(episode_id, claim_id, seq, segment_id, t0, t1, quote)
-                    VALUES(?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO evidence_spans(episode_id, claim_id, seq, segment_id, t0, t1, quote, context_t0, context_t1, context_text, context_type)
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         out.episode_id,
@@ -145,6 +155,10 @@ def upsert_pipeline_outputs(
                         evidence.t0,
                         evidence.t1,
                         evidence.quote,
+                        evidence.context_t0,
+                        evidence.context_t1,
+                        evidence.context_text,
+                        evidence.context_type,
                     ),
                 )
 
@@ -261,6 +275,31 @@ def upsert_pipeline_outputs(
                     term.category,
                     term.definition,
                     evidence_json,
+                ),
+            )
+
+        # Upsert structured categories
+        for category in out.structured_categories:
+            supporting_evidence_json = json.dumps(category.supporting_evidence)
+            cur.execute(
+                """
+                INSERT INTO structured_categories(episode_id, category_id, category_name, wikidata_qid, coverage_confidence, supporting_evidence_json, frequency_score)
+                VALUES(?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(episode_id, category_id) DO UPDATE SET
+                    category_name = excluded.category_name,
+                    wikidata_qid = excluded.wikidata_qid,
+                    coverage_confidence = excluded.coverage_confidence,
+                    supporting_evidence_json = excluded.supporting_evidence_json,
+                    frequency_score = excluded.frequency_score
+            """,
+                (
+                    out.episode_id,
+                    category.category_id,
+                    category.category_name,
+                    category.wikidata_qid,
+                    category.coverage_confidence,
+                    supporting_evidence_json,
+                    category.frequency_score,
                 ),
             )
 

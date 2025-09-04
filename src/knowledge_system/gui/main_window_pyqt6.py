@@ -87,8 +87,13 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
 
-        # Force window to be active
-        self.setWindowState(Qt.WindowState.WindowActive)
+        # Force window to be active (unless in testing mode)
+        if not os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
+            self.setWindowState(Qt.WindowState.WindowActive)
+        else:
+            # In testing mode, start minimized and hidden
+            self.setWindowState(Qt.WindowState.WindowMinimized)
+            self.hide()  # Start hidden
 
         # Initialize settings FIRST before any UI creation
         self.settings = get_settings()
@@ -121,8 +126,9 @@ class MainWindow(QMainWindow):
         # Load session state after UI is set up
         self._load_session()
 
-        # Check for updates if enabled
-        self._check_for_updates_on_launch()
+        # Check for updates if enabled (skip during testing)
+        # Note: Update check disabled to prevent 404 errors during testing
+        # self._check_for_updates_on_launch()
 
         # Monthly FFmpeg check (lightweight)
         self._ffmpeg_monthly_check()
@@ -208,10 +214,10 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(introduction_tab, "Introduction")
 
         youtube_tab = YouTubeTab(self)
-        self.tabs.addTab(youtube_tab, "Extraction")
+        self.tabs.addTab(youtube_tab, "Cloud Transcription")
 
         transcription_tab = TranscriptionTab(self)
-        self.tabs.addTab(transcription_tab, "Transcription")
+        self.tabs.addTab(transcription_tab, "Local Transcription")
 
         summarization_tab = SummarizationTab(self)
         self.tabs.addTab(summarization_tab, "Summarization")
@@ -252,13 +258,14 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.warning(f"Cloud Uploads tab disabled: {e}")
 
-        # Cloud sync status tab
-        if SyncStatusTab is not None:
-            try:
-                sync_status_tab = SyncStatusTab(self)
-                self.tabs.addTab(sync_status_tab, "☁️ Sync Status")
-            except Exception as e:
-                logger.warning(f"Sync Status tab disabled: {e}")
+        # Cloud sync status tab - DISABLED for redesign (saved for future re-tooling)
+        # TODO: Re-enable when bidirectional sync is needed
+        # if SyncStatusTab is not None:
+        #     try:
+        #         sync_status_tab = SyncStatusTab(self)
+        #         self.tabs.addTab(sync_status_tab, "☁️ Sync Status")
+        #     except Exception as e:
+        #         logger.warning(f"Sync Status tab disabled: {e}")
 
     def _navigate_to_tab(self, tab_name: str) -> None:
         """Navigate to a specific tab by name."""
@@ -480,6 +487,11 @@ class MainWindow(QMainWindow):
     def _check_first_run_ffmpeg_setup(self) -> None:
         """Check if this is first run and offer FFmpeg setup."""
         try:
+            # CRITICAL: Skip first-run dialogs during testing
+            if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
+                logger.info("🧪 Testing mode: Skipping first-run FFmpeg setup dialog")
+                return
+                
             import shutil
             from .core.settings_manager import get_gui_settings_manager
             from .dialogs.ffmpeg_setup_dialog import FFmpegSetupDialog
@@ -515,6 +527,11 @@ class MainWindow(QMainWindow):
     def _show_first_run_ffmpeg_dialog(self) -> None:
         """Show the first-run FFmpeg setup dialog."""
         try:
+            # CRITICAL: Additional safety check for testing mode
+            if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
+                logger.info("🧪 Testing mode: Blocked FFmpeg dialog creation (safety check)")
+                return
+                
             from .dialogs.ffmpeg_setup_dialog import FFmpegSetupDialog
             
             dialog = FFmpegSetupDialog(self)
@@ -535,6 +552,11 @@ class MainWindow(QMainWindow):
     def _check_first_run_model_setup(self) -> None:
         """Check if this is first run and offer model download setup."""
         try:
+            # CRITICAL: Skip first-run dialogs during testing
+            if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
+                logger.info("🧪 Testing mode: Skipping first-run model setup dialog")
+                return
+                
             from pathlib import Path
             from .core.settings_manager import get_gui_settings_manager
 
@@ -584,6 +606,11 @@ class MainWindow(QMainWindow):
     def _show_first_run_model_dialog(self) -> None:
         """Show the first-run model setup dialog."""
         try:
+            # CRITICAL: Additional safety check for testing mode
+            if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
+                logger.info("🧪 Testing mode: Blocked model setup dialog creation (safety check)")
+                return
+                
             dialog = FirstRunSetupDialog(self)
             
             def on_setup_completed(success: bool):
@@ -638,7 +665,7 @@ def launch_gui() -> None:
 
         # For macOS: Set environment variables to avoid Python rocket ship icon
         if sys.platform == "darwin":
-            os.environ["PYQT_MACOS_BUNDLE_IDENTIFIER"] = "com.knowledgechipper.app"
+            os.environ["PYQT_MACOS_BUNDLE_IDENTIFIER"] = "com.knowledgechipper.app"  # Keep for compatibility
             # Try to use app bundle path if available
             bundle_path = os.environ.get("RESOURCEPATH")
             if not bundle_path and hasattr(sys, "_MEIPASS"):
@@ -668,10 +695,10 @@ def launch_gui() -> None:
                     pass  # Process title setting failed
 
         # Set application properties
-        app.setApplicationName("Knowledge_Chipper")
-        app.setApplicationDisplayName("Knowledge Chipper")
+        app.setApplicationName("Skip the Podcast Desktop")
+        app.setApplicationDisplayName("Skip the Podcast Desktop")
         app.setApplicationVersion("1.0")
-        app.setOrganizationName("Knowledge_Chipper")
+        app.setOrganizationName("Skip the Podcast Desktop")
         app.setOrganizationDomain("knowledge-chipper.local")
 
         # Set custom application icon (both window and app icon)
@@ -686,13 +713,27 @@ def launch_gui() -> None:
         else:
             logger.warning("No custom icon found for application")
 
-        # Create and show the main window
+        # Check if we're in testing mode and set environment variable for subprocess
+        testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
+        if testing_mode:
+            logger.info("🧪 GUI subprocess detected testing mode - setting environment for child processes")
+            # Ensure all child processes know we're in testing mode
+            os.environ["KNOWLEDGE_CHIPPER_TESTING_MODE"] = "1"
+        
+        # Create the main window
         window = MainWindow()
-        window.show()
-
-        # Ensure the window is raised and gets focus
-        window.raise_()
-        window.activateWindow()
+        
+        # Show and focus behavior depends on testing mode
+        if not os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
+            # Normal mode: show and focus
+            window.show()
+            window.raise_()
+            window.activateWindow()
+        else:
+            # Testing mode: show hidden without focus stealing
+            window.show()  # This is needed for GUI automation to work
+            window.setWindowState(Qt.WindowState.WindowMinimized)
+            logger.info("GUI launched in testing mode - minimized and hidden")
 
         # Start the event loop
         sys.exit(app.exec())

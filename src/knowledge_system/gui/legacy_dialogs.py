@@ -534,9 +534,9 @@ class ProcessingProgressDialog(QDialog):
 
         # Header
         icon_map = {
-            "Transcription": "🎵",
+            "Local Transcription": "🎵",
             "Summarization": "📝",
-            "Extraction": "📄",
+            "Cloud Transcription": "📄",
             "MOC Generation": "🗺️",
         }
         icon = icon_map.get(self.operation_name, "⚙️")
@@ -727,7 +727,7 @@ class TranscriptionProgressDialog(ProcessingProgressDialog):
     """Enhanced progress dialog for transcription operations."""
 
     def __init__(self, file_count: int, parent=None) -> None:
-        super().__init__("Transcription", file_count, parent)
+        super().__init__("Local Transcription", file_count, parent)
 
     def update_transcription_progress(self, progress: TranscriptionProgress):
         """Update transcription-specific progress."""
@@ -807,7 +807,7 @@ class ExtractionProgressDialog(ProcessingProgressDialog):
     """Enhanced progress dialog for extraction operations."""
 
     def __init__(self, file_count: int, parent=None) -> None:
-        super().__init__("Extraction", file_count, parent)
+        super().__init__("Cloud Transcription", file_count, parent)
 
     def update_extraction_progress(self, progress: ExtractionProgress):
         """Update extraction-specific progress."""

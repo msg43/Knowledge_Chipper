@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...config import get_valid_whisper_models
 from ...logger import get_logger
 from ...utils.cancellation import CancellationToken
 from ..components.base_tab import BaseTab
@@ -130,7 +131,16 @@ class YouTubeExtractionWorker(QThread):
                     f"📊 Total content to process: {total_videos_all_sources} videos"
                 )
 
-            processor = YouTubeTranscriptProcessor()
+            # Instantiate processor; if diarization is enabled, force diarization path to bypass transcript requirement
+            enable_diarization_cfg = bool(self.config.get("enable_diarization", False))
+            if enable_diarization_cfg:
+                logger.info("Diarization enabled in GUI - forcing diarization mode in processor")
+                processor = YouTubeTranscriptProcessor(
+                    force_diarization=True,
+                    require_diarization=False,
+                )
+            else:
+                processor = YouTubeTranscriptProcessor()
             results = {
                 "successful": 0,
                 "failed": 0,
@@ -166,7 +176,7 @@ class YouTubeExtractionWorker(QThread):
                     )
                     logger.info(f"YouTube extraction stopped by user after {i} URLs")
                     self.progress_updated.emit(
-                        i, total_urls, f"❌ Extraction cancelled after {i} URLs"
+                        i, total_urls, f"❌ Cloud transcription cancelled after {i} URLs"
                     )
                     break
 
@@ -428,6 +438,31 @@ class YouTubeExtractionWorker(QThread):
                             ):
                                 self.payment_required.emit()
 
+                            # Show a targeted popup if the failure is diarization-related
+                            if "Diarization failed" in error_msg or "diarization" in error_msg.lower():
+                                try:
+                                    from PyQt6.QtWidgets import QMessageBox
+
+                                    guidance = (
+                                        "Diarization failed. To fix:\n\n"
+                                        "1) Ensure HuggingFace token is set (Settings → API Keys).\n"
+                                        "2) Accept access to pyannote/speaker-diarization-3.1 on HuggingFace.\n"
+                                        "3) Verify ffmpeg/ffprobe are installed and on PATH.\n"
+                                        "4) Check network stability and retry.\n\n"
+                                        "This URL has been added to the failure CSV for easy re-run."
+                                    )
+
+                                    msg = QMessageBox(self)
+                                    msg.setIcon(QMessageBox.Icon.Warning)
+                                    msg.setWindowTitle("Diarization Failure")
+                                    msg.setText(error_msg)
+                                    msg.setInformativeText(guidance)
+                                    msg.exec()
+                                except Exception:
+                                    self.append_log(
+                                        "⚠️ Diarization failed. Guidance: set HuggingFace token, accept pyannote model, install ffmpeg, then retry."
+                                    )
+
                             results["failed"] += 1
                             results["failed_urls"].append(
                                 {"url": url, "title": display_title, "error": error_msg}
@@ -463,7 +498,7 @@ class YouTubeExtractionWorker(QThread):
                     self.url_completed.emit(url, False, exception_msg)
 
             # Final progress update
-            completion_msg = f"🎉 Extraction complete! ✅ {results['successful']} successful, ❌ {results['failed']} failed out of {total_urls} total URLs"
+            completion_msg = f"🎉 Cloud transcription complete! ✅ {results['successful']} successful, ❌ {results['failed']} failed out of {total_urls} total URLs"
             self.progress_updated.emit(total_urls, total_urls, completion_msg)
 
             # Emit completion
@@ -510,7 +545,7 @@ class YouTubeExtractionWorker(QThread):
             # Write new timestamped log file
             with open(log_file, "w", encoding="utf-8") as f:
                 f.write(f"{'='*70}\n")
-                f.write("YouTube Extraction Failures\n")
+                f.write("YouTube Cloud Transcription Failures\n")
                 f.write(f"Session: {datetime.now().isoformat()}\n")
                 f.write(f"Total failed: {len(failed_urls)}\n")
                 f.write(f"{'='*70}\n\n")
@@ -540,13 +575,13 @@ class YouTubeExtractionWorker(QThread):
 
             with open(csv_file, "w", newline="", encoding="utf-8") as csvfile:
                 # Write header comments
-                csvfile.write("# YouTube Extraction Failures - URLs for retry\n")
+                csvfile.write("# YouTube Cloud Transcription Failures - URLs for retry\n")
                 csvfile.write(f"# Session: {formatted_timestamp}\n")
                 csvfile.write(f"# Total failures: {len(failed_urls)}\n")
                 csvfile.write("#\n")
                 csvfile.write("# Instructions:\n")
                 csvfile.write(
-                    "# 1. You can load this file directly into the Extraction tab\n"
+                    "# 1. You can load this file directly into the Cloud Transcription tab\n"
                 )
                 csvfile.write(
                     "# 2. Select 'Or Select File' option and browse to this CSV\n"
@@ -581,7 +616,9 @@ class YouTubeTab(BaseTab):
     def __init__(self, parent: Any = None) -> None:
         self.extraction_worker = None
         self.gui_settings = get_gui_settings_manager()
-        self.tab_name = "Extraction"
+        self.tab_name = "Cloud Transcription"
+        # Reentrancy guard for progress updates to prevent recursion
+        self._progress_update_inflight = False
         super().__init__(parent)
 
     def _setup_ui(self) -> None:
@@ -728,7 +765,7 @@ class YouTubeTab(BaseTab):
 
     def _create_settings_section(self) -> QGroupBox:
         """Create the extraction settings section."""
-        group = QGroupBox("Extraction Settings")
+        group = QGroupBox("Cloud Transcription Settings")
         layout = QGridLayout()
 
         # Output directory
@@ -775,6 +812,30 @@ class YouTubeTab(BaseTab):
             0,
         )
 
+        # Transcription model selection - on the same line as Output Format
+        self.transcription_model_combo = QComboBox()
+        self.transcription_model_combo.addItems(get_valid_whisper_models())
+        self.transcription_model_combo.setCurrentText("base")
+        self.transcription_model_combo.currentTextChanged.connect(self._on_setting_changed)
+        self.transcription_model_combo.setToolTip(
+            "<b>Transcription Model</b> - Choose Whisper model for diarization<br/><br/>"
+            "<b>Models (accuracy vs speed):</b><br/>"
+            "• <b>tiny</b>: Fastest, least accurate (39 MB)<br/>"
+            "• <b>base</b>: Good balance (74 MB) - recommended<br/>"
+            "• <b>small</b>: Better accuracy (244 MB)<br/>"
+            "• <b>medium</b>: High accuracy (769 MB)<br/>"
+            "• <b>large</b>: Best accuracy (1550 MB)<br/><br/>"
+            "<b>💡 Tip:</b> Start with 'base' model. Use larger models only if you need better accuracy."
+        )
+        self._add_field_with_info(
+            layout,
+            "Transcription Model:",
+            self.transcription_model_combo,
+            "Model used for speech recognition during diarization",
+            1,
+            2,
+        )
+
         self.overwrite_checkbox = QCheckBox("Overwrite existing transcripts")
         self.overwrite_checkbox.setChecked(False)
         self.overwrite_checkbox.toggled.connect(self._on_setting_changed)
@@ -785,8 +846,9 @@ class YouTubeTab(BaseTab):
         )
         layout.addWidget(self.overwrite_checkbox, 2, 0, 1, 2)
 
+        # Enable speaker diarization - on the same line as Overwrite checkbox
         self.diarization_checkbox = QCheckBox("Enable speaker diarization")
-        self.diarization_checkbox.setChecked(False)
+        self.diarization_checkbox.setChecked(True)
         self.diarization_checkbox.toggled.connect(self._on_setting_changed)
         self.diarization_checkbox.setToolTip(
             "<b>Speaker Diarization</b> - AI-powered speaker identification<br/><br/>"
@@ -813,7 +875,7 @@ class YouTubeTab(BaseTab):
         )
         layout.addWidget(self.diarization_checkbox, 2, 2)
 
-        # NEW: Download-all mode checkbox
+        # Download-all mode checkbox - positioned directly below Enable speaker diarization
         self.download_all_checkbox = QCheckBox("Download all audio files first")
         self.download_all_checkbox.setChecked(False)
         self.download_all_checkbox.toggled.connect(self._on_setting_changed)
@@ -825,7 +887,7 @@ class YouTubeTab(BaseTab):
             "• System automatically checks if you have enough disk space\n"
             "• Falls back to normal mode if insufficient space"
         )
-        layout.addWidget(self.download_all_checkbox, 3, 0, 1, 3)
+        layout.addWidget(self.download_all_checkbox, 3, 2)
 
         group.setLayout(layout)
         return group
@@ -848,7 +910,7 @@ class YouTubeTab(BaseTab):
             "• Downloads transcripts for all provided URLs\n"
             "• Downloads thumbnails for each video\n"
             "• Processes both individual videos and playlists\n"
-            "• Requires WebShare proxy credentials for YouTube access\n"
+            "• Requires Bright Data API key for YouTube access\n"
             "• Progress will be shown in real-time below"
         )
         # Make green and take 3/4 of the width
@@ -874,7 +936,7 @@ class YouTubeTab(BaseTab):
         )
         layout.addWidget(self.start_btn, 3)  # 3/4 stretch factor
 
-        self.stop_btn = QPushButton("Stop Extraction")
+        self.stop_btn = QPushButton("Stop Cloud Transcription")
         self.stop_btn.clicked.connect(self._stop_processing)
         self.stop_btn.setEnabled(False)  # Initially disabled
         # Set fixed height for consistent sizing
@@ -1163,17 +1225,36 @@ class YouTubeTab(BaseTab):
         self.append_log("🔐 Checking Bright Data API credentials...")
         bright_data_api_key = getattr(self.settings.api_keys, "bright_data_api_key", None)
 
-        if not bright_data_api_key:
+        if not bright_data_api_key or len(str(bright_data_api_key).strip()) == 0:
             self.append_log("❌ Bright Data API key missing!")
             self._reset_button_state()
-            self.show_warning(
-                "Missing Credentials",
-                "Bright Data API key is required for YouTube processing.\n\n"
-                "Please go to the Settings tab and enter your Bright Data API Key.",
+            self.show_error(
+                "Bright Data API Key Required",
+                "YouTube transcription requires a Bright Data API key to avoid anti-bot restrictions.\n\n"
+                "Please:\n"
+                "1. Go to the 'API Keys' tab\n"
+                "2. Enter your Bright Data API key\n"
+                "3. Click 'Save API Keys'\n"
+                "4. Return here to start processing\n\n"
+                "💡 Get your API key at: https://brightdata.com/\n\n"
+                "Note: Without this key, YouTube processing will fail due to anti-bot protections."
             )
             return
 
-        self.append_log("✅ Bright Data API key found")
+        # Validate API key format (basic check)
+        api_key_str = str(bright_data_api_key).strip()
+        if len(api_key_str) < 10:
+            self.append_log("❌ Bright Data API key appears invalid!")
+            self._reset_button_state()
+            self.show_error(
+                "Invalid Bright Data API Key",
+                "The Bright Data API key appears to be invalid (too short).\n\n"
+                "Please check your API key in the 'API Keys' tab and ensure it's entered correctly.\n\n"
+                "💡 Get your API key at: https://brightdata.com/"
+            )
+            return
+
+        self.append_log("✅ Bright Data API key configured")
 
         # Use async URL collection to prevent GUI blocking
         self.append_log("📋 Collecting URLs from input...")
@@ -1246,7 +1327,9 @@ class YouTubeTab(BaseTab):
             self.append_log("📁 Setting up output directory...")
             output_dir = self.output_dir_input.text().strip()
             if not output_dir:
-                output_dir = str(Path.cwd())
+                self.show_error("Invalid Output", "Output directory must be selected.")
+                self._reset_button_state()
+                return
 
             # Store URLs for later use
             self._pending_urls = urls
@@ -1257,7 +1340,7 @@ class YouTubeTab(BaseTab):
             self.async_validate_directory(
                 output_dir,
                 self._handle_directory_validation_result,
-                check_writable=True,  # Extraction tab needs writable directory
+                check_writable=True,  # Cloud Transcription tab needs writable directory
                 check_parent=False,
             )
 
@@ -1386,6 +1469,7 @@ class YouTubeTab(BaseTab):
             "timestamps": False,  # Do not include timestamps for YouTube transcripts
             "overwrite": self.overwrite_checkbox.isChecked(),
             "enable_diarization": enable_diarization,
+            "transcription_model": self.transcription_model_combo.currentText(),  # Pass selected model
             "download_all_mode": self.download_all_checkbox.isChecked(),
         }
 
@@ -1617,49 +1701,58 @@ class YouTubeTab(BaseTab):
 
     def _update_extraction_progress(self, current: int, total: int, status: str):
         """Update extraction progress with enhanced messaging."""
-        # Always display the status message for detailed progress
-        self.append_log(status)
+        # Prevent re-entrant recursion if progress signals arrive during GUI repaint
+        if not hasattr(self, "_progress_update_inflight"):
+            self._progress_update_inflight = False
+        if self._progress_update_inflight:
+            return
 
-        if total > 0:
-            percent = (current / total) * 100
-
-            # Enhanced progress label with more detail
-            if "downloading" in status.lower() or "download" in status.lower():
-                # Download phase
-                self.progress_label.setText(
-                    f"📥 Downloading audio {current + 1}/{total} ({percent:.1f}%)"
-                )
-            elif "processing" in status.lower() or "diarization" in status.lower():
-                # Processing phase
-                self.progress_label.setText(
-                    f"🎙️ Processing audio {current + 1}/{total} ({percent:.1f}%)"
-                )
-            elif "transcript" in status.lower():
-                # Transcript extraction
-                self.progress_label.setText(
-                    f"📝 Extracting transcripts {current + 1}/{total} ({percent:.1f}%)"
-                )
-            elif current >= total:
-                # Completion
-                self.progress_label.setText(f"✅ Completed {total}/{total} URLs (100%)")
+        self._progress_update_inflight = True
+        try:
+            # For download progress and similar repetitive updates, update the same line
+            # For other status messages, append normally
+            if any(indicator in status for indicator in ['📥', 'Downloading:', '%', 'MB/s', '🔄', 'Processing:']):
+                self.update_last_log_line(status)
             else:
-                # Generic progress
-                self.progress_label.setText(
-                    f"🔄 Processing {current + 1}/{total} URLs ({percent:.1f}%)"
-                )
+                self.append_log(status)
 
-            self.progress_bar.setValue(int(percent))
-            self.progress_bar.setVisible(True)
-        else:
-            # Indeterminate progress (preparing, initializing, etc.)
-            self.progress_bar.setValue(0)
-            self.progress_bar.setVisible(True)
-            self.progress_label.setText(status)
+            if total > 0:
+                percent = (current / total) * 100
 
-        # Force immediate GUI update for real-time display
-        from PyQt6.QtWidgets import QApplication
+                # Enhanced progress label with more detail
+                if "downloading" in status.lower() or "download" in status.lower():
+                    # Download phase
+                    self.progress_label.setText(
+                        f"📥 Downloading audio {current + 1}/{total} ({percent:.1f}%)"
+                    )
+                elif "processing" in status.lower() or "diarization" in status.lower():
+                    # Processing phase
+                    self.progress_label.setText(
+                        f"🎙️ Processing audio {current + 1}/{total} ({percent:.1f}%)"
+                    )
+                elif "transcript" in status.lower():
+                    # Transcript extraction
+                    self.progress_label.setText(
+                        f"📝 Extracting transcripts {current + 1}/{total} ({percent:.1f}%)"
+                    )
+                elif current >= total:
+                    # Completion
+                    self.progress_label.setText(f"✅ Completed {total}/{total} URLs (100%)")
+                else:
+                    # Generic progress
+                    self.progress_label.setText(
+                        f"🔄 Processing {current + 1}/{total} URLs ({percent:.1f}%)"
+                    )
 
-        QApplication.processEvents()
+                self.progress_bar.setValue(int(percent))
+                self.progress_bar.setVisible(True)
+            else:
+                # Indeterminate progress (preparing, initializing, etc.)
+                self.progress_bar.setValue(0)
+                self.progress_bar.setVisible(True)
+                self.progress_label.setText(status)
+        finally:
+            self._progress_update_inflight = False
 
     def _url_extraction_completed(self, url: str, success: bool, message: str):
         """Handle completion of single URL extraction."""
@@ -1808,7 +1901,7 @@ class YouTubeTab(BaseTab):
     def _extraction_error(self, error_msg: str):
         """Handle extraction error."""
         self.append_log(f"❌ Error: {error_msg}")
-        self.show_error("Extraction Error", f"YouTube extraction failed: {error_msg}")
+        self.show_error("Cloud Transcription Error", f"YouTube cloud transcription failed: {error_msg}")
 
         # Reset UI
         self.start_btn.setEnabled(True)
@@ -1816,7 +1909,7 @@ class YouTubeTab(BaseTab):
         self.stop_btn.setEnabled(False)  # Disable stop button
         self.progress_bar.setVisible(False)
         self.progress_bar.setValue(0)
-        self.progress_label.setText("Extraction failed")
+        self.progress_label.setText("Cloud transcription failed")
 
         self.status_updated.emit("Ready")
 
@@ -1827,11 +1920,11 @@ class YouTubeTab(BaseTab):
 
         payment_dialog = QMessageBox(self)
         payment_dialog.setIcon(QMessageBox.Icon.Warning)
-        payment_dialog.setWindowTitle("WebShare Payment Required")
-        payment_dialog.setText("💰 WebShare Proxy Payment Required")
+        payment_dialog.setWindowTitle("Bright Data Payment Required")
+        payment_dialog.setText("💰 Bright Data Payment/Quota Required")
         payment_dialog.setInformativeText(
-            "Your WebShare proxy account has run out of funds and requires payment to continue.\n\n"
-            "Please visit https://panel.webshare.io/ to add payment to your account.\n\n"
+            "Your Bright Data account may be out of quota or requires payment to continue.\n\n"
+            "Please visit https://brightdata.com/ to check your account and add funds if needed.\n\n"
             "This is not a bug in our application - it's a billing issue with your proxy service."
         )
         payment_dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
@@ -1903,7 +1996,7 @@ class YouTubeTab(BaseTab):
             )
             self.diarization_checkbox.setChecked(
                 self.gui_settings.get_checkbox_state(
-                    self.tab_name, "enable_diarization", False
+                    self.tab_name, "enable_diarization", True
                 )
             )
             self.download_all_checkbox.setChecked(
@@ -2019,12 +2112,30 @@ class YouTubeTab(BaseTab):
                 )
 
                 if not is_diarization_available():
-                    self.show_error(
-                        "Missing Diarization Dependencies",
-                        "Speaker diarization requires additional dependencies.\n\n"
-                        + get_diarization_installation_instructions(),
-                    )
-                    return False
+                    # Offer guided installation dialog, then re-check
+                    try:
+                        from ..dialogs.diarization_setup_dialog import DiarizationSetupDialog
+
+                        install_dialog = DiarizationSetupDialog(self)
+                        # Block until finished so we can re-check immediately
+                        install_dialog.exec()
+
+                        # Re-check availability after installer closes
+                        if not is_diarization_available():
+                            self.show_error(
+                                "Missing Diarization Dependencies",
+                                "Speaker diarization requires additional dependencies.\n\n"
+                                + get_diarization_installation_instructions(),
+                            )
+                            return False
+                    except Exception:
+                        # If dialog cannot be shown, display instructions directly
+                        self.show_error(
+                            "Missing Diarization Dependencies",
+                            "Speaker diarization requires additional dependencies.\n\n"
+                            + get_diarization_installation_instructions(),
+                        )
+                        return False
             except ImportError:
                 self.show_error(
                     "Missing Dependency",

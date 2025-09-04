@@ -1,0 +1,53 @@
+test_suite: comprehensive
+timeout: 1800  # 30 minutes per test
+file_size_limit_mb: 100
+operations:
+  - transcribe_only
+  - summarize_only
+  - full_pipeline
+  - moc_generation
+  - batch_processing
+tabs:
+  - Process Pipeline
+  - Local Transcription
+  - Summarization
+  - YouTube
+  - File Watcher
+file_types:
+  audio:
+    - .mp3
+    - .wav
+    - .m4a
+    - .flac
+    - .ogg
+    - .aac
+  video:
+    - .mp4
+    - .webm
+    - .avi
+    - .mov
+    - .mkv
+  document:
+    - .txt
+    - .md
+    - .pdf
+    - .docx
+    - .doc
+    - .rtf
+    - .html
+    - .htm
+url_types:
+  youtube:
+    - single_video
+    - playlist
+    - channel
+  rss:
+    - news_feed
+    - podcast_feed
+    - blog_feed
+  web:
+    - article_page
+    - documentation
+error_scenarios: true
+performance_monitoring: true
+quick_mode: false

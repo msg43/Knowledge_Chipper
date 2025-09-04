@@ -1,8 +1,8 @@
-# Knowledge_Chipper
+# Skip the Podcast Desktop
 
-**Version:** 3.1.1 | **Build Date:** 2025-08-26 
+**Version:** 3.1.1 | **Build Date:** 2025-09-04 
 
-A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
+Skip the Podcast Desktop - A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 
 **What it does:** Transcribes videos → LLM-validated speaker identification → Extracts structured claims with confidence tiers → Maps relationships and contradictions → Creates knowledge maps → Organizes everything automatically.
 
@@ -10,7 +10,82 @@ A revolutionary knowledge management system for macOS that transforms videos, au
 
 ## 🎉 What's New (Latest Updates)
 
-### 🤖 **LLM Conditional Speaker Assignment System (August 2025)**
+### 📝 **Obsidian MOC Pages with Dataview Integration (January 2025)**
+- **Dynamic Knowledge Pages**: New "Write MOC Obsidian Pages" checkbox generates ready-to-use Obsidian pages with dataview queries
+- **Auto-Updating Collections**: People.md, Mental_Models.md, Jargon.md, and MOC.md files automatically aggregate content using powerful dataview queries
+- **Copy-to-Vault Ready**: Generated pages include comprehensive dataview queries and can be immediately copied to your Obsidian vault
+- **Simplified Workflow**: Removed Analysis Type dropdown - all processing now defaults to Document Summary with automatic entity extraction
+- **Zero Maintenance**: Dataview queries automatically include new content as you process more files, no manual updates required
+- **Advanced Queries**: Built-in queries for frequency analysis, recent content, usage statistics, and cross-references
+
+### 🛡️ **Process Isolation & Crash Prevention System (January 2025)**
+- **Zero GUI Crashes**: Complete process isolation prevents batch processing from crashing the main application
+- **Automatic Recovery**: Intelligent checkpoint system allows resuming interrupted jobs from exactly where they left off
+- **Real-time Monitoring**: Advanced memory monitoring and adaptive resource management prevents system overload
+- **Smart Restart**: Exponential backoff restart system with up to 3 automatic recovery attempts
+- **Recovery Dialog**: User-friendly interface to resume, restart, or manage interrupted processing jobs
+- **Performance Analytics**: Comprehensive monitoring of crash rates, recovery success, and system health
+- **Memory Safety**: Adaptive batch sizing and emergency cleanup procedures prevent memory exhaustion
+
+### 🗣️ **Enhanced Speaker Attribution System (August 2025)**
+- **Database-Only Storage**: Eliminated sidecar files in favor of comprehensive SQLite database storage
+- **Intelligent Learning System**: AI learns from user corrections to automatically suggest speaker names for future recordings
+- **Pattern Recognition**: Detects speakers based on content analysis, channel patterns, and voice characteristics
+- **Auto-Assignment Queue**: Shows recordings needing review with pre-filled AI suggestions based on learned patterns
+- **Enhanced Sample Segments**: Displays first 5 speaking segments for quick speaker identification
+- **Simplified UI**: Removed redundant auto-assign and export buttons, streamlined for database workflow
+
+### ☁️ **Cloud Database Integration (August 2025)**
+- **Direct Database Upload**: Cloud Uploads tab now uploads claims data directly to Supabase database (not file storage)
+- **Hardcoded Connection**: All users connect to shared Supabase instance with individual authentication
+- **Smart Change Tracking**: Only uploads new/modified claims since last upload with automatic status tracking
+- **One-Way Sync**: Desktop always overwrites cloud data for conflict-free uploads
+- **Complete Data Upload**: Claims upload with all associated episodes, people, concepts, evidence, and relations
+- **Simplified UI**: Browse SQLite database → Select claims → Upload to cloud database
+
+### ⚙️ HCE Summarization Controls (New)
+Fine‑tune speed vs. quality for summarization from the CLI and GUI.
+
+- Skim control:
+  - `--use-skim/--no-skim` to enable/disable a fast high‑level skim prior to mining.
+- Dual‑judge routing:
+  - Route hard/uncertain claims to a flagship judge: `--router-uncertainty-threshold 0.35` (lower → more routed).
+  - Models: `--judge-model`, `--flagship-judge-model`.
+- Per‑stage models:
+  - Miner: `--miner-model`, `--heavy-miner-model`
+  - Embedder/Reranker: `--embedder-model`, `--reranker-model`
+- Profiles:
+  - `--profile fast|balanced|quality` pre‑fills sensible defaults (can be overridden).
+- Prompt‑driven mode:
+  - `--prefer-template-summary` to have your template structure the output.
+
+Examples:
+
+```bash
+# Fast: skip skim, single judge
+knowledge-system summarize ./docs/ --dry-run \
+  --profile fast
+
+# Balanced with routed judging
+knowledge-system summarize ./docs/ -o ./output \
+  --profile balanced \
+  --flagship-judge-model openai://gpt-4o-mini
+
+# Quality with explicit thresholds and models
+knowledge-system summarize ./docs/ -o ./output \
+  --use-skim \
+  --router-uncertainty-threshold 0.25 \
+  --judge-model openai://gpt-4o-mini \
+  --flagship-judge-model openai://gpt-4o \
+  --miner-model local://qwen2.5:14b-instruct \
+  --embedder-model local://bge-small-en-v1.5 --reranker-model local://bge-reranker-base
+
+# Prompt-driven summary using a custom template
+knowledge-system summarize ./docs/file.md -o ./output \
+  --template config/prompts/document\ summary.txt \
+  --prefer-template-summary
+```
+
 Revolutionary speaker identification with AI-powered validation for podcast and interview processing:
 
 - **🧠 LLM First-Skim Validation**: AI analyzes speech patterns before user confirmation (90-95% accuracy)
@@ -351,7 +426,7 @@ python -m knowledge_system.gui
 Let's transcribe a YouTube video to get you started:
 
 1. **Open the desktop app** (see [First Run](#first-run) above)
-2. **Go to the "Extraction" tab**
+2. **Go to the "Cloud Transcription" tab**
 3. **Paste a YouTube URL** (try: `https://www.youtube.com/watch?v=dQw4w9WgXcQ`)
 4. **Click "Start Processing"**
 5. **Wait for completion** - you'll see progress updates
@@ -393,7 +468,7 @@ Your_Output_Folder/
 The desktop app has tabs for different operations:
 
 - **🎬 YouTube Extraction**: Process YouTube videos and playlists with speaker diarization support
-- **🎵 Audio Transcription**: Process local audio/video files with quality retry and GPU acceleration
+- **🎵 Local Transcription**: Process local audio/video files with quality retry and GPU acceleration
 - **📝 Summarization**: Create summaries from transcripts with claim tier validation
 - **📊 Process Management**: Full pipeline processing with transcription, summarization, and MOC generation
 - **🔍 Claim Search**: Explore and search extracted claims across all processed content
@@ -567,6 +642,34 @@ Creates **6 interconnected files**:
 - **`Jargon.md`** - Terminology glossary with context
 - **`claims.yaml`** - Structured claims data with confidence scores
 
+**🆕 Optional: Obsidian MOC Pages**
+When "Write MOC Obsidian Pages" is checked, generates additional **dataview-powered files**:
+
+- **`People.md`** - Dynamic people directory with dataview queries for automatic aggregation
+- **`Mental_Models.md`** - Self-updating mental models collection with usage statistics
+- **`Jargon.md`** - Auto-updating terminology glossary with frequency analysis
+- **`MOC.md`** - Comprehensive knowledge hub with real-time content statistics
+
+These files contain powerful Obsidian dataview queries that automatically update as you add more content to your vault.
+
+**Example Dataview Query (from People.md):**
+```sql
+TABLE 
+  People_01 as "Primary Person",
+  People_02 as "Additional People",
+  file.ctime as "Created"
+FROM ""
+WHERE People_01 != null
+SORT People_01 ASC
+```
+
+**Key Benefits of Obsidian Pages:**
+- **Always Current**: Queries automatically include new files as you process them
+- **No Maintenance**: Never need to manually update lists or counts
+- **Customizable**: Edit queries to match your specific needs
+- **Cross-Referenced**: Built-in linking between related content
+- **Statistics**: Real-time counts, usage frequency, and trends
+
 #### **🎯 What Gets Analyzed**
 
 **Example Input Content:**
@@ -617,17 +720,26 @@ Generated: {generated_at} | Files: {source_files_count}
 
 #### **🚀 Usage Examples**
 
-**GUI:** Summarization tab
+**GUI:** Process Pipeline tab
+1. Add files or directories to process
+2. Check "Generate MOC" to enable knowledge extraction
+3. ✨ **NEW**: Check "Write MOC Obsidian Pages" for dataview-powered Obsidian files
+4. Select output directory
+5. Click "Start Processing" - all files are processed with automatic entity extraction
+
+**GUI:** Summarization tab  
 1. Add documents or folders
-2. Choose Analysis Type from dropdown (Document Summary, Knowledge Map, Entity Extraction, or Relationship Analysis)
-3. Template auto-populates based on selection (customize if desired)
-4. Configure provider and model (use 🔄 to refresh available models)
-5. Click "Start Analysis"
+2. Template auto-populates for Document Summary (customize if desired)
+3. Configure provider and model (use 🔄 to refresh available models)
+4. Click "Start Analysis" - automatically extracts People, Mental Models, and Jargon
 
 **CLI:**
 ```bash
 # Basic MOC generation
 knowledge-system moc *.md
+
+# Generate Obsidian pages with dataview queries
+knowledge-system process ./documents/ --moc --write-obsidian-pages
 
 # With custom template and theme
 knowledge-system moc documents/ --template my_template.txt --theme hierarchical --depth 4
@@ -1011,7 +1123,7 @@ When retries are disabled and quality issues are detected:
 ```
 
 **🎛️ User Control:**
-- **GUI Controls**: Easy enable/disable in Audio Transcription tab
+- **GUI Controls**: Easy enable/disable in Local Transcription tab
 - **Configurable Attempts**: 0-3 retry attempts (0 = performance mode)
 - **Real-time Feedback**: See retry progress and model upgrades
 - **Persistent Settings**: Quality preferences saved automatically
@@ -1189,7 +1301,7 @@ knowledge-system transcribe --batch-urls urls.csv
 knowledge-system transcribe --batch-urls logs/youtube_extraction_failures.csv
 ```
 
-**GUI:** Use the "Extraction" tab for the easiest experience.
+**GUI:** Use the "Cloud Transcription" tab for the easiest experience.
 
 #### 🚀 **NEW: Intelligent Batch Processing with Resource Management**
 
@@ -1314,7 +1426,7 @@ knowledge-system transcribe --input "meeting.mp4"
 knowledge-system process ./recordings/ --recursive
 ```
 
-**GUI:** Use the "Audio Transcription" tab and browse to your files.
+**GUI:** Use the "Local Transcription" tab and browse to your files.
 
 ### Batch Processing
 
@@ -1478,7 +1590,7 @@ The Knowledge System automatically detects your Apple Silicon hardware and optim
 **For High-End Systems (M3 Ultra + 128GB RAM):**
 - Up to 16 concurrent file processing (vs 4 default)
 - 64-item batch sizes (vs 16 default)
-- Large-v3 Whisper model for maximum accuracy
+- Base Whisper model for optimal balance of speed and accuracy
 - Optimized for large-scale content processing
 
 **Manual Overrides Available:**
@@ -1491,7 +1603,7 @@ The Knowledge System automatically detects your Apple Silicon hardware and optim
 
 **Configure Quality vs Performance Tradeoff**
 
-The Audio Transcription tab includes advanced quality controls that let you balance processing speed against transcription accuracy:
+The Local Transcription tab includes advanced quality controls that let you balance processing speed against transcription accuracy:
 
 **🎛️ Quality Retry Controls:**
 - **Enable Automatic Quality Retry**: ☑️/☐ toggle for automatic retry on quality failures
@@ -1562,7 +1674,7 @@ Quality Mode (2 retries):
 
 **🎛️ Access These Settings:**
 1. Open the Knowledge System desktop app
-2. Go to "Audio Transcription" tab  
+2. Go to "Local Transcription" tab  
 3. Find "Quality vs Performance Controls" in the Settings section
 4. Configure retry behavior and maximum attempts
 5. Settings are saved automatically for future sessions
@@ -1849,7 +1961,7 @@ Content to analyze:
 
 **YouTube Extraction Failures:**
 - **Check failure log**: `logs/youtube_extraction_failures.log` for detailed error messages
-- **Retry failed URLs**: Load `logs/youtube_extraction_failures.csv` directly into Extraction tab
+- **Retry failed URLs**: Load `logs/youtube_extraction_failures.csv` directly into Cloud Transcription tab
 - **Common failures**: 
   - 🔐 Proxy authentication → Check WebShare credentials
   - 💰 Payment required → Add funds to WebShare account
@@ -2174,7 +2286,7 @@ The system now includes intelligent caching to avoid reprocessing unchanged cont
 **YouTube Extraction Failures:**
 - **Detailed Logging**: All failed extractions logged to `logs/youtube_extraction_failures.log`
 - **CSV Export**: Failed URLs automatically saved to `logs/youtube_extraction_failures.csv`
-- **Easy Retry**: Load the CSV file directly into Extraction tab to retry failed videos
+- **Easy Retry**: Load the CSV file directly into Cloud Transcription tab to retry failed videos
 - **Error Categories**: Proxy auth issues, payment required, video unavailable, etc.
 
 **Performance Statistics:**

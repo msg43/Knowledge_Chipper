@@ -11,10 +11,12 @@ class StageModelConfig(BaseModel):
     miner: ModelURI = "ollama://qwen2.5:14b-instruct"
     heavy_miner: ModelURI | None = None
     judge: ModelURI = "openai://gpt-5-large"
+    flagship_judge: ModelURI | None = None
     embedder: ModelURI = "local://bge-small-en-v1.5"
     reranker: ModelURI = "local://bge-reranker-base"
     people_disambiguator: ModelURI | None = None
     nli: ModelURI | None = "local://nli-mini"
+    skim: ModelURI | None = None
 
 
 class RerankPolicy(BaseModel):
@@ -29,3 +31,5 @@ class PipelineConfigFlex(BaseModel):
     models: StageModelConfig = StageModelConfig()
     rerank: RerankPolicy = RerankPolicy()
     use_skim: bool = True
+    router_uncertainty_threshold: float = 0.35
+    flagship_max_claims_per_file: int | None = None

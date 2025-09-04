@@ -1,5 +1,5 @@
 from pathlib import Path
-from ..config import get_settings
+from ...config import get_settings
 from .types import EpisodeBundle, Milestone
 
 from .models.llm_any import AnyLLM
@@ -54,12 +54,21 @@ class Skimmer:
         return milestones
 
 
-def skim_episode(episode: EpisodeBundle) -> list[Milestone]:
-    """Compatibility wrapper used by HCEPipeline."""
+def skim_episode(episode: EpisodeBundle, model_uri: str | None = None) -> list[Milestone]:
+    """Compatibility wrapper used by HCEPipeline.
+
+    If model_uri is provided, uses that model; otherwise falls back to settings.
+    """
     settings = get_settings()
-    # Use miner model for skim as a default lightweight LLM
-    model_uri = f"openai://{settings.hce.miner_model}" if settings.llm.provider == "openai" else f"{settings.llm.provider}://{settings.llm.model}"
-    llm = AnyLLM(model_uri)
+    # Use provided model or fall back to miner/default model
+    resolved_model_uri = model_uri
+    if not resolved_model_uri:
+        resolved_model_uri = (
+            f"openai://{settings.hce.miner_model}"
+            if settings.llm.provider == "openai"
+            else f"{settings.llm.provider}://{settings.llm.model}"
+        )
+    llm = AnyLLM(resolved_model_uri)
     prompt_path = Path(__file__).parent / "prompts" / "skim.txt"
     sk = Skimmer(llm, prompt_path)
     return sk.skim(episode.episode_id, episode.segments)

@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
 from ...logger import get_logger
 from ..components.base_tab import BaseTab
 from ..workers.ffmpeg_installer import FFmpegInstaller, FFmpegRelease
-from ..workers.update_worker import UpdateWorker
+from ..workers.dmg_update_worker import DMGUpdateWorker
 
 logger = get_logger(__name__)
 
@@ -179,15 +179,7 @@ class APIKeysTab(BaseTab):
         # Load session settings after UI is set up
         self._load_settings()
 
-        # Add the layout to a group and then to main layout
-        api_group = QGroupBox("API Keys Configuration")
-        api_group.setLayout(layout)
-        main_layout.addWidget(api_group)
-
-        # Button layout
-        button_layout = QHBoxLayout()
-
-        # Save button
+        # Save button (moved to top for better visibility)
         save_btn = QPushButton("💾 Save API Keys")
         save_btn.clicked.connect(self._save_settings)
         save_btn.setStyleSheet(
@@ -200,7 +192,15 @@ class APIKeysTab(BaseTab):
             "• You can save partial configurations (some keys can be empty)\n"
             "• Changes take effect immediately after saving"
         )
-        button_layout.addWidget(save_btn)
+        main_layout.addWidget(save_btn)
+
+        # Add the layout to a group and then to main layout
+        api_group = QGroupBox("API Keys Configuration")
+        api_group.setLayout(layout)
+        main_layout.addWidget(api_group)
+
+        # Button layout
+        button_layout = QHBoxLayout()
 
         # Add spacer
         button_layout.addStretch()
@@ -251,35 +251,53 @@ class APIKeysTab(BaseTab):
             "⚠️ Available without FFmpeg:\n"
             "• PDF processing and summarization\n"
             "• Text file processing\n"
-            "• Local audio transcription (compatible formats)\n"
+            "• Local transcription (compatible formats)\n"
             "• All MOC generation features\n\n"
             "Safe to install - creates a user-space binary that doesn't affect your system."
         )
         update_section.addWidget(ffmpeg_btn)
 
         # Auto-update checkbox
-        self.auto_update_checkbox = QCheckBox("Check for New Updates Upon Launch")
+        self.auto_update_checkbox = QCheckBox("Automatically check for updates on app launch")
         self.auto_update_checkbox.setToolTip(
-            "When enabled, Knowledge Chipper will automatically check for\n"
-            "updates each time you launch the application."
+            "When enabled, Knowledge Chipper will automatically check for new versions\n"
+            "when you launch the app. Updates use fast DMG downloads (~2-3 minutes)\n"
+            "and preserve all your data and settings in their standard macOS locations.\n\n"
+            "• Checks: GitHub releases for newer versions\n"
+            "• Downloads: Pre-built DMG files (no rebuilding required)\n"
+            "• Preserves: All data, settings, and preferences\n"
+            "• Restarts: Automatically to new version after update"
         )
+        # Use consistent styling similar to other checkboxes in the app
         self.auto_update_checkbox.setStyleSheet(
             """
             QCheckBox {
                 font-size: 12px;
-                color: #666;
+                color: #333;
+                font-weight: normal;
+                padding: 4px;
             }
             QCheckBox:hover {
                 color: #2196F3;
             }
+            QCheckBox:checked {
+                color: #1976d2;
+            }
         """
         )
-        # Load saved preference
-        self.auto_update_checkbox.setChecked(
+        # Load saved preference from app config (with GUI fallback for migration)
+        from ...config import get_settings
+        settings = get_settings()
+        
+        # Check both new app config and legacy GUI setting
+        auto_update_enabled = (
+            settings.app.auto_check_updates or 
             self.gui_settings.get_value(self.tab_name, "auto_update_enabled", False)
         )
+        self.auto_update_checkbox.setChecked(auto_update_enabled)
         self.auto_update_checkbox.stateChanged.connect(self._on_auto_update_changed)
         update_section.addWidget(self.auto_update_checkbox)
+        
 
         button_layout.addLayout(update_section)
 
@@ -508,6 +526,11 @@ class APIKeysTab(BaseTab):
                     or "",  # Use alias 'anthropic'
                     "hf_token": self.settings.api_keys.huggingface_token
                     or "",  # Use alias 'hf_token'
+                    # Persist Bright Data API key so it survives app restarts
+                    "bright_data_api_key": getattr(
+                        self.settings.api_keys, "bright_data_api_key", ""
+                    )
+                    or "",
                 }
             }
 
@@ -584,15 +607,41 @@ class APIKeysTab(BaseTab):
     def _on_auto_update_changed(self, state: int) -> None:
         """Handle auto-update checkbox state change."""
         is_enabled = bool(state)
+        
+        # Save to both app config and GUI settings (for backward compatibility)
+        from ...config import get_settings
+        settings = get_settings()
+        
+        # Update app config (this will be saved to settings.yaml)
+        settings.app.auto_check_updates = is_enabled
+        
+        # Also save to GUI settings for backward compatibility
         self.gui_settings.set_value(self.tab_name, "auto_update_enabled", is_enabled)
         self.gui_settings.save()
-        self.append_log(
-            f"{'Enabled' if is_enabled else 'Disabled'} automatic update checking on launch"
-        )
+        
+        # Save the app config to file
+        try:
+            from ...utils.macos_paths import get_config_dir
+            config_file = get_config_dir() / "settings.yaml"
+            settings.to_yaml(config_file)
+            self.append_log(f"✅ {'Enabled' if is_enabled else 'Disabled'} automatic update checking on launch")
+        except Exception as e:
+            self.append_log(f"⚠️ Setting changed but couldn't save to config file: {e}")
+            # Still update the runtime setting even if file save fails
+            self.append_log(f"{'Enabled' if is_enabled else 'Disabled'} automatic update checking (runtime only)")
 
     def check_for_updates_on_launch(self) -> None:
         """Check for updates if auto-update is enabled."""
-        if self.gui_settings.get_value(self.tab_name, "auto_update_enabled", False):
+        from ...config import get_settings
+        settings = get_settings()
+        
+        # Check app config first, fallback to GUI settings for migration
+        auto_update_enabled = (
+            settings.app.auto_check_updates or 
+            self.gui_settings.get_value(self.tab_name, "auto_update_enabled", False)
+        )
+        
+        if auto_update_enabled:
             self._check_for_updates(is_auto=True)
 
     def _check_for_updates(self, is_auto: bool = False) -> None:
@@ -608,7 +657,7 @@ class APIKeysTab(BaseTab):
                 self.update_worker = None
 
             # Always create a fresh worker instance to avoid restarting finished QThreads
-            self.update_worker = UpdateWorker()
+            self.update_worker = DMGUpdateWorker()
             self.update_worker.update_progress.connect(self._handle_update_progress)
             # New: determinate progress support
             try:
@@ -728,7 +777,11 @@ class APIKeysTab(BaseTab):
             msg_box = QMessageBox(self)
             msg_box.setWindowTitle("Update Complete")
             msg_box.setText("The app has been updated successfully!")
-            msg_box.setInformativeText("Would you like to restart Knowledge Chipper now to use the new version?")
+            msg_box.setInformativeText(
+                f"{message}\n\n"
+                "The new version has been installed to /Applications.\n"
+                "Your settings and data are preserved in their standard locations."
+            )
             msg_box.setIcon(QMessageBox.Icon.Information)
             
             # Add custom buttons

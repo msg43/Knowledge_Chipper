@@ -266,7 +266,7 @@ echo "   • CLI: source venv/bin/activate && knowledge-system --help"
 echo "   • Direct: source venv/bin/activate && python -m knowledge_system gui"
 echo
 echo -e "${YELLOW}3. Test Your Setup:${NC}"
-echo "   • Start with the YouTube Extraction tab"
+echo "   • Start with the Cloud Transcription tab"
 echo "   • Try a short video first: https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 echo "   • Check the Summarization tab with the resulting transcript"
 echo

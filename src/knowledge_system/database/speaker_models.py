@@ -85,10 +85,52 @@ class SpeakerAssignment(Base):
     user_confirmed = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
+    # Enhanced columns for sidecar file migration
+    suggested_name = Column(String(255), nullable=True)  # AI suggested name
+    suggestion_confidence = Column(Float, default=0.0)  # AI confidence score
+    suggestion_method = Column(String(100), nullable=True)  # 'content_analysis', 'pattern_matching', 'manual'
+    sample_segments_json = Column(Text, nullable=True)  # JSON array of first 5 segments
+    total_duration = Column(Float, default=0.0)  # Total speaking time
+    segment_count = Column(Integer, default=0)  # Number of segments
+    processing_metadata_json = Column(Text, nullable=True)  # Additional metadata
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
     # Foreign key to speaker voice (optional)
     voice_id = Column(Integer, ForeignKey('speaker_voices.id'), nullable=True)
     voice = relationship("SpeakerVoice", back_populates="assignments")
     
+    @property
+    def sample_segments(self) -> List[Dict[str, Any]]:
+        """Get sample segments as list of dictionaries."""
+        if self.sample_segments_json:
+            try:
+                return json.loads(self.sample_segments_json)
+            except json.JSONDecodeError:
+                logger.warning(f"Invalid JSON in sample_segments for assignment {self.id}")
+                return []
+        return []
+    
+    @sample_segments.setter
+    def sample_segments(self, data: List[Dict[str, Any]]):
+        """Set sample segments from list of dictionaries."""
+        self.sample_segments_json = json.dumps(data)
+    
+    @property
+    def processing_metadata(self) -> Dict[str, Any]:
+        """Get processing metadata as dictionary."""
+        if self.processing_metadata_json:
+            try:
+                return json.loads(self.processing_metadata_json)
+            except json.JSONDecodeError:
+                logger.warning(f"Invalid JSON in processing_metadata for assignment {self.id}")
+                return {}
+        return {}
+    
+    @processing_metadata.setter
+    def processing_metadata(self, data: Dict[str, Any]):
+        """Set processing metadata from dictionary."""
+        self.processing_metadata_json = json.dumps(data)
+
     def __repr__(self):
         return f"<SpeakerAssignment(id={self.id}, speaker_id='{self.speaker_id}', assigned_name='{self.assigned_name}')>"
 
@@ -143,6 +185,74 @@ class SpeakerSession(Base):
         return f"<SpeakerSession(id={self.id}, name='{self.session_name}')>"
 
 
+class SpeakerProcessingSession(Base):
+    """Database model for tracking speaker processing sessions and learning data."""
+    
+    __tablename__ = 'speaker_processing_sessions'
+    
+    session_id = Column(String(50), primary_key=True)
+    recording_path = Column(String(500), nullable=False, index=True)
+    processing_method = Column(String(100))  # 'diarization', 'manual', 'imported'
+    total_speakers = Column(Integer)
+    total_duration = Column(Float)
+    ai_suggestions_json = Column(Text)  # All AI suggestions before user input
+    user_corrections_json = Column(Text)  # What user changed from AI suggestions
+    confidence_scores_json = Column(Text)  # Confidence in each assignment
+    created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime)
+    
+    @property
+    def ai_suggestions(self) -> Dict[str, Any]:
+        """Get AI suggestions as dictionary."""
+        if self.ai_suggestions_json:
+            try:
+                return json.loads(self.ai_suggestions_json)
+            except json.JSONDecodeError:
+                logger.warning(f"Invalid JSON in ai_suggestions for session {self.session_id}")
+                return {}
+        return {}
+    
+    @ai_suggestions.setter
+    def ai_suggestions(self, data: Dict[str, Any]):
+        """Set AI suggestions from dictionary."""
+        self.ai_suggestions_json = json.dumps(data)
+    
+    @property
+    def user_corrections(self) -> Dict[str, Any]:
+        """Get user corrections as dictionary."""
+        if self.user_corrections_json:
+            try:
+                return json.loads(self.user_corrections_json)
+            except json.JSONDecodeError:
+                logger.warning(f"Invalid JSON in user_corrections for session {self.session_id}")
+                return {}
+        return {}
+    
+    @user_corrections.setter
+    def user_corrections(self, data: Dict[str, Any]):
+        """Set user corrections from dictionary."""
+        self.user_corrections_json = json.dumps(data)
+    
+    @property
+    def confidence_scores(self) -> Dict[str, float]:
+        """Get confidence scores as dictionary."""
+        if self.confidence_scores_json:
+            try:
+                return json.loads(self.confidence_scores_json)
+            except json.JSONDecodeError:
+                logger.warning(f"Invalid JSON in confidence_scores for session {self.session_id}")
+                return {}
+        return {}
+    
+    @confidence_scores.setter
+    def confidence_scores(self, data: Dict[str, float]):
+        """Set confidence scores from dictionary."""
+        self.confidence_scores_json = json.dumps(data)
+
+    def __repr__(self):
+        return f"<SpeakerProcessingSession(session_id='{self.session_id}', recording_path='{self.recording_path}')>"
+
+
 # Pydantic models for API/service layer
 class SpeakerVoiceModel(BaseModel):
     """Pydantic model for speaker voice data."""
@@ -172,6 +282,16 @@ class SpeakerAssignmentModel(BaseModel):
     voice_id: Optional[int] = Field(default=None, description="Associated voice profile ID")
     created_at: Optional[datetime] = None
     
+    # Enhanced fields for sidecar file migration
+    suggested_name: Optional[str] = Field(default=None, description="AI suggested name")
+    suggestion_confidence: float = Field(default=0.0, description="AI confidence score")
+    suggestion_method: Optional[str] = Field(default=None, description="Method used for suggestion")
+    sample_segments: List[Dict[str, Any]] = Field(default_factory=list, description="Sample segments for preview")
+    total_duration: float = Field(default=0.0, description="Total speaking time")
+    segment_count: int = Field(default=0, description="Number of segments")
+    processing_metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    updated_at: Optional[datetime] = None
+    
     class Config:
         from_attributes = True
 
@@ -186,6 +306,24 @@ class SpeakerLearningModel(BaseModel):
     learning_weight: float = Field(default=1.0, description="Weight for learning algorithm")
     voice_id: Optional[int] = Field(default=None, description="Associated voice profile ID")
     created_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class SpeakerProcessingSessionModel(BaseModel):
+    """Pydantic model for speaker processing session data."""
+    
+    session_id: str = Field(..., description="Unique session identifier")
+    recording_path: str = Field(..., description="Path to the recording file")
+    processing_method: Optional[str] = Field(default=None, description="Processing method used")
+    total_speakers: Optional[int] = Field(default=None, description="Total number of speakers")
+    total_duration: Optional[float] = Field(default=None, description="Total duration of recording")
+    ai_suggestions: Dict[str, Any] = Field(default_factory=dict, description="AI suggestions before user input")
+    user_corrections: Dict[str, Any] = Field(default_factory=dict, description="User corrections to AI suggestions")
+    confidence_scores: Dict[str, float] = Field(default_factory=dict, description="Confidence scores for assignments")
+    created_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -438,6 +576,151 @@ class SpeakerDatabaseService:
                 
         except Exception as e:
             logger.error(f"Error cleaning up old data: {e}")
+    
+    # Enhanced methods for sidecar file migration
+    
+    def get_unconfirmed_recordings(self) -> List[str]:
+        """Get list of recording paths with unconfirmed speaker assignments."""
+        try:
+            with self.get_session() as session:
+                results = session.query(SpeakerAssignment.recording_path).filter(
+                    SpeakerAssignment.user_confirmed == False
+                ).distinct().all()
+                return [result[0] for result in results]
+        except Exception as e:
+            logger.error(f"Error getting unconfirmed recordings: {e}")
+            return []
+    
+    def get_recordings_needing_review(self) -> List[Dict]:
+        """Get recordings with AI suggestions but no user confirmation."""
+        try:
+            with self.get_session() as session:
+                assignments = session.query(SpeakerAssignment).filter(
+                    SpeakerAssignment.user_confirmed == False,
+                    SpeakerAssignment.suggested_name.isnot(None)
+                ).all()
+                
+                recordings = {}
+                for assignment in assignments:
+                    path = assignment.recording_path
+                    if path not in recordings:
+                        recordings[path] = {
+                            'recording_path': path,
+                            'assignments': [],
+                            'total_speakers': 0,
+                            'total_duration': 0.0
+                        }
+                    
+                    recordings[path]['assignments'].append({
+                        'speaker_id': assignment.speaker_id,
+                        'suggested_name': assignment.suggested_name,
+                        'suggestion_confidence': assignment.suggestion_confidence,
+                        'suggestion_method': assignment.suggestion_method,
+                        'sample_segments': assignment.sample_segments
+                    })
+                    recordings[path]['total_speakers'] += 1
+                    recordings[path]['total_duration'] += assignment.total_duration
+                
+                return list(recordings.values())
+        except Exception as e:
+            logger.error(f"Error getting recordings needing review: {e}")
+            return []
+    
+    def get_speaker_assignment_summary(self, recording_path: str) -> Dict:
+        """Get complete assignment summary with samples for a recording."""
+        try:
+            with self.get_session() as session:
+                assignments = session.query(SpeakerAssignment).filter_by(
+                    recording_path=recording_path
+                ).all()
+                
+                if not assignments:
+                    return {}
+                
+                summary = {
+                    'recording_path': recording_path,
+                    'assignments': [],
+                    'user_confirmed': all(a.user_confirmed for a in assignments),
+                    'total_speakers': len(assignments),
+                    'total_duration': sum(a.total_duration for a in assignments),
+                    'created_at': min(a.created_at for a in assignments),
+                    'updated_at': max(a.updated_at for a in assignments if a.updated_at)
+                }
+                
+                for assignment in assignments:
+                    summary['assignments'].append({
+                        'speaker_id': assignment.speaker_id,
+                        'assigned_name': assignment.assigned_name,
+                        'suggested_name': assignment.suggested_name,
+                        'confidence': assignment.confidence,
+                        'suggestion_confidence': assignment.suggestion_confidence,
+                        'suggestion_method': assignment.suggestion_method,
+                        'sample_segments': assignment.sample_segments,
+                        'total_duration': assignment.total_duration,
+                        'segment_count': assignment.segment_count,
+                        'user_confirmed': assignment.user_confirmed
+                    })
+                
+                return summary
+        except Exception as e:
+            logger.error(f"Error getting speaker assignment summary: {e}")
+            return {}
+    
+    def create_processing_session(self, session_data: SpeakerProcessingSessionModel) -> Optional[SpeakerProcessingSession]:
+        """Create a new speaker processing session."""
+        try:
+            with self.get_session() as session:
+                processing_session = SpeakerProcessingSession(
+                    session_id=session_data.session_id,
+                    recording_path=session_data.recording_path,
+                    processing_method=session_data.processing_method,
+                    total_speakers=session_data.total_speakers,
+                    total_duration=session_data.total_duration,
+                    completed_at=session_data.completed_at
+                )
+                processing_session.ai_suggestions = session_data.ai_suggestions
+                processing_session.user_corrections = session_data.user_corrections
+                processing_session.confidence_scores = session_data.confidence_scores
+                
+                session.add(processing_session)
+                session.commit()
+                session.refresh(processing_session)
+                
+                logger.info(f"Created processing session: {session_data.session_id}")
+                return processing_session
+                
+        except Exception as e:
+            logger.error(f"Error creating processing session: {e}")
+            return None
+    
+    def update_assignment_with_enhancement(self, assignment_id: int, **kwargs) -> bool:
+        """Update an existing assignment with enhanced data."""
+        try:
+            with self.get_session() as session:
+                assignment = session.query(SpeakerAssignment).filter_by(id=assignment_id).first()
+                if not assignment:
+                    logger.warning(f"Assignment {assignment_id} not found")
+                    return False
+                
+                # Update fields if provided
+                for field, value in kwargs.items():
+                    if hasattr(assignment, field):
+                        if field == 'sample_segments' and isinstance(value, list):
+                            assignment.sample_segments = value
+                        elif field == 'processing_metadata' and isinstance(value, dict):
+                            assignment.processing_metadata = value
+                        else:
+                            setattr(assignment, field, value)
+                
+                assignment.updated_at = datetime.utcnow()
+                session.commit()
+                
+                logger.info(f"Updated assignment {assignment_id} with enhanced data")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error updating assignment with enhancement: {e}")
+            return False
 
 
 # Global database service instance

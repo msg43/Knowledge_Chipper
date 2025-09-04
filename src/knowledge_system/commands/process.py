@@ -36,6 +36,11 @@ from .transcribe import _generate_obsidian_link, format_transcript_content
 )
 @click.option("--moc/--no-moc", default=True, help="Generate Maps of Content")
 @click.option(
+    "--write-obsidian-pages/--no-write-obsidian-pages",
+    default=False,
+    help="Generate Obsidian MOC pages with dataview queries"
+)
+@click.option(
     "--recursive/--no-recursive",
     default=True,
     help="Process subdirectories recursively (when input is a folder)",
@@ -110,6 +115,57 @@ from .transcribe import _generate_obsidian_link, format_transcript_content
     is_flag=True,
     help="Export extracted claims to GetReceipts platform",
 )
+@click.option(
+    "--router-uncertainty-threshold",
+    type=float,
+    default=0.35,
+    help="Route claims with uncertainty above this threshold to flagship judge",
+)
+@click.option(
+    "--judge-model",
+    type=str,
+    help="Override default judge model URI (e.g., openai://gpt-4o-mini)",
+)
+@click.option(
+    "--flagship-judge-model",
+    type=str,
+    help="Model URI for flagship judge (used only for routed claims)",
+)
+@click.option(
+    "--miner-model",
+    type=str,
+    help="Override miner model URI",
+)
+@click.option(
+    "--heavy-miner-model",
+    type=str,
+    help="Optional heavy miner model URI",
+)
+@click.option(
+    "--embedder-model",
+    type=str,
+    help="Override embedder model URI",
+)
+@click.option(
+    "--reranker-model",
+    type=str,
+    help="Override reranker model URI",
+)
+@click.option(
+    "--profile",
+    type=click.Choice(["fast", "balanced", "quality"]),
+    help="Prefill recommended options for speed/quality tradeoffs",
+)
+@click.option(
+    "--flagship-max-claims-per-file",
+    type=int,
+    help="Cap the number of routed flagship claims per file",
+)
+@click.option(
+    "--use-skim/--no-skim",
+    default=True,
+    help="Enable a fast high-level skim before mining (default: on)",
+)
 @pass_context
 def process(
     ctx: CLIContext,
@@ -118,6 +174,7 @@ def process(
     transcribe: bool,
     summarize: bool,
     moc: bool,
+    write_obsidian_pages: bool,
     recursive: bool,
     patterns: list[str],
     transcription_model: str,
@@ -131,6 +188,16 @@ def process(
     sc_quote_cap: int | None,
     sc_max_concurrent: int | None,
     export_getreceipts: bool,
+    router_uncertainty_threshold: float,
+    judge_model: str | None,
+    flagship_judge_model: str | None,
+    flagship_max_claims_per_file: int | None,
+    miner_model: str | None,
+    heavy_miner_model: str | None,
+    embedder_model: str | None,
+    reranker_model: str | None,
+    profile: str | None,
+    use_skim: bool,
 ) -> None:
     """
     Process files or folders with transcription, summarization, and MOC generation
@@ -237,10 +304,45 @@ def process(
 
         # Create processors
         audio_processor = AudioProcessor(device=device)
+        # Apply profile defaults (can be overridden explicitly)
+        profile_opts: dict[str, Any] = {}
+        if profile == "fast":
+            profile_opts.update({
+                "use_skim": False,
+                "router_uncertainty_threshold": 1.0,
+                "flagship_judge_model": None,
+            })
+        elif profile == "balanced":
+            profile_opts.update({
+                "use_skim": True,
+                "router_uncertainty_threshold": 0.35,
+            })
+        elif profile == "quality":
+            profile_opts.update({
+                "use_skim": True,
+                "router_uncertainty_threshold": 0.25,
+            })
+
         summarizer_processor = SummarizerProcessor(
             provider=settings.llm.provider,
             model=summarization_model,
             max_tokens=settings.llm.max_tokens,
+            hce_options={
+                "use_skim": profile_opts.get("use_skim", use_skim),
+                "router_uncertainty_threshold": profile_opts.get(
+                    "router_uncertainty_threshold", router_uncertainty_threshold
+                ),
+                "judge_model_override": judge_model,
+                "flagship_judge_model": profile_opts.get(
+                    "flagship_judge_model", flagship_judge_model
+                ),
+                "flagship_max_claims_per_file": flagship_max_claims_per_file,
+                "miner_model": miner_model,
+                "heavy_miner_model": heavy_miner_model,
+                "embedder_model": embedder_model,
+                "reranker_model": reranker_model,
+                **profile_opts,
+            },
         )
         moc_processor = MOCProcessor()
 
@@ -553,7 +655,11 @@ def process(
 
             try:
                 result = moc_processor.process(
-                    moc_input_files, theme="topical", depth=3, include_beliefs=True
+                    moc_input_files, 
+                    theme="topical", 
+                    depth=3, 
+                    include_beliefs=True,
+                    write_obsidian_pages=write_obsidian_pages
                 )
                 if result.success:
                     # Save MOC files
@@ -615,9 +721,9 @@ def process(
         )
 
     except Exception as e:
+        import sys  # Ensure sys is available in this scope
         console.print(f"[red]✗ Unexpected error during processing:[/red] {e}")
         if ctx.verbose:
             import traceback
-
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)

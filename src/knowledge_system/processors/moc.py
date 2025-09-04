@@ -144,6 +144,19 @@ class MOCProcessor(BaseProcessor):
     def supported_formats(self) -> list[str]:
         return [".md", ".txt"]
 
+    def validate_input(self, input_data: Any) -> bool:
+        """
+        Validate that the input data is suitable for MOC processing.
+        
+        Args:
+            input_data: The data to validate (file path, directory, or list)
+            
+        Returns:
+            True if input is valid, False otherwise
+        """
+        from ..utils.validation import validate_file_input
+        return validate_file_input(input_data, self.supported_formats, allow_directories=True)
+
     def __init__(self) -> None:
         super().__init__()
         # Configure HCE pipeline for entity extraction
@@ -242,6 +255,7 @@ class MOCProcessor(BaseProcessor):
         input_data: Any,
         dry_run: bool = False,
         template: str | Path | None = None,
+        write_obsidian_pages: bool = False,
         **kwargs: Any,
     ) -> ProcessorResult:
         """Process input files to generate Maps of Content using HCE."""
@@ -433,6 +447,11 @@ class MOCProcessor(BaseProcessor):
 
             # Generate MOC files
             output_files = self._generate_moc_files(moc_data, template)
+
+            # Optionally generate Obsidian dataview pages
+            if write_obsidian_pages:
+                obsidian_files = self._generate_obsidian_pages()
+                output_files.update(obsidian_files)
 
             return ProcessorResult(
                 success=True,
@@ -771,3 +790,12 @@ class MOCProcessor(BaseProcessor):
         except Exception as e:
             logger.error(f"Error generating speaker-enhanced People.md: {e}")
             return "# People\n\nError generating content."
+
+    def _generate_obsidian_pages(self) -> dict[str, str]:
+        """Generate Obsidian MOC pages with dataview queries."""
+        from ..utils.obsidian_moc_generator import generate_all_obsidian_pages
+        
+        obsidian_files = generate_all_obsidian_pages()
+        
+        logger.info(f"Generated {len(obsidian_files)} Obsidian MOC pages with dataview queries")
+        return obsidian_files

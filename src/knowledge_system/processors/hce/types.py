@@ -6,13 +6,24 @@ from pydantic import BaseModel, Field
 
 ClaimType = Literal["factual", "causal", "normative", "forecast", "definition"]
 RelationType = Literal["supports", "contradicts", "depends_on", "refines"]
+ContextType = Literal["exact", "extended", "segment"]
+TemporalityScore = Literal[1, 2, 3, 4, 5]  # 1=Immediate, 2=Short-term, 3=Medium-term, 4=Long-term, 5=Timeless
 
 
 class EvidenceSpan(BaseModel):
-    t0: str
-    t1: str
-    quote: str
+    # Core precise quote (existing)
+    t0: str                    # Exact start of quote
+    t1: str                    # Exact end of quote  
+    quote: str                 # Precise verbatim quote
     segment_id: str | None = None
+    
+    # Extended context (new)
+    context_t0: str | None = None    # Extended window start
+    context_t1: str | None = None    # Extended window end
+    context_text: str | None = None  # 30-60 second context around quote
+    
+    # Metadata
+    context_type: ContextType = "exact"
 
 
 class Segment(BaseModel):
@@ -63,6 +74,13 @@ class ScoredClaim(BaseModel):
     evidence: list[EvidenceSpan]
     tier: Literal["A", "B", "C"] | None = None
     scores: dict[str, float] = Field(default_factory=dict)
+    temporality_score: TemporalityScore = 3  # Default to medium-term
+    temporality_confidence: float = Field(ge=0, le=1, default=0.5)
+    temporality_rationale: str | None = None
+    
+    # Structured categories (copied from episode-level analysis)
+    structured_categories: list[str] = []  # Category names this claim contributes to
+    category_relevance_scores: dict[str, float] = Field(default_factory=dict)  # How much this claim supports each category
 
 
 class Relation(BaseModel):
@@ -106,6 +124,16 @@ class JargonTerm(BaseModel):
     evidence_spans: list[EvidenceSpan] = []
 
 
+class StructuredCategory(BaseModel):
+    """Represents a Wikidata-style structured category coverage for an episode."""
+    category_id: str
+    category_name: str
+    wikidata_qid: str | None = None
+    coverage_confidence: float = Field(ge=0, le=1, default=0.5)
+    supporting_evidence: list[str] = []  # Claim IDs that support this categorization
+    frequency_score: float = Field(ge=0, le=1, default=0.0)  # How often this category appears
+    
+    
 class EpisodeBundle(BaseModel):
     episode_id: str
     segments: list[Segment]
@@ -120,3 +148,4 @@ class PipelineOutputs(BaseModel):
     people: list[PersonMention] = []
     concepts: list[MentalModel] = []
     jargon: list[JargonTerm] = []
+    structured_categories: list[StructuredCategory] = []

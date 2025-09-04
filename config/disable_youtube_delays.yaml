@@ -16,7 +16,4 @@ youtube_processing:
   # Don't use delays even when proxies are configured
   use_proxy_delays: false
 
-# Make sure your proxy credentials are configured
-api_keys:
-  webshare_username: "${WEBSHARE_USERNAME}"
-  webshare_password: "${WEBSHARE_PASSWORD}"
+# Bright Data is required for YouTube processing

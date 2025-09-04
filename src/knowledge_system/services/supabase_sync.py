@@ -105,8 +105,8 @@ class SupabaseSyncService:
         settings = get_settings()
         
         # Use provided credentials or get from settings
-        self.supabase_url = supabase_url or settings.supabase_url
-        self.supabase_key = supabase_key or settings.supabase_key
+        self.supabase_url = supabase_url or settings.cloud.supabase_url
+        self.supabase_key = supabase_key or settings.cloud.supabase_key
         
         if not self.supabase_url or not self.supabase_key:
             logger.info("Supabase credentials not configured; cloud sync disabled")

@@ -121,11 +121,11 @@ class IntroductionTab(BaseTab):
 <br><br><b>1. Configure API Keys</b> 🔑
 • Go to the <b>API Keys</b> tab
 • Add your OpenAI or Anthropic API key for summarization
-• For YouTube: Add WebShare proxy credentials (required)
+• For YouTube: Add Bright Data API key (required)
 • For speaker diarization: Add HuggingFace token (optional)
 
 <br><br><b>2. Extract YouTube metadata and full transcript with optional diarization</b> 📺
-• Go to the <b>Extraction</b> tab
+• Go to the <b>Cloud Transcription</b> tab
 • Enter YouTube URLs or RSS feeds, or upload a file with URLs
 • Enable speaker diarization for multi-speaker content
 • Click "Extract Transcripts"
@@ -182,7 +182,7 @@ class IntroductionTab(BaseTab):
 • Process entire playlists or channels automatically
 • Speaker diarization for multi-speaker content
 • Automatic metadata extraction and organization
-• Requires WebShare proxy credentials
+• Requires Bright Data API key
 
 <br><br><b>🎙️ Transcription</b> - Audio-to-text conversion
 • Advanced Whisper-based transcription

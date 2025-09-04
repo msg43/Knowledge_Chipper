@@ -10,6 +10,9 @@ echo "Project directory: $SCRIPT_DIR"
 # Change to the project directory
 cd "$SCRIPT_DIR"
 
+# Ensure local src/ is importable without requiring editable install
+export PYTHONPATH="$SCRIPT_DIR/src:${PYTHONPATH}"
+
 # Check if virtual environment exists
 if [ ! -d "venv" ]; then
     echo "❌ Error: Virtual environment not found at $SCRIPT_DIR/venv"
@@ -39,8 +42,8 @@ fi
 
 echo "✅ PyQt6 is available"
 
-# Check if knowledge_system module is available
-if ! ./venv/bin/python -c "import knowledge_system" 2>/dev/null; then
+# Check if knowledge_system module is available (with local src path)
+if ! ./venv/bin/python -c "import sys; sys.path.insert(0, 'src'); import knowledge_system" 2>/dev/null; then
     echo "❌ Error: knowledge_system module is not installed"
     echo ""
     echo "Please install the module in development mode:"
@@ -55,6 +58,6 @@ echo "✅ Knowledge System module is available"
 echo ""
 echo "🚀 Launching GUI..."
 
-# Activate virtual environment and launch GUI
+# Activate virtual environment and launch GUI via the direct GUI entrypoint
 source venv/bin/activate
-python -m knowledge_system gui
+python -m knowledge_system.gui

@@ -1,0 +1,329 @@
+"""DMG-based update worker for Knowledge Chipper."""
+
+import json
+import os
+import shutil
+import subprocess
+import tempfile
+import time
+from pathlib import Path
+from typing import Dict, Any
+from urllib.request import urlopen, urlretrieve
+from urllib.parse import urlparse
+
+from PyQt6.QtCore import QThread, pyqtSignal
+
+from ...logger import get_logger
+from ...__init__ import __version__
+
+logger = get_logger(__name__)
+
+
+class DMGUpdateWorker(QThread):
+    """Worker thread for handling DMG-based app updates."""
+
+    # Signals
+    update_progress = pyqtSignal(str)  # Status message
+    update_progress_percent = pyqtSignal(int, str)  # Percent [0-100], message
+    update_finished = pyqtSignal(bool, str)  # Success, Message
+    update_error = pyqtSignal(str)  # Error message
+
+    def __init__(self) -> None:
+        """Initialize the DMG update worker."""
+        super().__init__()
+        self.public_repo_url = "https://api.github.com/repos/msg43/Skipthepodcast.com/releases/latest"
+        self.current_version = __version__
+
+    def run(self) -> None:
+        """Run the DMG update process."""
+        try:
+            logger.info(f"Starting DMG update check from version {self.current_version}")
+            
+            # Step 1: Check for updates
+            self.update_progress.emit("🔍 Checking for updates...")
+            self.update_progress_percent.emit(10, "Checking GitHub releases")
+            
+            latest_release = self._check_for_updates()
+            if not latest_release:
+                self.update_finished.emit(False, "No updates available")
+                return
+            
+            new_version = latest_release["tag_name"].lstrip("v")
+            if not self._is_newer_version(new_version):
+                self.update_finished.emit(False, f"Already on latest version ({self.current_version})")
+                return
+            
+            logger.info(f"Update available: {self.current_version} → {new_version}")
+            
+            # Step 2: Download DMG
+            self.update_progress.emit(f"📥 Downloading Knowledge Chipper v{new_version}...")
+            self.update_progress_percent.emit(25, "Downloading update")
+            
+            dmg_url = self._get_dmg_download_url(latest_release)
+            if not dmg_url:
+                raise Exception("Could not find DMG download in release assets")
+            
+            dmg_path = self._download_dmg(dmg_url, new_version)
+            
+            # Step 3: Backup user data (minimal since data is in proper locations)
+            self.update_progress.emit("💾 Preparing for installation...")
+            self.update_progress_percent.emit(60, "Backing up settings")
+            
+            backup_info = self._prepare_update()
+            
+            # Step 4: Install DMG
+            self.update_progress.emit("🔄 Installing update...")
+            self.update_progress_percent.emit(80, "Installing new version")
+            
+            self._install_dmg(dmg_path)
+            
+            # Step 5: Complete installation
+            self.update_progress.emit("✅ Finalizing installation...")
+            self.update_progress_percent.emit(95, "Completing update")
+            
+            self._finalize_update(backup_info)
+            
+            # Step 6: Success
+            self.update_progress_percent.emit(100, "Update complete")
+            self.update_finished.emit(
+                True, 
+                f"✅ Successfully updated to v{new_version}!\n\nThe app will restart automatically."
+            )
+            
+            # Schedule app restart
+            self._schedule_restart()
+            
+        except Exception as e:
+            logger.error(f"DMG update failed: {e}", exc_info=True)
+            self.update_error.emit(f"Update failed: {str(e)}")
+
+    def _check_for_updates(self) -> Dict[str, Any] | None:
+        """Check GitHub API for latest release."""
+        try:
+            with urlopen(self.public_repo_url, timeout=10) as response:
+                if response.status != 200:
+                    raise Exception(f"GitHub API returned status {response.status}")
+                
+                data = json.loads(response.read().decode())
+                logger.info(f"Latest release: {data.get('tag_name', 'unknown')}")
+                return data
+                
+        except Exception as e:
+            logger.error(f"Failed to check for updates: {e}")
+            raise Exception(f"Could not check for updates: {e}")
+
+    def _is_newer_version(self, new_version: str) -> bool:
+        """Check if new version is newer than current."""
+        try:
+            # Simple version comparison (assumes semantic versioning)
+            def version_tuple(v: str) -> tuple:
+                return tuple(map(int, v.split('.')))
+            
+            current_tuple = version_tuple(self.current_version)
+            new_tuple = version_tuple(new_version)
+            
+            is_newer = new_tuple > current_tuple
+            logger.info(f"Version comparison: {self.current_version} vs {new_version} -> newer: {is_newer}")
+            return is_newer
+            
+        except Exception as e:
+            logger.warning(f"Version comparison failed: {e}, assuming update needed")
+            return True
+
+    def _get_dmg_download_url(self, release_data: Dict[str, Any]) -> str | None:
+        """Extract DMG download URL from release assets."""
+        try:
+            assets = release_data.get("assets", [])
+            for asset in assets:
+                if asset.get("name", "").endswith(".dmg"):
+                    download_url = asset.get("browser_download_url")
+                    logger.info(f"Found DMG asset: {asset.get('name')} ({asset.get('size', 0)} bytes)")
+                    return download_url
+            
+            logger.warning("No DMG asset found in release")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to find DMG download URL: {e}")
+            return None
+
+    def _download_dmg(self, download_url: str, version: str) -> Path:
+        """Download the DMG file with progress tracking."""
+        try:
+            # Create temp directory for download
+            temp_dir = Path(tempfile.mkdtemp(prefix="knowledge_chipper_update_"))
+            dmg_filename = f"Knowledge_Chipper-{version}.dmg"
+            dmg_path = temp_dir / dmg_filename
+            
+            logger.info(f"Downloading DMG from: {download_url}")
+            logger.info(f"Download destination: {dmg_path}")
+            
+            def progress_hook(block_num: int, block_size: int, total_size: int):
+                if total_size > 0:
+                    downloaded = block_num * block_size
+                    percent = min(int((downloaded / total_size) * 100), 100)
+                    mb_downloaded = downloaded / (1024 * 1024)
+                    mb_total = total_size / (1024 * 1024)
+                    
+                    # Update progress (25% base + 35% for download = 60% total)
+                    progress_percent = 25 + int((percent * 35) / 100)
+                    self.update_progress_percent.emit(
+                        progress_percent, 
+                        f"Downloading: {mb_downloaded:.1f}/{mb_total:.1f} MB ({percent}%)"
+                    )
+            
+            urlretrieve(download_url, dmg_path, reporthook=progress_hook)
+            
+            if not dmg_path.exists():
+                raise Exception("Downloaded DMG file not found")
+            
+            file_size = dmg_path.stat().st_size
+            logger.info(f"DMG downloaded successfully: {file_size} bytes")
+            
+            return dmg_path
+            
+        except Exception as e:
+            logger.error(f"DMG download failed: {e}")
+            raise Exception(f"Failed to download update: {e}")
+
+    def _prepare_update(self) -> Dict[str, Any]:
+        """Prepare for update by creating minimal backup info."""
+        try:
+            # Since we're using proper macOS locations, we just need to track what's happening
+            backup_info = {
+                "timestamp": time.time(),
+                "current_version": self.current_version,
+                "app_path": "/Applications/Knowledge_Chipper.app",
+                "backup_needed": False,  # Data is in proper locations, survives app replacement
+            }
+            
+            logger.info("Update preparation complete - data in standard locations")
+            return backup_info
+            
+        except Exception as e:
+            logger.error(f"Update preparation failed: {e}")
+            raise Exception(f"Failed to prepare for update: {e}")
+
+    def _install_dmg(self, dmg_path: Path) -> None:
+        """Install the new app from DMG."""
+        try:
+            logger.info(f"Installing DMG: {dmg_path}")
+            
+            # Mount the DMG
+            mount_result = subprocess.run([
+                "hdiutil", "attach", str(dmg_path), 
+                "-nobrowse", "-quiet", "-readonly"
+            ], capture_output=True, text=True, timeout=60)
+            
+            if mount_result.returncode != 0:
+                raise Exception(f"Failed to mount DMG: {mount_result.stderr}")
+            
+            # Find the mount point
+            mount_point = self._find_mount_point(dmg_path)
+            if not mount_point:
+                raise Exception("Could not determine DMG mount point")
+            
+            logger.info(f"DMG mounted at: {mount_point}")
+            
+            try:
+                # Find the app in the mounted DMG
+                app_in_dmg = None
+                for item in mount_point.iterdir():
+                    if item.name.endswith(".app"):
+                        app_in_dmg = item
+                        break
+                
+                if not app_in_dmg:
+                    raise Exception("No .app found in DMG")
+                
+                # Replace the existing app
+                target_app = Path("/Applications/Knowledge_Chipper.app")
+                
+                # Remove old app if it exists
+                if target_app.exists():
+                    logger.info("Removing old app version")
+                    shutil.rmtree(target_app)
+                
+                # Copy new app
+                logger.info(f"Installing new app: {app_in_dmg} → {target_app}")
+                shutil.copytree(app_in_dmg, target_app)
+                
+                # Set proper permissions
+                os.chmod(target_app, 0o755)
+                
+                logger.info("App installation complete")
+                
+            finally:
+                # Always unmount the DMG
+                subprocess.run([
+                    "hdiutil", "detach", str(mount_point)
+                ], capture_output=True, timeout=30)
+                
+                # Clean up downloaded DMG
+                dmg_path.unlink(missing_ok=True)
+                dmg_path.parent.rmdir()
+                
+        except Exception as e:
+            logger.error(f"DMG installation failed: {e}")
+            raise Exception(f"Failed to install update: {e}")
+
+    def _find_mount_point(self, dmg_path: Path) -> Path | None:
+        """Find where the DMG was mounted."""
+        try:
+            # Get mount information
+            result = subprocess.run([
+                "hdiutil", "info"
+            ], capture_output=True, text=True, timeout=10)
+            
+            if result.returncode != 0:
+                return None
+            
+            # Parse hdiutil info output to find our DMG's mount point
+            lines = result.stdout.split('\n')
+            dmg_name = dmg_path.stem  # Remove .dmg extension
+            
+            for i, line in enumerate(lines):
+                if str(dmg_path) in line:
+                    # Look for mount point in subsequent lines
+                    for j in range(i + 1, min(i + 10, len(lines))):
+                        if "/Volumes/" in lines[j]:
+                            mount_path = lines[j].strip().split()[-1]
+                            return Path(mount_path)
+            
+            # Fallback: check common mount point
+            common_mount = Path(f"/Volumes/Knowledge Chipper")
+            if common_mount.exists():
+                return common_mount
+                
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to find mount point: {e}")
+            return None
+
+    def _finalize_update(self, backup_info: Dict[str, Any]) -> None:
+        """Finalize the update process."""
+        try:
+            logger.info("Finalizing update installation")
+            
+            # Since data is in proper macOS locations, no restoration needed
+            # Just verify the new app exists
+            target_app = Path("/Applications/Knowledge_Chipper.app")
+            if not target_app.exists():
+                raise Exception("New app installation not found")
+            
+            logger.info("Update finalization complete")
+            
+        except Exception as e:
+            logger.error(f"Update finalization failed: {e}")
+            raise Exception(f"Failed to finalize update: {e}")
+
+    def _schedule_restart(self) -> None:
+        """Schedule the app to restart after update."""
+        try:
+            # The GUI will handle the restart when it receives the update_finished signal
+            logger.info("Update complete - restart will be handled by GUI")
+            
+        except Exception as e:
+            logger.error(f"Failed to schedule restart: {e}")
+            # Non-critical error, don't fail the update

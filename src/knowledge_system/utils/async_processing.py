@@ -93,8 +93,9 @@ class AsyncTranscriptionManager:
 
         try:
             # Use as_completed to handle whichever finishes first
+            # Reduced timeout from 3600s (1 hour) to 1800s (30 minutes) for better stuck detection
             for future in as_completed(
-                [transcription_future, diarization_future], timeout=3600
+                [transcription_future, diarization_future], timeout=1800
             ):
                 try:
                     result = future.result()
@@ -142,14 +143,32 @@ class AsyncTranscriptionManager:
         kwargs: dict[str, Any],
         progress_callback: Callable | None = None,
     ) -> ProcessorResult:
-        """Run transcription in a separate thread."""
+        """Run transcription in a separate thread with heartbeat monitoring."""
+        import threading
+        import time
+        
         try:
             logger.info("🎯 Starting transcription (Neural Engine)")
             if progress_callback:
                 progress_callback("Running transcription on Neural Engine...")
 
-            result = transcriber.process(audio_path, **kwargs)
-
+            # Add heartbeat mechanism for stuck detection
+            last_heartbeat = threading.Event()
+            
+            def heartbeat():
+                while not last_heartbeat.is_set():
+                    time.sleep(30)  # Heartbeat every 30 seconds
+                    if not last_heartbeat.is_set():
+                        logger.debug("🎯 Transcription heartbeat - still processing...")
+                        
+            heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
+            heartbeat_thread.start()
+            
+            try:
+                result = transcriber.process(audio_path, **kwargs)
+            finally:
+                last_heartbeat.set()  # Stop heartbeat
+                
             if result.success:
                 logger.info(
                     f"✅ Transcription successful: {len(result.data.get('text', ''))} characters"
@@ -170,14 +189,32 @@ class AsyncTranscriptionManager:
         kwargs: dict[str, Any],
         progress_callback: Callable | None = None,
     ) -> ProcessorResult:
-        """Run diarization in a separate thread."""
+        """Run diarization in a separate thread with heartbeat monitoring."""
+        import threading
+        import time
+        
         try:
             logger.info("🎭 Starting diarization (GPU)")
             if progress_callback:
                 progress_callback("Running diarization on GPU...")
 
-            result = diarizer.process(audio_path, **kwargs)
-
+            # Add heartbeat mechanism for stuck detection
+            last_heartbeat = threading.Event()
+            
+            def heartbeat():
+                while not last_heartbeat.is_set():
+                    time.sleep(30)  # Heartbeat every 30 seconds
+                    if not last_heartbeat.is_set():
+                        logger.debug("🎭 Diarization heartbeat - still processing...")
+                        
+            heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
+            heartbeat_thread.start()
+            
+            try:
+                result = diarizer.process(audio_path, **kwargs)
+            finally:
+                last_heartbeat.set()  # Stop heartbeat
+                
             if result.success:
                 logger.info(
                     f"✅ Diarization successful: {len(result.data)} speaker segments"

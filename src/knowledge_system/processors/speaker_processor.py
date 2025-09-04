@@ -40,6 +40,11 @@ class SpeakerData(BaseModel):
     suggested_name: Optional[str] = Field(default=None, description="AI-suggested name")
     confidence_score: float = Field(default=0.0, description="Confidence in suggestion")
     
+    # Enhanced fields for learning and sidecar migration
+    suggestion_method: str = Field(default="unknown", description="Method used for suggestion")
+    suggestion_metadata: Dict[str, Any] = Field(default_factory=dict, description="Detailed analysis results")
+    pattern_matches: List[Dict] = Field(default_factory=list, description="Pattern matches found")
+    
     
 class SpeakerAssignment(BaseModel):
     """Represents a user's assignment of a name to a speaker."""
@@ -254,8 +259,8 @@ class SpeakerProcessor(BaseProcessor):
         for i, segment in enumerate(segments[:5]):
             segment_dict = {
                 'text': segment.text,
-                'start': segment.start_time,
-                'end': segment.end_time,
+                'start': segment.start,
+                'end': segment.end,
                 'sequence': i + 1
             }
             first_five.append(segment_dict)
@@ -263,13 +268,24 @@ class SpeakerProcessor(BaseProcessor):
         return first_five
     
     def _suggest_speaker_name(self, speaker_data: SpeakerData) -> Tuple[Optional[str], float]:
-        """Generate AI-powered name suggestion for a speaker."""
+        """Generate AI-powered name suggestion for a speaker with enhanced metadata."""
         try:
             all_text = ' '.join([seg.text for seg in speaker_data.segments])
             
+            # Initialize enhanced metadata
+            speaker_data.suggestion_metadata = {
+                'text_analyzed': len(all_text),
+                'patterns_tried': [],
+                'pattern_matches': {},
+                'fallback_analysis': {}
+            }
+            speaker_data.pattern_matches = []
+            
             # Try different name detection patterns
             for pattern_name, pattern in self.name_patterns.items():
+                speaker_data.suggestion_metadata['patterns_tried'].append(pattern_name)
                 matches = pattern.findall(all_text)
+                
                 if matches:
                     # Take the most common match
                     name_counts = {}
@@ -277,22 +293,43 @@ class SpeakerProcessor(BaseProcessor):
                         name = match.strip().title()
                         name_counts[name] = name_counts.get(name, 0) + 1
                     
+                    speaker_data.suggestion_metadata['pattern_matches'][pattern_name] = {
+                        'matches': list(matches),
+                        'name_counts': name_counts,
+                        'total_matches': len(matches)
+                    }
+                    
                     if name_counts:
                         suggested_name = max(name_counts, key=name_counts.get)
                         confidence = min(0.9, name_counts[suggested_name] / len(matches))
+                        
+                        # Store pattern match details
+                        pattern_match = {
+                            'pattern_name': pattern_name,
+                            'suggested_name': suggested_name,
+                            'confidence': confidence,
+                            'matches_found': len(matches),
+                            'name_frequency': name_counts[suggested_name]
+                        }
+                        speaker_data.pattern_matches.append(pattern_match)
+                        speaker_data.suggestion_method = f"pattern_matching:{pattern_name}"
                         
                         logger.debug(f"Found name suggestion '{suggested_name}' with confidence {confidence:.2f} using pattern '{pattern_name}'")
                         return suggested_name, confidence
             
             # Fallback: analyze speech patterns for generic suggestions
-            return self._analyze_speech_patterns(speaker_data)
+            suggested_name, confidence = self._analyze_speech_patterns(speaker_data)
+            speaker_data.suggestion_method = "speech_pattern_analysis"
+            return suggested_name, confidence
             
         except Exception as e:
             logger.warning(f"Error suggesting speaker name: {e}")
+            speaker_data.suggestion_method = "error"
+            speaker_data.suggestion_metadata['error'] = str(e)
             return None, 0.0
     
     def _analyze_speech_patterns(self, speaker_data: SpeakerData) -> Tuple[Optional[str], float]:
-        """Analyze speech patterns to suggest generic speaker types."""
+        """Analyze speech patterns to suggest generic speaker types with enhanced metadata."""
         all_text = ' '.join([seg.text for seg in speaker_data.segments]).lower()
         
         # Analyze formality and role indicators
@@ -306,27 +343,135 @@ class SpeakerProcessor(BaseProcessor):
         leadership_indicators = ['we need to', 'let\'s', 'our goal', 'moving forward', 'next steps']
         leadership_count = sum(1 for indicator in leadership_indicators if indicator in all_text)
         
+        # Store analysis metadata
+        analysis_data = {
+            'formal_indicators_count': formal_count,
+            'informal_indicators_count': informal_count,
+            'leadership_indicators_count': leadership_count,
+            'total_duration': speaker_data.total_duration,
+            'formality_ratio': formal_count / max(1, formal_count + informal_count),
+            'leadership_density': leadership_count / max(1, len(speaker_data.segments))
+        }
+        speaker_data.suggestion_metadata['fallback_analysis'] = analysis_data
+        
         # Generate suggestion based on patterns
         if leadership_count > 2:
+            analysis_data['suggestion_reason'] = f"High leadership indicators: {leadership_count}"
             return "Meeting Leader", 0.6
         elif formal_count > informal_count and formal_count > 1:
+            analysis_data['suggestion_reason'] = f"Formal speech: {formal_count} vs {informal_count} informal"
             return "Presenter", 0.5
         elif speaker_data.total_duration > 300:  # More than 5 minutes
+            analysis_data['suggestion_reason'] = f"Long speaking time: {speaker_data.total_duration:.1f}s"
             return "Main Speaker", 0.4
         else:
+            analysis_data['suggestion_reason'] = "Default participant role"
             return "Participant", 0.3
+    
+    def _prepare_database_assignment(self, speaker_data: SpeakerData, assigned_name: str = None) -> Dict[str, Any]:
+        """Prepare speaker data for database storage with all enhanced fields."""
+        # Prepare sample segments for database storage
+        sample_segments = []
+        for segment in speaker_data.first_five_segments:
+            sample_segments.append({
+                'start': segment.get('start', 0),
+                'end': segment.get('end', 0),
+                'text': segment.get('text', '')[:200],  # Limit text length
+                'sequence': segment.get('sequence', 0)
+            })
+        
+        assignment_data = {
+            'speaker_id': speaker_data.speaker_id,
+            'assigned_name': assigned_name or speaker_data.suggested_name or speaker_data.speaker_id,
+            'suggested_name': speaker_data.suggested_name,
+            'suggestion_confidence': speaker_data.confidence_score,
+            'suggestion_method': speaker_data.suggestion_method,
+            'sample_segments': sample_segments,
+            'total_duration': speaker_data.total_duration,
+            'segment_count': speaker_data.segment_count,
+            'processing_metadata': {
+                'suggestion_metadata': speaker_data.suggestion_metadata,
+                'pattern_matches': speaker_data.pattern_matches,
+                'sample_texts': speaker_data.sample_texts[:3]  # Store limited sample texts
+            },
+            'user_confirmed': bool(assigned_name),  # True if manually assigned
+            'confidence': 1.0 if assigned_name else speaker_data.confidence_score
+        }
+        
+        return assignment_data
+    
+    def save_speaker_processing_session(self, recording_path: str, speaker_data_list: List[SpeakerData], 
+                                      assignments: Dict[str, str] = None) -> str:
+        """Save a speaker processing session with all learning data."""
+        import uuid
+        from ..database.speaker_models import get_speaker_db_service, SpeakerProcessingSessionModel
+        
+        session_id = str(uuid.uuid4())
+        
+        try:
+            # Prepare AI suggestions and user corrections
+            ai_suggestions = {}
+            user_corrections = {}
+            confidence_scores = {}
+            
+            for speaker_data in speaker_data_list:
+                speaker_id = speaker_data.speaker_id
+                ai_suggestions[speaker_id] = {
+                    'suggested_name': speaker_data.suggested_name,
+                    'confidence': speaker_data.confidence_score,
+                    'method': speaker_data.suggestion_method,
+                    'metadata': speaker_data.suggestion_metadata
+                }
+                confidence_scores[speaker_id] = speaker_data.confidence_score
+                
+                # Track user corrections if assignments provided
+                if assignments and speaker_id in assignments:
+                    user_assignment = assignments[speaker_id]
+                    if user_assignment != speaker_data.suggested_name:
+                        user_corrections[speaker_id] = {
+                            'ai_suggested': speaker_data.suggested_name,
+                            'user_assigned': user_assignment,
+                            'correction_type': 'name_change'
+                        }
+            
+            # Create processing session
+            session_data = SpeakerProcessingSessionModel(
+                session_id=session_id,
+                recording_path=recording_path,
+                processing_method='diarization',
+                total_speakers=len(speaker_data_list),
+                total_duration=sum(s.total_duration for s in speaker_data_list),
+                ai_suggestions=ai_suggestions,
+                user_corrections=user_corrections,
+                confidence_scores=confidence_scores,
+                completed_at=datetime.now() if assignments else None
+            )
+            
+            db_service = get_speaker_db_service()
+            db_service.create_processing_session(session_data)
+            
+            logger.info(f"Saved processing session {session_id} for {recording_path}")
+            return session_id
+            
+        except Exception as e:
+            logger.error(f"Error saving processing session: {e}")
+            return session_id
     
     def apply_speaker_assignments(
         self, 
         transcript_data: Dict[str, Any], 
-        assignments: Dict[str, str]
+        assignments: Dict[str, str],
+        recording_path: str = None,
+        speaker_data_list: List[SpeakerData] = None
     ) -> Dict[str, Any]:
         """
-        Apply user-assigned names to transcript data.
+        Apply user-assigned names to transcript data with enhanced database storage.
         
         Args:
             transcript_data: Original transcript data with speaker IDs
             assignments: Dictionary mapping speaker IDs to assigned names
+            recording_path: Path to the recording file for database storage
+            speaker_data_list: List of SpeakerData objects with AI analysis
             
         Returns:
             Updated transcript data with real names
@@ -348,12 +493,49 @@ class SpeakerProcessor(BaseProcessor):
             updated_data['speaker_assignments'] = assignments
             updated_data['assignment_timestamp'] = datetime.now().isoformat()
             
+            # Save enhanced data to database if speaker data provided
+            if recording_path and speaker_data_list:
+                self._save_assignments_to_database(recording_path, speaker_data_list, assignments)
+                
+                # Save processing session for learning
+                session_id = self.save_speaker_processing_session(recording_path, speaker_data_list, assignments)
+                updated_data['processing_session_id'] = session_id
+            
             logger.info(f"Successfully applied assignments to {len(updated_data.get('segments', []))} segments")
             return updated_data
             
         except Exception as e:
             logger.error(f"Error applying speaker assignments: {e}")
             return transcript_data
+    
+    def _save_assignments_to_database(self, recording_path: str, speaker_data_list: List[SpeakerData], 
+                                    assignments: Dict[str, str]):
+        """Save speaker assignments to database with enhanced data."""
+        try:
+            from ..database.speaker_models import get_speaker_db_service, SpeakerAssignmentModel
+            
+            db_service = get_speaker_db_service()
+            
+            for speaker_data in speaker_data_list:
+                speaker_id = speaker_data.speaker_id
+                assigned_name = assignments.get(speaker_id, speaker_data.suggested_name or speaker_id)
+                
+                # Prepare assignment data with enhanced fields
+                assignment_data = self._prepare_database_assignment(speaker_data, assigned_name)
+                assignment_data['recording_path'] = recording_path
+                
+                # Create enhanced assignment model
+                assignment_model = SpeakerAssignmentModel(**assignment_data)
+                
+                # Save to database
+                db_service.create_speaker_assignment(assignment_model)
+                
+                logger.debug(f"Saved enhanced assignment: {speaker_id} -> {assigned_name}")
+            
+            logger.info(f"Saved {len(speaker_data_list)} enhanced assignments to database")
+            
+        except Exception as e:
+            logger.error(f"Error saving assignments to database: {e}")
     
     def generate_speaker_color_map(self, speaker_ids: List[str]) -> Dict[str, str]:
         """Generate consistent color mapping for speakers."""

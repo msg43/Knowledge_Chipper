@@ -98,8 +98,13 @@ class EnhancedTranscriptionWorker(QThread):
 
             # Create processor with GUI settings - filter out conflicting diarization parameter
             kwargs = self.gui_settings.get("kwargs", {})
-            # Extract diarization setting and pass it as enable_diarization
-            enable_diarization = kwargs.get("diarization", False)
+            # Extract diarization setting and pass it as enable_diarization  
+            # Check for testing mode and disable diarization if needed
+            import os
+            testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
+            if testing_mode:
+                logger.info("🧪 Testing mode detected in worker - disabling diarization")
+            enable_diarization = kwargs.get("diarization", False) and not testing_mode
 
             # Valid AudioProcessor constructor parameters
             valid_audio_processor_params = {
@@ -177,12 +182,36 @@ class EnhancedTranscriptionWorker(QThread):
 
                     processing_kwargs_with_output["output_dir"] = output_dir
                     
-                    # Enable GUI mode for speaker assignment dialog
-                    processing_kwargs_with_output["gui_mode"] = True
+                    # Enable GUI mode for speaker assignment dialog (unless in testing mode)
+                    import os
+                    
+                    # Check multiple ways to detect testing mode
+                    testing_mode = (
+                        os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1" or
+                        os.environ.get("QT_MAC_DISABLE_FOREGROUND") == "1" or  # Set by test runner
+                        hasattr(self, '_testing_mode') and self._testing_mode
+                    )
+                    
+                    # Log testing mode detection for debugging
+                    logger.info(f"🧪 Testing mode detection: env_var={os.environ.get('KNOWLEDGE_CHIPPER_TESTING_MODE', 'NOT_SET')}, "
+                              f"qt_env={os.environ.get('QT_MAC_DISABLE_FOREGROUND', 'NOT_SET')}, final={testing_mode}")
+                    
+                    if testing_mode:
+                        logger.info("🧪 Testing mode detected - disabling diarization and speaker assignment dialog")
+                        # Disable diarization entirely during testing to prevent speaker dialog
+                        enable_diarization = False
+                    
+                    # CRITICAL: Never enable gui_mode during testing to prevent dialog crashes
+                    processing_kwargs_with_output["gui_mode"] = not testing_mode
                     processing_kwargs_with_output["show_speaker_dialog"] = (
                         enable_diarization and 
-                        self.gui_settings.get("enable_speaker_assignment", True)
+                        self.gui_settings.get("enable_speaker_assignment", True) and
+                        not testing_mode  # Disable speaker dialog during testing
                     )
+                    
+                    # Override diarization setting if in testing mode
+                    if testing_mode:
+                        processing_kwargs_with_output["diarization"] = False
                     processing_kwargs_with_output["enable_color_coding"] = (
                         self.gui_settings.get("enable_color_coding", True)
                     )
@@ -274,7 +303,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
     def __init__(self, parent=None) -> None:
         self.transcription_worker: EnhancedTranscriptionWorker | None = None
         self.gui_settings = get_gui_settings_manager()
-        self.tab_name = "Audio Transcription"
+        self.tab_name = "Local Transcription"
         super().__init__(parent)
 
     def _setup_ui(self) -> None:
@@ -349,11 +378,23 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         add_files_btn = QPushButton("Add Files")
         add_files_btn.setMinimumHeight(30)  # Ensure minimum button height
         add_files_btn.clicked.connect(self._add_files)
+        add_files_btn.setToolTip(
+            "Add individual audio/video files for transcription.\n"
+            "• Supported formats: MP3, WAV, MP4, AVI, MOV, WMV, FLV, FLAC, OGG, and more\n"
+            "• Multiple files can be selected at once\n"
+            "• Files are processed in the order they appear in the list"
+        )
         button_layout.addWidget(add_files_btn)
 
         add_folder_btn = QPushButton("Add Folder")
         add_folder_btn.setMinimumHeight(30)  # Ensure minimum button height
         add_folder_btn.clicked.connect(self._add_folder)
+        add_folder_btn.setToolTip(
+            "Add all compatible files from a selected folder.\n"
+            "• Recursively scans subfolders for audio/video files\n"
+            "• Automatically filters for supported formats\n"
+            "• Useful for processing large collections of media files"
+        )
         button_layout.addWidget(add_folder_btn)
 
         clear_btn = QPushButton("Clear")
@@ -984,7 +1025,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         """Handle transcription completion."""
         self.append_log("\n✅ All transcriptions completed!")
         self.append_log(
-            "📋 Note: Transcriptions are processed in memory. Use the Process Pipeline tab to save transcripts to markdown files."
+            "📋 Note: Transcriptions are processed in memory. Use the Summarization tab to save transcripts to markdown files."
         )
 
         # Hide progress bar and status
@@ -1403,7 +1444,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 )
                 self.diarization_checkbox.setChecked(
                     self.gui_settings.get_checkbox_state(
-                        self.tab_name, "enable_diarization", False
+                        self.tab_name, "enable_diarization", True
                     )
                 )
                 

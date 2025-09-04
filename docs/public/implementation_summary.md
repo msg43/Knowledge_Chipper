@@ -137,7 +137,7 @@ knowledge-system config validate
 - **Automatic Thumbnail Extraction**: Downloads video thumbnails during YouTube processing
 - **Format Support**: Handles JPG and PNG thumbnail formats
 - **CLI Integration**: `--download-thumbnails/--no-download-thumbnails` options
-- **GUI Support**: Checkbox control in Extraction processing tab
+- **GUI Support**: Checkbox control in Cloud Transcription processing tab
 - **Batch Processing**: Thumbnail downloading for playlists and CSV batch processing
 - **Error Handling**: Graceful fallback when thumbnail download fails
 - **Naming Convention**: `{video_id}_thumbnail.{ext}` format for organized storage
@@ -304,7 +304,7 @@ The YouTube processing functionality has been completely redesigned to focus on 
 
 ### GUI Integration
 
-The Extraction tab in the GUI has been updated with:
+The Cloud Transcription tab in the GUI has been updated with:
 - **Transcript Settings**: Language preferences, manual vs auto-caption preferences
 - **Output Options**: Format selection, timestamp inclusion
 - **Fallback Settings**: Whisper model, device, batch size for audio processing

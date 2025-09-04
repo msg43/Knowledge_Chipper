@@ -268,6 +268,21 @@ class SpeakerAssignmentDialog(QDialog):
             metadata: Optional YouTube/podcast metadata for auto-assignment
             parent: Parent widget
         """
+        # CRITICAL TESTING SAFETY: Use unified testing mode detection
+        from ...utils.testing import is_testing_mode, get_testing_mode_info
+        from ...logger import get_logger
+        logger = get_logger(__name__)
+        
+        testing_mode = is_testing_mode()
+        testing_info = get_testing_mode_info()
+        
+        logger.info(f"🧪 TESTING DEBUG: Testing mode = {testing_mode}, details = {testing_info}")
+        
+        if testing_mode:
+            logger.error("🧪 CRITICAL: Attempted to create SpeakerAssignmentDialog during testing mode - BLOCKED!")
+            # Raise exception to prevent dialog creation entirely
+            raise RuntimeError("SpeakerAssignmentDialog cannot be created during testing mode")
+            
         super().__init__(parent)
         self.speaker_data_list = speaker_data_list
         self.recording_path = recording_path
@@ -1007,6 +1022,12 @@ def show_speaker_assignment_dialog(
     Returns:
         Dictionary of speaker assignments or None if cancelled
     """
+    # Critical safety check: Never show dialog during testing mode
+    from ...utils.testing import is_testing_mode
+    if is_testing_mode():
+        logger.error("🧪 CRITICAL: Attempted to show SpeakerAssignmentDialog during testing mode - BLOCKED!")
+        return None
+        
     dialog = SpeakerAssignmentDialog(speaker_data_list, recording_path, metadata, parent)
     
     if dialog.exec() == QDialog.DialogCode.Accepted:

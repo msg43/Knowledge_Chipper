@@ -165,6 +165,57 @@ def _extract_youtube_url_from_file(file_path: Path) -> str | None:
     type=int,
     help="Maximum number of claims to extract per document",
 )
+@click.option(
+    "--router-uncertainty-threshold",
+    type=float,
+    default=0.35,
+    help="Route claims with uncertainty above this threshold to flagship judge",
+)
+@click.option(
+    "--judge-model",
+    type=str,
+    help="Override default judge model URI (e.g., openai://gpt-4o-mini)",
+)
+@click.option(
+    "--flagship-judge-model",
+    type=str,
+    help="Model URI for flagship judge (used only for routed claims)",
+)
+@click.option(
+    "--miner-model",
+    type=str,
+    help="Override miner model URI",
+)
+@click.option(
+    "--heavy-miner-model",
+    type=str,
+    help="Optional heavy miner model URI",
+)
+@click.option(
+    "--embedder-model",
+    type=str,
+    help="Override embedder model URI",
+)
+@click.option(
+    "--reranker-model",
+    type=str,
+    help="Override reranker model URI",
+)
+@click.option(
+    "--profile",
+    type=click.Choice(["fast", "balanced", "quality"]),
+    help="Prefill recommended options for speed/quality tradeoffs",
+)
+@click.option(
+    "--flagship-max-claims-per-file",
+    type=int,
+    help="Cap the number of routed flagship claims per file",
+)
+@click.option(
+    "--use-skim/--no-skim",
+    default=True,
+    help="Enable a fast high-level skim before mining (default: on)",
+)
 @pass_context
 def summarize(
     ctx: CLIContext,
@@ -186,6 +237,16 @@ def summarize(
     include_contradictions: bool,
     include_relations: bool,
     max_claims: int | None,
+    router_uncertainty_threshold: float,
+    judge_model: str | None,
+    flagship_judge_model: str | None,
+    flagship_max_claims_per_file: int | None,
+    miner_model: str | None,
+    heavy_miner_model: str | None,
+    embedder_model: str | None,
+    reranker_model: str | None,
+    profile: str | None,
+    use_skim: bool,
 ) -> None:
     """
     Summarize transcripts or documents using LLM
@@ -318,6 +379,25 @@ def summarize(
 
     # Use provider from CLI option if provided, otherwise from settings
     effective_provider = provider if provider else settings.llm.provider
+    # Apply profile defaults (can be overridden by explicit flags)
+    profile_opts: dict[str, Any] = {}
+    if profile == "fast":
+        profile_opts.update({
+            "use_skim": False,
+            "router_uncertainty_threshold": 1.0,
+            "flagship_judge_model": None,
+        })
+    elif profile == "balanced":
+        profile_opts.update({
+            "use_skim": True,
+            "router_uncertainty_threshold": 0.35,
+        })
+    elif profile == "quality":
+        profile_opts.update({
+            "use_skim": True,
+            "router_uncertainty_threshold": 0.25,
+        })
+
     processor = SummarizerProcessor(
         provider=effective_provider,
         model=model,
@@ -327,6 +407,16 @@ def summarize(
             "include_contradictions": include_contradictions,
             "include_relations": include_relations,
             "max_claims": max_claims,
+            "use_skim": profile_opts.get("use_skim", use_skim),
+            "router_uncertainty_threshold": router_uncertainty_threshold,
+            "judge_model_override": judge_model,
+            "flagship_judge_model": flagship_judge_model,
+            "flagship_max_claims_per_file": flagship_max_claims_per_file,
+            "miner_model": miner_model,
+            "heavy_miner_model": heavy_miner_model,
+            "embedder_model": embedder_model,
+            "reranker_model": reranker_model,
+            **profile_opts,
         },
     )
 
@@ -454,11 +544,15 @@ def summarize(
                         text_to_summarize,
                         dry_run=False,
                         prompt_template=template,
+                        prefer_template_summary=prefer_template_summary,
                     )
                 else:
                     # Handle text/markdown files
                     result = processor.process(
-                        file_path, dry_run=False, prompt_template=template
+                        file_path,
+                        dry_run=False,
+                        prompt_template=template,
+                        prefer_template_summary=prefer_template_summary,
                     )
 
                 file_processing_time = time.time() - file_start_time
@@ -807,6 +901,25 @@ def summarize(
                 f"- **Success Rate:** {(session_stats['successful_files']/session_stats['total_files']*100):.1f}%\n\n"
             )
 
+            # Effective configuration
+            f.write("## Effective Configuration\n\n")
+            f.write(f"- **Use Skim:** {processor.hce_options.get('use_skim', True)}\n")
+            f.write(
+                f"- **Router Threshold:** {processor.hce_options.get('router_uncertainty_threshold', 0.35)}\n"
+            )
+            f.write(
+                f"- **Judge:** {processor.hce_options.get('judge_model_override') or processor.hce_config.models.judge}\n"
+            )
+            f.write(
+                f"- **Flagship Judge:** {processor.hce_config.models.flagship_judge or 'None'}\n"
+            )
+            f.write(f"- **Miner:** {processor.hce_config.models.miner}\n")
+            f.write(
+                f"- **Heavy Miner:** {processor.hce_config.models.heavy_miner or 'None'}\n"
+            )
+            f.write(f"- **Embedder:** {processor.hce_config.models.embedder}\n")
+            f.write(f"- **Reranker:** {processor.hce_config.models.reranker}\n\n")
+
             # Resource usage
             f.write("## Resource Usage\n\n")
             f.write(f"- **Total Tokens:** {session_stats['total_tokens']:,}\n")
@@ -831,6 +944,17 @@ def summarize(
             f.write(
                 f"- **Average Compression:** {(1-avg_compression)*100:.1f}% reduction\n\n"
             )
+
+            # Routing analytics (if available in metadata of successful files)
+            routed_count = 0
+            local_count = 0
+            for detail in session_stats["file_details"]:
+                # No per-file metadata object stored here; aggregate not available without deeper wiring
+                pass
+            # Placeholder headings for future detailed aggregation
+            f.write("## Routing Analytics\n\n")
+            f.write("- Routed to flagship: (see per-file metadata)\n")
+            f.write("- Kept local: (see per-file metadata)\n\n")
 
             # Per-file details
             f.write("## Per-File Details\n\n")

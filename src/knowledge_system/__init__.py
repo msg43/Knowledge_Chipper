@@ -8,8 +8,20 @@ videos, audio files, and documents into searchable knowledge.
 from __future__ import annotations
 
 import re
+import warnings
 from importlib import metadata
 from pathlib import Path
+
+# Suppress common ML/audio library warnings early in application startup
+# Import warning suppressions utility to handle PyTorch/TorchAudio/PyAnnote deprecations
+try:
+    from .utils.warning_suppressions import suppress_ml_library_warnings
+    suppress_ml_library_warnings()
+except ImportError:
+    # Fallback to direct warning suppressions if utility import fails
+    warnings.filterwarnings("ignore", category=UserWarning, module="torchaudio._backend.utils")
+    warnings.filterwarnings("ignore", category=UserWarning, module="pyannote.audio.models.blocks.pooling")
+    warnings.filterwarnings("ignore", message=".*std\\(\\): degrees of freedom.*", category=UserWarning)
 
 
 def _resolve_version() -> str:
@@ -45,7 +57,7 @@ def _resolve_version() -> str:
 
 
 __version__ = _resolve_version()
-__author__ = "Knowledge_Chipper"
+__author__ = "Skip the Podcast Desktop"
 __email__ = "dev@knowledge-system.local"
 
 # Core imports
@@ -81,8 +93,8 @@ def gui_main() -> None:
         app = QApplication(sys.argv)
 
         # Set application properties
-        app.setApplicationName("Knowledge_Chipper")
-        app.setApplicationDisplayName("Knowledge_Chipper")
+        app.setApplicationName("Skip the Podcast Desktop")
+        app.setApplicationDisplayName("Skip the Podcast Desktop")
         app.setApplicationVersion("1.0")
 
         # Import and create main window

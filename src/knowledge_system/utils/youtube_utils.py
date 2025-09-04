@@ -389,44 +389,32 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
 
         settings = get_settings()
 
-        # Try Bright Data first (preferred)
+        # Bright Data API key (no proxy credentials required for playlist expansion)
         bright_data_api_key = getattr(settings.api_keys, "bright_data_api_key", None)
-        use_bright_data = False
+        if not bright_data_api_key:
+            import os
+            bright_data_api_key = (
+                os.getenv("BRIGHT_DATA_API_KEY")
+                or os.getenv("BRIGHTDATA_API_KEY")
+                or os.getenv("BD_API_KEY")
+            )
+
+        use_bright_data = bool(bright_data_api_key and len(str(bright_data_api_key)) >= 10)
         proxy_url = None
         session_manager = None
 
-        if bright_data_api_key:
+        # If proxy credentials are available, use sessions for better reliability; otherwise, proceed without proxy
+        if use_bright_data:
             try:
-                # Initialize Bright Data session manager
                 db_service = DatabaseService()
                 session_manager = BrightDataSessionManager(db_service)
-
-                # Validate credentials
                 if session_manager._validate_credentials():
-                    use_bright_data = True
-                    logger.info("Using Bright Data for playlist expansion")
+                    logger.info("Using Bright Data residential proxies for playlist expansion")
                 else:
-                    logger.warning(
-                        "Bright Data credentials incomplete, falling back to WebShare"
-                    )
+                    logger.warning("Bright Data proxy credentials missing; proceeding without proxy")
+                    session_manager = None
             except Exception as e:
-                logger.warning(
-                    f"Bright Data initialization failed: {e}, falling back to WebShare"
-                )
-
-        # Fallback to WebShare if Bright Data not available
-        if not use_bright_data:
-            username = settings.api_keys.webshare_username
-            password = settings.api_keys.webshare_password
-
-            if not username or not password:
-                logger.error(
-                    "Proxy credentials required for playlist expansion. Please configure either Bright Data API Key or WebShare credentials."
-                )
-                return {"expanded_urls": urls, "playlist_info": []}
-
-            proxy_url = f"http://{username}:{password}@p.webshare.io:80/"
-            logger.info("Using WebShare for playlist expansion")
+                logger.warning(f"Bright Data initialization failed (non-fatal): {e}")
 
         expanded_urls = []
         playlist_info = []
@@ -440,7 +428,7 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
                 session_id = None
                 playlist_id = None
 
-                if use_bright_data:
+                if use_bright_data and session_manager:
                     # Extract playlist ID for session
                     import re
 

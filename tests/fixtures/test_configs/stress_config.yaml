@@ -1,0 +1,31 @@
+test_suite: stress
+timeout: 7200  # 2 hours per test
+file_size_limit_mb: 1000
+operations:
+  - full_pipeline
+  - batch_processing
+  - heavy_processing
+tabs:
+  - Process Pipeline
+  - YouTube
+  - File Watcher
+file_types:
+  audio:
+    - .mp3
+    - .wav
+    - .flac
+  video:
+    - .mp4
+    - .webm
+    - .avi
+  document:
+    - .pdf
+    - .docx
+stress_scenarios:
+  large_files: true
+  batch_processing: true
+  memory_pressure: true
+  long_duration: true
+performance_monitoring: true
+detailed_logging: true
+quick_mode: false

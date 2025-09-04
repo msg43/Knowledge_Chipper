@@ -1,714 +1,406 @@
 """
 Speaker Learning Service
 
-Provides intelligent speaker learning and pattern recognition capabilities
-for the speaker identification system. Handles voice pattern learning,
-speaker consistency analysis, and automatic suggestions.
+Enhances speaker attribution using historical data and user corrections.
+Provides auto-assignment suggestions based on accumulated learning.
 """
 
 import json
-from collections import Counter, defaultdict
 from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
-from pydantic import BaseModel, Field
 
 from ..database.speaker_models import (
-    get_speaker_db_service,
-    SpeakerVoiceModel,
+    get_speaker_db_service, 
     SpeakerAssignmentModel,
-    SpeakerLearningModel
+    SpeakerProcessingSessionModel
 )
 from ..logger import get_logger
-from ..processors.speaker_processor import SpeakerData
-from ..utils.speaker_intelligence import SpeakerNameSuggester
 
 logger = get_logger(__name__)
 
 
-class SpeakerSuggestion(BaseModel):
-    """Represents a speaker name suggestion with confidence and context."""
-    
-    name: str = Field(..., description="Suggested speaker name")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score")
-    source: str = Field(..., description="Source of suggestion (e.g., 'self_introduction', 'learned_pattern')")
-    context: Optional[str] = Field(default=None, description="Context that led to this suggestion")
-    
-    def is_valid(self) -> bool:
-        """Check if the suggestion is valid."""
-        return len(self.name.strip()) > 0 and 0.0 <= self.confidence <= 1.0
-
-
-class VoicePattern:
-    """Represents a voice pattern for speaker recognition."""
-    
-    def __init__(self, speaker_name: str):
-        """
-        Initialize voice pattern.
-        
-        Args:
-            speaker_name: Name of the speaker
-        """
-        self.speaker_name = speaker_name
-        self.speech_characteristics = {}
-        self.usage_count = 0
-        self.confidence_scores = []
-        self.last_updated = datetime.now()
-        
-        # Speech pattern features (placeholder for future audio analysis)
-        self.features = {
-            'avg_segment_length': 0.0,
-            'speech_rate': 0.0,  # Words per minute
-            'formality_score': 0.0,  # 0-1 scale
-            'vocabulary_complexity': 0.0,  # 0-1 scale
-            'common_phrases': [],
-            'speaking_style_indicators': []
-        }
-    
-    def update_from_speaker_data(self, speaker_data: SpeakerData):
-        """
-        Update voice pattern from speaker data.
-        
-        Args:
-            speaker_data: SpeakerData object with speech information
-        """
-        try:
-            # Update basic statistics
-            if speaker_data.segments:
-                total_text_length = sum(len(seg.text) for seg in speaker_data.segments)
-                self.features['avg_segment_length'] = total_text_length / len(speaker_data.segments)
-                
-                # Estimate speech rate (rough approximation)
-                if speaker_data.total_duration > 0:
-                    word_count = sum(len(seg.text.split()) for seg in speaker_data.segments)
-                    self.features['speech_rate'] = (word_count / speaker_data.total_duration) * 60
-            
-            # Analyze speech patterns
-            all_text = ' '.join([seg.text for seg in speaker_data.segments])
-            self._analyze_speech_patterns(all_text)
-            
-            # Update metadata
-            self.usage_count += 1
-            self.confidence_scores.append(speaker_data.confidence_score)
-            self.last_updated = datetime.now()
-            
-            logger.debug(f"Updated voice pattern for {self.speaker_name}")
-            
-        except Exception as e:
-            logger.error(f"Error updating voice pattern: {e}")
-    
-    def _analyze_speech_patterns(self, text: str):
-        """Analyze speech patterns from text."""
-        try:
-            text_lower = text.lower()
-            
-            # Formality analysis
-            formal_indicators = ['furthermore', 'therefore', 'consequently', 'regarding', 'pursuant', 'however']
-            informal_indicators = ['yeah', 'um', 'like', 'you know', 'basically', 'kinda']
-            
-            formal_count = sum(1 for indicator in formal_indicators if indicator in text_lower)
-            informal_count = sum(1 for indicator in informal_indicators if indicator in text_lower)
-            
-            total_indicators = formal_count + informal_count
-            if total_indicators > 0:
-                self.features['formality_score'] = formal_count / total_indicators
-            
-            # Vocabulary complexity (simple heuristic)
-            words = text_lower.split()
-            if words:
-                avg_word_length = sum(len(word) for word in words) / len(words)
-                self.features['vocabulary_complexity'] = min(1.0, avg_word_length / 10.0)
-            
-            # Common phrases (extract frequent 2-3 word combinations)
-            self._extract_common_phrases(text_lower)
-            
-        except Exception as e:
-            logger.warning(f"Error analyzing speech patterns: {e}")
-    
-    def _extract_common_phrases(self, text: str):
-        """Extract common phrases from text."""
-        try:
-            words = text.split()
-            if len(words) < 2:
-                return
-            
-            # Extract 2-word phrases
-            bigrams = [f"{words[i]} {words[i+1]}" for i in range(len(words)-1)]
-            bigram_counts = Counter(bigrams)
-            
-            # Store most common phrases
-            common_bigrams = [phrase for phrase, count in bigram_counts.most_common(5) if count > 1]
-            self.features['common_phrases'] = common_bigrams
-            
-        except Exception as e:
-            logger.warning(f"Error extracting common phrases: {e}")
-    
-    def get_similarity_score(self, other_pattern: 'VoicePattern') -> float:
-        """
-        Calculate similarity score with another voice pattern.
-        
-        Args:
-            other_pattern: Another VoicePattern to compare with
-            
-        Returns:
-            Similarity score between 0.0 and 1.0
-        """
-        try:
-            if not isinstance(other_pattern, VoicePattern):
-                return 0.0
-            
-            similarity_scores = []
-            
-            # Compare speech rate
-            if (self.features['speech_rate'] > 0 and other_pattern.features['speech_rate'] > 0):
-                rate_diff = abs(self.features['speech_rate'] - other_pattern.features['speech_rate'])
-                max_rate = max(self.features['speech_rate'], other_pattern.features['speech_rate'])
-                rate_similarity = 1.0 - (rate_diff / max_rate) if max_rate > 0 else 0.0
-                similarity_scores.append(rate_similarity)
-            
-            # Compare formality
-            formality_diff = abs(self.features['formality_score'] - other_pattern.features['formality_score'])
-            formality_similarity = 1.0 - formality_diff
-            similarity_scores.append(formality_similarity)
-            
-            # Compare vocabulary complexity
-            vocab_diff = abs(self.features['vocabulary_complexity'] - other_pattern.features['vocabulary_complexity'])
-            vocab_similarity = 1.0 - vocab_diff
-            similarity_scores.append(vocab_similarity)
-            
-            # Compare common phrases
-            phrase_similarity = self._calculate_phrase_similarity(other_pattern)
-            similarity_scores.append(phrase_similarity)
-            
-            # Return weighted average
-            if similarity_scores:
-                return sum(similarity_scores) / len(similarity_scores)
-            
-            return 0.0
-            
-        except Exception as e:
-            logger.error(f"Error calculating similarity score: {e}")
-            return 0.0
-    
-    def _calculate_phrase_similarity(self, other_pattern: 'VoicePattern') -> float:
-        """Calculate similarity based on common phrases."""
-        try:
-            my_phrases = set(self.features.get('common_phrases', []))
-            other_phrases = set(other_pattern.features.get('common_phrases', []))
-            
-            if not my_phrases and not other_phrases:
-                return 1.0  # Both have no phrases, consider similar
-            
-            if not my_phrases or not other_phrases:
-                return 0.0  # One has phrases, other doesn't
-            
-            # Jaccard similarity
-            intersection = len(my_phrases.intersection(other_phrases))
-            union = len(my_phrases.union(other_phrases))
-            
-            return intersection / union if union > 0 else 0.0
-            
-        except Exception as e:
-            logger.warning(f"Error calculating phrase similarity: {e}")
-            return 0.0
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert voice pattern to dictionary for storage."""
-        return {
-            'speaker_name': self.speaker_name,
-            'features': self.features,
-            'usage_count': self.usage_count,
-            'confidence_scores': self.confidence_scores,
-            'last_updated': self.last_updated.isoformat()
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'VoicePattern':
-        """Create voice pattern from dictionary."""
-        pattern = cls(data['speaker_name'])
-        pattern.features = data.get('features', {})
-        pattern.usage_count = data.get('usage_count', 0)
-        pattern.confidence_scores = data.get('confidence_scores', [])
-        
-        last_updated_str = data.get('last_updated')
-        if last_updated_str:
-            try:
-                pattern.last_updated = datetime.fromisoformat(last_updated_str)
-            except ValueError:
-                pattern.last_updated = datetime.now()
-        
-        return pattern
-
-
 class SpeakerLearningService:
-    """Service for intelligent speaker learning and suggestions."""
+    """Service for learning from user corrections and improving speaker suggestions."""
     
     def __init__(self):
-        """Initialize the speaker learning service."""
+        """Initialize the learning service."""
         self.db_service = get_speaker_db_service()
-        self.name_suggester = SpeakerNameSuggester()
-        self.voice_patterns: Dict[str, VoicePattern] = {}
-        self._load_voice_patterns()
-    
-    def _load_voice_patterns(self):
-        """Load existing voice patterns from database."""
-        try:
-            # Get all speaker voices from database
-            voices = self.db_service.find_matching_voices({}, threshold=0.0)  # Get all
-            
-            for voice in voices:
-                if voice.voice_fingerprint:
-                    try:
-                        pattern_data = json.loads(voice.voice_fingerprint)
-                        if isinstance(pattern_data, dict) and 'speaker_name' in pattern_data:
-                            pattern = VoicePattern.from_dict(pattern_data)
-                            self.voice_patterns[voice.name] = pattern
-                    except (json.JSONDecodeError, KeyError) as e:
-                        logger.warning(f"Error loading voice pattern for {voice.name}: {e}")
-            
-            logger.info(f"Loaded {len(self.voice_patterns)} voice patterns")
-            
-        except Exception as e:
-            logger.error(f"Error loading voice patterns: {e}")
-    
-    def learn_speaker_voice(self, speaker_name: str, speaker_data: SpeakerData) -> bool:
-        """
-        Learn voice characteristics for a speaker.
         
-        Args:
-            speaker_name: Name of the speaker
-            speaker_data: SpeakerData with speech information
-            
-        Returns:
-            True if learning was successful
-        """
-        try:
-            # Get or create voice pattern
-            if speaker_name not in self.voice_patterns:
-                self.voice_patterns[speaker_name] = VoicePattern(speaker_name)
-            
-            pattern = self.voice_patterns[speaker_name]
-            
-            # Update pattern with new data
-            pattern.update_from_speaker_data(speaker_data)
-            
-            # Save to database
-            self._save_voice_pattern(pattern)
-            
-            logger.info(f"Learned voice pattern for {speaker_name}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error learning speaker voice: {e}")
-            return False
-    
-    def _save_voice_pattern(self, pattern: VoicePattern):
-        """Save voice pattern to database."""
-        try:
-            # Convert pattern to JSON
-            pattern_json = json.dumps(pattern.to_dict())
-            
-            # Create or update voice model
-            voice_data = SpeakerVoiceModel(
-                name=pattern.speaker_name,
-                voice_fingerprint={'pattern_data': pattern_json},
-                usage_count=pattern.usage_count,
-                last_used=pattern.last_updated
-            )
-            
-            # Check if voice already exists
-            existing_voice = self.db_service.get_speaker_voice_by_name(pattern.speaker_name)
-            if existing_voice:
-                # Update usage count
-                self.db_service.update_voice_usage(existing_voice.id)
-            else:
-                # Create new voice
-                self.db_service.create_speaker_voice(voice_data)
-            
-        except Exception as e:
-            logger.error(f"Error saving voice pattern: {e}")
-    
-    def find_similar_speakers(
+    def suggest_assignments_from_learning(
         self, 
-        speaker_data: SpeakerData, 
-        similarity_threshold: float = 0.7
-    ) -> List[Tuple[str, float]]:
-        """
-        Find speakers similar to the given speaker data.
-        
-        Args:
-            speaker_data: SpeakerData to find matches for
-            similarity_threshold: Minimum similarity score
-            
-        Returns:
-            List of (speaker_name, similarity_score) tuples
-        """
-        try:
-            # Create temporary pattern for comparison
-            temp_pattern = VoicePattern("temp")
-            temp_pattern.update_from_speaker_data(speaker_data)
-            
-            similar_speakers = []
-            
-            for name, pattern in self.voice_patterns.items():
-                similarity = temp_pattern.get_similarity_score(pattern)
-                if similarity >= similarity_threshold:
-                    similar_speakers.append((name, similarity))
-            
-            # Sort by similarity score (highest first)
-            similar_speakers.sort(key=lambda x: x[1], reverse=True)
-            
-            logger.debug(f"Found {len(similar_speakers)} similar speakers")
-            return similar_speakers
-            
-        except Exception as e:
-            logger.error(f"Error finding similar speakers: {e}")
-            return []
-    
-    def suggest_speaker_names(
-        self, 
-        speaker_data_list: List[SpeakerData],
-        folder_path: Optional[Path] = None
+        recording_path: str, 
+        diarization_data: List[Dict]
     ) -> Dict[str, Tuple[str, float]]:
-        """
-        Suggest speaker names for a list of speakers.
+        """Use learning data to suggest speaker assignments with confidence scores."""
+        suggestions = {}
         
-        Args:
-            speaker_data_list: List of SpeakerData objects
-            folder_path: Optional folder path for context
-            
-        Returns:
-            Dictionary mapping speaker IDs to (suggested_name, confidence) tuples
-        """
         try:
-            suggestions = {}
+            # Extract metadata from recording path for pattern matching
+            file_name = Path(recording_path).stem.lower()
             
-            # Get folder-level suggestions if available
-            folder_suggestions = []
-            if folder_path:
-                folder_analysis = self.analyze_folder_speakers(folder_path)
-                folder_suggestions = folder_analysis.get('suggestions', [])
+            # Get channel-specific patterns if this is a YouTube recording
+            channel_patterns = self._extract_channel_patterns(recording_path)
             
-            for i, speaker_data in enumerate(speaker_data_list):
-                # Try voice pattern matching first
-                similar_speakers = self.find_similar_speakers(speaker_data, similarity_threshold=0.6)
+            # Get historical patterns for similar content
+            content_patterns = self._get_content_patterns(file_name, diarization_data)
+            
+            # Generate suggestions for each speaker
+            for speaker_data in diarization_data:
+                speaker_id = speaker_data.get('speaker_id', 'UNKNOWN')
                 
-                if similar_speakers:
-                    # Use most similar speaker
-                    suggested_name, confidence = similar_speakers[0]
-                    suggestions[speaker_data.speaker_id] = (suggested_name, confidence)
-                elif folder_suggestions and i < len(folder_suggestions):
-                    # Use folder-level suggestion
-                    folder_suggestion = folder_suggestions[i]
-                    suggestions[speaker_data.speaker_id] = (
-                        folder_suggestion['name'], 
-                        folder_suggestion['confidence']
+                # Try channel-specific patterns first
+                suggestion = self._suggest_from_channel_patterns(
+                    speaker_data, channel_patterns
+                )
+                
+                # Fall back to content analysis patterns
+                if not suggestion or suggestion[1] < 0.6:
+                    content_suggestion = self._suggest_from_content_patterns(
+                        speaker_data, content_patterns
                     )
-                else:
-                    # Use context-based suggestion from name suggester
-                    context_suggestions = self.name_suggester.suggest_names_from_context(
-                        speaker_data.sample_texts
-                    )
+                    if content_suggestion and (not suggestion or content_suggestion[1] > suggestion[1]):
+                        suggestion = content_suggestion
+                
+                # Fall back to voice similarity patterns
+                if not suggestion or suggestion[1] < 0.5:
+                    voice_suggestion = self._suggest_from_voice_patterns(speaker_data)
+                    if voice_suggestion and (not suggestion or voice_suggestion[1] > suggestion[1]):
+                        suggestion = voice_suggestion
+                
+                if suggestion:
+                    suggestions[speaker_id] = suggestion
                     
-                    if context_suggestions:
-                        suggested_name, confidence = context_suggestions[0]
-                        suggestions[speaker_data.speaker_id] = (suggested_name, confidence)
-                    else:
-                        # Generic fallback
-                        speaker_num = speaker_data.speaker_id.replace("SPEAKER_", "")
-                        try:
-                            num = int(speaker_num) + 1
-                            suggestions[speaker_data.speaker_id] = (f"Speaker {num}", 0.3)
-                        except ValueError:
-                            suggestions[speaker_data.speaker_id] = ("Unknown Speaker", 0.1)
-            
-            logger.info(f"Generated suggestions for {len(suggestions)} speakers")
+            logger.info(f"Generated {len(suggestions)} learned suggestions for {recording_path}")
             return suggestions
             
         except Exception as e:
-            logger.error(f"Error suggesting speaker names: {e}")
+            logger.error(f"Error generating learned suggestions: {e}")
             return {}
     
-    def analyze_folder_speakers(self, folder_path: Path) -> Dict[str, Any]:
-        """
-        Analyze speaker consistency across multiple recordings in a folder.
-        
-        Args:
-            folder_path: Path to folder containing recordings
-            
-        Returns:
-            Analysis results with suggested consistent speakers
-        """
+    def _extract_channel_patterns(self, recording_path: str) -> Dict[str, Any]:
+        """Extract patterns specific to YouTube channels or content creators."""
         try:
-            # Get all assignments in the folder
-            assignments = []
-            recording_files = []
+            # Try to extract channel info from file path or metadata
+            path_parts = Path(recording_path).parts
+            channel_indicators = []
             
-            # Look for audio files in the folder
-            audio_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac']
-            for ext in audio_extensions:
-                recording_files.extend(folder_path.glob(f"*{ext}"))
+            # Look for common channel patterns in path
+            for part in path_parts:
+                if any(keyword in part.lower() for keyword in ['channel', 'podcast', 'show']):
+                    channel_indicators.append(part)
             
-            # Get assignments for each recording
-            for audio_file in recording_files:
-                file_assignments = self.db_service.get_assignments_for_recording(str(audio_file))
-                assignments.extend(file_assignments)
-            
-            if not assignments:
-                return {'consistent_speakers': [], 'suggestions': []}
-            
-            # Analyze name frequency and patterns
-            name_counts = Counter([assignment.assigned_name for assignment in assignments])
-            speaker_id_patterns = defaultdict(list)
-            
-            # Group by speaker ID patterns
-            for assignment in assignments:
-                speaker_id_patterns[assignment.speaker_id].append(assignment.assigned_name)
-            
-            # Find consistent speakers (appear in multiple recordings)
-            consistent_speakers = []
-            suggestions = []
-            
-            for name, count in name_counts.most_common():
-                if count > 1:  # Appears in multiple recordings
-                    consistent_speakers.append(name)
-                    
-                    # Calculate confidence based on frequency and consistency
-                    confidence = min(0.9, count * 0.2)
-                    suggestions.append({
-                        'name': name,
-                        'frequency': count,
-                        'confidence': confidence
-                    })
-            
-            # Analyze speaker ID consistency
-            consistent_id_mappings = {}
-            for speaker_id, names in speaker_id_patterns.items():
-                name_counts_for_id = Counter(names)
-                most_common_name, frequency = name_counts_for_id.most_common(1)[0]
-                
-                # If this speaker ID consistently maps to the same name
-                if frequency > 1 and frequency / len(names) > 0.6:
-                    consistent_id_mappings[speaker_id] = most_common_name
+            # Get historical assignments for similar paths
+            similar_assignments = self._get_similar_path_assignments(recording_path)
             
             return {
-                'consistent_speakers': consistent_speakers,
-                'suggestions': suggestions[:5],  # Top 5 suggestions
-                'total_recordings': len(set(assignment.recording_path for assignment in assignments)),
-                'unique_speakers': len(name_counts),
-                'consistent_id_mappings': consistent_id_mappings
+                'channel_indicators': channel_indicators,
+                'historical_assignments': similar_assignments,
+                'pattern_strength': len(similar_assignments)
             }
             
         except Exception as e:
-            logger.error(f"Error analyzing folder speakers: {e}")
-            return {'consistent_speakers': [], 'suggestions': []}
+            logger.debug(f"Error extracting channel patterns: {e}")
+            return {}
     
-    def learn_from_user_corrections(
+    def _get_similar_path_assignments(self, recording_path: str) -> List[Dict]:
+        """Get assignments from recordings with similar paths."""
+        try:
+            path_obj = Path(recording_path)
+            parent_dir = str(path_obj.parent)
+            file_prefix = path_obj.stem.split('_')[0]  # First part before underscore
+            
+            # Query for recordings in same directory or with similar names
+            from ..database.speaker_models import SpeakerAssignment
+            
+            with self.db_service.get_session() as session:
+                # Get assignments from same directory
+                similar_by_dir = session.query(SpeakerAssignment).filter(
+                    SpeakerAssignment.recording_path.like(f'{parent_dir}%'),
+                    SpeakerAssignment.user_confirmed == True
+                ).all()
+                
+                # Get assignments with similar file names
+                similar_by_name = session.query(SpeakerAssignment).filter(
+                    SpeakerAssignment.recording_path.like(f'%{file_prefix}%'),
+                    SpeakerAssignment.user_confirmed == True
+                ).all()
+            
+            # Combine and deduplicate
+            all_similar = list(set(similar_by_dir + similar_by_name))
+            
+            return [{
+                'speaker_id': a.speaker_id,
+                'assigned_name': a.assigned_name,
+                'confidence': a.confidence,
+                'recording_path': a.recording_path
+            } for a in all_similar]
+            
+        except Exception as e:
+            logger.debug(f"Error getting similar path assignments: {e}")
+            return []
+    
+    def _suggest_from_channel_patterns(
         self, 
-        original_suggestion: str, 
-        user_correction: str, 
-        context: Dict[str, Any]
-    ):
-        """
-        Learn from user corrections to improve future suggestions.
-        
-        Args:
-            original_suggestion: Original AI suggestion
-            user_correction: User's correction
-            context: Context information about the correction
-        """
+        speaker_data: Dict, 
+        channel_patterns: Dict
+    ) -> Optional[Tuple[str, float]]:
+        """Suggest speaker name based on channel-specific patterns."""
         try:
-            # Create learning entry
-            learning_data = SpeakerLearningModel(
-                original_suggestion=original_suggestion,
-                user_correction=user_correction,
-                context_data=context,
-                learning_weight=1.0
-            )
+            historical = channel_patterns.get('historical_assignments', [])
             
-            # Save to database
-            self.db_service.create_learning_entry(learning_data)
+            if not historical:
+                return None
             
-            # Update voice patterns if applicable
-            if user_correction in self.voice_patterns:
-                pattern = self.voice_patterns[user_correction]
-                # Increase confidence for this pattern
-                pattern.confidence_scores.append(0.9)  # High confidence for user correction
+            # Count frequency of names for similar speaker positions
+            speaker_position = speaker_data.get('position', 0)  # 0=main, 1=first guest, etc.
+            name_counts = {}
             
-            logger.info(f"Learned from correction: {original_suggestion} -> {user_correction}")
+            for assignment in historical:
+                # Simple heuristic: assume first speaker (SPEAKER_00) is often the host
+                if (speaker_data.get('speaker_id', '').endswith('00') and 
+                    assignment['speaker_id'].endswith('00')):
+                    name = assignment['assigned_name']
+                    name_counts[name] = name_counts.get(name, 0) + 1
+                elif assignment['speaker_id'] == speaker_data.get('speaker_id'):
+                    name = assignment['assigned_name']
+                    name_counts[name] = name_counts.get(name, 0) + 1
+            
+            if name_counts:
+                # Return most frequent name with confidence based on frequency
+                best_name = max(name_counts, key=name_counts.get)
+                frequency = name_counts[best_name]
+                total_samples = len(historical)
+                confidence = min(0.9, frequency / max(1, total_samples) * 2)  # Scale confidence
+                
+                return best_name, confidence
+            
+            return None
             
         except Exception as e:
-            logger.error(f"Error learning from user correction: {e}")
+            logger.debug(f"Error suggesting from channel patterns: {e}")
+            return None
     
-    def get_speaker_statistics(self) -> Dict[str, Any]:
-        """Get statistics about learned speakers."""
+    def _get_content_patterns(self, file_name: str, diarization_data: List[Dict]) -> Dict[str, Any]:
+        """Get patterns based on content analysis of similar recordings."""
         try:
-            db_stats = self.db_service.get_speaker_statistics()
+            # Look for content keywords in filename
+            content_keywords = []
             
-            # Add voice pattern statistics
-            pattern_stats = {
-                'total_patterns': len(self.voice_patterns),
-                'most_active_speakers': [],
-                'average_confidence': 0.0
+            # Common content type indicators
+            content_types = {
+                'interview': ['interview', 'conversation', 'chat', 'talk'],
+                'podcast': ['podcast', 'episode', 'show'],
+                'meeting': ['meeting', 'call', 'conference'],
+                'presentation': ['presentation', 'speech', 'lecture']
             }
             
-            if self.voice_patterns:
-                # Sort by usage count
-                sorted_patterns = sorted(
-                    self.voice_patterns.values(),
-                    key=lambda p: p.usage_count,
-                    reverse=True
-                )
-                
-                pattern_stats['most_active_speakers'] = [
-                    {
-                        'name': pattern.speaker_name,
-                        'usage_count': pattern.usage_count,
-                        'last_updated': pattern.last_updated.isoformat()
-                    }
-                    for pattern in sorted_patterns[:5]
-                ]
-                
-                # Calculate average confidence
-                all_confidences = []
-                for pattern in self.voice_patterns.values():
-                    all_confidences.extend(pattern.confidence_scores)
-                
-                if all_confidences:
-                    pattern_stats['average_confidence'] = sum(all_confidences) / len(all_confidences)
+            detected_type = None
+            for content_type, keywords in content_types.items():
+                if any(keyword in file_name for keyword in keywords):
+                    detected_type = content_type
+                    content_keywords.extend(keywords)
+                    break
+            
+            # Get assignments from recordings of similar content type
+            similar_content_assignments = self._get_content_type_assignments(detected_type)
             
             return {
-                'database_stats': db_stats,
-                'pattern_stats': pattern_stats
+                'content_type': detected_type,
+                'keywords': content_keywords,
+                'similar_assignments': similar_content_assignments
             }
             
         except Exception as e:
-            logger.error(f"Error getting speaker statistics: {e}")
+            logger.debug(f"Error getting content patterns: {e}")
             return {}
     
-    def export_speaker_profiles(self, output_path: Path) -> bool:
-        """
-        Export learned speaker profiles for backup/sharing.
-        
-        Args:
-            output_path: Path to save the exported profiles
+    def _get_content_type_assignments(self, content_type: str) -> List[Dict]:
+        """Get assignments from recordings of similar content type."""
+        if not content_type:
+            return []
             
-        Returns:
-            True if export was successful
-        """
         try:
-            export_data = {
-                'export_timestamp': datetime.now().isoformat(),
-                'voice_patterns': {},
-                'metadata': {
-                    'total_patterns': len(self.voice_patterns),
-                    'export_version': '1.0'
+            from ..database.speaker_models import SpeakerAssignment
+            
+            with self.db_service.get_session() as session:
+                # Get assignments where processing metadata indicates similar content
+                assignments = session.query(SpeakerAssignment).filter(
+                    SpeakerAssignment.processing_metadata_json.like(f'%{content_type}%'),
+                    SpeakerAssignment.user_confirmed == True
+                ).all()
+            
+            return [{
+                'speaker_id': a.speaker_id,
+                'assigned_name': a.assigned_name,
+                'confidence': a.confidence,
+                'content_type': content_type
+            } for a in assignments]
+            
+        except Exception as e:
+            logger.debug(f"Error getting content type assignments: {e}")
+            return []
+    
+    def _suggest_from_content_patterns(
+        self, 
+        speaker_data: Dict, 
+        content_patterns: Dict
+    ) -> Optional[Tuple[str, float]]:
+        """Suggest speaker name based on content type patterns."""
+        try:
+            content_type = content_patterns.get('content_type')
+            similar_assignments = content_patterns.get('similar_assignments', [])
+            
+            if not content_type or not similar_assignments:
+                return None
+            
+            # Content-specific role mapping
+            role_mappings = {
+                'interview': {
+                    'SPEAKER_00': ['Interviewer', 'Host', 'Journalist'],
+                    'SPEAKER_01': ['Interviewee', 'Guest', 'Subject']
+                },
+                'podcast': {
+                    'SPEAKER_00': ['Host', 'Podcaster', 'Main Host'],
+                    'SPEAKER_01': ['Co-host', 'Guest', 'Co-podcaster']
+                },
+                'meeting': {
+                    'SPEAKER_00': ['Meeting Leader', 'Chair', 'Facilitator'],
+                    'SPEAKER_01': ['Participant', 'Team Member', 'Attendee']
                 }
             }
             
-            # Export voice patterns
-            for name, pattern in self.voice_patterns.items():
-                export_data['voice_patterns'][name] = pattern.to_dict()
+            speaker_id = speaker_data.get('speaker_id', '')
+            suggested_roles = role_mappings.get(content_type, {}).get(speaker_id, [])
             
-            # Write to file
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(export_data, f, indent=2, ensure_ascii=False)
+            # Check if any historical assignments match suggested roles
+            for assignment in similar_assignments:
+                if assignment['assigned_name'] in suggested_roles:
+                    return assignment['assigned_name'], 0.7
             
-            logger.info(f"Exported {len(self.voice_patterns)} speaker profiles to {output_path}")
-            return True
+            # Fallback: return most common role for this content type
+            if suggested_roles:
+                return suggested_roles[0], 0.5
+            
+            return None
             
         except Exception as e:
-            logger.error(f"Error exporting speaker profiles: {e}")
-            return False
+            logger.debug(f"Error suggesting from content patterns: {e}")
+            return None
     
-    def import_speaker_profiles(self, profile_path: Path) -> bool:
-        """
-        Import speaker profiles from backup/sharing.
-        
-        Args:
-            profile_path: Path to the profile file to import
-            
-        Returns:
-            True if import was successful
-        """
+    def _suggest_from_voice_patterns(self, speaker_data: Dict) -> Optional[Tuple[str, float]]:
+        """Suggest speaker name based on voice pattern similarity."""
         try:
-            if not profile_path.exists():
-                logger.error(f"Profile file not found: {profile_path}")
-                return False
+            # This would integrate with voice recognition/similarity
+            # For now, return generic suggestions based on speaking patterns
             
-            with open(profile_path, 'r', encoding='utf-8') as f:
-                import_data = json.load(f)
+            duration = speaker_data.get('total_duration', 0)
+            segment_count = speaker_data.get('segment_count', 0)
             
-            if 'voice_patterns' not in import_data:
-                logger.error("Invalid profile file format")
-                return False
-            
-            imported_count = 0
-            
-            # Import voice patterns
-            for name, pattern_data in import_data['voice_patterns'].items():
-                try:
-                    pattern = VoicePattern.from_dict(pattern_data)
-                    
-                    # Check if pattern already exists
-                    if name in self.voice_patterns:
-                        # Merge patterns (keep the one with higher usage count)
-                        existing_pattern = self.voice_patterns[name]
-                        if pattern.usage_count > existing_pattern.usage_count:
-                            self.voice_patterns[name] = pattern
-                            self._save_voice_pattern(pattern)
-                    else:
-                        self.voice_patterns[name] = pattern
-                        self._save_voice_pattern(pattern)
-                    
-                    imported_count += 1
-                    
-                except Exception as e:
-                    logger.warning(f"Error importing pattern for {name}: {e}")
-            
-            logger.info(f"Imported {imported_count} speaker profiles from {profile_path}")
-            return imported_count > 0
+            # Simple heuristic based on speaking time
+            if duration > 300:  # More than 5 minutes
+                return "Main Speaker", 0.4
+            elif duration > 60:  # More than 1 minute
+                return "Participant", 0.3
+            else:
+                return "Brief Speaker", 0.2
             
         except Exception as e:
-            logger.error(f"Error importing speaker profiles: {e}")
-            return False
+            logger.debug(f"Error suggesting from voice patterns: {e}")
+            return None
     
-    def cleanup_old_patterns(self, days_old: int = 90):
-        """
-        Clean up old, unused voice patterns.
-        
-        Args:
-            days_old: Remove patterns older than this many days with low usage
-        """
+    def get_channel_speaker_patterns(self, channel_id: str) -> Dict[str, float]:
+        """Get common speakers for a specific channel with frequency scores."""
         try:
-            cutoff_date = datetime.now() - timedelta(days=days_old)
-            removed_count = 0
+            from ..database.speaker_models import SpeakerAssignment
             
-            patterns_to_remove = []
+            with self.db_service.get_session() as session:
+                # Get all assignments for this channel (approximate by path matching)
+                assignments = session.query(SpeakerAssignment).filter(
+                    SpeakerAssignment.recording_path.like(f'%{channel_id}%'),
+                    SpeakerAssignment.user_confirmed == True
+                ).all()
             
-            for name, pattern in self.voice_patterns.items():
-                # Remove if old and low usage
-                if (pattern.last_updated < cutoff_date and 
-                    pattern.usage_count < 3):
-                    patterns_to_remove.append(name)
+            # Count frequency of each speaker name
+            name_counts = {}
+            total_assignments = len(assignments)
             
-            # Remove patterns
-            for name in patterns_to_remove:
-                del self.voice_patterns[name]
-                removed_count += 1
+            for assignment in assignments:
+                name = assignment.assigned_name
+                name_counts[name] = name_counts.get(name, 0) + 1
             
-            # Also cleanup database
-            self.db_service.cleanup_old_data(days_old)
+            # Convert to frequency scores
+            frequency_scores = {}
+            for name, count in name_counts.items():
+                frequency_scores[name] = count / max(1, total_assignments)
             
-            logger.info(f"Cleaned up {removed_count} old voice patterns")
+            return frequency_scores
             
         except Exception as e:
-            logger.error(f"Error cleaning up old patterns: {e}")
+            logger.error(f"Error getting channel speaker patterns: {e}")
+            return {}
+    
+    def update_pattern_confidence(self, pattern_type: str, success: bool):
+        """Update confidence in specific patterns based on user validation."""
+        try:
+            # This would update pattern confidence scores in a separate table
+            # For now, log the feedback for future implementation
+            logger.info(f"Pattern feedback: {pattern_type} {'succeeded' if success else 'failed'}")
+            
+            # Future: Store pattern confidence metrics
+            # - Track success/failure rates for different pattern types
+            # - Adjust confidence scores based on historical accuracy
+            # - Learn which patterns work best for different content types
+            
+        except Exception as e:
+            logger.error(f"Error updating pattern confidence: {e}")
+    
+    def analyze_learning_effectiveness(self) -> Dict[str, Any]:
+        """Analyze how well the learning system is performing."""
+        try:
+            from ..database.speaker_models import SpeakerProcessingSession
+            
+            with self.db_service.get_session() as session:
+                # Get recent processing sessions
+                recent_sessions = session.query(SpeakerProcessingSession).filter(
+                    SpeakerProcessingSession.created_at > 
+                    datetime.now() - timedelta(days=30)
+                ).all()
+            
+            total_sessions = len(recent_sessions)
+            sessions_with_corrections = 0
+            avg_confidence = 0.0
+            
+            for session in recent_sessions:
+                if session.user_corrections:
+                    corrections = json.loads(session.user_corrections_json) if session.user_corrections_json else {}
+                    if corrections:
+                        sessions_with_corrections += 1
+                
+                if session.confidence_scores:
+                    scores = json.loads(session.confidence_scores_json) if session.confidence_scores_json else {}
+                    if scores:
+                        avg_confidence += sum(scores.values()) / len(scores)
+            
+            if total_sessions > 0:
+                avg_confidence /= total_sessions
+                correction_rate = sessions_with_corrections / total_sessions
+            else:
+                correction_rate = 0
+            
+            return {
+                'total_sessions': total_sessions,
+                'correction_rate': correction_rate,
+                'average_confidence': avg_confidence,
+                'learning_effectiveness': 1.0 - correction_rate  # Higher is better
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing learning effectiveness: {e}")
+            return {}
 
 
-# Global service instance
+# Global learning service instance
 _learning_service: Optional[SpeakerLearningService] = None
 
 

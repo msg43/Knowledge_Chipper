@@ -476,26 +476,28 @@ class HardwareDetector:
         )  # Capped at 8 for whisper.cpp compatibility
 
         # Hardware-specific optimizations
+        # Cap model recommendations at 'base' since it provides sufficient quality
+        # while being much faster and using less resources
         if chip_type in [ChipType.M3_ULTRA, ChipType.M2_ULTRA, ChipType.M1_ULTRA]:
-            # Ultra chips: Maximum performance
+            # Ultra chips: Maximum performance with base model
             max_concurrent = min(16, cpu_cores // 2)
             optimal_batch = 8  # Capped for whisper.cpp compatibility
-            recommended_model = "large-v3"
+            recommended_model = "base"
 
         elif chip_type in [ChipType.M3_MAX, ChipType.M2_MAX, ChipType.M1_MAX]:
-            # Max chips: High performance
+            # Max chips: High performance with base model
             max_concurrent = min(12, cpu_cores // 2)
             optimal_batch = 8  # Capped for whisper.cpp compatibility
-            recommended_model = "large-v3"
+            recommended_model = "base"
 
         elif chip_type in [ChipType.M3_PRO, ChipType.M2_PRO, ChipType.M1_PRO]:
-            # Pro chips: Balanced performance
+            # Pro chips: Balanced performance with base model
             max_concurrent = min(8, cpu_cores // 2)
             optimal_batch = 8  # Capped for whisper.cpp compatibility
-            recommended_model = "medium"
+            recommended_model = "base"
 
         else:
-            # Base chips: Conservative settings
+            # Base chips: Conservative settings with base model
             max_concurrent = min(6, cpu_cores // 2)
             optimal_batch = 8  # Capped for whisper.cpp compatibility
             recommended_model = "base"
@@ -528,30 +530,31 @@ class HardwareDetector:
         )  # 20% safety margin
 
         # Apply memory-based constraints
+        # Since we're already using "base" model, focus on concurrent processing limits
         if available_memory_gb < 8:
             max_concurrent = min(max_concurrent, 2, safe_concurrent)
             optimal_batch = min(optimal_batch, 16)
-            recommended_model = "base"  # Force smaller model for low memory
+            # recommended_model already set to "base" above
         elif available_memory_gb < 16:
             max_concurrent = min(max_concurrent, 4, safe_concurrent)
             optimal_batch = min(optimal_batch, 24)
-            if recommended_model in ["large", "large-v3"]:
-                recommended_model = "medium"  # Downgrade for memory safety
+            # recommended_model already set to "base" above
         elif available_memory_gb < 24:
             max_concurrent = min(max_concurrent, 6, safe_concurrent)
             optimal_batch = min(optimal_batch, 32)
 
         # CUDA-specific optimizations
+        # Focus on performance improvements while keeping "base" model
         if gpu_type == GPUType.NVIDIA_CUDA and cuda_specs:
-            # Boost performance for high-VRAM CUDA GPUs
+            # Boost concurrent processing for high-VRAM CUDA GPUs
             if cuda_specs.total_vram_gb >= 16:
                 max_concurrent = min(max_concurrent * 2, 16)
                 optimal_batch = min(optimal_batch * 2, 64)
-                recommended_model = "large-v3"
+                # Keep recommended_model as "base" for consistency
             elif cuda_specs.total_vram_gb >= 8:
                 max_concurrent = min(max_concurrent + 2, 12)
                 optimal_batch = min(optimal_batch + 16, 48)
-                recommended_model = "medium"
+                # Keep recommended_model as "base" for consistency
 
             # Use mixed precision for Tensor Core GPUs
             if cuda_specs.supports_tensor_cores:

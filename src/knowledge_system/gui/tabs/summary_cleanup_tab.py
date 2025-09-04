@@ -80,16 +80,37 @@ class SummaryCleanupTab(QWidget):
         # File controls
         self.load_btn = QPushButton("Load Summary")
         self.load_btn.clicked.connect(self.load_summary)
+        self.load_btn.setToolTip(
+            "Load a summary file for cleanup and review.\n"
+            "• Supports Markdown (.md) and JSON (.json) summary files\n"
+            "• Automatically parses claims, entities, and metadata\n"
+            "• Enables manual editing and correction of AI-generated content\n"
+            "• Preserves original data while allowing modifications"
+        )
         header_layout.addWidget(self.load_btn)
         
         self.save_btn = QPushButton("Save Changes")
         self.save_btn.clicked.connect(self.save_changes)
         self.save_btn.setEnabled(False)
+        self.save_btn.setToolTip(
+            "Save modifications back to the original file.\n"
+            "• Creates automatic backup before overwriting\n"
+            "• Preserves original file format (Markdown or JSON)\n"
+            "• Updates all edited content including claims and entities\n"
+            "• Only enabled when changes have been made"
+        )
         header_layout.addWidget(self.save_btn)
         
         self.export_btn = QPushButton("Export Clean")
         self.export_btn.clicked.connect(self.export_clean)
         self.export_btn.setEnabled(False)
+        self.export_btn.setToolTip(
+            "Export cleaned version to a new file.\n"
+            "• Creates a new file with all your modifications\n"
+            "• Choose output format (Markdown or JSON)\n"
+            "• Preserves original file unchanged\n"
+            "• Useful for creating finalized versions"
+        )
         header_layout.addWidget(self.export_btn)
         
         layout.addLayout(header_layout)
@@ -199,12 +220,26 @@ class SummaryCleanupTab(QWidget):
         
         self.claim_tier_combo = QComboBox()
         self.claim_tier_combo.addItems(["A", "B", "C"])
+        self.claim_tier_combo.setToolTip(
+            "Set the confidence tier for new claims:\n"
+            "• Tier A: High-confidence, core claims (85%+ confidence)\n"
+            "• Tier B: Medium-confidence claims (60-85% confidence)\n"
+            "• Tier C: Supporting or uncertain claims (below 60% confidence)\n"
+            "Higher tiers indicate more reliable and important claims"
+        )
         controls.addWidget(QLabel("Tier:"))
         controls.addWidget(self.claim_tier_combo)
         
         self.confidence_spin = QSpinBox()
         self.confidence_spin.setRange(0, 100)
         self.confidence_spin.setSuffix("%")
+        self.confidence_spin.setToolTip(
+            "Set the confidence percentage for new claims.\n"
+            "• 85-100%: High confidence (Tier A)\n"
+            "• 60-84%: Medium confidence (Tier B)\n"
+            "• 0-59%: Low confidence (Tier C)\n"
+            "This helps categorize claim reliability and importance"
+        )
         controls.addWidget(QLabel("Confidence:"))
         controls.addWidget(self.confidence_spin)
         
@@ -212,6 +247,13 @@ class SummaryCleanupTab(QWidget):
         
         self.add_claim_btn = QPushButton("Add Claim")
         self.add_claim_btn.clicked.connect(self.add_claim)
+        self.add_claim_btn.setToolTip(
+            "Add a new claim with the selected tier and confidence.\n"
+            "• Creates a new claim entry in the claims list\n"
+            "• Uses current tier and confidence settings\n"
+            "• Claim text can be edited after creation\n"
+            "• All new claims are automatically saved with the summary"
+        )
         controls.addWidget(self.add_claim_btn)
         
         layout.addLayout(controls)
@@ -235,11 +277,25 @@ class SummaryCleanupTab(QWidget):
         self.update_claim_btn = QPushButton("Update")
         self.update_claim_btn.clicked.connect(self.update_claim)
         self.update_claim_btn.setEnabled(False)
+        self.update_claim_btn.setToolTip(
+            "Update the selected claim with current edits.\n"
+            "• Saves changes to claim text, tier, and confidence\n"
+            "• Updates the display in the claims list\n"
+            "• Only enabled when a claim is selected and text is modified\n"
+            "• Changes are applied immediately to the summary data"
+        )
         edit_controls.addWidget(self.update_claim_btn)
         
         self.delete_claim_btn = QPushButton("Delete")
         self.delete_claim_btn.clicked.connect(self.delete_claim)
         self.delete_claim_btn.setEnabled(False)
+        self.delete_claim_btn.setToolTip(
+            "Delete the selected claim from the summary.\n"
+            "• Permanently removes the claim from the summary\n"
+            "• Cannot be undone (use Export Clean to preserve original)\n"
+            "• Only enabled when a claim is selected\n"
+            "• Useful for removing AI-generated errors or duplicates"
+        )
         edit_controls.addWidget(self.delete_claim_btn)
         
         claim_edit_layout.addLayout(edit_controls)
@@ -257,6 +313,13 @@ class SummaryCleanupTab(QWidget):
         
         self.add_person_btn = QPushButton("Add Person")
         self.add_person_btn.clicked.connect(self.add_person)
+        self.add_person_btn.setToolTip(
+            "Add a new person mentioned in the summary.\n"
+            "• Opens dialog to enter person's name\n"
+            "• Useful for adding people missed by AI extraction\n"
+            "• Double-click existing entries to edit names\n"
+            "• Helps create comprehensive people index"
+        )
         controls.addWidget(self.add_person_btn)
         
         controls.addStretch()
@@ -273,6 +336,13 @@ class SummaryCleanupTab(QWidget):
         
         self.merge_btn = QPushButton("Merge Selected")
         self.merge_btn.clicked.connect(self.merge_people)
+        self.merge_btn.setToolTip(
+            "Merge multiple selected people entries into one.\n"
+            "• Select 2 or more people from the list first\n"
+            "• Choose which name to keep as primary\n"
+            "• Useful for consolidating duplicate or variant names\n"
+            "• Helps clean up AI extraction inconsistencies"
+        )
         merge_layout.addWidget(self.merge_btn)
         
         layout.addWidget(merge_group)
@@ -289,6 +359,13 @@ class SummaryCleanupTab(QWidget):
         
         self.add_concept_btn = QPushButton("Add Concept")
         self.add_concept_btn.clicked.connect(self.add_concept)
+        self.add_concept_btn.setToolTip(
+            "Add a new key concept mentioned in the summary.\n"
+            "• Opens dialog to enter concept term\n"
+            "• Useful for adding important concepts missed by AI\n"
+            "• Double-click existing entries to edit terms\n"
+            "• Helps build comprehensive concept index"
+        )
         controls.addWidget(self.add_concept_btn)
         
         controls.addStretch()
@@ -309,6 +386,13 @@ class SummaryCleanupTab(QWidget):
         
         self.add_jargon_btn = QPushButton("Add Term")
         self.add_jargon_btn.clicked.connect(self.add_jargon)
+        self.add_jargon_btn.setToolTip(
+            "Add a new technical term or jargon from the summary.\n"
+            "• Opens dialog to enter technical term\n"
+            "• Useful for capturing domain-specific vocabulary\n"
+            "• Double-click existing entries to edit terms\n"
+            "• Helps create specialized terminology index"
+        )
         controls.addWidget(self.add_jargon_btn)
         
         controls.addStretch()

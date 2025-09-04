@@ -42,10 +42,6 @@ speaker_profiles:
     - american accent
     - precise diction
     - analytical tone
-video_mappings:
-  COtibNznlP4:
-    speakers:
-      Speaker_1: Jordan Peterson
-      Speaker_2: Sam Harris
-      Speaker_3: Moderator
-    title: Peterson Harris Debate Moments
+# video_mappings: 
+# Removed - video-specific mappings are now handled through database learning system
+# The system will learn speaker patterns automatically from user corrections

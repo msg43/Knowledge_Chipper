@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS milestones (
   FOREIGN KEY (episode_id) REFERENCES episodes(episode_id) ON DELETE CASCADE
 );
 
--- Claims table with scoring and tiering
+-- Claims table with scoring, tiering, and temporality analysis
 CREATE TABLE IF NOT EXISTS claims (
   episode_id TEXT NOT NULL,
   claim_id TEXT NOT NULL,           -- Cluster ID, stable within episode
@@ -48,20 +48,39 @@ CREATE TABLE IF NOT EXISTS claims (
   tier TEXT CHECK (tier IN ('A','B','C')),
   first_mention_ts TEXT,            -- Timestamp of first occurrence
   scores_json TEXT NOT NULL,        -- JSON: {"importance":0.8, "novelty":0.7, "controversy":0.2}
+  
+  -- Temporality analysis (new)
+  temporality_score INTEGER CHECK (temporality_score IN (1,2,3,4,5)) DEFAULT 3,  -- 1=Immediate, 5=Timeless
+  temporality_confidence REAL CHECK (temporality_confidence BETWEEN 0 AND 1) DEFAULT 0.5,
+  temporality_rationale TEXT,       -- Why this claim has this temporality
+  
+  -- Structured categories (new)
+  structured_categories_json TEXT,  -- JSON array of category names
+  category_relevance_scores_json TEXT,  -- JSON object mapping categories to relevance scores
+  
   inserted_at TEXT DEFAULT (datetime('now')),
   PRIMARY KEY (episode_id, claim_id),
   FOREIGN KEY (episode_id) REFERENCES episodes(episode_id) ON DELETE CASCADE
 );
 
--- Evidence spans linking claims to source quotes
+-- Evidence spans linking claims to source quotes with dual-level context
 CREATE TABLE IF NOT EXISTS evidence_spans (
   episode_id TEXT NOT NULL,
   claim_id TEXT NOT NULL,
   seq INTEGER NOT NULL,             -- Sequence number (0..n)
   segment_id TEXT,                  -- Reference to segment
-  t0 TEXT,                         -- Start timestamp
-  t1 TEXT,                         -- End timestamp
-  quote TEXT,                      -- Verbatim quote
+  
+  -- Precise quote level
+  t0 TEXT,                         -- Exact start timestamp of quote
+  t1 TEXT,                         -- Exact end timestamp of quote
+  quote TEXT,                      -- Precise verbatim quote
+  
+  -- Extended context level
+  context_t0 TEXT,                 -- Extended context start timestamp
+  context_t1 TEXT,                 -- Extended context end timestamp  
+  context_text TEXT,               -- Extended conversational context
+  context_type TEXT DEFAULT 'exact' CHECK (context_type IN ('exact', 'extended', 'segment')),
+  
   PRIMARY KEY (episode_id, claim_id, seq),
   FOREIGN KEY (episode_id, claim_id) REFERENCES claims(episode_id, claim_id) ON DELETE CASCADE,
   FOREIGN KEY (episode_id, segment_id) REFERENCES segments(episode_id, segment_id)
@@ -121,6 +140,19 @@ CREATE TABLE IF NOT EXISTS jargon (
   FOREIGN KEY (episode_id) REFERENCES episodes(episode_id) ON DELETE CASCADE
 );
 
+-- Structured categories (Wikidata-style topic classification)
+CREATE TABLE IF NOT EXISTS structured_categories (
+  episode_id TEXT NOT NULL,
+  category_id TEXT NOT NULL,
+  category_name TEXT NOT NULL,
+  wikidata_qid TEXT,                -- Wikidata Q-identifier if available
+  coverage_confidence REAL CHECK (coverage_confidence BETWEEN 0 AND 1) DEFAULT 0.5,
+  supporting_evidence_json TEXT,    -- JSON array of claim IDs supporting this categorization
+  frequency_score REAL CHECK (frequency_score BETWEEN 0 AND 1) DEFAULT 0.0,
+  PRIMARY KEY (episode_id, category_id),
+  FOREIGN KEY (episode_id) REFERENCES episodes(episode_id) ON DELETE CASCADE
+);
+
 -- Full-text search tables (contentless for efficiency)
 CREATE VIRTUAL TABLE IF NOT EXISTS claims_fts USING fts5(
   episode_id,
@@ -140,11 +172,14 @@ CREATE VIRTUAL TABLE IF NOT EXISTS quotes_fts USING fts5(
 -- Performance indexes
 CREATE INDEX IF NOT EXISTS idx_claims_episode_tier ON claims(episode_id, tier);
 CREATE INDEX IF NOT EXISTS idx_claims_first_mention ON claims(first_mention_ts);
+CREATE INDEX IF NOT EXISTS idx_claims_temporality ON claims(temporality_score, temporality_confidence);
 CREATE INDEX IF NOT EXISTS idx_evidence_spans_segment ON evidence_spans(episode_id, segment_id);
 CREATE INDEX IF NOT EXISTS idx_relations_type ON relations(type);
 CREATE INDEX IF NOT EXISTS idx_people_normalized ON people(normalized);
 CREATE INDEX IF NOT EXISTS idx_concepts_name ON concepts(name);
 CREATE INDEX IF NOT EXISTS idx_jargon_term ON jargon(term);
+CREATE INDEX IF NOT EXISTS idx_structured_categories_name ON structured_categories(category_name);
+CREATE INDEX IF NOT EXISTS idx_structured_categories_confidence ON structured_categories(coverage_confidence);
 
 -- Useful views for common queries
 CREATE VIEW IF NOT EXISTS v_episode_claims AS

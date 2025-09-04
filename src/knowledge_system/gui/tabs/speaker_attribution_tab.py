@@ -86,31 +86,71 @@ class SpeakerAttributionTab(QWidget):
         # Load transcript button
         self.load_btn = QPushButton("Load Transcript")
         self.load_btn.clicked.connect(self.load_transcript)
+        self.load_btn.setToolTip(
+            "Load a transcript file for speaker attribution and review.\n"
+            "• Supports transcripts with speaker diarization data\n"
+            "• Allows manual assignment of real names to detected speakers\n"
+            "• Automatically detects transcripts needing speaker confirmation\n"
+            "• Supports both individual files and batch processing"
+        )
         header_layout.addWidget(self.load_btn)
 
         # Queue/navigation controls
         self.queue_label = QLabel("")
         self.queue_label.setStyleSheet("font-size: 12px; color: #666;")
+        self.queue_label.setToolTip(
+            "Shows current position in the queue of transcripts needing speaker confirmation.\n"
+            "• Automatically builds a queue of unconfirmed transcripts\n"
+            "• Navigate through transcripts using Previous/Next buttons\n"
+            "• Shows progress through the confirmation process"
+        )
         header_layout.addWidget(self.queue_label)
 
         self.prev_btn = QPushButton("Previous")
         self.prev_btn.clicked.connect(self.on_prev_in_queue)
         self.prev_btn.setEnabled(False)
+        self.prev_btn.setToolTip(
+            "Navigate to the previous transcript in the confirmation queue.\n"
+            "• Moves backward through transcripts needing speaker attribution\n"
+            "• Saves current speaker assignments before navigating\n"
+            "• Disabled when at the beginning of the queue"
+        )
         header_layout.addWidget(self.prev_btn)
 
         self.confirm_next_btn = QPushButton("Confirm & Next")
         self.confirm_next_btn.clicked.connect(self.on_confirm_and_next)
         self.confirm_next_btn.setEnabled(False)
+        self.confirm_next_btn.setToolTip(
+            "Confirm current speaker assignments and move to next transcript.\n"
+            "• Saves all speaker name assignments to the current transcript\n"
+            "• Automatically advances to the next unconfirmed transcript\n"
+            "• Updates the transcript files with confirmed speaker names\n"
+            "• Most efficient way to process multiple transcripts"
+        )
         header_layout.addWidget(self.confirm_next_btn)
 
         self.next_btn = QPushButton("Next")
         self.next_btn.clicked.connect(self.on_next_in_queue)
         self.next_btn.setEnabled(False)
+        self.next_btn.setToolTip(
+            "Move to the next transcript without saving current assignments.\n"
+            "• Advances to the next transcript in the confirmation queue\n"
+            "• Does not save current speaker assignments\n"
+            "• Use this to skip transcripts or review multiple files\n"
+            "• Disabled when at the end of the queue"
+        )
         header_layout.addWidget(self.next_btn)
 
         # Batch preview button
         self.preview_all_btn = QPushButton("Preview All Unconfirmed")
         self.preview_all_btn.clicked.connect(self.show_batch_preview_all)
+        self.preview_all_btn.setToolTip(
+            "Preview all transcripts that need speaker confirmation.\n"
+            "• Shows a batch overview of all unconfirmed transcripts\n"
+            "• Allows bulk speaker assignment across multiple files\n"
+            "• Helps identify patterns and common speakers\n"
+            "• Efficient for processing large batches of similar content"
+        )
         header_layout.addWidget(self.preview_all_btn)
         
         layout.addLayout(header_layout)
@@ -157,20 +197,19 @@ class SpeakerAttributionTab(QWidget):
         """)
         layout.addWidget(self.transcript_text)
         
-        # Controls
+        # Controls - simplified after removing auto-assign and export buttons
         controls_layout = QHBoxLayout()
-        
-        self.auto_assign_btn = QPushButton("Auto-Assign Speakers")
-        self.auto_assign_btn.clicked.connect(self.auto_assign_speakers)
-        controls_layout.addWidget(self.auto_assign_btn)
         
         self.save_assignments_btn = QPushButton("Save Assignments")
         self.save_assignments_btn.clicked.connect(self.save_assignments)
+        self.save_assignments_btn.setToolTip(
+            "Save current speaker name assignments to the transcript file.\n"
+            "• Updates the transcript with assigned speaker names\n"
+            "• Preserves speaker timing and segment information\n"
+            "• Creates backup of original file before modification\n"
+            "• Required before moving to next transcript"
+        )
         controls_layout.addWidget(self.save_assignments_btn)
-        
-        self.export_btn = QPushButton("Export Attributed")
-        self.export_btn.clicked.connect(self.export_attributed_transcript)
-        controls_layout.addWidget(self.export_btn)
         
         controls_layout.addStretch()
         layout.addLayout(controls_layout)
@@ -201,6 +240,13 @@ class SpeakerAttributionTab(QWidget):
         
         self.assign_btn = QPushButton("Assign")
         self.assign_btn.clicked.connect(self.assign_speaker)
+        self.assign_btn.setToolTip(
+            "Assign the entered name to the selected speaker ID.\n"
+            "• Maps the real name to all segments from this speaker\n"
+            "• Updates the transcript display with the assigned name\n"
+            "• Creates consistent speaker identification across the transcript\n"
+            "• Can be changed later if needed"
+        )
         assign_layout.addWidget(self.assign_btn)
         
         speaker_layout.addLayout(assign_layout)
@@ -320,37 +366,39 @@ class SpeakerAttributionTab(QWidget):
         # Reset current mappings before load
         self.speaker_mappings = {}
 
-        # If JSON transcript, try to extract existing assignments
+        # Load existing assignments from database
         pre_assignments: Dict[str, str] = {}
-        if file_path.suffix.lower() == ".json" and file_path.exists():
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                if isinstance(data, dict):
-                    # Prefer explicit speaker_assignments if present
-                    pre_assignments = data.get("speaker_assignments", {}) or {}
-                    # If not present, attempt to derive mapping from segments preserving original ids
-                    if not pre_assignments and "segments" in data:
-                        for seg in data["segments"]:
-                            orig_id = seg.get("original_speaker_id") or seg.get("speaker")
-                            name = seg.get("speaker")
-                            if orig_id and name:
-                                pre_assignments.setdefault(str(orig_id), str(name))
-            except Exception as e:
-                logger.debug(f"No pre-assignments available from JSON: {e}")
-
-        # Also check sidecar assignments file
-        sidecar = file_path.with_suffix(".speaker_assignments.json")
-        if sidecar.exists():
-            try:
-                with open(sidecar, 'r', encoding='utf-8') as f:
-                    sidecar_data = json.load(f)
-                if isinstance(sidecar_data, dict):
-                    sidecar_assign = sidecar_data.get("assignments") or {}
-                    if sidecar_assign:
-                        pre_assignments.update(sidecar_assign)
-            except Exception as e:
-                logger.debug(f"Failed reading sidecar assignments: {e}")
+        recording_path = str(file_path)
+        
+        try:
+            # First check database for assignments
+            assignments = self.db_speakers.get_assignments_for_recording(recording_path)
+            if assignments:
+                for assignment in assignments:
+                    pre_assignments[assignment.speaker_id] = assignment.assigned_name
+                logger.info(f"Loaded {len(assignments)} assignments from database")
+            
+            # Fallback: extract from JSON transcript if no database assignments
+            if not pre_assignments and file_path.suffix.lower() == ".json" and file_path.exists():
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        # Prefer explicit speaker_assignments if present
+                        pre_assignments = data.get("speaker_assignments", {}) or {}
+                        # If not present, attempt to derive mapping from segments preserving original ids
+                        if not pre_assignments and "segments" in data:
+                            for seg in data["segments"]:
+                                orig_id = seg.get("original_speaker_id") or seg.get("speaker")
+                                name = seg.get("speaker")
+                                if orig_id and name:
+                                    pre_assignments.setdefault(str(orig_id), str(name))
+                        logger.debug(f"Fallback: extracted {len(pre_assignments)} assignments from JSON")
+                except Exception as e:
+                    logger.debug(f"No fallback assignments available from JSON: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Error loading assignments from database: {e}")
 
         # Parse transcript into segments
         self.speaker_segments = self.parse_transcript(self.current_transcript_path)
@@ -358,6 +406,30 @@ class SpeakerAttributionTab(QWidget):
         # Apply pre-assignments if available
         if pre_assignments:
             self.speaker_mappings.update(pre_assignments)
+        else:
+            # Try to get auto-suggestions from learning service
+            try:
+                from ...services.speaker_learning_service import get_speaker_learning_service
+                learning_service = get_speaker_learning_service()
+                
+                # Extract speaker data for suggestions
+                speaker_data = self._extract_speaker_data_from_transcript(file_path)
+                if speaker_data:
+                    learned_suggestions = learning_service.suggest_assignments_from_learning(
+                        recording_path, speaker_data
+                    )
+                    
+                    if learned_suggestions:
+                        # Apply learned suggestions as initial mappings
+                        for speaker_id, (suggested_name, confidence) in learned_suggestions.items():
+                            if confidence > 0.5:  # Only use high-confidence suggestions
+                                self.speaker_mappings[speaker_id] = suggested_name
+                        
+                        logger.info(f"Applied {len(learned_suggestions)} learned suggestions")
+                        self.update_status(f"Applied learned suggestions for {len(learned_suggestions)} speakers")
+                    
+            except Exception as e:
+                logger.debug(f"Could not get learned suggestions: {e}")
 
         # Render UI
         self.display_transcript()
@@ -554,64 +626,53 @@ class SpeakerAttributionTab(QWidget):
             self.name_entry.setText(name)
             self.assign_speaker()
     
-    def auto_assign_speakers(self):
-        """Automatically assign speakers based on voice characteristics."""
-        self.update_status("Auto-assigning speakers...")
-        self.progress_bar.setVisible(True)
-        
-        # Simulate processing with timer
-        QTimer.singleShot(1000, self.complete_auto_assignment)
-    
-    def complete_auto_assignment(self):
-        """Complete the auto-assignment process."""
-        speakers = self.get_unique_speakers()
-        
-        # Common speaker names
-        auto_names = ["Host", "Guest 1", "Guest 2", "Guest 3", "Caller"]
-        
-        for i, speaker_id in enumerate(speakers[:len(auto_names)]):
-            if speaker_id not in self.speaker_mappings:
-                self.speaker_mappings[speaker_id] = auto_names[i]
-        
-        # Update displays
-        self.update_speaker_list()
-        self.display_transcript()
-        
-        self.progress_bar.setVisible(False)
-        self.update_status(f"Auto-assigned {len(speakers)} speakers")
+
     
     def save_assignments(self):
-        """Save speaker assignments to database."""
+        """Save speaker assignments to database only."""
         if not self.current_transcript_path:
             return
         
         try:
-            # Save to a sidecar file
-            assignments_file = self.current_transcript_path.with_suffix(
-                ".speaker_assignments.json"
-            )
+            recording_path = str(self.current_transcript_path)
             
-            data = {
-                "transcript": str(self.current_transcript_path),
-                "assignments": self.speaker_mappings,
-                "timestamp": datetime.now().isoformat(),
-                "user_confirmed": False,
-                "segments": [
-                    {
-                        "start": seg.start_time,
-                        "end": seg.end_time,
-                        "speaker_id": seg.speaker_id,
-                        "assigned_name": self.speaker_mappings.get(seg.speaker_id),
-                        "text": seg.text[:100] + "..." if len(seg.text) > 100 else seg.text
-                    }
-                    for seg in self.speaker_segments
-                ]
-            }
+            # Save each assignment to database with enhanced data
+            for speaker_id, assigned_name in self.speaker_mappings.items():
+                # Find speaker data for this ID
+                speaker_segments = [seg for seg in self.speaker_segments if seg.speaker_id == speaker_id]
+                
+                if speaker_segments:
+                    # Prepare sample segments
+                    sample_segments = []
+                    for i, seg in enumerate(speaker_segments[:5]):
+                        sample_segments.append({
+                            'start': seg.start_time,
+                            'end': seg.end_time,
+                            'text': seg.text[:200],
+                            'sequence': i + 1
+                        })
+                    
+                    # Calculate totals
+                    total_duration = sum(seg.end_time - seg.start_time for seg in speaker_segments)
+                    segment_count = len(speaker_segments)
+                    
+                    # Create assignment model
+                    assignment_data = SpeakerAssignmentModel(
+                        recording_path=recording_path,
+                        speaker_id=speaker_id,
+                        assigned_name=assigned_name,
+                        user_confirmed=False,  # Will be confirmed later
+                        sample_segments=sample_segments,
+                        total_duration=total_duration,
+                        segment_count=segment_count,
+                        suggestion_method="manual_assignment",
+                        confidence=1.0
+                    )
+                    
+                    # Save to database
+                    self.db_speakers.create_speaker_assignment(assignment_data)
             
-            with open(assignments_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2)
-            
-            self.update_status(f"Saved assignments to {assignments_file.name}")
+            self.update_status(f"Saved {len(self.speaker_mappings)} assignments to database")
             
         except Exception as e:
             logger.error(f"Failed to save assignments: {e}")
@@ -629,49 +690,91 @@ class SpeakerAttributionTab(QWidget):
         return [p for p in candidates if p.exists() and p.is_dir()]
 
     def build_unconfirmed_queue(self):
-        """Build list of transcripts that have assignments but are not confirmed."""
-        queue: List[Path] = []
-        scanned = set()
-        for base in self.find_default_transcript_dirs():
-            for path in base.rglob("*.json"):
-                if path in scanned:
-                    continue
-                scanned.add(path)
-                try:
-                    with open(path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    # Candidate if it has segments and either speaker_assignments exist without confirmation,
-                    # or a sidecar exists without confirmed flag
-                    has_segments = isinstance(data, dict) and bool(data.get("segments"))
-                    has_assignments = bool((data.get("speaker_assignments") or {}))
-                    if has_segments and has_assignments:
-                        sidecar = path.with_suffix(".speaker_assignments.json")
-                        confirmed = False
-                        if sidecar.exists():
-                            try:
-                                with open(sidecar, 'r', encoding='utf-8') as sf:
-                                    sdata = json.load(sf)
-                                confirmed = bool(sdata.get("user_confirmed"))
-                            except Exception:
-                                confirmed = False
-                        # If no sidecar, treat as unconfirmed
-                        if not confirmed:
-                            queue.append(path)
-                            continue
-                except Exception:
-                    continue
-            # Also include any sidecar files explicitly unconfirmed
-            for sc in base.rglob("*.speaker_assignments.json"):
-                try:
-                    with open(sc, 'r', encoding='utf-8') as f:
-                        sdata = json.load(f)
-                    if not sdata.get("user_confirmed"):
-                        tpath = Path(sdata.get("transcript")) if sdata.get("transcript") else sc.with_suffix("")
-                        if tpath.exists() and tpath.suffix.lower() == ".json" and tpath not in queue:
-                            queue.append(tpath)
-                except Exception:
-                    continue
-        self.unconfirmed_queue = queue
+        """Build list of transcripts that have assignments but are not confirmed using database queries and learning."""
+        try:
+            # Get recordings needing review from database (with AI suggestions)
+            recordings_needing_review = self.db_speakers.get_recordings_needing_review()
+            queue: List[Path] = []
+            
+            # Add recordings with existing AI suggestions
+            for recording_data in recordings_needing_review:
+                path = Path(recording_data['recording_path'])
+                if path.exists() and path.suffix.lower() in ['.json', '.md', '.txt']:
+                    queue.append(path)
+                    logger.debug(f"Added to queue with AI suggestions: {path.name}")
+            
+            # Also check for recordings that could benefit from learned auto-assignment
+            from ...services.speaker_learning_service import get_speaker_learning_service
+            learning_service = get_speaker_learning_service()
+            
+            # Find recent recordings without assignments that could be auto-assigned
+            unconfirmed_paths = self.db_speakers.get_unconfirmed_recordings()
+            for recording_path in unconfirmed_paths:
+                path = Path(recording_path)
+                if (path.exists() and path.suffix.lower() in ['.json', '.md', '.txt'] 
+                    and path not in queue):
+                    
+                    # Try to generate learned suggestions for this recording
+                    try:
+                        # Extract basic speaker data from transcript
+                        speaker_data = self._extract_speaker_data_from_transcript(path)
+                        if speaker_data:
+                            suggestions = learning_service.suggest_assignments_from_learning(
+                                recording_path, speaker_data
+                            )
+                            if suggestions:
+                                queue.append(path)
+                                logger.debug(f"Added to queue with learned suggestions: {path.name}")
+                    except Exception as e:
+                        logger.debug(f"Could not generate suggestions for {path.name}: {e}")
+            
+            # Sort by modification time (newest first)
+            queue.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            
+            self.unconfirmed_queue = queue
+            logger.info(f"Built enhanced queue with {len(queue)} recordings from database and learning")
+            
+        except Exception as e:
+            logger.error(f"Error building unconfirmed queue: {e}")
+            self.unconfirmed_queue = []
+    
+    def _extract_speaker_data_from_transcript(self, transcript_path: Path) -> List[Dict]:
+        """Extract basic speaker data from transcript for learning suggestions."""
+        try:
+            if transcript_path.suffix.lower() != '.json':
+                return []
+            
+            with open(transcript_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            if not isinstance(data, dict) or 'segments' not in data:
+                return []
+            
+            # Group segments by speaker
+            speaker_stats = {}
+            for segment in data['segments']:
+                speaker_id = segment.get('speaker', 'UNKNOWN')
+                if speaker_id not in speaker_stats:
+                    speaker_stats[speaker_id] = {
+                        'speaker_id': speaker_id,
+                        'total_duration': 0.0,
+                        'segment_count': 0,
+                        'total_text': ''
+                    }
+                
+                start = segment.get('start', 0)
+                end = segment.get('end', 0)
+                text = segment.get('text', '')
+                
+                speaker_stats[speaker_id]['total_duration'] += (end - start)
+                speaker_stats[speaker_id]['segment_count'] += 1
+                speaker_stats[speaker_id]['total_text'] += ' ' + text
+            
+            return list(speaker_stats.values())
+            
+        except Exception as e:
+            logger.debug(f"Error extracting speaker data from {transcript_path}: {e}")
+            return []
         # Update controls
         self.update_queue_label()
         self.prev_btn.setEnabled(False)
@@ -729,49 +832,48 @@ class SpeakerAttributionTab(QWidget):
         self.update_queue_label()
 
     def _save_confirmation(self, confirmed: bool):
-        """Persist confirmation to sidecar and speaker DB."""
+        """Persist confirmation to database only."""
         if not self.current_transcript_path:
             return
-        # Ensure assignments saved with confirmation flag
-        sidecar = self.current_transcript_path.with_suffix(".speaker_assignments.json")
-        payload = {
-            "transcript": str(self.current_transcript_path),
-            "assignments": self.speaker_mappings,
-            "timestamp": datetime.now().isoformat(),
-            "user_confirmed": bool(confirmed),
-        }
-        # Try to include brief segments sample for context
+            
+        recording_path = str(self.current_transcript_path)
+        
         try:
-            payload["segments"] = [
-                {
-                    "start": seg.start_time,
-                    "end": seg.end_time,
-                    "speaker_id": seg.speaker_id,
-                    "assigned_name": self.speaker_mappings.get(seg.speaker_id),
-                }
-                for seg in self.speaker_segments[:10]
-            ]
-        except Exception:
-            pass
-        try:
-            with open(sidecar, 'w', encoding='utf-8') as f:
-                json.dump(payload, f, indent=2)
-        except Exception as e:
-            logger.warning(f"Could not write confirmation sidecar: {e}")
-
-        # Persist to speaker assignment DB
-        try:
+            # Update existing assignments or create new ones with confirmation flag
             for spk_id, name in self.speaker_mappings.items():
-                assignment = SpeakerAssignmentModel(
-                    recording_path=str(self.current_transcript_path),
-                    speaker_id=str(spk_id),
-                    assigned_name=str(name),
-                    confidence=1.0,
-                    user_confirmed=bool(confirmed),
-                )
-                self.db_speakers.create_speaker_assignment(assignment)
+                # Check if assignment already exists
+                existing_assignments = self.db_speakers.get_assignments_for_recording(recording_path)
+                existing_assignment = None
+                for assignment in existing_assignments:
+                    if assignment.speaker_id == spk_id:
+                        existing_assignment = assignment
+                        break
+                
+                if existing_assignment:
+                    # Update existing assignment
+                    self.db_speakers.update_assignment_with_enhancement(
+                        existing_assignment.id,
+                        assigned_name=str(name),
+                        user_confirmed=bool(confirmed),
+                        updated_at=datetime.now()
+                    )
+                    logger.debug(f"Updated assignment confirmation: {spk_id} -> {name}")
+                else:
+                    # Create new assignment
+                    assignment = SpeakerAssignmentModel(
+                        recording_path=recording_path,
+                        speaker_id=str(spk_id),
+                        assigned_name=str(name),
+                        confidence=1.0,
+                        user_confirmed=bool(confirmed),
+                    )
+                    self.db_speakers.create_speaker_assignment(assignment)
+                    logger.debug(f"Created new assignment: {spk_id} -> {name}")
+            
+            logger.info(f"Saved confirmation for {len(self.speaker_mappings)} assignments: confirmed={confirmed}")
+            
         except Exception as e:
-            logger.debug(f"Speaker DB persistence skipped/failed: {e}")
+            logger.error(f"Error saving confirmation to database: {e}")
 
     # ===== Utilities =====
     def _make_source_header_text(self) -> str:
@@ -823,52 +925,7 @@ class SpeakerAttributionTab(QWidget):
         else:
             self.speaker_samples_text.setPlainText("\n\n".join(samples))
     
-    def export_attributed_transcript(self):
-        """Export transcript with speaker names."""
-        if not self.current_transcript_path or not self.speaker_segments:
-            return
-        
-        # Ask for output location
-        output_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Attributed Transcript",
-            str(self.current_transcript_path.with_suffix(".attributed.md")),
-            "Markdown files (*.md);;Text files (*.txt);;All files (*.*)"
-        )
-        
-        if not output_path:
-            return
-        
-        try:
-            with open(output_path, 'w', encoding='utf-8') as f:
-                # Write header
-                f.write(f"# Attributed Transcript\n\n")
-                f.write(f"Original: {self.current_transcript_path.name}\n")
-                f.write(f"Attributed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                
-                # Write speaker list
-                f.write("## Speakers\n\n")
-                for speaker_id, name in self.speaker_mappings.items():
-                    f.write(f"- **{speaker_id}**: {name}\n")
-                f.write("\n---\n\n")
-                
-                # Write transcript
-                f.write("## Transcript\n\n")
-                for segment in self.speaker_segments:
-                    speaker_name = self.speaker_mappings.get(
-                        segment.speaker_id,
-                        segment.speaker_id
-                    )
-                    timestamp = self.format_timestamp(segment.start_time)
-                    
-                    f.write(f"**{speaker_name}** ({timestamp}):\n")
-                    f.write(f"{segment.text}\n\n")
-            
-            self.update_status(f"Exported to {Path(output_path).name}")
-            
-        except Exception as e:
-            logger.error(f"Failed to export transcript: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to export: {str(e)}")
+
     
     def load_known_speakers(self):
         """Load known speakers from database."""

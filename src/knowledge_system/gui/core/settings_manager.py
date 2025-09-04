@@ -24,9 +24,14 @@ class GUISettingsManager:
 
     def get_output_directory(self, tab_name: str, default: str | None = None) -> str:
         """Get the saved output directory for a tab."""
+        # Try tab-specific directory first
         saved_dir = self.session_manager.get_tab_setting(
-            tab_name, "output_directory", default
+            tab_name, "output_directory", None
         )
+
+        # Fallback to global last used output directory
+        if not saved_dir:
+            saved_dir = self.session_manager.get_value("last_output_directory", None)
         if saved_dir:
             # Return the saved directory if it exists
             path = Path(saved_dir)
@@ -41,6 +46,8 @@ class GUISettingsManager:
         self.session_manager.set_tab_setting(
             tab_name, "output_directory", str(directory)
         )
+        # Also update global last used directory for cross-tab defaulting
+        self.session_manager.set_value("last_output_directory", str(directory))
 
     def get_checkbox_state(
         self, tab_name: str, checkbox_name: str, default: bool = False

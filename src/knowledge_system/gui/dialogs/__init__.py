@@ -1,11 +1,6 @@
-"""GUI dialogs for Knowledge System."""
+"""
+GUI dialogs for Knowledge Chipper.
 
-from .ffmpeg_prompt_dialog import FFmpegPromptDialog
-from .ffmpeg_setup_dialog import FFmpegSetupDialog
-from .first_run_setup_dialog import FirstRunSetupDialog
-
-__all__ = [
-    "FFmpegPromptDialog", 
-    "FFmpegSetupDialog",
-    "FirstRunSetupDialog"
-]
+This module contains various dialog windows and modals used throughout
+the application.
+"""

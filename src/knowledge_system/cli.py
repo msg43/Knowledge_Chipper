@@ -6,11 +6,22 @@ Provides comprehensive CLI commands for all system operations.
 
 import os
 import sys
+import warnings
 from pathlib import Path
 from typing import Any
 
 import click
 from rich.console import Console
+
+# Suppress common ML/audio library warnings for CLI usage
+try:
+    from .utils.warning_suppressions import suppress_ml_library_warnings
+    suppress_ml_library_warnings()
+except ImportError:
+    # Fallback warning suppression if utility import fails
+    warnings.filterwarnings("ignore", category=UserWarning, module="torchaudio._backend.utils")
+    warnings.filterwarnings("ignore", category=UserWarning, module="pyannote.audio.models.blocks.pooling")
+    warnings.filterwarnings("ignore", message=".*std\\(\\): degrees of freedom.*", category=UserWarning)
 
 # Import modular commands
 from .commands import database, moc, process, summarize, transcribe

@@ -1,0 +1,39 @@
+# Cursor AI Rules for Knowledge_Chipper
+
+## Version Management
+- Before making any significant code changes, always use `python3 scripts/bump_version.py --part patch|minor|major` to increment version in pyproject.toml
+- pyproject.toml [project.version] is the SINGLE SOURCE OF TRUTH for all version references
+- After version bump, verify that README.md version line is automatically synced by the script
+- If the version in README.md doesn't match pyproject.toml, run `bash scripts/update_build_date.sh` to sync them
+- Always commit version changes separately before making other code changes
+- The bump_version.py script automatically updates:
+  - pyproject.toml [project.version]
+  - README.md version header line
+  - Knowledge_Chipper_Codebase_Overview_for_Claude.md (if exists)
+
+## Build and Release Process
+- When making significant changes that warrant a release, increment the version FIRST
+- Use semantic versioning: MAJOR.MINOR.PATCH
+  - MAJOR: Breaking changes
+  - MINOR: New features (backward compatible)
+  - PATCH: Bug fixes (backward compatible)
+- After version bump and code changes, update README.md build date if not current using `bash scripts/update_build_date.sh`
+
+## Code Change Guidelines
+- Before fixing a problem by creating a fallback or suppressing warnings, stop and ask the user if this is the route they would like to go
+- Prefer to fix the root cause of a message rather than suppress the message
+- Each time a significant code change is made, review the README.md to see if the changes should be reflected in that document
+
+## Release Guidelines
+- For public releases, use the release automation: `bash scripts/release_dmg_to_public.sh`
+- This will create tagged releases on the public repository (msg43/Skipthepodcast.com)
+- The private codebase (msg43/Knowledge_Chipper) remains private
+- Only built DMG files are shared publicly
+
+## Memory Guidelines
+- User prefers that generated summaries include HCE claims and follow the @Summary Prompt.txt prompt
+- The user wants HCE modules to be mandatory in the core app and for prerequisites to be loaded with the .dmg installer
+- User prefers the 'Daniel' voice because only it sounds normal, and wants the default speech speed set to 155
+- User wants YAML field names to exactly match their H3 headers (e.g., Jargon, People, Mental Models), converting spaces to underscores
+- The user prefers not to set hard defaults for LLM provider/model. They choose provider/model per run, and if omitted, the prior session selection is restored on launch
+- User wants to handle sudo password prompts themselves when running build scripts or other commands that require elevated privileges

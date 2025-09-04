@@ -72,16 +72,7 @@ class SpeakerAttributor:
                     ]
                 }
             },
-            'video_mappings': {
-                'COtibNznlP4': {  # Peterson vs Harris compilation
-                    'title': 'Peterson Harris Debate Moments',
-                    'speakers': {
-                        'Speaker_1': 'Jordan Peterson',
-                        'Speaker_2': 'Sam Harris', 
-                        'Speaker_3': 'Moderator'
-                    }
-                }
-            },
+# video_mappings removed - now handled by database learning system
             'speaker_profiles': {
                 'Jordan Peterson': {
                     'aliases': ['Peterson', 'JP', 'Jordan B Peterson'],
@@ -138,15 +129,7 @@ class SpeakerAttributor:
             applied_mapping = manual_mapping
             logger.info(f"Applied MANUAL OVERRIDE speaker mapping: {manual_mapping}")
         
-        # PRIORITY 2: Video-Specific Mapping
-        elif video_id and video_id in self.video_mappings:
-            mapping = self.video_mappings[video_id]['speakers']
-            result_segments = self._apply_mapping(result_segments, mapping)
-            attribution_method = "video_specific"
-            applied_mapping = mapping
-            logger.info(f"Applied VIDEO-SPECIFIC mapping for {video_id}: {mapping}")
-        
-        # PRIORITY 3: Content-Based Detection
+        # PRIORITY 2: Content-Based Detection (video-specific mapping removed)
         elif transcript_text:
             mapping = self._detect_speakers_by_content(transcript_text)
             if mapping:
@@ -155,7 +138,7 @@ class SpeakerAttributor:
                 applied_mapping = mapping
                 logger.info(f"Applied CONTENT-BASED speaker mapping: {mapping}")
         
-        # PRIORITY 4: Default Fallback (no changes)
+        # PRIORITY 3: Default Fallback (no changes)
         if not applied_mapping:
             attribution_method = "fallback"
             logger.info("No speaker attribution applied - using original labels")

@@ -93,6 +93,14 @@ class FirstRunSetupDialog(QDialog):
     setup_completed = pyqtSignal(bool)  # success
     
     def __init__(self, parent=None):
+        # CRITICAL: Testing safety check - prevent dialog creation during testing
+        import os
+        if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
+            from ...logger import get_logger
+            logger = get_logger(__name__)
+            logger.error("🧪 CRITICAL: Attempted to create FirstRunSetupDialog during testing mode - BLOCKED!")
+            raise RuntimeError("FirstRunSetupDialog cannot be created during testing mode")
+            
         super().__init__(parent)
         self.setWindowTitle("Welcome to Knowledge Chipper")
         self.setModal(True)

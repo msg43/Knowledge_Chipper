@@ -10,6 +10,10 @@ echo "##PERCENT## 0 Starting updater"
 SKIP_INSTALL=0
 MAKE_DMG=0
 INCREMENTAL=0
+# Optional extras to include in the bundled app (defaults: diarization and hce ON)
+WITH_DIARIZATION=1
+WITH_HCE=1
+WITH_CUDA=0
 for arg in "$@"; do
   case "$arg" in
     --no-install|--skip-install)
@@ -20,6 +24,20 @@ for arg in "$@"; do
       ;;
     --incremental)
       INCREMENTAL=1
+      ;;
+    --with-diarization)
+      WITH_DIARIZATION=1
+      ;;
+    --with-hce)
+      WITH_HCE=1
+      ;;
+    --with-cuda)
+      WITH_CUDA=1
+      ;;
+    --full)
+      WITH_DIARIZATION=1
+      WITH_HCE=1
+      WITH_CUDA=1
       ;;
   esac
 done
@@ -97,7 +115,7 @@ next_step() {
 }
 
 # Define paths
-APP_NAME="Knowledge_Chipper.app"
+APP_NAME="Skip the Podcast Desktop.app"
 APP_PATH="/Applications/$APP_NAME"               # Final destination
 CONTENTS_PATH="$APP_PATH/Contents"
 MACOS_PATH="$CONTENTS_PATH/MacOS"
@@ -138,7 +156,43 @@ rsync -a --delete \
   --exclude '*.egg-info' \
   --exclude '*.dist-info' \
   src/ "$BUILD_MACOS_PATH/src/"
+
+# Copy config as fallback templates (app now uses macOS standard locations)
+echo "📝 Including config templates for fallback..."
 rsync -a --delete config/ "$BUILD_MACOS_PATH/config/"
+
+# Create configuration guide for macOS paths
+cat > "$BUILD_MACOS_PATH/MACOS_CONFIGURATION.md" << 'CONFIG_EOF'
+# Knowledge Chipper - macOS Configuration
+
+## Configuration Locations
+
+Knowledge Chipper now follows Apple's macOS guidelines for file locations:
+
+### Settings & Configuration
+- **Primary**: `~/Library/Application Support/Knowledge Chipper/Config/settings.yaml`
+- **Credentials**: `~/Library/Application Support/Knowledge Chipper/Config/credentials.yaml`
+- **Fallback**: Files in this app bundle's `config/` directory (templates only)
+
+### User Data
+- **Database**: `~/Library/Application Support/Knowledge Chipper/knowledge_system.db`
+- **Output**: `~/Documents/Knowledge Chipper/Output/`
+- **Input**: `~/Documents/Knowledge Chipper/Input/`
+
+### Cache & Logs  
+- **Cache**: `~/Library/Caches/Knowledge Chipper/`
+- **Logs**: `~/Library/Logs/Knowledge Chipper/`
+
+## Benefits
+- ✅ **Time Machine**: Automatically backs up your data
+- ✅ **Updates**: Data survives app updates/reinstalls
+- ✅ **Clean**: Separates app code from user data
+- ✅ **Standard**: Follows Apple's guidelines
+
+## Migration
+The app automatically creates these directories and migrates settings as needed.
+CONFIG_EOF
+
 cp requirements.txt "$BUILD_MACOS_PATH/"
 cp scripts/build_macos_app.sh "$BUILD_MACOS_PATH/"
 # Safety: remove any stray packaging metadata if present
@@ -200,12 +254,41 @@ else
   "$VENV_DIR/bin/python" -m pip check || true
 fi
 
-# Install HCE optional dependencies into the app bundle venv
-next_step "Install HCE optional dependencies"
-"$VENV_DIR/bin/python" -m pip install sentence-transformers scikit-learn || true
+# Conditionally install optional extras into the staging venv
+if [ "$WITH_HCE" -eq 1 ]; then
+  next_step "Install HCE optional dependencies (staging)"
+  # Install from project root (ensures pyproject.toml/extras resolution)
+  "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[hce] || {
+    echo "⚠️ Failed to install HCE extras in staging; continuing"
+  }
+else
+  echo "🎯 Skipping HCE heavy dependencies in staging (default)"
+fi
 
-echo "🎯 Excluding heavy ML dependencies (torch, transformers, etc.) from app bundle"
-echo "ℹ️  Heavy dependencies will be installed automatically when needed"
+if [ "$WITH_DIARIZATION" -eq 1 ]; then
+  next_step "Install diarization dependencies (staging)"
+  # Install from project root (ensures pyproject.toml/extras resolution)
+  "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[diarization] || {
+    echo "⚠️ Failed to install diarization extras in staging; continuing"
+  }
+else
+  echo "🎯 Skipping diarization dependencies in staging (default)"
+fi
+
+if [ "$WITH_CUDA" -eq 1 ]; then
+  next_step "Install CUDA-related dependencies (staging)"
+  # Install from project root (ensures pyproject.toml/extras resolution)
+  "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[cuda] || {
+    echo "⚠️ Failed to install CUDA extras in staging; continuing"
+  }
+else
+  echo "🎯 Skipping CUDA extras in staging (default)"
+fi
+
+if [ "$WITH_HCE" -eq 0 ] && [ "$WITH_DIARIZATION" -eq 0 ] && [ "$WITH_CUDA" -eq 0 ]; then
+  echo "🎯 Excluding heavy ML dependencies (torch, transformers, etc.) from app bundle"
+  echo "ℹ️  Heavy dependencies will be installed automatically when needed"
+fi
 
 # Verify critical dependencies are installed
 echo "🔍 Verifying critical dependencies..."
@@ -215,30 +298,25 @@ echo "##PERCENT## 55 Verify critical dependencies"
 "$VENV_DIR/bin/python" -c "import psutil; print('✅ psutil:', psutil.__version__)" || { echo "❌ psutil missing, installing..."; "$VENV_DIR/bin/python" -m pip install psutil; }
 "$VENV_DIR/bin/python" -c "import openai; print('✅ OpenAI:', openai.__version__)" || { echo "❌ OpenAI missing, installing..."; "$VENV_DIR/bin/python" -m pip install openai; }
 
-# Create minimal pyproject.toml for runtime metadata (not used for build)
-cat > "/tmp/pyproject.toml" << EOF
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "knowledge_system"
-version = "$CURRENT_VERSION"
-authors = [ { name="Matthew Greer" } ]
-description = "Knowledge Chipper - Your Personal Knowledge Assistant"
-requires-python = ">=3.13"
-
-[tool.setuptools]
-packages = ["knowledge_system"]
-package-dir = {"" = "src"}
-EOF
-mv "/tmp/pyproject.toml" "$BUILD_MACOS_PATH/pyproject.toml"
-chown "$CURRENT_USER:staff" "$BUILD_MACOS_PATH/pyproject.toml" 2>/dev/null || true
+# Copy full project pyproject.toml (includes optional dependency extras like [diarization])
+if [ -f "$PROJECT_ROOT/pyproject.toml" ]; then
+  cp "$PROJECT_ROOT/pyproject.toml" "$BUILD_MACOS_PATH/pyproject.toml"
+  # Ensure version inside the copied pyproject matches CURRENT_VERSION (best-effort in-place replace)
+  if command -v gsed >/dev/null 2>&1; then
+    gsed -i "s/^version = \".*\"/version = \"$CURRENT_VERSION\"/" "$BUILD_MACOS_PATH/pyproject.toml" || true
+  else
+    sed -i '' "s/^version = \".*\"/version = \"$CURRENT_VERSION\"/" "$BUILD_MACOS_PATH/pyproject.toml" || true
+  fi
+  chown "$CURRENT_USER:staff" "$BUILD_MACOS_PATH/pyproject.toml" 2>/dev/null || true
+else
+  echo "⚠️  pyproject.toml not found at project root; extras installation inside app may fail."
+fi
 
 # Ensure venv ownership (should already be current user in staging)
 chown -R "$CURRENT_USER:staff" "$VENV_DIR" 2>/dev/null || true
 
-# Create logs directory in staging so permissions can be applied post-install
+# Note: Logs now go to ~/Library/Logs/Knowledge Chipper (macOS standard)
+# Create a logs directory in app bundle for backward compatibility, but it won't be used
 mkdir -p "$BUILD_MACOS_PATH/logs"
 
 # Create Info.plist (with proper version)
@@ -257,7 +335,7 @@ cat > "/tmp/Info.plist" << EOF
     <key>CFBundleIdentifier</key>
     <string>com.knowledgechipper.app</string>
     <key>CFBundleName</key>
-    <string>Knowledge Chipper</string>
+    <string>Skip the Podcast Desktop</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -281,17 +359,42 @@ echo "##PERCENT## 65 Create launch script"
 cat > "/tmp/launch" << EOF
 #!/bin/bash
 APP_DIR="\$( cd "\$( dirname "\${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-LOG_FILE="\$APP_DIR/logs/knowledge_system.log"
-mkdir -p "\$APP_DIR/logs"; touch "\$LOG_FILE"; chmod 666 "\$LOG_FILE"
-if [ -f "\$APP_DIR/version.txt" ]; then echo "Launching Knowledge Chipper:" >> "\$LOG_FILE"; cat "\$APP_DIR/version.txt" >> "\$LOG_FILE"; fi
+
+# Use macOS standard locations for logs (not app bundle)
+LOG_DIR="\$HOME/Library/Logs/Skip the Podcast Desktop"
+mkdir -p "\$LOG_DIR"
+LOG_FILE="\$LOG_DIR/knowledge_system.log"
+touch "\$LOG_FILE"; chmod 644 "\$LOG_FILE"
+
+echo "=== Skip the Podcast Desktop Launch \$(date) ===" >> "\$LOG_FILE"
+if [ -f "\$APP_DIR/version.txt" ]; then 
+    echo "Version Info:" >> "\$LOG_FILE"
+    cat "\$APP_DIR/version.txt" >> "\$LOG_FILE"
+fi
+
+# Set up Python environment
 source "\$APP_DIR/venv/bin/activate"
 export PYTHONPATH="\$APP_DIR/src:\$PYTHONPATH"
 cd "\$APP_DIR"
+
+# Log environment info
 echo "Current directory: \$(pwd)" >> "\$LOG_FILE"
 echo "PYTHONPATH: \$PYTHONPATH" >> "\$LOG_FILE"
 echo "Python version: \$("\$APP_DIR/venv/bin/python" --version)" >> "\$LOG_FILE"
 echo "Virtual env: \$VIRTUAL_ENV" >> "\$LOG_FILE"
 echo "Architecture: \$(arch)" >> "\$LOG_FILE"
+
+# Initialize macOS paths on first run
+echo "Initializing macOS standard paths..." >> "\$LOG_FILE"
+"\$APP_DIR/venv/bin/python" -c "
+try:
+    from knowledge_system.utils.macos_paths import get_default_paths, log_paths_info
+    log_paths_info()
+    print('macOS paths initialized successfully')
+except Exception as e:
+    print(f'Path initialization warning: {e}')
+" >> "\$LOG_FILE" 2>&1
+
 echo "Launching GUI..." >> "\$LOG_FILE"
 if [[ "\$(uname -m)" == "arm64" ]]; then
     exec arch -arm64 "\$APP_DIR/venv/bin/python" -m knowledge_system.gui.__main__ 2>&1 | tee -a "\$LOG_FILE"
@@ -308,8 +411,8 @@ next_step "Create assets"
 echo "##PERCENT## 70 Create assets"
 mkdir -p icon.iconset
 for size in 16 32 128 256 512; do
-    sips -z $size $size Assets/chipper.png --out icon.iconset/icon_${size}x${size}.png
-    sips -z $((size*2)) $((size*2)) Assets/chipper.png --out icon.iconset/icon_${size}x${size}@2x.png
+    sips -z $size $size Assets/STP_Icon_1.png --out icon.iconset/icon_${size}x${size}.png
+    sips -z $((size*2)) $((size*2)) Assets/STP_Icon_1.png --out icon.iconset/icon_${size}x${size}@2x.png
 done
 iconutil -c icns icon.iconset -o "/tmp/AppIcon.icns"
 mv "/tmp/AppIcon.icns" "$BUILD_RESOURCES_PATH/AppIcon.icns"
@@ -344,6 +447,7 @@ if [ "$SKIP_INSTALL" -eq 0 ]; then
   echo "🔒 Setting permissions..."
   sudo chown -R root:wheel "$APP_PATH"
   sudo chmod -R 755 "$APP_PATH"
+  # Logs now use macOS standard location, but keep legacy directory for compatibility
   sudo mkdir -p "$MACOS_PATH/logs" && sudo chmod 777 "$MACOS_PATH/logs"
   sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/build_macos_app.sh" || true
   sudo chmod 755 "$MACOS_PATH/build_macos_app.sh" || true
@@ -362,6 +466,33 @@ if [ "$SKIP_INSTALL" -eq 0 ]; then
   sudo -H "$MACOS_PATH/venv/bin/python" -m pip install --upgrade pip
   next_step "Install requirements (final)"
   sudo -H "$MACOS_PATH/venv/bin/python" -m pip install -r "$MACOS_PATH/requirements.txt"
+
+  # Ensure pyproject.toml exists at final app path for extras resolution
+  if [ ! -f "$MACOS_PATH/pyproject.toml" ] && [ -f "$PROJECT_ROOT/pyproject.toml" ]; then
+    sudo cp "$PROJECT_ROOT/pyproject.toml" "$MACOS_PATH/pyproject.toml"
+  fi
+
+  # Conditionally install extras in the final venv as well
+  if [ "$WITH_HCE" -eq 1 ]; then
+    next_step "Install HCE extras (final)"
+    sudo -H "$MACOS_PATH/venv/bin/python" -m pip install -e "$MACOS_PATH"[hce] || {
+      echo "⚠️ Failed to install HCE extras in final venv; continuing"
+    }
+  fi
+
+  if [ "$WITH_DIARIZATION" -eq 1 ]; then
+    next_step "Install diarization extras (final)"
+    sudo -H "$MACOS_PATH/venv/bin/python" -m pip install -e "$MACOS_PATH"[diarization] || {
+      echo "⚠️ Failed to install diarization extras in final venv; continuing"
+    }
+  fi
+
+  if [ "$WITH_CUDA" -eq 1 ]; then
+    next_step "Install CUDA extras (final)"
+    sudo -H "$MACOS_PATH/venv/bin/python" -m pip install -e "$MACOS_PATH"[cuda] || {
+      echo "⚠️ Failed to install CUDA extras in final venv; continuing"
+    }
+  fi
   # Post-install preflight
   next_step "Final verification"
   if ! PYTHONPATH="$MACOS_PATH/src:${PYTHONPATH}" "$MACOS_PATH/venv/bin/python" -c "import knowledge_system.gui.__main__"; then
@@ -394,6 +525,15 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
   ln -sf /Applications "$DMG_STAGING/root/Applications"
   hdiutil create -volname "Knowledge Chipper" -srcfolder "$DMG_STAGING/root" -ov -format UDZO "$DIST_DIR/Knowledge_Chipper-${CURRENT_VERSION}.dmg"
   echo "✅ DMG created at: $DIST_DIR/Knowledge_Chipper-${CURRENT_VERSION}.dmg"
+  
+  # Optional: Offer to publish release to public repository
+  if [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-0}" != "1" ]; then
+    echo ""
+    echo "🌐 DMG ready for release!"
+    echo "📍 To publish to public repository: bash scripts/publish_release.sh"
+    echo "📍 To publish with existing DMG: bash scripts/publish_release.sh --skip-build"
+  fi
+  
   # Clean up staging to avoid Spotlight finding duplicate app bundles
   rm -rf "$DMG_STAGING"
 fi

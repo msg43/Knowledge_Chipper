@@ -2,13 +2,21 @@
 
 **Author**: Cursor Integration Engineer  
 **Date**: 2024-01-18  
-**Status**: Planning Phase (Updated)
+**Status**: General Availability (HCE Mandatory)
 
 ## Executive Summary
 
 This report documents the COMPLETE REPLACEMENT of the legacy summarizer with the Hybrid Claim Extractor (HCE) system in the Knowledge Chipper codebase. The HCE system will replace all existing summarization and MOC functionality while maintaining identical external behavior (UI tabs, filenames, API response shapes).
 
-**Important Note**: This is a FULL REPLACEMENT with NO feature flags. HCE becomes the sole path for summarization and content analysis. The existing SQLite database infrastructure (7 tables) and Bright Data proxy system are preserved and extended with HCE-specific tables.
+**Important Note**: HCE is now the sole path for summarization and content analysis (mandatory). The existing SQLite database infrastructure (7 tables) and Bright Data proxy system are preserved and extended with HCE-specific tables.
+
+## Installation & Packaging Notes
+
+- macOS .dmg now includes HCE prerequisites by default. No additional user action is required for HCE to run.
+- For source installs, ensure the following are present in your environment:
+  - Base requirements from `requirements.txt`
+  - HCE extras: `pip install sentence-transformers scikit-learn`
+- Local LLM defaults are tuned to avoid timeouts (bounded `num_predict`, `num_ctx`, optional streaming). These can be adjusted in `config/settings.yaml` under `llm` and `local_config`.
 
 **Repo Scan Date**: 2024-01-20
 **Status**: Replacement Implementation (No Legacy Preservation)

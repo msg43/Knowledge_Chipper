@@ -18,7 +18,7 @@ class ExampleResourceAwareTranscriptionTab(BaseTab, ResourceAwareTabMixin):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.tab_name = "Audio Transcription"
+        self.tab_name = "Local Transcription"
 
         # Connect the authorization signal
         self.resource_authorized.connect(self._start_processing_with_resources)

@@ -1,5 +1,5 @@
 from pathlib import Path
-from ..config import get_settings
+from ...config import get_settings
 from .types import EpisodeBundle, ConsolidatedClaim
 
 from .models.llm_any import AnyLLM

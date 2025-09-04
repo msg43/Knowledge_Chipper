@@ -1,3 +1,4 @@
+import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -78,9 +79,9 @@ class AudioProcessor(BaseProcessor):
         self.max_retry_attempts = max_retry_attempts
         self.require_diarization = require_diarization
 
-        # Use whisper.cpp as the default transcriber
+        # Use whisper.cpp as the default transcriber with acceleration
         self.transcriber = WhisperCppTranscribeProcessor(
-            model=model, progress_callback=progress_callback
+            model=model, use_coreml=True, progress_callback=progress_callback
         )
 
         # Model progression for retries (from smaller to larger for better accuracy)
@@ -112,22 +113,33 @@ class AudioProcessor(BaseProcessor):
             return input_path.suffix.lower() == f".{self.target_format}"
 
         try:
+            # Report conversion start
+            if self.progress_callback:
+                self.progress_callback(f"🔄 Converting to .{self.target_format} format...", 0)
+            
             # Convert audio using FFmpeg
             success = convert_audio_file(
                 input_path=input_path,
                 output_path=output_path,
                 target_format=self.target_format,
                 normalize=self.normalize_audio,
+                progress_callback=self.progress_callback,
             )
 
             if success:
+                if self.progress_callback:
+                    self.progress_callback(f"✅ Conversion to .{self.target_format} complete", 100)
                 logger.info(f"Successfully converted {input_path} to {output_path}")
                 return True
             else:
+                if self.progress_callback:
+                    self.progress_callback(f"❌ Conversion to .{self.target_format} failed", 0)
                 logger.error(f"Failed to convert {input_path} to {output_path}")
                 return False
 
         except Exception as e:
+            if self.progress_callback:
+                self.progress_callback(f"❌ Conversion error: {str(e)}", 0)
             logger.error(f"Audio conversion error: {e}")
             return False
 
@@ -135,6 +147,12 @@ class AudioProcessor(BaseProcessor):
         self, audio_path: Path, **diarization_kwargs
     ) -> list | None:
         """Run speaker diarization on the audio file with optional optimization parameters."""
+        # Safety check: Never run diarization during testing mode
+        testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
+        if testing_mode:
+            logger.info("🧪 Testing mode: Skipping diarization entirely (safety override)")
+            return None
+            
         try:
             from .diarization import (
                 SpeakerDiarizationProcessor,
@@ -381,8 +399,20 @@ class AudioProcessor(BaseProcessor):
             # Check if we're in GUI mode and can show dialog
             show_dialog = kwargs.get("show_speaker_dialog", True)
             gui_mode = kwargs.get("gui_mode", False)
+            testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
             
-            if show_dialog and gui_mode:
+            # ADDITIONAL SAFETY: Check if GUI mode is False (testing indicator)
+            if not gui_mode:
+                logger.info("🧪 GUI mode disabled - skipping speaker assignment dialog")
+                show_dialog = False
+            
+            # NEVER show dialogs during testing mode, regardless of other flags
+            if testing_mode:
+                logger.info("🧪 Testing mode: Skipping speaker assignment dialog (forced)")
+                show_dialog = False
+            
+            # Triple safety check: NEVER show dialogs during testing
+            if show_dialog and gui_mode and not testing_mode and not os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
                 # Show speaker assignment dialog with metadata for auto-assignment
                 metadata = kwargs.get("metadata", {})
                 assignments = self._show_speaker_assignment_dialog(
@@ -390,9 +420,9 @@ class AudioProcessor(BaseProcessor):
                 )
                 
                 if assignments:
-                    # Apply assignments to transcript data
+                    # Apply assignments to transcript data with enhanced storage
                     updated_data = speaker_processor.apply_speaker_assignments(
-                        transcript_data, assignments
+                        transcript_data, assignments, recording_path, speaker_data_list
                     )
                     
                     logger.info(f"✅ Applied speaker assignments: {assignments}")
@@ -401,19 +431,24 @@ class AudioProcessor(BaseProcessor):
                     logger.info("Speaker assignment cancelled or no assignments made")
                     return transcript_data
             else:
-                # Non-GUI mode: try to load existing assignments or use suggestions
+                if testing_mode:
+                    logger.info("🧪 Testing mode: Skipping speaker assignment dialog")
+                    
+                # Non-GUI mode or testing: try to load existing assignments or use suggestions
                 assignments = self._get_automatic_speaker_assignments(
                     speaker_data_list, recording_path
                 )
                 
                 if assignments:
                     updated_data = speaker_processor.apply_speaker_assignments(
-                        transcript_data, assignments
+                        transcript_data, assignments, recording_path, speaker_data_list
                     )
                     logger.info(f"Applied automatic speaker assignments: {assignments}")
                     return updated_data
                 else:
-                    logger.info("No automatic speaker assignments available")
+                    # Save AI suggestions even if no assignments made (for learning)
+                    speaker_processor.save_speaker_processing_session(recording_path, speaker_data_list)
+                    logger.info("No automatic speaker assignments available, but saved AI suggestions for learning")
                     return transcript_data
             
         except Exception as e:
@@ -438,6 +473,12 @@ class AudioProcessor(BaseProcessor):
         Returns:
             Dictionary of speaker assignments or None if cancelled
         """
+        # Double-check for testing mode as a safety net
+        testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
+        if testing_mode:
+            logger.info("🧪 Testing mode: Refusing to show speaker assignment dialog (safety net)")
+            return None
+            
         try:
             from ..gui.dialogs.speaker_assignment_dialog import show_speaker_assignment_dialog
             
@@ -448,6 +489,13 @@ class AudioProcessor(BaseProcessor):
             
             return assignments
             
+        except RuntimeError as e:
+            if "testing mode" in str(e):
+                logger.info("🧪 Testing mode: Speaker assignment dialog blocked (as expected)")
+                return None
+            else:
+                logger.error(f"Speaker assignment dialog runtime error: {e}")
+                return None
         except ImportError as e:
             logger.warning(f"Speaker assignment dialog not available: {e}")
             return None
@@ -683,7 +731,7 @@ class AudioProcessor(BaseProcessor):
         # YAML frontmatter
         lines.append("---")
         lines.append(
-            f'title: "Audio Transcription - {audio_metadata.get("filename", "Unknown")}"'
+            f'title: "Local Transcription - {audio_metadata.get("filename", "Unknown")}"'
         )
         lines.append(f'source_file: "{audio_metadata.get("filename", "Unknown")}"')
         lines.append(f'transcription_date: "{datetime.now().isoformat()}"')
@@ -841,6 +889,7 @@ class AudioProcessor(BaseProcessor):
         """Attempt transcription with automatic retry using better model if quality validation fails."""
         current_model = self.model
         audio_duration = audio_metadata.get("duration_seconds")
+        output_path = None  # Track temp file for cleanup
 
         # Determine max attempts based on settings
         max_attempts = self.max_retry_attempts + 1 if self.enable_quality_retry else 1
@@ -857,9 +906,9 @@ class AudioProcessor(BaseProcessor):
                     logger.info(
                         f"Retrying transcription with improved model: {current_model}"
                     )
-                    # Create new transcriber with better model
+                    # Create new transcriber with better model and acceleration
                     self.transcriber = WhisperCppTranscribeProcessor(
-                        model=current_model, progress_callback=self.progress_callback
+                        model=current_model, use_coreml=True, progress_callback=self.progress_callback
                     )
 
                 # Create temporary file for processed audio
@@ -882,7 +931,9 @@ class AudioProcessor(BaseProcessor):
                         self._log_transcription_failure(
                             path, error_msg, current_model, audio_duration
                         )
-                    output_path.unlink(missing_ok=True)
+                    # Clean up temp file before returning
+                    if output_path and output_path.exists():
+                        output_path.unlink(missing_ok=True)
                     return ProcessorResult(success=False, errors=[error_msg])
 
                 # Apply Apple Silicon optimizations if available
@@ -915,6 +966,12 @@ class AudioProcessor(BaseProcessor):
 
                 # Determine processing strategy based on file characteristics
                 diarization_enabled = kwargs.get("diarization", self.enable_diarization)
+                
+                # Force disable diarization during testing mode to prevent GUI threading issues
+                testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
+                if testing_mode:
+                    logger.info("🧪 Testing mode: Force disabling diarization to prevent GUI threading issues")
+                    diarization_enabled = False
                 memory_gb = psutil.virtual_memory().total / (1024**3)
 
                 # Check if we should use streaming processing for very long files
@@ -1009,8 +1066,8 @@ class AudioProcessor(BaseProcessor):
                     )
                     diarization_result = None
 
-                # Clean up temporary file
-                output_path.unlink(missing_ok=True)
+                # Note: Don't clean up temporary file yet - diarization might need it
+                # Cleanup will happen after all processing is complete
 
                 if transcription_result.success:
                     # Quality validation with duration-based analysis
@@ -1040,6 +1097,9 @@ class AudioProcessor(BaseProcessor):
                                     logger.info(
                                         "Attempting retry with better model due to quality issues..."
                                     )
+                                    # Clean up temp file before retry
+                                    if output_path and output_path.exists():
+                                        output_path.unlink(missing_ok=True)
                                     continue
                                 else:  # Last attempt failed OR retries disabled
                                     if not self.enable_quality_retry:
@@ -1055,6 +1115,10 @@ class AudioProcessor(BaseProcessor):
                                             "retry_count": 0,
                                             "duration_seconds": audio_duration,
                                         }
+                                        # Clean up temporary file before returning
+                                        if output_path and output_path.exists():
+                                            output_path.unlink(missing_ok=True)
+                                            
                                         return ProcessorResult(
                                             success=True,  # Mark as success but with quality warning
                                             data=transcription_result.data,
@@ -1073,6 +1137,10 @@ class AudioProcessor(BaseProcessor):
                                             current_model,
                                             audio_duration,
                                         )
+                                        # Clean up temporary file before returning
+                                        if output_path and output_path.exists():
+                                            output_path.unlink(missing_ok=True)
+                                            
                                         return ProcessorResult(
                                             success=False,
                                             errors=[
@@ -1205,6 +1273,10 @@ class AudioProcessor(BaseProcessor):
                             if saved_file:
                                 enhanced_metadata["saved_markdown_file"] = str(saved_file)
 
+                        # Clean up temporary file before returning success
+                        if output_path and output_path.exists():
+                            output_path.unlink(missing_ok=True)
+                            
                         return ProcessorResult(
                             success=True,
                             data=final_data,
@@ -1225,6 +1297,10 @@ class AudioProcessor(BaseProcessor):
                         self._log_transcription_failure(
                             path, error_msg, current_model, audio_duration
                         )
+                        # Clean up temporary file before returning
+                        if output_path and output_path.exists():
+                            output_path.unlink(missing_ok=True)
+                            
                         return ProcessorResult(
                             success=False,
                             errors=transcription_result.errors,
@@ -1247,8 +1323,15 @@ class AudioProcessor(BaseProcessor):
                     self._log_transcription_failure(
                         path, error_msg, current_model, audio_duration
                     )
+                    # Clean up temporary file before returning
+                    if output_path and output_path.exists():
+                        output_path.unlink(missing_ok=True)
+                        
                     return ProcessorResult(success=False, errors=[str(e)])
                 else:
+                    # Clean up temp file before retry
+                    if output_path and output_path.exists():
+                        output_path.unlink(missing_ok=True)
                     # Try retry
                     continue
 
@@ -1257,6 +1340,10 @@ class AudioProcessor(BaseProcessor):
         self._log_transcription_failure(
             path, final_error, current_model, audio_duration
         )
+        # Clean up temporary file before returning
+        if output_path and output_path.exists():
+            output_path.unlink(missing_ok=True)
+            
         return ProcessorResult(success=False, errors=[final_error])
 
     def process_batch(

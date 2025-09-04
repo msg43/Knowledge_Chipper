@@ -2,7 +2,7 @@ from pathlib import Path
 
 from .models.llm_any import AnyLLM
 from .types import ScoredClaim
-from ..config import get_settings
+from ...config import get_settings
 
 
 class Judge:
@@ -38,11 +38,32 @@ class Judge:
         return out
 
 
-def judge_claims(claims: list[ScoredClaim], judge_model_uri: str) -> list[ScoredClaim]:
-    """Compatibility wrapper used by HCEPipeline."""
-    settings = get_settings()
-    llm = AnyLLM(judge_model_uri)
+def judge_claims(
+    claims: list[ScoredClaim],
+    judge_model_uri: str,
+    flagship_claims: list[ScoredClaim] | None = None,
+    flagship_model_uri: str | None = None,
+) -> list[ScoredClaim]:
+    """Compatibility wrapper used by HCEPipeline.
+
+    If flagship_claims and flagship_model_uri are provided, runs a dual pass:
+    - claims (minus flagship_claims) judged by judge_model_uri
+    - flagship_claims judged by flagship_model_uri
+    Returns combined judged list.
+    """
     prompt_path = Path(__file__).parent / "prompts" / "judge.txt"
-    j = Judge(llm, prompt_path)
-    # Minimal episode context: join top segments (not available here), so pass empty
-    return j.judge("", claims)
+
+    # Partition claims if flagship set provided
+    flagship_set = set(flagship_claims or [])
+    local_bucket = [c for c in claims if c not in flagship_set]
+    judged: list[ScoredClaim] = []
+
+    if local_bucket:
+        j_local = Judge(AnyLLM(judge_model_uri), prompt_path)
+        judged.extend(j_local.judge("", local_bucket))
+
+    if flagship_claims and flagship_model_uri:
+        j_flag = Judge(AnyLLM(flagship_model_uri), prompt_path)
+        judged.extend(j_flag.judge("", flagship_claims))
+
+    return judged

@@ -31,64 +31,74 @@ def get_valid_whisper_models() -> list[str]:
 class AppConfig(BaseModel):
     """Application-level configuration."""
 
-    name: str = "Knowledge_Chipper"
+    name: str = "Skip the Podcast Desktop"
     version: str = "0.0.0"  # runtime will prefer package __version__
     debug: bool = False
+    
+    # Update Settings
+    auto_check_updates: bool = Field(
+        default=True, 
+        description="Automatically check for updates when the app launches"
+    )
+    update_channel: str = Field(
+        default="stable",
+        description="Update channel: stable, beta, or dev"
+    )
 
 
 class PathsConfig(BaseModel):
-    """Configuration for file paths."""
+    """Configuration for file paths using macOS standard locations."""
 
-    # Base data directory (user will need to set this)
+    # Base data directory - defaults to proper macOS Application Support
     data_dir: str = Field(
         default="",
-        description="Base data directory (must be configured by user)",
+        description="Base data directory (auto-configured to macOS standard location)",
     )
-    # Output directory (user will need to set this)
+    # Output directory - defaults to proper user Documents
     output_dir: str = Field(
         default="",
-        description="Output directory (must be configured by user)",
+        description="Output directory (auto-configured to user Documents)",
     )
-    # Cache directory (user will need to set this)
+    # Cache directory - defaults to proper macOS Cache
     cache_dir: str = Field(
         default="",
-        description="Cache directory (must be configured by user)",
+        description="Cache directory (auto-configured to macOS standard location)",
     )
 
-    # Input/output paths (user will need to set these)
+    # Input/output paths - auto-configured to standard locations
     input_dir: str = Field(
         default="",
-        description="Input directory (must be configured by user)",
+        description="Input directory (auto-configured to user Documents)",
     )
     output: str = Field(
         default="",
-        description="Output path (must be configured by user)",
+        description="Output path (auto-configured to user Documents)",
     )
     transcripts: str = Field(
         default="",
-        description="Transcripts directory (must be configured by user)",
+        description="Transcripts directory (auto-configured)",
     )
     summaries: str = Field(
         default="",
-        description="Summaries directory (must be configured by user)",
+        description="Summaries directory (auto-configured)",
     )
     mocs: str = Field(
         default="",
-        description="Maps of Content directory (must be configured by user)",
+        description="Maps of Content directory (auto-configured)",
     )
     cache: str = Field(
         default="",
-        description="Cache directory (must be configured by user)",
+        description="Cache directory (auto-configured)",
     )
-    logs_dir: str = Field(default="./logs", description="Logs directory")
+    logs_dir: str = Field(default="", description="Logs directory (auto-configured to macOS standard)")
 
     # Additional paths for backward compatibility
     input: str = Field(
         default="",
-        description="Input directory (must be configured by user)",
+        description="Input directory (auto-configured)",
     )
     logs: str = Field(
-        default="./logs", description="Logs directory (alias for logs_dir)"
+        default="", description="Logs directory (alias for logs_dir, auto-configured)"
     )
 
     @field_validator(
@@ -213,7 +223,7 @@ class TranscriptionConfig(BaseModel):
         default="base", pattern="^(tiny|base|small|medium|large|large-v2|large-v3)$"
     )
     use_gpu: bool = True
-    diarization: bool = False
+    diarization: bool = True
     min_words: int = Field(default=50, ge=1)
     use_whisper_cpp: bool = False
 
@@ -276,10 +286,6 @@ class APIKeysConfig(BaseModel):
     openai_api_key: str | None = Field(default=None, alias="openai")
     anthropic_api_key: str | None = Field(default=None, alias="anthropic")
 
-    # Webshare Proxy Keys (Required for YouTube)
-    webshare_username: str | None = Field(default=None)
-    webshare_password: str | None = Field(default=None)
-
     # HuggingFace for local models
     huggingface_token: str | None = Field(default=None, alias="hf_token")
 
@@ -310,15 +316,8 @@ class APIKeysConfig(BaseModel):
         if v is None or v == "":
             return v
 
-        # Basic format validation - Bright Data API keys typically start with specific prefixes
-        if not v.startswith(
-            ("bd_", "brd_", "2")
-        ):  # Common Bright Data API key prefixes
-            raise ValueError(
-                "Bright Data API key should start with 'bd_', 'brd_', or be numeric"
-            )
-
-        # Minimum length check
+        # Accept common formats, including UUID-style keys from Bright Data
+        # Only enforce a reasonable minimum length to avoid obvious mistakes
         if len(v) < 10:
             raise ValueError("Bright Data API key is too short")
 
@@ -550,8 +549,15 @@ class GUIFeaturesConfig(BaseModel):
 class CloudConfig(BaseModel):
     """Cloud configuration for Supabase access and storage."""
 
-    supabase_url: str | None = Field(default=None, description="Supabase project URL")
-    supabase_key: str | None = Field(default=None, description="Supabase service role or anon key")
+    # Hardcoded Supabase connection for all users
+    supabase_url: str = Field(
+        default="https://sdkxuiqcwlmbpjvjdpkj.supabase.co",
+        description="Hardcoded Supabase project URL for all users"
+    )
+    supabase_key: str = Field(
+        default="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNka3h1aXFjd2xtYnBqdmpkcGtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTU3MzQsImV4cCI6MjA3MTM5MTczNH0.VoP6yX3GwyVjylgioTGchQYwPQ_K2xQFdHP5ani0vts",
+        description="Hardcoded Supabase anon key for all users"
+    )
     supabase_bucket: str | None = Field(default=None, description="Default storage bucket name")
 
 
@@ -587,6 +593,13 @@ class Settings(BaseSettings):
     def __init__(self, config_path: str | Path | None = None, **kwargs) -> None:
         """Initialize settings from YAML file and environment variables."""
 
+        # Import here to avoid circular imports
+        try:
+            from .utils.macos_paths import get_default_paths, get_config_dir
+            macos_paths_available = True
+        except ImportError:
+            macos_paths_available = False
+
         # Static YAML loading function for use before super().__init__()
         def load_yaml_static(path: str | Path) -> dict[str, Any]:
             """Load YAML configuration file (static version for init)."""
@@ -598,18 +611,39 @@ class Settings(BaseSettings):
                 print(f"Failed to load config from {path}: {e}")
                 return {}
 
+        # Set up default paths using macOS standards
+        if macos_paths_available:
+            default_macos_paths = get_default_paths()
+            config_dir = get_config_dir()
+            
+            # Apply default paths if not overridden
+            if "paths" not in kwargs:
+                kwargs["paths"] = {}
+            
+            for key, value in default_macos_paths.items():
+                if key not in kwargs["paths"] or not kwargs["paths"][key]:
+                    kwargs["paths"][key] = value
+
         # Load from YAML file if provided
         if config_path:
             config_data = load_yaml_static(config_path)
             kwargs.update(config_data)
         else:
-            # Try to load from default locations
+            # Try to load from default locations (including new macOS standard location)
             default_paths = [
                 Path("config/settings.yaml"),
                 Path("../config/settings.yaml"),  # Handle running from src/ directory
                 Path("settings.yaml"),
-                Path.home() / ".knowledge-system" / "settings.yaml",
             ]
+            
+            # Add macOS standard config location
+            if macos_paths_available:
+                default_paths.extend([
+                    config_dir / "settings.yaml",
+                    Path.home() / ".knowledge-system" / "settings.yaml",  # Legacy fallback
+                ])
+            else:
+                default_paths.append(Path.home() / ".knowledge-system" / "settings.yaml")
 
             for path in default_paths:
                 if path.exists():
@@ -622,8 +656,16 @@ class Settings(BaseSettings):
             Path("config/credentials.yaml"),
             Path("../config/credentials.yaml"),  # Handle running from src/ directory
             Path("credentials.yaml"),
-            Path.home() / ".knowledge-system" / "credentials.yaml",
         ]
+        
+        # Add macOS standard config location for credentials
+        if macos_paths_available:
+            credentials_paths.extend([
+                config_dir / "credentials.yaml",
+                Path.home() / ".knowledge-system" / "credentials.yaml",  # Legacy fallback
+            ])
+        else:
+            credentials_paths.append(Path.home() / ".knowledge-system" / "credentials.yaml")
 
         for cred_path in credentials_paths:
             if cred_path.exists():
@@ -668,11 +710,18 @@ class Settings(BaseSettings):
             if env_anthropic:
                 api_keys["anthropic"] = env_anthropic
 
-        if not api_keys.get("webshare_username"):
-            api_keys["webshare_username"] = os.getenv("WEBSHARE_USERNAME")
-        if not api_keys.get("webshare_password"):
-            api_keys["webshare_password"] = os.getenv("WEBSHARE_PASSWORD")
+        # Bright Data API key fallback from environment
+        # Accept common env var names for convenience
+        if not api_keys.get("bright_data_api_key"):
+            env_bd = (
+                os.getenv("BRIGHT_DATA_API_KEY")
+                or os.getenv("BRIGHTDATA_API_KEY")
+                or os.getenv("BD_API_KEY")
+            )
+            if env_bd:
+                api_keys["bright_data_api_key"] = env_bd
 
+        # Remove WebShare env loads - Bright Data only
         super().__init__(**kwargs)
 
     def _load_yaml(self, path: str | Path) -> dict[str, Any]:

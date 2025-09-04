@@ -91,8 +91,7 @@ api_keys:
   openai_api_key: "${OPENAI_API_KEY}"
   anthropic_api_key: "${ANTHROPIC_API_KEY}"
   youtube_api_key: "${YOUTUBE_API_KEY}"
-  webshare_username: "${WEBSHARE_USERNAME}"
-  webshare_password: "${WEBSHARE_PASSWORD}"
+  # WebShare removed; use Bright Data only
   huggingface_token: "${HUGGINGFACE_HUB_TOKEN}"  # Required for pyannote diarization
 
 # Processing Options
@@ -154,6 +153,13 @@ gui_features:
 
   # Advanced feature toggles
   enable_advanced_features: false     # Enable experimental/advanced GUI features
+
+# Cloud Services Configuration
+cloud:
+  # Supabase settings for cloud sync and storage (optional)
+  supabase_url: null    # Your Supabase project URL (e.g., "https://your-project.supabase.co")
+  supabase_key: null    # Your Supabase service role or anon key
+  supabase_bucket: null # Default storage bucket name (e.g., "knowledge-files")
 
 # Summarization Settings (inherits from llm by default)
 summarization:

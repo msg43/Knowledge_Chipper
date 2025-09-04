@@ -171,6 +171,14 @@ class EnhancedSummarizationWorker(QThread):
                 provider=provider,
                 model=clean_model_name,
                 max_tokens=self.gui_settings.get("max_tokens", 10000),
+                hce_options={
+                    "use_skim": self.gui_settings.get("use_skim", True),
+                    "enable_routing": self.gui_settings.get("enable_routing", True),
+                    "routing_threshold": self.gui_settings.get("routing_threshold", 0.35),
+                    "prompt_driven_mode": self.gui_settings.get("prompt_driven_mode", False),
+                    "flagship_file_tokens": self.gui_settings.get("flagship_file_tokens", 0),
+                    "flagship_session_tokens": self.gui_settings.get("flagship_session_tokens", 0),
+                },
             )
 
             # Get output directory (if not updating in-place)
@@ -390,6 +398,8 @@ class EnhancedSummarizationWorker(QThread):
                     prompt_template=template_path,
                     progress_callback=enhanced_progress_callback,
                     cancellation_token=self.cancellation_token,
+                    prefer_template_summary=self.gui_settings.get("prompt_driven_mode", False),
+                    allow_llm_fallback=True,  # Enable fallback for better reliability
                 )
 
                 if result.success:
@@ -1040,42 +1050,33 @@ class SummarizationTab(BaseTab):
         )
         layout.addWidget(input_group)
 
-        # Analysis Type section
-        analysis_group = QGroupBox("Analysis Type")
-        analysis_layout = QHBoxLayout()
+        # Analysis Type removed - now defaults to "Document Summary" with entity extraction
 
-        # Create a grid layout temporarily for the _add_field_with_info method
-        temp_grid = QGridLayout()
+        # Profile section
+        profile_group = QGroupBox("Analysis Profile")
+        profile_layout = QHBoxLayout()
 
-        self.analysis_type_combo = QComboBox()
-        self.analysis_type_combo.addItems(self._load_analysis_types())
-        self.analysis_type_combo.currentTextChanged.connect(
-            self._on_analysis_type_changed
-        )
-        self.analysis_type_combo.setMinimumWidth(280)
-
-        self._add_field_with_info(
-            temp_grid,
-            "Analysis Type:",
-            self.analysis_type_combo,
-            "Choose analysis type: Document Summary (comprehensive overview), Knowledge Map (structured knowledge extraction), Entity Extraction (people, places, concepts), or Relationship Analysis (connections and networks)",
-            0,
-            0,
+        self.profile_combo = QComboBox()
+        self.profile_combo.addItems(["Balanced", "Fast", "Quality", "Custom"])
+        self.profile_combo.currentTextChanged.connect(self._on_profile_changed)
+        self.profile_combo.setMinimumWidth(150)
+        self.profile_combo.setToolTip(
+            "Choose analysis profile:\n"
+            "• Fast: Lightweight models, no routing, skim disabled\n"
+            "• Balanced: Default settings with routing enabled\n"
+            "• Quality: Flagship models, aggressive routing, all features\n"
+            "• Custom: Manual configuration"
         )
 
-        # Extract the widgets from the grid and add to horizontal layout
-        label_widget = temp_grid.itemAtPosition(0, 0).widget()
-        combo_container = temp_grid.itemAtPosition(0, 1).widget()
+        profile_layout.addWidget(QLabel("Profile:"))
+        profile_layout.addWidget(self.profile_combo)
+        profile_layout.addStretch()
 
-        analysis_layout.addWidget(label_widget)
-        analysis_layout.addWidget(combo_container)
-        analysis_layout.addStretch()
-
-        analysis_group.setLayout(analysis_layout)
-        analysis_group.setSizePolicy(
+        profile_group.setLayout(profile_layout)
+        profile_group.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        layout.addWidget(analysis_group)
+        layout.addWidget(profile_group)
 
         # Settings section
         settings_group = QGroupBox("Settings")
@@ -1170,7 +1171,7 @@ class SummarizationTab(BaseTab):
             "Maximum response size for claim extraction. Higher values allow more detailed analysis but cost more. 1000 tokens ≈ 750 words."
         )
         self.max_tokens_spin.valueChanged.connect(self._on_setting_changed)
-        self.max_tokens_spin.setMinimumWidth(120)
+        self.max_tokens_spin.setMinimumWidth(80)
         self.max_tokens_spin.setToolTip(
             "Maximum response size for claim extraction. Higher values allow more detailed analysis but cost more. 1000 tokens ≈ 750 words."
         )
@@ -1184,7 +1185,7 @@ class SummarizationTab(BaseTab):
             "Path to custom prompt template file for claim extraction. Leave empty to use default HCE prompts."
         )
         self.template_path_edit = QLineEdit("")
-        self.template_path_edit.setMinimumWidth(180)
+        self.template_path_edit.setMinimumWidth(280)
         self.template_path_edit.setToolTip(
             "Path to custom prompt template file for claim extraction. Leave empty to use default HCE prompts."
         )
@@ -1204,6 +1205,18 @@ class SummarizationTab(BaseTab):
             "• Leave empty to use built-in templates for each analysis type"
         )
         settings_layout.addWidget(browse_template_btn, 1, 4)
+
+        # Prompt-driven summary mode
+        self.prompt_driven_mode_checkbox = QCheckBox("Prompt-Driven Summary (use template structure)")
+        self.prompt_driven_mode_checkbox.setToolTip(
+            "Uses selected template as authoritative structure.\n"
+            "• HCE metadata still extracted but formatting follows template exactly\n"
+            "• Useful for consistent output format across documents\n"
+            "• Requires a properly formatted template file"
+        )
+        self.prompt_driven_mode_checkbox.toggled.connect(self._on_setting_changed)
+        self.prompt_driven_mode_checkbox.toggled.connect(self._on_template_mode_changed)
+        settings_layout.addWidget(self.prompt_driven_mode_checkbox, 1, 5, 1, 1)
 
         # Options
         self.update_md_checkbox = QCheckBox("Append Summary To Transcript File")
@@ -1297,48 +1310,42 @@ class SummarizationTab(BaseTab):
         hce_group = QGroupBox("🔍 Claim Analysis Settings")
         hce_layout = QGridLayout()
 
-        # Claim tier filter
-        tier_label = QLabel("Minimum Claim Tier:")
-        tier_label.setToolTip(
+        # Claim tier filter with blue info indicator
+        self.claim_tier_combo = QComboBox()
+        self._add_field_with_info(
+            hce_layout,
+            "Minimum Claim Tier:",
+            self.claim_tier_combo,
             "Select minimum claim tier to include:\n"
             "• Tier A: High-confidence, core claims (85%+ confidence)\n"
             "• Tier B: Medium-confidence claims (65%+ confidence)\n"
             "• Tier C: Lower-confidence, supporting claims\n"
-            "• All: Include all tiers"
+            "• All: Include all tiers",
+            0,
+            0,
         )
-        self.claim_tier_combo = QComboBox()
         self.claim_tier_combo.addItems(["All", "Tier A", "Tier B", "Tier C"])
         self.claim_tier_combo.setCurrentText("All")
         self.claim_tier_combo.currentTextChanged.connect(self._on_setting_changed)
-        self.claim_tier_combo.setToolTip(
-            "Select minimum claim tier to include:\n"
-            "• Tier A: High-confidence, core claims (85%+ confidence)\n"
-            "• Tier B: Medium-confidence claims (65%+ confidence)\n"
-            "• Tier C: Lower-confidence, supporting claims\n"
-            "• All: Include all tiers"
-        )
-        hce_layout.addWidget(tier_label, 0, 0)
-        hce_layout.addWidget(self.claim_tier_combo, 0, 1)
 
-        # Max claims limit
-        max_claims_label = QLabel("Max Claims per Document:")
-        max_claims_label.setToolTip(
-            "Maximum number of claims to extract per document.\n"
-            "Leave empty for no limit. Higher values provide more detail but take longer."
-        )
+        # Max claims limit with blue info indicator
         self.max_claims_spin = QSpinBox()
+        self._add_field_with_info(
+            hce_layout,
+            "Max Claims per Document:",
+            self.max_claims_spin,
+            "Maximum number of claims to extract per document.\n"
+            "Set to 0 for unlimited. Higher values provide more detail but take longer.",
+            0,
+            2,
+        )
         self.max_claims_spin.setRange(0, 1000)
         self.max_claims_spin.setValue(0)  # 0 means unlimited
         self.max_claims_spin.setSpecialValueText("Unlimited")
         self.max_claims_spin.valueChanged.connect(self._on_setting_changed)
-        self.max_claims_spin.setToolTip(
-            "Maximum number of claims to extract per document.\n"
-            "Set to 0 for unlimited. Higher values provide more detail but take longer."
-        )
-        hce_layout.addWidget(max_claims_label, 0, 2)
-        hce_layout.addWidget(self.max_claims_spin, 0, 3)
 
-        # Analysis options
+        # Analysis options with blue info indicators
+        contradictions_layout = QHBoxLayout()
         self.include_contradictions_checkbox = QCheckBox(
             "Include Contradiction Analysis"
         )
@@ -1348,8 +1355,39 @@ class SummarizationTab(BaseTab):
             "Helps identify conflicting information and inconsistencies."
         )
         self.include_contradictions_checkbox.toggled.connect(self._on_setting_changed)
-        hce_layout.addWidget(self.include_contradictions_checkbox, 1, 0, 1, 2)
+        contradictions_layout.addWidget(self.include_contradictions_checkbox)
+        
+        # Add blue info indicator for contradictions
+        contradictions_info = QLabel("ⓘ")
+        contradictions_info.setFixedSize(16, 16)
+        contradictions_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        contradictions_info.setToolTip(
+            "<b>Include Contradiction Analysis:</b><br/><br/>"
+            "Analyze contradictions between claims within and across documents.<br/>"
+            "Helps identify conflicting information and inconsistencies."
+        )
+        contradictions_info.setStyleSheet(
+            """
+            QLabel {
+                color: #007AFF;
+                font-size: 12px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+            }
+            QLabel:hover {
+                color: #0051D5;
+            }
+        """
+        )
+        contradictions_layout.addWidget(contradictions_info)
+        contradictions_layout.addStretch()
+        
+        contradictions_widget = QWidget()
+        contradictions_widget.setLayout(contradictions_layout)
+        hce_layout.addWidget(contradictions_widget, 1, 0, 1, 2)
 
+        relations_layout = QHBoxLayout()
         self.include_relations_checkbox = QCheckBox("Include Relationship Mapping")
         self.include_relations_checkbox.setChecked(True)
         self.include_relations_checkbox.setToolTip(
@@ -1357,38 +1395,294 @@ class SummarizationTab(BaseTab):
             "Creates connections that help understand how ideas relate."
         )
         self.include_relations_checkbox.toggled.connect(self._on_setting_changed)
-        hce_layout.addWidget(self.include_relations_checkbox, 1, 2, 1, 2)
+        relations_layout.addWidget(self.include_relations_checkbox)
+        
+        # Add blue info indicator for relations
+        relations_info = QLabel("ⓘ")
+        relations_info.setFixedSize(16, 16)
+        relations_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        relations_info.setToolTip(
+            "<b>Include Relationship Mapping:</b><br/><br/>"
+            "Map relationships between claims, entities, and concepts.<br/>"
+            "Creates connections that help understand how ideas relate."
+        )
+        relations_info.setStyleSheet(
+            """
+            QLabel {
+                color: #007AFF;
+                font-size: 12px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+            }
+            QLabel:hover {
+                color: #0051D5;
+            }
+        """
+        )
+        relations_layout.addWidget(relations_info)
+        relations_layout.addStretch()
+        
+        relations_widget = QWidget()
+        relations_widget.setLayout(relations_layout)
+        hce_layout.addWidget(relations_widget, 1, 2, 1, 2)
 
-        # Confidence thresholds
-        tier_a_label = QLabel("Tier A Threshold:")
-        tier_a_label.setToolTip("Confidence threshold for Tier A claims (0.0-1.0)")
+        # Confidence thresholds with blue info indicators
         self.tier_a_threshold_spin = QSpinBox()
+        self._add_field_with_info(
+            hce_layout,
+            "Tier A Threshold:",
+            self.tier_a_threshold_spin,
+            "Confidence threshold for Tier A claims (0-100%).\n"
+            "Claims above this threshold are considered high-confidence core claims.",
+            2,
+            0,
+        )
         self.tier_a_threshold_spin.setRange(0, 100)
         self.tier_a_threshold_spin.setValue(85)
         self.tier_a_threshold_spin.setSuffix("%")
-        self.tier_a_threshold_spin.setToolTip(
-            "Confidence threshold for Tier A claims (0-100%)"
-        )
         self.tier_a_threshold_spin.valueChanged.connect(self._on_setting_changed)
-        hce_layout.addWidget(tier_a_label, 2, 0)
-        hce_layout.addWidget(self.tier_a_threshold_spin, 2, 1)
 
-        tier_b_label = QLabel("Tier B Threshold:")
-        tier_b_label.setToolTip("Confidence threshold for Tier B claims (0.0-1.0)")
         self.tier_b_threshold_spin = QSpinBox()
+        self._add_field_with_info(
+            hce_layout,
+            "Tier B Threshold:",
+            self.tier_b_threshold_spin,
+            "Confidence threshold for Tier B claims (0-100%).\n"
+            "Claims above this threshold are considered medium-confidence claims.",
+            2,
+            2,
+        )
         self.tier_b_threshold_spin.setRange(0, 100)
         self.tier_b_threshold_spin.setValue(65)
         self.tier_b_threshold_spin.setSuffix("%")
-        self.tier_b_threshold_spin.setToolTip(
-            "Confidence threshold for Tier B claims (0-100%)"
-        )
         self.tier_b_threshold_spin.valueChanged.connect(self._on_setting_changed)
-        hce_layout.addWidget(tier_b_label, 2, 2)
-        hce_layout.addWidget(self.tier_b_threshold_spin, 2, 3)
+
+        # High-level skim toggle
+        self.use_skim_checkbox = QCheckBox("High-level skim (pre-pass)")
+        self.use_skim_checkbox.setChecked(True)
+        self.use_skim_checkbox.setToolTip(
+            "Runs a quick milestone scan before detailed analysis.\n"
+            "• Identifies key topics and structure\n"
+            "• Guides claim extraction focus\n"
+            "• Disabling reduces LLM calls but may miss context"
+        )
+        self.use_skim_checkbox.toggled.connect(self._on_setting_changed)
+        hce_layout.addWidget(self.use_skim_checkbox, 3, 0, 1, 2)
+
+        # Routed judging toggle
+        self.enable_routing_checkbox = QCheckBox("Enable routed judging")
+        self.enable_routing_checkbox.setChecked(True)
+        self.enable_routing_checkbox.setToolTip(
+            "Routes uncertain or important claims to a flagship judge model.\n"
+            "• Improves accuracy for complex claims\n"
+            "• Increases processing cost\n"
+            "• Requires flagship judge model configuration"
+        )
+        self.enable_routing_checkbox.toggled.connect(self._on_setting_changed)
+        self.enable_routing_checkbox.toggled.connect(self._on_routing_toggle_changed)
+        hce_layout.addWidget(self.enable_routing_checkbox, 3, 2, 1, 2)
+
+        # Routing threshold
+        routing_threshold_label = QLabel("Routing Threshold:")
+        routing_threshold_label.setToolTip(
+            "Uncertainty threshold for routing claims to flagship judge.\n"
+            "Lower values route more claims to flagship (higher cost, better accuracy)."
+        )
+        self.routing_threshold_spin = QSpinBox()
+        self.routing_threshold_spin.setRange(0, 100)
+        self.routing_threshold_spin.setValue(35)
+        self.routing_threshold_spin.setSuffix("%")
+        self.routing_threshold_spin.setToolTip(
+            "Uncertainty threshold for routing claims to flagship judge.\n"
+            "Lower values route more claims to flagship (higher cost, better accuracy)."
+        )
+        self.routing_threshold_spin.valueChanged.connect(self._on_setting_changed)
+        hce_layout.addWidget(routing_threshold_label, 4, 0)
+        hce_layout.addWidget(self.routing_threshold_spin, 4, 1)
 
         hce_group.setLayout(hce_layout)
         hce_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(hce_group)
+
+        # Advanced: Per-stage Models (collapsible)
+        from PyQt6.QtWidgets import QFrame
+        
+        self.advanced_models_group = QGroupBox("🔧 Advanced: Per-stage Models")
+        self.advanced_models_group.setCheckable(True)
+        self.advanced_models_group.setChecked(False)  # Collapsed by default
+        self.advanced_models_group.setToolTip(
+            "Configure different models for each analysis stage.\n"
+            "Leave empty to use main model for all stages."
+        )
+        
+        advanced_layout = QGridLayout()
+        # Set column stretch factors to better distribute space
+        advanced_layout.setColumnStretch(0, 0)  # Label column - fixed width
+        advanced_layout.setColumnStretch(1, 0)  # Provider column - fixed width  
+        advanced_layout.setColumnStretch(2, 1)  # Model column - takes remaining space
+        advanced_layout.setColumnStretch(3, 0)  # URI column - fixed width
+        
+        # Add spacing between columns
+        advanced_layout.setHorizontalSpacing(15)
+        advanced_layout.setVerticalSpacing(8)
+        
+        # Helper function to create model selector row with blue info indicator
+        def create_model_selector(name: str, tooltip: str, row: int) -> tuple:
+            # Create label with info indicator layout
+            label_layout = QHBoxLayout()
+            label_layout.setContentsMargins(0, 0, 0, 0)
+            label_layout.setSpacing(8)
+            
+            label = QLabel(f"{name}:")
+            label.setToolTip(tooltip)
+            label_layout.addWidget(label)
+            
+            # Add blue info indicator
+            info_label = QLabel("ⓘ")
+            info_label.setFixedSize(16, 16)
+            info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            info_label.setToolTip(f"<b>{name}:</b><br/><br/>{tooltip}")
+            info_label.setStyleSheet(
+                """
+                QLabel {
+                    color: #007AFF;
+                    font-size: 12px;
+                    font-weight: bold;
+                    background: transparent;
+                    border: none;
+                }
+                QLabel:hover {
+                    color: #0051D5;
+                }
+            """
+            )
+            label_layout.addWidget(info_label)
+            label_layout.addStretch()
+            
+            label_widget = QWidget()
+            label_widget.setLayout(label_layout)
+            label_widget.setMinimumWidth(180)  # Ensure label has enough space
+            
+            provider_combo = QComboBox()
+            provider_combo.addItems(["", "openai", "anthropic", "local"])
+            provider_combo.setMinimumWidth(120)  # Reasonable width for provider names
+            provider_combo.setMaximumWidth(140)  # Prevent it from taking too much space
+            provider_combo.currentTextChanged.connect(self._on_setting_changed)
+            provider_combo.setToolTip(f"AI provider for {name}")
+            
+            model_combo = QComboBox()
+            model_combo.setEditable(True)
+            model_combo.setMinimumWidth(400)  # Much wider for full model names
+            model_combo.currentTextChanged.connect(self._on_setting_changed)
+            model_combo.setToolTip(f"Specific model name for {name}")
+            
+            # Connect provider change to update model options
+            provider_combo.currentTextChanged.connect(
+                lambda provider: self._update_advanced_model_combo(provider, model_combo)
+            )
+            
+            uri_label = QLabel("(auto)")
+            uri_label.setStyleSheet("color: #666; font-style: italic; font-size: 10px;")
+            uri_label.setWordWrap(True)
+            uri_label.setMaximumWidth(100)  # Limit URI label width
+            uri_label.setToolTip("API endpoint (automatically determined)")
+            
+            advanced_layout.addWidget(label_widget, row, 0)
+            advanced_layout.addWidget(provider_combo, row, 1)
+            advanced_layout.addWidget(model_combo, row, 2)
+            advanced_layout.addWidget(uri_label, row, 3)
+            
+            return provider_combo, model_combo, uri_label
+        
+        # Create model selectors
+        self.miner_provider, self.miner_model, self.miner_uri = create_model_selector(
+            "Miner Model", "Model for initial claim extraction", 0
+        )
+        
+        self.heavy_miner_provider, self.heavy_miner_model, self.heavy_miner_uri = create_model_selector(
+            "Heavy Miner Model", "Model for complex/detailed claim extraction (optional)", 1
+        )
+        
+        self.judge_provider, self.judge_model, self.judge_uri = create_model_selector(
+            "Judge Model", "Lightweight model for claim scoring", 2
+        )
+        
+        self.flagship_judge_provider, self.flagship_judge_model, self.flagship_judge_uri = create_model_selector(
+            "Flagship Judge Model", "High-quality model for important claims", 3
+        )
+        
+        self.embedder_provider, self.embedder_model, self.embedder_uri = create_model_selector(
+            "Embedder Model", "Model for claim embeddings and similarity", 4
+        )
+        
+        self.reranker_provider, self.reranker_model, self.reranker_uri = create_model_selector(
+            "Reranker Model", "Model for claim reranking and prioritization", 5
+        )
+        
+        self.people_provider, self.people_model, self.people_uri = create_model_selector(
+            "People Disambiguator", "Model for person name resolution (optional)", 6
+        )
+        
+        self.nli_provider, self.nli_model, self.nli_uri = create_model_selector(
+            "NLI Model", "Natural Language Inference model (optional)", 7
+        )
+        
+        self.advanced_models_group.setLayout(advanced_layout)
+        self.advanced_models_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        layout.addWidget(self.advanced_models_group)
+        
+        # Initialize model dropdowns to be empty by default
+        for provider_combo, model_combo, _ in [
+            (self.miner_provider, self.miner_model, self.miner_uri),
+            (self.heavy_miner_provider, self.heavy_miner_model, self.heavy_miner_uri),
+            (self.judge_provider, self.judge_model, self.judge_uri),
+            (self.flagship_judge_provider, self.flagship_judge_model, self.flagship_judge_uri),
+            (self.embedder_provider, self.embedder_model, self.embedder_uri),
+            (self.reranker_provider, self.reranker_model, self.reranker_uri),
+            (self.people_provider, self.people_model, self.people_uri),
+            (self.nli_provider, self.nli_model, self.nli_uri),
+        ]:
+            model_combo.clear()
+            model_combo.addItems([""])  # Start with empty option
+
+        # Budgets & Limits (collapsible)
+        self.budgets_group = QGroupBox("💰 Budgets & Limits")
+        self.budgets_group.setCheckable(True)
+        self.budgets_group.setChecked(False)  # Collapsed by default
+        budgets_layout = QGridLayout()
+        
+        # Flagship budget per file
+        flagship_file_label = QLabel("Flagship max tokens per file:")
+        flagship_file_label.setToolTip(
+            "Maximum tokens to spend on flagship judge per file.\n"
+            "Set to 0 for unlimited. Helps control costs."
+        )
+        self.flagship_file_tokens_spin = QSpinBox()
+        self.flagship_file_tokens_spin.setRange(0, 100000)
+        self.flagship_file_tokens_spin.setValue(0)
+        self.flagship_file_tokens_spin.setSpecialValueText("Unlimited")
+        self.flagship_file_tokens_spin.valueChanged.connect(self._on_setting_changed)
+        budgets_layout.addWidget(flagship_file_label, 0, 0)
+        budgets_layout.addWidget(self.flagship_file_tokens_spin, 0, 1)
+        
+        # Flagship budget per session
+        flagship_session_label = QLabel("Flagship max tokens per session:")
+        flagship_session_label.setToolTip(
+            "Maximum tokens to spend on flagship judge per entire session.\n"
+            "Set to 0 for unlimited. Helps control total costs."
+        )
+        self.flagship_session_tokens_spin = QSpinBox()
+        self.flagship_session_tokens_spin.setRange(0, 1000000)
+        self.flagship_session_tokens_spin.setValue(0)
+        self.flagship_session_tokens_spin.setSpecialValueText("Unlimited")
+        self.flagship_session_tokens_spin.valueChanged.connect(self._on_setting_changed)
+        budgets_layout.addWidget(flagship_session_label, 0, 2)
+        budgets_layout.addWidget(self.flagship_session_tokens_spin, 0, 3)
+        
+        self.budgets_group.setLayout(budgets_layout)
+        self.budgets_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        layout.addWidget(self.budgets_group)
 
         # Action buttons
         action_layout = self._create_action_layout()
@@ -1459,7 +1753,16 @@ class SummarizationTab(BaseTab):
                 "update_in_place": self.update_md_checkbox.isChecked(),
                 "create_separate_file": self.separate_file_checkbox.isChecked(),
                 "force_regenerate": self.force_regenerate_checkbox.isChecked(),
-                "analysis_type": self.analysis_type_combo.currentText(),
+                "analysis_type": "Document Summary",  # Fixed to Document Summary
+                "export_getreceipts": self.export_getreceipts_checkbox.isChecked(),
+                # New HCE settings
+                "profile": self.profile_combo.currentText(),
+                "use_skim": self.use_skim_checkbox.isChecked(),
+                "enable_routing": self.enable_routing_checkbox.isChecked(),
+                "routing_threshold": self.routing_threshold_spin.value() / 100.0,  # Convert to 0-1
+                "prompt_driven_mode": self.prompt_driven_mode_checkbox.isChecked(),
+                "flagship_file_tokens": self.flagship_file_tokens_spin.value(),
+                "flagship_session_tokens": self.flagship_session_tokens_spin.value(),
             }
 
             # Start async model availability check
@@ -1480,8 +1783,16 @@ class SummarizationTab(BaseTab):
             "update_in_place": self.update_md_checkbox.isChecked(),
             "create_separate_file": self.separate_file_checkbox.isChecked(),
             "force_regenerate": self.force_regenerate_checkbox.isChecked(),
-            "analysis_type": self.analysis_type_combo.currentText(),
+            "analysis_type": "Document Summary",  # Fixed to Document Summary
             "export_getreceipts": self.export_getreceipts_checkbox.isChecked(),
+            # New HCE settings
+            "profile": self.profile_combo.currentText(),
+            "use_skim": self.use_skim_checkbox.isChecked(),
+            "enable_routing": self.enable_routing_checkbox.isChecked(),
+            "routing_threshold": self.routing_threshold_spin.value() / 100.0,  # Convert to 0-1
+            "prompt_driven_mode": self.prompt_driven_mode_checkbox.isChecked(),
+            "flagship_file_tokens": self.flagship_file_tokens_spin.value(),
+            "flagship_session_tokens": self.flagship_session_tokens_spin.value(),
         }
 
         # Start worker
@@ -2136,6 +2447,55 @@ class SummarizationTab(BaseTab):
                     # If none of the preferred defaults are available, use the first model
                     self.model_combo.setCurrentIndex(0)
 
+    def _update_advanced_model_combo(self, provider: str, model_combo: QComboBox):
+        """Update an advanced model combo box based on provider selection."""
+        if not provider:  # Empty provider
+            model_combo.clear()
+            model_combo.addItems([""])
+            return
+            
+        model_combo.clear()
+        logger.debug(f"Updating advanced model combo for provider: {provider}")
+        
+        try:
+            from knowledge_system.processors.hce.config_flex import get_provider_models
+            from knowledge_system.processors.hce.judge import get_ollama_manager
+            
+            if provider in {"openai", "anthropic"}:
+                models = get_provider_models(provider, force_refresh=False)
+                logger.debug(f"Got {len(models)} models for {provider}: {models[:3]}...")
+            else:  # local
+                try:
+                    ollama_manager = get_ollama_manager()
+                    registry_models = ollama_manager.get_registry_models(use_cache=True)
+                    models = []
+                    for model_info in registry_models:
+                        if "(Installed)" in model_info.name:
+                            models.append(model_info.name)
+                        else:
+                            size_gb = model_info.size_bytes / 1_000_000_000
+                            models.append(f"{model_info.name} ({size_gb:.0f} GB)")
+                    logger.debug(f"Got {len(models)} local models: {models[:3]}...")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch Ollama models for advanced dropdown: {e}")
+                    models = [
+                        "llama3.2:3b (2 GB)",
+                        "llama3.1:8b (5 GB)", 
+                        "qwen2.5:7b (4 GB)",
+                        "mistral:7b (4 GB)"
+                    ]
+                    logger.debug(f"Using fallback models: {models}")
+            
+            # Add empty option first, then models
+            all_items = [""] + models
+            model_combo.addItems(all_items)
+            logger.debug(f"Added {len(all_items)} items to model combo")
+            
+        except Exception as e:
+            logger.warning(f"Failed to populate advanced model dropdown for {provider}: {e}")
+            model_combo.addItems([""])
+            logger.debug("Added empty item due to exception")
+
     def _select_template(self):
         """Select a template file."""
         file_path, _ = QFileDialog.getOpenFileName(
@@ -2473,6 +2833,11 @@ class SummarizationTab(BaseTab):
         if hasattr(self, "report_btn"):
             self.report_btn.setEnabled(True)
         
+        # Generate session report
+        if success_count > 0:
+            self._generate_session_report(success_count, failure_count, total_count, total_time_text)
+            self.append_log("📋 Session report generated - click 'View Session Report' to see details")
+        
         # Show claim validation option if summaries were generated with HCE
         if success_count > 0:
             self._show_claim_validation_option()
@@ -2523,6 +2888,21 @@ class SummarizationTab(BaseTab):
                     if len(top_concepts) > 3:
                         concepts_str += f" (and {len(top_concepts) - 3} more)"
                     self.append_log(f"      Key Concepts: {concepts_str}")
+
+            # Show routing analytics (if routing was enabled)
+            if self.enable_routing_checkbox.isChecked():
+                flagship_routed = analytics.get("flagship_routed_count", 0)
+                local_processed = analytics.get("local_processed_count", 0)
+                if flagship_routed > 0 or local_processed > 0:
+                    self.append_log(f"   🎯 Routing Analytics:")
+                    if local_processed > 0:
+                        self.append_log(f"      📱 Local Judge: {local_processed} claims")
+                    if flagship_routed > 0:
+                        self.append_log(f"      🚀 Flagship Judge: {flagship_routed} claims")
+                        
+                    routing_reason = analytics.get("routing_reason", "uncertainty")
+                    if routing_reason and flagship_routed > 0:
+                        self.append_log(f"      📋 Primary routing reason: {routing_reason}")
 
             # Show relations and contradictions
             relations_count = analytics.get("relations_count", 0)
@@ -2587,6 +2967,14 @@ class SummarizationTab(BaseTab):
                 self.include_relations_checkbox,
                 self.tier_a_threshold_spin,
                 self.tier_b_threshold_spin,
+                # New HCE fields
+                self.profile_combo,
+                self.use_skim_checkbox,
+                self.enable_routing_checkbox,
+                self.routing_threshold_spin,
+                self.prompt_driven_mode_checkbox,
+                self.flagship_file_tokens_spin,
+                self.flagship_session_tokens_spin,
             ]
 
             # Block all signals
@@ -2696,6 +3084,49 @@ class SummarizationTab(BaseTab):
                 )
                 self.tier_b_threshold_spin.setValue(saved_tier_b_threshold)
 
+                # Load new HCE settings
+                # Profile selection
+                saved_profile = self.gui_settings.get_combo_selection(
+                    self.tab_name, "profile", "Balanced"
+                )
+                index = self.profile_combo.findText(saved_profile)
+                if index >= 0:
+                    self.profile_combo.setCurrentIndex(index)
+
+                # Skim and routing settings
+                self.use_skim_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(
+                        self.tab_name, "use_skim", True
+                    )
+                )
+                self.enable_routing_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(
+                        self.tab_name, "enable_routing", True
+                    )
+                )
+                saved_routing_threshold = self.gui_settings.get_spinbox_value(
+                    self.tab_name, "routing_threshold", 35
+                )
+                self.routing_threshold_spin.setValue(saved_routing_threshold)
+
+                # Template mode
+                self.prompt_driven_mode_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(
+                        self.tab_name, "prompt_driven_mode", False
+                    )
+                )
+
+                # Budget settings
+                saved_flagship_file_tokens = self.gui_settings.get_spinbox_value(
+                    self.tab_name, "flagship_file_tokens", 0
+                )
+                self.flagship_file_tokens_spin.setValue(saved_flagship_file_tokens)
+
+                saved_flagship_session_tokens = self.gui_settings.get_spinbox_value(
+                    self.tab_name, "flagship_session_tokens", 0
+                )
+                self.flagship_session_tokens_spin.setValue(saved_flagship_session_tokens)
+
                 # Update output visibility based on checkbox state
                 self._toggle_output_options()
 
@@ -2778,6 +3209,29 @@ class SummarizationTab(BaseTab):
                 self.tab_name, "tier_b_threshold", self.tier_b_threshold_spin.value()
             )
 
+            # Save new HCE settings
+            self.gui_settings.set_combo_selection(
+                self.tab_name, "profile", self.profile_combo.currentText()
+            )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name, "use_skim", self.use_skim_checkbox.isChecked()
+            )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name, "enable_routing", self.enable_routing_checkbox.isChecked()
+            )
+            self.gui_settings.set_spinbox_value(
+                self.tab_name, "routing_threshold", self.routing_threshold_spin.value()
+            )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name, "prompt_driven_mode", self.prompt_driven_mode_checkbox.isChecked()
+            )
+            self.gui_settings.set_spinbox_value(
+                self.tab_name, "flagship_file_tokens", self.flagship_file_tokens_spin.value()
+            )
+            self.gui_settings.set_spinbox_value(
+                self.tab_name, "flagship_session_tokens", self.flagship_session_tokens_spin.value()
+            )
+
             logger.info(f"✅ Successfully saved settings for {self.tab_name} tab")
         except Exception as e:
             logger.error(f"Failed to save settings for {self.tab_name} tab: {e}")
@@ -2820,6 +3274,131 @@ class SummarizationTab(BaseTab):
 
         # Trigger settings save after template path is updated
         self._on_setting_changed()
+
+    def _on_profile_changed(self, profile: str) -> None:
+        """Handle profile selection changes."""
+        if profile == "Custom":
+            return  # Don't override custom settings
+            
+        logger.debug(f"🔄 Profile changed to: {profile}")
+        
+        # Apply profile settings
+        if profile == "Fast":
+            # Fast: skim off, routing off, lightweight only
+            self.use_skim_checkbox.setChecked(False)
+            self.enable_routing_checkbox.setChecked(False)
+            self.routing_threshold_spin.setValue(50)  # Higher threshold = less routing
+            
+        elif profile == "Balanced":
+            # Balanced: skim on, routing on, default settings
+            self.use_skim_checkbox.setChecked(True)
+            self.enable_routing_checkbox.setChecked(True)
+            self.routing_threshold_spin.setValue(35)  # Default
+            
+        elif profile == "Quality":
+            # Quality: skim on, aggressive routing, all features
+            self.use_skim_checkbox.setChecked(True)
+            self.enable_routing_checkbox.setChecked(True)
+            self.routing_threshold_spin.setValue(25)  # Lower = more routing
+            
+        # Show brief feedback
+        self.append_log(f"📋 Applied {profile} profile settings")
+        
+        # Trigger settings save
+        self._save_settings()
+
+    def _on_routing_toggle_changed(self, enabled: bool) -> None:
+        """Handle routing toggle changes."""
+        # Enable/disable routing threshold based on toggle
+        self.routing_threshold_spin.setEnabled(enabled)
+        
+        # Show dependency warning if routing enabled without flagship judge
+        if enabled:
+            flagship_provider = getattr(self, 'flagship_judge_provider', None)
+            flagship_model = getattr(self, 'flagship_judge_model', None)
+            
+            if flagship_provider and flagship_model:
+                if not flagship_provider.currentText() or not flagship_model.currentText():
+                    self.append_log("⚠️ Routing enabled but no flagship judge model configured")
+
+    def _on_template_mode_changed(self, enabled: bool) -> None:
+        """Handle template mode toggle changes."""
+        if enabled:
+            self.append_log("📋 Prompt-driven mode enabled - HCE formatting will be bypassed")
+            # Could add visual indicators here if needed
+        else:
+            self.append_log("🔍 Standard HCE analysis mode enabled")
+
+    def _generate_session_report(self, success_count: int, failure_count: int, total_count: int, time_text: str) -> None:
+        """Generate comprehensive session report."""
+        try:
+            from datetime import datetime
+            import json
+
+            # Create report data
+            report_data = {
+                "session_info": {
+                    "timestamp": datetime.now().isoformat(),
+                    "total_files": total_count,
+                    "successful": success_count,
+                    "failed": failure_count,
+                    "processing_time": time_text.strip(),
+                },
+                "configuration": {
+                    "profile": self.profile_combo.currentText(),
+                    "provider": self.provider_combo.currentText(),
+                    "model": self.model_combo.currentText(),
+                    "max_tokens": self.max_tokens_spin.value(),
+                    "analysis_type": "Document Summary",  # Fixed to Document Summary
+                    "use_skim": self.use_skim_checkbox.isChecked(),
+                    "enable_routing": self.enable_routing_checkbox.isChecked(),
+                    "routing_threshold": self.routing_threshold_spin.value(),
+                    "prompt_driven_mode": self.prompt_driven_mode_checkbox.isChecked(),
+                    "flagship_file_tokens": self.flagship_file_tokens_spin.value(),
+                    "flagship_session_tokens": self.flagship_session_tokens_spin.value(),
+                },
+                "output_settings": {
+                    "update_in_place": self.update_md_checkbox.isChecked(),
+                    "create_separate_file": self.separate_file_checkbox.isChecked(),
+                    "output_directory": self.output_edit.text(),
+                    "force_regenerate": self.force_regenerate_checkbox.isChecked(),
+                }
+            }
+
+            # Save report to output directory or default location
+            output_dir = self.output_edit.text() if self.separate_file_checkbox.isChecked() else "output/summaries"
+            report_path = Path(output_dir) / f"session_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(report_path, 'w', encoding='utf-8') as f:
+                json.dump(report_data, f, indent=2, ensure_ascii=False)
+            
+            # Store report path for viewing
+            self._last_session_report = report_path
+            
+            logger.info(f"Session report saved to: {report_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to generate session report: {e}")
+
+    def _view_session_report(self) -> None:
+        """Open the last generated session report."""
+        if hasattr(self, '_last_session_report') and self._last_session_report.exists():
+            try:
+                import subprocess
+                import sys
+                
+                if sys.platform.startswith('darwin'):  # macOS
+                    subprocess.run(['open', str(self._last_session_report)])
+                elif sys.platform.startswith('win'):  # Windows
+                    subprocess.run(['start', str(self._last_session_report)], shell=True)
+                else:  # Linux
+                    subprocess.run(['xdg-open', str(self._last_session_report)])
+                    
+            except Exception as e:
+                self.show_warning("Cannot Open Report", f"Failed to open session report: {e}")
+        else:
+            self.show_warning("No Report", "No session report available. Run a summarization first.")
 
     def _show_claim_validation_option(self):
         """Show claim validation option after successful HCE processing."""

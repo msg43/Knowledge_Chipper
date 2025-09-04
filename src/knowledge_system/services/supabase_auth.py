@@ -7,11 +7,13 @@ are performed as authenticated users (not anon).
 
 from __future__ import annotations
 
-from typing import Optional
+import webbrowser
+from typing import Optional, Dict, Any
 
 from ..config import get_settings
 from ..logger import get_logger
 from ..utils.optional_deps import ensure_module, add_vendor_to_sys_path
+from .oauth_callback_server import start_oauth_callback_server
 
 
 logger = get_logger(__name__)
@@ -34,8 +36,8 @@ class SupabaseAuthService:
         except Exception:
             pass
 
-        url = url or getattr(settings, "supabase_url", None)
-        key = key or getattr(settings, "supabase_key", None)
+        url = url or getattr(settings.cloud, "supabase_url", None)
+        key = key or getattr(settings.cloud, "supabase_key", None)
 
         self.supabase_url: Optional[str] = url
         self.supabase_key: Optional[str] = key
@@ -89,6 +91,7 @@ class SupabaseAuthService:
 
     # Authentication APIs
     def sign_up(self, email: str, password: str) -> tuple[bool, str]:
+        """Direct email/password sign-up (legacy method)."""
         if not self.client:
             return False, "Auth client not available"
         try:
@@ -97,6 +100,52 @@ class SupabaseAuthService:
         except Exception as e:
             logger.error(f"Sign-up failed: {e}")
             return False, str(e)
+    
+    def sign_up_with_oauth(self, timeout: float = 300.0) -> tuple[bool, str]:
+        """
+        Sign up using GetReceipts OAuth flow.
+        
+        Args:
+            timeout: Maximum time to wait for OAuth callback (seconds)
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        if not self.client:
+            return False, "Auth client not available"
+        
+        try:
+            logger.info("Starting GetReceipts OAuth sign-up flow")
+            
+            # Start local callback server
+            logger.info("Starting OAuth callback server on localhost:8080")
+            
+            # Construct OAuth URL with callback
+            oauth_url = "https://skipthepodcast.com/auth/signin?redirect_to=knowledge_chipper&return_url=http://localhost:8080/auth/callback"
+            
+            # Open browser to OAuth URL
+            logger.info(f"Opening browser to: {oauth_url}")
+            webbrowser.open(oauth_url)
+            
+            # Wait for OAuth callback
+            logger.info(f"Waiting for OAuth callback (timeout: {timeout}s)")
+            tokens = start_oauth_callback_server(timeout)
+            
+            if not tokens:
+                return False, "OAuth authentication failed or timed out"
+            
+            # Set up Supabase session with received tokens
+            success, message = self.set_session_from_tokens(tokens)
+            if success:
+                logger.info("OAuth sign-up completed successfully")
+                return True, "Successfully signed in via GetReceipts"
+            else:
+                logger.error(f"Failed to set session: {message}")
+                return False, f"Failed to establish session: {message}"
+                
+        except Exception as e:
+            logger.error(f"OAuth sign-up failed: {e}")
+            return False, f"OAuth authentication error: {str(e)}"
 
     def sign_in(self, email: str, password: str) -> tuple[bool, str]:
         if not self.client:
@@ -117,5 +166,62 @@ class SupabaseAuthService:
         except Exception as e:
             logger.error(f"Sign-out failed: {e}")
             return False, str(e)
+    
+    def set_session_from_tokens(self, tokens: Dict[str, str]) -> tuple[bool, str]:
+        """
+        Set Supabase session using OAuth tokens received from GetReceipts.
+        
+        Args:
+            tokens: Dictionary containing access_token, refresh_token, and user_id
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        if not self.client:
+            return False, "Auth client not available"
+        
+        try:
+            access_token = tokens.get('access_token')
+            refresh_token = tokens.get('refresh_token')
+            
+            if not access_token or not refresh_token:
+                return False, "Missing required tokens"
+            
+            # Set session in Supabase client
+            self.client.auth.set_session(access_token, refresh_token)
+            
+            # Verify session is working
+            session = self.client.auth.get_session()
+            if session and session.user:
+                logger.info(f"Session established for user: {session.user.email}")
+                return True, "Session established successfully"
+            else:
+                return False, "Failed to verify session"
+                
+        except Exception as e:
+            logger.error(f"Failed to set session from tokens: {e}")
+            return False, f"Session setup error: {str(e)}"
+    
+    def refresh_session(self) -> tuple[bool, str]:
+        """
+        Refresh the current session.
+        
+        Returns:
+            Tuple of (success, message)
+        """
+        if not self.client:
+            return False, "Auth client not available"
+        
+        try:
+            session = self.client.auth.refresh_session()
+            if session and session.user:
+                logger.info("Session refreshed successfully")
+                return True, "Session refreshed"
+            else:
+                return False, "Failed to refresh session"
+                
+        except Exception as e:
+            logger.error(f"Session refresh failed: {e}")
+            return False, f"Refresh error: {str(e)}"
 
 

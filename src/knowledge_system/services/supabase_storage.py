@@ -52,9 +52,9 @@ class SupabaseStorageService:
             pass
 
         # Fallback to legacy flat attributes if they exist
-        url = url or getattr(settings, "supabase_url", None)
-        key = key or getattr(settings, "supabase_key", None)
-        bkt = bkt or getattr(settings, "supabase_bucket", None)
+        url = url or getattr(settings.cloud, "supabase_url", None)
+        key = key or getattr(settings.cloud, "supabase_key", None)
+        bkt = bkt or getattr(settings.cloud, "supabase_bucket", None)
 
         self.supabase_url: Optional[str] = url
         self.supabase_key: Optional[str] = key

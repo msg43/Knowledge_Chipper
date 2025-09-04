@@ -50,7 +50,13 @@ class HCEPipeline:
         milestones = []
         if self.config.use_skim:
             try:
-                milestones = skim.skim_episode(episode)
+                # Allow explicit skim model override
+                skim_model_uri = (
+                    self.config.models.skim
+                    if hasattr(self.config.models, "skim")
+                    else None
+                )
+                milestones = skim.skim_episode(episode, skim_model_uri)
             except Exception as e:
                 logger.warning(f"Skim failed, continuing without milestones: {e}")
 
@@ -75,10 +81,30 @@ class HCEPipeline:
         )
 
         # Step 6: Route claims to appropriate judge
-        routed = router.route_claims(reranked)
+        to_flagship, keep_local = router.route_claims(
+            reranked, self.config.router_uncertainty_threshold
+        )
 
-        # Step 7: Judge claims for final scoring
-        scored = judge.judge_claims(routed, self.config.models.judge)
+        # Optional cap on flagship volume
+        if (
+            self.config.flagship_max_claims_per_file is not None
+            and len(to_flagship) > self.config.flagship_max_claims_per_file
+        ):
+            to_flagship = to_flagship[: self.config.flagship_max_claims_per_file]
+
+        # Step 7: Judge claims for final scoring (dual-judge routing if configured)
+        flagship_model_uri = (
+            self.config.models.flagship_judge
+            if hasattr(self.config.models, "flagship_judge")
+            else None
+        )
+        combined = keep_local + to_flagship
+        scored = judge.judge_claims(
+            combined,
+            self.config.models.judge,
+            flagship_claims=to_flagship if flagship_model_uri else None,
+            flagship_model_uri=flagship_model_uri,
+        )
 
         # Step 8: Extract entities
         people_mentions = people.extract_people(
@@ -87,17 +113,38 @@ class HCEPipeline:
         mental_models = concepts.extract_concepts(episode, scored)
         jargon_terms = glossary.extract_jargon(episode)
 
-        # Step 9: Extract relations
-        claim_relations = relations.extract_relations(scored, self.config.models.judge)
+        # Step 9: Analyze claim temporality
+        from .hce.temporality import analyze_temporality
+        scored_with_temporality = analyze_temporality(scored, self.config.models.judge)
 
-        return PipelineOutputs(
+        # Step 10: Extract relations
+        claim_relations = relations.extract_relations(scored_with_temporality, self.config.models.judge)
+
+        # Create initial pipeline outputs for category analysis
+        initial_outputs = PipelineOutputs(
             episode_id=episode.episode_id,
-            claims=scored,
+            claims=scored_with_temporality,
             relations=claim_relations,
             milestones=milestones,
             people=people_mentions,
             concepts=mental_models,
             jargon=jargon_terms,
+        )
+
+        # Step 11: Analyze structured categories
+        from .hce.structured_categories import analyze_structured_categories
+        episode_categories = analyze_structured_categories(initial_outputs, self.config.models.judge)
+
+        # Return final outputs with categories
+        return PipelineOutputs(
+            episode_id=episode.episode_id,
+            claims=scored_with_temporality,
+            relations=claim_relations,
+            milestones=milestones,
+            people=people_mentions,
+            concepts=mental_models,
+            jargon=jargon_terms,
+            structured_categories=episode_categories,
         )
 
 
@@ -144,14 +191,75 @@ class SummarizerProcessor(BaseProcessor):
 
         # Configure HCE pipeline with equivalent models
         model_uri = f"{self.provider}://{self.model}"
+        
+        # Determine flagship judge model
+        flagship_judge_uri = model_uri  # Default to same model
+        if self.hce_options.get("enable_routing", True):
+            # Could be configured differently in advanced UI
+            flagship_judge_uri = model_uri
+        
         self.hce_config = PipelineConfigFlex(
             models=StageModelConfig(
                 miner=model_uri,
                 judge=model_uri,
+                flagship_judge=flagship_judge_uri if self.hce_options.get("enable_routing", True) else None,
                 embedder="local://bge-small-en-v1.5",
                 reranker="local://bge-reranker-base",
-            )
+            ),
+            use_skim=self.hce_options.get("use_skim", True),
+            router_uncertainty_threshold=self.hce_options.get("routing_threshold", 0.35),
+            flagship_max_claims_per_file=self.hce_options.get("flagship_file_tokens", None),
         )
+        # Per-stage model overrides
+        try:
+            miner_override = self.hce_options.get("miner_model")
+            if miner_override:
+                self.hce_config.models.miner = str(miner_override)
+        except Exception:
+            pass
+        try:
+            heavy_miner = self.hce_options.get("heavy_miner_model")
+            if heavy_miner:
+                self.hce_config.models.heavy_miner = str(heavy_miner)
+        except Exception:
+            pass
+        try:
+            embedder_override = self.hce_options.get("embedder_model")
+            if embedder_override:
+                self.hce_config.models.embedder = str(embedder_override)
+        except Exception:
+            pass
+        try:
+            reranker_override = self.hce_options.get("reranker_model")
+            if reranker_override:
+                self.hce_config.models.reranker = str(reranker_override)
+        except Exception:
+            pass
+        # Judge routing and model overrides
+        try:
+            thr = self.hce_options.get("router_uncertainty_threshold")
+            if isinstance(thr, (float, int)):
+                self.hce_config.router_uncertainty_threshold = float(thr)
+        except Exception:
+            pass
+        try:
+            judge_override = self.hce_options.get("judge_model_override")
+            if judge_override:
+                self.hce_config.models.judge = str(judge_override)
+        except Exception:
+            pass
+        try:
+            flagship_judge = self.hce_options.get("flagship_judge_model")
+            if flagship_judge:
+                self.hce_config.models.flagship_judge = str(flagship_judge)
+        except Exception:
+            pass
+        try:
+            fcap = self.hce_options.get("flagship_max_claims_per_file")
+            if isinstance(fcap, int):
+                self.hce_config.flagship_max_claims_per_file = fcap
+        except Exception:
+            pass
         self.hce_pipeline = HCEPipeline(self.hce_config)
 
     def validate_input(self, input_data: str | Path) -> bool:
@@ -423,9 +531,11 @@ class SummarizerProcessor(BaseProcessor):
 
             # If HCE produced no content, use LLM fallback
             used_llm_fallback = False
-            allow_llm_fallback = bool(kwargs.get("allow_llm_fallback", False))
+            # Prompt-driven summary mode: if prefer_template_summary is True, bypass HCE formatting
+            prefer_template = bool(kwargs.get("prefer_template_summary", False))
+            allow_llm_fallback = bool(kwargs.get("allow_llm_fallback", False)) or prefer_template
             if allow_llm_fallback and (
-                (not summary.strip()) or ("Extracted 0 claims" in summary)
+                prefer_template or (not summary.strip()) or ("Extracted 0 claims" in summary)
             ):
                 try:
                     prompt = _build_prompt(kwargs.get("prompt_template"), text)

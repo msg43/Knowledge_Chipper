@@ -1,14 +1,15 @@
 """
 Cloud Uploads Tab
 
-Allows users to browse local output files, select specific files, and upload
-them to Supabase Storage on demand. No automatic uploads occur.
+Database-to-database upload system for uploading claims and associated data
+directly from SQLite to Supabase database. No file storage operations.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import List
+from typing import List, Dict, Any, Optional
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -19,357 +20,845 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QLabel,
     QFileDialog,
-    QListWidget,
-    QListWidgetItem,
-    QCheckBox,
-    QLineEdit,
-    QSplitter,
     QMessageBox,
     QTableWidget,
     QTableWidgetItem,
+    QLineEdit,
+    QSplitter,
+    QHeaderView,
+    QProgressBar,
+    QTextEdit,
+    QCheckBox,
 )
 
 from ...config import get_settings
 from ...logger import get_logger
-from ...services.supabase_storage import SupabaseStorageService
+from ...services.claims_upload_service import ClaimsUploadService, ClaimUploadData
 from ...services.supabase_auth import SupabaseAuthService
+from ...services.supabase_sync import SupabaseSyncService
 from ..components.base_tab import BaseTab
-
 
 logger = get_logger(__name__)
 
 
-class UploadWorker(QThread):
-    progress = pyqtSignal(int, int, str)
-    finished = pyqtSignal(int, int)
-    error = pyqtSignal(str)
+class DatabaseUploadWorker(QThread):
+    """Worker thread for uploading claims data to Supabase database."""
+    
+    progress = pyqtSignal(int, int, str)  # current, total, message
+    finished = pyqtSignal(int, int)       # success_count, total_count
+    error = pyqtSignal(str)               # error_message
 
-    def __init__(self, files: List[Path], client: object | None) -> None:
+    def __init__(self, claims_data: List[ClaimUploadData], client: object | None):
         super().__init__()
-        self.files = files
-        self.storage = SupabaseStorageService(client=client)
-        self.bucket: str | None = None
-        self.subfolder: str | None = None
+        self.claims_data = claims_data
+        self.client = client
+        self.should_stop = False
 
     def run(self) -> None:
-        # Require client to be initialized; bucket may be provided per-upload
-        if self.storage.client is None:
-            self.error.emit("Supabase storage is not configured")
-            self.finished.emit(0, len(self.files))
+        """Upload claims data to Supabase database."""
+        if not self.client:
+            self.error.emit("Supabase client not available")
+            self.finished.emit(0, len(self.claims_data))
             return
 
-        success = 0
-        total = len(self.files)
-        for idx, fp in enumerate(self.files, start=1):
-            ok, msg = self.storage.upload_file(fp, bucket=self.bucket, subfolder=self.subfolder)
-            if ok:
-                success += 1
-            else:
-                logger.error(f"Upload failed for {fp}: {msg}")
-            self.progress.emit(idx, total, f"{fp.name}: {'OK' if ok else 'FAIL'}")
+        success_count = 0
+        total_count = len(self.claims_data)
 
-        self.finished.emit(success, total)
+        # Initialize sync service with client
+        sync_service = SupabaseSyncService()
+        sync_service.client = self.client
+
+        for i, claim in enumerate(self.claims_data):
+            if self.should_stop:
+                break
+
+            try:
+                # Upload claim and associated data
+                success = self._upload_claim_data(sync_service, claim)
+                
+                if success:
+                    success_count += 1
+                    self.progress.emit(i + 1, total_count, f"✅ {claim.canonical[:50]}...")
+                else:
+                    self.progress.emit(i + 1, total_count, f"❌ {claim.canonical[:50]}...")
+
+            except Exception as e:
+                logger.error(f"Error uploading claim {claim.claim_id}: {e}")
+                self.progress.emit(i + 1, total_count, f"❌ Error: {str(e)[:50]}...")
+
+        self.finished.emit(success_count, total_count)
+
+    def _upload_claim_data(self, sync_service: SupabaseSyncService, claim: ClaimUploadData) -> bool:
+        """Upload a single claim with all associated data."""
+        try:
+            # Upload episode first (if not already exists)
+            if claim.episode_data:
+                self._upsert_episode(sync_service, claim.episode_data)
+
+            # Upload the claim
+            self._upsert_claim(sync_service, claim)
+
+            # Upload associated data
+            for evidence in claim.evidence_spans:
+                self._upsert_evidence_span(sync_service, evidence)
+
+            for person in claim.people:
+                self._upsert_person(sync_service, person)
+
+            for concept in claim.concepts:
+                self._upsert_concept(sync_service, concept)
+
+            for jargon in claim.jargon:
+                self._upsert_jargon(sync_service, jargon)
+
+            for relation in claim.relations:
+                self._upsert_relation(sync_service, relation)
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error uploading claim data: {e}")
+            return False
+
+    def _upsert_episode(self, sync_service: SupabaseSyncService, episode_data: Dict[str, Any]) -> None:
+        """Upload episode data with overwrite."""
+        sync_service.client.table('episodes').upsert(episode_data).execute()
+
+    def _upsert_claim(self, sync_service: SupabaseSyncService, claim: ClaimUploadData) -> None:
+        """Upload claim data with overwrite."""
+        claim_dict = {
+            'episode_id': claim.episode_id,
+            'claim_id': claim.claim_id,
+            'canonical': claim.canonical,
+            'claim_type': claim.claim_type,
+            'tier': claim.tier,
+            'first_mention_ts': claim.first_mention_ts,
+            'scores_json': claim.scores_json,
+            'inserted_at': claim.inserted_at
+        }
+        sync_service.client.table('claims').upsert(claim_dict).execute()
+
+    def _upsert_evidence_span(self, sync_service: SupabaseSyncService, evidence: Dict[str, Any]) -> None:
+        """Upload evidence span data."""
+        sync_service.client.table('evidence_spans').upsert(evidence).execute()
+
+    def _upsert_person(self, sync_service: SupabaseSyncService, person: Dict[str, Any]) -> None:
+        """Upload person data."""
+        sync_service.client.table('people').upsert(person).execute()
+
+    def _upsert_concept(self, sync_service: SupabaseSyncService, concept: Dict[str, Any]) -> None:
+        """Upload concept data."""
+        sync_service.client.table('concepts').upsert(concept).execute()
+
+    def _upsert_jargon(self, sync_service: SupabaseSyncService, jargon: Dict[str, Any]) -> None:
+        """Upload jargon data."""
+        sync_service.client.table('jargon').upsert(jargon).execute()
+
+    def _upsert_relation(self, sync_service: SupabaseSyncService, relation: Dict[str, Any]) -> None:
+        """Upload relation data."""
+        sync_service.client.table('relations').upsert(relation).execute()
+
+    def stop(self) -> None:
+        """Stop the upload process."""
+        self.should_stop = True
 
 
 class CloudUploadsTab(BaseTab):
-    """Tab for selecting and uploading files to cloud storage manually."""
+    """Tab for uploading claims data directly to Supabase database."""
 
     def __init__(self, parent=None) -> None:
-        self.upload_worker: UploadWorker | None = None
+        self.upload_worker: Optional[DatabaseUploadWorker] = None
         self.tab_name = "Cloud Uploads"
         self.auth = SupabaseAuthService()
+        self.claims_service: Optional[ClaimsUploadService] = None
+        self.claims_data: List[ClaimUploadData] = []
+        
+        # Initialize UI attributes to None before calling super().__init__
+        self.claims_table = None
+        self.upload_btn = None
+        self.status_label = None
+        self.progress_bar = None
+        self.upload_log = None
+        
         super().__init__(parent)
 
     def _setup_ui(self) -> None:
+        """Setup the UI for database uploads."""
         layout = QVBoxLayout(self)
 
+        # Main splitter
         splitter = QSplitter(Qt.Orientation.Horizontal)
         layout.addWidget(splitter)
 
-        # Left panel: auth + file selection
-        left = QWidget()
-        left_layout = QVBoxLayout(left)
+        # Left panel: Authentication + Database selection
+        left_widget = self._create_left_panel()
+        splitter.addWidget(left_widget)
 
-        # Auth box
-        auth_group = QGroupBox("Authentication")
-        auth_layout = QHBoxLayout(auth_group)
+        # Right panel: Claims list + Upload controls
+        right_widget = self._create_right_panel()
+        splitter.addWidget(right_widget)
+
+        splitter.setSizes([400, 800])
+
+        # Load default database
+        self._load_default_database()
+
+    def _connect_signals(self) -> None:
+        """Connect internal signals. Override to prevent base class errors."""
+        # No additional signal connections needed beyond what's in the UI setup
+        pass
+
+    def _create_left_panel(self) -> QWidget:
+        """Create left panel with auth and database controls."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        # Authentication section
+        auth_group = self._create_auth_section()
+        layout.addWidget(auth_group)
+
+        # Database selection section
+        db_group = self._create_database_section()
+        layout.addWidget(db_group)
+
+        # Database stats section
+        stats_group = self._create_stats_section()
+        layout.addWidget(stats_group)
+
+        layout.addStretch()
+        return widget
+
+    def _create_auth_section(self) -> QGroupBox:
+        """Create authentication section."""
+        group = QGroupBox("GetReceipts Authentication")
+        layout = QVBoxLayout(group)
+
+        # Auth status
+        self.auth_status_label = QLabel("Not authenticated")
+        self.auth_status_label.setStyleSheet("color: #666; font-style: italic;")
+        layout.addWidget(self.auth_status_label)
+
+        # Info text about OAuth flow
+        info_text = QLabel(
+            "🔐 Sign in via Skipthepodcast.com to upload your claims data.\n"
+            "This will open your browser for secure authentication."
+        )
+        info_text.setWordWrap(True)
+        info_text.setStyleSheet(
+            "color: #666; font-style: italic; margin: 8px; padding: 8px; "
+            "background-color: #f5f5f5; border-radius: 4px;"
+        )
+        layout.addWidget(info_text)
+
+        # OAuth authentication button
+        self.oauth_btn = QPushButton("🌐 Sign In at Skipthepodcast.com")
+        self.oauth_btn.setStyleSheet(
+            "QPushButton { padding: 10px; font-size: 14px; background-color: #2196F3; color: white; border: none; border-radius: 6px; }"
+            "QPushButton:hover { background-color: #1976D2; }"
+            "QPushButton:disabled { background-color: #cccccc; }"
+        )
+        self.oauth_btn.clicked.connect(self._sign_in_with_oauth)
+        layout.addWidget(self.oauth_btn)
+
+        # Sign out button
+        self.logout_btn = QPushButton("Sign Out")
+        self.logout_btn.setEnabled(False)
+        self.logout_btn.clicked.connect(self._sign_out)
+        layout.addWidget(self.logout_btn)
+
+        # Legacy email/password section (collapsible)
+        self._create_legacy_auth_section(layout)
+
+        self._refresh_auth_ui()
+        return group
+
+    def _create_legacy_auth_section(self, parent_layout: QVBoxLayout) -> None:
+        """Create collapsible legacy email/password auth section."""
+        # Expandable section for legacy auth
+        self.legacy_auth_toggle = QPushButton("▶ Advanced: Direct Email/Password Sign-In")
+        self.legacy_auth_toggle.setStyleSheet("text-align: left; border: none; padding: 5px;")
+        self.legacy_auth_toggle.clicked.connect(self._toggle_legacy_auth)
+        parent_layout.addWidget(self.legacy_auth_toggle)
+
+        # Legacy auth widget (initially hidden)
+        self.legacy_auth_widget = QWidget()
+        self.legacy_auth_widget.setVisible(False)
+        legacy_layout = QVBoxLayout(self.legacy_auth_widget)
+
+        # Email and password
+        auth_layout = QHBoxLayout()
         self.email_edit = QLineEdit()
         self.email_edit.setPlaceholderText("Email")
         self.password_edit = QLineEdit()
         self.password_edit.setPlaceholderText("Password")
         self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.login_btn = QPushButton("Sign In")
-        self.signup_btn = QPushButton("Sign Up")
-        self.logout_btn = QPushButton("Sign Out")
-        self.logout_btn.setEnabled(False)
+        
         auth_layout.addWidget(self.email_edit)
         auth_layout.addWidget(self.password_edit)
-        auth_layout.addWidget(self.login_btn)
-        auth_layout.addWidget(self.signup_btn)
-        auth_layout.addWidget(self.logout_btn)
-        left_layout.addWidget(auth_group)
+        legacy_layout.addLayout(auth_layout)
 
-        input_group = QGroupBox("Select Files to Upload")
-        input_layout = QVBoxLayout(input_group)
+        # Legacy auth buttons
+        button_layout = QHBoxLayout()
+        self.login_btn = QPushButton("Sign In")
+        self.signup_btn = QPushButton("Sign Up")
 
-        paths_row = QHBoxLayout()
-        self.root_edit = QLineEdit()
-        self.root_edit.setPlaceholderText("Root folder (defaults to output_dir)")
-        browse_btn = QPushButton("Browse…")
-        browse_btn.clicked.connect(self._browse_root)
-        paths_row.addWidget(QLabel("Root:"))
-        paths_row.addWidget(self.root_edit, 1)
-        paths_row.addWidget(browse_btn)
-        input_layout.addLayout(paths_row)
+        button_layout.addWidget(self.login_btn)
+        button_layout.addWidget(self.signup_btn)
+        legacy_layout.addLayout(button_layout)
 
-        self.include_md = QCheckBox("Markdown (.md)")
-        self.include_md.setChecked(True)
-        self.include_txt = QCheckBox("Text (.txt)")
-        self.include_txt.setChecked(True)
-        self.include_srt = QCheckBox("SubRip (.srt)")
-        self.include_vtt = QCheckBox("WebVTT (.vtt)")
-        self.include_json = QCheckBox("JSON (.json)")
-        for w in (self.include_md, self.include_txt, self.include_srt, self.include_vtt, self.include_json):
-            input_layout.addWidget(w)
-
-        refresh_btn = QPushButton("Scan Files")
-        refresh_btn.clicked.connect(self._scan_files)
-        input_layout.addWidget(refresh_btn)
-
-        left_layout.addWidget(input_group)
-
-        # Bucket + subfolder controls
-        bucket_row = QHBoxLayout()
-        self.bucket_edit = QLineEdit()
-        self.bucket_edit.setPlaceholderText("Bucket (optional; defaults to settings)")
-        self.subfolder_edit = QLineEdit()
-        self.subfolder_edit.setPlaceholderText("Destination subfolder (optional)")
-        self.use_user_subfolder = QCheckBox("Use user ID as subfolder")
-        bucket_row.addWidget(QLabel("Bucket:"))
-        bucket_row.addWidget(self.bucket_edit)
-        bucket_row.addWidget(QLabel("Subfolder:"))
-        bucket_row.addWidget(self.subfolder_edit)
-        bucket_row.addWidget(self.use_user_subfolder)
-        left_layout.addLayout(bucket_row)
-
-        # Two-column table: file path and relative destination
-        self.file_table = QTableWidget()
-        self.file_table.setColumnCount(2)
-        self.file_table.setHorizontalHeaderLabels(["File", "Destination (relative)"])
-        self.file_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.file_table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
-        left_layout.addWidget(self.file_table, 1)
-
-        splitter.addWidget(left)
-
-        # Right panel: actions and status
-        right = QWidget()
-        right_layout = QVBoxLayout(right)
-
-        status_group = QGroupBox("Upload Status")
-        status_layout = QVBoxLayout(status_group)
-        self.status_label = QLabel("Ready")
-        status_layout.addWidget(self.status_label)
-        right_layout.addWidget(status_group)
-
-        actions = QHBoxLayout()
-        self.upload_btn = QPushButton("Upload Selected")
-        self.upload_btn.clicked.connect(self._start_upload)
-        actions.addWidget(self.upload_btn)
-
-        select_all_btn = QPushButton("Select All")
-        select_all_btn.clicked.connect(self._select_all_rows)
-        actions.addWidget(select_all_btn)
-
-        clear_btn = QPushButton("Clear Selection")
-        clear_btn.clicked.connect(self._clear_selection)
-        actions.addWidget(clear_btn)
-
-        actions.addStretch()
-        right_layout.addLayout(actions)
-
-        splitter.addWidget(right)
-        splitter.setSizes([700, 300])
-
-        self._load_defaults()
-
-        # Wire auth buttons
+        # Connect legacy auth buttons
         self.login_btn.clicked.connect(self._sign_in)
         self.signup_btn.clicked.connect(self._sign_up)
-        self.logout_btn.clicked.connect(self._sign_out)
-        self._refresh_auth_ui()
 
-    def _load_defaults(self) -> None:
+        parent_layout.addWidget(self.legacy_auth_widget)
+
+    def _toggle_legacy_auth(self) -> None:
+        """Toggle visibility of legacy auth section."""
+        is_visible = self.legacy_auth_widget.isVisible()
+        self.legacy_auth_widget.setVisible(not is_visible)
+        
+        if is_visible:
+            self.legacy_auth_toggle.setText("▶ Advanced: Direct Email/Password Sign-In")
+        else:
+            self.legacy_auth_toggle.setText("▼ Advanced: Direct Email/Password Sign-In")
+
+    def _create_database_section(self) -> QGroupBox:
+        """Create database selection section."""
+        group = QGroupBox("Database Selection")
+        layout = QVBoxLayout(group)
+
+        # Database file selection
+        file_layout = QHBoxLayout()
+        self.db_path_edit = QLineEdit()
+        self.db_path_edit.setPlaceholderText("Select SQLite database file...")
+        self.db_path_edit.setReadOnly(True)
+        
+        browse_btn = QPushButton("Browse...")
+        browse_btn.clicked.connect(self._browse_database)
+        
+        file_layout.addWidget(self.db_path_edit)
+        file_layout.addWidget(browse_btn)
+        layout.addLayout(file_layout)
+
+        # Scan button
+        self.scan_btn = QPushButton("Load Claims from Database")
+        self.scan_btn.clicked.connect(self._load_claims)
+        self.scan_btn.setEnabled(False)
+        layout.addWidget(self.scan_btn)
+
+        return group
+
+    def _create_stats_section(self) -> QGroupBox:
+        """Create database statistics section."""
+        group = QGroupBox("Database Statistics")
+        layout = QVBoxLayout(group)
+
+        self.stats_label = QLabel("No database loaded")
+        self.stats_label.setWordWrap(True)
+        layout.addWidget(self.stats_label)
+
+        return group
+
+    def _create_right_panel(self) -> QWidget:
+        """Create right panel with claims list and upload controls."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        # Claims list section
+        claims_group = self._create_claims_section()
+        layout.addWidget(claims_group)
+
+        # Upload controls section
+        upload_group = self._create_upload_section()
+        layout.addWidget(upload_group)
+
+        return widget
+
+    def _create_claims_section(self) -> QGroupBox:
+        """Create claims list section."""
+        group = QGroupBox("Claims Ready for Upload")
+        layout = QVBoxLayout(group)
+
+        # Info label
+        info_label = QLabel("📋 Select claims to upload to Supabase. All associated data (episodes, people, concepts, evidence) will be included automatically.")
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #666; font-style: italic; margin-bottom: 8px; padding: 8px; background-color: #f5f5f5; border-radius: 4px;")
+        layout.addWidget(info_label)
+
+        # Claims table
+        self.claims_table = QTableWidget()
+        self.claims_table.setColumnCount(6)
+        self.claims_table.setHorizontalHeaderLabels([
+            "Select", "Claim Text", "Type", "Tier", "Episode", "Inserted"
+        ])
+        
+        # Configure table
+        header = self.claims_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)  # Select column
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)          # Claim text
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)  # Type
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)  # Tier
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)  # Episode
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)  # Inserted
+        
+        self.claims_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.claims_table.setAlternatingRowColors(True)
+        layout.addWidget(self.claims_table)
+
+        # Selection controls
+        selection_layout = QHBoxLayout()
+        select_all_btn = QPushButton("Select All")
+        select_none_btn = QPushButton("Select None")
+        select_all_btn.clicked.connect(self._select_all_claims)
+        select_none_btn.clicked.connect(self._select_no_claims)
+        
+        selection_layout.addWidget(select_all_btn)
+        selection_layout.addWidget(select_none_btn)
+        selection_layout.addStretch()
+        layout.addLayout(selection_layout)
+
+        return group
+
+    def _create_upload_section(self) -> QGroupBox:
+        """Create upload controls section."""
+        group = QGroupBox("Upload to Supabase")
+        layout = QVBoxLayout(group)
+
+        # Upload button and status
+        upload_layout = QHBoxLayout()
+        self.upload_btn = QPushButton("Upload Selected Claims")
+        self.upload_btn.clicked.connect(self._start_upload)
+        self.upload_btn.setEnabled(False)
+        
+        self.stop_btn = QPushButton("Stop Upload")
+        self.stop_btn.clicked.connect(self._stop_upload)
+        self.stop_btn.setEnabled(False)
+        
+        upload_layout.addWidget(self.upload_btn)
+        upload_layout.addWidget(self.stop_btn)
+        upload_layout.addStretch()
+        layout.addLayout(upload_layout)
+
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        layout.addWidget(self.progress_bar)
+
+        # Status label
+        self.status_label = QLabel("Ready")
+        layout.addWidget(self.status_label)
+
+        # Upload log
+        log_label = QLabel("Upload Log:")
+        layout.addWidget(log_label)
+        
+        self.upload_log = QTextEdit()
+        self.upload_log.setMaximumHeight(150)
+        self.upload_log.setReadOnly(True)
+        layout.addWidget(self.upload_log)
+
+        return group
+
+    def _load_default_database(self) -> None:
+        """Load the default knowledge_system.db file."""
         try:
-            out_dir = Path(get_settings().paths.output_dir or "").expanduser()
-            if out_dir:
-                self.root_edit.setText(str(out_dir))
-        except Exception:
-            pass
+            # Try to find the default database
+            default_path = Path.cwd() / "knowledge_system.db"
+            if default_path.exists():
+                if hasattr(self, 'db_path_edit') and self.db_path_edit:
+                    self.db_path_edit.setText(str(default_path))
+                self._setup_claims_service(default_path)
+                if hasattr(self, 'scan_btn') and self.scan_btn:
+                    self.scan_btn.setEnabled(True)
+                self._update_database_stats()
+            else:
+                if hasattr(self, 'status_label') and self.status_label:
+                    self.status_label.setText("Default database not found. Please select a database file.")
+        except Exception as e:
+            logger.error(f"Error loading default database: {e}")
+            if hasattr(self, 'status_label') and self.status_label:
+                self.status_label.setText("Error loading default database")
 
-    def _browse_root(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Select Root Folder")
-        if directory:
-            self.root_edit.setText(directory)
+    def _browse_database(self) -> None:
+        """Browse for SQLite database file."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select SQLite Database",
+            str(Path.cwd()),
+            "SQLite Database (*.db *.sqlite *.sqlite3);;All Files (*)"
+        )
+        
+        if file_path:
+            db_path = Path(file_path)
+            
+            # Show warning if not the default database
+            if db_path.name != "knowledge_system.db":
+                reply = QMessageBox.question(
+                    self,
+                    "Non-Standard Database",
+                    f"You selected '{db_path.name}' instead of the standard 'knowledge_system.db'.\n\n"
+                    "This may cause issues if the database doesn't have the expected schema or data.\n\n"
+                    "Are you sure you want to continue?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                
+                if reply == QMessageBox.StandardButton.No:
+                    return
+            
+            self.db_path_edit.setText(str(db_path))
+            self._setup_claims_service(db_path)
+            self.scan_btn.setEnabled(True)
+            self._update_database_stats()
 
-    def _scan_files(self) -> None:
-        root = Path(self.root_edit.text().strip() or ".").expanduser()
-        if not root.exists() or not root.is_dir():
-            QMessageBox.warning(self, "Invalid Folder", f"Not a folder: {root}")
+    def _setup_claims_service(self, db_path: Path) -> None:
+        """Setup the claims service with the selected database."""
+        try:
+            self.claims_service = ClaimsUploadService(db_path)
+            
+            # Validate database
+            is_valid, message = self.claims_service.is_database_valid()
+            if not is_valid:
+                logger.warning(f"Invalid database: {message}")
+                if hasattr(self, 'scan_btn') and self.scan_btn:
+                    self.scan_btn.setEnabled(False)
+                return
+            
+            if hasattr(self, 'status_label') and self.status_label:
+                self.status_label.setText(f"Database loaded: {db_path.name}")
+            
+        except Exception as e:
+            logger.error(f"Error setting up claims service: {e}")
+            if hasattr(self, 'scan_btn') and self.scan_btn:
+                self.scan_btn.setEnabled(False)
+
+    def _update_database_stats(self) -> None:
+        """Update database statistics display."""
+        if not self.claims_service:
             return
-
-        exts: List[str] = []
-        if self.include_md.isChecked():
-            exts.append(".md")
-        if self.include_txt.isChecked():
-            exts.append(".txt")
-        if self.include_srt.isChecked():
-            exts.append(".srt")
-        if self.include_vtt.isChecked():
-            exts.append(".vtt")
-        if self.include_json.isChecked():
-            exts.append(".json")
-
-        files: List[Path] = []
-        for p in root.rglob("*"):
-            if p.is_file() and (not exts or p.suffix.lower() in exts):
-                files.append(p)
-
-        self.file_table.setRowCount(0)
-        rows = []
-        # Use output_dir as the basis for destination preview, to match upload logic
+        
         try:
-            out_dir = Path(get_settings().paths.output_dir or "").expanduser()
-        except Exception:
-            out_dir = None
-        for p in sorted(files):
-            # Compute relative destination for preview
-            rel = p.name
-            try:
-                if out_dir and out_dir.exists():
-                    rel = str(p.relative_to(out_dir))
-                else:
-                    rel = p.name
-            except Exception:
-                rel = p.name
-            rows.append((str(p), rel))
+            stats = self.claims_service.get_database_stats()
+            stats_text = f"""Total Claims: {stats.get('total_claims', 0)}
+Unuploaded: {stats.get('unuploaded_claims', 0)}
+Uploaded: {stats.get('uploaded_claims', 0)}
+Episodes: {stats.get('total_episodes', 0)}"""
+            
+            self.stats_label.setText(stats_text)
+            
+        except Exception as e:
+            logger.error(f"Error updating database stats: {e}")
 
-        self.file_table.setRowCount(len(rows))
-        for r, (fp, rel) in enumerate(rows):
-            self.file_table.setItem(r, 0, QTableWidgetItem(fp))
-            self.file_table.setItem(r, 1, QTableWidgetItem(rel))
+    def _load_claims(self) -> None:
+        """Load claims from the database."""
+        if not self.claims_service:
+            return
+        
+        try:
+            self.claims_data = self.claims_service.get_unuploaded_claims()
+            self._populate_claims_table()
+            self._update_upload_button_state()
+            
+            if self.claims_data:
+                self.status_label.setText(f"Loaded {len(self.claims_data)} unuploaded claims")
+            else:
+                self.status_label.setText("No unuploaded claims found")
+                
+        except Exception as e:
+            logger.error(f"Error loading claims: {e}")
+            QMessageBox.critical(self, "Error", f"Error loading claims: {str(e)}")
 
-        self.status_label.setText(f"Found {len(files)} files")
+    def _populate_claims_table(self) -> None:
+        """Populate the claims table with data."""
+        self.claims_table.setRowCount(len(self.claims_data))
+        
+        for row, claim in enumerate(self.claims_data):
+            # Checkbox for selection (all selected by default)
+            checkbox = QCheckBox()
+            checkbox.setChecked(True)
+            checkbox.stateChanged.connect(self._update_upload_button_state)
+            self.claims_table.setCellWidget(row, 0, checkbox)
+            
+            # Claim text (truncated)
+            claim_text = claim.canonical[:100] + "..." if len(claim.canonical) > 100 else claim.canonical
+            self.claims_table.setItem(row, 1, QTableWidgetItem(claim_text))
+            
+            # Type
+            self.claims_table.setItem(row, 2, QTableWidgetItem(claim.claim_type or ""))
+            
+            # Tier
+            tier_item = QTableWidgetItem(claim.tier or "")
+            if claim.tier == "A":
+                tier_item.setBackground(Qt.GlobalColor.green)
+            elif claim.tier == "B":
+                tier_item.setBackground(Qt.GlobalColor.yellow)
+            elif claim.tier == "C":
+                tier_item.setBackground(Qt.GlobalColor.red)
+            self.claims_table.setItem(row, 3, tier_item)
+            
+            # Episode
+            episode_title = ""
+            if claim.episode_data:
+                episode_title = claim.episode_data.get('title', '')[:30]
+                if len(episode_title) > 30:
+                    episode_title += "..."
+            self.claims_table.setItem(row, 4, QTableWidgetItem(episode_title))
+            
+            # Inserted date
+            inserted_date = claim.inserted_at[:10] if claim.inserted_at else ""
+            self.claims_table.setItem(row, 5, QTableWidgetItem(inserted_date))
+
+    def _select_all_claims(self) -> None:
+        """Select all claims."""
+        for row in range(self.claims_table.rowCount()):
+            checkbox = self.claims_table.cellWidget(row, 0)
+            if checkbox:
+                checkbox.setChecked(True)
+
+    def _select_no_claims(self) -> None:
+        """Deselect all claims."""
+        for row in range(self.claims_table.rowCount()):
+            checkbox = self.claims_table.cellWidget(row, 0)
+            if checkbox:
+                checkbox.setChecked(False)
+
+    def _get_selected_claims(self) -> List[ClaimUploadData]:
+        """Get list of selected claims."""
+        if not self.claims_table:
+            return []
+            
+        selected = []
+        for row in range(self.claims_table.rowCount()):
+            checkbox = self.claims_table.cellWidget(row, 0)
+            if checkbox and checkbox.isChecked():
+                selected.append(self.claims_data[row])
+        return selected
+
+    def _update_upload_button_state(self) -> None:
+        """Update upload button enabled state based on selection and auth."""
+        # Check if UI elements exist before accessing them
+        if not self.claims_table or not self.upload_btn:
+            return
+            
+        selected_claims = self._get_selected_claims()
+        is_authenticated = self.auth.is_authenticated() if self.auth else False
+        
+        self.upload_btn.setEnabled(
+            len(selected_claims) > 0 and 
+            is_authenticated and 
+            not (self.upload_worker and self.upload_worker.isRunning())
+        )
 
     def _start_upload(self) -> None:
-        selected: List[Path] = []
-        for idx in self._selected_row_indices():
-            item = self.file_table.item(idx, 0)
-            if item:
-                selected.append(Path(item.text()))
-        if not selected:
-            QMessageBox.information(self, "No Files Selected", "Please select one or more files to upload.")
+        """Start uploading selected claims."""
+        selected_claims = self._get_selected_claims()
+        if not selected_claims:
+            QMessageBox.information(self, "No Selection", "Please select claims to upload.")
             return
 
-        self.upload_btn.setEnabled(False)
-        self.status_label.setText("Uploading…")
+        if not self.auth or not self.auth.is_authenticated():
+            QMessageBox.warning(self, "Not Authenticated", "Please sign in first.")
+            return
 
-        # Stash bucket/subfolder for worker; we’ll use settings inside worker
-        client = self.auth.get_client() if self.auth and self.auth.is_available() else None
-        self.upload_worker = UploadWorker(selected, client)
-        self.upload_worker.bucket = self.bucket_edit.text().strip() or None  # type: ignore[attr-defined]
-        # If toggle is on and we have a user, default subfolder to user id
-        subfolder = self.subfolder_edit.text().strip()
-        if self.use_user_subfolder.isChecked() and self.auth and self.auth.is_authenticated():
-            user_id = self.auth.get_user_id()
-            if user_id:
-                subfolder = user_id if not subfolder else f"{user_id}/{subfolder.strip('/')}"
-        self.upload_worker.subfolder = subfolder or None  # type: ignore[attr-defined]
-        self.upload_worker.progress.connect(self._on_progress)
-        self.upload_worker.finished.connect(self._on_finished)
-        self.upload_worker.error.connect(self._on_error)
+        # Start upload worker
+        client = self.auth.get_client()
+        self.upload_worker = DatabaseUploadWorker(selected_claims, client)
+        self.upload_worker.progress.connect(self._on_upload_progress)
+        self.upload_worker.finished.connect(self._on_upload_finished)
+        self.upload_worker.error.connect(self._on_upload_error)
+
         self.upload_worker.start()
 
-    def _on_progress(self, current: int, total: int, message: str) -> None:
-        self.status_label.setText(f"{current}/{total} • {message}")
+        # Update UI
+        self.upload_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setMaximum(len(selected_claims))
+        self.progress_bar.setValue(0)
+        
+        self.upload_log.clear()
+        self.upload_log.append(f"Starting upload of {len(selected_claims)} claims...")
+        self.status_label.setText("Uploading...")
 
-    def _on_finished(self, success: int, total: int) -> None:
-        self.status_label.setText(f"Completed: {success}/{total} uploaded")
+    def _stop_upload(self) -> None:
+        """Stop the current upload."""
+        if self.upload_worker:
+            self.upload_worker.stop()
+            self.stop_btn.setEnabled(False)
+
+    def _on_upload_progress(self, current: int, total: int, message: str) -> None:
+        """Handle upload progress updates."""
+        self.progress_bar.setValue(current)
+        self.upload_log.append(f"[{current}/{total}] {message}")
+        self.upload_log.verticalScrollBar().setValue(self.upload_log.verticalScrollBar().maximum())
+
+    def _on_upload_finished(self, success_count: int, total_count: int) -> None:
+        """Handle upload completion."""
+        self.progress_bar.setVisible(False)
         self.upload_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
 
-    def _on_error(self, message: str) -> None:
-        self.status_label.setText(message)
+        self.upload_log.append(f"\n✅ Upload completed: {success_count}/{total_count} claims uploaded successfully")
+        
+        if success_count > 0:
+            # Mark successful claims as uploaded
+            if self.claims_service:
+                selected_claims = self._get_selected_claims()
+                successful_ids = [(claim.episode_id, claim.claim_id) for claim in selected_claims[:success_count]]
+                self.claims_service.mark_claims_uploaded(successful_ids)
+            
+            # Reload claims to update the list
+            self._load_claims()
+            self._update_database_stats()
+
+        self.status_label.setText(f"Upload completed: {success_count}/{total_count} successful")
+
+        if success_count == total_count:
+            QMessageBox.information(self, "Upload Complete", f"Successfully uploaded {success_count} claims!")
+        else:
+            QMessageBox.warning(self, "Upload Partially Complete", 
+                              f"Uploaded {success_count} out of {total_count} claims. Check the log for details.")
+
+    def _on_upload_error(self, error_message: str) -> None:
+        """Handle upload errors."""
+        self.progress_bar.setVisible(False)
         self.upload_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        
+        self.upload_log.append(f"❌ Upload error: {error_message}")
+        self.status_label.setText(f"Upload error: {error_message}")
+        
+        QMessageBox.critical(self, "Upload Error", f"Upload failed: {error_message}")
 
-    def _selected_row_indices(self) -> List[int]:
-        rows: List[int] = []
-        for idx in self.file_table.selectedIndexes():
-            if idx.column() == 0:
-                if idx.row() not in rows:
-                    rows.append(idx.row())
-        return sorted(rows)
-
-    def _select_all_rows(self) -> None:
-        self.file_table.selectAll()
-
-    def _clear_selection(self) -> None:
-        self.file_table.clearSelection()
-
-    # Auth helpers
+    # Authentication methods
     def _refresh_auth_ui(self) -> None:
-        authed = self.auth.is_authenticated() if self.auth else False
-        self.login_btn.setEnabled(not authed)
-        self.logout_btn.setEnabled(authed)
-        if authed:
-            email = self.auth.get_user_email() or "Signed in"
-            self.status_label.setText(f"{email} • Ready")
+        """Refresh authentication UI state."""
+        if not self.auth:
+            return
+        
+        is_authenticated = self.auth.is_authenticated()
+        
+        # Update OAuth button
+        self.oauth_btn.setEnabled(not is_authenticated)
+        
+        # Update legacy auth buttons (if they exist)
+        if hasattr(self, 'login_btn'):
+            self.login_btn.setEnabled(not is_authenticated)
+        
+        # Update logout button
+        self.logout_btn.setEnabled(is_authenticated)
+        
+        if is_authenticated:
+            email = self.auth.get_user_email() or "Unknown"
+            self.auth_status_label.setText(f"✅ Signed in as: {email}")
+            self.auth_status_label.setStyleSheet("color: #4CAF50;")
+            self.oauth_btn.setText("✅ Signed In")
+        else:
+            self.auth_status_label.setText("❌ Not authenticated")
+            self.auth_status_label.setStyleSheet("color: #F44336;")
+            self.oauth_btn.setText("🌐 Sign In at Skipthepodcast.com")
+        
+        self._update_upload_button_state()
 
-    def _sign_in(self) -> None:
+    def _sign_in_with_oauth(self) -> None:
+        """Sign in using GetReceipts OAuth flow."""
         if not self.auth or not self.auth.is_available():
-            QMessageBox.warning(self, "Auth Unavailable", "Supabase auth is not available")
+            QMessageBox.warning(self, "Auth Unavailable", "Supabase authentication is not available")
             return
-        email = self.email_edit.text().strip()
-        password = self.password_edit.text()
-        if not email or not password:
-            QMessageBox.information(self, "Missing Credentials", "Enter email and password")
-            return
-        ok, msg = self.auth.sign_in(email, password)
-        if not ok:
-            QMessageBox.warning(self, "Sign In Failed", msg)
-        self._refresh_auth_ui()
-
-    def _sign_out(self) -> None:
-        if not self.auth or not self.auth.is_available():
-            return
-        ok, msg = self.auth.sign_out()
-        if not ok:
-            QMessageBox.warning(self, "Sign Out Failed", msg)
-        self._refresh_auth_ui()
-
-    def _sign_up(self) -> None:
-        if not self.auth or not self.auth.is_available():
-            QMessageBox.warning(self, "Auth Unavailable", "Supabase auth is not available")
-            return
+        
+        # Show progress dialog
+        from PyQt6.QtWidgets import QProgressDialog
+        from PyQt6.QtCore import Qt
+        
+        progress = QProgressDialog("Waiting for authentication...", "Cancel", 0, 0, self)
+        progress.setWindowTitle("GetReceipts Authentication")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setAutoClose(True)
+        progress.setAutoReset(True)
+        progress.show()
+        
+        # Update progress text to show steps
+        progress.setLabelText(
+            "🌐 Opening Skipthepodcast.com in your browser...\n\n"
+            "1. Sign in or create account on Skipthepodcast.com\n"
+            "2. Authorize Knowledge_Chipper access\n"
+            "3. Return to this app when complete\n\n"
+            "Waiting for authentication..."
+        )
+        
         try:
-            from ..dialogs.sign_up_dialog import SignUpDialog
-        except Exception:
-            QMessageBox.warning(self, "Unavailable", "Sign-up dialog not available")
-            return
-
-        dlg = SignUpDialog(self)
-        if dlg.exec():
-            email, password = dlg.get_values()
-            if not email or not password:
-                QMessageBox.information(self, "Missing", "Email and password are required")
-                return
-            ok, msg = self.auth.sign_up(email, password)
-            if ok:
+            # Start OAuth flow with 5-minute timeout
+            success, message = self.auth.sign_up_with_oauth(timeout=300.0)
+            
+            progress.close()
+            
+            if success:
+                self._refresh_auth_ui()
                 QMessageBox.information(
                     self,
-                    "Check Your Email",
-                    "Account created. If email confirmations are enabled, check your inbox to verify before signing in.",
+                    "Authentication Successful",
+                    "Successfully signed in via Skipthepodcast.com!\n\n"
+                    "You can now upload your claims data to the shared database."
                 )
             else:
-                QMessageBox.warning(self, "Sign Up Failed", msg)
+                QMessageBox.warning(self, "Authentication Failed", message)
+                
+        except Exception as e:
+            progress.close()
+            logger.error(f"OAuth authentication error: {e}")
+            QMessageBox.critical(self, "Authentication Error", f"OAuth error: {str(e)}")
 
+    def _sign_in(self) -> None:
+        """Sign in to Supabase."""
+        if not self.auth or not self.auth.is_available():
+            QMessageBox.warning(self, "Auth Unavailable", "Supabase authentication is not available")
+            return
+        
+        email = self.email_edit.text().strip()
+        password = self.password_edit.text()
+        
+        if not email or not password:
+            QMessageBox.information(self, "Missing Credentials", "Please enter email and password")
+            return
+        
+        success, message = self.auth.sign_in(email, password)
+        if success:
+            self._refresh_auth_ui()
+            self.password_edit.clear()  # Clear password for security
+        else:
+            QMessageBox.warning(self, "Sign In Failed", message)
 
+    def _sign_up(self) -> None:
+        """Sign up for Supabase account."""
+        if not self.auth or not self.auth.is_available():
+            QMessageBox.warning(self, "Auth Unavailable", "Supabase authentication is not available")
+            return
+        
+        try:
+            from ..dialogs.sign_up_dialog import SignUpDialog
+            dialog = SignUpDialog(self)
+            if dialog.exec():
+                email, password = dialog.get_values()
+                if email and password:
+                    success, message = self.auth.sign_up(email, password)
+                    if success:
+                        QMessageBox.information(
+                            self,
+                            "Check Your Email",
+                            "Account created. Check your email to verify before signing in."
+                        )
+                    else:
+                        QMessageBox.warning(self, "Sign Up Failed", message)
+        except ImportError:
+            QMessageBox.warning(self, "Unavailable", "Sign-up dialog not available")
+
+    def _sign_out(self) -> None:
+        """Sign out of Supabase."""
+        if not self.auth or not self.auth.is_available():
+            return
+        
+        success, message = self.auth.sign_out()
+        if success:
+            self._refresh_auth_ui()
+        else:
+            QMessageBox.warning(self, "Sign Out Failed", message)

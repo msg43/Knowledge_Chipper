@@ -181,7 +181,7 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         self.auto_process_checkbox.setChecked(True)
         self.auto_process_checkbox.setToolTip(
             "Automatically process new files as they are detected.\n"
-            "• Uses current settings from Audio Transcription and Document Summarization tabs\n"
+            "• Uses current settings from Local Transcription and Document Summarization tabs\n"
             "• Processes files immediately when they appear in the watch directory\n"
             "• When disabled, files are only detected but not processed\n"
             "• Requires valid API keys for processing"

@@ -28,6 +28,12 @@ class FFmpegSetupDialog(QDialog):
     installation_completed = pyqtSignal(bool)  # success/failure
     
     def __init__(self, parent: Any = None) -> None:
+        # CRITICAL: Testing safety check - prevent dialog creation during testing
+        import os
+        if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
+            logger.error("🧪 CRITICAL: Attempted to create FFmpegSetupDialog during testing mode - BLOCKED!")
+            raise RuntimeError("FFmpegSetupDialog cannot be created during testing mode")
+            
         super().__init__(parent)
         self.ffmpeg_worker: FFmpegInstaller | None = None
         self._setup_ui()

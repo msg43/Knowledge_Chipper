@@ -681,11 +681,11 @@ class YouTubeBatchWorker(QThread):
 
             # Configure yt-dlp with proxy and progress hook
             ydl_opts = {
-                "format": "bestaudio/best",
+                "format": "250/249/140/worst",  # Use lowest quality audio to minimize file size
                 "outtmpl": str(audio_file.with_suffix(".%(ext)s")),
                 "extractaudio": True,
                 "audioformat": "wav",
-                "audioquality": 0,  # Best quality
+                "audioquality": 9,  # Lowest quality setting for minimum file size
                 "quiet": True,
                 "no_warnings": True,
                 "progress_hooks": [progress_hook],
