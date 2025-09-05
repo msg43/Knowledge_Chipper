@@ -102,7 +102,7 @@ class FirstRunSetupDialog(QDialog):
             raise RuntimeError("FirstRunSetupDialog cannot be created during testing mode")
             
         super().__init__(parent)
-        self.setWindowTitle("Welcome to Knowledge Chipper")
+        self.setWindowTitle("Welcome to Skip the Podcast Desktop")
         self.setModal(True)
         self.setMinimumWidth(600)
         self.setMinimumHeight(500)
@@ -140,7 +140,7 @@ class FirstRunSetupDialog(QDialog):
         header_layout = QHBoxLayout(header_widget)
         
         # Title
-        title_label = QLabel("🚀 Welcome to Knowledge Chipper")
+        title_label = QLabel("🚀 Welcome to Skip the Podcast Desktop")
         title_font = QFont()
         title_font.setPointSize(18)
         title_font.setBold(True)
@@ -153,7 +153,7 @@ class FirstRunSetupDialog(QDialog):
     def _create_welcome_message(self, layout: QVBoxLayout):
         """Create the welcome message."""
         message = QLabel(
-            "Thanks for installing Knowledge Chipper! 🎉\n\n"
+            "Thanks for installing Skip the Podcast Desktop! 🎉\n\n"
             "To get started, we'll download some essential AI models for transcription. "
             "This is a one-time setup that will enable you to transcribe audio and video files.\n\n"
             "📦 App Size Optimization: We've made the initial download 83% smaller by downloading "

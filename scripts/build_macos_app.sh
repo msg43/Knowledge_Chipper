@@ -98,7 +98,7 @@ if [ -z "$CURRENT_VERSION" ]; then
   exit 1
 fi
 
-echo "🏗️ Building Knowledge_Chipper.app... (version $CURRENT_VERSION)"
+echo "🏗️ Building Skip the Podcast Desktop.app... (version $CURRENT_VERSION)"
 echo "##PERCENT## 15 Preparing build"
 
 # Determine total steps for accurate high-level progress (no artificial heartbeats)
@@ -163,25 +163,25 @@ rsync -a --delete config/ "$BUILD_MACOS_PATH/config/"
 
 # Create configuration guide for macOS paths
 cat > "$BUILD_MACOS_PATH/MACOS_CONFIGURATION.md" << 'CONFIG_EOF'
-# Knowledge Chipper - macOS Configuration
+# Skip the Podcast Desktop - macOS Configuration
 
 ## Configuration Locations
 
-Knowledge Chipper now follows Apple's macOS guidelines for file locations:
+Skip the Podcast Desktop now follows Apple's macOS guidelines for file locations:
 
 ### Settings & Configuration
-- **Primary**: `~/Library/Application Support/Knowledge Chipper/Config/settings.yaml`
-- **Credentials**: `~/Library/Application Support/Knowledge Chipper/Config/credentials.yaml`
+- **Primary**: `~/Library/Application Support/Skip the Podcast Desktop/Config/settings.yaml`
+- **Credentials**: `~/Library/Application Support/Skip the Podcast Desktop/Config/credentials.yaml`
 - **Fallback**: Files in this app bundle's `config/` directory (templates only)
 
 ### User Data
-- **Database**: `~/Library/Application Support/Knowledge Chipper/knowledge_system.db`
-- **Output**: `~/Documents/Knowledge Chipper/Output/`
-- **Input**: `~/Documents/Knowledge Chipper/Input/`
+- **Database**: `~/Library/Application Support/Skip the Podcast Desktop/knowledge_system.db`
+- **Output**: `~/Documents/Skip the Podcast Desktop/Output/`
+- **Input**: `~/Documents/Skip the Podcast Desktop/Input/`
 
 ### Cache & Logs  
-- **Cache**: `~/Library/Caches/Knowledge Chipper/`
-- **Logs**: `~/Library/Logs/Knowledge Chipper/`
+- **Cache**: `~/Library/Caches/Skip the Podcast Desktop/`
+- **Logs**: `~/Library/Logs/Skip the Podcast Desktop/`
 
 ## Benefits
 - ✅ **Time Machine**: Automatically backs up your data
@@ -315,7 +315,7 @@ fi
 # Ensure venv ownership (should already be current user in staging)
 chown -R "$CURRENT_USER:staff" "$VENV_DIR" 2>/dev/null || true
 
-# Note: Logs now go to ~/Library/Logs/Knowledge Chipper (macOS standard)
+# Note: Logs now go to ~/Library/Logs/Skip the Podcast Desktop (macOS standard)
 # Create a logs directory in app bundle for backward compatibility, but it won't be used
 mkdir -p "$BUILD_MACOS_PATH/logs"
 
@@ -333,7 +333,7 @@ cat > "/tmp/Info.plist" << EOF
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.knowledgechipper.app</string>
+    <string>com.skipthepodcast.desktop</string>
     <key>CFBundleName</key>
     <string>Skip the Podcast Desktop</string>
     <key>CFBundlePackageType</key>
@@ -507,7 +507,7 @@ echo "✨ App bundle created successfully! Version: $CURRENT_VERSION"
 echo "##PERCENT## 100 Complete"
 echo "🎯 Large model files excluded - they'll download automatically when needed"
 if [ "$SKIP_INSTALL" -eq 0 ]; then
-  echo "🚀 You can now launch Knowledge Chipper from your Applications folder"
+  echo "🚀 You can now launch Skip the Podcast Desktop from your Applications folder"
 else
   echo "🚀 Staged app is at: $BUILD_APP_PATH"
 fi
@@ -523,8 +523,8 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
   /usr/bin/xattr -rc "$BUILD_APP_PATH" || true
   cp -R "$BUILD_APP_PATH" "$DMG_STAGING/root/"
   ln -sf /Applications "$DMG_STAGING/root/Applications"
-  hdiutil create -volname "Knowledge Chipper" -srcfolder "$DMG_STAGING/root" -ov -format UDZO "$DIST_DIR/Knowledge_Chipper-${CURRENT_VERSION}.dmg"
-  echo "✅ DMG created at: $DIST_DIR/Knowledge_Chipper-${CURRENT_VERSION}.dmg"
+  hdiutil create -volname "Skip the Podcast Desktop" -srcfolder "$DMG_STAGING/root" -ov -format UDZO "$DIST_DIR/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
+  echo "✅ DMG created at: $DIST_DIR/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
   
   # Optional: Offer to publish release to public repository
   if [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-0}" != "1" ]; then

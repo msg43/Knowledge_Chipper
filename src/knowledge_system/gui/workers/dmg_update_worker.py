@@ -152,7 +152,7 @@ class DMGUpdateWorker(QThread):
         try:
             # Create temp directory for download
             temp_dir = Path(tempfile.mkdtemp(prefix="knowledge_chipper_update_"))
-            dmg_filename = f"Knowledge_Chipper-{version}.dmg"
+            dmg_filename = f"Skip_the_Podcast_Desktop-{version}.dmg"
             dmg_path = temp_dir / dmg_filename
             
             logger.info(f"Downloading DMG from: {download_url}")

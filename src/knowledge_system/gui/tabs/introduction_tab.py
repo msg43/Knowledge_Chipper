@@ -52,8 +52,6 @@ class IntroductionTab(BaseTab):
         # Tab navigation guide
         self._create_tab_guide_section(content_layout)
 
-        # Documentation section
-        self._create_documentation_section(content_layout)
 
         # Add stretch to push content to top
         content_layout.addStretch()
@@ -122,12 +120,14 @@ class IntroductionTab(BaseTab):
 
             <br><br><b>THAT'S IT! You are ready to go.</b>
 
-            <br><br><b>3. Just work your way through the tabs in order left to right.</b>
-            <br>For example, if you want to summarize a YouTube video, you would go to the <b>Cloud Transcription</b> tab, enter the URL, and click "Extract Transcripts".
-            <br>If you prefer to summarize a local video, you would go to the <b>Local Transcription</b> tab, select the audio or video file or text document, and click "Extract Transcripts".
-            <br>Either way, you will get a .md file with the transcript, a nice thumbnail, and a bunch of metadata.
+            <br><br><b>Just work your way through the tabs in order left to right.</b>
+           
+           <br>For example, if you want to summarize a YouTube video, you would go to the <b>Cloud Transcription</b> tab, enter the URL, and click "Extract Transcripts".
+           <br>If you prefer to summarize a local video, you would go to the <b>Local Transcription</b> tab, select the audio or video file or text document, and click "Extract Transcripts".
+           <br>Either way, you will get a .md file with the transcript, a nice thumbnail, and a bunch of metadata.
 
-            <br><br>Then you would go to the <b>Summarization</b> tab, select the .md file with the transcript, and click "Start Summarization".
+            <br><br>Then you would go to the <b>Summarization</b> tab, select the .md file with the transcript (or an entire folder), and click "Start Summarization".
+
             <br>The summary can be saved in a variety of formats both in separate files or inline with Obsidian .md files
             """
         )
@@ -149,8 +149,7 @@ class IntroductionTab(BaseTab):
 
         tabs_text = QLabel(
             """
-            <b>Advanced Features Tabs:</b>
-
+            
             <br><br><b>🔍 Claim Search</b> - Search for claims across all processed content
 
             <br><br><b>👁️ File Watcher</b> - Automated processing
@@ -173,85 +172,3 @@ class IntroductionTab(BaseTab):
         tabs_text.setWordWrap(True)
         tabs_text.setTextFormat(Qt.TextFormat.RichText)
         parent_layout.addWidget(tabs_text)
-
-    def _create_documentation_section(self, parent_layout: Any) -> None:
-        """Create the documentation section."""
-        # Section header
-        header_label = QLabel("📚 Documentation & Resources")
-        header_font = QFont()
-        header_font.setPointSize(14)
-        header_font.setBold(True)
-        header_label.setFont(header_font)
-        header_label.setStyleSheet("margin-top: 20px; margin-bottom: 10px;")
-        parent_layout.addWidget(header_label)
-
-        # Documentation links in main text
-        doc_text = QLabel(
-            """
-            <b>📖 Complete Documentation:</b>
-            <br>• <a href="readme://open">README.md</a> - Full setup guide, troubleshooting, and advanced features
-            <br>• <a href="changelog://open">CHANGELOG.md</a> - Latest updates and version history
-            <br>• <a href="contributing://open">CONTRIBUTING.md</a> - Development and contribution guidelines
-
-            <br><br><b>🎯 Quick Reference:</b>
-            <br>• <a href="youtube://setup">YouTube API Setup Guide</a> - Configure YouTube integration
-            <br>• <a href="performance://guide">Performance Optimization</a> - Get the best results
-            <br>• <a href="troubleshooting://help">Troubleshooting Guide</a> - Common issues and solutions
-            """
-        )
-
-        doc_text.setWordWrap(True)
-        doc_text.setTextFormat(Qt.TextFormat.RichText)
-        doc_text.setOpenExternalLinks(False)  # Handle clicks manually
-        doc_text.linkActivated.connect(self._handle_documentation_link)
-        parent_layout.addWidget(doc_text)
-
-    def _handle_documentation_link(self, link: str) -> None:
-        """Handle clicks on documentation links."""
-        try:
-            project_root = Path(__file__).parents[4]  # Go up to Knowledge_Chipper root
-
-            if link == "readme://open":
-                readme_path = project_root / "README.md"
-                self.async_open_file(str(readme_path), "README.md")
-
-            elif link == "changelog://open":
-                changelog_path = project_root / "CHANGELOG.md"
-                self.async_open_file(str(changelog_path), "CHANGELOG.md")
-
-            elif link == "contributing://open":
-                contributing_path = project_root / "CONTRIBUTING.md"
-                self.async_open_file(str(contributing_path), "CONTRIBUTING.md")
-
-            elif link == "youtube://setup":
-                youtube_setup_path = project_root / "docs" / "YOUTUBE_API_SETUP.md"
-                self.async_open_file(str(youtube_setup_path), "YouTube API Setup Guide")
-
-            elif link == "performance://guide":
-                # Open the README section on performance
-                readme_path = project_root / "README.md"
-                self.async_open_file(str(readme_path), "Performance Guide (README.md)")
-
-            elif link == "troubleshooting://help":
-                # Open the README section on troubleshooting
-                readme_path = project_root / "README.md"
-                self.async_open_file(
-                    str(readme_path), "Troubleshooting Guide (README.md)"
-                )
-
-        except Exception as e:
-            logger.error(f"Error opening documentation: {e}")
-            self.show_error("Error", f"Could not open documentation: {str(e)}")
-
-    # Override base class methods since this is an informational tab
-    def _get_start_button_text(self) -> str:
-        """Return start button text."""
-        return "Get Started"
-
-    def _start_processing(self) -> None:
-        """Navigate to the process tab when start is clicked."""
-        self.show_info(
-            "Welcome!",
-            "Let's start by configuring your API Keys, then move to Process Management to begin!",
-        )
-        self.navigate_to_tab.emit("API Keys")

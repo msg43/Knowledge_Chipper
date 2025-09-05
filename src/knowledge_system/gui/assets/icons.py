@@ -23,9 +23,10 @@ def get_icon_paths() -> list[Path]:
     ]
 
     icon_names = [
+        "STP_Icon_1.png",
         "chipper.png",
         "chipper.ico",
-    ]  # PNG first for better macOS compatibility
+    ]  # STP_Icon_1.png first, then fallbacks for compatibility
 
     paths = []
     for base in base_paths:

@@ -39,10 +39,10 @@ echo -e "${YELLOW}🔗 Target repository:${NC} https://github.com/msg43/skipthep
 echo
 
 # Check if DMG already exists
-DMG_FILE="$PROJECT_ROOT/dist/Knowledge_Chipper-${CURRENT_VERSION}.dmg"
+DMG_FILE="$PROJECT_ROOT/dist/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
 if [ -f "$DMG_FILE" ]; then
     DMG_SIZE=$(du -h "$DMG_FILE" | cut -f1)
-    echo -e "${GREEN}✅ DMG already exists:${NC} Knowledge_Chipper-${CURRENT_VERSION}.dmg ($DMG_SIZE)"
+    echo -e "${GREEN}✅ DMG already exists:${NC} Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg ($DMG_SIZE)"
     echo
     read -p "Use existing DMG or rebuild? (u/rebuild): " -n 1 -r
     echo

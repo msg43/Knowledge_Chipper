@@ -3,8 +3,8 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-echo "Knowledge System GUI Launcher"
-echo "============================="
+echo "Skip the Podcast GUI Launcher"
+echo "=============================="
 echo "Project directory: $SCRIPT_DIR"
 
 # Change to the project directory
@@ -54,7 +54,7 @@ if ! ./venv/bin/python -c "import sys; sys.path.insert(0, 'src'); import knowled
     exit 1
 fi
 
-echo "✅ Knowledge System module is available"
+echo "✅ Skip the Podcast module is available"
 echo ""
 echo "🚀 Launching GUI..."
 

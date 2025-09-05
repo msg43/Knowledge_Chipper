@@ -155,7 +155,7 @@ class MainWindow(QMainWindow):
     def _setup_ui(self) -> None:
         """Set up the streamlined main UI."""
         self.setWindowTitle(
-            f"Knowledge Chipper v{__version__} - Your Personal Knowledge Assistant"
+            f"Skip the Podcast v{__version__} - Your Personal Knowledge Assistant"
         )
         # Make window resizable with reasonable default size and minimum size
         self.resize(1200, 800)  # Default size
@@ -189,7 +189,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
 
         # Add version label to the right side (show semantic version, not commit hash)
-        version_msg = f"Knowledge Chipper v{__version__} • Built: {_get_build_date()}"
+        version_msg = f"Skip the Podcast v{__version__} • Built: {_get_build_date()}"
 
         version_label = QLabel(version_msg)
         version_label.setStyleSheet("color: #666;")
@@ -665,7 +665,7 @@ def launch_gui() -> None:
 
         # For macOS: Set environment variables to avoid Python rocket ship icon
         if sys.platform == "darwin":
-            os.environ["PYQT_MACOS_BUNDLE_IDENTIFIER"] = "com.knowledgechipper.app"  # Keep for compatibility
+            os.environ["PYQT_MACOS_BUNDLE_IDENTIFIER"] = "com.skipthepodcast.desktop"
             # Try to use app bundle path if available
             bundle_path = os.environ.get("RESOURCEPATH")
             if not bundle_path and hasattr(sys, "_MEIPASS"):

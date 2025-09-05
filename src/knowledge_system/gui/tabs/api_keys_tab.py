@@ -677,7 +677,7 @@ class APIKeysTab(BaseTab):
             self.update_progress_dialog = QProgressDialog(
                 "Checking for updates...", "Cancel", 0, 0, self
             )
-            self.update_progress_dialog.setWindowTitle("Knowledge Chipper Update")
+            self.update_progress_dialog.setWindowTitle("Skip the Podcast Desktop Update")
             self.update_progress_dialog.setModal(True)
             self.update_progress_dialog.setMinimumDuration(
                 0 if is_auto else 500

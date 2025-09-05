@@ -110,7 +110,7 @@ Revolutionary speaker identification with AI-powered validation for podcast and 
 **Accuracy Pipeline**: Metadata (75-85%) → + LLM Validation (90-95%) → + User Review (99%)
 
 ### 🚀 **Major Architecture Refactor Completed (Dec 2024)**
-The Knowledge Chipper has undergone a comprehensive refactor, transforming it into a modern, multi-format knowledge management platform:
+Skip the Podcast Desktop has undergone a comprehensive refactor, transforming it into a modern, multi-format knowledge management platform:
 
 - **📚 Multi-Format Support**: Now processes PDFs, Word docs, Markdown, and more with author attribution
 - **☁️ Cloud Sync**: Full Supabase integration for backup and multi-device access
@@ -1489,7 +1489,7 @@ knowledge-system summarize research_papers/ --analysis-type "HCE Analysis"
 
 ### Configuration Files
 
-The Knowledge Chipper uses a flexible configuration system with multiple layers:
+Skip the Podcast Desktop uses a flexible configuration system with multiple layers:
 
 1. **Default Configuration** (`config_default.toml`)
    - System defaults (do not modify)
@@ -2210,7 +2210,7 @@ pytest tests/unit/test_config.py -v
 #### Database Issues
 
 **Issue**: "Database locked" errors
-- **Solution**: Close other instances of Knowledge Chipper, check file permissions
+- **Solution**: Close other instances of Skip the Podcast Desktop, check file permissions
 
 **Issue**: Migration failures
 - **Solution**: Back up database, run migrations manually with `--debug` flag
@@ -2494,7 +2494,7 @@ See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for detailed instructions.
 
 ### Python API
 
-The Knowledge Chipper provides a comprehensive Python API for integration:
+Skip the Podcast Desktop provides a comprehensive Python API for integration:
 
 ```python
 from src.knowledge_system import KnowledgeSystem

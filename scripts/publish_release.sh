@@ -105,7 +105,7 @@ fi
 log "📋 Current version: $CURRENT_VERSION"
 
 # Check if DMG exists for current version
-DMG_FILE="$PRIVATE_REPO_PATH/dist/Knowledge_Chipper-${CURRENT_VERSION}.dmg"
+DMG_FILE="$PRIVATE_REPO_PATH/dist/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
 
 if [ "$SKIP_BUILD" -eq 0 ]; then
     if [ -f "$DMG_FILE" ] && [ "$FORCE_REBUILD" -eq 0 ]; then
@@ -169,7 +169,7 @@ else
         
         # Create initial README for public repo
         cat > README.md << EOF
-# Knowledge Chipper
+# Skip the Podcast
 
 A comprehensive knowledge management system for macOS that transforms videos, audio files, and documents into organized, searchable knowledge.
 
@@ -181,7 +181,7 @@ Download the latest release from the [Releases](https://github.com/msg43/skipthe
 
 1. Download the latest \`.dmg\` file from releases
 2. Open the \`.dmg\` file
-3. Drag Knowledge Chipper.app to your Applications folder
+3. Drag Skip the Podcast.app to your Applications folder
 4. Launch from Applications
 
 ## Version
@@ -209,16 +209,10 @@ log "🏷️ Creating tag: $TAG_NAME"
 
 if [ "$DRY_RUN" -eq 1 ]; then
     log "[DRY RUN] Would create tag: $TAG_NAME"
-    log "[DRY RUN] Would copy DMG to: releases/"
-    log "[DRY RUN] Would push tag and trigger release"
+    log "[DRY RUN] Would update README.md with version info"
+    log "[DRY RUN] Would create GitHub release with DMG asset"
 else
     cd "$TEMP_DIR/$PUBLIC_REPO_NAME"
-    
-    # Create releases directory if it doesn't exist
-    mkdir -p releases
-    
-    # Copy the DMG to releases directory
-    cp "$DMG_FILE" "releases/Knowledge_Chipper-${CURRENT_VERSION}.dmg"
     
     # Update README with current version if it exists
     if [ -f "README.md" ]; then
@@ -234,13 +228,12 @@ else
         fi
     fi
     
-    # Commit the new release
-    git add .
+    # Commit only the README update (no DMG files)
+    git add README.md
     if ! git diff --staged --quiet; then
-        git commit -m "Release v${CURRENT_VERSION}
+        git commit -m "Update README for v${CURRENT_VERSION}
 
 - Updated Knowledge Chipper to version ${CURRENT_VERSION}
-- DMG size: $DMG_SIZE
 - Build date: $(date +"%Y-%m-%d")"
     fi
     
@@ -248,10 +241,10 @@ else
     if git tag -l | grep -q "^${TAG_NAME}$"; then
         warning "Tag $TAG_NAME already exists, deleting and recreating..."
         git tag -d "$TAG_NAME" || true
-        git push origin --delete "$TAG_NAME" || true
+        git push origin --delete "$TAG_NAME" 2>/dev/null || true
     fi
     
-    git tag -a "$TAG_NAME" -m "Knowledge Chipper v${CURRENT_VERSION}
+    git tag -a "$TAG_NAME" -m "Skip the Podcast v${CURRENT_VERSION}
 
 Release notes:
 - Version: ${CURRENT_VERSION}
@@ -260,7 +253,7 @@ Release notes:
 
 This is an automated release from the build system."
     
-    log "📤 Pushing to public repository..."
+    log "📤 Pushing repository updates and tag..."
     git push origin main
     git push origin "$TAG_NAME"
 fi
@@ -271,24 +264,34 @@ if command -v gh >/dev/null 2>&1; then
     
     if [ "$DRY_RUN" -eq 1 ]; then
         log "[DRY RUN] Would create GitHub release with:"
-        log "  Title: Knowledge Chipper v${CURRENT_VERSION}"
+        log "  Title: Skip the Podcast v${CURRENT_VERSION}"
         log "  Tag: $TAG_NAME"
-        log "  Asset: releases/Knowledge_Chipper-${CURRENT_VERSION}.dmg"
+        log "  Assets: $DMG_FILE"
+        log "         README.md (from $PRIVATE_REPO_PATH/README.md)"
     else
         cd "$TEMP_DIR/$PUBLIC_REPO_NAME"
         
-        # Create the release
+        # Check if release already exists and delete it
+        if gh release view "$TAG_NAME" --repo "msg43/skipthepodcast.com" >/dev/null 2>&1; then
+            warning "Release $TAG_NAME already exists, deleting and recreating..."
+            gh release delete "$TAG_NAME" --repo "msg43/skipthepodcast.com" --yes || true
+        fi
+        
+        # Copy README.md from private repo to temp location for upload
+        cp "$PRIVATE_REPO_PATH/README.md" "./README.md"
+        
+        # Create the release with DMG asset and README.md
         gh release create "$TAG_NAME" \
             --repo "msg43/skipthepodcast.com" \
-            --title "Knowledge Chipper v${CURRENT_VERSION}" \
-            --notes "**Knowledge Chipper v${CURRENT_VERSION}**
+            --title "Skip the Podcast v${CURRENT_VERSION}" \
+            --notes "**Skip the Podcast v${CURRENT_VERSION}**
 
 🍎 **macOS Application Release**
 
 ## Installation
 1. Download the \`.dmg\` file below
 2. Open the downloaded file
-3. Drag Knowledge Chipper.app to your Applications folder
+3. Drag Skip the Podcast.app to your Applications folder
 4. Launch from Applications
 
 ## Release Info
@@ -298,17 +301,21 @@ if command -v gh >/dev/null 2>&1; then
 - **Platform:** macOS (Universal Binary)
 
 ## What's New
-This release includes the latest features and improvements from the Knowledge Chipper development cycle.
+This release includes the latest features and improvements from the Skip the Podcast development cycle.
+
+📖 **Download the README.md file below for complete documentation and feature details.**
 
 ---
 *This release was automatically generated from the build system.*" \
-            "releases/Knowledge_Chipper-${CURRENT_VERSION}.dmg"
+            "$DMG_FILE" \
+            "./README.md"
     fi
 else
     warning "GitHub CLI (gh) not found. Release created but you'll need to manually:"
     warning "1. Go to https://github.com/msg43/skipthepodcast.com/releases"
     warning "2. Create a new release for tag $TAG_NAME"
-    warning "3. Upload the DMG file: releases/Knowledge_Chipper-${CURRENT_VERSION}.dmg"
+    warning "3. Upload the DMG file: $DMG_FILE"
+    warning "4. Upload the README.md file: $PRIVATE_REPO_PATH/README.md"
 fi
 
 success "🎉 Release publication complete!"
