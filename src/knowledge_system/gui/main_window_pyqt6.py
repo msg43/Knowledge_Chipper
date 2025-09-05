@@ -23,26 +23,28 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from .. import __version__
 from ..config import get_settings
 from ..logger import get_logger
-from .. import __version__
 from .assets.icons import get_app_icon, get_icon_path
 
 
 def _get_build_date() -> str:
     """Get build date from current date (when running) or app bundle info."""
     from datetime import datetime
+
     return datetime.now().strftime("%Y-%m-%d")
+
 
 # Import workers and components
 from .components.progress_tracking import EnhancedProgressBar
 
-# Import dialogs
-from .dialogs.first_run_setup_dialog import FirstRunSetupDialog
-
 # Import core GUI components
 from .core.session_manager import get_session_manager
 from .core.settings_manager import get_gui_settings_manager
+
+# Import dialogs
+from .dialogs.first_run_setup_dialog import FirstRunSetupDialog
 
 # Import modular tabs
 from .tabs import (
@@ -67,7 +69,10 @@ def _update_state_version(version: str) -> None:
     try:
         import json
         from pathlib import Path
-        state_path = Path(__file__).resolve().parents[3] / "state" / "application_state.json"
+
+        state_path = (
+            Path(__file__).resolve().parents[3] / "state" / "application_state.json"
+        )
         if not state_path.exists():
             return
         data = json.loads(state_path.read_text(encoding="utf-8"))
@@ -132,10 +137,10 @@ class MainWindow(QMainWindow):
 
         # Monthly FFmpeg check (lightweight)
         self._ffmpeg_monthly_check()
-        
+
         # First-run FFmpeg setup (if needed)
         self._check_first_run_ffmpeg_setup()
-        
+
         # First-run model setup (if needed)
         self._check_first_run_model_setup()
 
@@ -225,11 +230,11 @@ class MainWindow(QMainWindow):
         # Claim search tab for exploring extracted claims
         claim_search_tab = ClaimSearchTab(self)
         self.tabs.addTab(claim_search_tab, "🔍 Claim Search")
-        
+
         # Speaker attribution tab for managing speaker identification
         speaker_attribution_tab = SpeakerAttributionTab(self)
         self.tabs.addTab(speaker_attribution_tab, "🎙️ Speaker Attribution")
-        
+
         # Summary cleanup tab for post-processing review
         summary_cleanup_tab = SummaryCleanupTab(self)
         self.tabs.addTab(summary_cleanup_tab, "✏️ Summary Cleanup")
@@ -252,6 +257,7 @@ class MainWindow(QMainWindow):
         # Cloud uploads (manual) tab
         try:
             from .tabs import CloudUploadsTab
+
             if CloudUploadsTab is not None:
                 cloud_uploads_tab = CloudUploadsTab(self)
                 self.tabs.addTab(cloud_uploads_tab, "☁️ Cloud Uploads")
@@ -393,9 +399,9 @@ class MainWindow(QMainWindow):
 
             # Set Anthropic API key
             if self.settings.api_keys.anthropic_api_key:
-                os.environ["ANTHROPIC_API_KEY"] = (
-                    self.settings.api_keys.anthropic_api_key
-                )
+                os.environ[
+                    "ANTHROPIC_API_KEY"
+                ] = self.settings.api_keys.anthropic_api_key
 
             logger.debug("API keys loaded to environment variables")
 
@@ -491,36 +497,40 @@ class MainWindow(QMainWindow):
             if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
                 logger.info("🧪 Testing mode: Skipping first-run FFmpeg setup dialog")
                 return
-                
+
             import shutil
+
             from .core.settings_manager import get_gui_settings_manager
             from .dialogs.ffmpeg_setup_dialog import FFmpegSetupDialog
 
             gui = get_gui_settings_manager()
-            
+
             # Check if we've already shown the first-run dialog
-            first_run_shown = gui.get_value("⚙️ Settings", "ffmpeg_first_run_shown", False)
-            
+            first_run_shown = gui.get_value(
+                "⚙️ Settings", "ffmpeg_first_run_shown", False
+            )
+
             if first_run_shown:
                 return  # Already shown, don't show again
-                
+
             # Check if FFmpeg is already available
             if shutil.which("ffmpeg"):
                 # FFmpeg already available, mark first-run as shown and skip
                 gui.set_value("⚙️ Settings", "ffmpeg_first_run_shown", True)
                 gui.save()
                 return
-                
+
             # Show first-run setup dialog
             # Use an in-memory guard to prevent duplicate dialogs during startup
             if getattr(self, "_ffmpeg_first_run_dialog_open", False):
                 return
             setattr(self, "_ffmpeg_first_run_dialog_open", True)
-            
+
             # Use QTimer to show dialog after main window is fully loaded
             from PyQt6.QtCore import QTimer
+
             QTimer.singleShot(1000, self._show_first_run_ffmpeg_dialog)
-            
+
         except (ImportError, AttributeError) as e:
             logger.warning(f"First-run FFmpeg setup failed: {e}")
 
@@ -529,16 +539,19 @@ class MainWindow(QMainWindow):
         try:
             # CRITICAL: Additional safety check for testing mode
             if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
-                logger.info("🧪 Testing mode: Blocked FFmpeg dialog creation (safety check)")
+                logger.info(
+                    "🧪 Testing mode: Blocked FFmpeg dialog creation (safety check)"
+                )
                 return
-                
+
             from .dialogs.ffmpeg_setup_dialog import FFmpegSetupDialog
-            
+
             dialog = FFmpegSetupDialog(self)
             result = dialog.exec()
             # Persist the flag after the user has seen the dialog once
             try:
                 from .core.settings_manager import get_gui_settings_manager
+
                 gui = get_gui_settings_manager()
                 gui.set_value("⚙️ Settings", "ffmpeg_first_run_shown", True)
                 gui.save()
@@ -556,22 +569,25 @@ class MainWindow(QMainWindow):
             if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
                 logger.info("🧪 Testing mode: Skipping first-run model setup dialog")
                 return
-                
+
             from pathlib import Path
+
             from .core.settings_manager import get_gui_settings_manager
 
             gui = get_gui_settings_manager()
-            
+
             # Check if we've already shown the first-run model dialog
-            model_first_run_shown = gui.get_value("⚙️ Settings", "model_first_run_shown", False)
-            
+            model_first_run_shown = gui.get_value(
+                "⚙️ Settings", "model_first_run_shown", False
+            )
+
             if model_first_run_shown:
                 return  # Already shown, don't show again
-                
+
             # Check if any Whisper models are already available
             models_dir = Path.home() / ".cache" / "whisper-cpp"
             local_models_dir = Path("models")
-            
+
             has_models = False
             if models_dir.exists():
                 # Check for common model files
@@ -579,27 +595,28 @@ class MainWindow(QMainWindow):
                     if (models_dir / model_file).exists():
                         has_models = True
                         break
-                        
+
             if local_models_dir.exists():
                 # Check local models directory
                 for model_file in local_models_dir.glob("*.bin"):
                     has_models = True
                     break
-                    
+
             if has_models:
                 # Models already available, mark first-run as shown and skip
                 gui.set_value("⚙️ Settings", "model_first_run_shown", True)
                 gui.save()
                 return
-                
+
             # Show first-run model setup dialog
             gui.set_value("⚙️ Settings", "model_first_run_shown", True)
             gui.save()
-            
+
             # Use QTimer to show dialog after main window is fully loaded (after FFmpeg dialog)
             from PyQt6.QtCore import QTimer
+
             QTimer.singleShot(2000, self._show_first_run_model_dialog)
-            
+
         except (ImportError, AttributeError) as e:
             logger.warning(f"First-run model setup failed: {e}")
 
@@ -608,22 +625,28 @@ class MainWindow(QMainWindow):
         try:
             # CRITICAL: Additional safety check for testing mode
             if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
-                logger.info("🧪 Testing mode: Blocked model setup dialog creation (safety check)")
+                logger.info(
+                    "🧪 Testing mode: Blocked model setup dialog creation (safety check)"
+                )
                 return
-                
+
             dialog = FirstRunSetupDialog(self)
-            
+
             def on_setup_completed(success: bool):
                 if success:
                     logger.info("First-run model setup completed successfully")
-                    self.status_bar.showMessage("Model setup complete - ready to transcribe!", 5000)
+                    self.status_bar.showMessage(
+                        "Model setup complete - ready to transcribe!", 5000
+                    )
                 else:
                     logger.info("First-run model setup skipped or cancelled")
-                    self.status_bar.showMessage("Model setup skipped - you can download models later", 3000)
-            
+                    self.status_bar.showMessage(
+                        "Model setup skipped - you can download models later", 3000
+                    )
+
             dialog.setup_completed.connect(on_setup_completed)
             dialog.exec()
-            
+
         except Exception as e:
             logger.warning(f"Failed to show first-run model dialog: {e}")
 
@@ -697,7 +720,7 @@ def launch_gui() -> None:
         # Set application properties
         app.setApplicationName("Skip the Podcast Desktop")
         app.setApplicationDisplayName("Skip the Podcast Desktop")
-        app.setApplicationVersion("1.0")
+        app.setApplicationVersion(__version__)
         app.setOrganizationName("Skip the Podcast Desktop")
         app.setOrganizationDomain("knowledge-chipper.local")
 
@@ -716,13 +739,15 @@ def launch_gui() -> None:
         # Check if we're in testing mode and set environment variable for subprocess
         testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
         if testing_mode:
-            logger.info("🧪 GUI subprocess detected testing mode - setting environment for child processes")
+            logger.info(
+                "🧪 GUI subprocess detected testing mode - setting environment for child processes"
+            )
             # Ensure all child processes know we're in testing mode
             os.environ["KNOWLEDGE_CHIPPER_TESTING_MODE"] = "1"
-        
+
         # Create the main window
         window = MainWindow()
-        
+
         # Show and focus behavior depends on testing mode
         if not os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
             # Normal mode: show and focus

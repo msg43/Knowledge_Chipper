@@ -16,12 +16,19 @@ from pathlib import Path
 # Import warning suppressions utility to handle PyTorch/TorchAudio/PyAnnote deprecations
 try:
     from .utils.warning_suppressions import suppress_ml_library_warnings
+
     suppress_ml_library_warnings()
 except ImportError:
     # Fallback to direct warning suppressions if utility import fails
-    warnings.filterwarnings("ignore", category=UserWarning, module="torchaudio._backend.utils")
-    warnings.filterwarnings("ignore", category=UserWarning, module="pyannote.audio.models.blocks.pooling")
-    warnings.filterwarnings("ignore", message=".*std\\(\\): degrees of freedom.*", category=UserWarning)
+    warnings.filterwarnings(
+        "ignore", category=UserWarning, module="torchaudio._backend.utils"
+    )
+    warnings.filterwarnings(
+        "ignore", category=UserWarning, module="pyannote.audio.models.blocks.pooling"
+    )
+    warnings.filterwarnings(
+        "ignore", message=".*std\\(\\): degrees of freedom.*", category=UserWarning
+    )
 
 
 def _resolve_version() -> str:
@@ -95,7 +102,7 @@ def gui_main() -> None:
         # Set application properties
         app.setApplicationName("Skip the Podcast Desktop")
         app.setApplicationDisplayName("Skip the Podcast Desktop")
-        app.setApplicationVersion("1.0")
+        app.setApplicationVersion(__version__)
 
         # Import and create main window
         # (no circular import since we're in the parent package)

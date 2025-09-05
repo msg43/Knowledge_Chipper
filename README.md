@@ -1,6 +1,6 @@
 # Skip the Podcast Desktop
 
-**Version:** 3.1.3 | **Build Date:** 2025-09-04 
+**Version:** 3.1.3 | **Build Date:** 2025-01-27 
 
 Skip the Podcast Desktop - A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 

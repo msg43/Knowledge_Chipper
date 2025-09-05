@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import QTimer, pyqtSignal, Qt
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QFrame,
@@ -11,18 +11,19 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
     QMessageBox,
     QProgressDialog,
     QPushButton,
     QVBoxLayout,
-    QLayout,
 )
 
 from ...logger import get_logger
 from ..components.base_tab import BaseTab
-from ..workers.ffmpeg_installer import FFmpegInstaller, FFmpegRelease
 from ..workers.dmg_update_worker import DMGUpdateWorker
+from ..workers.ffmpeg_installer import FFmpegInstaller, FFmpegRelease
+from ..workers.update_worker import UpdateWorker
 
 logger = get_logger(__name__)
 
@@ -170,8 +171,6 @@ class APIKeysTab(BaseTab):
             0,
         )
 
-
-
         # Load existing values and set up change handlers
         self._load_existing_values()
         self._setup_change_handlers()
@@ -258,7 +257,9 @@ class APIKeysTab(BaseTab):
         update_section.addWidget(ffmpeg_btn)
 
         # Auto-update checkbox
-        self.auto_update_checkbox = QCheckBox("Automatically check for updates on app launch")
+        self.auto_update_checkbox = QCheckBox(
+            "Automatically check for updates on app launch"
+        )
         self.auto_update_checkbox.setToolTip(
             "When enabled, Knowledge Chipper will automatically check for new versions\n"
             "when you launch the app. Updates use fast DMG downloads (~2-3 minutes)\n"
@@ -287,17 +288,17 @@ class APIKeysTab(BaseTab):
         )
         # Load saved preference from app config (with GUI fallback for migration)
         from ...config import get_settings
+
         settings = get_settings()
-        
+
         # Check both new app config and legacy GUI setting
         auto_update_enabled = (
-            settings.app.auto_check_updates or 
-            self.gui_settings.get_value(self.tab_name, "auto_update_enabled", False)
+            settings.app.auto_check_updates
+            or self.gui_settings.get_value(self.tab_name, "auto_update_enabled", False)
         )
         self.auto_update_checkbox.setChecked(auto_update_enabled)
         self.auto_update_checkbox.stateChanged.connect(self._on_auto_update_changed)
         update_section.addWidget(self.auto_update_checkbox)
-        
 
         button_layout.addLayout(update_section)
 
@@ -329,27 +330,27 @@ class APIKeysTab(BaseTab):
         """Load existing API key values from settings."""
         # Load OpenAI key
         if self.settings.api_keys.openai_api_key:
-            self._actual_api_keys["openai_api_key"] = (
-                self.settings.api_keys.openai_api_key
-            )
+            self._actual_api_keys[
+                "openai_api_key"
+            ] = self.settings.api_keys.openai_api_key
             self.openai_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
 
         # Load Anthropic key
         if self.settings.api_keys.anthropic_api_key:
-            self._actual_api_keys["anthropic_api_key"] = (
-                self.settings.api_keys.anthropic_api_key
-            )
+            self._actual_api_keys[
+                "anthropic_api_key"
+            ] = self.settings.api_keys.anthropic_api_key
             self.anthropic_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
 
         # Load HuggingFace token
         if self.settings.api_keys.huggingface_token:
-            self._actual_api_keys["huggingface_token"] = (
-                self.settings.api_keys.huggingface_token
-            )
+            self._actual_api_keys[
+                "huggingface_token"
+            ] = self.settings.api_keys.huggingface_token
             self.huggingface_token_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
@@ -359,14 +360,12 @@ class APIKeysTab(BaseTab):
             hasattr(self.settings.api_keys, "bright_data_api_key")
             and self.settings.api_keys.bright_data_api_key
         ):
-            self._actual_api_keys["bright_data_api_key"] = (
-                self.settings.api_keys.bright_data_api_key
-            )
+            self._actual_api_keys[
+                "bright_data_api_key"
+            ] = self.settings.api_keys.bright_data_api_key
             self.bright_data_api_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
-
-
 
     def _setup_change_handlers(self) -> None:
         """Set up change handlers for password/key fields."""
@@ -432,8 +431,6 @@ class APIKeysTab(BaseTab):
         try:
             # First load from the credential files (like the existing _load_existing_values)
             self._load_existing_values()
-
-
 
             # Note: We don't restore actual API keys from session for security,
             # only restore the masked display indicators to show fields that were previously filled
@@ -607,40 +604,47 @@ class APIKeysTab(BaseTab):
     def _on_auto_update_changed(self, state: int) -> None:
         """Handle auto-update checkbox state change."""
         is_enabled = bool(state)
-        
+
         # Save to both app config and GUI settings (for backward compatibility)
         from ...config import get_settings
+
         settings = get_settings()
-        
+
         # Update app config (this will be saved to settings.yaml)
         settings.app.auto_check_updates = is_enabled
-        
+
         # Also save to GUI settings for backward compatibility
         self.gui_settings.set_value(self.tab_name, "auto_update_enabled", is_enabled)
         self.gui_settings.save()
-        
+
         # Save the app config to file
         try:
             from ...utils.macos_paths import get_config_dir
+
             config_file = get_config_dir() / "settings.yaml"
             settings.to_yaml(config_file)
-            self.append_log(f"✅ {'Enabled' if is_enabled else 'Disabled'} automatic update checking on launch")
+            self.append_log(
+                f"✅ {'Enabled' if is_enabled else 'Disabled'} automatic update checking on launch"
+            )
         except Exception as e:
             self.append_log(f"⚠️ Setting changed but couldn't save to config file: {e}")
             # Still update the runtime setting even if file save fails
-            self.append_log(f"{'Enabled' if is_enabled else 'Disabled'} automatic update checking (runtime only)")
+            self.append_log(
+                f"{'Enabled' if is_enabled else 'Disabled'} automatic update checking (runtime only)"
+            )
 
     def check_for_updates_on_launch(self) -> None:
         """Check for updates if auto-update is enabled."""
         from ...config import get_settings
+
         settings = get_settings()
-        
+
         # Check app config first, fallback to GUI settings for migration
         auto_update_enabled = (
-            settings.app.auto_check_updates or 
-            self.gui_settings.get_value(self.tab_name, "auto_update_enabled", False)
+            settings.app.auto_check_updates
+            or self.gui_settings.get_value(self.tab_name, "auto_update_enabled", False)
         )
-        
+
         if auto_update_enabled:
             self._check_for_updates(is_auto=True)
 
@@ -666,10 +670,10 @@ class APIKeysTab(BaseTab):
                 pass
             self.update_worker.update_finished.connect(self._handle_update_finished)
             self.update_worker.update_error.connect(self._handle_update_error)
-            
+
             # Initialize completion tracking
             self._update_completed = False
-            
+
             # Add worker failure detection
             self.update_worker.finished.connect(self._on_worker_finished)
 
@@ -677,7 +681,9 @@ class APIKeysTab(BaseTab):
             self.update_progress_dialog = QProgressDialog(
                 "Checking for updates...", "Cancel", 0, 0, self
             )
-            self.update_progress_dialog.setWindowTitle("Skip the Podcast Desktop Update")
+            self.update_progress_dialog.setWindowTitle(
+                "Skip the Podcast Desktop Update"
+            )
             self.update_progress_dialog.setModal(True)
             self.update_progress_dialog.setMinimumDuration(
                 0 if is_auto else 500
@@ -753,7 +759,9 @@ class APIKeysTab(BaseTab):
             if message:
                 self._set_update_dialog_text(message)
         # Mirror to status label/log
-        self.status_label.setText(f"{message} ({percent}%)" if message else f"{percent}%")
+        self.status_label.setText(
+            f"{message} ({percent}%)" if message else f"{percent}%"
+        )
         self.status_label.setStyleSheet("color: #2196F3; font-weight: bold;")
         self.append_log(f"{percent}% - {message}" if message else f"{percent}%")
 
@@ -761,7 +769,7 @@ class APIKeysTab(BaseTab):
         """Handle update completion."""
         # Mark update as completed to prevent false crash detection
         self._update_completed = True
-        
+
         # Close progress dialog
         if self.update_progress_dialog:
             self.update_progress_dialog.close()
@@ -773,7 +781,7 @@ class APIKeysTab(BaseTab):
 
             # Show restart dialog with auto-restart option
             from PyQt6.QtWidgets import QMessageBox, QPushButton
-            
+
             msg_box = QMessageBox(self)
             msg_box.setWindowTitle("Update Complete")
             msg_box.setText("The app has been updated successfully!")
@@ -783,15 +791,19 @@ class APIKeysTab(BaseTab):
                 "Your settings and data are preserved in their standard locations."
             )
             msg_box.setIcon(QMessageBox.Icon.Information)
-            
+
             # Add custom buttons
-            restart_button = msg_box.addButton("Restart Now", QMessageBox.ButtonRole.AcceptRole)
-            later_button = msg_box.addButton("Restart Later", QMessageBox.ButtonRole.RejectRole)
+            restart_button = msg_box.addButton(
+                "Restart Now", QMessageBox.ButtonRole.AcceptRole
+            )
+            later_button = msg_box.addButton(
+                "Restart Later", QMessageBox.ButtonRole.RejectRole
+            )
             msg_box.setDefaultButton(restart_button)
-            
+
             # Show the dialog and handle response
             msg_box.exec()
-            
+
             if msg_box.clickedButton() == restart_button:
                 self._restart_application()
             else:
@@ -814,20 +826,23 @@ class APIKeysTab(BaseTab):
 
     def _restart_application(self) -> None:
         """Restart the application after an update."""
-        import sys
         import os
+        import sys
+
         from PyQt6.QtWidgets import QApplication
-        
+
         try:
             # Get the current application path
-            if getattr(sys, 'frozen', False):
+            if getattr(sys, "frozen", False):
                 # Running as packaged app
                 app_path = sys.executable
             else:
                 # Running from source - find the app bundle or start script
                 app_bundle_path = "/Applications/Knowledge_Chipper.app"
-                user_app_path = os.path.expanduser("~/Applications/Knowledge_Chipper.app")
-                
+                user_app_path = os.path.expanduser(
+                    "~/Applications/Knowledge_Chipper.app"
+                )
+
                 if os.path.exists(app_bundle_path):
                     app_path = app_bundle_path
                 elif os.path.exists(user_app_path):
@@ -835,19 +850,20 @@ class APIKeysTab(BaseTab):
                 else:
                     # Fallback to running from source
                     app_path = sys.executable + " -m knowledge_system.gui.__main__"
-            
+
             self.append_log("🔄 Restarting application...")
-            
+
             # Close current application and start new one
             QApplication.quit()
-            
+
             # Use subprocess to start the new instance
             import subprocess
+
             if app_path.endswith(".app"):
                 subprocess.Popen(["open", app_path])
             else:
                 subprocess.Popen(app_path.split())
-                
+
         except Exception as e:
             self.append_log(f"❌ Failed to restart automatically: {e}")
             self.append_log("Please restart Knowledge Chipper manually.")
@@ -857,23 +873,26 @@ class APIKeysTab(BaseTab):
         if self.update_worker:
             # Check if worker finished without calling our completion handlers
             # This indicates the worker crashed or was terminated unexpectedly
-            if (not hasattr(self, '_update_completed') or not self._update_completed) and self.update_worker.isFinished():
+            if (
+                not hasattr(self, "_update_completed") or not self._update_completed
+            ) and self.update_worker.isFinished():
                 self.append_log("⚠️  Update worker finished unexpectedly")
                 if self.update_progress_dialog:
                     self.update_progress_dialog.close()
                     self.update_progress_dialog = None
-                
+
                 # Offer fallback option
                 from PyQt6.QtWidgets import QMessageBox
+
                 reply = QMessageBox.question(
                     self,
                     "Update Issue",
                     "The update process encountered an issue. Would you like to try the fallback update method?\n\n"
                     "This will open Terminal where you can run the update manually.",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.Yes
+                    QMessageBox.StandardButton.Yes,
                 )
-                
+
                 if reply == QMessageBox.StandardButton.Yes:
                     self._fallback_update()
 
@@ -882,31 +901,41 @@ class APIKeysTab(BaseTab):
         try:
             import subprocess
             from pathlib import Path
-            
+
             # Find the script
-            script_path = Path.home() / "Projects" / "Knowledge_Chipper" / "scripts" / "build_macos_app.sh"
+            script_path = (
+                Path.home()
+                / "Projects"
+                / "Knowledge_Chipper"
+                / "scripts"
+                / "build_macos_app.sh"
+            )
             if not script_path.exists():
                 self.append_log("❌ Could not find build script for fallback update")
                 return
-            
+
             # Open Terminal and run the original script
             script_dir = str(script_path.parent)
             script_name = script_path.name
-            
+
             apple_script = f"""
 tell application "Terminal"
   activate
   do script "cd {script_dir}; echo '🏗️ Running fallback updater…'; bash {script_name}; echo ''; echo '✅ Update finished. Please restart Knowledge Chipper and close this window.'"
 end tell
 """
-            
+
             subprocess.run(["osascript", "-e", apple_script], check=True)
             self.append_log("🔄 Opened Terminal for fallback update")
-            self.append_log("Please follow the prompts in Terminal, then restart the app")
-            
+            self.append_log(
+                "Please follow the prompts in Terminal, then restart the app"
+            )
+
         except Exception as e:
             self.append_log(f"❌ Fallback update failed: {e}")
-            self.append_log("Please run 'bash scripts/build_macos_app.sh' manually from Terminal")
+            self.append_log(
+                "Please run 'bash scripts/build_macos_app.sh' manually from Terminal"
+            )
 
     def _admin_install(self) -> None:
         """Perform an admin install to /Applications via Terminal, removing user-space copy first.
@@ -915,16 +944,28 @@ end tell
             import subprocess
             from pathlib import Path
 
-            script_path = Path.home() / "Projects" / "Knowledge_Chipper" / "scripts" / "build_macos_app.sh"
+            script_path = (
+                Path.home()
+                / "Projects"
+                / "Knowledge_Chipper"
+                / "scripts"
+                / "build_macos_app.sh"
+            )
             if not script_path.exists():
                 self.append_log("❌ Could not find build script for admin install")
-                QMessageBox.critical(self, "Admin Install", "Build script not found. Ensure the repository exists at ~/Projects/Knowledge_Chipper.")
+                QMessageBox.critical(
+                    self,
+                    "Admin Install",
+                    "Build script not found. Ensure the repository exists at ~/Projects/Knowledge_Chipper.",
+                )
                 return
 
             script_dir = str(script_path.parent)
             script_name = script_path.name
 
-            self.append_log("🔐 Admin install requested. A Terminal window will open and may prompt for your macOS password.")
+            self.append_log(
+                "🔐 Admin install requested. A Terminal window will open and may prompt for your macOS password."
+            )
 
             # Disable update actions during admin install to avoid conflicts
             self._set_admin_install_in_progress(True)
@@ -940,7 +981,9 @@ end tell
             self.append_log("🔄 Opened Terminal for admin install")
         except Exception as e:
             self.append_log(f"❌ Admin install failed to launch: {e}")
-            QMessageBox.critical(self, "Admin Install", f"Failed to start admin install: {e}")
+            QMessageBox.critical(
+                self, "Admin Install", f"Failed to start admin install: {e}"
+            )
             # Re-enable on failure to launch
             self._set_admin_install_in_progress(False)
 
@@ -950,14 +993,16 @@ end tell
             if self.admin_install_btn:
                 self.admin_install_btn.setEnabled(not in_progress)
                 self.admin_install_btn.setToolTip(
-                    "Admin install in progress…" if in_progress else
-                    "Install to /Applications (requires admin). Your macOS password will be requested in Terminal."
+                    "Admin install in progress…"
+                    if in_progress
+                    else "Install to /Applications (requires admin). Your macOS password will be requested in Terminal."
                 )
             if self.update_btn:
                 self.update_btn.setEnabled(not in_progress)
                 self.update_btn.setToolTip(
-                    "Disabled during Admin Install" if in_progress else
-                    "Check for and install the latest version.\n• Pulls latest code from GitHub\n• Updates the app bundle\n• Preserves your settings and configuration\n• Requires an active internet connection"
+                    "Disabled during Admin Install"
+                    if in_progress
+                    else "Check for and install the latest version.\n• Pulls latest code from GitHub\n• Updates the app bundle\n• Preserves your settings and configuration\n• Requires an active internet connection"
                 )
         except Exception:
             pass
@@ -966,7 +1011,7 @@ end tell
         """Handle update errors."""
         # Mark update as completed (even though failed) to prevent false crash detection
         self._update_completed = True
-        
+
         # Close progress dialog
         if self.update_progress_dialog:
             self.update_progress_dialog.close()
@@ -991,9 +1036,11 @@ end tell
         try:
             # Fast path: if ffmpeg already exists on PATH, configure and return
             import shutil as _shutil
+
             existing = _shutil.which("ffmpeg")
             if existing:
                 import os as _os
+
                 _os.environ["FFMPEG_PATH"] = existing
                 ffprobe_existing = _shutil.which("ffprobe")
                 if ffprobe_existing:
@@ -1006,20 +1053,28 @@ end tell
             for candidate in ("/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"):
                 try:
                     from pathlib import Path as _Path
+
                     if _Path(candidate).exists() and _Path(candidate).is_file():
                         import os as _os
+
                         _os.environ["FFMPEG_PATH"] = candidate
                         # Also set PATH for this process so shutil.which will work later
                         current_path = _os.environ.get("PATH", "")
                         bin_dir = str(_Path(candidate).parent)
                         if bin_dir not in current_path:
-                            _os.environ["PATH"] = f"{bin_dir}:{current_path}" if current_path else bin_dir
+                            _os.environ["PATH"] = (
+                                f"{bin_dir}:{current_path}" if current_path else bin_dir
+                            )
                         # Try ffprobe next to it
                         probe = _Path(candidate).parent / "ffprobe"
                         if probe.exists():
                             _os.environ["FFPROBE_PATH"] = str(probe)
-                        self.status_label.setText("✅ FFmpeg already installed and configured")
-                        self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
+                        self.status_label.setText(
+                            "✅ FFmpeg already installed and configured"
+                        )
+                        self.status_label.setStyleSheet(
+                            "color: #4caf50; font-weight: bold;"
+                        )
                         self.append_log(f"Using existing ffmpeg at: {candidate}")
                         return
                 except Exception:
@@ -1027,6 +1082,7 @@ end tell
 
             # Use the same arch-aware default selection as the first-run installer
             from ..workers.ffmpeg_installer import get_default_ffmpeg_release
+
             release = get_default_ffmpeg_release()
 
             self.ffmpeg_worker = FFmpegInstaller(release)

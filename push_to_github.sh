@@ -1,6 +1,6 @@
 #!/bin/bash
-# push_to_github.sh - Auto-increment version and push Knowledge_Chipper to GitHub
-# Automatically increments patch version and pushes to current branch
+# push_to_github.sh - Push Knowledge_Chipper to GitHub
+# Pushes current changes to GitHub without auto-incrementing version
 
 set -e
 
@@ -31,22 +31,12 @@ else
     echo "✅ GitHub remote already configured correctly"
 fi
 
-echo "📈 Auto-incrementing version via scripts/bump_version.py (patch)..."
-if [ -f "scripts/bump_version.py" ]; then
-    # Capture current version before bump
-    if [ -f "pyproject.toml" ]; then
-        CURRENT_VERSION=$(grep '^version\s*=\s*"' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
-    fi
-    python3 scripts/bump_version.py --part patch | cat
-    if [ -f "pyproject.toml" ]; then
-        NEW_VERSION=$(grep '^version\s*=\s*"' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
-        echo "✅ Version now: $NEW_VERSION (was ${CURRENT_VERSION:-unknown})"
-    else
-        NEW_VERSION="unknown"
-    fi
+# Get current version for display (no auto-increment)
+if [ -f "pyproject.toml" ]; then
+    CURRENT_VERSION=$(grep '^version\s*=\s*"' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
+    echo "📋 Current version: $CURRENT_VERSION"
 else
-    echo "❌ scripts/bump_version.py not found; cannot bump version"
-    NEW_VERSION="unknown"
+    CURRENT_VERSION="unknown"
 fi
 
 # Stage all changes
@@ -57,28 +47,19 @@ git add .
 if git diff --staged --quiet; then
     echo "ℹ️  No changes to commit"
 else
-    # Commit with version increment message
-    if [ "$NEW_VERSION" != "unknown" ]; then
-        git commit -m "Version bump to $NEW_VERSION
-
-- Incremented version from $CURRENT_VERSION to $NEW_VERSION
-- Latest code changes and improvements"
-    else
-        git commit -m "Code updates and improvements
+    # Commit with descriptive message
+    git commit -m "Code updates and improvements
 
 - Latest development changes
 - Bug fixes and enhancements"
-    fi
-    echo "✅ Committed changes with version increment"
+    echo "✅ Committed changes"
 fi
 
 # Push to GitHub
 echo "🚀 Pushing to GitHub..."
 echo "This will push to: https://github.com/msg43/Knowledge_Chipper.git"
 echo "Branch: $CURRENT_BRANCH"
-if [ "$NEW_VERSION" != "unknown" ]; then
-    echo "New version: $NEW_VERSION"
-fi
+echo "Current version: $CURRENT_VERSION"
 read -p "Continue? (y/N): " -n 1 -r
 echo
 
@@ -90,9 +71,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo ""
     echo "📍 Repository: https://github.com/msg43/Knowledge_Chipper"
     echo "🌿 Branch: $CURRENT_BRANCH"
-    if [ "$NEW_VERSION" != "unknown" ]; then
-        echo "📈 Version: $NEW_VERSION"
-    fi
+    echo "📋 Version: $CURRENT_VERSION"
     echo ""
     echo "✨ Changes are now live on GitHub!"
     echo ""
@@ -105,8 +84,6 @@ fi
 echo "🔍 Verifying push status..."
 echo "Remote: $(git remote get-url origin)"
 echo "Branch: $(git branch --show-current) ($(git log --oneline -1 | cut -d' ' -f1))"
-if [ "$NEW_VERSION" != "unknown" ]; then
-    echo "Version: $NEW_VERSION"
-fi
+echo "Version: $CURRENT_VERSION"
 echo ""
 echo "✅ Push complete!"

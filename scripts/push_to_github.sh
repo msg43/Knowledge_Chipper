@@ -24,6 +24,38 @@ git remote add origin https://github.com/msg43/Knowledge_Chipper.git
 
 echo "✅ Git remote configured"
 
+# Pre-push quality checks via pre-commit
+echo "🔍 Running pre-push quality checks..."
+
+# Check if pre-commit is set up
+if ! command -v pre-commit &> /dev/null; then
+    echo "⚠️  pre-commit not found. Setting up..."
+    echo "💡 Running setup script first..."
+    ./setup_precommit.sh
+    echo ""
+fi
+
+# Run pre-push hooks (includes flake8, mypy, bandit, etc.)
+echo "   → Running pre-push hooks (linting, type checking, security)..."
+if ! pre-commit run --hook-stage pre-push --all-files; then
+    echo ""
+    echo "❌ Pre-push checks failed! These are the same checks that CI runs."
+    echo ""
+    echo "💡 Pre-commit has likely auto-fixed what it can. Please:"
+    echo "   1. Review and commit any auto-fixes: git add . && git commit -m 'style: pre-commit auto-fixes'"
+    echo "   2. Fix any remaining issues shown above"
+    echo "   3. Run 'pre-commit run --hook-stage pre-push --all-files' to verify"
+    echo ""
+    read -p "Continue with push anyway? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "❌ Push cancelled due to quality check failures"
+        exit 1
+    fi
+fi
+
+echo "✅ All pre-push checks passed"
+
 # Stage all changes
 echo "📦 Staging all files..."
 git add .

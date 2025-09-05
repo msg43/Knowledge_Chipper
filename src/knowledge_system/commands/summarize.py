@@ -382,21 +382,27 @@ def summarize(
     # Apply profile defaults (can be overridden by explicit flags)
     profile_opts: dict[str, Any] = {}
     if profile == "fast":
-        profile_opts.update({
-            "use_skim": False,
-            "router_uncertainty_threshold": 1.0,
-            "flagship_judge_model": None,
-        })
+        profile_opts.update(
+            {
+                "use_skim": False,
+                "router_uncertainty_threshold": 1.0,
+                "flagship_judge_model": None,
+            }
+        )
     elif profile == "balanced":
-        profile_opts.update({
-            "use_skim": True,
-            "router_uncertainty_threshold": 0.35,
-        })
+        profile_opts.update(
+            {
+                "use_skim": True,
+                "router_uncertainty_threshold": 0.35,
+            }
+        )
     elif profile == "quality":
-        profile_opts.update({
-            "use_skim": True,
-            "router_uncertainty_threshold": 0.25,
-        })
+        profile_opts.update(
+            {
+                "use_skim": True,
+                "router_uncertainty_threshold": 0.25,
+            }
+        )
 
     processor = SummarizerProcessor(
         provider=effective_provider,
@@ -544,7 +550,6 @@ def summarize(
                         text_to_summarize,
                         dry_run=False,
                         prompt_template=template,
-                        prefer_template_summary=prefer_template_summary,
                     )
                 else:
                     # Handle text/markdown files
@@ -552,7 +557,6 @@ def summarize(
                         file_path,
                         dry_run=False,
                         prompt_template=template,
-                        prefer_template_summary=prefer_template_summary,
                     )
 
                 file_processing_time = time.time() - file_start_time
@@ -843,9 +847,7 @@ def summarize(
             console.print(
                 f"💰 Total cost: [yellow]${session_stats['total_cost']:.4f} USD[/yellow]"
             )
-            console.print(
-                f"⚡ Average speed: {avg_tokens_per_second:.1f} tokens/second"
-            )
+            console.print(f"⚡ Average speed: {avg_tokens_per_second:.1f} tokens/second")
 
             # Content statistics
             console.print("\n[bold]Summarization:[/bold]")
