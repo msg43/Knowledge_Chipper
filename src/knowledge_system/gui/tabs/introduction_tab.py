@@ -64,7 +64,7 @@ class IntroductionTab(BaseTab):
     def _create_overview_section(self, parent_layout: Any) -> None:
         """Create the app overview section."""
         # Section header
-        header_label = QLabel("📚 What is Knowledge Chipper?")
+        header_label = QLabel("📚 What is Skipthepodcast.com?")
         header_font = QFont()
         header_font.setPointSize(14)
         header_font.setBold(True)
@@ -74,29 +74,23 @@ class IntroductionTab(BaseTab):
 
         overview_text = QLabel(
             """
-            <b>Knowledge Chipper transforms your media content into organized, searchable knowledge.</b>
+            <b>Skipthepodcast.com transforms your YouTube videos, RSS Feeds, and Documents into CLAIMS.</b>
 
-<br><br><b>🎯 Perfect for:</b>
-• Researchers processing interview recordings
-• Students transcribing lectures and creating study materials
-• Content creators organizing video libraries
-• Professionals building knowledge bases from meetings
+            <br><br>What are claims? Claims are the carefully sourced, atomized statements that make up the heart of any informative video or document. They form the backbone of a world class summary. Not just an overview of what was discussed, but a point by point inventory of the most novel, important, controversial insightful views of the source.
 
-<br><br><b>⚡ What it does:</b>
-<br>📹 <b>Transcribes</b> → Videos, audio files, and documents using advanced AI
-<br>📝 <b>Summarizes</b> → Creates intelligent summaries with smart chunking
-<br>🗺️ <b>Organizes</b> → Generates knowledge maps and connections
-<br>🔍 <b>Makes Searchable</b> → Everything becomes easily findable
+            <br><br><b>⚡ What it does:</b>
+            <br>📹 <b>Transcribes</b> → Videos (YouTube or local), audio files (RSS feeds or local files), and documents
+            <br>📝 <b>Summarizes</b> → Creates summaries unlike any you have ever seen. Highly intelligent summaries using the most cutting edge AI strategies
+            <br>🗺️ <b>Organizes</b> → Generates knowledge maps and connections
+            <br>🔍 <b>Collaborates</b> → This data can go out in multiple formats, including to Obsidian vaults or to our Skipthepodcast.com website, where you can share your insight with others
 
-<br><br><b>🚀 Key Features:</b>
-<br>• <b>Smart Model-Aware Chunking:</b> 95% efficiency vs 25% with hardcoded limits
-<br>• <b>Real-time Progress Tracking:</b> Accurate ETAs and detailed status updates
-<br>• <b>YouTube Integration:</b> Direct video download and processing with proxy support
-<br>• <b>Speaker Diarization:</b> Identify different speakers in multi-speaker content
-<br>• <b>Multiple AI Providers:</b> OpenAI, Anthropic, local models via Ollama
-<br>• <b>Batch Processing:</b> Handle multiple files simultaneously
-<br>• <b>File Watching:</b> Automatic processing of new files
-        """
+            <br><br><b>🚀 Key Features:</b>
+            <br>• <b>One-click YouTube Integration:</b> Enter a URL or a Playlist URL with 5000 videos in it and we do the rest!
+            <br>• <b>Speaker Diarization:</b> Identify different speakers in multi-speaker content
+            <br>• <b>Local and Cloud AI Options:</b> Highly granular control over the AI models you use for each step of the process, including OpenAI, Anthropic, local models via Ollama
+            <br>• <b>Batch Processing:</b> Handle thousands of files simultaneously
+            <br>• <b>File Watching:</b> Automatic processing of new files
+            """
         )
 
         overview_text.setWordWrap(True)
@@ -116,35 +110,26 @@ class IntroductionTab(BaseTab):
 
         quickstart_text = QLabel(
             """
-            <b>Get started in 4 simple steps:</b>
+            <b>Get started in two simple steps:</b>
 
-<br><br><b>1. Configure API Keys</b> 🔑
-• Go to the <b>API Keys</b> tab
-• Add your OpenAI or Anthropic API key for summarization
-• For YouTube: Add Bright Data API key (required)
-• For speaker diarization: Add HuggingFace token (optional)
+            <br><br><b>1. Decide if you want to access YouTube videos for summarization.</b>
+            <br>• If so, go to the <b>Settings</b> tab and add your Bright Data API key
+            <br>• If not, you can still use the app to summarize local audio and video files and RSS feeds and documents
 
-<br><br><b>2. Extract YouTube metadata and full transcript with optional diarization</b> 📺
-• Go to the <b>Cloud Transcription</b> tab
-• Enter YouTube URLs or RSS feeds, or upload a file with URLs
-• Enable speaker diarization for multi-speaker content
-• Click "Extract Transcripts"
+            <br><br><b>2. Decide if you want to use cloud or local AI models.</b>
+            <br>• For Local, just follow the prompts in the app to install Ollama (and maybe get a HuggingFace token if you want to use certain local models)
+            <br>• For Cloud, go to Settings and add your OpenAI or Anthropic API key
 
-<br><br><b>3. Summarize YouTube transcript or any other document using advanced AI techniques</b> 📝
-• Go to the <b>Summarization</b> tab
-• Upload your transcripts or other documents
-• Choose your AI provider and custom prompts
-• Click "Start Summarization"
+            <br><br><b>THAT'S IT! You are ready to go.</b>
 
-<br><br><b>4. View your results, which can be saved in a variety of formats both in separate files or inline with Obsidian .md files</b> 📄
-• Transcripts are saved as .txt files
-• Summaries are saved as .md files with YAML frontmatter
-• Knowledge maps (MOCs) organize everything
-• Output supports Obsidian integration
-• Use "View Last Report" to see detailed results
+            <br><br><b>3. Just work your way through the tabs in order left to right.</b>
+            <br>For example, if you want to summarize a YouTube video, you would go to the <b>Cloud Transcription</b> tab, enter the URL, and click "Extract Transcripts".
+            <br>If you prefer to summarize a local video, you would go to the <b>Local Transcription</b> tab, select the audio or video file or text document, and click "Extract Transcripts".
+            <br>Either way, you will get a .md file with the transcript, a nice thumbnail, and a bunch of metadata.
 
-<br><br><b>💡 Pro Tip:</b> Start with shorter files (under 30 minutes) to get familiar with the workflow, then scale up to longer content!
-        """
+            <br><br>Then you would go to the <b>Summarization</b> tab, select the .md file with the transcript, and click "Start Summarization".
+            <br>The summary can be saved in a variety of formats both in separate files or inline with Obsidian .md files
+            """
         )
 
         quickstart_text.setWordWrap(True)
@@ -152,9 +137,9 @@ class IntroductionTab(BaseTab):
         parent_layout.addWidget(quickstart_text)
 
     def _create_tab_guide_section(self, parent_layout: Any) -> None:
-        """Create the tab navigation guide section."""
+        """Create the advanced features section."""
         # Section header
-        header_label = QLabel("🧭 Tab Navigation Guide")
+        header_label = QLabel("🔧 Advanced Features")
         header_font = QFont()
         header_font.setPointSize(14)
         header_font.setBold(True)
@@ -164,41 +149,25 @@ class IntroductionTab(BaseTab):
 
         tabs_text = QLabel(
             """
-            <b>Each tab serves a specific purpose:</b>
+            <b>Advanced Features Tabs:</b>
 
-<br><br><b>📁 Process Management</b> - Your main workspace
-• Upload and process multiple files at once
-• Configure transcription and summarization settings
-• Monitor progress with real-time updates
-• Generate knowledge maps (MOCs) from your content
+            <br><br><b>🔍 Claim Search</b> - Search for claims across all processed content
 
-<br><br><b>👁️ File Watcher</b> - Automated processing
-• Set up folders to watch for new files
-• Automatically process files as they're added
-• Perfect for ongoing projects or regular content
+            <br><br><b>👁️ File Watcher</b> - Automated processing
+            <br>• Set up folders to watch for new files
+            <br>• Automatically process files as they're added
+            <br>• Perfect for ongoing projects or regular content
 
-<br><br><b>📺 YouTube</b> - Video content processing
-• Download videos directly from YouTube URLs or RSS feeds with proxy support
-• Process entire playlists or channels automatically
-• Speaker diarization for multi-speaker content
-• Automatic metadata extraction and organization
-• Requires Bright Data API key
+            <br><br><b>🎙️ Speaker Attribution</b> - Speaker identification
+            <br>• Identify the speakers in the transcript
+            <br>• Assign names to the speakers
+            <br>• The app will learn from your corrections and improve over time
 
-<br><br><b>🎙️ Transcription</b> - Audio-to-text conversion
-• Advanced Whisper-based transcription
-• Multiple model sizes for speed vs accuracy
-• GPU acceleration support for faster processing
+            <br><br><b>✏️ Summary Cleanup</b> - Review and edit summaries, claims, and entities post-generation
 
-<br><br><b>📝 Summarization</b> - AI-powered insights
-• Create intelligent summaries with custom prompts
-• Smart chunking for long content
-• Multiple AI providers (OpenAI, Anthropic, Ollama)
-
-<br><br><b>🔑 API Keys</b> - Configuration and setup
-• Manage all your API credentials securely
-• Test connections and validate keys
-• Required for AI-powered features
-        """
+            <br><br><b>☁️ Cloud Uploads</b> - Upload claims to the cloud
+            <br>• Upload claims to the cloud for sharing and collaboration
+            """
         )
 
         tabs_text.setWordWrap(True)
@@ -220,15 +189,15 @@ class IntroductionTab(BaseTab):
         doc_text = QLabel(
             """
             <b>📖 Complete Documentation:</b>
-<br>• <a href="readme://open">README.md</a> - Full setup guide, troubleshooting, and advanced features
-<br>• <a href="changelog://open">CHANGELOG.md</a> - Latest updates and version history
-<br>• <a href="contributing://open">CONTRIBUTING.md</a> - Development and contribution guidelines
+            <br>• <a href="readme://open">README.md</a> - Full setup guide, troubleshooting, and advanced features
+            <br>• <a href="changelog://open">CHANGELOG.md</a> - Latest updates and version history
+            <br>• <a href="contributing://open">CONTRIBUTING.md</a> - Development and contribution guidelines
 
-<br><br><b>🎯 Quick Reference:</b>
-<br>• <a href="youtube://setup">YouTube API Setup Guide</a> - Configure YouTube integration
-<br>• <a href="performance://guide">Performance Optimization</a> - Get the best results
-<br>• <a href="troubleshooting://help">Troubleshooting Guide</a> - Common issues and solutions
-        """
+            <br><br><b>🎯 Quick Reference:</b>
+            <br>• <a href="youtube://setup">YouTube API Setup Guide</a> - Configure YouTube integration
+            <br>• <a href="performance://guide">Performance Optimization</a> - Get the best results
+            <br>• <a href="troubleshooting://help">Troubleshooting Guide</a> - Common issues and solutions
+            """
         )
 
         doc_text.setWordWrap(True)
