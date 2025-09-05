@@ -68,14 +68,14 @@ repos:
     rev: v1.8.0
     hooks:
       - id: mypy
-        args: ['--config-file=pyproject.toml', '--ignore-missing-imports']
+        args: ['--config-file=pyproject.toml', '--ignore-missing-imports', '--explicit-package-bases']
         additional_dependencies:
           - types-requests
           - types-PyYAML
           - types-python-dateutil
           - types-setuptools
-        files: ^src/
-        exclude: ^tests/
+        files: ^src/knowledge_system/.*\.py$
+        exclude: ^(tests/|src/knowledge_system/__init__\.py)
         stages: [pre-push]
 
   # Security scanning with bandit

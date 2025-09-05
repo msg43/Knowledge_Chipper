@@ -863,9 +863,9 @@ class APIKeysTab(BaseTab):
             import subprocess  # nosec B404 # Required for app restart functionality
 
             if app_path.endswith(".app"):
-                subprocess.Popen(
+                subprocess.Popen(  # nosec B603,B607 # Trusted system operation
                     ["open", app_path]
-                )  # nosec B603,B607 # Trusted system operation
+                )
             else:
                 subprocess.Popen(app_path.split())  # nosec B603 # Trusted app path
 
@@ -930,9 +930,9 @@ tell application "Terminal"
 end tell
 """
 
-            subprocess.run(
+            subprocess.run(  # nosec B603,B607 # Trusted AppleScript execution
                 ["osascript", "-e", apple_script], check=True
-            )  # nosec B603,B607 # Trusted AppleScript execution
+            )
             self.append_log("🔄 Opened Terminal for fallback update")
             self.append_log(
                 "Please follow the prompts in Terminal, then restart the app"
@@ -987,9 +987,9 @@ tell application "Terminal"
 end tell
 """
 
-            subprocess.run(
+            subprocess.run(  # nosec B603,B607 # Trusted AppleScript execution
                 ["osascript", "-e", apple_script], check=True
-            )  # nosec B603,B607 # Trusted AppleScript execution
+            )
             self.append_log("🔄 Opened Terminal for admin install")
         except Exception as e:
             self.append_log(f"❌ Admin install failed to launch: {e}")
