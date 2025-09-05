@@ -1,5 +1,4 @@
-"""
-Temporality Analysis for Claims
+"""Temporality Analysis for Claims.
 
 This module analyzes claims to determine whether they are:
 - Timeless: Universal truths, principles, or facts that remain valid indefinitely
@@ -22,14 +21,14 @@ class TemporalityAnalyzer:
     """Analyzes claims for temporal characteristics using LLM reasoning."""
 
     def __init__(self, llm: AnyLLM, prompt_path: Path):
+        """Initialize the temporality analyzer."""
         self.llm = llm
         self.template = prompt_path.read_text()
 
     def analyze_claim_temporality(
         self, claim: ScoredClaim
     ) -> tuple[TemporalityScore, float, str]:
-        """
-        Analyze a single claim for its temporal characteristics.
+        """Analyze a single claim for its temporal characteristics.
 
         Args:
             claim: The claim to analyze
@@ -78,8 +77,7 @@ class TemporalityAnalyzer:
             return 3, 0.1, f"Analysis failed: {str(e)}"
 
     def analyze_claims_batch(self, claims: list[ScoredClaim]) -> list[ScoredClaim]:
-        """
-        Analyze temporality for a batch of claims.
+        """Analyze temporality for a batch of claims.
 
         Args:
             claims: List of claims to analyze
@@ -105,8 +103,7 @@ class TemporalityAnalyzer:
 
 
 def analyze_temporality(claims: list[ScoredClaim], model_uri: str) -> list[ScoredClaim]:
-    """
-    Analyze temporality for all claims in a list.
+    """Analyze temporality for all claims in a list.
 
     Args:
         claims: List of claims to analyze
@@ -190,8 +187,7 @@ def is_timely_claim(claim_text: str) -> bool:
 
 
 def estimate_claim_half_life(temporality: TemporalityType, claim_text: str) -> str:
-    """
-    Estimate how long a claim will remain relevant.
+    """Estimate how long a claim will remain relevant.
 
     Args:
         temporality: The temporal classification

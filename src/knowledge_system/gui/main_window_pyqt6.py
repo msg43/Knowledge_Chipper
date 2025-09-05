@@ -1,6 +1,4 @@
-"""
-Main GUI Window for Knowledge System - PyQt6 Implementation
-Main GUI Window for Knowledge System - PyQt6 Implementation
+"""Main GUI Window for Knowledge System - PyQt6 Implementation.
 
 Streamlined main window that focuses on window setup and coordination.
 All business logic has been moved to modular tab classes.
@@ -90,6 +88,7 @@ class MainWindow(QMainWindow):
     """Streamlined main application window for Knowledge System using PyQt6."""
 
     def __init__(self) -> None:
+        """Initialize the main window."""
         super().__init__()
 
         # Force window to be active (unless in testing mode)
@@ -555,8 +554,8 @@ class MainWindow(QMainWindow):
                 gui = get_gui_settings_manager()
                 gui.set_value("⚙️ Settings", "ffmpeg_first_run_shown", True)
                 gui.save()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not save FFmpeg first run flag: {e}")
             # Clear the guard regardless of result
             setattr(self, "_ffmpeg_first_run_dialog_open", False)
         except Exception as e:
@@ -673,7 +672,6 @@ class MainWindow(QMainWindow):
 
 def launch_gui() -> None:
     """Launch the Knowledge System GUI application."""
-
     try:
         # Import PyQt6 first to check availability
         import os

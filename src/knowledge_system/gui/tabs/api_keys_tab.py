@@ -35,6 +35,7 @@ class APIKeysTab(BaseTab):
     settings_saved = pyqtSignal()
 
     def __init__(self, parent: Any = None) -> None:
+        """Initialize the API keys tab."""
         # Initialize _actual_api_keys before calling super().__init__
         self._actual_api_keys: dict[str, str] = {}
         self.update_worker: UpdateWorker | None = None
@@ -666,8 +667,9 @@ class APIKeysTab(BaseTab):
             # New: determinate progress support
             try:
                 self.update_worker.update_progress_percent.connect(self._handle_update_progress_percent)  # type: ignore[attr-defined]
-            except Exception:
-                pass
+            except AttributeError:
+                # Optional signal, not available in all worker versions
+                logger.debug("update_progress_percent signal not available")
             self.update_worker.update_finished.connect(self._handle_update_finished)
             self.update_worker.update_error.connect(self._handle_update_error)
 
@@ -700,8 +702,9 @@ class APIKeysTab(BaseTab):
                     self.update_progress_dialog.layout().setSizeConstraint(
                         QLayout.SizeConstraint.SetFixedSize
                     )
-            except Exception:
-                pass
+            except (AttributeError, RuntimeError):
+                # Layout constraint not supported in this PyQt version
+                logger.debug("Layout size constraint not available")
             self.update_progress_dialog.setSizeGripEnabled(False)
             # Subtle styling and monospace label for better readability of logs
             self.update_progress_dialog.setStyleSheet(
@@ -938,8 +941,11 @@ end tell
             )
 
     def _admin_install(self) -> None:
-        """Perform an admin install to /Applications via Terminal, removing user-space copy first.
-        This will prompt for the macOS password in Terminal (not inside the app)."""
+        """Perform an admin install to /Applications via Terminal.
+
+        Removes user-space copy first. This will prompt for the macOS password
+        in Terminal (not inside the app).
+        """
         try:
             import subprocess
             from pathlib import Path
@@ -1004,8 +1010,8 @@ end tell
                     if in_progress
                     else "Check for and install the latest version.\n• Pulls latest code from GitHub\n• Updates the app bundle\n• Preserves your settings and configuration\n• Requires an active internet connection"
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not update button tooltip: {e}")
 
     def _handle_update_error(self, error: str) -> None:
         """Handle update errors."""
@@ -1077,8 +1083,8 @@ end tell
                         )
                         self.append_log(f"Using existing ffmpeg at: {candidate}")
                         return
-                except Exception:
-                    pass
+                except (OSError, RuntimeError) as e:
+                    logger.debug(f"FFmpeg check failed for {candidate}: {e}")
 
             # Use the same arch-aware default selection as the first-run installer
             from ..workers.ffmpeg_installer import get_default_ffmpeg_release
@@ -1146,8 +1152,9 @@ end tell
             try:
                 if self.update_progress_dialog:
                     self.update_progress_dialog.setLabelText(clean)
-            except Exception:
-                pass
+            except RuntimeError:
+                # Dialog was destroyed or not ready
+                logger.debug("Could not update progress dialog text")
 
     def _handle_ffmpeg_finished(
         self, success: bool, message: str, installed_path: str

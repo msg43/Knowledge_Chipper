@@ -1,6 +1,4 @@
-"""
-Summarize command for the Knowledge System CLI
-Summarize command for the Knowledge System CLI.
+"""Summarize command for the Knowledge System CLI.
 
 Handles summarization of transcripts and documents using LLM services.
 """
@@ -20,9 +18,7 @@ from .transcribe import _generate_obsidian_link
 
 
 def _extract_youtube_url_from_file(file_path: Path) -> str | None:
-    """
-    Extract YouTube URL from a processed file's YAML frontmatter
-    Extract YouTube URL from a processed file's YAML frontmatter.
+    """Extract YouTube URL from a processed file's YAML frontmatter.
 
     Looks for the 'source' field in the YAML frontmatter which typically
     contains the original YouTube URL for transcript and summary files.
@@ -248,9 +244,7 @@ def summarize(
     profile: str | None,
     use_skim: bool,
 ) -> None:
-    """
-    Summarize transcripts or documents using LLM
-    Summarize transcripts or documents using LLM.
+    """Summarize transcripts or documents using LLM.
 
     Takes transcripts, PDFs, or markdown files and generates structured summaries
     with key points, insights, and actionable items. Supports both single files

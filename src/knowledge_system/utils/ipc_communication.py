@@ -1,5 +1,4 @@
-"""
-Inter-Process Communication (IPC) Module
+"""Inter-Process Communication (IPC) Module.
 
 Handles communication between the main GUI process and standalone worker processes.
 Uses JSON messages over stdout/stderr for robust cross-platform communication.
@@ -28,6 +27,7 @@ class IPCCommunicator:
     """Handles JSON-based IPC communication between processes."""
 
     def __init__(self):
+        """Initialize the IPC communicator."""
         self._lock = threading.Lock()
         self._sequence_number = 0
 
@@ -128,6 +128,7 @@ class IPCMessageParser:
     """Parses incoming IPC messages from worker processes."""
 
     def __init__(self):
+        """Initialize the message parser."""
         self.message_handlers = {}
 
     def register_handler(self, message_type: str, handler_func):
@@ -176,6 +177,7 @@ class HeartbeatMonitor:
     """Monitors heartbeat messages from worker processes."""
 
     def __init__(self, timeout_seconds: int = 60):
+        """Initialize the heartbeat monitor."""
         self.timeout_seconds = timeout_seconds
         self.last_heartbeat = time.time()
         self._lock = threading.Lock()
@@ -222,6 +224,7 @@ class ProcessCommunicationManager:
     """High-level manager for process communication."""
 
     def __init__(self):
+        """Initialize the process communication manager."""
         self.parser = IPCMessageParser()
         self.heartbeat_monitor = HeartbeatMonitor()
         self.message_buffer = []

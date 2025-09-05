@@ -1,5 +1,4 @@
-"""
-Process Isolation Configuration Management
+"""Process Isolation Configuration Management.
 
 Provides configuration settings and management for the process isolation system,
 including resource limits, safety settings, and feature flags.
@@ -84,8 +83,7 @@ class ProcessIsolationConfig:
     }
 
     def __init__(self, config_file: str | None = None):
-        """
-        Initialize configuration manager.
+        """Initialize configuration manager.
 
         Args:
             config_file: Optional path to configuration file
@@ -455,8 +453,8 @@ def validate_system_requirements() -> dict[str, Any]:
             free_gb = disk_usage.free / (1024**3)
             if free_gb < 5.0:
                 results["warnings"].append(f"Low disk space: {free_gb:.1f}GB free")
-        except Exception:
-            pass
+        except (OSError, AttributeError) as e:
+            logger.debug(f"Could not check disk space: {e}")
 
     except Exception as e:
         results["issues"].append(f"System check failed: {e}")

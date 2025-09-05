@@ -167,6 +167,7 @@
   },
   "active": "012fe1ae2cece1a4",
   "lastOpenFiles": [
+    "src/knowledge_system/gui/main_window_pyqt6.py.isorted",
     "test_push_hooks.py",
     "venv/bin/pre-commit",
     "venv/lib/python3.13/site-packages/pre_commit-4.3.0.dist-info/top_level.txt",
@@ -177,7 +178,6 @@
     "venv/lib/python3.13/site-packages/pre_commit-4.3.0.dist-info/METADATA",
     "venv/lib/python3.13/site-packages/pre_commit-4.3.0.dist-info/RECORD",
     "venv/lib/python3.13/site-packages/pre_commit-4.3.0.dist-info/LICENSE",
-    "venv/lib/python3.13/site-packages/pre_commit-4.3.0.dist-info",
     "dist/dmg_staging.noindex/root/Skip the Podcast Desktop.app/Contents/MacOS/venv/lib/python3.13/site-packages/streamlit/static/static/media/snowflake.JU2jBHL8.svg",
     "dist/dmg_staging.noindex/root/Skip the Podcast Desktop.app/Contents/MacOS/venv/lib/python3.13/site-packages/streamlit/static/static/media/flake-2.BnWSExPC.png",
     "dist/dmg_staging.noindex/root/Skip the Podcast Desktop.app/Contents/MacOS/venv/lib/python3.13/site-packages/streamlit/static/static/media/flake-1.B2r5AHMK.png",
