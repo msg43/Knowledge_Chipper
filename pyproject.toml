@@ -163,6 +163,13 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 strict_equality = true
+explicit_package_bases = true
+exclude = [
+    "^build/",
+    "^dist/",
+    "^venv/",
+    "^src/knowledge_system\\.egg-info/",
+]
 
 [[tool.mypy.overrides]]
 module = [

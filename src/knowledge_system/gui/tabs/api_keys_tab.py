@@ -860,12 +860,14 @@ class APIKeysTab(BaseTab):
             QApplication.quit()
 
             # Use subprocess to start the new instance
-            import subprocess
+            import subprocess  # nosec B404 # Required for app restart functionality
 
             if app_path.endswith(".app"):
-                subprocess.Popen(["open", app_path])
+                subprocess.Popen(
+                    ["open", app_path]
+                )  # nosec B603,B607 # Trusted system operation
             else:
-                subprocess.Popen(app_path.split())
+                subprocess.Popen(app_path.split())  # nosec B603 # Trusted app path
 
         except Exception as e:
             self.append_log(f"❌ Failed to restart automatically: {e}")
@@ -902,7 +904,7 @@ class APIKeysTab(BaseTab):
     def _fallback_update(self) -> None:
         """Fallback update method using Terminal."""
         try:
-            import subprocess
+            import subprocess  # nosec B404 # Required for Terminal automation
             from pathlib import Path
 
             # Find the script
@@ -928,7 +930,9 @@ tell application "Terminal"
 end tell
 """
 
-            subprocess.run(["osascript", "-e", apple_script], check=True)
+            subprocess.run(
+                ["osascript", "-e", apple_script], check=True
+            )  # nosec B603,B607 # Trusted AppleScript execution
             self.append_log("🔄 Opened Terminal for fallback update")
             self.append_log(
                 "Please follow the prompts in Terminal, then restart the app"
@@ -947,7 +951,7 @@ end tell
         in Terminal (not inside the app).
         """
         try:
-            import subprocess
+            import subprocess  # nosec B404 # Required for Terminal automation
             from pathlib import Path
 
             script_path = (
@@ -983,7 +987,9 @@ tell application "Terminal"
 end tell
 """
 
-            subprocess.run(["osascript", "-e", apple_script], check=True)
+            subprocess.run(
+                ["osascript", "-e", apple_script], check=True
+            )  # nosec B603,B607 # Trusted AppleScript execution
             self.append_log("🔄 Opened Terminal for admin install")
         except Exception as e:
             self.append_log(f"❌ Admin install failed to launch: {e}")
