@@ -2752,3 +2752,4 @@ python -m knowledge_system cache flag
 - Application behaving unexpectedly after changes
 
 The cache clearing is smart and only runs when needed, so it won't slow down normal application startup.
+# Test comment
