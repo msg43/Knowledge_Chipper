@@ -1,6 +1,6 @@
 # Skip the Podcast Desktop
 
-**Version:** 3.1.1 | **Build Date:** 2025-09-04 
+**Version:** 3.2.0 | **Build Date:** 2025-01-22 
 
 Skip the Podcast Desktop - A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 
@@ -9,6 +9,15 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 **🔍 HCE Features:** Advanced claim extraction with A/B/C confidence tiers + real-time contradiction detection + semantic deduplication + entity recognition (people/concepts) + relationship mapping + evidence citations + Obsidian integration with auto-tagging + comprehensive search and filtering.
 
 ## 🎉 What's New (Latest Updates)
+
+### 🔐 **GetReceipts.org OAuth Integration (January 2025)**
+- **Seamless Cloud Sync**: Direct OAuth-based uploads to GetReceipts.org with complete user attribution
+- **One-Click Authentication**: Secure browser-based sign-in via GetReceipts.org with automatic token management
+- **Complete Data Fidelity**: All HCE data types preserved (claims, evidence, people, jargon, mental models, relationships)
+- **GUI Integration**: Updated Cloud Uploads tab with OAuth authentication and real-time upload progress
+- **CLI Integration**: New `knowledge-system upload` command for batch uploads with tier filtering
+- **Production Ready**: Environment switching between development and production GetReceipts instances
+- **Smart Filtering**: Upload only A/B tier claims or filter by specific criteria before upload
 
 ### 📝 **Obsidian MOC Pages with Dataview Integration (January 2025)**
 - **Dynamic Knowledge Pages**: New "Write MOC Obsidian Pages" checkbox generates ready-to-use Obsidian pages with dataview queries

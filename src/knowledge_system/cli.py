@@ -171,6 +171,14 @@ main.add_command(moc)
 main.add_command(process)
 main.add_command(database)
 
+# Import and add upload command
+try:
+    from .commands.upload import upload
+    main.add_command(upload)
+except ImportError as e:
+    # OAuth dependencies not available
+    pass
+
 
 
 # Models subcommands

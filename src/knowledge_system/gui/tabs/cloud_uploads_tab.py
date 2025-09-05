@@ -1,8 +1,8 @@
 """
 Cloud Uploads Tab
 
-Database-to-database upload system for uploading claims and associated data
-directly from SQLite to Supabase database. No file storage operations.
+OAuth-based upload system for uploading claims and associated data
+directly to GetReceipts.org via authenticated user uploads.
 """
 
 from __future__ import annotations
@@ -34,129 +34,97 @@ from PyQt6.QtWidgets import (
 from ...config import get_settings
 from ...logger import get_logger
 from ...services.claims_upload_service import ClaimsUploadService, ClaimUploadData
-from ...services.supabase_auth import SupabaseAuthService
-from ...services.supabase_sync import SupabaseSyncService
+from ...cloud.oauth import GetReceiptsUploader, get_config, set_production
 from ..components.base_tab import BaseTab
 
 logger = get_logger(__name__)
 
 
 class DatabaseUploadWorker(QThread):
-    """Worker thread for uploading claims data to Supabase database."""
+    """Worker thread for uploading claims data via GetReceipts OAuth."""
     
     progress = pyqtSignal(int, int, str)  # current, total, message
     finished = pyqtSignal(int, int)       # success_count, total_count
     error = pyqtSignal(str)               # error_message
 
-    def __init__(self, claims_data: List[ClaimUploadData], client: object | None):
+    def __init__(self, claims_data: List[ClaimUploadData], uploader: GetReceiptsUploader):
         super().__init__()
         self.claims_data = claims_data
-        self.client = client
+        self.uploader = uploader
         self.should_stop = False
 
     def run(self) -> None:
-        """Upload claims data to Supabase database."""
-        if not self.client:
-            self.error.emit("Supabase client not available")
+        """Upload claims data via GetReceipts OAuth."""
+        if not self.uploader:
+            self.error.emit("GetReceipts uploader not available")
             self.finished.emit(0, len(self.claims_data))
             return
 
         success_count = 0
         total_count = len(self.claims_data)
 
-        # Initialize sync service with client
-        sync_service = SupabaseSyncService()
-        sync_service.client = self.client
-
-        for i, claim in enumerate(self.claims_data):
-            if self.should_stop:
-                break
-
-            try:
-                # Upload claim and associated data
-                success = self._upload_claim_data(sync_service, claim)
-                
-                if success:
-                    success_count += 1
-                    self.progress.emit(i + 1, total_count, f"✅ {claim.canonical[:50]}...")
-                else:
-                    self.progress.emit(i + 1, total_count, f"❌ {claim.canonical[:50]}...")
-
-            except Exception as e:
-                logger.error(f"Error uploading claim {claim.claim_id}: {e}")
-                self.progress.emit(i + 1, total_count, f"❌ Error: {str(e)[:50]}...")
+        try:
+            # Convert claims data to GetReceipts format and upload
+            session_data = self._convert_to_getreceipts_format()
+            
+            self.progress.emit(0, total_count, "🔄 Starting upload to GetReceipts.org...")
+            
+            # Upload all data at once using the GetReceipts uploader
+            upload_results = self.uploader.upload_session_data(session_data)
+            
+            # Count successes based on upload results
+            success_count = sum(len(data) if data else 0 for data in upload_results.values())
+            
+            self.progress.emit(total_count, total_count, f"✅ Upload completed! {success_count} records uploaded")
+            
+        except Exception as e:
+            logger.error(f"Error uploading to GetReceipts: {e}")
+            self.error.emit(f"Upload failed: {str(e)}")
 
         self.finished.emit(success_count, total_count)
 
-    def _upload_claim_data(self, sync_service: SupabaseSyncService, claim: ClaimUploadData) -> bool:
-        """Upload a single claim with all associated data."""
-        try:
-            # Upload episode first (if not already exists)
-            if claim.episode_data:
-                self._upsert_episode(sync_service, claim.episode_data)
-
-            # Upload the claim
-            self._upsert_claim(sync_service, claim)
-
-            # Upload associated data
-            for evidence in claim.evidence_spans:
-                self._upsert_evidence_span(sync_service, evidence)
-
-            for person in claim.people:
-                self._upsert_person(sync_service, person)
-
-            for concept in claim.concepts:
-                self._upsert_concept(sync_service, concept)
-
-            for jargon in claim.jargon:
-                self._upsert_jargon(sync_service, jargon)
-
-            for relation in claim.relations:
-                self._upsert_relation(sync_service, relation)
-
-            return True
-
-        except Exception as e:
-            logger.error(f"Error uploading claim data: {e}")
-            return False
-
-    def _upsert_episode(self, sync_service: SupabaseSyncService, episode_data: Dict[str, Any]) -> None:
-        """Upload episode data with overwrite."""
-        sync_service.client.table('episodes').upsert(episode_data).execute()
-
-    def _upsert_claim(self, sync_service: SupabaseSyncService, claim: ClaimUploadData) -> None:
-        """Upload claim data with overwrite."""
-        claim_dict = {
-            'episode_id': claim.episode_id,
-            'claim_id': claim.claim_id,
-            'canonical': claim.canonical,
-            'claim_type': claim.claim_type,
-            'tier': claim.tier,
-            'first_mention_ts': claim.first_mention_ts,
-            'scores_json': claim.scores_json,
-            'inserted_at': claim.inserted_at
+    def _convert_to_getreceipts_format(self) -> Dict[str, Any]:
+        """Convert Knowledge_Chipper claims data to GetReceipts format."""
+        session_data = {
+            'episodes': [],
+            'claims': [],
+            'evidence_spans': [],
+            'people': [],
+            'jargon': [],
+            'concepts': [],
+            'relations': []
         }
-        sync_service.client.table('claims').upsert(claim_dict).execute()
-
-    def _upsert_evidence_span(self, sync_service: SupabaseSyncService, evidence: Dict[str, Any]) -> None:
-        """Upload evidence span data."""
-        sync_service.client.table('evidence_spans').upsert(evidence).execute()
-
-    def _upsert_person(self, sync_service: SupabaseSyncService, person: Dict[str, Any]) -> None:
-        """Upload person data."""
-        sync_service.client.table('people').upsert(person).execute()
-
-    def _upsert_concept(self, sync_service: SupabaseSyncService, concept: Dict[str, Any]) -> None:
-        """Upload concept data."""
-        sync_service.client.table('concepts').upsert(concept).execute()
-
-    def _upsert_jargon(self, sync_service: SupabaseSyncService, jargon: Dict[str, Any]) -> None:
-        """Upload jargon data."""
-        sync_service.client.table('jargon').upsert(jargon).execute()
-
-    def _upsert_relation(self, sync_service: SupabaseSyncService, relation: Dict[str, Any]) -> None:
-        """Upload relation data."""
-        sync_service.client.table('relations').upsert(relation).execute()
+        
+        # Track unique episodes
+        seen_episodes = set()
+        
+        for claim in self.claims_data:
+            # Add episode data (if not already added)
+            if claim.episode_data and claim.episode_id not in seen_episodes:
+                session_data['episodes'].append(claim.episode_data)
+                seen_episodes.add(claim.episode_id)
+            
+            # Add claim data
+            claim_dict = {
+                'claim_id': claim.claim_id,
+                'canonical': claim.canonical,
+                'episode_id': claim.episode_id,
+                'claim_type': claim.claim_type,
+                'tier': claim.tier,
+                'scores_json': claim.scores_json,
+                'first_mention_ts': claim.first_mention_ts,
+                'inserted_at': claim.inserted_at
+            }
+            session_data['claims'].append(claim_dict)
+            
+            # Add associated data
+            session_data['evidence_spans'].extend(claim.evidence_spans)
+            session_data['people'].extend(claim.people)
+            session_data['jargon'].extend(claim.jargon)
+            session_data['concepts'].extend(claim.concepts)
+            session_data['relations'].extend(claim.relations)
+        
+        return session_data
 
     def stop(self) -> None:
         """Stop the upload process."""
@@ -164,12 +132,13 @@ class DatabaseUploadWorker(QThread):
 
 
 class CloudUploadsTab(BaseTab):
-    """Tab for uploading claims data directly to Supabase database."""
+    """Tab for uploading claims data to GetReceipts.org via OAuth."""
 
     def __init__(self, parent=None) -> None:
         self.upload_worker: Optional[DatabaseUploadWorker] = None
         self.tab_name = "Cloud Uploads"
-        self.auth = SupabaseAuthService()
+        self.uploader: Optional[GetReceiptsUploader] = None
+        self.authenticated_user: Optional[Dict[str, Any]] = None
         self.claims_service: Optional[ClaimsUploadService] = None
         self.claims_data: List[ClaimUploadData] = []
         
@@ -240,7 +209,7 @@ class CloudUploadsTab(BaseTab):
 
         # Info text about OAuth flow
         info_text = QLabel(
-            "🔐 Sign in via Skipthepodcast.com to upload your claims data.\n"
+            "🔐 Sign in via GetReceipts.org to upload your claims data.\n"
             "This will open your browser for secure authentication."
         )
         info_text.setWordWrap(True)
@@ -251,7 +220,7 @@ class CloudUploadsTab(BaseTab):
         layout.addWidget(info_text)
 
         # OAuth authentication button
-        self.oauth_btn = QPushButton("🌐 Sign In at Skipthepodcast.com")
+        self.oauth_btn = QPushButton("🌐 Sign In via GetReceipts")
         self.oauth_btn.setStyleSheet(
             "QPushButton { padding: 10px; font-size: 14px; background-color: #2196F3; color: white; border: none; border-radius: 6px; }"
             "QPushButton:hover { background-color: #1976D2; }"
@@ -641,7 +610,7 @@ Episodes: {stats.get('total_episodes', 0)}"""
             return
             
         selected_claims = self._get_selected_claims()
-        is_authenticated = self.auth.is_authenticated() if self.auth else False
+        is_authenticated = self.uploader is not None and self.authenticated_user is not None
         
         self.upload_btn.setEnabled(
             len(selected_claims) > 0 and 
@@ -650,19 +619,18 @@ Episodes: {stats.get('total_episodes', 0)}"""
         )
 
     def _start_upload(self) -> None:
-        """Start uploading selected claims."""
+        """Start uploading selected claims via GetReceipts."""
         selected_claims = self._get_selected_claims()
         if not selected_claims:
             QMessageBox.information(self, "No Selection", "Please select claims to upload.")
             return
 
-        if not self.auth or not self.auth.is_authenticated():
-            QMessageBox.warning(self, "Not Authenticated", "Please sign in first.")
+        if not self.uploader or not self.authenticated_user:
+            QMessageBox.warning(self, "Not Authenticated", "Please sign in to GetReceipts first.")
             return
 
         # Start upload worker
-        client = self.auth.get_client()
-        self.upload_worker = DatabaseUploadWorker(selected_claims, client)
+        self.upload_worker = DatabaseUploadWorker(selected_claims, self.uploader)
         self.upload_worker.progress.connect(self._on_upload_progress)
         self.upload_worker.finished.connect(self._on_upload_finished)
         self.upload_worker.error.connect(self._on_upload_error)
@@ -733,10 +701,7 @@ Episodes: {stats.get('total_episodes', 0)}"""
     # Authentication methods
     def _refresh_auth_ui(self) -> None:
         """Refresh authentication UI state."""
-        if not self.auth:
-            return
-        
-        is_authenticated = self.auth.is_authenticated()
+        is_authenticated = self.uploader is not None and self.authenticated_user is not None
         
         # Update OAuth button
         self.oauth_btn.setEnabled(not is_authenticated)
@@ -748,65 +713,76 @@ Episodes: {stats.get('total_episodes', 0)}"""
         # Update logout button
         self.logout_btn.setEnabled(is_authenticated)
         
-        if is_authenticated:
-            email = self.auth.get_user_email() or "Unknown"
-            self.auth_status_label.setText(f"✅ Signed in as: {email}")
+        if is_authenticated and self.authenticated_user:
+            email = self.authenticated_user.get('email', 'Unknown')
+            name = self.authenticated_user.get('name', email)
+            self.auth_status_label.setText(f"✅ Signed in as: {name}")
             self.auth_status_label.setStyleSheet("color: #4CAF50;")
             self.oauth_btn.setText("✅ Signed In")
         else:
             self.auth_status_label.setText("❌ Not authenticated")
             self.auth_status_label.setStyleSheet("color: #F44336;")
-            self.oauth_btn.setText("🌐 Sign In at Skipthepodcast.com")
+            self.oauth_btn.setText("🌐 Sign In via GetReceipts")
         
         self._update_upload_button_state()
 
     def _sign_in_with_oauth(self) -> None:
         """Sign in using GetReceipts OAuth flow."""
-        if not self.auth or not self.auth.is_available():
-            QMessageBox.warning(self, "Auth Unavailable", "Supabase authentication is not available")
-            return
-        
-        # Show progress dialog
-        from PyQt6.QtWidgets import QProgressDialog
-        from PyQt6.QtCore import Qt
-        
-        progress = QProgressDialog("Waiting for authentication...", "Cancel", 0, 0, self)
-        progress.setWindowTitle("GetReceipts Authentication")
-        progress.setWindowModality(Qt.WindowModality.WindowModal)
-        progress.setAutoClose(True)
-        progress.setAutoReset(True)
-        progress.show()
-        
-        # Update progress text to show steps
-        progress.setLabelText(
-            "🌐 Opening Skipthepodcast.com in your browser...\n\n"
-            "1. Sign in or create account on Skipthepodcast.com\n"
-            "2. Authorize Knowledge_Chipper access\n"
-            "3. Return to this app when complete\n\n"
-            "Waiting for authentication..."
-        )
-        
         try:
-            # Start OAuth flow with 5-minute timeout
-            success, message = self.auth.sign_up_with_oauth(timeout=300.0)
+            # Initialize GetReceipts configuration
+            config = get_config()
+            self.uploader = GetReceiptsUploader(
+                supabase_url=config['supabase_url'],
+                supabase_anon_key=config['supabase_anon_key'],
+                base_url=config['base_url']
+            )
+            
+            # Show progress dialog
+            from PyQt6.QtWidgets import QProgressDialog
+            from PyQt6.QtCore import Qt
+            
+            progress = QProgressDialog("Waiting for authentication...", "Cancel", 0, 0, self)
+            progress.setWindowTitle("GetReceipts Authentication")
+            progress.setWindowModality(Qt.WindowModality.WindowModal)
+            progress.setAutoClose(True)
+            progress.setAutoReset(True)
+            progress.show()
+            
+            # Update progress text to show steps
+            progress.setLabelText(
+                "🌐 Opening GetReceipts.org in your browser...\n\n"
+                "1. Sign in or create account on GetReceipts.org\n"
+                "2. Authorize Knowledge_Chipper access\n"
+                "3. Return to this app when complete\n\n"
+                "Waiting for authentication..."
+            )
+            
+            # Start OAuth authentication flow
+            auth_result = self.uploader.authenticate()
             
             progress.close()
             
-            if success:
-                self._refresh_auth_ui()
-                QMessageBox.information(
-                    self,
-                    "Authentication Successful",
-                    "Successfully signed in via Skipthepodcast.com!\n\n"
-                    "You can now upload your claims data to the shared database."
-                )
-            else:
-                QMessageBox.warning(self, "Authentication Failed", message)
+            # Store authentication result
+            self.authenticated_user = auth_result['user_info']
+            
+            self._refresh_auth_ui()
+            QMessageBox.information(
+                self,
+                "Authentication Successful",
+                f"Successfully signed in as {self.authenticated_user['name']}!\n\n"
+                "You can now upload your claims data to GetReceipts.org."
+            )
                 
         except Exception as e:
-            progress.close()
+            if 'progress' in locals():
+                progress.close()
             logger.error(f"OAuth authentication error: {e}")
             QMessageBox.critical(self, "Authentication Error", f"OAuth error: {str(e)}")
+            
+            # Clear authentication state on error
+            self.uploader = None
+            self.authenticated_user = None
+            self._refresh_auth_ui()
 
     def _sign_in(self) -> None:
         """Sign in to Supabase."""
@@ -853,12 +829,13 @@ Episodes: {stats.get('total_episodes', 0)}"""
             QMessageBox.warning(self, "Unavailable", "Sign-up dialog not available")
 
     def _sign_out(self) -> None:
-        """Sign out of Supabase."""
-        if not self.auth or not self.auth.is_available():
-            return
+        """Sign out of GetReceipts."""
+        self.uploader = None
+        self.authenticated_user = None
+        self._refresh_auth_ui()
         
-        success, message = self.auth.sign_out()
-        if success:
-            self._refresh_auth_ui()
-        else:
-            QMessageBox.warning(self, "Sign Out Failed", message)
+        QMessageBox.information(
+            self,
+            "Signed Out",
+            "Successfully signed out of GetReceipts.org"
+        )

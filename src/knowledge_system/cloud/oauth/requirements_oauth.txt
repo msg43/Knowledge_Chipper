@@ -1,0 +1,32 @@
+# Knowledge_Chipper OAuth Integration Requirements
+# Install with: pip install -r requirements_oauth.txt
+
+# Supabase client for database operations
+supabase>=2.0.0
+
+# HTTP requests for OAuth flow
+requests>=2.28.0
+
+# JSON handling (usually included with Python)
+# json - built-in module
+
+# Web server for OAuth callback
+# http.server - built-in module
+
+# URL parsing utilities  
+# urllib.parse - built-in module
+
+# Threading for background callback server
+# threading - built-in module
+
+# Time utilities for timeouts
+# time - built-in module
+
+# Type hints support
+typing>=3.7.0
+
+# Web browser control for OAuth
+# webbrowser - built-in module
+
+# Optional: For better error handling and logging
+colorama>=0.4.0  # Cross-platform colored terminal text

@@ -40,6 +40,9 @@ numpy>=1.24.0
 sqlalchemy>=2.0.0
 alembic>=1.12.0
 
+# OAuth integration for GetReceipts.org
+supabase>=2.0.0
+
 # System monitoring
 psutil>=6.0.0
 
