@@ -234,6 +234,7 @@ settings.yaml
 *.rsls
 *.rslsc
 .app_build/
+scripts/.app_build/
 
 # Internal documentation (development only)
 docs/internal/
@@ -251,7 +252,7 @@ tests/reports/
 tests/data/test_files/Test Outputs/
 tests/real_speech_pack/
 
-# Additional test data directories  
+# Additional test data directories
 data/test_files/Test Inputs/
 data/test_files/Test Outputs/
 tests/data/test_files/
@@ -259,4 +260,3 @@ tests/fixtures/test_configs/
 
 # All test data files (can be recreated with scripts)
 data/test_files/
-

@@ -63,30 +63,30 @@ repos:
           - flake8-comprehensions
         stages: [pre-push]
 
-  # Type checking with mypy (using pyproject.toml config) - TEMPORARILY DISABLED
-  # - repo: https://github.com/pre-commit/mirrors-mypy
-  #   rev: v1.8.0
-  #   hooks:
-  #     - id: mypy
-  #       args: ['--config-file=pyproject.toml', '--ignore-missing-imports', '--explicit-package-bases']
-  #       additional_dependencies:
-  #         - types-requests
-  #         - types-PyYAML
-  #         - types-python-dateutil
-  #         - types-setuptools
-  #       files: ^src/knowledge_system/.*\.py$
-  #       exclude: ^(tests/|src/knowledge_system/__init__\.py)
-  #       stages: [pre-push]
+  # Type checking with mypy (using pyproject.toml config with improved excludes)
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        args: ['--config-file=pyproject.toml', '--ignore-missing-imports']
+        additional_dependencies:
+          - types-requests
+          - types-PyYAML
+          - types-python-dateutil
+          - types-setuptools
+        files: ^src/knowledge_system/.*\.py$
+        exclude: ^(tests/|build/|dist/|scripts/\.app_build/)
+        stages: [pre-push]
 
-  # Security scanning with bandit - TEMPORARILY DISABLED
-  # - repo: https://github.com/pycqa/bandit
-  #   rev: 1.7.5
-  #   hooks:
-  #     - id: bandit
-  #       args: ['-f', 'json']  # Scan individual files passed by pre-commit
-  #     files: ^src/.*\.py$
-  #     exclude: ^(tests/|config/credentials\.yaml|config/client_secret.*\.json|config/youtube_oauth2_credentials\.json|.*\.env)
-  #     stages: [pre-push]
+  # Security scanning with bandit (using .bandit config file)
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: ['--configfile', '.bandit']
+        files: ^src/.*\.py$
+        exclude: ^(tests/|config/credentials\.yaml|config/client_secret.*\.json|config/youtube_oauth2_credentials\.json|.*\.env)
+        stages: [pre-push]
 
   # Docstring style checking
   - repo: https://github.com/pycqa/pydocstyle
