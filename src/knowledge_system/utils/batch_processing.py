@@ -616,7 +616,7 @@ def batch_process_with_progress(
 ) -> list[BatchResult]:
     """
     Process a batch of items with progress tracking.
-    
+
     Args:
         items: List of file paths or URLs to process
         processor_class: Class to instantiate for processing (e.g., AudioProcessor)
@@ -625,26 +625,26 @@ def batch_process_with_progress(
         max_concurrent: Maximum concurrent processing tasks
         strategy: Batch processing strategy
         progress_callback: Function to call for progress updates
-        
+
     Returns:
         List of batch processing results
     """
     processor_kwargs = processor_kwargs or {}
     processing_kwargs = processing_kwargs or {}
-    
+
     # Create batch items
     batch_items = create_batch_from_files([Path(item) for item in items])
-    
+
     # Initialize processor
     processor = processor_class(**processor_kwargs)
-    
+
     # Create batch processor
     batch_processor = BatchProcessor(
         max_concurrent_files=max_concurrent,
         strategy=strategy,
         progress_callback=progress_callback,
     )
-    
+
     # Process the batch
     return batch_processor.process_batch(
         batch_items,

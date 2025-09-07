@@ -105,7 +105,9 @@ def check_package():
     if not dist.exists():
         print("⚠️  dist/ not found; skipping twine check")
         return
-    run_command([sys.executable, "-m", "twine", "check", "dist/*"], "Checking package quality")
+    run_command(
+        [sys.executable, "-m", "twine", "check", "dist/*"], "Checking package quality"
+    )
 
 
 def test_install():
@@ -123,7 +125,11 @@ def test_install():
     if result.returncode == 0:
         run_command(["knowledge-system", "--version"], "Testing CLI entry point")
         run_command(
-            [sys.executable, "-c", "from knowledge_system.gui import main; print('GUI OK')"],
+            [
+                sys.executable,
+                "-c",
+                "from knowledge_system.gui import main; print('GUI OK')",
+            ],
             "Testing GUI entry point",
         )
         print("✅ Package installation test passed")
@@ -171,7 +177,11 @@ def main():
     build_package()
     check_package()
 
-    skip_install = args.skip_install_test or os.getenv("CI", "").lower() in {"1", "true", "yes"}
+    skip_install = args.skip_install_test or os.getenv("CI", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     if skip_install:
         show_results()
         return
@@ -184,5 +194,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

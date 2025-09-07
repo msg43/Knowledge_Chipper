@@ -46,7 +46,7 @@ if [ -f "$DMG_FILE" ]; then
     echo
     read -p "Use existing DMG or rebuild? (u/rebuild): " -n 1 -r
     echo
-    
+
     if [[ $REPLY =~ ^[Rr]$ ]]; then
         echo "🏗️ Will rebuild DMG..."
         rm -f "$DMG_FILE"
@@ -72,7 +72,7 @@ echo "🚀 Starting release process..."
 if [ ! -f "$DMG_FILE" ]; then
     echo "🏗️ Building DMG..."
     bash "$SCRIPT_DIR/build_macos_app.sh" --make-dmg --skip-install
-    
+
     if [ ! -f "$DMG_FILE" ]; then
         echo "❌ Failed to create DMG"
         exit 1

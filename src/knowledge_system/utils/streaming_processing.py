@@ -158,14 +158,22 @@ class StreamingProcessor:
             ]
 
             # Use non-blocking subprocess execution with timeout
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            process = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
             try:
                 stdout, stderr = process.communicate(timeout=60)  # 1 minute timeout
-                result = type('obj', (object,), {'returncode': process.returncode, 'stderr': stderr})
+                result = type(
+                    "obj",
+                    (object,),
+                    {"returncode": process.returncode, "stderr": stderr},
+                )
             except subprocess.TimeoutExpired:
                 process.kill()
                 stdout, stderr = process.communicate()
-                result = type('obj', (object,), {'returncode': -1, 'stderr': 'Process timed out'})
+                result = type(
+                    "obj", (object,), {"returncode": -1, "stderr": "Process timed out"}
+                )
 
             if result.returncode == 0 and output_path.exists():
                 logger.debug(

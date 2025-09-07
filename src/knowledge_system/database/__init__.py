@@ -7,9 +7,7 @@ YouTube video records, transcripts, summaries, MOC data, and processing tracking
 
 # HCE models are optional and imported separately to avoid SQLAlchemy issues
 try:
-    from .hce_models import (
-        extend_video_model,
-    )
+    from .hce_models import extend_video_model
 
     HCE_AVAILABLE = True
 except Exception:
@@ -25,12 +23,13 @@ from .models import (
     Base,
     BrightDataSession,
     GeneratedFile,
-    MOCExtraction,
     MediaSource,
+    MOCExtraction,
     ProcessingJob,
     Summary,
     Transcript,
 )
+
 # Backward-compatibility: export legacy symbol `Video` even if models renamed
 Video = MediaSource
 from .service import DatabaseService

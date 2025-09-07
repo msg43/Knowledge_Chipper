@@ -12,13 +12,13 @@ from typing import Any
 from sqlalchemy import (
     Boolean,
     Column,
-    DateTime, 
+    DateTime,
     Float,
+    ForeignKey,
+    Index,
     Integer,
     String,
     Text,
-    ForeignKey,
-    Index
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session
@@ -32,55 +32,59 @@ Base = declarative_base()
 
 class Migration003:
     """Migration 003: Speaker Assignment Enhancements"""
-    
+
     version = "003"
-    description = "Add enhanced speaker assignment columns and processing sessions table"
-    
+    description = (
+        "Add enhanced speaker assignment columns and processing sessions table"
+    )
+
     def upgrade(self, session: Session) -> bool:
         """Apply the migration."""
         try:
             logger.info("Starting Migration 003: Speaker Assignment Enhancements")
-            
+
             # 1. Add new columns to speaker_assignments table
             self._add_speaker_assignment_columns(session)
-            
+
             # 2. Create speaker_processing_sessions table
             self._create_processing_sessions_table(session)
-            
+
             # 3. Add database indexes for performance
             self._add_database_indexes(session)
-            
+
             session.commit()
             logger.info("Migration 003 completed successfully")
             return True
-            
+
         except Exception as e:
             logger.error(f"Migration 003 failed: {e}")
             session.rollback()
             return False
-    
+
     def downgrade(self, session: Session) -> bool:
         """Reverse the migration."""
         try:
             logger.info("Starting Migration 003 downgrade")
-            
+
             # 1. Drop speaker_processing_sessions table
             session.execute("DROP TABLE IF EXISTS speaker_processing_sessions")
-            
+
             # 2. Remove added columns from speaker_assignments (if possible)
             # Note: SQLite doesn't support DROP COLUMN, so we'd need to recreate the table
             # For safety, we'll log a warning instead
-            logger.warning("Cannot remove columns from speaker_assignments in SQLite - manual cleanup required")
-            
+            logger.warning(
+                "Cannot remove columns from speaker_assignments in SQLite - manual cleanup required"
+            )
+
             session.commit()
             logger.info("Migration 003 downgrade completed")
             return True
-            
+
         except Exception as e:
             logger.error(f"Migration 003 downgrade failed: {e}")
             session.rollback()
             return False
-    
+
     def _add_speaker_assignment_columns(self, session: Session):
         """Add new columns to speaker_assignments table."""
         columns_to_add = [
@@ -91,9 +95,9 @@ class Migration003:
             "ALTER TABLE speaker_assignments ADD COLUMN total_duration FLOAT DEFAULT 0.0",
             "ALTER TABLE speaker_assignments ADD COLUMN segment_count INTEGER DEFAULT 0",
             "ALTER TABLE speaker_assignments ADD COLUMN processing_metadata_json TEXT",
-            "ALTER TABLE speaker_assignments ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"
+            "ALTER TABLE speaker_assignments ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP",
         ]
-        
+
         for sql in columns_to_add:
             try:
                 session.execute(sql)
@@ -101,7 +105,7 @@ class Migration003:
             except Exception as e:
                 # Column might already exist, log and continue
                 logger.debug(f"Column addition skipped (might already exist): {e}")
-    
+
     def _create_processing_sessions_table(self, session: Session):
         """Create speaker_processing_sessions table."""
         create_table_sql = """
@@ -118,10 +122,10 @@ class Migration003:
             completed_at DATETIME
         )
         """
-        
+
         session.execute(create_table_sql)
         logger.info("Created speaker_processing_sessions table")
-    
+
     def _add_database_indexes(self, session: Session):
         """Add database indexes for performance."""
         indexes_to_create = [
@@ -131,9 +135,9 @@ class Migration003:
             "CREATE INDEX IF NOT EXISTS idx_speaker_assignments_created_at ON speaker_assignments(created_at)",
             "CREATE INDEX IF NOT EXISTS idx_speaker_assignments_suggestion_method ON speaker_assignments(suggestion_method)",
             "CREATE INDEX IF NOT EXISTS idx_processing_sessions_recording_path ON speaker_processing_sessions(recording_path)",
-            "CREATE INDEX IF NOT EXISTS idx_processing_sessions_created_at ON speaker_processing_sessions(created_at)"
+            "CREATE INDEX IF NOT EXISTS idx_processing_sessions_created_at ON speaker_processing_sessions(created_at)",
         ]
-        
+
         for sql in indexes_to_create:
             try:
                 session.execute(sql)
@@ -158,10 +162,10 @@ if __name__ == "__main__":
     # Test the migration
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    
+
     engine = create_engine("sqlite:///test_migration.db")
     Session = sessionmaker(bind=engine)
-    
+
     with Session() as session:
         success = run_migration(session)
         print(f"Migration test: {'SUCCESS' if success else 'FAILED'}")

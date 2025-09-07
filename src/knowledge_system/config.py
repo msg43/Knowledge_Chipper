@@ -34,15 +34,14 @@ class AppConfig(BaseModel):
     name: str = "Skip the Podcast Desktop"
     version: str = "0.0.0"  # runtime will prefer package __version__
     debug: bool = False
-    
+
     # Update Settings
     auto_check_updates: bool = Field(
-        default=True, 
-        description="Automatically check for updates when the app launches"
+        default=True,
+        description="Automatically check for updates when the app launches",
     )
     update_channel: str = Field(
-        default="stable",
-        description="Update channel: stable, beta, or dev"
+        default="stable", description="Update channel: stable, beta, or dev"
     )
 
 
@@ -90,7 +89,9 @@ class PathsConfig(BaseModel):
         default="",
         description="Cache directory (auto-configured)",
     )
-    logs_dir: str = Field(default="", description="Logs directory (auto-configured to macOS standard)")
+    logs_dir: str = Field(
+        default="", description="Logs directory (auto-configured to macOS standard)"
+    )
 
     # Additional paths for backward compatibility
     input: str = Field(
@@ -275,7 +276,8 @@ class LocalLLMConfig(BaseModel):
         description="Context window to request for local models (if applicable)",
     )
     use_stream: bool = Field(
-        default=True, description="Use streaming responses for local providers when available"
+        default=True,
+        description="Use streaming responses for local providers when available",
     )
 
 
@@ -307,6 +309,16 @@ class APIKeysConfig(BaseModel):
     bright_data_password: str | None = Field(
         default=None,
         description="Bright Data zone password for proxy authentication (BD_PASS environment variable)",
+    )
+
+    # PacketStream Proxy Credentials (alternative to Bright Data for residential proxies)
+    packetstream_username: str | None = Field(
+        default=None,
+        description="PacketStream username for residential proxy access",
+    )
+    packetstream_auth_key: str | None = Field(
+        default=None,
+        description="PacketStream authentication key for proxy authentication",
     )
 
     @field_validator("bright_data_api_key")
@@ -473,59 +485,81 @@ class SpeakerIdentificationConfig(BaseModel):
         default=True, description="Enable interactive speaker assignment dialog"
     )
     auto_show_assignment_dialog: bool = Field(
-        default=True, description="Automatically show speaker assignment dialog after diarization"
+        default=True,
+        description="Automatically show speaker assignment dialog after diarization",
     )
     enable_voice_learning: bool = Field(
-        default=True, description="Learn voice patterns for future automatic suggestions"
+        default=True,
+        description="Learn voice patterns for future automatic suggestions",
     )
     confidence_threshold: float = Field(
-        default=0.7, ge=0.0, le=1.0, description="Minimum confidence threshold for speaker suggestions"
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence threshold for speaker suggestions",
     )
     max_speaker_suggestions: int = Field(
-        default=5, ge=1, le=10, description="Maximum number of speaker name suggestions to show"
+        default=5,
+        ge=1,
+        le=10,
+        description="Maximum number of speaker name suggestions to show",
     )
-    
+
     # Color-coded transcript settings
     enable_color_coded_transcripts: bool = Field(
-        default=True, description="Generate color-coded HTML and enhanced markdown transcripts"
+        default=True,
+        description="Generate color-coded HTML and enhanced markdown transcripts",
     )
     color_coded_by_default: bool = Field(
-        default=True, description="Enable color coding by default in transcription settings"
+        default=True,
+        description="Enable color coding by default in transcription settings",
     )
-    
+
     # Batch processing settings
     batch_processing_enabled: bool = Field(
-        default=True, description="Enable batch speaker assignment for multiple recordings"
+        default=True,
+        description="Enable batch speaker assignment for multiple recordings",
     )
     maintain_speaker_consistency: bool = Field(
-        default=True, description="Try to maintain consistent speaker names across recordings in the same folder"
+        default=True,
+        description="Try to maintain consistent speaker names across recordings in the same folder",
     )
-    
+
     # Integration settings
     integrate_with_people_moc: bool = Field(
-        default=True, description="Automatically add identified speakers to People MOC files"
+        default=True,
+        description="Automatically add identified speakers to People MOC files",
     )
     update_people_yaml: bool = Field(
         default=True, description="Update People.yaml files with speaker information"
     )
-    
+
     # Advanced settings
     enable_audio_playback: bool = Field(
-        default=False, description="Enable audio playback in speaker assignment dialog (future feature)"
+        default=False,
+        description="Enable audio playback in speaker assignment dialog (future feature)",
     )
     voice_fingerprinting_enabled: bool = Field(
-        default=False, description="Enable advanced voice fingerprinting for speaker recognition (future feature)"
+        default=False,
+        description="Enable advanced voice fingerprinting for speaker recognition (future feature)",
     )
-    
+
     # Learning and suggestion settings
     learn_from_corrections: bool = Field(
-        default=True, description="Learn from user corrections to improve future suggestions"
+        default=True,
+        description="Learn from user corrections to improve future suggestions",
     )
     suggestion_learning_weight: float = Field(
-        default=1.0, ge=0.1, le=2.0, description="Weight for learning from user corrections"
+        default=1.0,
+        ge=0.1,
+        le=2.0,
+        description="Weight for learning from user corrections",
     )
     cleanup_old_patterns_days: int = Field(
-        default=90, ge=7, le=365, description="Days after which to clean up old, unused voice patterns"
+        default=90,
+        ge=7,
+        le=365,
+        description="Days after which to clean up old, unused voice patterns",
     )
 
 
@@ -552,13 +586,15 @@ class CloudConfig(BaseModel):
     # Hardcoded Supabase connection for all users
     supabase_url: str = Field(
         default="https://sdkxuiqcwlmbpjvjdpkj.supabase.co",
-        description="Hardcoded Supabase project URL for all users"
+        description="Hardcoded Supabase project URL for all users",
     )
     supabase_key: str = Field(
         default="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNka3h1aXFjd2xtYnBqdmpkcGtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTU3MzQsImV4cCI6MjA3MTM5MTczNH0.VoP6yX3GwyVjylgioTGchQYwPQ_K2xQFdHP5ani0vts",
-        description="Hardcoded Supabase anon key for all users"
+        description="Hardcoded Supabase anon key for all users",
     )
-    supabase_bucket: str | None = Field(default=None, description="Default storage bucket name")
+    supabase_bucket: str | None = Field(
+        default=None, description="Default storage bucket name"
+    )
 
 
 class Settings(BaseSettings):
@@ -586,7 +622,9 @@ class Settings(BaseSettings):
     moc: MOCConfig = Field(default_factory=MOCConfig)
     hce: HCEConfig = Field(default_factory=HCEConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
-    speaker_identification: SpeakerIdentificationConfig = Field(default_factory=SpeakerIdentificationConfig)
+    speaker_identification: SpeakerIdentificationConfig = Field(
+        default_factory=SpeakerIdentificationConfig
+    )
     gui_features: GUIFeaturesConfig = Field(default_factory=GUIFeaturesConfig)
     cloud: CloudConfig = Field(default_factory=CloudConfig)
 
@@ -595,7 +633,8 @@ class Settings(BaseSettings):
 
         # Import here to avoid circular imports
         try:
-            from .utils.macos_paths import get_default_paths, get_config_dir
+            from .utils.macos_paths import get_config_dir, get_default_paths
+
             macos_paths_available = True
         except ImportError:
             macos_paths_available = False
@@ -615,11 +654,11 @@ class Settings(BaseSettings):
         if macos_paths_available:
             default_macos_paths = get_default_paths()
             config_dir = get_config_dir()
-            
+
             # Apply default paths if not overridden
             if "paths" not in kwargs:
                 kwargs["paths"] = {}
-            
+
             for key, value in default_macos_paths.items():
                 if key not in kwargs["paths"] or not kwargs["paths"][key]:
                     kwargs["paths"][key] = value
@@ -635,15 +674,21 @@ class Settings(BaseSettings):
                 Path("../config/settings.yaml"),  # Handle running from src/ directory
                 Path("settings.yaml"),
             ]
-            
+
             # Add macOS standard config location
             if macos_paths_available:
-                default_paths.extend([
-                    config_dir / "settings.yaml",
-                    Path.home() / ".knowledge-system" / "settings.yaml",  # Legacy fallback
-                ])
+                default_paths.extend(
+                    [
+                        config_dir / "settings.yaml",
+                        Path.home()
+                        / ".knowledge-system"
+                        / "settings.yaml",  # Legacy fallback
+                    ]
+                )
             else:
-                default_paths.append(Path.home() / ".knowledge-system" / "settings.yaml")
+                default_paths.append(
+                    Path.home() / ".knowledge-system" / "settings.yaml"
+                )
 
             for path in default_paths:
                 if path.exists():
@@ -657,15 +702,21 @@ class Settings(BaseSettings):
             Path("../config/credentials.yaml"),  # Handle running from src/ directory
             Path("credentials.yaml"),
         ]
-        
+
         # Add macOS standard config location for credentials
         if macos_paths_available:
-            credentials_paths.extend([
-                config_dir / "credentials.yaml",
-                Path.home() / ".knowledge-system" / "credentials.yaml",  # Legacy fallback
-            ])
+            credentials_paths.extend(
+                [
+                    config_dir / "credentials.yaml",
+                    Path.home()
+                    / ".knowledge-system"
+                    / "credentials.yaml",  # Legacy fallback
+                ]
+            )
         else:
-            credentials_paths.append(Path.home() / ".knowledge-system" / "credentials.yaml")
+            credentials_paths.append(
+                Path.home() / ".knowledge-system" / "credentials.yaml"
+            )
 
         for cred_path in credentials_paths:
             if cred_path.exists():
@@ -684,7 +735,11 @@ class Settings(BaseSettings):
                         for key, value in cred_data.items():
                             if key == "api_keys":
                                 continue  # handled above
-                            if key in kwargs and isinstance(kwargs[key], dict) and isinstance(value, dict):
+                            if (
+                                key in kwargs
+                                and isinstance(kwargs[key], dict)
+                                and isinstance(value, dict)
+                            ):
                                 # Deep merge for dict sections like 'cloud'
                                 kwargs[key].update(value)
                             else:
@@ -779,9 +834,9 @@ class Settings(BaseSettings):
         if self.performance.override_batch_size:
             profile_config["batch_size"] = self.performance.override_batch_size
         if self.performance.override_max_concurrent:
-            profile_config["max_concurrent_files"] = (
-                self.performance.override_max_concurrent
-            )
+            profile_config[
+                "max_concurrent_files"
+            ] = self.performance.override_max_concurrent
 
         # Apply force settings
         if self.performance.force_mps:

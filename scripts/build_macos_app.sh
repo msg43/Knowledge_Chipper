@@ -179,7 +179,7 @@ Skip the Podcast Desktop now follows Apple's macOS guidelines for file locations
 - **Output**: `~/Documents/Skip the Podcast Desktop/Output/`
 - **Input**: `~/Documents/Skip the Podcast Desktop/Input/`
 
-### Cache & Logs  
+### Cache & Logs
 - **Cache**: `~/Library/Caches/Skip the Podcast Desktop/`
 - **Logs**: `~/Library/Logs/Skip the Podcast Desktop/`
 
@@ -367,7 +367,7 @@ LOG_FILE="\$LOG_DIR/knowledge_system.log"
 touch "\$LOG_FILE"; chmod 644 "\$LOG_FILE"
 
 echo "=== Skip the Podcast Desktop Launch \$(date) ===" >> "\$LOG_FILE"
-if [ -f "\$APP_DIR/version.txt" ]; then 
+if [ -f "\$APP_DIR/version.txt" ]; then
     echo "Version Info:" >> "\$LOG_FILE"
     cat "\$APP_DIR/version.txt" >> "\$LOG_FILE"
 fi
@@ -525,7 +525,7 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
   ln -sf /Applications "$DMG_STAGING/root/Applications"
   hdiutil create -volname "Skip the Podcast Desktop" -srcfolder "$DMG_STAGING/root" -ov -format UDZO "$DIST_DIR/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
   echo "✅ DMG created at: $DIST_DIR/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
-  
+
   # Optional: Offer to publish release to public repository
   if [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-0}" != "1" ]; then
     echo ""
@@ -533,7 +533,7 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
     echo "📍 To publish to public repository: bash scripts/publish_release.sh"
     echo "📍 To publish with existing DMG: bash scripts/publish_release.sh --skip-build"
   fi
-  
+
   # Clean up staging to avoid Spotlight finding duplicate app bundles
   rm -rf "$DMG_STAGING"
 fi

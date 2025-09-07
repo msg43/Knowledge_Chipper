@@ -53,5 +53,3 @@ fi
 
 echo "Error: Neither 'supabase' CLI nor 'psql' found in PATH. Install one to proceed." 1>&2
 exit 127
-
-

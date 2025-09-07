@@ -13,12 +13,12 @@ from typing import Any
 
 from ..config import get_settings
 from ..logger import get_logger
-from .base import BaseProcessor, ProcessorResult
-from .hce.config_flex import PipelineConfigFlex, StageModelConfig
-from .hce.types import EpisodeBundle, PipelineOutputs, Segment
-from .hce.health import validate_hce_or_raise, HCEValidationError
 from ..processors.html import fetch_html_text
 from ..utils.llm_providers import UnifiedLLMClient
+from .base import BaseProcessor, ProcessorResult
+from .hce.config_flex import PipelineConfigFlex, StageModelConfig
+from .hce.health import HCEValidationError, validate_hce_or_raise
+from .hce.types import EpisodeBundle, PipelineOutputs, Segment
 
 logger = get_logger(__name__)
 
@@ -115,10 +115,13 @@ class HCEPipeline:
 
         # Step 9: Analyze claim temporality
         from .hce.temporality import analyze_temporality
+
         scored_with_temporality = analyze_temporality(scored, self.config.models.judge)
 
         # Step 10: Extract relations
-        claim_relations = relations.extract_relations(scored_with_temporality, self.config.models.judge)
+        claim_relations = relations.extract_relations(
+            scored_with_temporality, self.config.models.judge
+        )
 
         # Create initial pipeline outputs for category analysis
         initial_outputs = PipelineOutputs(
@@ -133,7 +136,10 @@ class HCEPipeline:
 
         # Step 11: Analyze structured categories
         from .hce.structured_categories import analyze_structured_categories
-        episode_categories = analyze_structured_categories(initial_outputs, self.config.models.judge)
+
+        episode_categories = analyze_structured_categories(
+            initial_outputs, self.config.models.judge
+        )
 
         # Return final outputs with categories
         return PipelineOutputs(
@@ -191,24 +197,30 @@ class SummarizerProcessor(BaseProcessor):
 
         # Configure HCE pipeline with equivalent models
         model_uri = f"{self.provider}://{self.model}"
-        
+
         # Determine flagship judge model
         flagship_judge_uri = model_uri  # Default to same model
         if self.hce_options.get("enable_routing", True):
             # Could be configured differently in advanced UI
             flagship_judge_uri = model_uri
-        
+
         self.hce_config = PipelineConfigFlex(
             models=StageModelConfig(
                 miner=model_uri,
                 judge=model_uri,
-                flagship_judge=flagship_judge_uri if self.hce_options.get("enable_routing", True) else None,
+                flagship_judge=flagship_judge_uri
+                if self.hce_options.get("enable_routing", True)
+                else None,
                 embedder="local://bge-small-en-v1.5",
                 reranker="local://bge-reranker-base",
             ),
             use_skim=self.hce_options.get("use_skim", True),
-            router_uncertainty_threshold=self.hce_options.get("routing_threshold", 0.35),
-            flagship_max_claims_per_file=self.hce_options.get("flagship_file_tokens", None),
+            router_uncertainty_threshold=self.hce_options.get(
+                "routing_threshold", 0.35
+            ),
+            flagship_max_claims_per_file=self.hce_options.get(
+                "flagship_file_tokens", None
+            ),
         )
         # Per-stage model overrides
         try:
@@ -520,7 +532,9 @@ class SummarizerProcessor(BaseProcessor):
 
                 # Trim very long inputs for local models (smaller to avoid timeouts)
                 max_chars = 8000
-                body = body_text if len(body_text) <= max_chars else body_text[:max_chars]
+                body = (
+                    body_text if len(body_text) <= max_chars else body_text[:max_chars]
+                )
                 # If template contains {text}, substitute directly; otherwise append content block
                 if "{text}" in tmpl:
                     try:
@@ -533,9 +547,13 @@ class SummarizerProcessor(BaseProcessor):
             used_llm_fallback = False
             # Prompt-driven summary mode: if prefer_template_summary is True, bypass HCE formatting
             prefer_template = bool(kwargs.get("prefer_template_summary", False))
-            allow_llm_fallback = bool(kwargs.get("allow_llm_fallback", False)) or prefer_template
+            allow_llm_fallback = (
+                bool(kwargs.get("allow_llm_fallback", False)) or prefer_template
+            )
             if allow_llm_fallback and (
-                prefer_template or (not summary.strip()) or ("Extracted 0 claims" in summary)
+                prefer_template
+                or (not summary.strip())
+                or ("Extracted 0 claims" in summary)
             ):
                 try:
                     prompt = _build_prompt(kwargs.get("prompt_template"), text)
@@ -632,84 +650,97 @@ class SummarizerProcessor(BaseProcessor):
     def _build_summary_index(self, output_dir: Path) -> dict[str, Any]:
         """
         Build an index of existing summary files for skip detection.
-        
+
         Scans the output directory for existing summary files and builds
         a mapping of source files to their summary metadata.
-        
+
         Args:
             output_dir: Directory to scan for existing summaries
-            
+
         Returns:
             Dictionary mapping source file paths to summary metadata
         """
         import json
         import os
         from datetime import datetime
-        
+
         summary_index = {}
-        
+
         if not output_dir.exists():
             return summary_index
-            
+
         try:
             # Look for summary files (both .md and .txt)
             summary_extensions = [".md", ".txt"]
-            
+
             for root, dirs, files in os.walk(output_dir):
                 for file in files:
                     if any(file.endswith(ext) for ext in summary_extensions):
                         summary_path = Path(root) / file
-                        
+
                         try:
                             # Get file modification time
                             mtime = summary_path.stat().st_mtime
-                            
+
                             # Try to determine the source file from the summary filename
                             # Remove common summary suffixes
                             base_name = file
-                            for suffix in ["_summary", "_Summary", "-summary", "-Summary"]:
+                            for suffix in [
+                                "_summary",
+                                "_Summary",
+                                "-summary",
+                                "-Summary",
+                            ]:
                                 if suffix in base_name:
                                     base_name = base_name.replace(suffix, "")
                                     break
-                            
+
                             # Remove extension and add back original extension possibilities
                             name_without_ext = Path(base_name).stem
-                            
+
                             # Store in index
                             summary_index[str(summary_path)] = {
                                 "source_file_stem": name_without_ext,
                                 "summary_path": str(summary_path),
                                 "modification_time": mtime,
-                                "creation_date": datetime.fromtimestamp(mtime).isoformat(),
+                                "creation_date": datetime.fromtimestamp(
+                                    mtime
+                                ).isoformat(),
                             }
-                            
+
                         except (OSError, ValueError) as e:
-                            logger.warning(f"Could not process summary file {summary_path}: {e}")
+                            logger.warning(
+                                f"Could not process summary file {summary_path}: {e}"
+                            )
                             continue
-                            
+
         except Exception as e:
             logger.warning(f"Error building summary index: {e}")
-            
+
         return summary_index
 
-    def _save_index_to_file(self, index_file: Path, summary_index: dict[str, Any]) -> None:
+    def _save_index_to_file(
+        self, index_file: Path, summary_index: dict[str, Any]
+    ) -> None:
         """
         Save the summary index to a JSON file.
-        
+
         Args:
             index_file: Path where to save the index
             summary_index: Index data to save
         """
         import json
-        
+
         try:
             index_file.parent.mkdir(parents=True, exist_ok=True)
-            
+
             with open(index_file, "w", encoding="utf-8") as f:
                 json.dump(summary_index, f, indent=2, ensure_ascii=False)
-                
-            logger.debug(f"Saved summary index with {len(summary_index)} entries to {index_file}")
-            
+
+            logger.debug(
+                f"Saved summary index with {len(summary_index)} entries to {index_file}"
+            )
+
         except Exception as e:
             logger.error(f"Failed to save summary index to {index_file}: {e}")
 
@@ -718,11 +749,11 @@ class SummarizerProcessor(BaseProcessor):
     ) -> tuple[bool, str]:
         """
         Check if a file needs to be summarized based on existing summaries.
-        
+
         Args:
             file_path: Path to the source file to check
             summary_index: Index of existing summaries
-            
+
         Returns:
             Tuple of (needs_summary: bool, reason: str)
         """
@@ -730,34 +761,37 @@ class SummarizerProcessor(BaseProcessor):
             # If no index, always summarize
             if not summary_index:
                 return True, "No existing summary index"
-                
+
             # Get file modification time
             if not file_path.exists():
                 return True, "Source file does not exist"
-                
+
             source_mtime = file_path.stat().st_mtime
             file_stem = file_path.stem
-            
+
             # Look for existing summaries that match this file
             matching_summaries = []
             for summary_path, summary_info in summary_index.items():
                 if summary_info.get("source_file_stem") == file_stem:
                     matching_summaries.append((summary_path, summary_info))
-            
+
             if not matching_summaries:
                 return True, "No existing summary found"
-                
+
             # Check if any existing summary is newer than the source file
             for summary_path, summary_info in matching_summaries:
                 summary_mtime = summary_info.get("modification_time", 0)
-                
+
                 # If summary is newer than source, no need to re-summarize
                 if summary_mtime > source_mtime:
-                    return False, f"Up-to-date summary exists: {Path(summary_path).name}"
-                    
+                    return (
+                        False,
+                        f"Up-to-date summary exists: {Path(summary_path).name}",
+                    )
+
             # All existing summaries are older than source file
             return True, "Source file is newer than existing summaries"
-            
+
         except Exception as e:
             logger.warning(f"Error checking summarization needs for {file_path}: {e}")
             # On error, err on the side of caution and summarize

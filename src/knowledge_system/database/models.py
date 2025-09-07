@@ -58,7 +58,9 @@ class MediaSource(Base):
     media_id = Column(String(20), primary_key=True)
     # Back-compat attribute: many modules still expect 'video_id'
     video_id = synonym("media_id")
-    source_type = Column(String(50), nullable=False, default="youtube")  # 'youtube', 'upload', 'rss'
+    source_type = Column(
+        String(50), nullable=False, default="youtube"
+    )  # 'youtube', 'upload', 'rss'
     title = Column(String(500), nullable=False)
     url = Column(String(200), nullable=False)
 
@@ -84,6 +86,17 @@ class MediaSource(Base):
     extracted_keywords_json = Column(
         JSONEncodedType
     )  # JSON array of AI-extracted keywords
+
+    # Related content and recommendations
+    related_videos_json = Column(JSONEncodedType)  # JSON array of related video data
+
+    # Detailed channel statistics
+    channel_stats_json = Column(JSONEncodedType)  # JSON object with channel metrics
+
+    # Video chapters/timestamps
+    video_chapters_json = Column(
+        JSONEncodedType
+    )  # JSON array of chapter data with timestamps
 
     # Processing metadata
     extraction_method = Column(String(50))  # 'bright_data_api', 'yt_dlp', etc.
@@ -112,7 +125,10 @@ class MediaSource(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<MediaSource(media_id='{self.media_id}', title='{self.title[:50]}...')>"
+        return (
+            f"<MediaSource(media_id='{self.media_id}', title='{self.title[:50]}...')>"
+        )
+
 
 # Backward-compatibility: many modules still import/use `Video`
 # Map the legacy symbol to the new class to avoid breaking imports
@@ -406,30 +422,32 @@ class ClaimTierValidation(Base):
     validation_id = Column(String(50), primary_key=True)
 
     # Claim identification
-    claim_id = Column(String(50), nullable=False)        # HCE claim ID
-    episode_id = Column(String(50))                      # Episode/content ID
-    
+    claim_id = Column(String(50), nullable=False)  # HCE claim ID
+    episode_id = Column(String(50))  # Episode/content ID
+
     # Tier validation
-    original_tier = Column(String(1), nullable=False)    # Original LLM-assigned tier (A, B, C)
-    validated_tier = Column(String(1), nullable=False)   # User-validated tier (A, B, C)
-    is_modified = Column(Boolean, default=False)         # Whether user changed the tier
-    
+    original_tier = Column(
+        String(1), nullable=False
+    )  # Original LLM-assigned tier (A, B, C)
+    validated_tier = Column(String(1), nullable=False)  # User-validated tier (A, B, C)
+    is_modified = Column(Boolean, default=False)  # Whether user changed the tier
+
     # Claim content
-    claim_text = Column(Text, nullable=False)            # The actual claim text
-    claim_type = Column(String(30))                      # Type of claim (factual, causal, etc.)
-    
+    claim_text = Column(Text, nullable=False)  # The actual claim text
+    claim_type = Column(String(30))  # Type of claim (factual, causal, etc.)
+
     # Validation context
-    validated_by_user = Column(String(100))              # User identifier
+    validated_by_user = Column(String(100))  # User identifier
     validated_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Original LLM scoring context
-    original_scores = Column(JSONEncodedType)            # Original confidence scores
-    model_used = Column(String(50))                      # HCE model/version used
-    
+    original_scores = Column(JSONEncodedType)  # Original confidence scores
+    model_used = Column(String(50))  # HCE model/version used
+
     # Evidence and context
-    evidence_spans = Column(JSONEncodedType)             # Evidence that supported the claim
-    validation_session_id = Column(String(50))          # Group validations by session
-    
+    evidence_spans = Column(JSONEncodedType)  # Evidence that supported the claim
+    validation_session_id = Column(String(50))  # Group validations by session
+
     def __repr__(self) -> str:
         return f"<ClaimTierValidation(claim_id='{self.claim_id}', {self.original_tier}->{self.validated_tier}, modified={self.is_modified})>"
 
@@ -443,28 +461,32 @@ class QualityRating(Base):
     rating_id = Column(String(50), primary_key=True)
 
     # What's being rated
-    content_type = Column(String(30), nullable=False)  # 'summary', 'transcript', 'moc_extraction', 'claim_tier'
-    content_id = Column(String(50), nullable=False)    # ID of the rated content
+    content_type = Column(
+        String(30), nullable=False
+    )  # 'summary', 'transcript', 'moc_extraction', 'claim_tier'
+    content_id = Column(String(50), nullable=False)  # ID of the rated content
 
     # Rating details
-    llm_rating = Column(Float)           # Original LLM-assigned rating (0.0-1.0)
-    user_rating = Column(Float)          # User-corrected rating (0.0-1.0)
+    llm_rating = Column(Float)  # Original LLM-assigned rating (0.0-1.0)
+    user_rating = Column(Float)  # User-corrected rating (0.0-1.0)
     is_user_corrected = Column(Boolean, default=False)
 
     # Rating criteria (JSON object with detailed scores)
-    criteria_scores = Column(JSONEncodedType)  # {"accuracy": 0.8, "completeness": 0.9, "relevance": 0.7}
+    criteria_scores = Column(
+        JSONEncodedType
+    )  # {"accuracy": 0.8, "completeness": 0.9, "relevance": 0.7}
 
     # Feedback details
-    user_feedback = Column(Text)         # Optional text feedback from user
-    rating_reason = Column(Text)         # Why this rating was given
+    user_feedback = Column(Text)  # Optional text feedback from user
+    rating_reason = Column(Text)  # Why this rating was given
 
     # Context
     rated_by_user = Column(String(100))  # User identifier
     rated_at = Column(DateTime, default=datetime.utcnow)
 
     # Model context for learning
-    model_used = Column(String(50))      # Which model generated the content
-    prompt_template = Column(String(200)) # Which template was used
+    model_used = Column(String(50))  # Which model generated the content
+    prompt_template = Column(String(200))  # Which template was used
     input_characteristics = Column(JSONEncodedType)  # Input length, complexity, etc.
 
     def __repr__(self) -> str:

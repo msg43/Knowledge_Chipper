@@ -52,17 +52,17 @@ jobs:
         echo "=== Checking test directory structure ==="
         ls -la tests/ || echo "tests directory not found"
         find tests/ -name "*.py" -type f || echo "No Python test files found"
-        
+
         # Debug: Show current directory and Python path
         echo "=== Environment Debug ==="
         pwd
         echo "Python path: $PYTHONPATH"
         python -c "import sys; print('Python sys.path:', sys.path)"
-        
+
         # Run pytest with explicit discovery
         echo "=== Running pytest with discovery ==="
         pytest --collect-only -v
-        
+
         # Run the actual tests
         echo "=== Running tests with coverage ==="
         pytest tests/ --cov=knowledge_system --cov-report=xml -v -k "not proxy and not youtube and not network"
@@ -131,4 +131,3 @@ jobs:
           python -c "import knowledge_system.gui as g; print('GUI import OK')"
           ffmpeg -version | head -n 1 | cat
           python -c "import yt_dlp; print('yt_dlp OK')"
-

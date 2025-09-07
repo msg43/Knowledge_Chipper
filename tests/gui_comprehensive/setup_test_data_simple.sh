@@ -37,7 +37,7 @@ ffmpeg -f lavfi -i "sine=frequency=180+150*sin(2*PI*t/4)+75*sin(2*PI*t*3):durati
 aformat=sample_fmts=s16:sample_rates=16000:channel_layouts=mono,
 aresample=resampler=soxr[out]" -map "[out]" "${FIXTURES_DIR}/audio/long_speech_5min.m4a" -y 2>/dev/null
 
-# Generate interview (3 minutes) - alternating speakers simulation  
+# Generate interview (3 minutes) - alternating speakers simulation
 ffmpeg -f lavfi -i "sine=frequency=200+100*sin(2*PI*t/8):duration=180" -filter_complex "
 [0:a]volume=0.4,
 aformat=sample_fmts=s16:sample_rates=16000:channel_layouts=mono,
@@ -68,7 +68,7 @@ ffmpeg -f lavfi -i "color=color=white:size=1920x1080:rate=30" -f lavfi -i "sine=
 -shortest -c:v libx264 -preset veryfast -crf 26 -c:a aac -b:a 128k \
 "${FIXTURES_DIR}/video/webinar_10min.mp4" -y 2>/dev/null
 
-# Generate full lecture (45 minutes) - LONG for stress testing  
+# Generate full lecture (45 minutes) - LONG for stress testing
 ffmpeg -f lavfi -i "testsrc=size=1280x720:rate=30" -f lavfi -i "sine=frequency=200+120*sin(2*PI*t/8):duration=2700" \
 -vf "format=yuv420p,drawtext=text='Lecture %{pts\\:hms}':x=20:y=h-60:fontsize=24" \
 -shortest -c:v libx264 -preset veryfast -crf 27 -c:a aac -b:a 128k \
@@ -99,7 +99,7 @@ Attendees: Sarah Chen, Mike Rodriguez, Anna Kim
 
 Agenda:
 1. Review transcription accuracy metrics
-2. Speaker diarization improvements  
+2. Speaker diarization improvements
 3. Performance optimization
 4. Quality assurance protocols
 
@@ -125,7 +125,7 @@ Real-time Automatic Speech Recognition pipeline for high-throughput processing.
 
 ## Architecture
 - Input Layer: Multi-format audio ingestion
-- Preprocessing: VAD, noise reduction, normalization  
+- Preprocessing: VAD, noise reduction, normalization
 - ASR Engine: Transformer-based neural network
 - Post-processing: Grammar correction, punctuation
 
@@ -145,15 +145,15 @@ cat > "${FIXTURES_DIR}/documents/research_paper.txt" << 'EOF'
 A Study on Robust Speaker Diarization under Realistic Noise Conditions
 
 Abstract
-Speaker diarization faces challenges in real-world scenarios with background noise, 
-overlapping speech, and varying acoustic conditions. This study analyzes state-of-the-art 
+Speaker diarization faces challenges in real-world scenarios with background noise,
+overlapping speech, and varying acoustic conditions. This study analyzes state-of-the-art
 systems under realistic noise and proposes robustness improvements.
 
 1. Introduction
-Speaker diarization determines "who spoke when" in audio recordings. Applications include 
+Speaker diarization determines "who spoke when" in audio recordings. Applications include
 meeting transcription, broadcast analysis, and conversational AI.
 
-2. Methodology  
+2. Methodology
 We evaluated five diarization systems using:
 - AMI Meeting Corpus (clean)
 - DIHARD III Challenge (realistic)
@@ -180,7 +180,7 @@ cat > "${FIXTURES_DIR}/documents/blog_post.html" << 'EOF'
 <body>
     <h1>Latency vs Accuracy Trade-offs in Speech Recognition</h1>
     <p><em>By Dr. Alexandra Martinez - January 15, 2024</em></p>
-    
+
     <h2>The Challenge</h2>
     <p>Modern applications demand different balance points:</p>
     <ul>
@@ -188,11 +188,11 @@ cat > "${FIXTURES_DIR}/documents/blog_post.html" << 'EOF'
         <li>Voice assistants: &lt;100ms</li>
         <li>Conference transcription: 500-1000ms acceptable</li>
     </ul>
-    
+
     <h2>Optimization Strategies</h2>
-    <p>Model architecture choices include streaming vs bidirectional models, 
+    <p>Model architecture choices include streaming vs bidirectional models,
     with hardware considerations for GPU acceleration and edge deployment.</p>
-    
+
     <h2>Conclusion</h2>
     <p>Optimal balance depends on application requirements and constraints.</p>
 </body>
@@ -205,7 +205,7 @@ Knowledge Chipper User Manual
 
 Table of Contents
 1. Introduction
-2. Installation  
+2. Installation
 3. Configuration
 4. Audio Processing
 5. Video Processing
@@ -216,13 +216,13 @@ Table of Contents
 10. Appendices
 
 Chapter 1: Introduction
-Welcome to Knowledge Chipper, a comprehensive tool for processing audio, video, 
+Welcome to Knowledge Chipper, a comprehensive tool for processing audio, video,
 and document content with advanced AI capabilities.
 
 Chapter 2: Installation
 System requirements and installation procedures for various platforms.
 
-Chapter 3: Configuration  
+Chapter 3: Configuration
 Detailed configuration options for optimal performance in your environment.
 
 Chapter 4: Audio Processing
@@ -262,7 +262,7 @@ echo "Generated simple test files in: $FIXTURES_DIR"
 echo ""
 echo "File sizes optimized for GUI testing:"
 echo "- Quick tests: 5-10 seconds"
-echo "- Standard tests: 2-5 minutes" 
+echo "- Standard tests: 2-5 minutes"
 echo "- Stress tests: 10-45 minutes"
 echo ""
 echo "Run tests with:"

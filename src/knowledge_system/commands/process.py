@@ -38,7 +38,7 @@ from .transcribe import _generate_obsidian_link, format_transcript_content
 @click.option(
     "--write-obsidian-pages/--no-write-obsidian-pages",
     default=False,
-    help="Generate Obsidian MOC pages with dataview queries"
+    help="Generate Obsidian MOC pages with dataview queries",
 )
 @click.option(
     "--recursive/--no-recursive",
@@ -307,21 +307,27 @@ def process(
         # Apply profile defaults (can be overridden explicitly)
         profile_opts: dict[str, Any] = {}
         if profile == "fast":
-            profile_opts.update({
-                "use_skim": False,
-                "router_uncertainty_threshold": 1.0,
-                "flagship_judge_model": None,
-            })
+            profile_opts.update(
+                {
+                    "use_skim": False,
+                    "router_uncertainty_threshold": 1.0,
+                    "flagship_judge_model": None,
+                }
+            )
         elif profile == "balanced":
-            profile_opts.update({
-                "use_skim": True,
-                "router_uncertainty_threshold": 0.35,
-            })
+            profile_opts.update(
+                {
+                    "use_skim": True,
+                    "router_uncertainty_threshold": 0.35,
+                }
+            )
         elif profile == "quality":
-            profile_opts.update({
-                "use_skim": True,
-                "router_uncertainty_threshold": 0.25,
-            })
+            profile_opts.update(
+                {
+                    "use_skim": True,
+                    "router_uncertainty_threshold": 0.25,
+                }
+            )
 
         summarizer_processor = SummarizerProcessor(
             provider=settings.llm.provider,
@@ -473,23 +479,30 @@ def process(
                             )
 
                         # Export to GetReceipts if enabled and summarization succeeded
-                        if export_getreceipts and result.success and result.metadata.get("hce_data"):
+                        if (
+                            export_getreceipts
+                            and result.success
+                            and result.metadata.get("hce_data")
+                        ):
                             if not ctx.quiet:
                                 console.print(
                                     f"[blue]🔄 Uploading to GetReceipts.org: {input_for_summary.name}[/blue]"
                                 )
-                            
+
                             try:
-                                from ...cloud.oauth import upload_to_getreceipts
-                                
+                                from ..integrations import upload_to_getreceipts
+
                                 # Get HCE pipeline outputs from result metadata
                                 hce_data = result.metadata["hce_data"]
-                                
+
                                 # Upload to GetReceipts using OAuth authentication
                                 upload_results = upload_to_getreceipts(hce_data)
-                                
+
                                 if not ctx.quiet:
-                                    total_uploaded = sum(len(data) if data else 0 for data in upload_results.values())
+                                    total_uploaded = sum(
+                                        len(data) if data else 0
+                                        for data in upload_results.values()
+                                    )
                                     console.print(
                                         f"[green]✅ Uploaded {total_uploaded} records to GetReceipts.org[/green]"
                                     )
@@ -501,12 +514,12 @@ def process(
                                         f"Jargon: {len(upload_results.get('jargon', []))}, "
                                         f"Mental Models: {len(upload_results.get('mental_models', []))}[/dim]"
                                     )
-                                    
+
                             except Exception as e:
                                 error_msg = f"GetReceipts upload error: {str(e)}"
                                 if not ctx.quiet:
                                     console.print(f"[yellow]⚠ {error_msg}[/yellow]")
-                                    
+
                     else:
                         results["errors"].append(
                             f"Summarization failed for {input_for_summary.name}: {result.errors}"
@@ -558,11 +571,11 @@ def process(
 
             try:
                 result = moc_processor.process(
-                    moc_input_files, 
-                    theme="topical", 
-                    depth=3, 
+                    moc_input_files,
+                    theme="topical",
+                    depth=3,
                     include_beliefs=True,
-                    write_obsidian_pages=write_obsidian_pages
+                    write_obsidian_pages=write_obsidian_pages,
                 )
                 if result.success:
                     # Save MOC files
@@ -625,8 +638,10 @@ def process(
 
     except Exception as e:
         import sys  # Ensure sys is available in this scope
+
         console.print(f"[red]✗ Unexpected error during processing:[/red] {e}")
         if ctx.verbose:
             import traceback
+
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)

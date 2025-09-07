@@ -1,6 +1,8 @@
 """Test input pipeline integration."""
-import pytest
 from pathlib import Path
+
+import pytest
+
 from knowledge_system.config import Settings
 
 
@@ -15,6 +17,7 @@ def test_pipeline_imports():
     try:
         from knowledge_system.processors.base import BaseProcessor
         from knowledge_system.processors.registry import ProcessorRegistry
+
         assert BaseProcessor is not None
         assert ProcessorRegistry is not None
     except ImportError:

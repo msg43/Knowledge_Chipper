@@ -10,16 +10,16 @@ __author__ = "Knowledge Chipper Development Team"
 
 # Handle imports for both module and direct execution
 try:
-    from .test_framework import GUITestFramework
     from .gui_automation import GUIAutomation
+    from .test_framework import GUITestFramework
     from .validation import OutputValidator
 except ImportError:
-    from test_framework import GUITestFramework
     from gui_automation import GUIAutomation
+    from test_framework import GUITestFramework
     from validation import OutputValidator
 
 __all__ = [
     "GUITestFramework",
-    "GUIAutomation", 
+    "GUIAutomation",
     "OutputValidator",
 ]

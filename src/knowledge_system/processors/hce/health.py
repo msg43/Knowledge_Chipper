@@ -45,5 +45,3 @@ def validate_hce_or_raise() -> None:
         raise HCEValidationError(
             "HCE is not fully available. Missing symbols: " + ", ".join(missing)
         )
-
-

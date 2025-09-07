@@ -168,5 +168,3 @@ Next steps:
 - Review $INDEX_SQL and apply relevant indexes on hot paths.
 - Prefer keyset pagination on ordered keys (avoid large OFFSETs).
 EOF
-
-

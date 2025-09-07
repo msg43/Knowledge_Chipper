@@ -5,12 +5,7 @@ from typing import Any
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import (
-    QLabel,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import QLabel, QScrollArea, QVBoxLayout, QWidget
 
 from ...logger import get_logger
 from ..components.base_tab import BaseTab
@@ -52,7 +47,6 @@ class IntroductionTab(BaseTab):
         # Tab navigation guide
         self._create_tab_guide_section(content_layout)
 
-
         # Add stretch to push content to top
         content_layout.addStretch()
 
@@ -74,7 +68,8 @@ class IntroductionTab(BaseTab):
             """
             <b>Skipthepodcast.com transforms your YouTube videos, RSS Feeds, and Documents into CLAIMS.</b>
 
-            <br><br>What are claims? Claims are the carefully sourced, atomized statements that make up the heart of any informative video or document. They form the backbone of a world class summary. Not just an overview of what was discussed, but a point by point inventory of the most novel, important, controversial insightful views of the source.
+            <br><br>What are claims?
+            Claims are the carefully sourced, atomized statements that make up the heart of any informative video or document. They form the backbone of a world class summary. Not just an overview of what was discussed, but a point by point inventory of the most novel, important, controversial, insightful views of the source.
 
             <br><br><b>⚡ What it does:</b>
             <br>📹 <b>Transcribes</b> → Videos (YouTube or local), audio files (RSS feeds or local files), and documents
@@ -111,7 +106,7 @@ class IntroductionTab(BaseTab):
             <b>Get started in two simple steps:</b>
 
             <br><br><b>1. Decide if you want to access YouTube videos for summarization.</b>
-            <br>• If so, go to the <b>Settings</b> tab and add your Bright Data API key
+            <br>• If so, go to the <b>Settings</b> tab and add your PacketStream credentials (username and auth key)
             <br>• If not, you can still use the app to summarize local audio and video files and RSS feeds and documents
 
             <br><br><b>2. Decide if you want to use cloud or local AI models.</b>
@@ -121,9 +116,9 @@ class IntroductionTab(BaseTab):
             <br><br><b>THAT'S IT! You are ready to go.</b>
 
             <br><br><b>Just work your way through the tabs in order left to right.</b>
-           
-           <br>For example, if you want to summarize a YouTube video, you would go to the <b>Cloud Transcription</b> tab, enter the URL, and click "Extract Transcripts".
-           <br>If you prefer to summarize a local video, you would go to the <b>Local Transcription</b> tab, select the audio or video file or text document, and click "Extract Transcripts".
+
+           <br>For example, if you want to summarize a YouTube video, you would go to the <b>Cloud Transcription</b> tab, enter the URL, and click "Start Transcription".
+           <br>If you prefer to summarize a local video, you would go to the <b>Local Transcription</b> tab, select the audio or video file or text document, and click "Start Transcription".
            <br>Either way, you will get a .md file with the transcript, a nice thumbnail, and a bunch of metadata.
 
             <br><br>Then you would go to the <b>Summarization</b> tab, select the .md file with the transcript (or an entire folder), and click "Start Summarization".
@@ -149,7 +144,7 @@ class IntroductionTab(BaseTab):
 
         tabs_text = QLabel(
             """
-            
+
             <br><br><b>🔍 Claim Search</b> - Search for claims across all processed content
 
             <br><br><b>👁️ File Watcher</b> - Automated processing

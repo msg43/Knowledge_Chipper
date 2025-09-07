@@ -79,6 +79,10 @@ def process_bright_data_youtube_response(
                 thumbnail_url=metadata.thumbnail_url,
                 tags_json=metadata.tags,
                 categories_json=metadata.categories,
+                # New enhanced fields
+                related_videos_json=metadata.related_videos,
+                channel_stats_json=metadata.channel_stats,
+                video_chapters_json=metadata.video_chapters,
             )
 
             if video_record:

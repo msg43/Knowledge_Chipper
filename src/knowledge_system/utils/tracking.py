@@ -155,13 +155,13 @@ class SummarizationProgress:
     batch_percent: float | None = None  # Overall batch progress (0.0-100.0)
 
     # Legacy compatibility (DEPRECATED - auto-calculated for backward compatibility)
-    percent: None | (float) = (
-        None  # DEPRECATED: Use file_percent instead (auto-calculated)
-    )
+    percent: None | (
+        float
+    ) = None  # DEPRECATED: Use file_percent instead (auto-calculated)
     status: str | None = None  # Current status/stage (still used)
-    batch_percent_characters: None | (float) = (
-        None  # DEPRECATED: Use batch_percent instead (auto-calculated)
-    )
+    batch_percent_characters: None | (
+        float
+    ) = None  # DEPRECATED: Use batch_percent instead (auto-calculated)
 
     # Performance metrics
     chars_per_second: float | None = None  # Character processing rate
@@ -840,24 +840,24 @@ def update_progress_with_character_tracking(
 def resume_from_checkpoint(checkpoint_path: Path | str) -> ProgressTracker | None:
     """
     Resume a batch processing job from a checkpoint file.
-    
+
     Args:
         checkpoint_path: Path to the checkpoint file
-        
+
     Returns:
         Loaded BatchProgressTracker instance, or None if checkpoint doesn't exist
     """
     checkpoint_path = Path(checkpoint_path)
-    
+
     if not checkpoint_path.exists():
         return None
-    
+
     try:
         # Create a new tracker instance and load from checkpoint
         tracker = ProgressTracker(str(checkpoint_path.parent), enable_checkpoints=True)
         tracker._load_checkpoint()
         return tracker
-        
+
     except Exception as e:
         logger = get_logger()
         logger.error(f"Failed to resume from checkpoint {checkpoint_path}: {e}")

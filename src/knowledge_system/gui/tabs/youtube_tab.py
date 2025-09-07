@@ -27,7 +27,11 @@ from ...config import get_valid_whisper_models
 from ...logger import get_logger
 from ...utils.cancellation import CancellationToken
 from ..components.base_tab import BaseTab
+from ..components.completion_summary import CloudTranscriptionSummary
+from ..components.enhanced_error_dialog import show_enhanced_error
+from ..components.enhanced_progress_display import CloudTranscriptionStatusDisplay
 from ..core.settings_manager import get_gui_settings_manager
+from ..dialogs.diarization_ffmpeg_dialog import DiarizationFFmpegDialog
 from ..dialogs.ffmpeg_prompt_dialog import FFmpegPromptDialog
 from ..workers.youtube_batch_worker import YouTubeBatchWorker
 
@@ -43,6 +47,10 @@ class YouTubeExtractionWorker(QThread):
     extraction_error = pyqtSignal(str)
     payment_required = pyqtSignal()  # 402 Payment Required error
     playlist_info_updated = pyqtSignal(dict)  # playlist metadata for display
+    log_message = pyqtSignal(str)  # for log messages from worker
+    speaker_assignment_requested = pyqtSignal(
+        object, str, object, object
+    )  # data, path, metadata, result_callback
 
     def __init__(self, urls: Any, config: Any, parent: Any = None) -> None:
         super().__init__(parent)
@@ -50,6 +58,9 @@ class YouTubeExtractionWorker(QThread):
         self.config = config
         self.should_stop = False
         self.cancellation_token = CancellationToken()
+        # Speaker assignment synchronization
+        self._speaker_assignment_event = None
+        self._speaker_assignment_result = None
 
         # Log worker creation details
         logger.info(f"YouTubeExtractionWorker created with {len(urls)} URLs")
@@ -134,7 +145,9 @@ class YouTubeExtractionWorker(QThread):
             # Instantiate processor; if diarization is enabled, force diarization path to bypass transcript requirement
             enable_diarization_cfg = bool(self.config.get("enable_diarization", False))
             if enable_diarization_cfg:
-                logger.info("Diarization enabled in GUI - forcing diarization mode in processor")
+                logger.info(
+                    "Diarization enabled in GUI - forcing diarization mode in processor"
+                )
                 processor = YouTubeTranscriptProcessor(
                     force_diarization=True,
                     require_diarization=False,
@@ -279,15 +292,25 @@ class YouTubeExtractionWorker(QThread):
                         )
 
                     # Pass cancellation token and progress callback to processor
+                    enable_diarization = self.config.get("enable_diarization", False)
+                    testing_mode = (
+                        os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
+                    )
+
                     result = processor.process(
                         url,
                         output_dir=self.config.get("output_dir"),
                         output_format=self.config.get("format", "md"),
                         include_timestamps=self.config.get("timestamps", True),
                         overwrite=self.config.get("overwrite", False),
-                        enable_diarization=self.config.get("enable_diarization", False),
+                        enable_diarization=enable_diarization,
+                        gui_mode=not testing_mode,  # Enable GUI mode unless testing
+                        show_speaker_dialog=(
+                            enable_diarization and not testing_mode
+                        ),  # Show dialog if diarization enabled and not testing
                         cancellation_token=self.cancellation_token,
                         progress_callback=progress_callback,
+                        speaker_assignment_callback=self._speaker_assignment_callback,
                     )
 
                     # CRITICAL DEBUG: Log result summary
@@ -438,30 +461,24 @@ class YouTubeExtractionWorker(QThread):
                             ):
                                 self.payment_required.emit()
 
-                            # Show a targeted popup if the failure is diarization-related
-                            if "Diarization failed" in error_msg or "diarization" in error_msg.lower():
-                                try:
-                                    from PyQt6.QtWidgets import QMessageBox
+                            # CRITICAL: Do NOT create dialogs from worker threads!
+                            # Instead, emit a signal to show guidance on the main thread
+                            if (
+                                "Diarization failed" in error_msg
+                                or "diarization" in error_msg.lower()
+                            ):
+                                guidance = (
+                                    "Diarization failed. To fix:\n\n"
+                                    "1) Ensure HuggingFace token is set (Settings → API Keys).\n"
+                                    "2) Accept access to pyannote/speaker-diarization-3.1 on HuggingFace.\n"
+                                    "3) Verify ffmpeg/ffprobe are installed and on PATH.\n"
+                                    "4) Check network stability and retry.\n\n"
+                                    "This URL has been added to the failure CSV for easy re-run."
+                                )
 
-                                    guidance = (
-                                        "Diarization failed. To fix:\n\n"
-                                        "1) Ensure HuggingFace token is set (Settings → API Keys).\n"
-                                        "2) Accept access to pyannote/speaker-diarization-3.1 on HuggingFace.\n"
-                                        "3) Verify ffmpeg/ffprobe are installed and on PATH.\n"
-                                        "4) Check network stability and retry.\n\n"
-                                        "This URL has been added to the failure CSV for easy re-run."
-                                    )
-
-                                    msg = QMessageBox(self)
-                                    msg.setIcon(QMessageBox.Icon.Warning)
-                                    msg.setWindowTitle("Diarization Failure")
-                                    msg.setText(error_msg)
-                                    msg.setInformativeText(guidance)
-                                    msg.exec()
-                                except Exception:
-                                    self.append_log(
-                                        "⚠️ Diarization failed. Guidance: set HuggingFace token, accept pyannote model, install ffmpeg, then retry."
-                                    )
+                                # Emit signal to show guidance on main thread (thread-safe)
+                                self.log_message.emit(f"❌ {error_msg}")
+                                self.log_message.emit(f"💡 {guidance}")
 
                             results["failed"] += 1
                             results["failed_urls"].append(
@@ -508,9 +525,7 @@ class YouTubeExtractionWorker(QThread):
             error_msg = f"YouTube extraction failed: {str(e)}"
             logger.error(error_msg)
             self.extraction_error.emit(error_msg)
-            self.progress_updated.emit(
-                0, len(self.urls), f"💥 Fatal error: {error_msg}"
-            )
+            self.progress_updated.emit(0, len(self.urls), f"💥 Fatal error: {error_msg}")
 
     def stop(self) -> None:
         """Stop the extraction process."""
@@ -575,7 +590,9 @@ class YouTubeExtractionWorker(QThread):
 
             with open(csv_file, "w", newline="", encoding="utf-8") as csvfile:
                 # Write header comments
-                csvfile.write("# YouTube Cloud Transcription Failures - URLs for retry\n")
+                csvfile.write(
+                    "# YouTube Cloud Transcription Failures - URLs for retry\n"
+                )
                 csvfile.write(f"# Session: {formatted_timestamp}\n")
                 csvfile.write(f"# Total failures: {len(failed_urls)}\n")
                 csvfile.write("#\n")
@@ -586,7 +603,7 @@ class YouTubeExtractionWorker(QThread):
                 csvfile.write(
                     "# 2. Select 'Or Select File' option and browse to this CSV\n"
                 )
-                csvfile.write("# 3. Click 'Extract Transcripts' to retry failed URLs\n")
+                csvfile.write("# 3. Click 'Start Transcription' to retry failed URLs\n")
                 csvfile.write("#\n")
 
                 # Write URLs - one per line for simplicity
@@ -608,6 +625,40 @@ class YouTubeExtractionWorker(QThread):
         except Exception as e:
             logger.error(f"Failed to write failure log: {e}")
             return None, None
+
+    def _speaker_assignment_callback(
+        self, speaker_data_list, recording_path, metadata=None
+    ):
+        """
+        Thread-safe callback for speaker assignment requests from worker thread.
+        Emits a signal to the main thread to show the dialog, then waits for result.
+        """
+        import threading
+
+        self._speaker_assignment_event = threading.Event()
+        self._speaker_assignment_result = None
+
+        # Emit to main thread with a result callback
+        self.speaker_assignment_requested.emit(
+            speaker_data_list,
+            recording_path,
+            metadata,
+            self._on_speaker_assignment_result,
+        )
+
+        # Wait up to 5 minutes
+        if self._speaker_assignment_event:
+            self._speaker_assignment_event.wait(timeout=300)
+
+        result = self._speaker_assignment_result
+        self._speaker_assignment_result = None
+        self._speaker_assignment_event = None
+        return result
+
+    def _on_speaker_assignment_result(self, result):
+        self._speaker_assignment_result = result
+        if self._speaker_assignment_event:
+            self._speaker_assignment_event.set()
 
 
 class YouTubeTab(BaseTab):
@@ -667,7 +718,7 @@ class YouTubeTab(BaseTab):
         # URL input
         self.url_input = QTextEdit()
         self.url_input.setPlaceholderText(
-            "Enter YouTube URLs, Playlist URLs, or RSS feeds (one per line) - shows total video count across all playlists:\n"
+            "Enter YouTube URLs, Playlist URLs, or RSS feeds (one per line):\n"
             "https://www.youtube.com/watch?v=...\n"
             "https://youtu.be/...\n"
             "https://www.youtube.com/playlist?list=...\n"
@@ -707,7 +758,7 @@ class YouTubeTab(BaseTab):
         file_layout = QHBoxLayout()
         file_layout.addWidget(
             QLabel(
-                "Select a .TXT, .RTF, or .CSV file with YouTube URLs/Playlists or RSS feeds (shows total video count across all):"
+                "Select a .TXT, .RTF, or .CSV file with YouTube URLs/Playlists or RSS feeds:"
             )
         )
 
@@ -773,6 +824,8 @@ class YouTubeTab(BaseTab):
         self.output_dir_input.setPlaceholderText(
             "Click Browse to select output directory (required)"
         )
+        # Make output directory field significantly longer (300% of original)
+        self.output_dir_input.setMinimumWidth(450)
         # Remove default setting - require user selection
         self.output_dir_input.textChanged.connect(self._on_setting_changed)
         self._add_field_with_info(
@@ -816,7 +869,9 @@ class YouTubeTab(BaseTab):
         self.transcription_model_combo = QComboBox()
         self.transcription_model_combo.addItems(get_valid_whisper_models())
         self.transcription_model_combo.setCurrentText("base")
-        self.transcription_model_combo.currentTextChanged.connect(self._on_setting_changed)
+        self.transcription_model_combo.currentTextChanged.connect(
+            self._on_setting_changed
+        )
         self.transcription_model_combo.setToolTip(
             "<b>Transcription Model</b> - Choose Whisper model for diarization<br/><br/>"
             "<b>Models (accuracy vs speed):</b><br/>"
@@ -981,17 +1036,21 @@ class YouTubeTab(BaseTab):
         """Create the progress tracking section."""
         layout = QVBoxLayout()
 
-        # Progress label
-        self.progress_label = QLabel("Ready to extract transcripts")
-        layout.addWidget(self.progress_label)
+        # Enhanced cloud status display - this replaces all legacy progress components
+        self.cloud_status_display = CloudTranscriptionStatusDisplay()
+        layout.addWidget(self.cloud_status_display)
 
-        # Progress bar
+        # Legacy progress components - kept for compatibility but NOT added to layout to prevent overlap
+        self.progress_label = QLabel("Ready to extract transcripts")
+        self.progress_label.setVisible(False)  # Hidden - enhanced display handles this
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setMinimum(0)
         self.progress_bar.setMaximum(100)
         self.progress_bar.setValue(0)
-        self.progress_bar.setVisible(False)  # Hidden initially
-        layout.addWidget(self.progress_bar)
+        self.progress_bar.setVisible(False)  # Hidden - enhanced display handles this
+
+        # NOTE: Legacy components are intentionally NOT added to layout to prevent overlapping progress bars
 
         return layout
 
@@ -1053,7 +1112,7 @@ class YouTubeTab(BaseTab):
 
     def _get_start_button_text(self) -> str:
         """Get the text for the start button."""
-        return "🎬 Extract Transcripts"
+        return "🎬 Start Transcription"
 
     def _check_diarization_dependencies(self) -> None:
         """Check and report status of diarization dependencies asynchronously."""
@@ -1114,9 +1173,7 @@ class YouTubeTab(BaseTab):
         """Handle the result of async diarization dependency check."""
         try:
             if success:
-                self.append_log(
-                    "✅ Diarization dependencies (pyannote.audio) available"
-                )
+                self.append_log("✅ Diarization dependencies (pyannote.audio) available")
 
                 # Check for HuggingFace token
                 hf_token = getattr(self.settings.api_keys, "huggingface_token", None)
@@ -1135,9 +1192,7 @@ class YouTubeTab(BaseTab):
                             "✅ Apple Silicon GPU (MPS) available for diarization"
                         )
                     elif backend == "cuda":
-                        self.append_log(
-                            "✅ NVIDIA GPU (CUDA) available for diarization"
-                        )
+                        self.append_log("✅ NVIDIA GPU (CUDA) available for diarization")
                     else:
                         self.append_log(
                             "ℹ️ Using CPU for diarization (slower but functional)"
@@ -1150,20 +1205,30 @@ class YouTubeTab(BaseTab):
                 if "Dependencies missing" in message:
                     self.append_log("❌ Diarization dependencies missing!")
                     try:
-                        from ..dialogs.diarization_setup_dialog import DiarizationSetupDialog
+                        from ..dialogs.diarization_setup_dialog import (
+                            DiarizationSetupDialog,
+                        )
 
                         # Offer guided installation
                         install_dialog = DiarizationSetupDialog(self)
+
                         def _after_install(success: bool):
                             if success:
-                                self.append_log("✅ Diarization dependencies installed. Continuing...")
+                                self.append_log(
+                                    "✅ Diarization dependencies installed. Continuing..."
+                                )
                             else:
-                                self.append_log("❌ Diarization installation failed. You can retry later.")
+                                self.append_log(
+                                    "❌ Diarization installation failed. You can retry later."
+                                )
+
                         install_dialog.installation_completed.connect(_after_install)
                         install_dialog.exec()
                     except Exception:
                         # Fallback to simple warning if dialog import fails
-                        self.append_log("   Install with: pip install -e '.[diarization]'")
+                        self.append_log(
+                            "   Install with: pip install -e '.[diarization]'"
+                        )
                         self.show_warning(
                             "Diarization Dependencies Missing",
                             "Speaker diarization requires additional dependencies.\n\n"
@@ -1216,14 +1281,25 @@ class YouTubeTab(BaseTab):
 
         QApplication.processEvents()
 
-        # Check for FFmpeg first (required for YouTube video downloads)
-        if not self._check_ffmpeg_availability():
-            self._reset_button_state()
-            return
+        # Check if diarization is enabled first to determine FFMPEG requirements
+        enable_diarization = self.diarization_checkbox.isChecked()
+
+        # For diarization, we need a more thorough FFMPEG check with user interaction
+        if enable_diarization:
+            if not self._check_ffmpeg_for_diarization():
+                self._reset_button_state()
+                return
+        else:
+            # For non-diarization, use the standard check
+            if not self._check_ffmpeg_availability():
+                self._reset_button_state()
+                return
 
         # Check Bright Data API key from settings
         self.append_log("🔐 Checking Bright Data API credentials...")
-        bright_data_api_key = getattr(self.settings.api_keys, "bright_data_api_key", None)
+        bright_data_api_key = getattr(
+            self.settings.api_keys, "bright_data_api_key", None
+        )
 
         if not bright_data_api_key or len(str(bright_data_api_key).strip()) == 0:
             self.append_log("❌ Bright Data API key missing!")
@@ -1237,7 +1313,7 @@ class YouTubeTab(BaseTab):
                 "3. Click 'Save API Keys'\n"
                 "4. Return here to start processing\n\n"
                 "💡 Get your API key at: https://brightdata.com/\n\n"
-                "Note: Without this key, YouTube processing will fail due to anti-bot protections."
+                "Note: Without this key, YouTube processing will fail due to anti-bot protections.",
             )
             return
 
@@ -1250,7 +1326,7 @@ class YouTubeTab(BaseTab):
                 "Invalid Bright Data API Key",
                 "The Bright Data API key appears to be invalid (too short).\n\n"
                 "Please check your API key in the 'API Keys' tab and ensure it's entered correctly.\n\n"
-                "💡 Get your API key at: https://brightdata.com/"
+                "💡 Get your API key at: https://brightdata.com/",
             )
             return
 
@@ -1376,9 +1452,7 @@ class YouTubeTab(BaseTab):
             del self._pending_urls
             del self._pending_output_dir
 
-            logger.info(
-                f"Starting extraction of {len(urls)} URLs to {output_dir}"
-            )
+            logger.info(f"Starting extraction of {len(urls)} URLs to {output_dir}")
 
             # Schedule diarization check asynchronously if needed
             enable_diarization = self.diarization_checkbox.isChecked()
@@ -1412,7 +1486,9 @@ class YouTubeTab(BaseTab):
     def _validate_non_filesystem_inputs(self) -> bool:
         """Validate inputs that don't require filesystem access."""
         # Check Bright Data API key (required for YouTube processing)
-        bright_data_api_key = getattr(self.settings.api_keys, "bright_data_api_key", None)
+        bright_data_api_key = getattr(
+            self.settings.api_keys, "bright_data_api_key", None
+        )
 
         if not bright_data_api_key:
             self.append_log("❌ Bright Data API key missing!")
@@ -1490,9 +1566,7 @@ class YouTubeTab(BaseTab):
                     "📥 Download-all mode: Will download all audio files first"
                 )
             else:
-                self.append_log(
-                    "🔄 Conveyor belt mode: Processing in optimized batches"
-                )
+                self.append_log("🔄 Conveyor belt mode: Processing in optimized batches")
             self.append_log("-" * 50)
             self._start_batch_processing(urls, config)
         else:
@@ -1553,10 +1627,15 @@ class YouTubeTab(BaseTab):
         self.extraction_worker.url_completed.connect(self._url_extraction_completed)
         self.extraction_worker.extraction_finished.connect(self._extraction_finished)
         self.extraction_worker.extraction_error.connect(self._extraction_error)
+        self.extraction_worker.log_message.connect(self.append_log)
         self.extraction_worker.payment_required.connect(
             self._show_payment_required_dialog
         )
         self.extraction_worker.playlist_info_updated.connect(self._handle_playlist_info)
+        # Ensure speaker assignment dialog is shown on the main thread
+        self.extraction_worker.speaker_assignment_requested.connect(
+            self._handle_speaker_assignment_request
+        )
 
         # Add to active workers
         self.active_workers.append(self.extraction_worker)
@@ -1693,6 +1772,7 @@ class YouTubeTab(BaseTab):
         """Check if URL is supported by any registered processor."""
         try:
             from knowledge_system.processors.registry import get_processor_for_input
+
             return get_processor_for_input(url) is not None
         except Exception as e:
             logger.debug(f"Error checking URL support for {url}: {e}")
@@ -1709,9 +1789,41 @@ class YouTubeTab(BaseTab):
 
         self._progress_update_inflight = True
         try:
+            # Update enhanced cloud status display
+            if total > 0:
+                # Determine operation type from status
+                if "downloading" in status.lower() or "download" in status.lower():
+                    operation = f"📥 Downloading audio from URL {current + 1}"
+                elif "processing" in status.lower() or "diarization" in status.lower():
+                    operation = f"🎙️ Processing audio for URL {current + 1}"
+                elif "transcript" in status.lower():
+                    operation = f"📝 Extracting transcript from URL {current + 1}"
+                elif current >= total:
+                    operation = "✅ Cloud transcription completed"
+                else:
+                    operation = f"🔄 Processing URL {current + 1}"
+
+                self.cloud_status_display.update_cloud_status(
+                    current_url=current + 1,
+                    total_urls=total,
+                    current_operation=operation,
+                    api_status="Active",
+                )
+            else:
+                # Indeterminate progress
+                self.cloud_status_display.update_cloud_status(
+                    current_url=0,
+                    total_urls=0,
+                    current_operation=status,
+                    api_status="Initializing",
+                )
+
             # For download progress and similar repetitive updates, update the same line
             # For other status messages, append normally
-            if any(indicator in status for indicator in ['📥', 'Downloading:', '%', 'MB/s', '🔄', 'Processing:']):
+            if any(
+                indicator in status
+                for indicator in ["📥", "Downloading:", "%", "MB/s", "🔄", "Processing:"]
+            ):
                 self.update_last_log_line(status)
             else:
                 self.append_log(status)
@@ -1720,37 +1832,12 @@ class YouTubeTab(BaseTab):
                 percent = (current / total) * 100
 
                 # Enhanced progress label with more detail
-                if "downloading" in status.lower() or "download" in status.lower():
-                    # Download phase
-                    self.progress_label.setText(
-                        f"📥 Downloading audio {current + 1}/{total} ({percent:.1f}%)"
-                    )
-                elif "processing" in status.lower() or "diarization" in status.lower():
-                    # Processing phase
-                    self.progress_label.setText(
-                        f"🎙️ Processing audio {current + 1}/{total} ({percent:.1f}%)"
-                    )
-                elif "transcript" in status.lower():
-                    # Transcript extraction
-                    self.progress_label.setText(
-                        f"📝 Extracting transcripts {current + 1}/{total} ({percent:.1f}%)"
-                    )
-                elif current >= total:
-                    # Completion
-                    self.progress_label.setText(f"✅ Completed {total}/{total} URLs (100%)")
-                else:
-                    # Generic progress
-                    self.progress_label.setText(
-                        f"🔄 Processing {current + 1}/{total} URLs ({percent:.1f}%)"
-                    )
-
-                self.progress_bar.setValue(int(percent))
-                self.progress_bar.setVisible(True)
+                # Legacy progress updates removed - enhanced display handles all progress updates
+                # (progress_label and progress_bar updates moved to enhanced display)
+                pass
             else:
-                # Indeterminate progress (preparing, initializing, etc.)
-                self.progress_bar.setValue(0)
-                self.progress_bar.setVisible(True)
-                self.progress_label.setText(status)
+                # Indeterminate progress handled by enhanced display
+                pass
         finally:
             self._progress_update_inflight = False
 
@@ -1767,6 +1854,10 @@ class YouTubeTab(BaseTab):
 
     def _extraction_finished(self, results: dict[str, Any]):
         """Handle completion of all extractions."""
+        # Update cloud status display with completion
+        success_count = results.get("successful", 0)
+        failed_count = results.get("failed", 0)
+        self.cloud_status_display.complete(success_count, failed_count)
         self.append_log("\n" + "=" * 50)
         self.append_log("🎬 YouTube extraction completed!")
         self.append_log(
@@ -1802,7 +1893,9 @@ class YouTubeTab(BaseTab):
                 f"\n🎉 Successfully processed and saved {results['successful']} video(s)!"
             )
             self.append_log("📝 Check the output directory for .md transcript files")
-            self.append_log("🖼️  Check the Thumbnails subdirectory for thumbnail images")
+            self.append_log(
+                "🖼️  Check the Thumbnails subdirectory for thumbnail images"
+            )
 
         if skipped_count > 0:
             self.append_log(f"\n⏭️ Skipped {skipped_count} existing file(s):")
@@ -1861,57 +1954,95 @@ class YouTubeTab(BaseTab):
                     f"\n📊 Summary: {skipped_count} files already existed (no new files created)"
                 )
         else:
-            self.append_log(
-                "\n📊 Summary: No files were saved. Check the issues above."
-            )
+            self.append_log("\n📊 Summary: No files were saved. Check the issues above.")
 
         # Reset UI
         self.start_btn.setEnabled(True)
         self.start_btn.setText(self._get_start_button_text())
         self.stop_btn.setEnabled(False)  # Disable stop button
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setValue(100)
+        # Legacy progress bar updates removed - enhanced display handles completion
 
         # Enhanced completion message with playlist context
         total_processed = results["successful"] + skipped_count
         playlist_count = len(results.get("playlist_info", []))
 
-        if results["successful"] > 0:
-            if playlist_count > 0:
-                self.progress_label.setText(
-                    f"Completed! {results['successful']} files saved from {playlist_count} playlist(s) + individual videos."
-                )
-            else:
-                self.progress_label.setText(
-                    f"Completed! {results['successful']} files saved successfully."
-                )
-        else:
-            if playlist_count > 0:
-                self.progress_label.setText(
-                    f"Completed - processed {playlist_count} playlist(s) but no files were saved. See log for details."
-                )
-            else:
-                self.progress_label.setText(
-                    "Completed - but no files were saved. See log for details."
-                )
+        # Completion message now handled by enhanced cloud display
+        success_count = results["successful"]
+        failure_count = total_processed - success_count
+        self.cloud_status_display.complete(success_count, failure_count)
 
         self.status_updated.emit("YouTube extraction completed")
         self.processing_finished.emit()
 
+        # Generate session report for View Last Report functionality
+        self._generate_session_report(results)
+
+        # Show cloud completion summary
+        if results["successful"] > 0 or results["failed"] > 0:
+            self._show_cloud_summary(results)
+
     def _extraction_error(self, error_msg: str):
         """Handle extraction error."""
+        # CRITICAL: Thread safety check - ensure we're on the main thread
+        from PyQt6.QtCore import QThread
+        from PyQt6.QtWidgets import QApplication
+
+        if QThread.currentThread() != QApplication.instance().thread():
+            logger.error(
+                "🚨 CRITICAL: _extraction_error called from background thread - BLOCKED!"
+            )
+            logger.error(f"Current thread: {QThread.currentThread()}")
+            logger.error(f"Main thread: {QApplication.instance().thread()}")
+            # Still update status display and log on any thread
+            self.cloud_status_display.set_error(error_msg)
+            self.append_log(f"❌ Error: {error_msg}")
+            return
+
+        # Update cloud status display with error
+        self.cloud_status_display.set_error(error_msg)
+
         self.append_log(f"❌ Error: {error_msg}")
-        self.show_error("Cloud Transcription Error", f"YouTube cloud transcription failed: {error_msg}")
+        show_enhanced_error(
+            self,
+            "Cloud Transcription Error",
+            error_msg,
+            context="YouTube cloud transcription via SkipThePodcast API",
+        )
 
         # Reset UI
         self.start_btn.setEnabled(True)
         self.start_btn.setText(self._get_start_button_text())
         self.stop_btn.setEnabled(False)  # Disable stop button
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setValue(0)
-        self.progress_label.setText("Cloud transcription failed")
+        # Error handled by enhanced cloud display
+        self.cloud_status_display.set_error(error_msg)
 
         self.status_updated.emit("Ready")
+
+    def _show_cloud_summary(self, results: dict):
+        """Show cloud transcription completion summary."""
+        # CRITICAL: Thread safety check - ensure we're on the main thread
+        from PyQt6.QtCore import QThread
+        from PyQt6.QtWidgets import QApplication
+
+        if QThread.currentThread() != QApplication.instance().thread():
+            logger.error(
+                "🚨 CRITICAL: _show_cloud_summary called from background thread - BLOCKED!"
+            )
+            logger.error(f"Current thread: {QThread.currentThread()}")
+            logger.error(f"Main thread: {QApplication.instance().thread()}")
+            return
+
+        summary = CloudTranscriptionSummary(self)
+
+        # Calculate processing time (mock - would be tracked in real implementation)
+        processing_time = 120.0  # Mock 2 minutes
+
+        summary.show_cloud_summary(
+            successful_urls=results["successful"],
+            failed_urls=results["failed"],
+            total_processing_time=processing_time,
+            service_status="Active",
+        )
 
     def _show_payment_required_dialog(self):
         """Show popup dialog for 402 Payment Required error."""
@@ -2090,7 +2221,9 @@ class YouTubeTab(BaseTab):
             return False
 
         # Check Bright Data API key (required for YouTube processing)
-        bright_data_api_key = getattr(self.settings.api_keys, "bright_data_api_key", None)
+        bright_data_api_key = getattr(
+            self.settings.api_keys, "bright_data_api_key", None
+        )
 
         if not bright_data_api_key:
             self.show_error(
@@ -2114,7 +2247,9 @@ class YouTubeTab(BaseTab):
                 if not is_diarization_available():
                     # Offer guided installation dialog, then re-check
                     try:
-                        from ..dialogs.diarization_setup_dialog import DiarizationSetupDialog
+                        from ..dialogs.diarization_setup_dialog import (
+                            DiarizationSetupDialog,
+                        )
 
                         install_dialog = DiarizationSetupDialog(self)
                         # Block until finished so we can re-check immediately
@@ -2160,8 +2295,8 @@ class YouTubeTab(BaseTab):
 
     def _check_ffmpeg_availability(self) -> bool:
         """Check if FFmpeg is available and prompt for installation if needed."""
-        import shutil
         import os
+        import shutil
         from pathlib import Path
 
         # Try multiple resolution strategies consistent with Settings page
@@ -2178,7 +2313,14 @@ class YouTubeTab(BaseTab):
             candidates.append(which_ffmpeg)
 
         # 3) App-managed bin dir (where our installer drops binaries)
-        app_bin = Path.home() / "Library" / "Application Support" / "Knowledge_Chipper" / "bin" / "ffmpeg"
+        app_bin = (
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "Knowledge_Chipper"
+            / "bin"
+            / "ffmpeg"
+        )
         candidates.append(str(app_bin))
 
         # 4) Common Homebrew locations
@@ -2194,7 +2336,9 @@ class YouTubeTab(BaseTab):
                     # Verify it's runnable
                     import subprocess
 
-                    result = subprocess.run([str(p), "-version"], capture_output=True, text=True)
+                    result = subprocess.run(
+                        [str(p), "-version"], capture_output=True, text=True
+                    )
                     if result.returncode == 0:
                         # Best-effort: expose to environment for downstream tools
                         os.environ.setdefault("FFMPEG_PATH", str(p))
@@ -2205,13 +2349,13 @@ class YouTubeTab(BaseTab):
                         return True
             except Exception:
                 continue
-            
+
         # FFmpeg not found - show prompt
         self.append_log("⚠️ FFmpeg not found - required for YouTube transcription")
-        
+
         prompt_dialog = FFmpegPromptDialog("YouTube transcription", self)
         result = prompt_dialog.exec()
-        
+
         if result == QDialog.DialogCode.Accepted:
             # User chose to install - check again after installation dialog closes
             if shutil.which("ffmpeg"):
@@ -2225,6 +2369,229 @@ class YouTubeTab(BaseTab):
             self.append_log("❌ YouTube processing cancelled - FFmpeg required")
             return False
 
+    def _check_ffmpeg_for_diarization(self) -> bool:
+        """Check if FFmpeg is available for diarization, with installation dialog if needed."""
+        import os
+        import shutil
+        from pathlib import Path
+
+        # Try multiple resolution strategies consistent with Settings page
+        candidates: list[str] = []
+
+        # 1) Environment override set by Settings/installer
+        env_ffmpeg = os.environ.get("FFMPEG_PATH")
+        if env_ffmpeg:
+            candidates.append(env_ffmpeg)
+
+        # 2) PATH lookup
+        which_ffmpeg = shutil.which("ffmpeg")
+        if which_ffmpeg:
+            candidates.append(which_ffmpeg)
+
+        # 3) App-managed bin dir (where our installer drops binaries)
+        app_bin = (
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "Knowledge_Chipper"
+            / "bin"
+            / "ffmpeg"
+        )
+        candidates.append(str(app_bin))
+
+        # 4) Common Homebrew locations
+        candidates.extend(["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"])
+
+        # Return true on first runnable candidate
+        for candidate in candidates:
+            try:
+                if not candidate:
+                    continue
+                p = Path(candidate)
+                if p.exists() and os.access(p, os.X_OK):
+                    # Verify it's runnable
+                    import subprocess
+
+                    result = subprocess.run(
+                        [str(p), "-version"], capture_output=True, text=True
+                    )
+                    if result.returncode == 0:
+                        # Best-effort: expose to environment for downstream tools
+                        os.environ.setdefault("FFMPEG_PATH", str(p))
+                        probe_guess = str(p).replace("ffmpeg", "ffprobe")
+                        if Path(probe_guess).exists():
+                            os.environ.setdefault("FFPROBE_PATH", probe_guess)
+                        self.append_log("✅ FFmpeg found - diarization ready")
+                        return True
+            except Exception:
+                continue
+
+        # FFmpeg not found - show diarization-specific dialog
+        self.append_log("⚠️ FFmpeg required for cloud transcription with diarization")
+
+        try:
+            # Import here to avoid circular imports
+            from PyQt6.QtWidgets import QDialog
+
+            dialog = DiarizationFFmpegDialog(self)
+            result = dialog.exec()
+
+            if result == QDialog.DialogCode.Accepted:
+                # User chose to install - check again after installation
+                # First, check if environment was updated by the installer
+                if os.environ.get("FFMPEG_PATH"):
+                    self.append_log("✅ FFmpeg installed and configured!")
+                    return True
+                elif shutil.which("ffmpeg"):
+                    self.append_log("✅ FFmpeg installation completed!")
+                    return True
+                else:
+                    self.append_log("❌ FFmpeg installation was not completed")
+                    return False
+            else:
+                # User chose to cancel
+                self.append_log(
+                    "❌ Cloud transcription cancelled - FFmpeg required for diarization"
+                )
+                return False
+
+        except Exception as e:
+            logger.error(f"Error showing diarization FFmpeg dialog: {e}")
+            self.append_log(f"❌ Error showing installation dialog: {e}")
+            return False
+
+    def _generate_session_report(self, results: dict[str, Any]) -> None:
+        """Generate comprehensive session report for cloud transcription."""
+        try:
+            import json
+            from datetime import datetime
+            from pathlib import Path
+
+            # Create report data
+            report_data = {
+                "session_info": {
+                    "timestamp": datetime.now().isoformat(),
+                    "operation_type": "Cloud Transcription",
+                    "total_urls": results.get("successful", 0)
+                    + results.get("failed", 0)
+                    + results.get("skipped", 0),
+                    "successful": results.get("successful", 0),
+                    "failed": results.get("failed", 0),
+                    "skipped": results.get("skipped", 0),
+                    "processing_mode": results.get("processing_mode", "unknown"),
+                },
+                "configuration": {
+                    "output_directory": self.output_dir_input.text().strip()
+                    or str(Path.cwd()),
+                    "output_format": self.format_combo.currentText(),
+                    "transcription_model": self.transcription_model_combo.currentText(),
+                    "overwrite_existing": self.overwrite_checkbox.isChecked(),
+                    "enable_speaker_diarization": self.diarization_checkbox.isChecked(),
+                    "download_all_audio": self.download_all_checkbox.isChecked(),
+                },
+                "results": {
+                    "successful_urls": results.get("urls_processed", []),
+                    "failed_urls": results.get("failed_urls", []),
+                    "skipped_urls": results.get("skipped_urls", []),
+                    "playlist_info": results.get("playlist_info", []),
+                },
+            }
+
+            # Save report to logs directory
+            logs_dir = Path("logs")
+            logs_dir.mkdir(parents=True, exist_ok=True)
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            report_path = logs_dir / f"cloud_transcription_report_{timestamp}.json"
+
+            with open(report_path, "w", encoding="utf-8") as f:
+                json.dump(report_data, f, indent=2, ensure_ascii=False)
+
+            # Store report path for viewing
+            self.current_report = str(report_path)
+
+            # Also generate a human-readable markdown report
+            md_report_path = logs_dir / f"cloud_transcription_report_{timestamp}.md"
+            with open(md_report_path, "w", encoding="utf-8") as f:
+                f.write(f"# Cloud Transcription Session Report\n\n")
+                f.write(
+                    f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                )
+
+                f.write("## Summary\n\n")
+                f.write(
+                    f"- **Total URLs processed:** {report_data['session_info']['total_urls']}\n"
+                )
+                f.write(
+                    f"- **Successful:** {report_data['session_info']['successful']}\n"
+                )
+                f.write(f"- **Failed:** {report_data['session_info']['failed']}\n")
+                f.write(f"- **Skipped:** {report_data['session_info']['skipped']}\n")
+                f.write(
+                    f"- **Processing Mode:** {report_data['session_info']['processing_mode']}\n\n"
+                )
+
+                f.write("## Configuration\n\n")
+                f.write(
+                    f"- **Output Directory:** {report_data['configuration']['output_directory']}\n"
+                )
+                f.write(
+                    f"- **Output Format:** {report_data['configuration']['output_format']}\n"
+                )
+                f.write(
+                    f"- **Include Timestamps:** {report_data['configuration']['include_timestamps']}\n"
+                )
+                f.write(
+                    f"- **Overwrite Existing:** {report_data['configuration']['overwrite_existing']}\n"
+                )
+                f.write(
+                    f"- **Speaker Diarization:** {report_data['configuration']['enable_speaker_diarization']}\n"
+                )
+                f.write(
+                    f"- **Download All Audio:** {report_data['configuration']['download_all_audio']}\n\n"
+                )
+
+                if report_data["results"]["successful_urls"]:
+                    f.write("## Successfully Processed URLs\n\n")
+                    for url in report_data["results"]["successful_urls"]:
+                        f.write(f"- {url}\n")
+                    f.write("\n")
+
+                if report_data["results"]["failed_urls"]:
+                    f.write("## Failed URLs\n\n")
+                    for item in report_data["results"]["failed_urls"]:
+                        if isinstance(item, dict):
+                            title = item.get("title", "Unknown Title")
+                            error = item.get("error", "Unknown error")
+                            url = item.get("url", "Unknown URL")
+                            f.write(f"- **{title}** ({url}): {error}\n")
+                        else:
+                            f.write(f"- {item}\n")
+                    f.write("\n")
+
+                if report_data["results"]["skipped_urls"]:
+                    f.write("## Skipped URLs\n\n")
+                    for item in report_data["results"]["skipped_urls"]:
+                        if isinstance(item, dict):
+                            title = item.get("title", "Unknown Title")
+                            reason = item.get("reason", "Already exists")
+                            f.write(f"- **{title}**: {reason}\n")
+                        else:
+                            f.write(f"- {item}\n")
+                    f.write("\n")
+
+            # Store markdown report path as well for easy viewing
+            self.current_report = str(md_report_path)
+
+            self.append_log(f"📋 Session report saved to: {md_report_path.name}")
+
+        except Exception as e:
+            from ...logger import get_logger
+
+            logger = get_logger(__name__)
+            logger.error(f"Failed to generate session report: {e}")
+            self.append_log(f"⚠️ Warning: Could not generate session report: {e}")
+
     def cleanup_workers(self):
         """Clean up any active workers."""
         if self.extraction_worker and self.extraction_worker.isRunning():
@@ -2237,6 +2604,5 @@ class YouTubeTab(BaseTab):
         self.start_btn.setEnabled(True)
         self.start_btn.setText(self._get_start_button_text())
         self.stop_btn.setEnabled(False)
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setValue(0)
-        self.progress_label.setText("Ready to extract transcripts")
+        # Reset handled by enhanced cloud display
+        self.cloud_status_display.reset()

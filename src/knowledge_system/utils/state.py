@@ -106,7 +106,7 @@ class UserPreferences(BaseModel):
     # Monitoring
     log_level: str = "INFO"
     enable_notifications: bool = True
-    
+
     # Update Preferences
     auto_check_updates: bool = True
     last_update_check: float | None = None
@@ -282,11 +282,12 @@ class StateManager:
             # Use macOS standard Application Support directory for state
             try:
                 from .macos_paths import get_application_support_dir
+
                 state_dir = get_application_support_dir() / "state"
             except ImportError:
                 # Fallback to cache directory if macos_paths not available
                 state_dir = Path(self.settings.paths.cache) / "state"
-            
+
             ensure_directory(state_dir)
             self.state_file = state_dir / "application_state.json"
         else:

@@ -152,7 +152,7 @@ class ClaimSearchTab(BaseTab):
         # Search input
         search_text_layout = QHBoxLayout()
         search_text_layout.addWidget(QLabel("Search Text:"))
-        
+
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Enter search terms...")
         self.search_input.returnPressed.connect(self._start_search)
@@ -164,7 +164,7 @@ class ClaimSearchTab(BaseTab):
             "• Results are ranked by relevance and confidence tier"
         )
         search_text_layout.addWidget(self.search_input)
-        
+
         # Add info indicator for search input
         search_info_label = QLabel("ⓘ")
         search_info_label.setFixedSize(16, 16)
@@ -211,7 +211,7 @@ class ClaimSearchTab(BaseTab):
             "Higher tiers indicate more reliable and important claims"
         )
         tier_filter_layout.addWidget(self.tier_filter)
-        
+
         # Add info indicator for tier filter
         tier_info_label = QLabel("ⓘ")
         tier_info_label.setFixedSize(16, 16)
@@ -259,7 +259,7 @@ class ClaimSearchTab(BaseTab):
             "• Definition: Explanations and terminology"
         )
         type_filter_layout.addWidget(self.type_filter)
-        
+
         # Add info indicator for type filter
         type_info_label = QLabel("ⓘ")
         type_info_label.setFixedSize(16, 16)

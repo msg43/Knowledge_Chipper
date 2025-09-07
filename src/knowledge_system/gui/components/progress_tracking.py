@@ -59,7 +59,7 @@ class ProgressTracker(QWidget):
 
         # Details label
         self.details_label = QLabel("")
-        self.details_label.setStyleSheet("color: #888;")
+        self.details_label.setStyleSheet("color: #333;")
         layout.addWidget(self.details_label)
 
         # Initially hide the widget
@@ -156,7 +156,7 @@ class ProgressTracker(QWidget):
     def _reset_styles(self) -> None:
         """Reset label styles and hide."""
         self.status_label.setStyleSheet("")
-        self.details_label.setStyleSheet("color: #888;")
+        self.details_label.setStyleSheet("color: #333;")
         self.reset()
 
 

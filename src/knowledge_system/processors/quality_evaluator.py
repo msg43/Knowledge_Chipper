@@ -27,13 +27,17 @@ class _LLMProviderAdapter:
     """
 
     def __init__(self, provider: str, model: str, temperature: float) -> None:
-        self._client = UnifiedLLMClient(provider=provider, model=model, temperature=temperature)
+        self._client = UnifiedLLMClient(
+            provider=provider, model=model, temperature=temperature
+        )
 
     def call(self, prompt: str) -> LLMResponse:
         return self._client.generate(prompt)
 
 
-def get_llm_provider(provider: str, model: str, temperature: float = 0.3) -> _LLMProviderAdapter:
+def get_llm_provider(
+    provider: str, model: str, temperature: float = 0.3
+) -> _LLMProviderAdapter:
     """Backward-compatible provider factory used by tests.
 
     Returns an object exposing a .call(prompt) method that delegates to
@@ -67,11 +71,17 @@ class QualityEvaluator(BaseProcessor):
         self.evaluation_provider = evaluation_provider
         self.temperature = temperature
         self.cache_evaluations = cache_evaluations
-        self.evaluation_cache: Dict[str, Dict[str, Any]] = {}
+        self.evaluation_cache: dict[str, dict[str, Any]] = {}
 
         # Quality criteria for different content types
-        self.criteria: Dict[str, list[str]] = {
-            "summary": ["accuracy", "completeness", "relevance", "clarity", "conciseness"],
+        self.criteria: dict[str, list[str]] = {
+            "summary": [
+                "accuracy",
+                "completeness",
+                "relevance",
+                "clarity",
+                "conciseness",
+            ],
             "transcript": ["accuracy", "completeness", "clarity", "coherence"],
             "moc_extraction": ["accuracy", "relevance", "completeness", "organization"],
         }
@@ -81,8 +91,8 @@ class QualityEvaluator(BaseProcessor):
         summary: str,
         original_text: str,
         model_used: str,
-        prompt_template: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        prompt_template: str | None = None,
+    ) -> dict[str, Any]:
         """Evaluate the quality of a summary.
 
         Args:
@@ -102,7 +112,9 @@ class QualityEvaluator(BaseProcessor):
                 return self.evaluation_cache[cache_key]
 
         try:
-            evaluation_prompt = self._get_summary_evaluation_prompt(summary, original_text)
+            evaluation_prompt = self._get_summary_evaluation_prompt(
+                summary, original_text
+            )
 
             # Get evaluation from LLM (through compatibility function)
             provider = get_llm_provider(
@@ -112,7 +124,9 @@ class QualityEvaluator(BaseProcessor):
             )
 
             response = provider.call(evaluation_prompt)
-            evaluation_result = self._parse_evaluation_response(response.content, "summary")
+            evaluation_result = self._parse_evaluation_response(
+                response.content, "summary"
+            )
 
             # Add metadata
             evaluation_result.update(
@@ -125,7 +139,9 @@ class QualityEvaluator(BaseProcessor):
                     "input_characteristics": {
                         "original_length": len(original_text),
                         "summary_length": len(summary),
-                        "compression_ratio": len(summary) / len(original_text) if original_text else 0,
+                        "compression_ratio": len(summary) / len(original_text)
+                        if original_text
+                        else 0,
                     },
                 }
             )
@@ -142,9 +158,9 @@ class QualityEvaluator(BaseProcessor):
     def evaluate_transcript_quality(
         self,
         transcript: str,
-        audio_metadata: Dict[str, Any],
+        audio_metadata: dict[str, Any],
         model_used: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Evaluate the quality of a transcript.
 
         Args:
@@ -157,13 +173,17 @@ class QualityEvaluator(BaseProcessor):
         """
         cache_key = None
         if self.cache_evaluations:
-            cache_key = self._create_cache_key("transcript", transcript, str(audio_metadata))
+            cache_key = self._create_cache_key(
+                "transcript", transcript, str(audio_metadata)
+            )
             if cache_key in self.evaluation_cache:
                 logger.debug("Using cached evaluation result")
                 return self.evaluation_cache[cache_key]
 
         try:
-            evaluation_prompt = self._get_transcript_evaluation_prompt(transcript, audio_metadata)
+            evaluation_prompt = self._get_transcript_evaluation_prompt(
+                transcript, audio_metadata
+            )
 
             provider = get_llm_provider(
                 self.evaluation_provider,
@@ -172,7 +192,9 @@ class QualityEvaluator(BaseProcessor):
             )
 
             response = provider.call(evaluation_prompt)
-            evaluation_result = self._parse_evaluation_response(response.content, "transcript")
+            evaluation_result = self._parse_evaluation_response(
+                response.content, "transcript"
+            )
 
             evaluation_result.update(
                 {
@@ -195,14 +217,16 @@ class QualityEvaluator(BaseProcessor):
 
         except Exception as e:
             logger.error(f"Failed to evaluate transcript quality: {e}")
-            return self._get_fallback_evaluation("transcript", transcript, audio_metadata)
+            return self._get_fallback_evaluation(
+                "transcript", transcript, audio_metadata
+            )
 
     def evaluate_moc_quality(
         self,
-        moc_data: Dict[str, Any],
+        moc_data: dict[str, Any],
         source_content: str,
         model_used: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Evaluate the quality of MOC extraction.
 
         Args:
@@ -221,7 +245,9 @@ class QualityEvaluator(BaseProcessor):
                 return self.evaluation_cache[cache_key]
 
         try:
-            evaluation_prompt = self._get_moc_evaluation_prompt(moc_data, source_content)
+            evaluation_prompt = self._get_moc_evaluation_prompt(
+                moc_data, source_content
+            )
 
             provider = get_llm_provider(
                 self.evaluation_provider,
@@ -230,7 +256,9 @@ class QualityEvaluator(BaseProcessor):
             )
 
             response = provider.call(evaluation_prompt)
-            evaluation_result = self._parse_evaluation_response(response.content, "moc_extraction")
+            evaluation_result = self._parse_evaluation_response(
+                response.content, "moc_extraction"
+            )
 
             evaluation_result.update(
                 {
@@ -254,11 +282,15 @@ class QualityEvaluator(BaseProcessor):
 
         except Exception as e:
             logger.error(f"Failed to evaluate MOC quality: {e}")
-            return self._get_fallback_evaluation("moc_extraction", moc_data, source_content)
+            return self._get_fallback_evaluation(
+                "moc_extraction", moc_data, source_content
+            )
 
     def _get_summary_evaluation_prompt(self, summary: str, original_text: str) -> str:
         """Create evaluation prompt for summary quality assessment."""
-        original_preview = original_text[:2000] + "..." if len(original_text) > 2000 else original_text
+        original_preview = (
+            original_text[:2000] + "..." if len(original_text) > 2000 else original_text
+        )
 
         return f"""Please evaluate the quality of this summary on a scale of 0.0 to 1.0 for each criterion.
 
@@ -289,13 +321,17 @@ Respond ONLY in valid JSON format:
     "reasoning": "Brief explanation of the rating (2-3 sentences max)"
 }}"""
 
-    def _get_transcript_evaluation_prompt(self, transcript: str, audio_metadata: Dict[str, Any]) -> str:
+    def _get_transcript_evaluation_prompt(
+        self, transcript: str, audio_metadata: dict[str, Any]
+    ) -> str:
         """Create evaluation prompt for transcript quality assessment."""
         duration = audio_metadata.get("duration_seconds", 0)
         word_count = len(transcript.split()) if transcript else 0
         wpm = (word_count / (duration / 60)) if duration > 0 else 0
 
-        transcript_preview = transcript[:2000] + "..." if len(transcript) > 2000 else transcript
+        transcript_preview = (
+            transcript[:2000] + "..." if len(transcript) > 2000 else transcript
+        )
 
         return f"""Please evaluate the quality of this transcript on a scale of 0.0 to 1.0 for each criterion.
 
@@ -328,14 +364,22 @@ Respond ONLY in valid JSON format:
     "reasoning": "Brief explanation of the rating (2-3 sentences max)"
 }}"""
 
-    def _get_moc_evaluation_prompt(self, moc_data: Dict[str, Any], source_content: str) -> str:
+    def _get_moc_evaluation_prompt(
+        self, moc_data: dict[str, Any], source_content: str
+    ) -> str:
         """Create evaluation prompt for MOC extraction quality assessment."""
-        source_preview = source_content[:1500] + "..." if len(source_content) > 1500 else source_content
+        source_preview = (
+            source_content[:1500] + "..."
+            if len(source_content) > 1500
+            else source_content
+        )
 
         moc_summary = {
             "people": list(moc_data.get("people", {}).keys())[:10],
             "tags": list(moc_data.get("tags", {}).keys())[:15],
-            "jargon": [item.get("term", "") for item in moc_data.get("jargon", [])][:10],
+            "jargon": [item.get("term", "") for item in moc_data.get("jargon", [])][
+                :10
+            ],
         }
 
         return f"""Please evaluate the quality of this MOC (Map of Content) extraction on a scale of 0.0 to 1.0.
@@ -367,7 +411,9 @@ Respond ONLY in valid JSON format:
     "reasoning": "Brief explanation of the rating (2-3 sentences max)"
 }}"""
 
-    def _parse_evaluation_response(self, response: str, content_type: str) -> Dict[str, Any]:
+    def _parse_evaluation_response(
+        self, response: str, content_type: str
+    ) -> dict[str, Any]:
         """Parse the LLM evaluation response into structured data."""
         try:
             response = response.strip()
@@ -410,7 +456,9 @@ Respond ONLY in valid JSON format:
             logger.debug(f"Raw response: {response}")
             return self._get_fallback_evaluation(content_type, "", "")
 
-    def _get_fallback_evaluation(self, content_type: str, content: Any, context: Any) -> Dict[str, Any]:
+    def _get_fallback_evaluation(
+        self, content_type: str, content: Any, context: Any
+    ) -> dict[str, Any]:
         """Generate a fallback evaluation when automated evaluation fails."""
         criteria_names = self.criteria.get(
             content_type, ["accuracy", "completeness", "relevance", "clarity"]
@@ -440,10 +488,14 @@ Respond ONLY in valid JSON format:
         """Create a cache key for evaluation results."""
         import hashlib
 
-        content_hash = hashlib.md5(f"{content_type}:{content}:{context}".encode()).hexdigest()
+        content_hash = hashlib.md5(
+            f"{content_type}:{content}:{context}".encode()
+        ).hexdigest()
         return f"{content_type}_{content_hash[:16]}"
 
-    def process(self, input_data: Any, dry_run: bool = False, **kwargs: Any) -> ProcessorResult:
+    def process(
+        self, input_data: Any, dry_run: bool = False, **kwargs: Any
+    ) -> ProcessorResult:
         """Process method for BaseProcessor compatibility."""
         return ProcessorResult(
             success=True,
@@ -456,8 +508,9 @@ Respond ONLY in valid JSON format:
         self.evaluation_cache.clear()
         logger.info("Cleared quality evaluation cache")
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> dict[str, Any]:
         """Get statistics about the evaluation cache."""
-        return {"cache_size": len(self.evaluation_cache), "cache_enabled": self.cache_evaluations}
-
-
+        return {
+            "cache_size": len(self.evaluation_cache),
+            "cache_enabled": self.cache_evaluations,
+        }

@@ -1,9 +1,14 @@
 from pathlib import Path
-from ...config import get_settings
-from .types import EpisodeBundle, ConsolidatedClaim
 
+from ...config import get_settings
 from .models.llm_any import AnyLLM
-from .types import CandidateClaim, EvidenceSpan, Segment
+from .types import (
+    CandidateClaim,
+    ConsolidatedClaim,
+    EpisodeBundle,
+    EvidenceSpan,
+    Segment,
+)
 
 
 class Miner:
@@ -35,7 +40,9 @@ class Miner:
         return out
 
 
-def mine_claims(episode: EpisodeBundle, miner_model_uri: str) -> list[ConsolidatedClaim]:
+def mine_claims(
+    episode: EpisodeBundle, miner_model_uri: str
+) -> list[ConsolidatedClaim]:
     """Compatibility wrapper used by HCEPipeline to mine and dedupe claims."""
     from .dedupe import Deduper
     from .models.embedder import Embedder

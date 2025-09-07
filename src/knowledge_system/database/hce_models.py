@@ -65,10 +65,10 @@ class Claim(Base):
     first_mention_ts = Column(String(20))
     scores_json = Column(JSONEncodedType, nullable=False)
     inserted_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Upload tracking fields
     last_uploaded_at = Column(String(50), nullable=True)
-    upload_status = Column(String(20), default='pending')
+    upload_status = Column(String(20), default="pending")
 
     __table_args__ = (
         CheckConstraint(

@@ -22,7 +22,6 @@ import pathlib
 import re
 import sys
 
-
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 PYPROJECT = PROJECT_ROOT / "pyproject.toml"
 README = PROJECT_ROOT / "README.md"
@@ -79,7 +78,7 @@ def get_current_version(pyproject_text: str) -> str:
 
 
 def update_pyproject_version(py_text: str, new_version: str) -> str:
-    return _VERSION_RE.sub(f"version = \"{new_version}\"", py_text, count=1)
+    return _VERSION_RE.sub(f'version = "{new_version}"', py_text, count=1)
 
 
 def update_readme_version(rd_text: str, new_version: str, today: str) -> str:
@@ -136,5 +135,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-

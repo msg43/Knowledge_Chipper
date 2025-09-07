@@ -65,6 +65,7 @@ class AudioProcessor(BaseProcessor):
         enable_quality_retry: bool = True,
         max_retry_attempts: int = 1,
         require_diarization: bool = False,
+        speaker_assignment_callback=None,
     ) -> None:
         self.normalize_audio = normalize_audio
         self.target_format = target_format
@@ -77,6 +78,7 @@ class AudioProcessor(BaseProcessor):
         self.hf_token = hf_token
         self.enable_quality_retry = enable_quality_retry
         self.max_retry_attempts = max_retry_attempts
+        self.speaker_assignment_callback = speaker_assignment_callback
         self.require_diarization = require_diarization
 
         # Use whisper.cpp as the default transcriber with acceleration
@@ -115,8 +117,10 @@ class AudioProcessor(BaseProcessor):
         try:
             # Report conversion start
             if self.progress_callback:
-                self.progress_callback(f"🔄 Converting to .{self.target_format} format...", 0)
-            
+                self.progress_callback(
+                    f"🔄 Converting to .{self.target_format} format...", 0
+                )
+
             # Convert audio using FFmpeg
             success = convert_audio_file(
                 input_path=input_path,
@@ -128,12 +132,16 @@ class AudioProcessor(BaseProcessor):
 
             if success:
                 if self.progress_callback:
-                    self.progress_callback(f"✅ Conversion to .{self.target_format} complete", 100)
+                    self.progress_callback(
+                        f"✅ Conversion to .{self.target_format} complete", 100
+                    )
                 logger.info(f"Successfully converted {input_path} to {output_path}")
                 return True
             else:
                 if self.progress_callback:
-                    self.progress_callback(f"❌ Conversion to .{self.target_format} failed", 0)
+                    self.progress_callback(
+                        f"❌ Conversion to .{self.target_format} failed", 0
+                    )
                 logger.error(f"Failed to convert {input_path} to {output_path}")
                 return False
 
@@ -150,9 +158,11 @@ class AudioProcessor(BaseProcessor):
         # Safety check: Never run diarization during testing mode
         testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
         if testing_mode:
-            logger.info("🧪 Testing mode: Skipping diarization entirely (safety override)")
+            logger.info(
+                "🧪 Testing mode: Skipping diarization entirely (safety override)"
+            )
             return None
-            
+
         try:
             from .diarization import (
                 SpeakerDiarizationProcessor,
@@ -351,21 +361,21 @@ class AudioProcessor(BaseProcessor):
         return None
 
     def _handle_speaker_assignment(
-        self, 
-        transcript_data: dict, 
-        diarization_segments: list, 
-        recording_path: str, 
-        kwargs: dict
+        self,
+        transcript_data: dict,
+        diarization_segments: list,
+        recording_path: str,
+        kwargs: dict,
     ) -> dict:
         """
         Handle speaker assignment workflow after diarization completion.
-        
+
         Args:
             transcript_data: Transcription data with speaker segments
             diarization_segments: Raw diarization segments
             recording_path: Path to the recording file
             kwargs: Processing kwargs that may contain GUI settings
-            
+
         Returns:
             Updated transcript data with real speaker names
         """
@@ -375,56 +385,76 @@ class AudioProcessor(BaseProcessor):
             if not enable_speaker_assignment:
                 logger.info("Speaker assignment disabled, keeping generic speaker IDs")
                 return transcript_data
-            
+
             # Import speaker processing components
             from .speaker_processor import SpeakerProcessor
-            
+
             # Prepare speaker data for assignment
             speaker_processor = SpeakerProcessor()
-            
+
             # Extract transcript segments for processing
             transcript_segments = transcript_data.get("segments", [])
-            
-            # Prepare speaker data
+
+            # Prepare speaker data with metadata for enhanced suggestions
+            metadata = kwargs.get("metadata", {})
             speaker_data_list = speaker_processor.prepare_speaker_data(
-                diarization_segments, transcript_segments
+                diarization_segments, transcript_segments, metadata
             )
-            
+
             if not speaker_data_list:
                 logger.warning("No speaker data prepared for assignment")
                 return transcript_data
-            
+
             logger.info(f"🎭 Found {len(speaker_data_list)} speakers for assignment")
-            
+
             # Check if we're in GUI mode and can show dialog
             show_dialog = kwargs.get("show_speaker_dialog", True)
             gui_mode = kwargs.get("gui_mode", False)
             testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
-            
+
             # ADDITIONAL SAFETY: Check if GUI mode is False (testing indicator)
             if not gui_mode:
                 logger.info("🧪 GUI mode disabled - skipping speaker assignment dialog")
                 show_dialog = False
-            
+
             # NEVER show dialogs during testing mode, regardless of other flags
             if testing_mode:
-                logger.info("🧪 Testing mode: Skipping speaker assignment dialog (forced)")
-                show_dialog = False
-            
-            # Triple safety check: NEVER show dialogs during testing
-            if show_dialog and gui_mode and not testing_mode and not os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
-                # Show speaker assignment dialog with metadata for auto-assignment
-                metadata = kwargs.get("metadata", {})
-                assignments = self._show_speaker_assignment_dialog(
-                    speaker_data_list, recording_path, metadata
+                logger.info(
+                    "🧪 Testing mode: Skipping speaker assignment dialog (forced)"
                 )
-                
+                show_dialog = False
+
+            # Use callback if available (thread-safe), otherwise try direct dialog (legacy)
+            if (
+                show_dialog
+                and gui_mode
+                and not testing_mode
+                and not os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE")
+            ):
+                metadata = kwargs.get("metadata", {})
+                assignments = None
+
+                # Prefer callback for thread safety
+                if self.speaker_assignment_callback:
+                    logger.info("Using thread-safe speaker assignment callback")
+                    assignments = self.speaker_assignment_callback(
+                        speaker_data_list, recording_path, metadata
+                    )
+                else:
+                    # Fallback to direct dialog (may cause threading issues)
+                    logger.warning(
+                        "Using direct dialog - may cause threading issues in worker threads"
+                    )
+                    assignments = self._show_speaker_assignment_dialog(
+                        speaker_data_list, recording_path, metadata
+                    )
+
                 if assignments:
                     # Apply assignments to transcript data with enhanced storage
                     updated_data = speaker_processor.apply_speaker_assignments(
                         transcript_data, assignments, recording_path, speaker_data_list
                     )
-                    
+
                     logger.info(f"✅ Applied speaker assignments: {assignments}")
                     return updated_data
                 else:
@@ -433,12 +463,12 @@ class AudioProcessor(BaseProcessor):
             else:
                 if testing_mode:
                     logger.info("🧪 Testing mode: Skipping speaker assignment dialog")
-                    
+
                 # Non-GUI mode or testing: try to load existing assignments or use suggestions
                 assignments = self._get_automatic_speaker_assignments(
                     speaker_data_list, recording_path
                 )
-                
+
                 if assignments:
                     updated_data = speaker_processor.apply_speaker_assignments(
                         transcript_data, assignments, recording_path, speaker_data_list
@@ -447,51 +477,58 @@ class AudioProcessor(BaseProcessor):
                     return updated_data
                 else:
                     # Save AI suggestions even if no assignments made (for learning)
-                    speaker_processor.save_speaker_processing_session(recording_path, speaker_data_list)
-                    logger.info("No automatic speaker assignments available, but saved AI suggestions for learning")
+                    speaker_processor.save_speaker_processing_session(
+                        recording_path, speaker_data_list
+                    )
+                    logger.info(
+                        "No automatic speaker assignments available, but saved AI suggestions for learning"
+                    )
                     return transcript_data
-            
+
         except Exception as e:
             logger.error(f"Error in speaker assignment workflow: {e}")
             # Return original data if speaker assignment fails
             return transcript_data
-    
+
     def _show_speaker_assignment_dialog(
-        self, 
-        speaker_data_list: list, 
-        recording_path: str,
-        metadata: dict = None
+        self, speaker_data_list: list, recording_path: str, metadata: dict = None
     ) -> dict | None:
         """
         Show the speaker assignment dialog.
-        
+
         Args:
             speaker_data_list: List of SpeakerData objects
             recording_path: Path to the recording file
             metadata: Optional metadata for auto-assignment
-            
+
         Returns:
             Dictionary of speaker assignments or None if cancelled
         """
         # Double-check for testing mode as a safety net
         testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
         if testing_mode:
-            logger.info("🧪 Testing mode: Refusing to show speaker assignment dialog (safety net)")
+            logger.info(
+                "🧪 Testing mode: Refusing to show speaker assignment dialog (safety net)"
+            )
             return None
-            
+
         try:
-            from ..gui.dialogs.speaker_assignment_dialog import show_speaker_assignment_dialog
-            
+            from ..gui.dialogs.speaker_assignment_dialog import (
+                show_speaker_assignment_dialog,
+            )
+
             # Show the dialog with metadata for podcast auto-assignment
             assignments = show_speaker_assignment_dialog(
                 speaker_data_list, recording_path, metadata
             )
-            
+
             return assignments
-            
+
         except RuntimeError as e:
             if "testing mode" in str(e):
-                logger.info("🧪 Testing mode: Speaker assignment dialog blocked (as expected)")
+                logger.info(
+                    "🧪 Testing mode: Speaker assignment dialog blocked (as expected)"
+                )
                 return None
             else:
                 logger.error(f"Speaker assignment dialog runtime error: {e}")
@@ -502,38 +539,38 @@ class AudioProcessor(BaseProcessor):
         except Exception as e:
             logger.error(f"Error showing speaker assignment dialog: {e}")
             return None
-    
+
     def _get_automatic_speaker_assignments(
-        self, 
-        speaker_data_list: list, 
-        recording_path: str
+        self, speaker_data_list: list, recording_path: str
     ) -> dict | None:
         """
         Get automatic speaker assignments for non-GUI mode.
-        
+
         Args:
             speaker_data_list: List of SpeakerData objects
             recording_path: Path to the recording file
-            
+
         Returns:
             Dictionary of automatic assignments or None
         """
         try:
             from ..database.speaker_models import get_speaker_db_service
-            
+
             # Check for existing assignments in database
             db_service = get_speaker_db_service()
-            existing_assignments = db_service.get_assignments_for_recording(recording_path)
-            
+            existing_assignments = db_service.get_assignments_for_recording(
+                recording_path
+            )
+
             if existing_assignments:
                 # Use existing assignments
                 assignments = {}
                 for assignment in existing_assignments:
                     assignments[assignment.speaker_id] = assignment.assigned_name
-                
+
                 logger.info(f"Found existing speaker assignments: {assignments}")
                 return assignments
-            
+
             # Use AI suggestions as fallback
             assignments = {}
             for speaker_data in speaker_data_list:
@@ -547,87 +584,81 @@ class AudioProcessor(BaseProcessor):
                         assignments[speaker_data.speaker_id] = f"Speaker {num}"
                     except ValueError:
                         assignments[speaker_data.speaker_id] = speaker_data.speaker_id
-            
+
             if assignments:
                 logger.info(f"Generated automatic speaker assignments: {assignments}")
                 return assignments
-            
+
             return None
-            
+
         except Exception as e:
             logger.error(f"Error getting automatic speaker assignments: {e}")
             return None
-    
+
     def _save_color_coded_transcript(
         self,
         transcript_data: dict,
         audio_path: Path,
         output_dir: Path,
-        include_timestamps: bool = True
+        include_timestamps: bool = True,
     ) -> Path | None:
         """
         Save color-coded transcript with speaker identification.
-        
+
         Args:
             transcript_data: Transcript data with speaker assignments
             audio_path: Original audio file path
             output_dir: Output directory
             include_timestamps: Whether to include timestamps
-            
+
         Returns:
             Path to saved color-coded transcript or None if failed
         """
         try:
             from ..utils.color_transcript import save_color_coded_transcript
-            
+
             # Create output filename for color-coded transcript
             base_name = audio_path.stem
             safe_name = "".join(
                 c for c in base_name if c.isalnum() or c in (" ", "-", "_")
             ).rstrip()
             safe_name = safe_name.replace(" ", "_")
-            
+
             # Save both HTML and enhanced markdown versions
             html_path = output_dir / f"{safe_name}_transcript_color_coded.html"
             md_path = output_dir / f"{safe_name}_transcript_enhanced.md"
-            
+
             # Get speaker assignments from transcript data
             speaker_assignments = transcript_data.get("speaker_assignments", {})
-            
+
             # Prepare kwargs for transcript generation
             transcript_kwargs = {
                 "source_name": audio_path.name,
                 "model": transcript_data.get("transcription_model", "unknown"),
                 "device": "auto",  # Could be extracted from metadata
                 "include_timestamps": include_timestamps,
-                "use_html_colors": True
+                "use_html_colors": True,
             }
-            
+
             # Save HTML version
             html_success = save_color_coded_transcript(
-                transcript_data,
-                html_path,
-                speaker_assignments,
-                **transcript_kwargs
+                transcript_data, html_path, speaker_assignments, **transcript_kwargs
             )
-            
+
             # Save enhanced markdown version
             md_success = save_color_coded_transcript(
-                transcript_data,
-                md_path,
-                speaker_assignments,
-                **transcript_kwargs
+                transcript_data, md_path, speaker_assignments, **transcript_kwargs
             )
-            
+
             if html_success:
                 logger.info(f"✅ Color-coded HTML transcript saved: {html_path}")
-                
+
             if md_success:
                 logger.info(f"✅ Enhanced markdown transcript saved: {md_path}")
-            
+
             # Return the HTML path as primary color-coded transcript
             return html_path if html_success else (md_path if md_success else None)
-            
+
         except Exception as e:
             logger.error(f"Error saving color-coded transcript: {e}")
             return None
@@ -908,7 +939,9 @@ class AudioProcessor(BaseProcessor):
                     )
                     # Create new transcriber with better model and acceleration
                     self.transcriber = WhisperCppTranscribeProcessor(
-                        model=current_model, use_coreml=True, progress_callback=self.progress_callback
+                        model=current_model,
+                        use_coreml=True,
+                        progress_callback=self.progress_callback,
                     )
 
                 # Create temporary file for processed audio
@@ -966,11 +999,13 @@ class AudioProcessor(BaseProcessor):
 
                 # Determine processing strategy based on file characteristics
                 diarization_enabled = kwargs.get("diarization", self.enable_diarization)
-                
+
                 # Force disable diarization during testing mode to prevent GUI threading issues
                 testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
                 if testing_mode:
-                    logger.info("🧪 Testing mode: Force disabling diarization to prevent GUI threading issues")
+                    logger.info(
+                        "🧪 Testing mode: Force disabling diarization to prevent GUI threading issues"
+                    )
                     diarization_enabled = False
                 memory_gb = psutil.virtual_memory().total / (1024**3)
 
@@ -1118,7 +1153,7 @@ class AudioProcessor(BaseProcessor):
                                         # Clean up temporary file before returning
                                         if output_path and output_path.exists():
                                             output_path.unlink(missing_ok=True)
-                                            
+
                                         return ProcessorResult(
                                             success=True,  # Mark as success but with quality warning
                                             data=transcription_result.data,
@@ -1140,7 +1175,7 @@ class AudioProcessor(BaseProcessor):
                                         # Clean up temporary file before returning
                                         if output_path and output_path.exists():
                                             output_path.unlink(missing_ok=True)
-                                            
+
                                         return ProcessorResult(
                                             success=False,
                                             errors=[
@@ -1242,14 +1277,14 @@ class AudioProcessor(BaseProcessor):
                         include_timestamps = kwargs.get("timestamps", True)
                         enable_color_coding = kwargs.get("enable_color_coding", True)
                         saved_file = None
-                        
+
                         if output_dir:
                             temp_result = ProcessorResult(
                                 success=True,
                                 data=final_data,
                                 metadata=enhanced_metadata,
                             )
-                            
+
                             # Save regular markdown transcript
                             saved_file = self.save_transcript_to_markdown(
                                 temp_result,
@@ -1257,26 +1292,31 @@ class AudioProcessor(BaseProcessor):
                                 output_dir,
                                 include_timestamps=include_timestamps,
                             )
-                            
+
                             # Save color-coded transcript if speakers are identified and color coding is enabled
-                            if (enable_color_coding and 
-                                diarization_successful and 
-                                final_data.get("speaker_assignments")):
-                                
+                            if (
+                                enable_color_coding
+                                and diarization_successful
+                                and final_data.get("speaker_assignments")
+                            ):
                                 color_coded_file = self._save_color_coded_transcript(
                                     final_data, path, output_dir, include_timestamps
                                 )
-                                
+
                                 if color_coded_file:
-                                    enhanced_metadata["saved_color_coded_file"] = str(color_coded_file)
-                            
+                                    enhanced_metadata["saved_color_coded_file"] = str(
+                                        color_coded_file
+                                    )
+
                             if saved_file:
-                                enhanced_metadata["saved_markdown_file"] = str(saved_file)
+                                enhanced_metadata["saved_markdown_file"] = str(
+                                    saved_file
+                                )
 
                         # Clean up temporary file before returning success
                         if output_path and output_path.exists():
                             output_path.unlink(missing_ok=True)
-                            
+
                         return ProcessorResult(
                             success=True,
                             data=final_data,
@@ -1300,7 +1340,7 @@ class AudioProcessor(BaseProcessor):
                         # Clean up temporary file before returning
                         if output_path and output_path.exists():
                             output_path.unlink(missing_ok=True)
-                            
+
                         return ProcessorResult(
                             success=False,
                             errors=transcription_result.errors,
@@ -1326,7 +1366,7 @@ class AudioProcessor(BaseProcessor):
                     # Clean up temporary file before returning
                     if output_path and output_path.exists():
                         output_path.unlink(missing_ok=True)
-                        
+
                     return ProcessorResult(success=False, errors=[str(e)])
                 else:
                     # Clean up temp file before retry
@@ -1343,7 +1383,7 @@ class AudioProcessor(BaseProcessor):
         # Clean up temporary file before returning
         if output_path and output_path.exists():
             output_path.unlink(missing_ok=True)
-            
+
         return ProcessorResult(success=False, errors=[final_error])
 
     def process_batch(

@@ -27,6 +27,7 @@ from ...logger import get_logger
 from ...utils.model_registry import get_provider_models
 from ...utils.ollama_manager import get_ollama_manager
 from ..components.base_tab import BaseTab
+from ..components.rich_log_display import ProcessorLogIntegrator, RichLogDisplay
 from ..core.settings_manager import get_gui_settings_manager
 from ..dialogs.claim_validation_dialog import ClaimValidationDialog
 from ..legacy_dialogs import ModelDownloadDialog, OllamaServiceDialog
@@ -174,10 +175,18 @@ class EnhancedSummarizationWorker(QThread):
                 hce_options={
                     "use_skim": self.gui_settings.get("use_skim", True),
                     "enable_routing": self.gui_settings.get("enable_routing", True),
-                    "routing_threshold": self.gui_settings.get("routing_threshold", 0.35),
-                    "prompt_driven_mode": self.gui_settings.get("prompt_driven_mode", False),
-                    "flagship_file_tokens": self.gui_settings.get("flagship_file_tokens", 0),
-                    "flagship_session_tokens": self.gui_settings.get("flagship_session_tokens", 0),
+                    "routing_threshold": self.gui_settings.get(
+                        "routing_threshold", 0.35
+                    ),
+                    "prompt_driven_mode": self.gui_settings.get(
+                        "prompt_driven_mode", False
+                    ),
+                    "flagship_file_tokens": self.gui_settings.get(
+                        "flagship_file_tokens", 0
+                    ),
+                    "flagship_session_tokens": self.gui_settings.get(
+                        "flagship_session_tokens", 0
+                    ),
                 },
             )
 
@@ -326,9 +335,7 @@ class EnhancedSummarizationWorker(QThread):
                         f"🔧 DEBUG: template_path absolute: '{template_path.absolute()}'"
                     )
                     if not template_path.exists():
-                        logger.error(
-                            f"❌ Template path does not exist: {template_path}"
-                        )
+                        logger.error(f"❌ Template path does not exist: {template_path}")
                         template_path = None
                     else:
                         logger.info(f"✅ Template path exists: {template_path}")
@@ -398,7 +405,9 @@ class EnhancedSummarizationWorker(QThread):
                     prompt_template=template_path,
                     progress_callback=enhanced_progress_callback,
                     cancellation_token=self.cancellation_token,
-                    prefer_template_summary=self.gui_settings.get("prompt_driven_mode", False),
+                    prefer_template_summary=self.gui_settings.get(
+                        "prompt_driven_mode", False
+                    ),
                     allow_llm_fallback=True,  # Enable fallback for better reliability
                 )
 
@@ -418,63 +427,85 @@ class EnhancedSummarizationWorker(QThread):
                                 hce_data, file_path_obj.name
                             )
                             self.hce_analytics_updated.emit(analytics)
-                            
+
                             # Export to GetReceipts if enabled
                             if self.gui_settings.get("export_getreceipts", False):
                                 try:
                                     # Import our knowledge_chipper_integration function
                                     import sys
                                     from pathlib import Path as PathLib
-                                    
+
                                     # Add the project root to Python path to import our integration
-                                    project_root = PathLib(__file__).parent.parent.parent.parent.parent
+                                    project_root = PathLib(
+                                        __file__
+                                    ).parent.parent.parent.parent.parent
                                     if str(project_root) not in sys.path:
                                         sys.path.insert(0, str(project_root))
-                                    
-                                    from knowledge_chipper_integration import publish_to_getreceipts
-                                    
+
+                                    from knowledge_chipper_integration import (
+                                        publish_to_getreceipts,
+                                    )
+
                                     # Read file content for transcript
                                     transcript_text = ""
                                     if file_path_obj.exists():
-                                        transcript_text = file_path_obj.read_text(encoding="utf-8")
-                                    
+                                        transcript_text = file_path_obj.read_text(
+                                            encoding="utf-8"
+                                        )
+
                                     # Convert HCE data to GetReceipts format
                                     claims = []
                                     people = []
                                     jargon = []
                                     mental_models = []
-                                    
+
                                     # Extract claims (only high-quality ones)
                                     for claim in hce_data.get("claims", []):
-                                        if claim.get("tier") in ["A", "B"]:  # Only high-quality claims
+                                        if claim.get("tier") in [
+                                            "A",
+                                            "B",
+                                        ]:  # Only high-quality claims
                                             claims.append(claim.get("canonical", ""))
-                                    
-                                    # Extract people 
+
+                                    # Extract people
                                     for person in hce_data.get("people", []):
-                                        people.append({
-                                            "name": person.get("normalized", person.get("surface", "")),
-                                            "bio": None,  # HCE doesn't provide bio
-                                            "expertise": None,  # HCE doesn't provide expertise
-                                            "credibility_score": person.get("confidence", 0.5),
-                                            "sources": []  # HCE doesn't provide sources
-                                        })
-                                    
+                                        people.append(
+                                            {
+                                                "name": person.get(
+                                                    "normalized",
+                                                    person.get("surface", ""),
+                                                ),
+                                                "bio": None,  # HCE doesn't provide bio
+                                                "expertise": None,  # HCE doesn't provide expertise
+                                                "credibility_score": person.get(
+                                                    "confidence", 0.5
+                                                ),
+                                                "sources": [],  # HCE doesn't provide sources
+                                            }
+                                        )
+
                                     # Extract jargon terms
                                     for term in hce_data.get("jargon", []):
-                                        jargon.append({
-                                            "term": term.get("term", ""),
-                                            "definition": term.get("definition", ""),
-                                            "domain": term.get("category"),
-                                            "related_terms": [],
-                                            "examples": []
-                                        })
-                                    
+                                        jargon.append(
+                                            {
+                                                "term": term.get("term", ""),
+                                                "definition": term.get(
+                                                    "definition", ""
+                                                ),
+                                                "domain": term.get("category"),
+                                                "related_terms": [],
+                                                "examples": [],
+                                            }
+                                        )
+
                                     # Extract mental models (concepts)
                                     for concept in hce_data.get("concepts", []):
                                         # Convert HCE relations to GetReceipts format
                                         concept_relations = []
                                         for relation in hce_data.get("relations", []):
-                                            if relation.get("source_claim_id") == concept.get("model_id"):
+                                            if relation.get(
+                                                "source_claim_id"
+                                            ) == concept.get("model_id"):
                                                 rel_type = relation.get("type", "")
                                                 # Map HCE relation types to GetReceipts types
                                                 if rel_type == "supports":
@@ -485,49 +516,71 @@ class EnhancedSummarizationWorker(QThread):
                                                     gr_type = "conflicts_with"
                                                 else:
                                                     gr_type = "causes"
-                                                
-                                                concept_relations.append({
-                                                    "from": concept.get("name", ""),
-                                                    "to": relation.get("target_claim_id", ""),
-                                                    "type": gr_type
-                                                })
-                                        
-                                        mental_models.append({
-                                            "name": concept.get("name", ""),
-                                            "description": concept.get("definition", ""),
-                                            "domain": None,  # HCE doesn't provide domain
-                                            "key_concepts": concept.get("aliases", []),
-                                            "relationships": concept_relations
-                                        })
-                                    
+
+                                                concept_relations.append(
+                                                    {
+                                                        "from": concept.get("name", ""),
+                                                        "to": relation.get(
+                                                            "target_claim_id", ""
+                                                        ),
+                                                        "type": gr_type,
+                                                    }
+                                                )
+
+                                        mental_models.append(
+                                            {
+                                                "name": concept.get("name", ""),
+                                                "description": concept.get(
+                                                    "definition", ""
+                                                ),
+                                                "domain": None,  # HCE doesn't provide domain
+                                                "key_concepts": concept.get(
+                                                    "aliases", []
+                                                ),
+                                                "relationships": concept_relations,
+                                            }
+                                        )
+
                                     # Determine video URL if available
                                     video_url = f"file://{str(file_path_obj)}"
-                                    
+
                                     # Call our GetReceipts integration function
                                     getreceipts_result = publish_to_getreceipts(
-                                        transcript=transcript_text[:5000],  # Limit to first 5000 chars
+                                        transcript=transcript_text[
+                                            :5000
+                                        ],  # Limit to first 5000 chars
                                         video_url=video_url,
                                         claims=claims,
                                         people=people,
                                         jargon=jargon,
                                         mental_models=mental_models,
-                                        topics=[file_path_obj.stem, "knowledge_chipper", "gui_processing"]
+                                        topics=[
+                                            file_path_obj.stem,
+                                            "knowledge_chipper",
+                                            "gui_processing",
+                                        ],
                                     )
-                                    
+
                                     if getreceipts_result["success"]:
-                                        claims_exported = getreceipts_result["published_claims"]
+                                        claims_exported = getreceipts_result[
+                                            "published_claims"
+                                        ]
                                         # Update progress with GetReceipts success
                                         progress.current_step = f"✅ Exported {claims_exported} claims to GetReceipts"
                                         self.progress_updated.emit(progress)
                                     else:
-                                        errors = getreceipts_result.get("errors", ["Unknown error"])
+                                        errors = getreceipts_result.get(
+                                            "errors", ["Unknown error"]
+                                        )
                                         # Update progress with GetReceipts error
                                         progress.current_step = f"⚠️ GetReceipts export failed: {'; '.join(errors[:1])}"
                                         self.progress_updated.emit(progress)
-                                        
+
                                 except Exception as e:
                                     # Update progress with GetReceipts error
-                                    progress.current_step = f"⚠️ GetReceipts export error: {str(e)}"
+                                    progress.current_step = (
+                                        f"⚠️ GetReceipts export error: {str(e)}"
+                                    )
                                     self.progress_updated.emit(progress)
 
                     # Save the summary to file(s) based on user selection
@@ -967,11 +1020,19 @@ class EnhancedSummarizationWorker(QThread):
 class SummarizationTab(BaseTab):
     """Tab for document summarization using AI models."""
 
+    # Thread-safe signal for dialog creation
+    show_ollama_service_dialog_signal = pyqtSignal(str)  # model name
+
     def __init__(self, parent: Any = None) -> None:
         self.summarization_worker = None
         self.gui_settings = get_gui_settings_manager()
         self.tab_name = "Summarization"
         super().__init__(parent)
+
+        # Connect thread-safe signal for dialog creation
+        self.show_ollama_service_dialog_signal.connect(
+            self._show_ollama_service_dialog_on_main_thread
+        )
 
     def _load_analysis_types(self) -> list[str]:
         """Load analysis types from config file."""
@@ -1087,7 +1148,11 @@ class SummarizationTab(BaseTab):
         self.provider_combo.addItems(["openai", "anthropic", "local"])
         self.provider_combo.currentTextChanged.connect(self._update_models)
         self.provider_combo.currentTextChanged.connect(self._on_setting_changed)
-        self.provider_combo.setMaximumWidth(120)  # Make provider field narrower
+        self.provider_combo.setMinimumWidth(150)  # Make provider field longer
+        self.provider_combo.setMaximumWidth(200)  # Allow it to be wider
+        self.provider_combo.setMinimumHeight(40)  # Make 100% taller
+        # Left-justify the text in the dropdown
+        self.provider_combo.setStyleSheet("QComboBox { text-align: left; }")
         self._add_field_with_info(
             settings_layout,
             "Provider:",
@@ -1105,6 +1170,7 @@ class SummarizationTab(BaseTab):
         self.model_combo.setMinimumWidth(
             300
         )  # Make model field wider to accommodate long model names
+        self.model_combo.setMinimumHeight(40)  # Make 100% taller
 
         # Model selection with custom layout for tooltip positioning
         settings_layout.addWidget(QLabel("Model:"), 0, 2)
@@ -1185,7 +1251,7 @@ class SummarizationTab(BaseTab):
             "Path to custom prompt template file for claim extraction. Leave empty to use default HCE prompts."
         )
         self.template_path_edit = QLineEdit("")
-        self.template_path_edit.setMinimumWidth(280)
+        self.template_path_edit.setMinimumWidth(200)  # Reduced from 280 to 200
         self.template_path_edit.setToolTip(
             "Path to custom prompt template file for claim extraction. Leave empty to use default HCE prompts."
         )
@@ -1194,7 +1260,7 @@ class SummarizationTab(BaseTab):
         settings_layout.addWidget(prompt_label, 1, 2)
         settings_layout.addWidget(
             self.template_path_edit, 1, 3, 1, 1
-        )  # Adjusted to fit in same row
+        )  # Ensure proper spacing
         browse_template_btn = QPushButton("Browse")
         browse_template_btn.setFixedWidth(80)
         browse_template_btn.clicked.connect(self._select_template)
@@ -1207,7 +1273,9 @@ class SummarizationTab(BaseTab):
         settings_layout.addWidget(browse_template_btn, 1, 4)
 
         # Prompt-driven summary mode
-        self.prompt_driven_mode_checkbox = QCheckBox("Prompt-Driven Summary (use template structure)")
+        self.prompt_driven_mode_checkbox = QCheckBox(
+            "Prompt-Driven Summary (use template structure)"
+        )
         self.prompt_driven_mode_checkbox.setToolTip(
             "Uses selected template as authoritative structure.\n"
             "• HCE metadata still extracted but formatting follows template exactly\n"
@@ -1270,7 +1338,7 @@ class SummarizationTab(BaseTab):
         settings_layout.addWidget(self.export_getreceipts_checkbox, 3, 4, 1, 2)
 
         # Output folder (only shown when not updating in-place)
-        self.output_label = QLabel("Output:")
+        self.output_label = QLabel("Output Directory:")
         settings_layout.addWidget(self.output_label, 4, 0)
         self.output_edit = QLineEdit()
         self.output_edit.setPlaceholderText(
@@ -1308,12 +1376,31 @@ class SummarizationTab(BaseTab):
 
         # HCE Claim Analysis Settings
         hce_group = QGroupBox("🔍 Claim Analysis Settings")
-        hce_layout = QGridLayout()
+        # Three-column layout with very thin separators
+        hce_layout = QHBoxLayout()
+        hce_layout.setSpacing(6)
 
-        # Claim tier filter with blue info indicator
+        # Column containers
+        col1_layout = QGridLayout()
+        col1_layout.setSpacing(5)
+        col1_widget = QWidget()
+        col1_widget.setLayout(col1_layout)
+
+        col2_layout = QGridLayout()
+        col2_layout.setSpacing(5)
+        col2_widget = QWidget()
+        col2_widget.setLayout(col2_layout)
+
+        col3_layout = QGridLayout()
+        col3_layout.setSpacing(5)
+        col3_widget = QWidget()
+        col3_widget.setLayout(col3_layout)
+
+        # Claim tier (Column 1)
         self.claim_tier_combo = QComboBox()
+        self.claim_tier_combo.setMaximumWidth(140)
         self._add_field_with_info(
-            hce_layout,
+            col1_layout,
             "Minimum Claim Tier:",
             self.claim_tier_combo,
             "Select minimum claim tier to include:\n"
@@ -1328,23 +1415,24 @@ class SummarizationTab(BaseTab):
         self.claim_tier_combo.setCurrentText("All")
         self.claim_tier_combo.currentTextChanged.connect(self._on_setting_changed)
 
-        # Max claims limit with blue info indicator
+        # Max claims (Column 2)
         self.max_claims_spin = QSpinBox()
+        self.max_claims_spin.setMaximumWidth(80)
         self._add_field_with_info(
-            hce_layout,
+            col2_layout,
             "Max Claims per Document:",
             self.max_claims_spin,
             "Maximum number of claims to extract per document.\n"
             "Set to 0 for unlimited. Higher values provide more detail but take longer.",
             0,
-            2,
+            0,
         )
         self.max_claims_spin.setRange(0, 1000)
-        self.max_claims_spin.setValue(0)  # 0 means unlimited
+        self.max_claims_spin.setValue(0)  # Default to 0 (unlimited)
         self.max_claims_spin.setSpecialValueText("Unlimited")
         self.max_claims_spin.valueChanged.connect(self._on_setting_changed)
 
-        # Analysis options with blue info indicators
+        # Contradictions (Column 1)
         contradictions_layout = QHBoxLayout()
         self.include_contradictions_checkbox = QCheckBox(
             "Include Contradiction Analysis"
@@ -1356,8 +1444,7 @@ class SummarizationTab(BaseTab):
         )
         self.include_contradictions_checkbox.toggled.connect(self._on_setting_changed)
         contradictions_layout.addWidget(self.include_contradictions_checkbox)
-        
-        # Add blue info indicator for contradictions
+
         contradictions_info = QLabel("ⓘ")
         contradictions_info.setFixedSize(16, 16)
         contradictions_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1382,11 +1469,11 @@ class SummarizationTab(BaseTab):
         )
         contradictions_layout.addWidget(contradictions_info)
         contradictions_layout.addStretch()
-        
         contradictions_widget = QWidget()
         contradictions_widget.setLayout(contradictions_layout)
-        hce_layout.addWidget(contradictions_widget, 1, 0, 1, 2)
+        col1_layout.addWidget(contradictions_widget, 1, 0, 1, 2)
 
+        # Relations (Column 2)
         relations_layout = QHBoxLayout()
         self.include_relations_checkbox = QCheckBox("Include Relationship Mapping")
         self.include_relations_checkbox.setChecked(True)
@@ -1396,8 +1483,7 @@ class SummarizationTab(BaseTab):
         )
         self.include_relations_checkbox.toggled.connect(self._on_setting_changed)
         relations_layout.addWidget(self.include_relations_checkbox)
-        
-        # Add blue info indicator for relations
+
         relations_info = QLabel("ⓘ")
         relations_info.setFixedSize(16, 16)
         relations_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1422,15 +1508,15 @@ class SummarizationTab(BaseTab):
         )
         relations_layout.addWidget(relations_info)
         relations_layout.addStretch()
-        
         relations_widget = QWidget()
         relations_widget.setLayout(relations_layout)
-        hce_layout.addWidget(relations_widget, 1, 2, 1, 2)
+        col2_layout.addWidget(relations_widget, 1, 0, 1, 2)
 
-        # Confidence thresholds with blue info indicators
+        # Thresholds
         self.tier_a_threshold_spin = QSpinBox()
+        self.tier_a_threshold_spin.setMaximumWidth(60)
         self._add_field_with_info(
-            hce_layout,
+            col1_layout,
             "Tier A Threshold:",
             self.tier_a_threshold_spin,
             "Confidence threshold for Tier A claims (0-100%).\n"
@@ -1444,21 +1530,22 @@ class SummarizationTab(BaseTab):
         self.tier_a_threshold_spin.valueChanged.connect(self._on_setting_changed)
 
         self.tier_b_threshold_spin = QSpinBox()
+        self.tier_b_threshold_spin.setMaximumWidth(60)
         self._add_field_with_info(
-            hce_layout,
+            col2_layout,
             "Tier B Threshold:",
             self.tier_b_threshold_spin,
             "Confidence threshold for Tier B claims (0-100%).\n"
             "Claims above this threshold are considered medium-confidence claims.",
             2,
-            2,
+            0,
         )
         self.tier_b_threshold_spin.setRange(0, 100)
         self.tier_b_threshold_spin.setValue(65)
         self.tier_b_threshold_spin.setSuffix("%")
         self.tier_b_threshold_spin.valueChanged.connect(self._on_setting_changed)
 
-        # High-level skim toggle
+        # Column 3 toggles
         self.use_skim_checkbox = QCheckBox("High-level skim (pre-pass)")
         self.use_skim_checkbox.setChecked(True)
         self.use_skim_checkbox.setToolTip(
@@ -1468,9 +1555,8 @@ class SummarizationTab(BaseTab):
             "• Disabling reduces LLM calls but may miss context"
         )
         self.use_skim_checkbox.toggled.connect(self._on_setting_changed)
-        hce_layout.addWidget(self.use_skim_checkbox, 3, 0, 1, 2)
+        col3_layout.addWidget(self.use_skim_checkbox, 0, 0, 1, 2)
 
-        # Routed judging toggle
         self.enable_routing_checkbox = QCheckBox("Enable routed judging")
         self.enable_routing_checkbox.setChecked(True)
         self.enable_routing_checkbox.setToolTip(
@@ -1481,9 +1567,8 @@ class SummarizationTab(BaseTab):
         )
         self.enable_routing_checkbox.toggled.connect(self._on_setting_changed)
         self.enable_routing_checkbox.toggled.connect(self._on_routing_toggle_changed)
-        hce_layout.addWidget(self.enable_routing_checkbox, 3, 2, 1, 2)
+        col3_layout.addWidget(self.enable_routing_checkbox, 1, 0, 1, 2)
 
-        # Routing threshold
         routing_threshold_label = QLabel("Routing Threshold:")
         routing_threshold_label.setToolTip(
             "Uncertainty threshold for routing claims to flagship judge.\n"
@@ -1493,13 +1578,36 @@ class SummarizationTab(BaseTab):
         self.routing_threshold_spin.setRange(0, 100)
         self.routing_threshold_spin.setValue(35)
         self.routing_threshold_spin.setSuffix("%")
+        # Make this input about 90% shorter than default
+        self.routing_threshold_spin.setMaximumWidth(50)
         self.routing_threshold_spin.setToolTip(
             "Uncertainty threshold for routing claims to flagship judge.\n"
             "Lower values route more claims to flagship (higher cost, better accuracy)."
         )
         self.routing_threshold_spin.valueChanged.connect(self._on_setting_changed)
-        hce_layout.addWidget(routing_threshold_label, 4, 0)
-        hce_layout.addWidget(self.routing_threshold_spin, 4, 1)
+        col3_layout.addWidget(routing_threshold_label, 2, 0)
+        col3_layout.addWidget(self.routing_threshold_spin, 2, 1)
+
+        # Add columns with very thin vertical separators
+        from PyQt6.QtWidgets import QFrame
+
+        vline1 = QFrame()
+        vline1.setFrameShape(QFrame.Shape.VLine)
+        vline1.setFrameShadow(QFrame.Shadow.Sunken)
+        vline1.setLineWidth(1)
+        vline1.setFixedWidth(1)
+
+        vline2 = QFrame()
+        vline2.setFrameShape(QFrame.Shape.VLine)
+        vline2.setFrameShadow(QFrame.Shadow.Sunken)
+        vline2.setLineWidth(1)
+        vline2.setFixedWidth(1)
+
+        hce_layout.addWidget(col1_widget, 1)
+        hce_layout.addWidget(vline1)
+        hce_layout.addWidget(col2_widget, 1)
+        hce_layout.addWidget(vline2)
+        hce_layout.addWidget(col3_widget, 1)
 
         hce_group.setLayout(hce_layout)
         hce_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -1507,37 +1615,39 @@ class SummarizationTab(BaseTab):
 
         # Advanced: Per-stage Models (collapsible)
         from PyQt6.QtWidgets import QFrame
-        
+
         self.advanced_models_group = QGroupBox("🔧 Advanced: Per-stage Models")
         self.advanced_models_group.setCheckable(True)
-        self.advanced_models_group.setChecked(False)  # Collapsed by default
+        self.advanced_models_group.setChecked(True)  # Expanded by default for usability
+        self.advanced_models_group.toggled.connect(self._on_setting_changed)
         self.advanced_models_group.setToolTip(
             "Configure different models for each analysis stage.\n"
-            "Leave empty to use main model for all stages."
+            "Leave empty to use main model for all stages.\n\n"
+            "💡 Tip: Check this box to expand and enable the dropdowns."
         )
-        
+
         advanced_layout = QGridLayout()
         # Set column stretch factors to better distribute space
         advanced_layout.setColumnStretch(0, 0)  # Label column - fixed width
-        advanced_layout.setColumnStretch(1, 0)  # Provider column - fixed width  
+        advanced_layout.setColumnStretch(1, 0)  # Provider column - fixed width
         advanced_layout.setColumnStretch(2, 1)  # Model column - takes remaining space
         advanced_layout.setColumnStretch(3, 0)  # URI column - fixed width
-        
+
         # Add spacing between columns
         advanced_layout.setHorizontalSpacing(15)
         advanced_layout.setVerticalSpacing(8)
-        
+
         # Helper function to create model selector row with blue info indicator
         def create_model_selector(name: str, tooltip: str, row: int) -> tuple:
             # Create label with info indicator layout
             label_layout = QHBoxLayout()
             label_layout.setContentsMargins(0, 0, 0, 0)
             label_layout.setSpacing(8)
-            
+
             label = QLabel(f"{name}:")
             label.setToolTip(tooltip)
             label_layout.addWidget(label)
-            
+
             # Add blue info indicator
             info_label = QLabel("ⓘ")
             info_label.setFixedSize(16, 16)
@@ -1559,85 +1669,120 @@ class SummarizationTab(BaseTab):
             )
             label_layout.addWidget(info_label)
             label_layout.addStretch()
-            
+
             label_widget = QWidget()
             label_widget.setLayout(label_layout)
             label_widget.setMinimumWidth(180)  # Ensure label has enough space
-            
+
             provider_combo = QComboBox()
             provider_combo.addItems(["", "openai", "anthropic", "local"])
             provider_combo.setMinimumWidth(120)  # Reasonable width for provider names
             provider_combo.setMaximumWidth(140)  # Prevent it from taking too much space
             provider_combo.currentTextChanged.connect(self._on_setting_changed)
             provider_combo.setToolTip(f"AI provider for {name}")
-            
+
             model_combo = QComboBox()
             model_combo.setEditable(True)
             model_combo.setMinimumWidth(400)  # Much wider for full model names
             model_combo.currentTextChanged.connect(self._on_setting_changed)
             model_combo.setToolTip(f"Specific model name for {name}")
-            
+
             # Connect provider change to update model options
-            provider_combo.currentTextChanged.connect(
-                lambda provider: self._update_advanced_model_combo(provider, model_combo)
-            )
-            
+            def on_provider_changed(provider_text):
+                """Handle provider change for this specific model combo."""
+                try:
+                    self._update_advanced_model_combo(provider_text, model_combo)
+                except Exception as e:
+                    logger.error(
+                        f"Failed to update advanced model combo for {name}: {e}"
+                    )
+
+            provider_combo.currentTextChanged.connect(on_provider_changed)
+
             uri_label = QLabel("(auto)")
             uri_label.setStyleSheet("color: #666; font-style: italic; font-size: 10px;")
             uri_label.setWordWrap(True)
             uri_label.setMaximumWidth(100)  # Limit URI label width
             uri_label.setToolTip("API endpoint (automatically determined)")
-            
+
             advanced_layout.addWidget(label_widget, row, 0)
             advanced_layout.addWidget(provider_combo, row, 1)
             advanced_layout.addWidget(model_combo, row, 2)
             advanced_layout.addWidget(uri_label, row, 3)
-            
+
             return provider_combo, model_combo, uri_label
-        
+
         # Create model selectors
         self.miner_provider, self.miner_model, self.miner_uri = create_model_selector(
             "Miner Model", "Model for initial claim extraction", 0
         )
-        
-        self.heavy_miner_provider, self.heavy_miner_model, self.heavy_miner_uri = create_model_selector(
-            "Heavy Miner Model", "Model for complex/detailed claim extraction (optional)", 1
+
+        (
+            self.heavy_miner_provider,
+            self.heavy_miner_model,
+            self.heavy_miner_uri,
+        ) = create_model_selector(
+            "Heavy Miner Model",
+            "Model for complex/detailed claim extraction (optional)",
+            1,
         )
-        
+
         self.judge_provider, self.judge_model, self.judge_uri = create_model_selector(
             "Judge Model", "Lightweight model for claim scoring", 2
         )
-        
-        self.flagship_judge_provider, self.flagship_judge_model, self.flagship_judge_uri = create_model_selector(
+
+        (
+            self.flagship_judge_provider,
+            self.flagship_judge_model,
+            self.flagship_judge_uri,
+        ) = create_model_selector(
             "Flagship Judge Model", "High-quality model for important claims", 3
         )
-        
-        self.embedder_provider, self.embedder_model, self.embedder_uri = create_model_selector(
+
+        (
+            self.embedder_provider,
+            self.embedder_model,
+            self.embedder_uri,
+        ) = create_model_selector(
             "Embedder Model", "Model for claim embeddings and similarity", 4
         )
-        
-        self.reranker_provider, self.reranker_model, self.reranker_uri = create_model_selector(
+
+        (
+            self.reranker_provider,
+            self.reranker_model,
+            self.reranker_uri,
+        ) = create_model_selector(
             "Reranker Model", "Model for claim reranking and prioritization", 5
         )
-        
-        self.people_provider, self.people_model, self.people_uri = create_model_selector(
+
+        (
+            self.people_provider,
+            self.people_model,
+            self.people_uri,
+        ) = create_model_selector(
             "People Disambiguator", "Model for person name resolution (optional)", 6
         )
-        
+
         self.nli_provider, self.nli_model, self.nli_uri = create_model_selector(
             "NLI Model", "Natural Language Inference model (optional)", 7
         )
-        
+
         self.advanced_models_group.setLayout(advanced_layout)
-        self.advanced_models_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.advanced_models_group.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         layout.addWidget(self.advanced_models_group)
-        
+
         # Initialize model dropdowns to be empty by default
         for provider_combo, model_combo, _ in [
             (self.miner_provider, self.miner_model, self.miner_uri),
             (self.heavy_miner_provider, self.heavy_miner_model, self.heavy_miner_uri),
             (self.judge_provider, self.judge_model, self.judge_uri),
-            (self.flagship_judge_provider, self.flagship_judge_model, self.flagship_judge_uri),
+            (
+                self.flagship_judge_provider,
+                self.flagship_judge_model,
+                self.flagship_judge_uri,
+            ),
             (self.embedder_provider, self.embedder_model, self.embedder_uri),
             (self.reranker_provider, self.reranker_model, self.reranker_uri),
             (self.people_provider, self.people_model, self.people_uri),
@@ -1651,7 +1796,7 @@ class SummarizationTab(BaseTab):
         self.budgets_group.setCheckable(True)
         self.budgets_group.setChecked(False)  # Collapsed by default
         budgets_layout = QGridLayout()
-        
+
         # Flagship budget per file
         flagship_file_label = QLabel("Flagship max tokens per file:")
         flagship_file_label.setToolTip(
@@ -1665,7 +1810,7 @@ class SummarizationTab(BaseTab):
         self.flagship_file_tokens_spin.valueChanged.connect(self._on_setting_changed)
         budgets_layout.addWidget(flagship_file_label, 0, 0)
         budgets_layout.addWidget(self.flagship_file_tokens_spin, 0, 1)
-        
+
         # Flagship budget per session
         flagship_session_label = QLabel("Flagship max tokens per session:")
         flagship_session_label.setToolTip(
@@ -1679,14 +1824,27 @@ class SummarizationTab(BaseTab):
         self.flagship_session_tokens_spin.valueChanged.connect(self._on_setting_changed)
         budgets_layout.addWidget(flagship_session_label, 0, 2)
         budgets_layout.addWidget(self.flagship_session_tokens_spin, 0, 3)
-        
+
         self.budgets_group.setLayout(budgets_layout)
-        self.budgets_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.budgets_group.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         layout.addWidget(self.budgets_group)
 
         # Action buttons
         action_layout = self._create_action_layout()
         layout.addLayout(action_layout)
+
+        # Rich log display for detailed processor information (like terminal)
+        self.rich_log_display = RichLogDisplay()
+        self.rich_log_display.setMinimumHeight(150)
+        self.rich_log_display.setMaximumHeight(300)
+        layout.addWidget(self.rich_log_display)
+
+        # Processor log integrator for enhanced progress tracking
+        self.log_integrator = ProcessorLogIntegrator()
+        self.log_integrator.progress_updated.connect(self._on_processor_progress)
+        self.log_integrator.status_updated.connect(self._on_processor_status)
 
         # Output section - this should expand and contract with window resizing
         output_layout = self._create_output_section()
@@ -1704,7 +1862,7 @@ class SummarizationTab(BaseTab):
 
     def _get_start_button_text(self) -> str:
         """Get the text for the start button."""
-        return "📝 Start Processing"
+        return "Start Summarization"
 
     def _start_processing(self) -> None:
         """Start the summarization process."""
@@ -1759,7 +1917,8 @@ class SummarizationTab(BaseTab):
                 "profile": self.profile_combo.currentText(),
                 "use_skim": self.use_skim_checkbox.isChecked(),
                 "enable_routing": self.enable_routing_checkbox.isChecked(),
-                "routing_threshold": self.routing_threshold_spin.value() / 100.0,  # Convert to 0-1
+                "routing_threshold": self.routing_threshold_spin.value()
+                / 100.0,  # Convert to 0-1
                 "prompt_driven_mode": self.prompt_driven_mode_checkbox.isChecked(),
                 "flagship_file_tokens": self.flagship_file_tokens_spin.value(),
                 "flagship_session_tokens": self.flagship_session_tokens_spin.value(),
@@ -1789,7 +1948,8 @@ class SummarizationTab(BaseTab):
             "profile": self.profile_combo.currentText(),
             "use_skim": self.use_skim_checkbox.isChecked(),
             "enable_routing": self.enable_routing_checkbox.isChecked(),
-            "routing_threshold": self.routing_threshold_spin.value() / 100.0,  # Convert to 0-1
+            "routing_threshold": self.routing_threshold_spin.value()
+            / 100.0,  # Convert to 0-1
             "prompt_driven_mode": self.prompt_driven_mode_checkbox.isChecked(),
             "flagship_file_tokens": self.flagship_file_tokens_spin.value(),
             "flagship_session_tokens": self.flagship_session_tokens_spin.value(),
@@ -1834,6 +1994,9 @@ class SummarizationTab(BaseTab):
                 f"⏱️  Estimated processing time: {file_count * 2}-{file_count * 5} minutes"
             )
         self.append_log("=" * 50)
+
+        # Start rich log display to capture detailed processor information
+        self.rich_log_display.start_processing("Enhanced Summarization")
 
         # Initialize batch timing when processing actually starts (not when first progress arrives)
         import time
@@ -1973,33 +2136,38 @@ class SummarizationTab(BaseTab):
                 self.start_btn.setEnabled(True)
                 self.start_btn.setText(self._get_start_button_text())
 
-            # Show service dialog
-            from PyQt6.QtWidgets import QDialog
+            # THREAD SAFETY FIX: Use signal to show dialog on main thread
+            # This method may be called from a worker thread, so we must not create GUI components directly
+            self.show_ollama_service_dialog_signal.emit(model)
+        else:
+            # Clean up worker if service is running
+            if hasattr(self, "_model_check_worker"):
+                self._model_check_worker.deleteLater()
+                del self._model_check_worker
 
-            from ..legacy_dialogs import OllamaServiceDialog
+    def _show_ollama_service_dialog_on_main_thread(self, model: str) -> None:
+        """Show Ollama service dialog on main thread (thread-safe)."""
+        from PyQt6.QtWidgets import QDialog
 
-            dialog = OllamaServiceDialog(self)
+        from ..legacy_dialogs import OllamaServiceDialog
 
-            def on_service_dialog_finished():
-                if hasattr(self, "_model_check_worker"):
-                    self._model_check_worker.deleteLater()
-                    del self._model_check_worker
+        dialog = OllamaServiceDialog(self)
 
-                # If user started service, restart model check
-                dialog_result = dialog.result()
-                if dialog_result == QDialog.DialogCode.Accepted:
-                    self.append_log("🔄 Ollama service started, rechecking model...")
-                    self._start_async_model_check(model)
-                else:
-                    self.append_log("❌ Ollama service required for local models")
+        def on_service_dialog_finished():
+            if hasattr(self, "_model_check_worker"):
+                self._model_check_worker.deleteLater()
+                del self._model_check_worker
 
-            dialog.finished.connect(on_service_dialog_finished)
-            dialog.exec()
+            # If user started service, restart model check
+            dialog_result = dialog.result()
+            if dialog_result == QDialog.DialogCode.Accepted:
+                self.append_log("🔄 Ollama service started, rechecking model...")
+                self._start_async_model_check(model)
+            else:
+                self.append_log("❌ Ollama service required for local models")
 
-        # Clean up worker
-        if hasattr(self, "_model_check_worker"):
-            self._model_check_worker.deleteLater()
-            del self._model_check_worker
+        dialog.finished.connect(on_service_dialog_finished)
+        dialog.exec()
 
     def _handle_model_check_result(
         self, available: bool, model: str, error_message: str
@@ -2058,9 +2226,7 @@ class SummarizationTab(BaseTab):
             # If download succeeded, continue processing
             dialog_result = dialog.result()
             if dialog_result == QDialog.DialogCode.Accepted:
-                self.append_log(
-                    f"✅ Model '{clean_model_name}' downloaded successfully"
-                )
+                self.append_log(f"✅ Model '{clean_model_name}' downloaded successfully")
                 self._continue_processing_after_model_check()
             else:
                 self.append_log(f"❌ Model download cancelled or failed")
@@ -2449,52 +2615,74 @@ class SummarizationTab(BaseTab):
 
     def _update_advanced_model_combo(self, provider: str, model_combo: QComboBox):
         """Update an advanced model combo box based on provider selection."""
-        if not provider:  # Empty provider
+        if not provider or not provider.strip():  # Empty provider
             model_combo.clear()
             model_combo.addItems([""])
             return
-            
-        model_combo.clear()
-        logger.debug(f"Updating advanced model combo for provider: {provider}")
-        
+
+        # Block signals to prevent recursive updates
+        model_combo.blockSignals(True)
         try:
-            from knowledge_system.processors.hce.config_flex import get_provider_models
-            from knowledge_system.processors.hce.judge import get_ollama_manager
-            
-            if provider in {"openai", "anthropic"}:
-                models = get_provider_models(provider, force_refresh=False)
-                logger.debug(f"Got {len(models)} models for {provider}: {models[:3]}...")
-            else:  # local
-                try:
-                    ollama_manager = get_ollama_manager()
-                    registry_models = ollama_manager.get_registry_models(use_cache=True)
-                    models = []
-                    for model_info in registry_models:
-                        if "(Installed)" in model_info.name:
-                            models.append(model_info.name)
-                        else:
-                            size_gb = model_info.size_bytes / 1_000_000_000
-                            models.append(f"{model_info.name} ({size_gb:.0f} GB)")
-                    logger.debug(f"Got {len(models)} local models: {models[:3]}...")
-                except Exception as e:
-                    logger.warning(f"Failed to fetch Ollama models for advanced dropdown: {e}")
-                    models = [
-                        "llama3.2:3b (2 GB)",
-                        "llama3.1:8b (5 GB)", 
-                        "qwen2.5:7b (4 GB)",
-                        "mistral:7b (4 GB)"
-                    ]
-                    logger.debug(f"Using fallback models: {models}")
-            
-            # Add empty option first, then models
-            all_items = [""] + models
-            model_combo.addItems(all_items)
-            logger.debug(f"Added {len(all_items)} items to model combo")
-            
-        except Exception as e:
-            logger.warning(f"Failed to populate advanced model dropdown for {provider}: {e}")
-            model_combo.addItems([""])
-            logger.debug("Added empty item due to exception")
+            current_text = model_combo.currentText()
+            model_combo.clear()
+            logger.debug(f"Updating advanced model combo for provider: {provider}")
+
+            try:
+                from ...utils.model_registry import get_provider_models
+                from ...utils.ollama_manager import get_ollama_manager
+
+                models = []
+                if provider in {"openai", "anthropic"}:
+                    models = get_provider_models(provider, force_refresh=False)
+                    logger.debug(
+                        f"Got {len(models)} models for {provider}: {models[:3] if models else 'none'}..."
+                    )
+                elif provider == "local":
+                    try:
+                        ollama_manager = get_ollama_manager()
+                        registry_models = ollama_manager.get_registry_models(
+                            use_cache=True
+                        )
+                        for model_info in registry_models:
+                            if "(Installed)" in model_info.name:
+                                models.append(model_info.name)
+                            else:
+                                size_gb = model_info.size_bytes / 1_000_000_000
+                                models.append(f"{model_info.name} ({size_gb:.0f} GB)")
+                        logger.debug(
+                            f"Got {len(models)} local models: {models[:3] if models else 'none'}..."
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to fetch Ollama models for advanced dropdown: {e}"
+                        )
+                        models = [
+                            "llama3.2:3b (2 GB)",
+                            "llama3.1:8b (5 GB)",
+                            "qwen2.5:7b (4 GB)",
+                            "mistral:7b (4 GB)",
+                        ]
+                        logger.debug(f"Using fallback models: {models}")
+
+                # Add empty option first, then models
+                all_items = [""] + (models if models else [])
+                model_combo.addItems(all_items)
+
+                # Try to restore previous selection if it's still valid
+                if current_text and current_text in all_items:
+                    model_combo.setCurrentText(current_text)
+
+                logger.debug(f"Added {len(all_items)} items to model combo")
+
+            except Exception as e:
+                logger.warning(
+                    f"Failed to populate advanced model dropdown for {provider}: {e}"
+                )
+                model_combo.addItems([""])
+                logger.debug("Added empty item due to exception")
+
+        finally:
+            model_combo.blockSignals(False)
 
     def _select_template(self):
         """Select a template file."""
@@ -2832,12 +3020,16 @@ class SummarizationTab(BaseTab):
         # Enable report button if available
         if hasattr(self, "report_btn"):
             self.report_btn.setEnabled(True)
-        
+
         # Generate session report
         if success_count > 0:
-            self._generate_session_report(success_count, failure_count, total_count, total_time_text)
-            self.append_log("📋 Session report generated - click 'View Session Report' to see details")
-        
+            self._generate_session_report(
+                success_count, failure_count, total_count, total_time_text
+            )
+            self.append_log(
+                "📋 Session report generated - click 'View Session Report' to see details"
+            )
+
         # Show claim validation option if summaries were generated with HCE
         if success_count > 0:
             self._show_claim_validation_option()
@@ -2896,13 +3088,19 @@ class SummarizationTab(BaseTab):
                 if flagship_routed > 0 or local_processed > 0:
                     self.append_log(f"   🎯 Routing Analytics:")
                     if local_processed > 0:
-                        self.append_log(f"      📱 Local Judge: {local_processed} claims")
+                        self.append_log(
+                            f"      📱 Local Judge: {local_processed} claims"
+                        )
                     if flagship_routed > 0:
-                        self.append_log(f"      🚀 Flagship Judge: {flagship_routed} claims")
-                        
+                        self.append_log(
+                            f"      🚀 Flagship Judge: {flagship_routed} claims"
+                        )
+
                     routing_reason = analytics.get("routing_reason", "uncertainty")
                     if routing_reason and flagship_routed > 0:
-                        self.append_log(f"      📋 Primary routing reason: {routing_reason}")
+                        self.append_log(
+                            f"      📋 Primary routing reason: {routing_reason}"
+                        )
 
             # Show relations and contradictions
             relations_count = analytics.get("relations_count", 0)
@@ -2975,6 +3173,24 @@ class SummarizationTab(BaseTab):
                 self.prompt_driven_mode_checkbox,
                 self.flagship_file_tokens_spin,
                 self.flagship_session_tokens_spin,
+                # Advanced per-stage provider and model dropdowns
+                self.advanced_models_group,
+                self.miner_provider,
+                self.miner_model,
+                self.heavy_miner_provider,
+                self.heavy_miner_model,
+                self.judge_provider,
+                self.judge_model,
+                self.flagship_judge_provider,
+                self.flagship_judge_model,
+                self.embedder_provider,
+                self.embedder_model,
+                self.reranker_provider,
+                self.reranker_model,
+                self.people_provider,
+                self.people_model,
+                self.nli_provider,
+                self.nli_model,
             ]
 
             # Block all signals
@@ -3125,7 +3341,53 @@ class SummarizationTab(BaseTab):
                 saved_flagship_session_tokens = self.gui_settings.get_spinbox_value(
                     self.tab_name, "flagship_session_tokens", 0
                 )
-                self.flagship_session_tokens_spin.setValue(saved_flagship_session_tokens)
+                self.flagship_session_tokens_spin.setValue(
+                    saved_flagship_session_tokens
+                )
+
+                # Load advanced models section state
+                saved_advanced_expanded = self.gui_settings.get_checkbox_state(
+                    self.tab_name, "advanced_models_expanded", True
+                )
+                self.advanced_models_group.setChecked(saved_advanced_expanded)
+
+                # Load advanced per-stage provider and model selections
+                advanced_dropdowns = [
+                    ("miner", self.miner_provider, self.miner_model),
+                    ("heavy_miner", self.heavy_miner_provider, self.heavy_miner_model),
+                    ("judge", self.judge_provider, self.judge_model),
+                    (
+                        "flagship_judge",
+                        self.flagship_judge_provider,
+                        self.flagship_judge_model,
+                    ),
+                    ("embedder", self.embedder_provider, self.embedder_model),
+                    ("reranker", self.reranker_provider, self.reranker_model),
+                    ("people", self.people_provider, self.people_model),
+                    ("nli", self.nli_provider, self.nli_model),
+                ]
+
+                for stage_name, provider_combo, model_combo in advanced_dropdowns:
+                    # Load provider selection
+                    saved_provider = self.gui_settings.get_combo_selection(
+                        self.tab_name, f"{stage_name}_provider", ""
+                    )
+                    index = provider_combo.findText(saved_provider)
+                    if index >= 0:
+                        provider_combo.setCurrentIndex(index)
+                        # Update models for this provider
+                        if saved_provider:
+                            self._update_advanced_model_combo(
+                                saved_provider, model_combo
+                            )
+
+                    # Load model selection
+                    saved_model = self.gui_settings.get_combo_selection(
+                        self.tab_name, f"{stage_name}_model", ""
+                    )
+                    index = model_combo.findText(saved_model)
+                    if index >= 0:
+                        model_combo.setCurrentIndex(index)
 
                 # Update output visibility based on checkbox state
                 self._toggle_output_options()
@@ -3217,20 +3479,63 @@ class SummarizationTab(BaseTab):
                 self.tab_name, "use_skim", self.use_skim_checkbox.isChecked()
             )
             self.gui_settings.set_checkbox_state(
-                self.tab_name, "enable_routing", self.enable_routing_checkbox.isChecked()
+                self.tab_name,
+                "enable_routing",
+                self.enable_routing_checkbox.isChecked(),
             )
             self.gui_settings.set_spinbox_value(
                 self.tab_name, "routing_threshold", self.routing_threshold_spin.value()
             )
             self.gui_settings.set_checkbox_state(
-                self.tab_name, "prompt_driven_mode", self.prompt_driven_mode_checkbox.isChecked()
+                self.tab_name,
+                "prompt_driven_mode",
+                self.prompt_driven_mode_checkbox.isChecked(),
             )
             self.gui_settings.set_spinbox_value(
-                self.tab_name, "flagship_file_tokens", self.flagship_file_tokens_spin.value()
+                self.tab_name,
+                "flagship_file_tokens",
+                self.flagship_file_tokens_spin.value(),
             )
             self.gui_settings.set_spinbox_value(
-                self.tab_name, "flagship_session_tokens", self.flagship_session_tokens_spin.value()
+                self.tab_name,
+                "flagship_session_tokens",
+                self.flagship_session_tokens_spin.value(),
             )
+
+            # Save advanced models section state
+            self.gui_settings.set_checkbox_state(
+                self.tab_name,
+                "advanced_models_expanded",
+                self.advanced_models_group.isChecked(),
+            )
+
+            # Save advanced per-stage provider and model selections
+            advanced_dropdowns = [
+                ("miner", self.miner_provider, self.miner_model),
+                ("heavy_miner", self.heavy_miner_provider, self.heavy_miner_model),
+                ("judge", self.judge_provider, self.judge_model),
+                (
+                    "flagship_judge",
+                    self.flagship_judge_provider,
+                    self.flagship_judge_model,
+                ),
+                ("embedder", self.embedder_provider, self.embedder_model),
+                ("reranker", self.reranker_provider, self.reranker_model),
+                ("people", self.people_provider, self.people_model),
+                ("nli", self.nli_provider, self.nli_model),
+            ]
+
+            for stage_name, provider_combo, model_combo in advanced_dropdowns:
+                # Save provider selection
+                self.gui_settings.set_combo_selection(
+                    self.tab_name,
+                    f"{stage_name}_provider",
+                    provider_combo.currentText(),
+                )
+                # Save model selection
+                self.gui_settings.set_combo_selection(
+                    self.tab_name, f"{stage_name}_model", model_combo.currentText()
+                )
 
             logger.info(f"✅ Successfully saved settings for {self.tab_name} tab")
         except Exception as e:
@@ -3279,31 +3584,31 @@ class SummarizationTab(BaseTab):
         """Handle profile selection changes."""
         if profile == "Custom":
             return  # Don't override custom settings
-            
+
         logger.debug(f"🔄 Profile changed to: {profile}")
-        
+
         # Apply profile settings
         if profile == "Fast":
             # Fast: skim off, routing off, lightweight only
             self.use_skim_checkbox.setChecked(False)
             self.enable_routing_checkbox.setChecked(False)
             self.routing_threshold_spin.setValue(50)  # Higher threshold = less routing
-            
+
         elif profile == "Balanced":
             # Balanced: skim on, routing on, default settings
             self.use_skim_checkbox.setChecked(True)
             self.enable_routing_checkbox.setChecked(True)
             self.routing_threshold_spin.setValue(35)  # Default
-            
+
         elif profile == "Quality":
             # Quality: skim on, aggressive routing, all features
             self.use_skim_checkbox.setChecked(True)
             self.enable_routing_checkbox.setChecked(True)
             self.routing_threshold_spin.setValue(25)  # Lower = more routing
-            
+
         # Show brief feedback
         self.append_log(f"📋 Applied {profile} profile settings")
-        
+
         # Trigger settings save
         self._save_settings()
 
@@ -3311,29 +3616,38 @@ class SummarizationTab(BaseTab):
         """Handle routing toggle changes."""
         # Enable/disable routing threshold based on toggle
         self.routing_threshold_spin.setEnabled(enabled)
-        
+
         # Show dependency warning if routing enabled without flagship judge
         if enabled:
-            flagship_provider = getattr(self, 'flagship_judge_provider', None)
-            flagship_model = getattr(self, 'flagship_judge_model', None)
-            
+            flagship_provider = getattr(self, "flagship_judge_provider", None)
+            flagship_model = getattr(self, "flagship_judge_model", None)
+
             if flagship_provider and flagship_model:
-                if not flagship_provider.currentText() or not flagship_model.currentText():
-                    self.append_log("⚠️ Routing enabled but no flagship judge model configured")
+                if (
+                    not flagship_provider.currentText()
+                    or not flagship_model.currentText()
+                ):
+                    self.append_log(
+                        "⚠️ Routing enabled but no flagship judge model configured"
+                    )
 
     def _on_template_mode_changed(self, enabled: bool) -> None:
         """Handle template mode toggle changes."""
         if enabled:
-            self.append_log("📋 Prompt-driven mode enabled - HCE formatting will be bypassed")
+            self.append_log(
+                "📋 Prompt-driven mode enabled - HCE formatting will be bypassed"
+            )
             # Could add visual indicators here if needed
         else:
             self.append_log("🔍 Standard HCE analysis mode enabled")
 
-    def _generate_session_report(self, success_count: int, failure_count: int, total_count: int, time_text: str) -> None:
+    def _generate_session_report(
+        self, success_count: int, failure_count: int, total_count: int, time_text: str
+    ) -> None:
         """Generate comprehensive session report."""
         try:
-            from datetime import datetime
             import json
+            from datetime import datetime
 
             # Create report data
             report_data = {
@@ -3362,72 +3676,88 @@ class SummarizationTab(BaseTab):
                     "create_separate_file": self.separate_file_checkbox.isChecked(),
                     "output_directory": self.output_edit.text(),
                     "force_regenerate": self.force_regenerate_checkbox.isChecked(),
-                }
+                },
             }
 
             # Save report to output directory or default location
-            output_dir = self.output_edit.text() if self.separate_file_checkbox.isChecked() else "output/summaries"
-            report_path = Path(output_dir) / f"session_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            output_dir = (
+                self.output_edit.text()
+                if self.separate_file_checkbox.isChecked()
+                else "output/summaries"
+            )
+            report_path = (
+                Path(output_dir)
+                / f"session_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            )
             report_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            with open(report_path, 'w', encoding='utf-8') as f:
+
+            with open(report_path, "w", encoding="utf-8") as f:
                 json.dump(report_data, f, indent=2, ensure_ascii=False)
-            
+
             # Store report path for viewing
             self._last_session_report = report_path
-            
+
             logger.info(f"Session report saved to: {report_path}")
-            
+
         except Exception as e:
             logger.error(f"Failed to generate session report: {e}")
 
     def _view_session_report(self) -> None:
         """Open the last generated session report."""
-        if hasattr(self, '_last_session_report') and self._last_session_report.exists():
+        if hasattr(self, "_last_session_report") and self._last_session_report.exists():
             try:
                 import subprocess
                 import sys
-                
-                if sys.platform.startswith('darwin'):  # macOS
-                    subprocess.run(['open', str(self._last_session_report)])
-                elif sys.platform.startswith('win'):  # Windows
-                    subprocess.run(['start', str(self._last_session_report)], shell=True)
+
+                if sys.platform.startswith("darwin"):  # macOS
+                    subprocess.run(["open", str(self._last_session_report)])
+                elif sys.platform.startswith("win"):  # Windows
+                    subprocess.run(
+                        ["start", str(self._last_session_report)], shell=True
+                    )
                 else:  # Linux
-                    subprocess.run(['xdg-open', str(self._last_session_report)])
-                    
+                    subprocess.run(["xdg-open", str(self._last_session_report)])
+
             except Exception as e:
-                self.show_warning("Cannot Open Report", f"Failed to open session report: {e}")
+                self.show_warning(
+                    "Cannot Open Report", f"Failed to open session report: {e}"
+                )
         else:
-            self.show_warning("No Report", "No session report available. Run a summarization first.")
+            self.show_warning(
+                "No Report", "No session report available. Run a summarization first."
+            )
 
     def _show_claim_validation_option(self):
         """Show claim validation option after successful HCE processing."""
         # Check if HCE processing was enabled and claims were extracted
         if not self._has_hce_claims():
             return
-            
+
         self.append_log("\n" + "🔍" * 20)
         self.append_log("📋 CLAIM VALIDATION")
         self.append_log("🔍" * 20)
-        self.append_log("💡 Help us improve claim tier accuracy! Review the A/B/C tier assignments.")
+        self.append_log(
+            "💡 Help us improve claim tier accuracy! Review the A/B/C tier assignments."
+        )
         self.append_log("🎯 Your feedback helps train better claim evaluation models.")
-        
+
         # Add claim validation button to the UI if not already present
-        if not hasattr(self, 'claim_validation_btn'):
+        if not hasattr(self, "claim_validation_btn"):
             self._add_claim_validation_button()
 
     def _has_hce_claims(self) -> bool:
         """Check if HCE processing was enabled and claims were extracted."""
         try:
             # Check if HCE processing is enabled in settings
-            hce_enabled = getattr(self, 'hce_checkbox', None)
+            hce_enabled = getattr(self, "hce_checkbox", None)
             if not hce_enabled or not hce_enabled.isChecked():
                 return False
-            
+
             # Check if we have recent HCE data with claims
             from ...database.service import DatabaseService
+
             db = DatabaseService()
-            
+
             # Look for recent episodes with claims
             # This is a simplified check - in practice you'd want to check
             # the specific files that were just processed
@@ -3437,7 +3767,7 @@ class SummarizationTab(BaseTab):
             except:
                 # If get_recent_claims doesn't exist, assume we have claims if HCE is enabled
                 return True
-            
+
         except Exception as e:
             logger.error(f"Failed to check for HCE claims: {e}")
             return False
@@ -3449,24 +3779,27 @@ class SummarizationTab(BaseTab):
             action_layout = None
             for i in range(self.layout().count()):
                 item = self.layout().itemAt(i)
-                if item and hasattr(item, 'layout') and item.layout():
+                if item and hasattr(item, "layout") and item.layout():
                     layout = item.layout()
                     # Check if this layout contains the start button
                     for j in range(layout.count()):
                         widget_item = layout.itemAt(j)
-                        if widget_item and hasattr(widget_item, 'widget'):
+                        if widget_item and hasattr(widget_item, "widget"):
                             widget = widget_item.widget()
-                            if hasattr(widget, 'text') and 'Start' in widget.text():
+                            if hasattr(widget, "text") and "Start" in widget.text():
                                 action_layout = layout
                                 break
                     if action_layout:
                         break
-            
+
             if action_layout:
                 # Create claim validation button
                 self.claim_validation_btn = QPushButton("🔍 Validate Claim Tiers")
-                self.claim_validation_btn.clicked.connect(self._show_claim_validation_dialog)
-                self.claim_validation_btn.setStyleSheet("""
+                self.claim_validation_btn.clicked.connect(
+                    self._show_claim_validation_dialog
+                )
+                self.claim_validation_btn.setStyleSheet(
+                    """
                     QPushButton {
                         background-color: #17a2b8;
                         color: white;
@@ -3478,23 +3811,26 @@ class SummarizationTab(BaseTab):
                     QPushButton:hover {
                         background-color: #138496;
                     }
-                """)
+                """
+                )
                 self.claim_validation_btn.setVisible(False)  # Initially hidden
-                
+
                 # Insert before the stretch (usually the last item)
                 stretch_index = action_layout.count() - 1
                 if stretch_index >= 0:
                     action_layout.insertWidget(stretch_index, self.claim_validation_btn)
                 else:
                     action_layout.addWidget(self.claim_validation_btn)
-                
+
                 # Show the button
                 self.claim_validation_btn.setVisible(True)
-                
+
                 logger.info("Added claim validation button to summarization tab")
             else:
-                logger.warning("Could not find action layout to add claim validation button")
-                
+                logger.warning(
+                    "Could not find action layout to add claim validation button"
+                )
+
         except Exception as e:
             logger.error(f"Failed to add claim validation button: {e}")
 
@@ -3503,37 +3839,41 @@ class SummarizationTab(BaseTab):
         try:
             # Get claims from the most recent HCE processing
             claims_data = self._get_recent_claims_for_validation()
-            
+
             if not claims_data:
                 self.append_log("❌ No claims found for validation.")
                 return
-            
+
             # Create claim validation dialog
             dialog = ClaimValidationDialog(claims_data, parent=self)
-            
+
             # Connect to handle validation completed
             dialog.validation_completed.connect(self._on_claim_validation_completed)
-            
+
             # Show dialog
             dialog.exec()
-            
+
         except Exception as e:
             logger.error(f"Failed to show claim validation dialog: {e}")
-            self.show_error("Claim Validation Error", f"Failed to show claim validation dialog: {str(e)}")
+            self.show_error(
+                "Claim Validation Error",
+                f"Failed to show claim validation dialog: {str(e)}",
+            )
 
     def _get_recent_claims_for_validation(self) -> list[dict]:
         """Get recent claims for validation from HCE processing."""
         try:
             from ...database.service import DatabaseService
+
             db = DatabaseService()
-            
+
             # Get recent claims from the database
             # This is a simplified implementation - in practice you'd want to get
             # claims from the specific files that were just processed
-            
+
             # For now, get the most recent 10 claims as a demo
             recent_claims = []
-            
+
             # Try to get claims from HCE database
             try:
                 # This would be the actual implementation if we had HCE claims in the database
@@ -3545,21 +3885,25 @@ class SummarizationTab(BaseTab):
                         "tier": ["A", "B", "C"][i % 3],
                         "claim_type": ["factual", "causal", "normative"][i % 3],
                         "evidence": [
-                            {"quote": f"Evidence quote {i}", "t0": "00:01:00", "t1": "00:01:05"}
+                            {
+                                "quote": f"Evidence quote {i}",
+                                "t0": "00:01:00",
+                                "t1": "00:01:05",
+                            }
                         ],
-                        "scores": {"confidence": 0.8 + (i * 0.05)}
+                        "scores": {"confidence": 0.8 + (i * 0.05)},
                     }
                     for i in range(5)  # Create 5 sample claims
                 ]
                 recent_claims = sample_claims
-                
+
             except Exception as e:
                 logger.warning(f"Could not get claims from database: {e}")
                 # Return empty list if no claims available
                 return []
-            
+
             return recent_claims
-            
+
         except Exception as e:
             logger.error(f"Failed to get recent claims for validation: {e}")
             return []
@@ -3568,26 +3912,52 @@ class SummarizationTab(BaseTab):
         """Handle claim validation completion."""
         try:
             total_claims = len(validation_results)
-            modified_claims = sum(1 for result in validation_results if result.get("was_modified", False))
+            modified_claims = sum(
+                1 for result in validation_results if result.get("was_modified", False)
+            )
             confirmed_claims = total_claims - modified_claims
-            
+
             self.append_log(f"\n✅ Claim validation completed!")
             self.append_log(f"📊 Validation Summary:")
             self.append_log(f"   • Total claims validated: {total_claims}")
             self.append_log(f"   • Confirmed as correct: {confirmed_claims}")
             self.append_log(f"   • Modified by user: {modified_claims}")
-            
+
             if total_claims > 0:
                 accuracy_rate = (confirmed_claims / total_claims) * 100
                 self.append_log(f"   • AI accuracy rate: {accuracy_rate:.1f}%")
-            
-            self.append_log("🙏 Thank you for your feedback! This helps improve our claim evaluation.")
-            
+
+            self.append_log(
+                "🙏 Thank you for your feedback! This helps improve our claim evaluation."
+            )
+
             # Hide the validation button after validation is completed
-            if hasattr(self, 'claim_validation_btn'):
+            if hasattr(self, "claim_validation_btn"):
                 self.claim_validation_btn.setVisible(False)
-                
+
         except Exception as e:
             logger.error(f"Failed to handle claim validation completion: {e}")
 
+    def _on_processing_finished(
+        self, success_count: int, failure_count: int, total_count: int
+    ):
+        """Handle summarization completion."""
+        # Stop rich log display
+        self.rich_log_display.stop_processing()
 
+        self.append_log(f"\n✅ Enhanced summarization completed!")
+        self.append_log(f"📊 Final Summary:")
+        self.append_log(f"   • Successfully processed: {success_count} files")
+        if failure_count > 0:
+            self.append_log(f"   • Failed to process: {failure_count} files")
+        self.append_log(f"   • Total files: {total_count}")
+
+    def _on_processor_progress(self, message: str, percentage: int):
+        """Handle progress updates from the processor log integrator."""
+        # Log rich processor information
+        self.append_log(f"🔧 {message}")
+
+    def _on_processor_status(self, status: str):
+        """Handle status updates from the processor log integrator."""
+        # Add rich processor status to our regular log output
+        self.append_log(f"🔍 {status}")

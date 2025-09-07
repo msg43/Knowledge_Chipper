@@ -292,6 +292,7 @@ class LocalLLMProvider(BaseLLMProvider):
 
             # Limit generation to avoid timeouts and runaway outputs on local models
             from ..config import get_settings
+
             settings = get_settings()
             max_predict_tokens = settings.local_config.num_predict
             payload = {

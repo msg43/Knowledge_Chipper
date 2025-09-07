@@ -61,23 +61,23 @@ class RelationMiner:
 
 def extract_relations(claims: list[ScoredClaim], model_uri: str) -> list[Relation]:
     """Extract relationships between claims using LLM analysis.
-    
+
     This function provides the interface expected by the pipeline.
     """
     from ...config import get_settings
     from .models.llm_factory import create_llm
-    
+
     # Currently disabled - return empty list until prompt template is created
     # TODO: Create relations extraction prompt template
     return []
-    
+
     # Future implementation:
-    # settings = get_settings() 
+    # settings = get_settings()
     # prompt_path = settings.prompts_dir / "relations.txt"
-    # 
+    #
     # if not prompt_path.exists():
     #     return []
-    #     
+    #
     # llm = create_llm(model_uri)
     # miner = RelationMiner(llm, prompt_path)
     # return miner.relate(claims)

@@ -211,7 +211,18 @@ class YouTubeTranscript(BaseModel):
                         minutes = int(start_time // 60)
                         seconds = int(start_time % 60)
                         timestamp = f"{minutes:02d}:{seconds:02d}"
-                        lines.append(f"**{timestamp}** {text}")
+
+                        # Create hyperlinked timestamp for YouTube videos
+                        if self.video_id:
+                            youtube_url = f"https://www.youtube.com/watch?v={self.video_id}&t={int(start_time)}s"
+                            timestamp_display = f"[{timestamp}]({youtube_url})"
+                        else:
+                            timestamp_display = f"**{timestamp}**"
+
+                        # Format with proper line breaks
+                        lines.append(f"{timestamp_display}")
+                        lines.append("")
+                        lines.append(text)
                         lines.append("")
         else:
             # Plain text transcript - also remove bracketed content
@@ -292,6 +303,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         self._configure_bright_data()
         if not self.use_bright_data:
             from ..errors import YouTubeAPIError
+
             raise YouTubeAPIError(
                 "Bright Data API key is required for YouTube transcript extraction. "
                 "Please configure your Bright Data API Key in Settings."
@@ -302,6 +314,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         try:
             if requests is None:
                 from ..errors import YouTubeAPIError
+
                 raise YouTubeAPIError(
                     "requests library not available - cannot use Bright Data"
                 )
@@ -313,6 +326,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             # Fallback: environment variables
             if not self.bright_data_api_key:
                 import os
+
                 self.bright_data_api_key = (
                     os.getenv("BRIGHT_DATA_API_KEY")
                     or os.getenv("BRIGHTDATA_API_KEY")
@@ -382,8 +396,12 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                 metadata_processor = YouTubeMetadataProcessor()
                 metadata_result = metadata_processor.process([url])
 
-                if metadata_result.success and metadata_result.data:
-                    video_metadata = metadata_result.data[0]
+                if (
+                    metadata_result.success
+                    and metadata_result.data
+                    and metadata_result.data.get("metadata")
+                ):
+                    video_metadata = metadata_result.data["metadata"][0]
                     # Create empty transcript with metadata for diarization to fill
                     return YouTubeTranscript(
                         video_id=self._extract_video_id(url),
@@ -407,7 +425,9 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     )
                     return None
             except Exception as e:
-                logger.warning(f"Failed to get metadata for diarization - proceeding without metadata: {e}")
+                logger.warning(
+                    f"Failed to get metadata for diarization - proceeding without metadata: {e}"
+                )
                 # Continue without metadata rather than failing completely
                 return None
 
@@ -431,20 +451,20 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             if not video_id:
                 return None
 
-            # Bright Data API endpoint - try different endpoint patterns
-            endpoints_to_try = [
-                "https://api.brightdata.com/dca/trigger_immediate",
-                "https://api.brightdata.com/dataset/collect",
-                "https://api.brightdata.com/datasets/youtube/trigger"
-            ]
+            # Bright Data YouTube Posts API - Datasets v3 (Working Implementation)
+            # This uses the account-specific dataset ID for YouTube Posts "Collect by URL"
+            dataset_id = "gd_lk538t2k2p1k3oos71"  # Your YouTube Posts dataset ID
+
+            # Use the same working implementation as youtube_metadata.py
+            trigger_url = f"https://api.brightdata.com/datasets/v3/trigger?dataset_id={dataset_id}&format=json"
+
             headers = {
                 "Authorization": f"Bearer {self.bright_data_api_key}",
                 "Content-Type": "application/json",
             }
-            payload = {
-                "url": url,
-                "discover_by": "url"
-            }
+
+            # Payload for Datasets v3 trigger
+            trigger_payload = [{"url": url}]
 
             # Fetch real metadata using the YouTube metadata processor
             real_metadata = None
@@ -460,7 +480,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                 ):
                     real_metadata = metadata_result.data["metadata"][0]
                     logger.info(
-                        f"Successfully fetched metadata: {real_metadata.get('title', 'Unknown')}"
+                        f"Successfully fetched Rich Meta data: {real_metadata.get('title', 'Unknown')}"
                     )
             except Exception as e:
                 logger.warning(f"Could not fetch metadata for {video_id}: {e}")
@@ -477,30 +497,143 @@ class YouTubeTranscriptProcessor(BaseProcessor):
 
                     # No artificial delays required with Bright Data
 
-                    # Try each endpoint until one works
-                    response = None
-                    for api_url in endpoints_to_try:
-                        try:
-                            logger.debug(f"Trying Bright Data endpoint for transcript: {api_url}")
-                            response = requests.post(api_url, headers=headers, json=payload, timeout=45)
-                            if response.status_code != 404:
-                                break  # Found a working endpoint
-                            else:
-                                logger.debug(f"Endpoint {api_url} returned 404, trying next endpoint")
-                        except Exception as e:
-                            logger.debug(f"Endpoint {api_url} failed with error: {e}")
-                            continue
-                    
-                    if not response:
-                        logger.error("All Bright Data API endpoints failed for transcript")
+                    # Step 1: Trigger the collection using Datasets v3 API
+                    logger.debug(
+                        f"Triggering Bright Data transcript collection: {trigger_url}"
+                    )
+                    trigger_response = requests.post(
+                        trigger_url,
+                        headers=headers,
+                        json=trigger_payload,
+                        timeout=30,
+                        verify=True,
+                    )
+
+                    logger.debug(
+                        f"Trigger response status: {trigger_response.status_code}"
+                    )
+
+                    if trigger_response.status_code != 200:
+                        if trigger_response.status_code == 401:
+                            logger.error(
+                                "Authentication failed (401) - check your Bright Data API key"
+                            )
+                        elif trigger_response.status_code == 403:
+                            logger.error(
+                                "Access forbidden (403) - check API key permissions"
+                            )
+                        elif trigger_response.status_code == 404:
+                            logger.error("Dataset not found (404) - check dataset ID")
+                        elif trigger_response.status_code == 400:
+                            logger.error(
+                                f"Bad request (400): {trigger_response.text[:200]}"
+                            )
+                        else:
+                            logger.error(
+                                f"Trigger failed with status {trigger_response.status_code}: {trigger_response.text[:200]}"
+                            )
                         return None
-                    if response.status_code != 200:
-                        raise RuntimeError(
-                            f"Bright Data API error {response.status_code}: {response.text}"
+
+                    # Get snapshot ID from trigger response
+                    trigger_data = trigger_response.json()
+                    snapshot_id = trigger_data.get("snapshot_id")
+
+                    if not snapshot_id:
+                        logger.error("No snapshot_id received from trigger response")
+                        return None
+
+                    logger.info(
+                        f"✅ Transcript collection triggered successfully, snapshot ID: {snapshot_id}"
+                    )
+
+                    # Step 2: Poll for data with exponential backoff
+                    status_url = (
+                        f"https://api.brightdata.com/datasets/v3/snapshot/{snapshot_id}"
+                    )
+                    max_poll_attempts = 15  # Up to 3 minutes of polling
+
+                    data = None
+                    for poll_attempt in range(max_poll_attempts):
+                        wait_time = min(
+                            10, 2 ** min(poll_attempt, 4)
+                        )  # Exponential backoff, max 10 seconds
+                        if poll_attempt > 0:
+                            logger.debug(
+                                f"Waiting {wait_time} seconds before poll attempt {poll_attempt + 1}..."
+                            )
+                            time.sleep(wait_time)
+
+                        logger.debug(
+                            f"Polling for transcript data (attempt {poll_attempt + 1}/{max_poll_attempts}): {status_url}"
                         )
-                    data = response.json()
-                    if not validate_bright_data_response(data):
-                        raise RuntimeError("Invalid Bright Data response structure")
+
+                        try:
+                            poll_response = requests.get(
+                                status_url, headers=headers, timeout=20, verify=True
+                            )
+                            logger.debug(
+                                f"Poll response status: {poll_response.status_code}"
+                            )
+
+                            if poll_response.status_code == 200:
+                                # Check if we have actual data (not just empty response)
+                                if poll_response.text.strip():
+                                    logger.info(
+                                        f"✅ YouTube transcript data received after {poll_attempt + 1} attempts"
+                                    )
+
+                                    try:
+                                        data = poll_response.json()
+                                        if not validate_bright_data_response(data):
+                                            raise RuntimeError(
+                                                "Invalid Bright Data response structure"
+                                            )
+                                        break  # Success! Exit polling loop
+
+                                    except json.JSONDecodeError as e:
+                                        logger.error(
+                                            f"Failed to parse JSON response: {e}"
+                                        )
+                                        logger.debug(
+                                            f"Raw response: {poll_response.text[:300]}"
+                                        )
+                                        return None
+
+                                else:
+                                    logger.debug(
+                                        f"Empty response, data still processing..."
+                                    )
+
+                            elif poll_response.status_code == 202:
+                                logger.debug(f"Status 202: Still processing...")
+
+                            elif poll_response.status_code == 404:
+                                logger.error(
+                                    f"Snapshot {snapshot_id} not found or expired"
+                                )
+                                return None
+
+                            else:
+                                logger.warning(
+                                    f"Unexpected poll status {poll_response.status_code}: {poll_response.text[:100]}"
+                                )
+
+                        except requests.exceptions.Timeout:
+                            logger.warning(
+                                f"Poll timeout on attempt {poll_attempt + 1}"
+                            )
+                            continue
+                        except Exception as e:
+                            logger.warning(
+                                f"Poll error on attempt {poll_attempt + 1}: {str(e)[:100]}"
+                            )
+                            continue
+
+                    if not data:
+                        logger.error(
+                            f"YouTube transcript collection timed out after {max_poll_attempts} attempts for {video_id}"
+                        )
+                        return None
 
                     # Check for cancellation after transcript list fetch
                     if cancellation_token and cancellation_token.is_cancelled():
@@ -513,9 +646,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                         data, url, self.preferred_language
                     )
                     if not bd_transcript:
-                        logger.warning(
-                            f"Empty transcript data for video {video_id}"
-                        )
+                        logger.warning(f"Empty transcript data for video {video_id}")
                         return None
 
                     # Use real metadata if available, otherwise create fallback
@@ -873,7 +1004,10 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                             opts["proxy"] = proxy_url
                         opts["progress_hooks"] = [download_progress_hook]
                         with yt_dlp.YoutubeDL(opts) as ydl:
-                            report_progress(f"📥 Starting audio download from {original_transcript.video_id}...", 25)
+                            report_progress(
+                                f"📥 Starting audio download from {original_transcript.video_id}...",
+                                25,
+                            )
                             ydl.download([url])
                         return audio_file.exists()
 
@@ -922,23 +1056,43 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                         report_progress(f"🎙️ {message}", overall_percent)
 
                     # Get transcription model from settings or kwargs, default to base
-                    transcription_model = kwargs.get("transcription_model") or getattr(settings.transcription, "whisper_model", "base")
-                    
+                    transcription_model = kwargs.get("transcription_model") or getattr(
+                        settings.transcription, "whisper_model", "base"
+                    )
+
                     processor = AudioProcessor(
                         model=transcription_model,  # Use configurable model from settings
                         enable_diarization=True,
                         require_diarization=True,  # Strict mode: require diarization success
                         hf_token=hf_token,
                         progress_callback=diarization_progress_callback,
+                        speaker_assignment_callback=kwargs.get(
+                            "speaker_assignment_callback"
+                        ),
                     )
 
                     # Process the audio file
                     report_progress("🎯 Processing audio with diarization...", 50)
-                    result = processor.process(
-                        audio_file,
-                        output_dir=None,  # Don't save to file, just get data
-                        timestamps=True,
-                    )
+
+                    # Pass through kwargs to enable speaker assignment dialog if needed
+                    process_kwargs = {
+                        "output_dir": None,  # Don't save to file, just get data
+                        "timestamps": True,
+                        "gui_mode": kwargs.get("gui_mode", False),
+                        "show_speaker_dialog": kwargs.get("show_speaker_dialog", True),
+                        # Pass through optional speaker assignment callback if provided by GUI worker
+                        "speaker_assignment_callback": kwargs.get(
+                            "speaker_assignment_callback"
+                        ),
+                        "metadata": {
+                            "video_id": original_transcript.video_id,
+                            "title": original_transcript.title,
+                            "url": original_transcript.url,
+                            "uploader": original_transcript.uploader,
+                        },
+                    }
+
+                    result = processor.process(audio_file, **process_kwargs)
 
                     if not result.success:
                         logger.error(f"AudioProcessor failed: {result.errors}")
@@ -1298,9 +1452,8 @@ Diarization processing failed for this video. The transcript was not saved to al
                                 # Skip adding to transcripts - no regular transcript should be saved
                                 continue
 
-                        transcripts.append(transcript)
-
                         # IMMEDIATE FILE WRITING: Write file right after extraction instead of batching
+                        # Only add transcript to list after successful file writing to avoid false success
                         if output_dir and not dry_run:
                             try:
                                 logger.info(
@@ -1334,7 +1487,9 @@ Diarization processing failed for this video. The transcript was not saved to al
                                     safe_title
                                     and len(safe_title) > 0
                                     and not safe_title.startswith("YouTube-Video")
-                                    and not transcript.title.startswith("YouTube Video ")
+                                    and not transcript.title.startswith(
+                                        "YouTube Video "
+                                    )
                                 ):
                                     filename = f"{safe_title}.{output_format}"
                                     logger.debug(
@@ -1351,7 +1506,9 @@ Diarization processing failed for this video. The transcript was not saved to al
                                     )
 
                                 # Always use video_id for thumbnail naming to match how thumbnails are actually saved
-                                thumbnail_filename = f"{transcript.video_id}_thumbnail.jpg"
+                                thumbnail_filename = (
+                                    f"{transcript.video_id}_thumbnail.jpg"
+                                )
 
                                 # Validate filename isn't empty or invalid
                                 if (
@@ -1377,6 +1534,8 @@ Diarization processing failed for this video. The transcript was not saved to al
                                         f"⏭️ Skipping existing transcript: {filepath} (overwrite disabled)"
                                     )
                                     skipped_files.append(str(filepath))
+                                    # Add transcript to list for skipped files (still considered success)
+                                    transcripts.append(transcript)
                                     continue
 
                                 logger.info(f"Creating transcript file: {filepath}")
@@ -1391,9 +1550,13 @@ Diarization processing failed for this video. The transcript was not saved to al
                                 )
 
                                 # Write transcript in requested format
-                                vault_path_obj = Path(vault_path) if vault_path else None
+                                vault_path_obj = (
+                                    Path(vault_path) if vault_path else None
+                                )
                                 interjections_file_obj = (
-                                    Path(interjections_file) if interjections_file else None
+                                    Path(interjections_file)
+                                    if interjections_file
+                                    else None
                                 )
 
                                 try:
@@ -1456,6 +1619,9 @@ Diarization processing failed for this video. The transcript was not saved to al
                                         )
                                         saved_files.append(str(filepath))
 
+                                        # Add transcript to list only after successful file save
+                                        transcripts.append(transcript)
+
                                         # Update index with successfully saved video
                                         if (
                                             not overwrite_existing
@@ -1479,10 +1645,14 @@ Diarization processing failed for this video. The transcript was not saved to al
                                     logger.error(
                                         f"❌ Permission denied writing to {filepath}: {e}"
                                     )
-                                    errors.append(f"Permission denied: {filepath} - {e}")
+                                    errors.append(
+                                        f"Permission denied: {filepath} - {e}"
+                                    )
                                     continue
                                 except OSError as e:
-                                    logger.error(f"❌ OS error writing to {filepath}: {e}")
+                                    logger.error(
+                                        f"❌ OS error writing to {filepath}: {e}"
+                                    )
                                     errors.append(f"OS error writing {filepath}: {e}")
                                     continue
                                 except Exception as write_error:
@@ -1511,13 +1681,17 @@ Diarization processing failed for this video. The transcript was not saved to al
                                         logger.info(
                                             f"Downloading thumbnail for {transcript.video_id}"
                                         )
-                                        from ..utils.youtube_utils import download_thumbnail
+                                        from ..utils.youtube_utils import (
+                                            download_thumbnail,
+                                        )
 
                                         # Pass thumbnails_dir directly since download_thumbnail now saves to exact directory provided
+                                        # Use Rich Meta thumbnail URL if available
                                         thumbnail_result = download_thumbnail(
                                             transcript.url,
                                             thumbnails_dir,
                                             use_cookies=False,
+                                            thumbnail_url=transcript.thumbnail_url,
                                         )
                                         if thumbnail_result:
                                             downloaded_path = Path(thumbnail_result)
@@ -1543,6 +1717,9 @@ Diarization processing failed for this video. The transcript was not saved to al
                                 errors.append(
                                     f"File save failed for {transcript.video_id}: {file_error}"
                                 )
+                        else:
+                            # No file saving (dry run) - add transcript to list for in-memory access
+                            transcripts.append(transcript)
                     else:
                         # If diarization is enabled or forced, try diarization-only path instead of failing
                         if enable_diarization or self.force_diarization:
@@ -1550,7 +1727,9 @@ Diarization processing failed for this video. The transcript was not saved to al
                                 f"No transcript via API for {url}, attempting diarization-only processing"
                             )
                             # Build a minimal transcript placeholder if needed
-                            video_id_fallback = self._extract_video_id(url) or "unknown_video"
+                            video_id_fallback = (
+                                self._extract_video_id(url) or "unknown_video"
+                            )
                             placeholder = YouTubeTranscript(
                                 video_id=video_id_fallback,
                                 title=f"YouTube Video {video_id_fallback}",
@@ -1570,7 +1749,106 @@ Diarization processing failed for this video. The transcript was not saved to al
                             )
                             if diarized_transcript:
                                 transcript = diarized_transcript
-                                transcripts.append(transcript)
+                                # Note: diarized transcripts need to go through file saving logic too
+                                logger.info(
+                                    f"🎙️ Diarized transcript created for {transcript.video_id}, now saving to file..."
+                                )
+
+                                # Process diarized transcript through the same file saving logic
+                                if output_dir and not dry_run:
+                                    # Use the same file saving logic as regular transcripts
+                                    try:
+                                        # Create sanitized filename
+                                        safe_title = re.sub(
+                                            r"[<>:\"/\\|?*]", "", transcript.title
+                                        ).strip()
+                                        safe_title = safe_title.replace("-", " ")
+                                        safe_title = re.sub(r"\s+", " ", safe_title)
+
+                                        if (
+                                            safe_title
+                                            and len(safe_title) > 0
+                                            and not safe_title.startswith(
+                                                "YouTube-Video"
+                                            )
+                                        ):
+                                            filename = f"{safe_title}.{output_format}"
+                                        else:
+                                            video_id = (
+                                                transcript.video_id or "unknown_video"
+                                            )
+                                            video_id = re.sub(r"[^\w-]", "", video_id)
+                                            filename = (
+                                                f"{video_id}_transcript.{output_format}"
+                                            )
+
+                                        filepath = output_dir / filename
+
+                                        # Check if file already exists
+                                        if filepath.exists() and not overwrite_existing:
+                                            logger.info(
+                                                f"⏭️ Skipping existing diarized transcript: {filepath}"
+                                            )
+                                            skipped_files.append(str(filepath))
+                                            transcripts.append(transcript)
+                                        else:
+                                            # Generate content and save file
+                                            vault_path_obj = (
+                                                Path(vault_path) if vault_path else None
+                                            )
+                                            interjections_file_obj = (
+                                                Path(interjections_file)
+                                                if interjections_file
+                                                else None
+                                            )
+
+                                            if output_format == "md":
+                                                content = transcript.to_markdown(
+                                                    include_timestamps=include_timestamps,
+                                                    include_analysis=include_analysis,
+                                                    vault_path=vault_path_obj,
+                                                    output_dir=output_dir,
+                                                    strip_interjections=strip_interjections,
+                                                    interjections_file=interjections_file_obj,
+                                                )
+                                            elif output_format == "srt":
+                                                content = transcript.to_srt(
+                                                    strip_interjections=strip_interjections,
+                                                    interjections_file=interjections_file_obj,
+                                                )
+                                            else:
+                                                content = transcript.transcript_text
+
+                                            # Write file
+                                            with open(
+                                                filepath, "w", encoding="utf-8"
+                                            ) as f:
+                                                f.write(content)
+
+                                            if filepath.exists():
+                                                saved_files.append(str(filepath))
+                                                transcripts.append(transcript)
+                                                logger.info(
+                                                    f"✅ Saved diarized transcript: {filepath}"
+                                                )
+                                            else:
+                                                logger.error(
+                                                    f"❌ Diarized transcript file not created: {filepath}"
+                                                )
+                                                errors.append(
+                                                    f"Failed to create diarized transcript file: {filepath}"
+                                                )
+
+                                    except Exception as diarization_save_error:
+                                        logger.error(
+                                            f"❌ Failed to save diarized transcript: {diarization_save_error}"
+                                        )
+                                        errors.append(
+                                            f"Diarized transcript save failed: {diarization_save_error}"
+                                        )
+                                else:
+                                    # No file saving (dry run or no output_dir)
+                                    transcripts.append(transcript)
                             else:
                                 logger.warning(
                                     f"Diarization-only processing failed for {url} after transcript miss"
@@ -1688,7 +1966,9 @@ Diarization processing failed for this video. The transcript was not saved to al
             if index_file and index_file.exists():
                 try:
                     index_file.unlink()
-                    logger.debug(f"🗑️  Cleaned up session index file: {index_file.name}")
+                    logger.debug(
+                        f"🗑️  Cleaned up session index file: {index_file.name}"
+                    )
                 except Exception as e:
                     logger.debug(f"Could not delete index file: {e}")
 

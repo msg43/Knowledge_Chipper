@@ -54,7 +54,11 @@ class UpdateWorker(QThread):
             # Last resort: try to find the repository by looking for typical Git project structure
             # This helps when running from an app bundle
             current_path = Path.cwd()
-            for potential_repo in [current_path, current_path.parent, current_path.parent.parent]:
+            for potential_repo in [
+                current_path,
+                current_path.parent,
+                current_path.parent.parent,
+            ]:
                 script_path = potential_repo / "scripts" / "build_macos_app.sh"
                 if script_path.exists() and (potential_repo / ".git").exists():
                     logger.info(f"Found update script at: {script_path}")
@@ -85,7 +89,7 @@ class UpdateWorker(QThread):
                 # Change to the script directory before running
                 script_dir = self.script_path.parent
                 logger.info(f"Working directory: {script_dir}")
-                
+
                 # Create a modified script that avoids sudo requirements
                 try:
                     sudo_free_script = self._create_sudo_free_script()
@@ -95,19 +99,29 @@ class UpdateWorker(QThread):
                     logger.error(f"Failed to create sudo-free script: {e}")
                     self.update_error.emit(f"Failed to prepare update script: {e}")
                     return
-                
+
                 # Use bash explicitly for consistent behavior
                 self.update_progress.emit("🚀 Starting update process...")
-                
+
                 # Determine correct working directory - use the repository root, not script directory
-                repo_root = self.script_path.parent.parent if self.script_path.name == "build_macos_app.sh" and self.script_path.parent.name == "scripts" else self.script_path.parent
+                repo_root = (
+                    self.script_path.parent.parent
+                    if self.script_path.name == "build_macos_app.sh"
+                    and self.script_path.parent.name == "scripts"
+                    else self.script_path.parent
+                )
                 logger.info(f"Using repository root: {repo_root}")
-                
+
                 try:
                     env = os.environ.copy()
                     env["IN_APP_UPDATER"] = "1"
                     process = subprocess.Popen(
-                        ["/bin/bash", str(sudo_free_script), "--skip-install", "--incremental"],
+                        [
+                            "/bin/bash",
+                            str(sudo_free_script),
+                            "--skip-install",
+                            "--incremental",
+                        ],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.STDOUT,  # Combine stdout and stderr
                         text=True,
@@ -125,13 +139,14 @@ class UpdateWorker(QThread):
                 # Read output in real-time with timeout
                 line_count = 0
                 import time
+
                 start_time = time.time()
                 max_update_time = 600  # 10 minutes timeout
-                
+
                 try:
                     # Suppress noisy repeated permission messages and persist full log
                     permission_denied_repeats = 0
-                    
+
                     while True:
                         # Check for timeout
                         if time.time() - start_time > max_update_time:
@@ -139,7 +154,7 @@ class UpdateWorker(QThread):
                             process.terminate()
                             self.update_error.emit("Update timed out after 10 minutes")
                             return
-                        
+
                         output = process.stdout.readline() if process.stdout else ""
                         if output == "" and process.poll() is not None:
                             break
@@ -165,20 +180,30 @@ class UpdateWorker(QThread):
                                         permission_denied_repeats = 0
 
                                     # Parse structured progress markers first
-                                    percent = self._parse_percent_marker(stripped_output)
+                                    percent = self._parse_percent_marker(
+                                        stripped_output
+                                    )
                                     if percent is not None:
                                         # Extract message after marker for nicer UX
-                                        message = self._strip_marker_message(stripped_output)
-                                        self.update_progress_percent.emit(percent, message)
+                                        message = self._strip_marker_message(
+                                            stripped_output
+                                        )
+                                        self.update_progress_percent.emit(
+                                            percent, message
+                                        )
                                     else:
                                         # Fallback: emit plain text for log
                                         self.update_progress.emit(stripped_output)
-                                logger.debug(f"Update output [{line_count}]: {stripped_output}")
-                        
+                                logger.debug(
+                                    f"Update output [{line_count}]: {stripped_output}"
+                                )
+
                         # Small delay to prevent excessive CPU usage
                         time.sleep(0.01)
-                    
-                    logger.info(f"Update process finished with return code: {process.returncode}")
+
+                    logger.info(
+                        f"Update process finished with return code: {process.returncode}"
+                    )
                 except Exception as e:
                     logger.error(f"Error reading update output: {e}")
                     process.terminate()
@@ -186,31 +211,48 @@ class UpdateWorker(QThread):
                     return
 
                 # Flush any remaining permission summary
-                if 'permission_denied_repeats' in locals() and permission_denied_repeats:
+                if (
+                    "permission_denied_repeats" in locals()
+                    and permission_denied_repeats
+                ):
                     self.update_progress.emit(
                         f"Permission denied (x{permission_denied_repeats})"
                     )
 
                 # Get the final status
                 if process.returncode == 0:
-                    logger.info("Update build completed successfully; installing to ~/Applications")
+                    logger.info(
+                        "Update build completed successfully; installing to ~/Applications"
+                    )
                     # After skip-install, copy staged app to ~/Applications
                     try:
-                        from shutil import rmtree, copytree
+                        from shutil import copytree, rmtree
+
                         user_apps = Path.home() / "Applications"
                         user_apps.mkdir(parents=True, exist_ok=True)
-                        staged_app = self.script_path.parent / ".app_build" / "Knowledge_Chipper.app"
+                        staged_app = (
+                            self.script_path.parent
+                            / ".app_build"
+                            / "Knowledge_Chipper.app"
+                        )
                         dest_app = user_apps / "Knowledge_Chipper.app"
                         if dest_app.exists():
                             try:
                                 rmtree(dest_app)
                             except Exception as e:
-                                logger.warning(f"Failed to remove existing app at {dest_app}: {e}")
+                                logger.warning(
+                                    f"Failed to remove existing app at {dest_app}: {e}"
+                                )
                         copytree(staged_app, dest_app)
-                        self.update_finished.emit(True, "✅ Update installed to ~/Applications")
+                        self.update_finished.emit(
+                            True, "✅ Update installed to ~/Applications"
+                        )
                     except Exception as e:
                         logger.error(f"Failed to copy app to ~/Applications: {e}")
-                        self.update_finished.emit(True, "✅ Update built; copy from scripts/.app_build to ~/Applications manually")
+                        self.update_finished.emit(
+                            True,
+                            "✅ Update built; copy from scripts/.app_build to ~/Applications manually",
+                        )
                 else:
                     # Read the entire output for error analysis
                     temp_file.seek(0)
@@ -230,7 +272,10 @@ class UpdateWorker(QThread):
                         error = "Permission error. Please check file permissions."
                     elif "No such file or directory" in full_output:
                         error = "Missing dependency. Please check your development environment."
-                    elif "sudo" in full_output.lower() and "password" in full_output.lower():
+                    elif (
+                        "sudo" in full_output.lower()
+                        and "password" in full_output.lower()
+                    ):
                         error = "Update requires admin privileges. Please run from Terminal: bash scripts/build_macos_app.sh"
                     else:
                         error = f"Update failed with exit code {process.returncode}. Check logs for details."
@@ -249,6 +294,7 @@ class UpdateWorker(QThread):
             # Persist update output to logs directory for debugging
             try:
                 from datetime import datetime
+
                 logs_dir = Path(repo_root) / "logs"
                 logs_dir.mkdir(parents=True, exist_ok=True)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -265,38 +311,41 @@ class UpdateWorker(QThread):
     def _create_sudo_free_script(self) -> Path:
         """Create a modified version of the build script that doesn't require sudo."""
         temp_script = Path(tempfile.mktemp(suffix=".sh"))
-        
+
         try:
             # Read the original script
-            with open(self.script_path, 'r') as f:
+            with open(self.script_path) as f:
                 original_content = f.read()
-            
+
             logger.debug(f"Original script size: {len(original_content)} bytes")
-            
+
             # Fix the script directory and project root paths to use the original script location
             # instead of the temporary script location
             original_script_dir = str(self.script_path.parent)
             original_project_root = str(self.script_path.parent.parent)
-            
+
             # Replace the dynamic path detection with fixed paths
             path_fixed_content = original_content.replace(
                 'SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"',
-                f'SCRIPT_DIR="{original_script_dir}"'
+                f'SCRIPT_DIR="{original_script_dir}"',
             ).replace(
                 'PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"',
-                f'PROJECT_ROOT="{original_project_root}"'
+                f'PROJECT_ROOT="{original_project_root}"',
             )
-            
+
             # Create a modified version that builds in user space and uses cp instead of sudo mv
-            modified_content = path_fixed_content.replace(
-                'APP_PATH="/Applications/$APP_NAME"',
-                'APP_PATH="$HOME/Applications/$APP_NAME"\nmkdir -p "$HOME/Applications"'
-            ).replace(
-                'sudo rm -rf "$APP_PATH"',
-                '# Skip removing /Applications without privileges; fallback will install in user space\nif [ -w "/Applications" ]; then\n    rm -rf "$APP_PATH" || true\nfi'
-            ).replace(
-                'sudo mv "$BUILD_APP_PATH" "$APP_PATH"',
-                '''# Non-sudo install with robust fallback to ~/Applications
+            modified_content = (
+                path_fixed_content.replace(
+                    'APP_PATH="/Applications/$APP_NAME"',
+                    'APP_PATH="$HOME/Applications/$APP_NAME"\nmkdir -p "$HOME/Applications"',
+                )
+                .replace(
+                    'sudo rm -rf "$APP_PATH"',
+                    '# Skip removing /Applications without privileges; fallback will install in user space\nif [ -w "/Applications" ]; then\n    rm -rf "$APP_PATH" || true\nfi',
+                )
+                .replace(
+                    'sudo mv "$BUILD_APP_PATH" "$APP_PATH"',
+                    """# Non-sudo install with robust fallback to ~/Applications
 # First try to install into /Applications; if it fails, fall back to user Applications
 if cp -R "$BUILD_APP_PATH" "$APP_PATH" 2>/dev/null; then
     : # success
@@ -310,75 +359,91 @@ else
     RESOURCES_PATH="$CONTENTS_PATH/Resources"
     FRAMEWORKS_PATH="$CONTENTS_PATH/Frameworks"
     cp -R "$BUILD_APP_PATH" "$APP_PATH"
-fi'''
-            ).replace(
-                'sudo chown -R root:wheel "$APP_PATH"',
-                '# Skip chown - not needed for user installation'
-            ).replace(
-                'sudo chmod -R 755 "$APP_PATH"',
-                'chmod -R 755 "$APP_PATH" || true'
-            ).replace(
-                'sudo mkdir -p "$MACOS_PATH/logs"',
-                'if [ -w "$MACOS_PATH" ]; then mkdir -p "$MACOS_PATH/logs"; fi'
-            ).replace(
-                'sudo chmod 777 "$MACOS_PATH/logs"',
-                'if [ -w "$MACOS_PATH/logs" ]; then chmod 777 "$MACOS_PATH/logs"; fi'
-            ).replace(
-                'sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/build_macos_app.sh"',
-                ': # skip chown of build_macos_app.sh in user install'
-            ).replace(
-                'sudo chmod 755 "$MACOS_PATH/build_macos_app.sh"',
-                'if [ -w "$MACOS_PATH/build_macos_app.sh" ]; then chmod 755 "$MACOS_PATH/build_macos_app.sh"; fi'
-            ).replace(
-                'sudo mv "/tmp/version.txt" "$MACOS_PATH/version.txt"',
-                'mv "/tmp/version.txt" "$MACOS_PATH/version.txt" || true'
-            ).replace(
-                'sudo rm -rf "$MACOS_PATH/venv"',
-                'rm -rf "$MACOS_PATH/venv" || true'
-            ).replace(
-                'sudo "$PYTHON_BIN_INSTALL" -m venv "$MACOS_PATH/venv"',
-                '"$PYTHON_BIN_INSTALL" -m venv "$MACOS_PATH/venv"'
-            ).replace(
-                'sudo "$MACOS_PATH/venv/bin/python" -m pip install --upgrade pip',
-                '"$MACOS_PATH/venv/bin/python" -m pip install --upgrade pip'
-            ).replace(
-                'sudo "$MACOS_PATH/venv/bin/python" -m pip install -r "$MACOS_PATH/requirements.txt"',
-                '"$MACOS_PATH/venv/bin/python" -m pip install -r "$MACOS_PATH/requirements.txt"'
-            ).replace(
-                'sudo "$MACOS_PATH/venv/bin/python" -m pip install -r "$MACOS_PATH/requirements.txt" &',
-                '"$MACOS_PATH/venv/bin/python" -m pip install -r "$MACOS_PATH/requirements.txt" &'
+fi""",
+                )
+                .replace(
+                    'sudo chown -R root:wheel "$APP_PATH"',
+                    "# Skip chown - not needed for user installation",
+                )
+                .replace(
+                    'sudo chmod -R 755 "$APP_PATH"', 'chmod -R 755 "$APP_PATH" || true'
+                )
+                .replace(
+                    'sudo mkdir -p "$MACOS_PATH/logs"',
+                    'if [ -w "$MACOS_PATH" ]; then mkdir -p "$MACOS_PATH/logs"; fi',
+                )
+                .replace(
+                    'sudo chmod 777 "$MACOS_PATH/logs"',
+                    'if [ -w "$MACOS_PATH/logs" ]; then chmod 777 "$MACOS_PATH/logs"; fi',
+                )
+                .replace(
+                    'sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/build_macos_app.sh"',
+                    ": # skip chown of build_macos_app.sh in user install",
+                )
+                .replace(
+                    'sudo chmod 755 "$MACOS_PATH/build_macos_app.sh"',
+                    'if [ -w "$MACOS_PATH/build_macos_app.sh" ]; then chmod 755 "$MACOS_PATH/build_macos_app.sh"; fi',
+                )
+                .replace(
+                    'sudo mv "/tmp/version.txt" "$MACOS_PATH/version.txt"',
+                    'mv "/tmp/version.txt" "$MACOS_PATH/version.txt" || true',
+                )
+                .replace(
+                    'sudo rm -rf "$MACOS_PATH/venv"',
+                    'rm -rf "$MACOS_PATH/venv" || true',
+                )
+                .replace(
+                    'sudo "$PYTHON_BIN_INSTALL" -m venv "$MACOS_PATH/venv"',
+                    '"$PYTHON_BIN_INSTALL" -m venv "$MACOS_PATH/venv"',
+                )
+                .replace(
+                    'sudo "$MACOS_PATH/venv/bin/python" -m pip install --upgrade pip',
+                    '"$MACOS_PATH/venv/bin/python" -m pip install --upgrade pip',
+                )
+                .replace(
+                    'sudo "$MACOS_PATH/venv/bin/python" -m pip install -r "$MACOS_PATH/requirements.txt"',
+                    '"$MACOS_PATH/venv/bin/python" -m pip install -r "$MACOS_PATH/requirements.txt"',
+                )
+                .replace(
+                    'sudo "$MACOS_PATH/venv/bin/python" -m pip install -r "$MACOS_PATH/requirements.txt" &',
+                    '"$MACOS_PATH/venv/bin/python" -m pip install -r "$MACOS_PATH/requirements.txt" &',
+                )
             )
-            
+
             logger.debug(f"Modified script size: {len(modified_content)} bytes")
-            
+
             # Write the modified script
-            with open(temp_script, 'w') as f:
+            with open(temp_script, "w") as f:
                 f.write(modified_content)
-            
+
             # Make it executable
             os.chmod(temp_script, 0o755)
-            
+
             # Verify the script was written correctly
             if not temp_script.exists():
-                raise FileNotFoundError(f"Failed to create temporary script at {temp_script}")
-            
+                raise FileNotFoundError(
+                    f"Failed to create temporary script at {temp_script}"
+                )
+
             script_size = temp_script.stat().st_size
             if script_size == 0:
                 raise ValueError("Created script is empty")
-            
-            logger.debug(f"Created sudo-free script: {temp_script} ({script_size} bytes)")
+
+            logger.debug(
+                f"Created sudo-free script: {temp_script} ({script_size} bytes)"
+            )
             return temp_script
-            
+
         except Exception as e:
             logger.error(f"Error creating sudo-free script: {e}")
             # Fallback: just copy the original script
             logger.info("Falling back to original script")
-            with open(self.script_path, 'r') as f:
+            with open(self.script_path) as f:
                 original_content = f.read()
-            
-            with open(temp_script, 'w') as f:
+
+            with open(temp_script, "w") as f:
                 f.write(original_content)
-            
+
             os.chmod(temp_script, 0o755)
             return temp_script
 
@@ -398,6 +463,7 @@ fi'''
             if line.startswith("##PROGRESS##"):
                 # Format: ##PROGRESS## X/Y: message
                 import re as _re
+
                 m = _re.search(r"##PROGRESS##\s+(\d+)\s*/\s*(\d+)", line)
                 if m:
                     current = int(m.group(1))

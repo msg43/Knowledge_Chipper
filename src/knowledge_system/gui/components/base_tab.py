@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import pyqtSignal, QThread
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QGridLayout,
@@ -57,14 +57,18 @@ class BaseTab(QWidget):
         # Start button
         self.start_btn = QPushButton(self._get_start_button_text())
         self.start_btn.clicked.connect(self._start_processing)
-        self.start_btn.setStyleSheet("background-color: #4caf50; font-weight: bold;")
+        self.start_btn.setFixedHeight(25)  # Reduced button height
+        self.start_btn.setStyleSheet(
+            "background-color: #4caf50; font-weight: bold; font-size: 12px; padding: 4px;"
+        )
         layout.addWidget(self.start_btn)
 
         # Stop button
         self.stop_btn = QPushButton("Stop Processing")
         self.stop_btn.clicked.connect(self._stop_processing)
+        self.stop_btn.setFixedHeight(25)  # Reduced button height
         self.stop_btn.setStyleSheet(
-            "background-color: #d32f2f; color: white; font-weight: bold;"
+            "background-color: #d32f2f; color: white; font-weight: bold; font-size: 12px; padding: 4px;"
         )
         self.stop_btn.setEnabled(False)  # Initially disabled
         layout.addWidget(self.stop_btn)
@@ -74,34 +78,33 @@ class BaseTab(QWidget):
         layout.addWidget(self.dry_run_checkbox)
 
         layout.addStretch()
+
+        # Report button (moved from output section)
+        self.report_btn = QPushButton("View Last Report")
+        self.report_btn.clicked.connect(self._view_last_report)
+        self.report_btn.setEnabled(True)
+        self.report_btn.setFixedHeight(25)  # Match action button height
+        self.report_btn.setStyleSheet(
+            "background-color: #1976d2; font-size: 12px; padding: 4px;"
+        )
+        layout.addWidget(self.report_btn)
+
         return layout
 
     def _create_output_section(self) -> QVBoxLayout:
         """Create a standard output section with log display."""
         layout = QVBoxLayout()
 
-        # Header with report button
-        header_layout = QHBoxLayout()
+        # Header with just output label
         output_label = QLabel("Output:")
-        header_layout.addWidget(output_label)
-        header_layout.addStretch()
-
-        self.report_btn = QPushButton("View Last Report")
-        self.report_btn.clicked.connect(self._view_last_report)
-        self.report_btn.setEnabled(
-            True
-        )  # Always enabled since we can find reports automatically
-        self.report_btn.setStyleSheet("background-color: #1976d2;")
-        header_layout.addWidget(self.report_btn)
-
-        layout.addLayout(header_layout)
+        layout.addWidget(output_label)
 
         # Output text area with responsive resizing behavior
         self.output_text = QTextEdit()
         self.output_text.setReadOnly(True)
         self.output_text.setMinimumHeight(
-            150
-        )  # Increased minimum height to prevent excessive compression
+            100
+        )  # Reduced minimum height to compensate for taller buttons
         # Remove maximum height constraint to allow expansion
         # Use Expanding vertical policy to grow/shrink with window
         self.output_text.setSizePolicy(
@@ -180,19 +183,21 @@ class BaseTab(QWidget):
         """Append a message to the output log with immediate GUI update."""
         if hasattr(self, "output_text"):
             self.output_text.append(message)
-            
+
             if force_update:
-                # Force immediate GUI update and scroll to bottom
-                self.output_text.repaint()
+                # Force scroll to bottom and ensure cursor is visible
+                self.output_text.verticalScrollBar().setValue(
+                    self.output_text.verticalScrollBar().maximum()
+                )
+                # Ensure cursor is at the end to maintain scroll position
+                cursor = self.output_text.textCursor()
+                cursor.movePosition(cursor.MoveOperation.End)
+                self.output_text.setTextCursor(cursor)
                 self.output_text.ensureCursorVisible()
-                # Process events multiple times to ensure immediate visual update
+
+                # Process events for immediate visual update
                 from PyQt6.QtWidgets import QApplication
 
-                # Process events immediately to update GUI
-                QApplication.processEvents()
-                # Force another repaint cycle
-                self.output_text.update()
-                # Process events again for any pending redraws
                 QApplication.processEvents()
 
         self.log_message.emit(message)
@@ -200,6 +205,7 @@ class BaseTab(QWidget):
         if force_update:
             # Process events one more time after signal emission
             from PyQt6.QtWidgets import QApplication
+
             QApplication.processEvents()
 
     def update_last_log_line(self, message: str) -> None:
@@ -207,18 +213,26 @@ class BaseTab(QWidget):
         if hasattr(self, "output_text"):
             # Get current content and remove the last line
             current_content = self.output_text.toPlainText()
-            lines = current_content.split('\n')
+            lines = current_content.split("\n")
             if lines:
                 lines[-1] = message  # Replace last line
-                self.output_text.setPlainText('\n'.join(lines))
+                self.output_text.setPlainText("\n".join(lines))
             else:
                 self.output_text.setPlainText(message)
-            
-            # Force immediate GUI update and scroll to bottom
-            self.output_text.repaint()
+
+            # Force scroll to bottom and ensure cursor is visible
+            self.output_text.verticalScrollBar().setValue(
+                self.output_text.verticalScrollBar().maximum()
+            )
+            # Ensure cursor is at the end to maintain scroll position
+            cursor = self.output_text.textCursor()
+            cursor.movePosition(cursor.MoveOperation.End)
+            self.output_text.setTextCursor(cursor)
             self.output_text.ensureCursorVisible()
+
             # Process events for immediate visual update
             from PyQt6.QtWidgets import QApplication
+
             QApplication.processEvents()
 
     def clear_log(self) -> None:
@@ -348,48 +362,103 @@ class BaseTab(QWidget):
 
     def show_error(self, title: str, message: str) -> None:
         """Show an error message box with custom icon."""
-        msg_box = QMessageBox(self)
-        msg_box.setIcon(QMessageBox.Icon.Critical)
-        msg_box.setWindowTitle(title)
-        msg_box.setText(message)
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        try:
+            from PyQt6.QtCore import QThread, QTimer
+            from PyQt6.QtWidgets import QApplication
 
-        # Set custom window icon
-        custom_icon = get_app_icon()
-        if custom_icon:
-            msg_box.setWindowIcon(custom_icon)
+            def _do_show():
+                msg_box = QMessageBox(self)
+                msg_box.setIcon(QMessageBox.Icon.Critical)
+                msg_box.setWindowTitle(title)
+                msg_box.setText(message)
+                msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+                custom_icon = get_app_icon()
+                if custom_icon:
+                    msg_box.setWindowIcon(custom_icon)
+                msg_box.exec()
 
-        msg_box.exec()
+            app = QApplication.instance()
+            if app and QThread.currentThread() != app.thread():
+                QTimer.singleShot(0, _do_show)
+                return
+            _do_show()
+        except Exception:
+            # Safe fallback: attempt direct show
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Critical)
+            msg_box.setWindowTitle(title)
+            msg_box.setText(message)
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            custom_icon = get_app_icon()
+            if custom_icon:
+                msg_box.setWindowIcon(custom_icon)
+            msg_box.exec()
 
     def show_warning(self, title: str, message: str) -> None:
         """Show a warning message box with custom icon."""
-        msg_box = QMessageBox(self)
-        msg_box.setIcon(QMessageBox.Icon.Warning)
-        msg_box.setWindowTitle(title)
-        msg_box.setText(message)
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        try:
+            from PyQt6.QtCore import QThread, QTimer
+            from PyQt6.QtWidgets import QApplication
 
-        # Set custom window icon
-        custom_icon = get_app_icon()
-        if custom_icon:
-            msg_box.setWindowIcon(custom_icon)
+            def _do_show():
+                msg_box = QMessageBox(self)
+                msg_box.setIcon(QMessageBox.Icon.Warning)
+                msg_box.setWindowTitle(title)
+                msg_box.setText(message)
+                msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+                custom_icon = get_app_icon()
+                if custom_icon:
+                    msg_box.setWindowIcon(custom_icon)
+                msg_box.exec()
 
-        msg_box.exec()
+            app = QApplication.instance()
+            if app and QThread.currentThread() != app.thread():
+                QTimer.singleShot(0, _do_show)
+                return
+            _do_show()
+        except Exception:
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            msg_box.setWindowTitle(title)
+            msg_box.setText(message)
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            custom_icon = get_app_icon()
+            if custom_icon:
+                msg_box.setWindowIcon(custom_icon)
+            msg_box.exec()
 
     def show_info(self, title: str, message: str) -> None:
         """Show an info message box with custom icon."""
-        msg_box = QMessageBox(self)
-        msg_box.setIcon(QMessageBox.Icon.Information)
-        msg_box.setWindowTitle(title)
-        msg_box.setText(message)
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        try:
+            from PyQt6.QtCore import QThread, QTimer
+            from PyQt6.QtWidgets import QApplication
 
-        # Set custom window icon
-        custom_icon = get_app_icon()
-        if custom_icon:
-            msg_box.setWindowIcon(custom_icon)
+            def _do_show():
+                msg_box = QMessageBox(self)
+                msg_box.setIcon(QMessageBox.Icon.Information)
+                msg_box.setWindowTitle(title)
+                msg_box.setText(message)
+                msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+                custom_icon = get_app_icon()
+                if custom_icon:
+                    msg_box.setWindowIcon(custom_icon)
+                msg_box.exec()
 
-        msg_box.exec()
+            app = QApplication.instance()
+            if app and QThread.currentThread() != app.thread():
+                QTimer.singleShot(0, _do_show)
+                return
+            _do_show()
+        except Exception:
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Information)
+            msg_box.setWindowTitle(title)
+            msg_box.setText(message)
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            custom_icon = get_app_icon()
+            if custom_icon:
+                msg_box.setWindowIcon(custom_icon)
+            msg_box.exec()
 
     def cleanup_workers(self) -> None:
         """Clean up any active worker threads."""
@@ -478,6 +547,19 @@ class BaseTab(QWidget):
                             f"*{self.tab_type.lower()}*.txt",
                             f"*{self.tab_type.lower()}*.log",
                         ]
+
+                        # Special patterns for Cloud Transcription tab
+                        if "cloud transcription" in self.tab_type.lower():
+                            patterns.extend(
+                                [
+                                    "*cloud_transcription*.md",
+                                    "*cloud_transcription*.json",
+                                    "*cloud_transcription*.log",
+                                    "*youtube_extraction*.md",
+                                    "*youtube_extraction*.log",
+                                    "*youtube_extraction*.csv",
+                                ]
+                            )
 
                         for pattern in patterns:
                             for report_file in report_dir.glob(pattern):
@@ -626,9 +708,7 @@ class BaseTab(QWidget):
             if success:
                 self.append_log(f"📄 Opened {file_description}: {Path(file_path).name}")
             else:
-                self.append_log(
-                    f"❌ Failed to open {file_description}: {error_message}"
-                )
+                self.append_log(f"❌ Failed to open {file_description}: {error_message}")
                 if "not found" in error_message.lower():
                     self.show_error("File Not Found", error_message)
                 else:

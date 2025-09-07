@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from ...logger import get_logger
@@ -45,6 +46,14 @@ class APIKeysTab(BaseTab):
         self.update_btn: QPushButton | None = None
         self.admin_install_btn: QPushButton | None = None
 
+        # Test execution tracking
+        self.test_process: Any = None
+        self.test_monitor_timer: QTimer | None = None
+        self.current_test_name: str = ""
+
+        # Update progress tracking
+        self._current_update_is_auto: bool = False
+
         # Initialize settings manager for session persistence
         from ..core.settings_manager import get_gui_settings_manager
 
@@ -62,11 +71,10 @@ class APIKeysTab(BaseTab):
         instructions_layout = QVBoxLayout()
 
         instructions_text = QLabel(
-            """
-            🔑 API Key Configuration Guide:
+            """🔑 API Key Configuration Guide:
 
-• Bright Data API Key: Required for YouTube access. Uses pay-per-request model with residential proxies.
-  Sign up at: https://brightdata.com/
+• PacketStream Credentials: Alternative for YouTube access with residential proxies.
+  Sign up at: https://packetstream.io (Username + Auth Key required)
 
 • OpenAI API Key: Required for GPT-based summarization.
   Get your key at: https://platform.openai.com/api-keys
@@ -75,8 +83,7 @@ class APIKeysTab(BaseTab):
   Get your key at: https://console.anthropic.com/
 
 • HuggingFace Token: Required for speaker diarization (separating different speakers in audio).
-  Get your free token at: https://huggingface.co/settings/tokens
-            """
+  Get your free token at: https://huggingface.co/settings/tokens"""
         )
         instructions_text.setWordWrap(True)
         # Dark background with light text for better readability
@@ -151,24 +158,46 @@ class APIKeysTab(BaseTab):
             0,
         )
 
-        # Bright Data API Key
+        # Bright Data API Key (hidden in UI)
         self.bright_data_api_key_edit = QLineEdit()
         self.bright_data_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.bright_data_api_key_edit.setPlaceholderText(
             "bd_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
         )
+
+        # PacketStream Username
+        self.packetstream_username_edit = QLineEdit()
+        self.packetstream_username_edit.setPlaceholderText("your_username")
         self._add_field_with_info(
             layout,
-            "Bright Data API Key:",
-            self.bright_data_api_key_edit,
-            "Your Bright Data API key for YouTube processing.\n"
-            "• Sign up at: https://brightdata.com/\n"
-            "• Used for: YouTube metadata, transcripts, and audio downloads\n"
-            "• Why needed: Pay-per-request model with residential proxies\n"
-            "• Cost: More cost-effective than monthly proxy subscriptions\n"
-            "• Benefits: Direct JSON responses, automatic IP rotation, reliable access\n"
-            "• Format: Starts with 'bd_' followed by alphanumeric characters",
-            5,
+            "PacketStream Username:",
+            self.packetstream_username_edit,
+            "Your PacketStream username for residential proxy access.\n"
+            "• Sign up at: https://packetstream.io\n"
+            "• Used for: YouTube metadata extraction with residential proxies\n"
+            "• Why needed: Avoids bot detection and rate limiting at scale\n"
+            "• Cost: Pay-per-GB pricing model\n"
+            "• Benefits: Residential IPs, sticky sessions, automatic rotation\n"
+            "• Alternative to: Bright Data for reliable YouTube access",
+            6,
+            0,
+        )
+
+        # PacketStream Auth Key
+        self.packetstream_auth_key_edit = QLineEdit()
+        self.packetstream_auth_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.packetstream_auth_key_edit.setPlaceholderText("your_auth_key")
+        self._add_field_with_info(
+            layout,
+            "PacketStream Auth Key:",
+            self.packetstream_auth_key_edit,
+            "Your PacketStream authentication key for proxy access.\n"
+            "• Found in your PacketStream dashboard\n"
+            "• Used with: Username to authenticate proxy connections\n"
+            "• Security: Stored securely in local credentials file\n"
+            "• Format: Alphanumeric string provided by PacketStream\n"
+            "• Required for: All PacketStream proxy operations",
+            7,
             0,
         )
 
@@ -179,7 +208,26 @@ class APIKeysTab(BaseTab):
         # Load session settings after UI is set up
         self._load_settings()
 
-        # Save button (moved to top for better visibility)
+        # Add the layout to a group and then to main layout
+        api_group = QGroupBox("API Keys Configuration")
+        api_group.setLayout(layout)
+        main_layout.addWidget(api_group)
+
+        # Save button (moved below API Keys Configuration box) - aligned with API key input fields
+        save_layout = QGridLayout()
+        save_layout.setColumnStretch(0, 0)  # Label column doesn't stretch
+        save_layout.setColumnStretch(
+            1, 1
+        )  # Input column stretches to match API keys layout
+
+        # Add empty label to match API keys layout structure
+        save_layout.addWidget(QLabel(), 0, 0)
+
+        # Create horizontal layout matching the API key field structure
+        save_widget_layout = QHBoxLayout()
+        save_widget_layout.setContentsMargins(0, 0, 0, 0)
+        save_widget_layout.setSpacing(8)
+
         save_btn = QPushButton("💾 Save API Keys")
         save_btn.clicked.connect(self._save_settings)
         save_btn.setStyleSheet(
@@ -192,21 +240,37 @@ class APIKeysTab(BaseTab):
             "• You can save partial configurations (some keys can be empty)\n"
             "• Changes take effect immediately after saving"
         )
-        main_layout.addWidget(save_btn)
+        save_widget_layout.addWidget(save_btn)
 
-        # Add the layout to a group and then to main layout
-        api_group = QGroupBox("API Keys Configuration")
-        api_group.setLayout(layout)
-        main_layout.addWidget(api_group)
+        # Add spacing to match the info icon (16px) + spacing (8px) = 24px total
+        save_widget_layout.addSpacing(24)
+        save_widget_layout.addStretch()  # Push everything to the left, matching API key field layout
 
-        # Button layout
-        button_layout = QHBoxLayout()
+        # Create container widget matching API key field structure
+        save_container = QWidget()
+        save_container.setLayout(save_widget_layout)
+        save_layout.addWidget(save_container, 0, 1)
 
-        # Add spacer
-        button_layout.addStretch()
+        main_layout.addLayout(save_layout)
 
-        # Update section layout
+        # Button layout - using grid layout to match API keys alignment
+        button_layout = QGridLayout()
+        button_layout.setColumnStretch(0, 0)  # Label column doesn't stretch
+        button_layout.setColumnStretch(
+            1, 1
+        )  # Input column stretches to match API keys layout
+
+        # Add empty label to match API keys layout structure
+        button_layout.addWidget(QLabel(), 0, 0)
+
+        # Create horizontal layout matching the API key field structure
+        button_widget_layout = QHBoxLayout()
+        button_widget_layout.setContentsMargins(0, 0, 0, 0)
+        button_widget_layout.setSpacing(8)
+
+        # Update section layout - stack buttons vertically in a container
         update_section = QVBoxLayout()
+        update_section.setSpacing(8)
 
         # Update button
         self.update_btn = QPushButton("🔄 Check for Updates")
@@ -299,19 +363,41 @@ class APIKeysTab(BaseTab):
         )
         self.auto_update_checkbox.setChecked(auto_update_enabled)
         self.auto_update_checkbox.stateChanged.connect(self._on_auto_update_changed)
+
         update_section.addWidget(self.auto_update_checkbox)
 
-        button_layout.addLayout(update_section)
+        # Add the update section to the horizontal layout
+        button_widget_layout.addLayout(update_section)
 
+        # Add spacing to match the info icon (16px) + spacing (8px) = 24px total
+        button_widget_layout.addSpacing(24)
+        button_widget_layout.addStretch()  # Push everything to the left, matching API key field layout
+
+        # Create container widget matching API key field structure
+        button_container = QWidget()
+        button_container.setLayout(button_widget_layout)
+        button_layout.addWidget(button_container, 0, 1)
         main_layout.addLayout(button_layout)
 
         # Status label
         self.status_label = QLabel("")
         main_layout.addWidget(self.status_label)
 
-        # Admin Install link (lower right)
-        admin_row = QHBoxLayout()
-        admin_row.addStretch()
+        # Admin Install link (lower right) - aligned with API key input fields
+        admin_layout = QGridLayout()
+        admin_layout.setColumnStretch(0, 0)  # Label column doesn't stretch
+        admin_layout.setColumnStretch(
+            1, 1
+        )  # Input column stretches to match API keys layout
+
+        # Add empty label to match API keys layout structure
+        admin_layout.addWidget(QLabel(), 0, 0)
+
+        # Create horizontal layout matching the API key field structure
+        admin_widget_layout = QHBoxLayout()
+        admin_widget_layout.setContentsMargins(0, 0, 0, 0)
+        admin_widget_layout.setSpacing(8)
+
         self.admin_install_btn = QPushButton("Admin Install")
         self.admin_install_btn.setFlat(True)
         self.admin_install_btn.setStyleSheet(
@@ -322,8 +408,190 @@ class APIKeysTab(BaseTab):
             "Install to /Applications (requires admin). Your macOS password will be requested in Terminal."
         )
         self.admin_install_btn.clicked.connect(self._admin_install)
-        admin_row.addWidget(self.admin_install_btn)
-        main_layout.addLayout(admin_row)
+        admin_widget_layout.addWidget(self.admin_install_btn)
+
+        # Add spacing to match the info icon (16px) + spacing (8px) = 24px total
+        admin_widget_layout.addSpacing(24)
+        admin_widget_layout.addStretch()  # Push everything to the left, matching API key field layout
+
+        # Create container widget matching API key field structure
+        admin_container = QWidget()
+        admin_container.setLayout(admin_widget_layout)
+        admin_layout.addWidget(admin_container, 0, 1)
+        main_layout.addLayout(admin_layout)
+
+        # Settings Tests section - aligned with API key input fields
+        tests_layout = QGridLayout()
+        tests_layout.setColumnStretch(0, 0)  # Label column doesn't stretch
+        tests_layout.setColumnStretch(
+            1, 1
+        )  # Input column stretches to match API keys layout
+
+        # Add empty label to match API keys layout structure
+        tests_layout.addWidget(QLabel(), 0, 0)
+
+        # Create horizontal layout matching the API key field structure
+        tests_widget_layout = QHBoxLayout()
+        tests_widget_layout.setContentsMargins(0, 0, 0, 0)
+        tests_widget_layout.setSpacing(8)
+
+        # Create the tests group box
+        tests_group = QGroupBox("Settings Tests")
+        tests_group_layout = QVBoxLayout()
+
+        # Add description
+        tests_description = QLabel(
+            "Run comprehensive tests to validate your Knowledge Chipper configuration and functionality:"
+        )
+        tests_description.setWordWrap(True)
+        tests_description.setStyleSheet("color: #666; margin-bottom: 10px;")
+        tests_group_layout.addWidget(tests_description)
+
+        # Test buttons in horizontal layout
+        test_buttons_layout = QHBoxLayout()
+
+        # Quick Tests button
+        self.quick_test_btn = QPushButton("🚀 Quick Tests (5-10 min)")
+        self.quick_test_btn.clicked.connect(self._run_quick_tests)
+        self.quick_test_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                font-weight: bold;
+                padding: 8px 16px;
+                font-size: 12px;
+                border-radius: 4px;
+                min-width: 140px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #0D47A1;
+            }
+        """
+        )
+        self.quick_test_btn.setToolTip(
+            "Quick validation tests (5-10 minutes)\n"
+            "• Smoke tests with small files\n"
+            "• Basic functionality verification\n"
+            "• Core feature validation\n"
+            "• Ideal for quick system health check"
+        )
+        test_buttons_layout.addWidget(self.quick_test_btn)
+
+        # Regular Tests button
+        self.regular_test_btn = QPushButton("🔧 Regular Tests (1-2 hrs)")
+        self.regular_test_btn.clicked.connect(self._run_regular_tests)
+        self.regular_test_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                font-weight: bold;
+                padding: 8px 16px;
+                font-size: 12px;
+                border-radius: 4px;
+                min-width: 140px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #0D47A1;
+            }
+        """
+        )
+        self.regular_test_btn.setToolTip(
+            "Comprehensive tests (1-2 hours)\n"
+            "• Full permutation testing\n"
+            "• All input types and operations\n"
+            "• Complete feature coverage\n"
+            "• Recommended for thorough validation"
+        )
+        test_buttons_layout.addWidget(self.regular_test_btn)
+
+        # Extended Tests button
+        self.extended_test_btn = QPushButton("⚡ Extended Tests (2+ hrs)")
+        self.extended_test_btn.clicked.connect(self._run_extended_tests)
+        self.extended_test_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                font-weight: bold;
+                padding: 8px 16px;
+                font-size: 12px;
+                border-radius: 4px;
+                min-width: 140px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #0D47A1;
+            }
+        """
+        )
+        self.extended_test_btn.setToolTip(
+            "Stress tests (2+ hours)\n"
+            "• Large file processing\n"
+            "• High-volume testing\n"
+            "• Performance validation\n"
+            "• Edge case scenarios"
+        )
+        test_buttons_layout.addWidget(self.extended_test_btn)
+
+        # Cancel Test button (initially hidden)
+        self.cancel_test_btn = QPushButton("❌ Cancel Test")
+        self.cancel_test_btn.clicked.connect(self._cancel_test)
+        self.cancel_test_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                font-weight: bold;
+                padding: 8px 16px;
+                font-size: 12px;
+                border-radius: 4px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background-color: #d32f2f;
+            }
+            QPushButton:pressed {
+                background-color: #b71c1c;
+            }
+        """
+        )
+        self.cancel_test_btn.setToolTip(
+            "Cancel the currently running test\n"
+            "• Gracefully terminates test execution\n"
+            "• Stops test process in Terminal\n"
+            "• Cleans up test resources"
+        )
+        self.cancel_test_btn.setVisible(False)  # Hidden initially
+        test_buttons_layout.addWidget(self.cancel_test_btn)
+
+        # Add stretch to left-justify buttons
+        test_buttons_layout.addStretch()
+
+        tests_group_layout.addLayout(test_buttons_layout)
+        tests_group.setLayout(tests_group_layout)
+
+        # Add the tests group to the horizontal layout
+        tests_widget_layout.addWidget(tests_group)
+
+        # Add spacing to match the info icon (16px) + spacing (8px) = 24px total
+        tests_widget_layout.addSpacing(24)
+        tests_widget_layout.addStretch()  # Push everything to the left, matching API key field layout
+
+        # Create container widget matching API key field structure
+        tests_container = QWidget()
+        tests_container.setLayout(tests_widget_layout)
+        tests_layout.addWidget(tests_container, 0, 1)
+        main_layout.addLayout(tests_layout)
 
         main_layout.addStretch()
 
@@ -368,6 +636,30 @@ class APIKeysTab(BaseTab):
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
 
+        # Load PacketStream username
+        if (
+            hasattr(self.settings.api_keys, "packetstream_username")
+            and self.settings.api_keys.packetstream_username
+        ):
+            self._actual_api_keys[
+                "packetstream_username"
+            ] = self.settings.api_keys.packetstream_username
+            self.packetstream_username_edit.setText(
+                self.settings.api_keys.packetstream_username
+            )
+
+        # Load PacketStream auth key
+        if (
+            hasattr(self.settings.api_keys, "packetstream_auth_key")
+            and self.settings.api_keys.packetstream_auth_key
+        ):
+            self._actual_api_keys[
+                "packetstream_auth_key"
+            ] = self.settings.api_keys.packetstream_auth_key
+            self.packetstream_auth_key_edit.setText(
+                "••••••••••••••••••••••••••••••••••••••••••••••••••••"
+            )
+
     def _setup_change_handlers(self) -> None:
         """Set up change handlers for password/key fields."""
         self.openai_key_edit.textChanged.connect(
@@ -381,6 +673,12 @@ class APIKeysTab(BaseTab):
         )
         self.bright_data_api_key_edit.textChanged.connect(
             lambda text: self._handle_key_change("bright_data_api_key", text)
+        )
+        self.packetstream_username_edit.textChanged.connect(
+            lambda text: self._handle_key_change("packetstream_username", text)
+        )
+        self.packetstream_auth_key_edit.textChanged.connect(
+            lambda text: self._handle_key_change("packetstream_auth_key", text)
         )
 
     def _handle_key_change(self, key_name: str, new_text: str) -> None:
@@ -480,6 +778,19 @@ class APIKeysTab(BaseTab):
             if not bright_data_api_key.startswith("••"):
                 self.settings.api_keys.bright_data_api_key = bright_data_api_key
 
+            # PacketStream credentials
+            packetstream_username = self._actual_api_keys.get(
+                "packetstream_username", self.packetstream_username_edit.text().strip()
+            )
+            if packetstream_username:
+                self.settings.api_keys.packetstream_username = packetstream_username
+
+            packetstream_auth_key = self._actual_api_keys.get(
+                "packetstream_auth_key", self.packetstream_auth_key_edit.text().strip()
+            )
+            if not packetstream_auth_key.startswith("••"):
+                self.settings.api_keys.packetstream_auth_key = packetstream_auth_key
+
             # PERSISTENT STORAGE: Save credentials to YAML file for persistence across sessions
             self._save_credentials_to_file()
 
@@ -527,6 +838,15 @@ class APIKeysTab(BaseTab):
                     # Persist Bright Data API key so it survives app restarts
                     "bright_data_api_key": getattr(
                         self.settings.api_keys, "bright_data_api_key", ""
+                    )
+                    or "",
+                    # Persist PacketStream credentials for residential proxy access
+                    "packetstream_username": getattr(
+                        self.settings.api_keys, "packetstream_username", ""
+                    )
+                    or "",
+                    "packetstream_auth_key": getattr(
+                        self.settings.api_keys, "packetstream_auth_key", ""
                     )
                     or "",
                 }
@@ -652,6 +972,18 @@ class APIKeysTab(BaseTab):
     def _check_for_updates(self, is_auto: bool = False) -> None:
         """Check for and install updates."""
         try:
+            # CRITICAL: Thread safety check - ensure we're on the main thread
+            from PyQt6.QtCore import QThread
+            from PyQt6.QtWidgets import QApplication
+
+            if QThread.currentThread() != QApplication.instance().thread():
+                logger.error(
+                    "🚨 CRITICAL: _check_for_updates called from background thread - BLOCKED!"
+                )
+                logger.error(f"Current thread: {QThread.currentThread()}")
+                logger.error(f"Main thread: {QApplication.instance().thread()}")
+                return
+
             # If a previous worker exists
             if self.update_worker:
                 # If it's still running, do not start another
@@ -662,7 +994,9 @@ class APIKeysTab(BaseTab):
                 self.update_worker = None
 
             # Always create a fresh worker instance to avoid restarting finished QThreads
-            self.update_worker = DMGUpdateWorker()
+            self.update_worker = DMGUpdateWorker(is_auto=is_auto)
+            # Track if this is an auto update for silent progress handling
+            self._current_update_is_auto = is_auto
             self.update_worker.update_progress.connect(self._handle_update_progress)
             # New: determinate progress support
             try:
@@ -679,38 +1013,44 @@ class APIKeysTab(BaseTab):
             # Add worker failure detection
             self.update_worker.finished.connect(self._on_worker_finished)
 
-            # Create and show progress dialog
-            self.update_progress_dialog = QProgressDialog(
-                "Checking for updates...", "Cancel", 0, 0, self
-            )
-            self.update_progress_dialog.setWindowTitle(
-                "Skip the Podcast Desktop Update"
-            )
-            self.update_progress_dialog.setModal(True)
-            self.update_progress_dialog.setMinimumDuration(
-                0 if is_auto else 500
-            )  # Show immediately for auto-updates
-            self.update_progress_dialog.canceled.connect(self._cancel_update)
-            self.update_progress_dialog.setAutoClose(False)
-            # Lock dialog size to prevent jumpy resizing
-            self.update_progress_dialog.setMinimumWidth(520)
-            self.update_progress_dialog.setMaximumWidth(520)
-            self.update_progress_dialog.setFixedHeight(160)
-            try:
-                # Prevent layout from recalculating size on label changes
-                if self.update_progress_dialog.layout():
-                    self.update_progress_dialog.layout().setSizeConstraint(
-                        QLayout.SizeConstraint.SetFixedSize
+            # Only show progress dialog for manual updates, not auto checks
+            if not is_auto:
+                # Create and show progress dialog (with additional thread safety check)
+                if QThread.currentThread() != QApplication.instance().thread():
+                    logger.error(
+                        "🚨 CRITICAL: QProgressDialog creation attempted from background thread - BLOCKED!"
                     )
-            except (AttributeError, RuntimeError):
-                # Layout constraint not supported in this PyQt version
-                logger.debug("Layout size constraint not available")
-            self.update_progress_dialog.setSizeGripEnabled(False)
-            # Subtle styling and monospace label for better readability of logs
-            self.update_progress_dialog.setStyleSheet(
-                "QProgressDialog QLabel { font-family: Menlo, Monaco, monospace; font-size: 12px; }"
-            )
-            self.update_progress_dialog.show()
+                    return
+
+                self.update_progress_dialog = QProgressDialog(
+                    "Checking for updates...", "Cancel", 0, 0, self
+                )
+                self.update_progress_dialog.setWindowTitle(
+                    "Skip the Podcast Desktop Update"
+                )
+                self.update_progress_dialog.setModal(True)
+                self.update_progress_dialog.setMinimumDuration(500)
+                self.update_progress_dialog.canceled.connect(self._cancel_update)
+                self.update_progress_dialog.setAutoClose(False)
+                # Lock dialog size to prevent jumpy resizing
+                self.update_progress_dialog.setMinimumWidth(520)
+                self.update_progress_dialog.setMaximumWidth(520)
+                self.update_progress_dialog.setFixedHeight(160)
+                try:
+                    # Prevent layout from recalculating size on label changes
+                    if self.update_progress_dialog.layout():
+                        self.update_progress_dialog.layout().setSizeConstraint(
+                            QLayout.SizeConstraint.SetFixedSize
+                        )
+                except (AttributeError, RuntimeError):
+                    # Layout constraint not supported in this PyQt version
+                    logger.debug("Layout size constraint not available")
+                self.update_progress_dialog.setSizeGripEnabled(False)
+                # Subtle styling and monospace label for better readability of logs
+                self.update_progress_dialog.setStyleSheet(
+                    "QProgressDialog QLabel { font-family: Menlo, Monaco, monospace; font-size: 12px; }"
+                )
+                self.update_progress_dialog.show()
 
             # Start update process
             self.update_worker.start()
@@ -741,6 +1081,11 @@ class APIKeysTab(BaseTab):
         if len(self._update_log_buffer) > 200:
             self._update_log_buffer = self._update_log_buffer[-200:]
 
+        # For auto updates, only log without updating UI
+        if self._current_update_is_auto:
+            self.append_log(message)
+            return
+
         # Show only the last line, trimmed, to avoid an overly long progress label
         last_line = (message or "").splitlines()[-1].strip()
         if len(last_line) > 140:
@@ -754,6 +1099,11 @@ class APIKeysTab(BaseTab):
 
     def _handle_update_progress_percent(self, percent: int, message: str) -> None:
         """Handle determinate progress updates."""
+        # For auto updates, only log without updating UI
+        if self._current_update_is_auto:
+            self.append_log(f"{percent}% - {message}" if message else f"{percent}%")
+            return
+
         if self.update_progress_dialog:
             # Switch from indeterminate to determinate on first percent
             if self.update_progress_dialog.maximum() == 0:
@@ -768,64 +1118,401 @@ class APIKeysTab(BaseTab):
         self.status_label.setStyleSheet("color: #2196F3; font-weight: bold;")
         self.append_log(f"{percent}% - {message}" if message else f"{percent}%")
 
-    def _handle_update_finished(self, success: bool, message: str) -> None:
+    def _handle_update_finished(
+        self, success: bool, message: str, silent: bool = False
+    ) -> None:
         """Handle update completion."""
         # Mark update as completed to prevent false crash detection
         self._update_completed = True
+
+        # Reset auto update tracking
+        was_auto = self._current_update_is_auto
+        self._current_update_is_auto = False
 
         # Close progress dialog
         if self.update_progress_dialog:
             self.update_progress_dialog.close()
             self.update_progress_dialog = None
 
+        # For silent updates (auto-checks when already up to date), only log and return
+        if silent:
+            logger.info(f"Silent update check completed: {message}")
+            return
+
         if success:
-            self.status_label.setText("✨ Update completed! Please restart the app.")
-            self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
+            # Check if this is "already on latest version" vs actual update completion
+            if "Already on latest version" in message:
+                # Show positive status for being up to date
+                self.status_label.setText(f"✅ {message}")
+                self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
+                self.append_log(f"✅ {message}")
 
-            # Show restart dialog with auto-restart option
-            from PyQt6.QtWidgets import QMessageBox, QPushButton
+                # Clear status after 10 seconds
+                from PyQt6.QtCore import QTimer
 
-            msg_box = QMessageBox(self)
-            msg_box.setWindowTitle("Update Complete")
-            msg_box.setText("The app has been updated successfully!")
-            msg_box.setInformativeText(
-                f"{message}\n\n"
-                "The new version has been installed to /Applications.\n"
-                "Your settings and data are preserved in their standard locations."
-            )
-            msg_box.setIcon(QMessageBox.Icon.Information)
-
-            # Add custom buttons
-            restart_button = msg_box.addButton(
-                "Restart Now", QMessageBox.ButtonRole.AcceptRole
-            )
-            later_button = msg_box.addButton(
-                "Restart Later", QMessageBox.ButtonRole.RejectRole
-            )
-            msg_box.setDefaultButton(restart_button)
-
-            # Show the dialog and handle response
-            msg_box.exec()
-
-            if msg_box.clickedButton() == restart_button:
-                self._restart_application()
+                QTimer.singleShot(10000, lambda: self.status_label.setText(""))
             else:
-                # Just close the dialog - user will restart manually later
-                pass
-        else:
-            self.status_label.setText(f"❌ Update failed: {message}")
-            self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+                # This is an actual update completion
+                self.status_label.setText("✨ Update completed! Please restart the app.")
+                self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
 
-            # Show error dialog
-            QMessageBox.warning(
-                self,
-                "Update Failed",
-                f"Failed to update Knowledge Chipper:\n\n{message}",
-                QMessageBox.StandardButton.Ok,
-            )
+                # Show restart dialog with auto-restart option
+                from PyQt6.QtWidgets import QMessageBox, QPushButton
+
+                msg_box = QMessageBox(self)
+                msg_box.setWindowTitle("Update Complete")
+                msg_box.setText("The app has been updated successfully!")
+                msg_box.setInformativeText(
+                    f"{message}\n\n"
+                    "The new version has been installed to /Applications.\n"
+                    "Your settings and data are preserved in their standard locations."
+                )
+                msg_box.setIcon(QMessageBox.Icon.Information)
+
+                # Add custom buttons
+                restart_button = msg_box.addButton(
+                    "Restart Now", QMessageBox.ButtonRole.AcceptRole
+                )
+                later_button = msg_box.addButton(
+                    "Restart Later", QMessageBox.ButtonRole.RejectRole
+                )
+                msg_box.setDefaultButton(restart_button)
+
+                # Show the dialog and handle response
+                msg_box.exec()
+
+                if msg_box.clickedButton() == restart_button:
+                    self._restart_application()
+                else:
+                    # Just close the dialog - user will restart manually later
+                    pass
+        else:
+            # Check if this is "No updates available" or "Already on latest version" - these are not errors
+            if (
+                "No updates available" in message
+                or "Already on latest version" in message
+            ):
+                # Show positive status for being up to date
+                from ....__init__ import __version__
+
+                self.status_label.setText(
+                    f"✅ You're on the latest version ({__version__})"
+                )
+                self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
+                self.append_log(f"✅ You're on the latest version ({__version__})")
+
+                # Clear status after 10 seconds
+                from PyQt6.QtCore import QTimer
+
+                QTimer.singleShot(10000, lambda: self.status_label.setText(""))
+            else:
+                # This is an actual error
+                self.status_label.setText(f"❌ Update failed: {message}")
+                self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+
+                # Show error dialog only for actual errors
+                from PyQt6.QtWidgets import QMessageBox
+
+                QMessageBox.warning(
+                    self,
+                    "Update Failed",
+                    f"Failed to update Knowledge Chipper:\n\n{message}",
+                    QMessageBox.StandardButton.Ok,
+                )
 
         self.append_log(message)
         self.update_worker = None
+
+    def _run_quick_tests(self) -> None:
+        """Run quick tests (smoke tests)."""
+        self._run_test_suite("smoke", "Quick Tests")
+
+    def _run_regular_tests(self) -> None:
+        """Run regular tests (comprehensive tests)."""
+        self._run_test_suite("comprehensive", "Regular Tests")
+
+    def _run_extended_tests(self) -> None:
+        """Run extended tests (stress tests)."""
+        self._run_test_suite("stress", "Extended Tests")
+
+    def _run_test_suite(self, test_mode: str, test_name: str) -> None:
+        """Run a test suite using the comprehensive testing framework."""
+        # Check if a test is already running
+        if self.test_process and self.test_process.poll() is None:
+            QMessageBox.warning(
+                self,
+                "Test Already Running",
+                f"A test is already running: {self.current_test_name}\n\n"
+                "Please wait for it to complete or cancel it first.",
+            )
+            return
+
+        try:
+            import subprocess  # nosec B404 # Required for test execution
+            from pathlib import Path
+
+            # Find the test runner script
+            project_root = Path.home() / "Projects" / "Knowledge_Chipper"
+            test_script = (
+                project_root / "tests" / "gui_comprehensive" / "main_test_runner.py"
+            )
+            venv_python = project_root / "venv" / "bin" / "python3"
+
+            if not test_script.exists():
+                self.status_label.setText("❌ Test script not found")
+                self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+                QMessageBox.critical(
+                    self,
+                    "Test Error",
+                    f"Test script not found at: {test_script}\n\n"
+                    "Please ensure the comprehensive test suite is available.",
+                )
+                return
+
+            if not venv_python.exists():
+                self.status_label.setText("❌ Virtual environment not found")
+                self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+                QMessageBox.critical(
+                    self,
+                    "Test Error",
+                    f"Virtual environment not found at: {venv_python}\n\n"
+                    "Please ensure the virtual environment is set up correctly.",
+                )
+                return
+
+            # Confirm test execution
+            reply = QMessageBox.question(
+                self,
+                f"Run {test_name}",
+                f"This will run {test_name} which may take some time:\n\n"
+                f"• Quick Tests: 5-10 minutes\n"
+                f"• Regular Tests: 1-2 hours\n"
+                f"• Extended Tests: 2+ hours\n\n"
+                f"The test will run in the background without blocking the app.\n"
+                f"Use the Cancel Test button to stop if needed.\n\n"
+                f"Continue with {test_name}?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+            # Start test in background process
+            self._start_background_test(
+                test_mode, test_name, project_root, venv_python, test_script
+            )
+
+        except Exception as e:
+            error_msg = f"Failed to start {test_name}: {e}"
+            self.append_log(f"❌ {error_msg}")
+            self.status_label.setText(f"❌ {error_msg}")
+            self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+            QMessageBox.critical(
+                self,
+                "Test Error",
+                f"Failed to start {test_name}:\n\n{e}",
+            )
+
+    def _start_background_test(
+        self,
+        test_mode: str,
+        test_name: str,
+        project_root: Path,
+        venv_python: Path,
+        test_script: Path,
+    ) -> None:
+        """Start test in background without blocking the app."""
+        try:
+            import subprocess  # nosec B404 # Required for test execution
+
+            self.current_test_name = test_name
+            self.append_log(f"🧪 Starting {test_name} in background...")
+            self.status_label.setText(f"🧪 Running {test_name}...")
+            self.status_label.setStyleSheet("color: #2196F3; font-weight: bold;")
+
+            # Show cancel button and disable test buttons
+            self.cancel_test_btn.setVisible(True)
+            self.quick_test_btn.setEnabled(False)
+            self.regular_test_btn.setEnabled(False)
+            self.extended_test_btn.setEnabled(False)
+
+            # Prepare command
+            cmd = [str(venv_python), str(test_script), test_mode, "--no-gui-launch"]
+
+            # Start process in background with proper working directory
+            self.test_process = (
+                subprocess.Popen(  # nosec B603 # Controlled command execution
+                    cmd,
+                    cwd=str(project_root),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    universal_newlines=True,
+                )
+            )
+
+            # Start monitoring timer
+            self.test_monitor_timer = QTimer()
+            self.test_monitor_timer.timeout.connect(self._monitor_test_progress)
+            self.test_monitor_timer.start(2000)  # Check every 2 seconds
+
+            self.append_log(
+                f"✅ {test_name} started successfully (PID: {self.test_process.pid})"
+            )
+            self.append_log("💡 Use Cancel Test button to stop the test gracefully")
+
+        except Exception as e:
+            self._handle_test_error(f"Failed to start background test: {e}")
+
+    def _monitor_test_progress(self) -> None:
+        """Monitor test progress and handle completion."""
+        if not self.test_process:
+            return
+
+        # Check if process is still running
+        poll_result = self.test_process.poll()
+
+        if poll_result is not None:
+            # Process has finished
+            self._handle_test_completion(poll_result)
+        else:
+            # Process is still running - update status
+            elapsed = getattr(self, "_test_start_time", 0)
+            if hasattr(self, "_test_start_time"):
+                import time
+
+                elapsed_mins = int((time.time() - self._test_start_time) / 60)
+                self.status_label.setText(
+                    f"🧪 Running {self.current_test_name} ({elapsed_mins} min elapsed)..."
+                )
+            else:
+                import time
+
+                self._test_start_time = time.time()
+
+    def _handle_test_completion(self, return_code: int) -> None:
+        """Handle test completion."""
+        if self.test_monitor_timer:
+            self.test_monitor_timer.stop()
+            self.test_monitor_timer = None
+
+        # Re-enable buttons and hide cancel
+        self.quick_test_btn.setEnabled(True)
+        self.regular_test_btn.setEnabled(True)
+        self.extended_test_btn.setEnabled(True)
+        self.cancel_test_btn.setVisible(False)
+
+        if return_code == 0:
+            self.status_label.setText(
+                f"✅ {self.current_test_name} completed successfully!"
+            )
+            self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
+            self.append_log(f"✅ {self.current_test_name} completed successfully")
+        else:
+            self.status_label.setText(
+                f"⚠️ {self.current_test_name} completed with warnings (code: {return_code})"
+            )
+            self.status_label.setStyleSheet("color: #ff9800; font-weight: bold;")
+            self.append_log(
+                f"⚠️ {self.current_test_name} completed with return code: {return_code}"
+            )
+
+        # Clear status after 10 seconds
+        QTimer.singleShot(10000, lambda: self.status_label.setText(""))
+
+        # Clean up
+        self.test_process = None
+        self.current_test_name = ""
+        if hasattr(self, "_test_start_time"):
+            delattr(self, "_test_start_time")
+
+    def _cancel_test(self) -> None:
+        """Cancel the currently running test."""
+        if not self.test_process or self.test_process.poll() is not None:
+            QMessageBox.information(
+                self,
+                "No Test Running",
+                "No test is currently running to cancel.",
+            )
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Cancel Test",
+            f"Are you sure you want to cancel {self.current_test_name}?\n\n"
+            "This will terminate the test process gracefully.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            # Gracefully terminate the process
+            self.test_process.terminate()
+
+            # Wait a bit for graceful shutdown
+            try:
+                self.test_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:  # type: ignore
+                # Force kill if it doesn't respond
+                self.test_process.kill()
+                self.test_process.wait()
+
+            self.append_log(f"❌ {self.current_test_name} cancelled by user")
+            self.status_label.setText(f"❌ {self.current_test_name} cancelled")
+            self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+
+            # Clean up immediately
+            if self.test_monitor_timer:
+                self.test_monitor_timer.stop()
+                self.test_monitor_timer = None
+
+            self.quick_test_btn.setEnabled(True)
+            self.regular_test_btn.setEnabled(True)
+            self.extended_test_btn.setEnabled(True)
+            self.cancel_test_btn.setVisible(False)
+
+            self.test_process = None
+            self.current_test_name = ""
+            if hasattr(self, "_test_start_time"):
+                delattr(self, "_test_start_time")
+
+            # Clear status after 5 seconds
+            QTimer.singleShot(5000, lambda: self.status_label.setText(""))
+
+        except Exception as e:
+            self._handle_test_error(f"Failed to cancel test: {e}")
+
+    def _handle_test_error(self, error_msg: str) -> None:
+        """Handle test execution errors."""
+        self.append_log(f"❌ {error_msg}")
+        self.status_label.setText(f"❌ Test error")
+        self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+
+        # Clean up on error
+        if self.test_monitor_timer:
+            self.test_monitor_timer.stop()
+            self.test_monitor_timer = None
+
+        self.quick_test_btn.setEnabled(True)
+        self.regular_test_btn.setEnabled(True)
+        self.extended_test_btn.setEnabled(True)
+        self.cancel_test_btn.setVisible(False)
+
+        self.test_process = None
+        self.current_test_name = ""
+        if hasattr(self, "_test_start_time"):
+            delattr(self, "_test_start_time")
+
+        QMessageBox.critical(
+            self,
+            "Test Error",
+            error_msg,
+        )
 
     def _restart_application(self) -> None:
         """Restart the application after an update."""
@@ -1024,6 +1711,10 @@ end tell
         # Mark update as completed (even though failed) to prevent false crash detection
         self._update_completed = True
 
+        # Reset auto update tracking
+        was_auto = self._current_update_is_auto
+        self._current_update_is_auto = False
+
         # Close progress dialog
         if self.update_progress_dialog:
             self.update_progress_dialog.close()
@@ -1100,6 +1791,16 @@ end tell
             self.ffmpeg_worker = FFmpegInstaller(release)
             self.ffmpeg_worker.progress.connect(self._handle_ffmpeg_progress)
             self.ffmpeg_worker.finished.connect(self._handle_ffmpeg_finished)
+
+            # Thread safety check for FFmpeg progress dialog
+            from PyQt6.QtCore import QThread
+            from PyQt6.QtWidgets import QApplication
+
+            if QThread.currentThread() != QApplication.instance().thread():
+                logger.error(
+                    "🚨 CRITICAL: FFmpeg QProgressDialog creation attempted from background thread - BLOCKED!"
+                )
+                return
 
             self.update_progress_dialog = QProgressDialog(
                 "Installing FFmpeg…", "Cancel", 0, 0, self

@@ -62,5 +62,3 @@ end $$;
 
 -- Optional: keep extension schema discoverable for consumers
 grant usage on schema extensions to public;
-
-

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Iterator, Tuple
+from typing import Tuple
 
 
 def _approx_tokens(text: str) -> int:
@@ -10,7 +11,7 @@ def _approx_tokens(text: str) -> int:
 
 def _sliding_windows(
     tokens: list[str], window_size: int, stride: int
-) -> Iterator[Tuple[int, list[str]]]:
+) -> Iterator[tuple[int, list[str]]]:
     for start in range(0, max(1, len(tokens) - window_size + 1), stride):
         yield start, tokens[start : start + window_size]
 

@@ -182,7 +182,9 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             # Fast: 150-250 WPM (news, fast speakers)
             # Audio with music/silence/long pauses is still valid content
 
-            if words_per_minute < 5:  # Less than 5 WPM suggests major failure (almost no speech)
+            if (
+                words_per_minute < 5
+            ):  # Less than 5 WPM suggests major failure (almost no speech)
                 return {
                     "is_valid": False,
                     "issue": f"Transcription appears to contain no speech ({word_count:,} words in {duration_minutes:.1f} min = {words_per_minute:.1f} WPM, expected >2 WPM)",
@@ -210,8 +212,9 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 else:
                     current_consecutive = 1
 
-            # If more than 5 consecutive identical words, likely a failure
-            if max_consecutive >= 5:
+            # If more than 7 consecutive identical words, likely a failure
+            # Increased from 5 to 7 to reduce false positives on natural speech patterns
+            if max_consecutive >= 7:
                 return {
                     "is_valid": False,
                     "issue": f"Repetitive pattern detected ('{words[0]}' repeated {max_consecutive} times)",
@@ -340,9 +343,11 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             ]
 
             # Use non-blocking subprocess execution
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            process = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
             stdout, stderr = process.communicate()
-            
+
             if process.returncode != 0:
                 raise subprocess.CalledProcessError(process.returncode, cmd, stderr)
             return output_path
@@ -486,12 +491,12 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 # CRITICAL: Add GPU acceleration for Apple Silicon (remove -ng flag which DISABLES GPU)
                 # Note: By default, whisper.cpp uses GPU when available unless -ng (--no-gpu) is specified
                 # We simply don't add the -ng flag to enable GPU acceleration
-                
+
                 # Add flash attention for better performance on Apple Silicon
                 if platform.system() == "Darwin" and platform.machine() == "arm64":
                     cmd.extend(["-fa"])  # Enable flash attention
                     logger.info("🚀 Enabled flash attention for Apple Silicon")
-                    
+
                 logger.info("🚀 GPU acceleration enabled (default whisper.cpp behavior)")
 
                 # Add output options
@@ -505,9 +510,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 )
 
                 if self.progress_callback:
-                    self.progress_callback(
-                        "🎯 Running whisper.cpp transcription...", 50
-                    )
+                    self.progress_callback("🎯 Running whisper.cpp transcription...", 50)
 
                 logger.info(f"Running command: {' '.join(cmd)}")
 

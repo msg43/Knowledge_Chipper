@@ -632,6 +632,11 @@ class YouTubeBatchWorker(QThread):
     def _download_audio_persistent(self, url: str, index: int) -> Path | None:
         """Download audio to persistent storage until successful processing."""
         try:
+            # Check cancellation before starting
+            if self.should_stop or self.cancellation_token.is_cancelled():
+                logger.info(f"Download cancelled before starting for {url}")
+                return None
+
             # Create unique filename for this audio
             video_id = self._extract_video_id(url)
             audio_file = self.audio_storage_dir / f"{video_id}_{index}.wav"
@@ -653,8 +658,20 @@ class YouTubeBatchWorker(QThread):
 
             import yt_dlp
 
-            # Track download progress
+            # Flag to track if download was cancelled
+            download_cancelled = False
+
+            # Track download progress and check for cancellation
             def progress_hook(d):
+                nonlocal download_cancelled
+
+                # Check for cancellation during download
+                if self.should_stop or self.cancellation_token.is_cancelled():
+                    download_cancelled = True
+                    logger.info(f"Download cancelled during progress for {video_id}")
+                    # Raise an exception to stop the download
+                    raise Exception("Download cancelled by user")
+
                 if d["status"] == "downloading":
                     # Emit detailed download progress
                     if "total_bytes" in d and d["total_bytes"]:
@@ -695,9 +712,37 @@ class YouTubeBatchWorker(QThread):
             # which use Bright Data API when available. Direct yt-dlp usage here
             # should be minimal and rely on the processor layer for proper proxy handling.
 
-            # Download
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+            # Download with cancellation handling
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+            except Exception as e:
+                if (
+                    download_cancelled
+                    or self.should_stop
+                    or self.cancellation_token.is_cancelled()
+                ):
+                    logger.info(f"Download cancelled for {video_id}")
+                    # Clean up any partial download
+                    for partial_file in self.audio_storage_dir.glob(
+                        f"{video_id}_{index}.*"
+                    ):
+                        try:
+                            partial_file.unlink()
+                            logger.info(f"Cleaned up partial download: {partial_file}")
+                        except Exception as cleanup_e:
+                            logger.warning(
+                                f"Could not clean up partial file {partial_file}: {cleanup_e}"
+                            )
+                    return None
+                else:
+                    # Re-raise if it's not a cancellation
+                    raise
+
+            # Check cancellation after download but before processing
+            if self.should_stop or self.cancellation_token.is_cancelled():
+                logger.info(f"Processing cancelled after download for {video_id}")
+                return None
 
             # Find the downloaded file (yt-dlp may have added extension)
             for possible_file in self.audio_storage_dir.glob(f"{video_id}_{index}.*"):
@@ -743,13 +788,20 @@ class YouTubeBatchWorker(QThread):
             video_id = self._extract_video_id(url)
             progress_callback("Starting transcription processing")
 
+            enable_diarization = self.config.get("enable_diarization", False)
+            testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
+
             result = processor.process(
                 url,
                 output_dir=self.config.get("output_dir"),
                 output_format=self.config.get("format", "md"),
                 include_timestamps=self.config.get("timestamps", True),
                 overwrite=self.config.get("overwrite", False),
-                enable_diarization=self.config.get("enable_diarization", False),
+                enable_diarization=enable_diarization,
+                gui_mode=not testing_mode,  # Enable GUI mode unless testing
+                show_speaker_dialog=(
+                    enable_diarization and not testing_mode
+                ),  # Show dialog if diarization enabled and not testing
                 cancellation_token=self.cancellation_token,
                 progress_callback=progress_callback,  # Pass our progress callback
             )

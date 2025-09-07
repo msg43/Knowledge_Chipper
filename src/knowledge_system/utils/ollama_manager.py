@@ -4,11 +4,11 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-import sys
 
 import requests
 
@@ -238,7 +238,9 @@ class OllamaManager:
                         )
                         launched_via_app = True
                     except Exception as e:
-                        logger.warning(f"Failed to launch Ollama.app, falling back to CLI: {e}")
+                        logger.warning(
+                            f"Failed to launch Ollama.app, falling back to CLI: {e}"
+                        )
 
             if not launched_via_app:
                 # Start headless CLI service in background (may not show in Dock)

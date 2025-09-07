@@ -157,6 +157,43 @@ def get_anthropic_models(force_refresh: bool = False) -> list[str]:
     return merged
 
 
+def get_local_models(force_refresh: bool = False) -> list[str]:
+    """Get local Ollama models from installed instances and registry."""
+    try:
+        from .ollama_manager import get_ollama_manager
+
+        ollama_manager = get_ollama_manager()
+        registry_models = ollama_manager.get_registry_models(
+            use_cache=not force_refresh
+        )
+
+        models = []
+        for model_info in registry_models:
+            # Extract base model name without status/size info
+            name = model_info.name
+            if " (Installed)" in name:
+                name = name.replace(" (Installed)", "")
+            # Also remove size info like " (4.7 GB)"
+            if " (" in name and name.endswith(")"):
+                name = name[: name.rfind(" (")]
+
+            if name and name not in models:
+                models.append(name)
+
+        # Get user overrides
+        overrides = load_model_overrides().get("local", [])
+
+        # Merge and deduplicate
+        merged = _dedupe_preserve_order([*models, *overrides])
+
+        return merged
+
+    except Exception as e:
+        logger.warning(f"Failed to fetch local models: {e}")
+        # Return some common fallback models
+        return ["llama3.2:3b", "llama3.1:8b", "qwen2.5:7b", "mistral:7b"]
+
+
 def get_provider_models(provider: str, force_refresh: bool = False) -> list[str]:
     """Get models for a provider, optionally forcing a refresh from community source."""
     p = provider.lower().strip()
@@ -164,6 +201,8 @@ def get_provider_models(provider: str, force_refresh: bool = False) -> list[str]
         return get_openai_models(force_refresh=force_refresh)
     if p in {"anthropic", "claude"}:
         return get_anthropic_models(force_refresh=force_refresh)
+    if p == "local":
+        return get_local_models(force_refresh=force_refresh)
     return []
 
 

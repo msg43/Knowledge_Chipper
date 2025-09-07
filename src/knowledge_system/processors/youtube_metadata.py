@@ -1,11 +1,16 @@
 """
-Advanced YouTube Metadata Processor
+Advanced YouTube Metadata Processor with Multi-Provider Support
 
-Uses Bright Data YouTube API Scrapers for reliable metadata extraction.
+Priority System:
+1. PacketStream proxy with yt-dlp (PRIMARY)
+2. Direct yt-dlp for small batches ≤2 videos (FALLBACK)
+3. Bright Data API (CONSERVED but DISABLED)
 
-Bright Data provides direct JSON responses, automatic IP rotation, and cost efficiency.
+Uses residential proxies to avoid bot detection while providing reliable metadata extraction.
 """
 
+import json
+import os
 import re
 import time
 from datetime import datetime
@@ -60,6 +65,17 @@ class YouTubeMetadata(BaseModel):
         default=None, description="Whether captions are available"
     )
     privacy_status: str | None = Field(default=None, description="Privacy status")
+
+    # Enhanced metadata fields
+    related_videos: list[dict[str, Any]] = Field(
+        default_factory=list, description="Related videos suggestions"
+    )
+    channel_stats: dict[str, Any] = Field(
+        default_factory=dict, description="Detailed channel statistics"
+    )
+    video_chapters: list[dict[str, Any]] = Field(
+        default_factory=list, description="Video chapters/timestamps"
+    )
 
     # Extraction metadata
     extraction_method: str = Field(
@@ -140,22 +156,19 @@ class YouTubeMetadataProcessor(BaseProcessor):
         self.use_bright_data = False
         self.bright_data_api_key = None
 
-        # Configure Bright Data (required)
+        # Configure Bright Data (optional - for fallback use only)
         self._configure_bright_data()
-        if not self.use_bright_data:
-            from ..errors import YouTubeAPIError
-            raise YouTubeAPIError(
-                "Bright Data API key is required for YouTube metadata extraction. "
-                "Please configure your Bright Data API Key in Settings."
-            )
+        # Note: Bright Data is no longer required as PacketStream is the primary method
+        # with direct yt-dlp as fallback for small batches
 
     def _configure_bright_data(self):
         """Configure Bright Data YouTube API Scraper (preferred method)."""
         try:
             if requests is None:
-                raise YouTubeAPIError(
+                logger.warning(
                     "requests library not available - cannot use Bright Data"
                 )
+                return
 
             # Primary from settings
             self.bright_data_api_key = getattr(
@@ -164,6 +177,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
             # Fallbacks from environment
             if not self.bright_data_api_key:
                 import os
+
                 self.bright_data_api_key = (
                     os.getenv("BRIGHT_DATA_API_KEY")
                     or os.getenv("BRIGHTDATA_API_KEY")
@@ -178,10 +192,14 @@ class YouTubeMetadataProcessor(BaseProcessor):
                 )
                 return
             else:
-                logger.warning("Bright Data API key missing or invalid")
+                logger.warning(
+                    "Bright Data API key missing or invalid - metadata extraction will be limited"
+                )
 
         except Exception as e:
-            logger.warning(f"Failed to configure Bright Data: {e}")
+            logger.warning(
+                f"Failed to configure Bright Data: {e} - metadata extraction will be limited"
+            )
 
     @property
     def supported_formats(self) -> list[str]:
@@ -237,77 +255,172 @@ class YouTubeMetadataProcessor(BaseProcessor):
                 logger.error(f"Could not extract video ID from URL: {url}")
                 return None
 
-            # Bright Data API endpoint - try different endpoint patterns
-            # Based on current API documentation, try these endpoints in order
-            endpoints_to_try = [
-                "https://api.brightdata.com/dca/trigger_immediate",
-                "https://api.brightdata.com/dataset/collect",
-                "https://api.brightdata.com/datasets/youtube/trigger"
-            ]
-            
+            # Bright Data YouTube Posts API - Datasets v3 (Working Implementation)
+            # This uses the account-specific dataset ID for YouTube Posts "Collect by URL"
+            dataset_id = "gd_lk538t2k2p1k3oos71"  # Your YouTube Posts dataset ID
+
+            # Step 1: Trigger collection using Datasets v3 API
+            trigger_url = f"https://api.brightdata.com/datasets/v3/trigger?dataset_id={dataset_id}&format=json"
+
             headers = {
                 "Authorization": f"Bearer {self.bright_data_api_key}",
                 "Content-Type": "application/json",
             }
 
-            # Request payload - try simplified structure first
-            payload = {
-                "url": url,
-                "discover_by": "url"
-            }
+            # Payload for Datasets v3 trigger
+            trigger_payload = [{"url": url}]
 
             logger.debug(f"Requesting metadata from Bright Data for video {video_id}")
 
-            # Try each endpoint until one works
-            response = None
-            for api_url in endpoints_to_try:
-                try:
-                    logger.debug(f"Trying Bright Data endpoint: {api_url}")
-                    response = requests.post(api_url, headers=headers, json=payload, timeout=30)
-                    if response.status_code != 404:
-                        break  # Found a working endpoint
+            # Step 1: Trigger the collection
+            try:
+                logger.debug(f"Triggering Bright Data collection: {trigger_url}")
+                trigger_response = requests.post(
+                    trigger_url,
+                    headers=headers,
+                    json=trigger_payload,
+                    timeout=30,
+                    verify=True,
+                )
+
+                logger.debug(f"Trigger response status: {trigger_response.status_code}")
+
+                if trigger_response.status_code != 200:
+                    if trigger_response.status_code == 401:
+                        logger.error(
+                            "Authentication failed (401) - check your Bright Data API key"
+                        )
+                    elif trigger_response.status_code == 403:
+                        logger.error(
+                            "Access forbidden (403) - check API key permissions"
+                        )
+                    elif trigger_response.status_code == 404:
+                        logger.error("Dataset not found (404) - check dataset ID")
+                    elif trigger_response.status_code == 400:
+                        logger.error(
+                            f"Bad request (400): {trigger_response.text[:200]}"
+                        )
                     else:
-                        logger.debug(f"Endpoint {api_url} returned 404, trying next endpoint")
-                except Exception as e:
-                    logger.debug(f"Endpoint {api_url} failed with error: {e}")
-                    continue
-            
-            if not response:
-                logger.error("All Bright Data API endpoints failed")
-                return None
-
-            if response.status_code == 200:
-                bright_data_response = response.json()
-
-                # Validate response structure
-                if not validate_bright_data_response(bright_data_response):
-                    logger.error(
-                        f"Invalid Bright Data response structure for {video_id}"
-                    )
+                        logger.error(
+                            f"Trigger failed with status {trigger_response.status_code}: {trigger_response.text[:200]}"
+                        )
                     return None
 
-                # Use the adapter to convert to our YouTubeMetadata model
-                metadata = adapt_bright_data_metadata(bright_data_response, url)
+                # Get snapshot ID from trigger response
+                trigger_data = trigger_response.json()
+                snapshot_id = trigger_data.get("snapshot_id")
 
-                logger.debug(
-                    f"✅ Successfully extracted metadata via Bright Data for {video_id}"
+                if not snapshot_id:
+                    logger.error("No snapshot_id received from trigger response")
+                    return None
+
+                logger.info(
+                    f"✅ Collection triggered successfully, snapshot ID: {snapshot_id}"
                 )
-                return metadata
 
-            elif response.status_code == 402:
-                logger.error("Bright Data API quota exceeded or payment required")
-                return None
-            elif response.status_code == 401:
-                logger.error("Invalid Bright Data API key")
-                return None
-            elif response.status_code == 429:
-                logger.warning("Bright Data API rate limit reached, retrying...")
-                time.sleep(2)
-                # Could implement retry logic here
-                return None
-            else:
+                # Step 2: Poll for data with exponential backoff
+                status_url = (
+                    f"https://api.brightdata.com/datasets/v3/snapshot/{snapshot_id}"
+                )
+                max_attempts = 15  # Up to 3 minutes of polling
+
+                for attempt in range(max_attempts):
+                    wait_time = min(
+                        10, 2 ** min(attempt, 4)
+                    )  # Exponential backoff, max 10 seconds
+                    if attempt > 0:
+                        logger.debug(
+                            f"Waiting {wait_time} seconds before poll attempt {attempt + 1}..."
+                        )
+                        time.sleep(wait_time)
+
+                    logger.debug(
+                        f"Polling for data (attempt {attempt + 1}/{max_attempts}): {status_url}"
+                    )
+
+                    try:
+                        poll_response = requests.get(
+                            status_url, headers=headers, timeout=20, verify=True
+                        )
+                        logger.debug(
+                            f"Poll response status: {poll_response.status_code}"
+                        )
+
+                        if poll_response.status_code == 200:
+                            # Check if we have actual data (not just empty response)
+                            if poll_response.text.strip():
+                                logger.info(
+                                    f"✅ YouTube metadata received after {attempt + 1} attempts"
+                                )
+
+                                try:
+                                    # Parse the response - handle both JSON formats
+                                    bright_data_response = poll_response.json()
+
+                                    # Validate response structure
+                                    if not validate_bright_data_response(
+                                        bright_data_response
+                                    ):
+                                        logger.error(
+                                            f"Invalid Bright Data response structure for {video_id}"
+                                        )
+                                        return None
+
+                                    # Use the adapter to convert to our YouTubeMetadata model
+                                    metadata = adapt_bright_data_metadata(
+                                        bright_data_response, url
+                                    )
+
+                                    logger.info(
+                                        f"✅ Successfully extracted metadata via Bright Data for {video_id}"
+                                    )
+                                    return metadata
+
+                                except json.JSONDecodeError as e:
+                                    logger.error(f"Failed to parse JSON response: {e}")
+                                    logger.debug(
+                                        f"Raw response: {poll_response.text[:300]}"
+                                    )
+                                    return None
+
+                            else:
+                                logger.debug(
+                                    f"Empty response, data still processing..."
+                                )
+
+                        elif poll_response.status_code == 202:
+                            logger.debug(f"Status 202: Still processing...")
+
+                        elif poll_response.status_code == 404:
+                            logger.error(f"Snapshot {snapshot_id} not found or expired")
+                            return None
+
+                        else:
+                            logger.warning(
+                                f"Unexpected poll status {poll_response.status_code}: {poll_response.text[:100]}"
+                            )
+
+                    except requests.exceptions.Timeout:
+                        logger.warning(f"Poll timeout on attempt {attempt + 1}")
+                        continue
+                    except Exception as e:
+                        logger.warning(
+                            f"Poll error on attempt {attempt + 1}: {str(e)[:100]}"
+                        )
+                        continue
+
+                # If we get here, polling timed out
                 logger.error(
-                    f"Bright Data API error {response.status_code}: {response.text}"
+                    f"YouTube metadata collection timed out after {max_attempts} attempts for {video_id}"
+                )
+                return None
+
+            except requests.exceptions.Timeout:
+                logger.error(f"Bright Data API trigger timeout for {url}")
+                return None
+            except Exception as e:
+                logger.error(
+                    f"Bright Data API trigger failed for {url}: {str(e)[:100]}"
                 )
                 return None
 
@@ -323,16 +436,271 @@ class YouTubeMetadataProcessor(BaseProcessor):
             )
             return None
 
-    def _extract_metadata_unified(self, url: str) -> YouTubeMetadata | None:
-        """Extract metadata using Bright Data API."""
-        return self._extract_metadata_bright_data(url)
+    def _extract_metadata_unified(
+        self, url: str, total_urls: int = 1
+    ) -> YouTubeMetadata | None:
+        """
+        Extract metadata with priority system:
+        1. PacketStream (primary)
+        2. Direct yt-dlp (fallback for ≤2 videos)
+        3. Bright Data (conserved but disabled)
+        """
+        # Ensure URL is a plain string, not a list or other format
+        if isinstance(url, list):
+            logger.debug(f"URL is a list: {url}, taking first element")
+            url = url[0] if url else ""
+        elif not isinstance(url, str):
+            logger.debug(f"URL is not a string: {type(url)}, converting to string")
+            url = str(url)
 
+        video_id = self._extract_video_id(url)
+        if not video_id:
+            logger.error(f"Could not extract video ID from URL: {url}")
+            return None
 
+        # Method 1: Try PacketStream proxy with yt-dlp (PRIMARY)
+        logger.info(f"🔄 Attempting PacketStream proxy extraction for {video_id}")
+        try:
+            metadata = self._extract_metadata_packetstream(url)
+            if metadata:
+                logger.info(f"✅ PacketStream extraction successful for {video_id}")
+                metadata.extraction_method = "packetstream_proxy"
+                return metadata
+            else:
+                logger.info(
+                    f"⚠️ PacketStream extraction failed for {video_id} - trying fallback methods"
+                )
+        except Exception as e:
+            logger.info(
+                f"⚠️ PacketStream proxy error for {video_id}: {str(e)[:100]} - trying fallback methods"
+            )
+
+        # Method 2: Try direct yt-dlp (FALLBACK for small batches ≤2 videos)
+        if total_urls <= 2:
+            logger.info(
+                f"🔄 Attempting direct yt-dlp extraction for {video_id} (≤2 videos)"
+            )
+            try:
+                metadata = self._extract_metadata_direct_ytdlp(url)
+                if metadata:
+                    logger.info(f"✅ Direct yt-dlp extraction successful for {video_id}")
+                    metadata.extraction_method = "direct_ytdlp"
+                    return metadata
+                else:
+                    logger.warning(f"⚠️ Direct yt-dlp extraction failed for {video_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ Direct yt-dlp error for {video_id}: {str(e)[:100]}")
+        else:
+            logger.info(
+                f"🚫 Skipping direct yt-dlp for {video_id} (>2 videos, would trigger bot detection)"
+            )
+            logger.info(
+                f"💡 For bulk operations, configure PacketStream credentials in Settings > API Keys"
+            )
+
+        # Method 3: Bright Data (CONSERVED but DISABLED)
+        # Note: This code is preserved for future use but currently disabled
+        # to prioritize PacketStream and avoid API costs
+        logger.info(
+            f"🚫 Bright Data extraction DISABLED for {video_id} (code conserved)"
+        )
+        # Uncomment the following lines to re-enable Bright Data as last resort:
+        # try:
+        #     metadata = self._extract_metadata_bright_data(url)
+        #     if metadata:
+        #         logger.info(f"✅ Bright Data extraction successful for {video_id}")
+        #         metadata.extraction_method = "bright_data_api"
+        #         return metadata
+        # except Exception as e:
+        #     logger.warning(f"⚠️ Bright Data error for {video_id}: {str(e)[:100]}")
+
+        logger.error(f"❌ All extraction methods failed for {video_id}")
+        return None
+
+    def _extract_metadata_packetstream(self, url: str) -> YouTubeMetadata | None:
+        """Extract metadata using PacketStream proxy with yt-dlp."""
+        try:
+            from .youtube_metadata_proxy import YouTubeMetadataProxyProcessor
+
+            # Create proxy processor instance
+            proxy_processor = YouTubeMetadataProxyProcessor()
+
+            # Use the proxy processor's yt-dlp method
+            metadata = proxy_processor._extract_metadata_with_proxy(url)
+            return metadata
+
+        except ImportError:
+            logger.error("PacketStream proxy processor not available")
+            return None
+        except Exception as e:
+            logger.error(f"PacketStream extraction error: {str(e)[:200]}")
+            return None
+
+    def _extract_metadata_direct_ytdlp(self, url: str) -> YouTubeMetadata | None:
+        """Extract metadata using direct yt-dlp (no proxy) for small batches."""
+        try:
+            import yt_dlp
+        except ImportError:
+            logger.error("yt-dlp not available for direct extraction")
+            return None
+
+        # Ensure URL is a plain string, not a list or other format
+        if isinstance(url, list):
+            logger.debug(f"URL is a list: {url}, taking first element")
+            url = url[0] if url else ""
+        elif not isinstance(url, str):
+            logger.debug(f"URL is not a string: {type(url)}, converting to string")
+            url = str(url)
+
+        video_id = self._extract_video_id(url)
+        if not video_id:
+            return None
+
+        try:
+            # Configure yt-dlp for metadata-only extraction
+            ydl_opts = {
+                "quiet": True,
+                "no_warnings": True,
+                "extract_flat": False,
+                "skip_download": True,
+                "writeinfojson": False,
+                "writesubtitles": False,
+                "writeautomaticsub": False,
+                "ignoreerrors": True,
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                logger.debug(f"Extracting metadata with direct yt-dlp for {video_id}")
+                yt_info = ydl.extract_info(url, download=False)
+
+                if not yt_info:
+                    logger.error(f"No metadata returned by yt-dlp for {video_id}")
+                    return None
+
+                # Convert yt-dlp info to our YouTubeMetadata model
+                metadata = self._convert_ytdlp_to_metadata(yt_info, url)
+                return metadata
+
+        except Exception as e:
+            logger.error(
+                f"Direct yt-dlp extraction failed for {video_id}: {str(e)[:200]}"
+            )
+            return None
+
+    def _convert_ytdlp_to_metadata(self, yt_info: dict, url: str) -> YouTubeMetadata:
+        """Convert yt-dlp info dict to YouTubeMetadata model."""
+        video_id = yt_info.get("id", self._extract_video_id(url))
+
+        # Parse duration
+        duration = yt_info.get("duration")
+        if isinstance(duration, str):
+            duration = self._parse_duration_string(duration)
+
+        # Extract upload date
+        upload_date = None
+        if yt_info.get("upload_date"):
+            try:
+                upload_date = datetime.strptime(
+                    yt_info["upload_date"], "%Y%m%d"
+                ).isoformat()
+            except:
+                upload_date = yt_info.get("upload_date")
+
+        # Extract tags
+        tags = yt_info.get("tags", []) or []
+        if isinstance(tags, str):
+            tags = [tag.strip() for tag in tags.split(",")]
+
+        # Extract categories
+        categories = []
+        if yt_info.get("categories"):
+            categories = (
+                yt_info["categories"]
+                if isinstance(yt_info["categories"], list)
+                else [yt_info["categories"]]
+            )
+
+        # Extract thumbnail (best quality)
+        thumbnail_url = None
+        thumbnails = yt_info.get("thumbnails", [])
+        if thumbnails:
+            # Get highest resolution thumbnail
+            best_thumb = max(
+                thumbnails, key=lambda x: x.get("width", 0) * x.get("height", 0)
+            )
+            thumbnail_url = best_thumb.get("url")
+
+        # Extract related videos (if available)
+        related_videos = []
+        if yt_info.get("related_videos"):
+            related_videos = yt_info["related_videos"]
+
+        # Extract channel stats
+        channel_stats = {}
+        if yt_info.get("channel_follower_count"):
+            channel_stats["subscribers"] = yt_info["channel_follower_count"]
+        if yt_info.get("channel_is_verified"):
+            channel_stats["verified"] = yt_info["channel_is_verified"]
+        if yt_info.get("channel_url"):
+            channel_stats["channel_url"] = yt_info["channel_url"]
+
+        # Extract video chapters
+        video_chapters = []
+        if yt_info.get("chapters"):
+            video_chapters = yt_info["chapters"]
+
+        return YouTubeMetadata(
+            video_id=video_id,
+            title=yt_info.get("title", ""),
+            url=url,
+            description=yt_info.get("description", ""),
+            uploader=yt_info.get("uploader", "") or yt_info.get("channel", ""),
+            uploader_id=yt_info.get("uploader_id", "") or yt_info.get("channel_id", ""),
+            upload_date=upload_date,
+            duration=duration,
+            view_count=yt_info.get("view_count"),
+            like_count=yt_info.get("like_count"),
+            comment_count=yt_info.get("comment_count"),
+            thumbnail_url=thumbnail_url,
+            tags=tags,
+            categories=categories,
+            related_videos=related_videos,
+            channel_stats=channel_stats,
+            video_chapters=video_chapters,
+            extraction_method="direct_ytdlp",
+            fetched_at=datetime.now(),
+        )
+
+    def _parse_duration_string(self, duration_str: str) -> int | None:
+        """Parse duration string to seconds."""
+        if not duration_str:
+            return None
+
+        try:
+            # If it's already a number, return it
+            if isinstance(duration_str, (int, float)):
+                return int(duration_str)
+
+            # Parse HH:MM:SS format
+            if ":" in duration_str:
+                parts = duration_str.split(":")
+                if len(parts) == 3:  # HH:MM:SS
+                    hours, minutes, seconds = parts
+                    return int(hours) * 3600 + int(minutes) * 60 + int(seconds)
+                elif len(parts) == 2:  # MM:SS
+                    minutes, seconds = parts
+                    return int(minutes) * 60 + int(seconds)
+
+            # Try to parse as plain number
+            return int(float(duration_str))
+
+        except (ValueError, TypeError):
+            return None
 
     def process(
         self, input_data: Any, dry_run: bool = False, **kwargs: Any
     ) -> ProcessorResult:
-        """Process YouTube URLs and extract metadata using Bright Data API Scraper."""
+        """Process YouTube URLs and extract metadata using priority system: PacketStream → Direct yt-dlp → Bright Data (disabled)."""
         start_time = time.time()
 
         try:
@@ -396,7 +764,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
                     logger.info(f"DRY RUN: Would extract metadata for {url}")
                     continue
 
-                metadata = self._extract_metadata_unified(url)
+                metadata = self._extract_metadata_unified(url, total_urls=len(urls))
                 if metadata:
                     all_metadata.append(metadata)
                     logger.info(f"✓ Successfully extracted metadata for {video_id}")
@@ -520,7 +888,9 @@ class YouTubeMetadataProcessor(BaseProcessor):
                     f.write(f"{i}. {error}\n")
 
                 f.write("\nNote: Processing uses Bright Data API Scrapers.\n")
-                f.write("If failures persist, check your Bright Data API key and quotas.\n")
+                f.write(
+                    "If failures persist, check your Bright Data API key and quotas.\n"
+                )
                 f.write(f"\n{'='*70}\n")
 
             logger.info(f"Failure log appended to: {log_file}")

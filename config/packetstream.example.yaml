@@ -1,0 +1,26 @@
+# PacketStream Residential Proxy Configuration
+# Based on: https://github.com/packetstream/packetstream-examples
+
+packetstream:
+  # Your PacketStream credentials
+  # Sign up at: https://packetstream.io
+  username: "your_username_here"
+  auth_key: "your_auth_key_here"
+
+  # Proxy settings
+  proxy_endpoints:
+    http: "proxy.packetstream.io:31111"
+    socks5: "proxy.packetstream.io:31113"
+
+  # Connection settings
+  timeout: 30
+  retry_attempts: 3
+  rotation_interval: 100  # Rotate IP after N requests
+
+  # Session management
+  sticky_sessions: true
+  session_duration: 300  # 5 minutes
+
+# Alternative: Set as environment variables
+# export PACKETSTREAM_USERNAME="your_username"
+# export PACKETSTREAM_AUTH_KEY="your_auth_key"

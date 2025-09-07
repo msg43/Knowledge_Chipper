@@ -44,9 +44,9 @@ def test_prompt_driven_summary_mode(tmp_path: Path):
     result = proc.process(
         src,
         dry_run=False,
-        prompt_template=tmp_path.joinpath("tmpl.txt").write_text(template) or tmp_path.joinpath("tmpl.txt"),
+        prompt_template=tmp_path.joinpath("tmpl.txt").write_text(template)
+        or tmp_path.joinpath("tmpl.txt"),
         prefer_template_summary=True,
     )
     assert result.success
     assert isinstance(result.data, str)
-

@@ -10,31 +10,31 @@ from .summary_cleanup_tab import SummaryCleanupTab
 
 # Make SyncStatusTab optional (depends on optional 'supabase' package)
 try:
-	from .sync_status_tab import SyncStatusTab
+    from .sync_status_tab import SyncStatusTab
 except Exception:
-	SyncStatusTab = None  # type: ignore
+    SyncStatusTab = None  # type: ignore
 
 # Make CloudUploadsTab optional at import time
 try:
-	from .cloud_uploads_tab import CloudUploadsTab
+    from .cloud_uploads_tab import CloudUploadsTab
 except Exception:
-	CloudUploadsTab = None  # type: ignore
+    CloudUploadsTab = None  # type: ignore
 
 from .transcription_tab import TranscriptionTab
 from .watcher_tab import WatcherTab
 from .youtube_tab import YouTubeTab
 
 __all__ = [
-	"IntroductionTab",
-	"ProcessTab",
-	"WatcherTab",
-	"YouTubeTab",
-	"TranscriptionTab",
-	"SummarizationTab",
-	"ClaimSearchTab",
-	"SpeakerAttributionTab",
-	"SummaryCleanupTab",
-	"SyncStatusTab",
-	"CloudUploadsTab",
-	"APIKeysTab",
+    "IntroductionTab",
+    "ProcessTab",
+    "WatcherTab",
+    "YouTubeTab",
+    "TranscriptionTab",
+    "SummarizationTab",
+    "ClaimSearchTab",
+    "SpeakerAttributionTab",
+    "SummaryCleanupTab",
+    "SyncStatusTab",
+    "CloudUploadsTab",
+    "APIKeysTab",
 ]

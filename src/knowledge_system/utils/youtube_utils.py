@@ -61,7 +61,15 @@ def extract_urls(input_data: Any) -> list[str]:
         FileNotFoundError: If input appears to be a file path but file doesn't exist
         IOError: If file cannot be read
     """
-    input_str = str(input_data)
+    # Handle different input types
+    if isinstance(input_data, list):
+        # If input is already a list, assume it's a list of URLs and return it
+        urls = []
+        for item in input_data:
+            item_str = str(item)
+            if is_youtube_url(item_str):
+                urls.append(item_str)
+        return urls
 
     input_str = str(input_data)
     urls = []
@@ -115,11 +123,13 @@ def get_manual_cookie_file() -> Path | None:
 
 def _show_cookie_help_dialog(error_message: str | None = None):
     """
-    Shows a helpful dialog box when cookies are stale or authentication fails
     Shows a helpful dialog box when cookies are stale or authentication fails.
+
+    Guarantees NSWindow/QMessageBox creation happens on the Qt main thread.
     """
     try:
         # Try to import GUI components
+        from PyQt6.QtCore import QThread, QTimer
         from PyQt6.QtWidgets import QApplication, QMessageBox
 
         # Get the current application instance
@@ -128,16 +138,19 @@ def _show_cookie_help_dialog(error_message: str | None = None):
             logger.warning("No QApplication instance found, cannot show dialog")
             return
 
-        msg_box = QMessageBox()
-        msg_box.setWindowTitle("YouTube Authentication Issue")
-        msg_box.setIcon(QMessageBox.Icon.Warning)
+        def _show_dialog() -> None:
+            try:
+                parent = app.activeWindow()
+                msg_box = QMessageBox(parent)
+                msg_box.setWindowTitle("YouTube Authentication Issue")
+                msg_box.setIcon(QMessageBox.Icon.Warning)
 
-        if (
-            error_message
-            and "sign in to confirm you're not a bot" in error_message.lower()
-        ):
-            title = "YouTube Requires Fresh Authentication"
-            message = """
+                if (
+                    error_message
+                    and "sign in to confirm you're not a bot" in error_message.lower()
+                ):
+                    title = "YouTube Requires Fresh Authentication"
+                    message = """
 It looks like your YouTube cookies have expired or are no longer valid.
 
 To fix this, please:
@@ -153,10 +166,10 @@ To fix this, please:
 This will allow the app to access YouTube without being blocked.
 
 Would you like to see detailed instructions?
-            """
-        else:
-            title = "YouTube Authentication Failed"
-            message = """
+                    """
+                else:
+                    title = "YouTube Authentication Failed"
+                    message = """
 The app couldn't authenticate with YouTube using your current settings.
 
 This usually means:
@@ -167,32 +180,41 @@ This usually means:
 The easiest solution is to create a manual cookies.txt file.
 
 Would you like to see detailed instructions?
-            """
+                    """
 
-        msg_box.setText(title)
-        msg_box.setInformativeText(message)
-        msg_box.setStandardButtons(
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        msg_box.setDefaultButton(QMessageBox.StandardButton.Yes)
+                msg_box.setText(title)
+                msg_box.setInformativeText(message)
+                msg_box.setStandardButtons(
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                msg_box.setDefaultButton(QMessageBox.StandardButton.Yes)
 
-        # Show the dialog
-        result = msg_box.exec()
+                # Show the dialog on the main thread
+                result = msg_box.exec()
 
-        if result == QMessageBox.StandardButton.Yes:
-            # Show detailed instructions
-            detailed_msg = QMessageBox()
-            detailed_msg.setWindowTitle("Detailed Cookie Instructions")
-            detailed_msg.setIcon(QMessageBox.Icon.Information)
-            detailed_msg.setText("How to Create a cookies.txt File")
-            detailed_msg.setInformativeText(create_cookie_instructions())
-            detailed_msg.setStandardButtons(QMessageBox.StandardButton.Ok)
-            detailed_msg.exec()
+                if result == QMessageBox.StandardButton.Yes:
+                    # Show detailed instructions
+                    detailed_msg = QMessageBox(parent)
+                    detailed_msg.setWindowTitle("Detailed Cookie Instructions")
+                    detailed_msg.setIcon(QMessageBox.Icon.Information)
+                    detailed_msg.setText("How to Create a cookies.txt File")
+                    detailed_msg.setInformativeText(create_cookie_instructions())
+                    detailed_msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+                    detailed_msg.exec()
+            except Exception as dialog_err:
+                logger.error(f"Failed while showing cookie help dialog: {dialog_err}")
+
+        # Marshal to main thread if needed
+        if QThread.currentThread() != app.thread():
+            QTimer.singleShot(0, _show_dialog)
+            return
+
+        _show_dialog()
 
     except ImportError:
         logger.warning("PyQt6 not available, cannot show dialog")
     except Exception as e:
-        logger.error(f"Failed to show cookie help dialog: {e}")
+        logger.error(f"Failed to prepare cookie help dialog: {e}")
 
 
 def get_single_working_strategy() -> dict[str, Any]:
@@ -393,13 +415,16 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
         bright_data_api_key = getattr(settings.api_keys, "bright_data_api_key", None)
         if not bright_data_api_key:
             import os
+
             bright_data_api_key = (
                 os.getenv("BRIGHT_DATA_API_KEY")
                 or os.getenv("BRIGHTDATA_API_KEY")
                 or os.getenv("BD_API_KEY")
             )
 
-        use_bright_data = bool(bright_data_api_key and len(str(bright_data_api_key)) >= 10)
+        use_bright_data = bool(
+            bright_data_api_key and len(str(bright_data_api_key)) >= 10
+        )
         proxy_url = None
         session_manager = None
 
@@ -408,10 +433,14 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
             try:
                 db_service = DatabaseService()
                 session_manager = BrightDataSessionManager(db_service)
-                if session_manager._validate_credentials():
-                    logger.info("Using Bright Data residential proxies for playlist expansion")
+                if session_manager._validate_credentials(log_missing=False):
+                    logger.info(
+                        "Using Bright Data residential proxies for playlist expansion"
+                    )
                 else:
-                    logger.warning("Bright Data proxy credentials missing; proceeding without proxy")
+                    logger.info(
+                        "Bright Data proxy credentials not configured; using API-only method"
+                    )
                     session_manager = None
             except Exception as e:
                 logger.warning(f"Bright Data initialization failed (non-fatal): {e}")

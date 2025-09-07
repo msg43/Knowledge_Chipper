@@ -1,8 +1,8 @@
 from pathlib import Path
 
+from ...config import get_settings
 from .models.llm_any import AnyLLM
 from .types import ScoredClaim
-from ...config import get_settings
 
 
 class Judge:

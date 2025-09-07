@@ -5,15 +5,15 @@ Handles processing of documents (PDF, DOCX, TXT, MD) with author attribution
 and metadata extraction for whitepapers, academic papers, and general documents.
 """
 
-import re
 import logging
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+import re
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-from ..processors.base import BaseProcessor, ProcessorResult
 from ..database import DatabaseService
 from ..logger import get_logger
+from ..processors.base import BaseProcessor, ProcessorResult
 from ..utils.validation import validate_document_input
 
 logger = get_logger(__name__)
@@ -21,20 +21,20 @@ logger = get_logger(__name__)
 
 class DocumentMetadata:
     """Container for document metadata."""
-    
+
     def __init__(self):
-        self.title: Optional[str] = None
-        self.authors: List[str] = []
-        self.date: Optional[datetime] = None
-        self.abstract: Optional[str] = None
-        self.keywords: List[str] = []
-        self.organization: Optional[str] = None
+        self.title: str | None = None
+        self.authors: list[str] = []
+        self.date: datetime | None = None
+        self.abstract: str | None = None
+        self.keywords: list[str] = []
+        self.organization: str | None = None
         self.document_type: str = "document"  # paper, whitepaper, article, report
-        self.doi: Optional[str] = None
-        self.url: Optional[str] = None
-        self.citations: List[Dict[str, str]] = []
-    
-    def to_dict(self) -> Dict[str, Any]:
+        self.doi: str | None = None
+        self.url: str | None = None
+        self.citations: list[dict[str, str]] = []
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert metadata to dictionary."""
         return {
             "title": self.title,
@@ -46,13 +46,13 @@ class DocumentMetadata:
             "document_type": self.document_type,
             "doi": self.doi,
             "url": self.url,
-            "citations": self.citations
+            "citations": self.citations,
         }
 
 
 class DocumentProcessor(BaseProcessor):
     """Process documents with author attribution and metadata extraction."""
-    
+
     # Common author patterns
     AUTHOR_PATTERNS = [
         # Academic style: "John Doe^1, Jane Smith^2"
@@ -64,64 +64,64 @@ class DocumentProcessor(BaseProcessor):
         # Written by
         r"^Written\s+by\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
     ]
-    
+
     # Title patterns
     TITLE_PATTERNS = [
         r"^#\s+(.+)$",  # Markdown H1
         r"^Title:\s*(.+)$",  # Title: line
         r"^(.+)\n[=]{3,}$",  # Underlined with =
     ]
-    
+
     # Date patterns
     DATE_PATTERNS = [
         r"(\d{4}-\d{2}-\d{2})",  # YYYY-MM-DD
         r"(\d{1,2}/\d{1,2}/\d{4})",  # MM/DD/YYYY
         r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})",  # Month DD, YYYY
     ]
-    
+
     # Abstract patterns
     ABSTRACT_PATTERNS = [
         r"^Abstract[:\s]*\n(.+?)(?:\n\n|\n[A-Z])",  # Abstract: followed by text
         r"^Summary[:\s]*\n(.+?)(?:\n\n|\n[A-Z])",  # Summary: followed by text
     ]
-    
+
     @property
-    def supported_formats(self) -> List[str]:
+    def supported_formats(self) -> list[str]:
         """Return list of supported formats."""
         return [".pdf", ".txt", ".md", ".docx", ".doc", ".rtf"]
-    
+
     def validate(self, input_data: Any) -> None:
         """Validate input document."""
         if not validate_document_input(input_data):
             raise ValueError(f"Invalid document input: {input_data}")
-    
+
     def extract_metadata(self, text: str, file_path: Path) -> DocumentMetadata:
         """Extract metadata from document text."""
         metadata = DocumentMetadata()
-        
+
         # Try to extract from first 1000 lines or 5000 characters
         preview = "\n".join(text.split("\n")[:1000])[:5000]
-        
+
         # Extract title
         metadata.title = self._extract_title(preview, file_path)
-        
+
         # Extract authors
         metadata.authors = self._extract_authors(preview)
-        
+
         # Extract date
         metadata.date = self._extract_date(preview)
-        
+
         # Extract abstract
         metadata.abstract = self._extract_abstract(preview)
-        
+
         # Extract keywords
         metadata.keywords = self._extract_keywords(preview)
-        
+
         # Determine document type
         metadata.document_type = self._determine_document_type(text, file_path)
-        
+
         return metadata
-    
+
     def _extract_title(self, text: str, file_path: Path) -> str:
         """Extract document title."""
         # Try patterns first
@@ -129,20 +129,20 @@ class DocumentProcessor(BaseProcessor):
             match = re.search(pattern, text, re.MULTILINE)
             if match:
                 return match.group(1).strip()
-        
+
         # Try first non-empty line
         for line in text.split("\n"):
             line = line.strip()
             if line and not line.startswith("#") and len(line) > 10:
                 return line
-        
+
         # Fall back to filename
         return file_path.stem.replace("_", " ").replace("-", " ").title()
-    
-    def _extract_authors(self, text: str) -> List[str]:
+
+    def _extract_authors(self, text: str) -> list[str]:
         """Extract author names from text."""
         authors = []
-        
+
         # Look for author patterns
         lines = text.split("\n")
         for i, line in enumerate(lines[:50]):  # Check first 50 lines
@@ -151,7 +151,7 @@ class DocumentProcessor(BaseProcessor):
                 if match:
                     # Extract author names
                     author_text = match.group(1) if match.lastindex else match.group(0)
-                    
+
                     # Split multiple authors
                     for sep in [",", " and ", "&", ";"]:
                         if sep in author_text:
@@ -160,23 +160,25 @@ class DocumentProcessor(BaseProcessor):
                             break
                     else:
                         authors.append(author_text.strip())
-                    
+
                     break
-        
+
         # Clean and deduplicate
         cleaned_authors = []
         for author in authors:
             # Remove superscripts and extra whitespace
             author = re.sub(r"\^?\d+", "", author).strip()
             author = re.sub(r"\s+", " ", author)
-            
+
             # Basic validation
             if author and len(author) > 3 and " " in author:
                 cleaned_authors.append(author)
-        
-        return list(dict.fromkeys(cleaned_authors))  # Remove duplicates preserving order
-    
-    def _extract_date(self, text: str) -> Optional[datetime]:
+
+        return list(
+            dict.fromkeys(cleaned_authors)
+        )  # Remove duplicates preserving order
+
+    def _extract_date(self, text: str) -> datetime | None:
         """Extract publication date from text."""
         for pattern in self.DATE_PATTERNS:
             match = re.search(pattern, text)
@@ -192,8 +194,8 @@ class DocumentProcessor(BaseProcessor):
                 except Exception:
                     pass
         return None
-    
-    def _extract_abstract(self, text: str) -> Optional[str]:
+
+    def _extract_abstract(self, text: str) -> str | None:
         """Extract abstract from text."""
         for pattern in self.ABSTRACT_PATTERNS:
             match = re.search(pattern, text, re.MULTILINE | re.DOTALL | re.IGNORECASE)
@@ -204,11 +206,11 @@ class DocumentProcessor(BaseProcessor):
                 if len(abstract) > 50:  # Reasonable minimum length
                     return abstract
         return None
-    
-    def _extract_keywords(self, text: str) -> List[str]:
+
+    def _extract_keywords(self, text: str) -> list[str]:
         """Extract keywords from text."""
         keywords = []
-        
+
         # Look for explicit keywords section
         keyword_match = re.search(r"Keywords?:\s*(.+?)(?:\n|$)", text, re.IGNORECASE)
         if keyword_match:
@@ -220,14 +222,14 @@ class DocumentProcessor(BaseProcessor):
                     break
             else:
                 keywords = [keyword_text.strip()]
-        
+
         return [k for k in keywords if k and len(k) > 2]
-    
+
     def _determine_document_type(self, text: str, file_path: Path) -> str:
         """Determine the type of document."""
         text_lower = text.lower()
         filename_lower = file_path.name.lower()
-        
+
         if "whitepaper" in filename_lower or "white paper" in text_lower[:1000]:
             return "whitepaper"
         elif "abstract" in text_lower[:1000] and "references" in text_lower:
@@ -238,13 +240,13 @@ class DocumentProcessor(BaseProcessor):
             return "article"
         else:
             return "document"
-    
+
     def process(self, input_data: Any, **kwargs) -> ProcessorResult:
         """Process a document file."""
         try:
             file_path = Path(input_data)
             self.validate(file_path)
-            
+
             # Read the document content based on type
             if file_path.suffix.lower() == ".pdf":
                 text = self._process_pdf(file_path)
@@ -257,16 +259,16 @@ class DocumentProcessor(BaseProcessor):
             else:
                 return ProcessorResult(
                     success=False,
-                    errors=[f"Unsupported document format: {file_path.suffix}"]
+                    errors=[f"Unsupported document format: {file_path.suffix}"],
                 )
-            
+
             # Extract metadata
             metadata = self.extract_metadata(text, file_path)
-            
+
             # Create media source record in database
             db = DatabaseService()
             media_id = f"doc_{file_path.stem}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            
+
             media_record = db.create_media_source(
                 media_id=media_id,
                 title=metadata.title,
@@ -282,9 +284,9 @@ class DocumentProcessor(BaseProcessor):
                     "doi": metadata.doi,
                     "file_path": str(file_path),
                     "file_size": file_path.stat().st_size,
-                }
+                },
             )
-            
+
             # Create transcript record with full text
             transcript_record = db.create_transcript(
                 media_id=media_id,
@@ -295,9 +297,9 @@ class DocumentProcessor(BaseProcessor):
                     "word_count": len(text.split()),
                     "character_count": len(text),
                     "paragraph_count": len(re.findall(r"\n\n+", text)) + 1,
-                }
+                },
             )
-            
+
             return ProcessorResult(
                 success=True,
                 data={
@@ -306,7 +308,7 @@ class DocumentProcessor(BaseProcessor):
                     "authors": metadata.authors,
                     "document_type": metadata.document_type,
                     "text": text,
-                    "metadata": metadata.to_dict()
+                    "metadata": metadata.to_dict(),
                 },
                 metadata={
                     "processor": self.name,
@@ -314,83 +316,82 @@ class DocumentProcessor(BaseProcessor):
                     "processing_time": datetime.now().isoformat(),
                     "db_records": {
                         "media_sources": media_id,
-                        "transcripts": transcript_record.transcript_id if transcript_record else None
-                    }
-                }
+                        "transcripts": transcript_record.transcript_id
+                        if transcript_record
+                        else None,
+                    },
+                },
             )
-            
+
         except Exception as e:
             logger.error(f"Document processing failed: {e}")
-            return ProcessorResult(
-                success=False,
-                errors=[str(e)]
-            )
-    
+            return ProcessorResult(success=False, errors=[str(e)])
+
     def _process_pdf(self, file_path: Path) -> str:
         """Extract text from PDF file."""
         try:
             import PyPDF2
-            
+
             text_parts = []
-            with open(file_path, 'rb') as file:
+            with open(file_path, "rb") as file:
                 pdf_reader = PyPDF2.PdfReader(file)
                 for page_num in range(len(pdf_reader.pages)):
                     page = pdf_reader.pages[page_num]
                     text_parts.append(page.extract_text())
-            
+
             return "\n".join(text_parts)
-            
+
         except ImportError:
             # Fall back to pdfplumber if available
             try:
                 import pdfplumber
-                
+
                 text_parts = []
                 with pdfplumber.open(file_path) as pdf:
                     for page in pdf.pages:
                         text = page.extract_text()
                         if text:
                             text_parts.append(text)
-                
+
                 return "\n".join(text_parts)
-                
+
             except ImportError:
                 raise ImportError("PDF processing requires PyPDF2 or pdfplumber")
-    
+
     def _process_docx(self, file_path: Path) -> str:
         """Extract text from DOCX file."""
         try:
             import docx
-            
+
             doc = docx.Document(file_path)
             text_parts = []
-            
+
             for paragraph in doc.paragraphs:
                 if paragraph.text.strip():
                     text_parts.append(paragraph.text)
-            
+
             return "\n\n".join(text_parts)
-            
+
         except ImportError:
             raise ImportError("DOCX processing requires python-docx")
-    
+
     def _process_rtf(self, file_path: Path) -> str:
         """Extract text from RTF file."""
         try:
             import striprtf
-            
-            with open(file_path, 'r', encoding='utf-8') as file:
+
+            with open(file_path, encoding="utf-8") as file:
                 rtf_content = file.read()
-            
+
             return striprtf.rtf_to_text(rtf_content)
-            
+
         except ImportError:
             # Basic RTF stripping
-            with open(file_path, 'r', encoding='utf-8') as file:
+            with open(file_path, encoding="utf-8") as file:
                 content = file.read()
-            
+
             # Remove basic RTF formatting
-            content = re.sub(r'\\[a-z]+\d*\s?', '', content)
-            content = re.sub(r'[{}]', '', content)
-            
+            content = re.sub(r"\\[a-z]+\d*\s?", "", content)
+            content = re.sub(r"[{}]", "", content)
+
             return content

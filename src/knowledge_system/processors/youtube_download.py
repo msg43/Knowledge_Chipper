@@ -6,6 +6,7 @@ Downloads audio and thumbnails from YouTube videos or playlists using yt-dlp.
 Supports configurable output format (mp3/wav), error handling, and returns output file paths and metadata.
 """
 
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -140,6 +141,16 @@ class YouTubeDownloadProcessor(BaseProcessor):
         progress_callback=None,
         **kwargs,
     ) -> ProcessorResult:
+        """
+        Process YouTube URLs for audio download with smart proxy fallback.
+
+        SECURITY FEATURE: When Bright Data proxy fails:
+        - Single video downloads: Allowed with direct connection (low risk)
+        - Bulk downloads (2+ URLs): Blocked to prevent YouTube IP bans
+
+        This protects users from triggering YouTube's anti-bot detection while
+        still allowing legitimate single-video use cases.
+        """
         output_format = output_format or self.output_format
         download_thumbnails = (
             download_thumbnails
@@ -159,7 +170,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
         # Initialize deduplication service
         dedup_service = VideoDeduplicationService()
-        
+
         original_count = len(urls)
         unique_urls, duplicate_results = dedup_service.check_batch_duplicates(
             urls,
@@ -257,13 +268,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     if progress_callback:
                         progress_callback("🌐 Using Bright Data residential proxies...")
                 else:
-                    logger.warning(
-                        "Bright Data credentials incomplete"
-                    )
+                    logger.warning("Bright Data credentials incomplete")
             except Exception as e:
-                logger.warning(
-                    f"Bright Data initialization failed: {e}"
-                )
+                logger.warning(f"Bright Data initialization failed: {e}")
 
         if not use_bright_data:
             return ProcessorResult(
@@ -291,10 +298,27 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     # Test proxy connectivity
                     import requests
 
+                    # SSL certificate path for restricted accounts
+                    ssl_cert_path = os.path.join(
+                        os.path.dirname(
+                            os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                        ),
+                        "config",
+                        "brightdata_proxy_ca",
+                        "New SSL certifcate - MUST BE USED WITH PORT 33335",
+                        "BrightData SSL certificate (port 33335).crt",
+                    )
+
+                    # Use SSL certificate if available
+                    verify_param = (
+                        ssl_cert_path if os.path.exists(ssl_cert_path) else True
+                    )
+
                     test_response = requests.get(
                         "https://httpbin.org/ip",
                         proxies={"http": proxy_url, "https": proxy_url},
                         timeout=15,
+                        verify=verify_param,
                     )
                     if test_response.status_code == 200:
                         proxy_ip = test_response.json().get("origin", "unknown")
@@ -311,14 +335,113 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         )
                 else:
                     logger.error("Failed to generate Bright Data proxy URL")
-                    use_bright_data = False
+
+                    # Smart fallback: Allow single video downloads, block bulk downloads
+                    if len(urls) == 1:
+                        logger.warning(
+                            "Single video download - allowing fallback despite proxy URL failure"
+                        )
+                        if progress_callback:
+                            progress_callback(
+                                "❌ Failed to generate Bright Data proxy URL"
+                            )
+                            progress_callback(
+                                "⚠️ Single video: Proceeding with direct connection (low risk)"
+                            )
+                        use_bright_data = False
+                    else:
+                        logger.error(
+                            f"Bulk download detected ({len(urls)} URLs) - blocking due to proxy URL failure"
+                        )
+                        if progress_callback:
+                            progress_callback(
+                                "❌ Failed to generate Bright Data proxy URL"
+                            )
+                            progress_callback(
+                                f"🚫 BLOCKED: Bulk download ({len(urls)} URLs) without proxy protection"
+                            )
+                            progress_callback(
+                                "🛡️ This prevents YouTube from banning your IP address"
+                            )
+                            progress_callback(
+                                "💡 Tip: Single video downloads are still allowed without proxy"
+                            )
+                            progress_callback(
+                                "🔧 Please fix Bright Data configuration before bulk downloading"
+                            )
+
+                        return ProcessorResult(
+                            success=False,
+                            data=None,
+                            errors=[
+                                f"Failed to generate Bright Data proxy URL for bulk download ({len(urls)} URLs). "
+                                "Bulk downloads without proxy protection are blocked to prevent IP bans. "
+                                "Single video downloads are still allowed."
+                            ],
+                            metadata={
+                                "proxy_required": True,
+                                "bulk_download_blocked": True,
+                                "urls_count": len(urls),
+                                "single_video_allowed": True,
+                            },
+                        )
 
             except Exception as proxy_test_error:
                 error_msg = str(proxy_test_error)
                 logger.error(f"❌ Bright Data proxy test failed: {error_msg}")
-                if progress_callback:
-                    progress_callback(f"❌ Bright Data proxy test failed: {error_msg}")
-                use_bright_data = False
+
+                # Smart fallback: Allow single video downloads, block bulk downloads
+                if len(urls) == 1:
+                    logger.warning(
+                        "Single video download - allowing fallback to direct connection"
+                    )
+                    if progress_callback:
+                        progress_callback(
+                            f"❌ Bright Data proxy test failed: {error_msg}"
+                        )
+                        progress_callback(
+                            "⚠️ Single video: Proceeding with direct connection (low risk)"
+                        )
+                        progress_callback(
+                            "🔄 Consider fixing Bright Data for future bulk downloads..."
+                        )
+                    use_bright_data = False
+                else:
+                    logger.error(
+                        f"Bulk download detected ({len(urls)} URLs) - blocking direct connection to prevent IP ban"
+                    )
+                    if progress_callback:
+                        progress_callback(
+                            f"❌ Bright Data proxy test failed: {error_msg}"
+                        )
+                        progress_callback(
+                            f"🚫 BLOCKED: Bulk download ({len(urls)} URLs) without proxy protection"
+                        )
+                        progress_callback(
+                            "🛡️ This prevents YouTube from banning your IP address"
+                        )
+                        progress_callback(
+                            "💡 Tip: Single video downloads are still allowed without proxy"
+                        )
+                        progress_callback(
+                            "🔧 Please fix Bright Data configuration before bulk downloading"
+                        )
+
+                    return ProcessorResult(
+                        success=False,
+                        data=None,
+                        errors=[
+                            f"Bright Data proxy failed for bulk download ({len(urls)} URLs): {error_msg}. "
+                            "Bulk downloads without proxy protection are blocked to prevent IP bans. "
+                            "Single video downloads are still allowed."
+                        ],
+                        metadata={
+                            "proxy_required": True,
+                            "bulk_download_blocked": True,
+                            "urls_count": len(urls),
+                            "single_video_allowed": True,
+                        },
+                    )
 
         # Proxy usage requires Bright Data; no legacy WebShare fallback
 
@@ -358,7 +481,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
             # Track last progress for updating single line
             last_progress_message = ""
-            
+
             def download_progress_hook(d):
                 """Hook to capture yt-dlp download progress and forward to GUI with diagnostic info."""
                 nonlocal last_progress_message
@@ -397,11 +520,23 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         elif time_since_last > 10:  # No progress for 10+ seconds
                             progress_msg += f" (stalled - retrying with {optimal_concurrency} connections)"
                         else:
-                            progress_msg += f" (buffering {optimal_concurrency} streams...)"
+                            progress_msg += (
+                                f" (buffering {optimal_concurrency} streams...)"
+                            )
 
                         # Use single line update if message changed significantly
-                        if not last_progress_message or abs(percent - 
-                            float(last_progress_message.split('(')[-1].split('%')[0] if '(' in last_progress_message else 0)) > 1:
+                        if (
+                            not last_progress_message
+                            or abs(
+                                percent
+                                - float(
+                                    last_progress_message.split("(")[-1].split("%")[0]
+                                    if "(" in last_progress_message
+                                    else 0
+                                )
+                            )
+                            > 1
+                        ):
                             progress_callback(progress_msg)
                             last_progress_message = progress_msg
                         last_progress_time[0] = current_time
@@ -491,11 +626,15 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         "socket_timeout": 30,
                     }
 
-                    proxy_type = "Bright Data" if use_bright_data else "Direct"
+                    proxy_type = (
+                        "Bright Data" if use_bright_data else "Direct (NO PROXY)"
+                    )
                     with yt_dlp.YoutubeDL(test_opts) as ydl_test:
-                        logger.info(
-                            f"Testing {proxy_type} proxy connectivity for: {url}"
-                        )
+                        logger.info(f"Testing {proxy_type} connectivity for: {url}")
+                        if progress_callback and not use_bright_data:
+                            progress_callback(
+                                f"⚠️ WARNING: Using direct connection (no proxy protection)"
+                            )
                         if progress_callback:
                             progress_callback(
                                 f"🔗 Testing {proxy_type} proxy connectivity..."
@@ -547,9 +686,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                 except Exception as e:
                     error_msg = str(e)
-                    logger.error(
-                        f"❌ Metadata extraction failed for {url}: {error_msg}"
-                    )
+                    logger.error(f"❌ Metadata extraction failed for {url}: {error_msg}")
 
                     if progress_callback:
                         if "403" in error_msg or "forbidden" in error_msg.lower():
@@ -712,9 +849,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     f"   Check proxy account status and credentials"
                                 )
                             elif "certificate" in download_error_msg.lower():
-                                progress_callback(
-                                    f"❌ SSL certificate issue with proxy"
-                                )
+                                progress_callback(f"❌ SSL certificate issue with proxy")
                             else:
                                 progress_callback(
                                     f"❌ Download error: {download_error_msg}"

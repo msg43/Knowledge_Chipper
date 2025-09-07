@@ -113,7 +113,7 @@ def analyze_temporality(claims: list[ScoredClaim], model_uri: str) -> list[Score
         List of claims with temporality populated
     """
     from ...config import get_settings
-    from .models.llm_factory import create_llm
+    from .models.llm_any import AnyLLM
 
     # Currently disabled - return claims unchanged until prompt template is created
     # TODO: Create temporality analysis prompt template
@@ -128,7 +128,7 @@ def analyze_temporality(claims: list[ScoredClaim], model_uri: str) -> list[Score
     #     logger.warning("Temporality prompt template not found, skipping analysis")
     #     return claims
     #
-    # llm = create_llm(model_uri)
+    # llm = AnyLLM(model_uri)
     # analyzer = TemporalityAnalyzer(llm, prompt_path)
     # return analyzer.analyze_claims_batch(claims)
 

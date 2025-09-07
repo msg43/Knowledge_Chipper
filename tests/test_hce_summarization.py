@@ -14,7 +14,11 @@ def test_hce_summarization_with_mocks(monkeypatch):
                 "claim_type": "forecast",
                 "stance": "asserts",
                 "evidence_spans": [
-                    {"t0": "000000", "t1": "000010", "quote": "we will have another big inflation soon"}
+                    {
+                        "t0": "000000",
+                        "t1": "000010",
+                        "quote": "we will have another big inflation soon",
+                    }
                 ],
                 "confidence": 0.8,
             }
@@ -30,7 +34,9 @@ def test_hce_summarization_with_mocks(monkeypatch):
             "decision": "accept",
         }
 
-    monkeypatch.setattr(llm_any_mod.AnyLLM, "generate_json", staticmethod(fake_generate_json))
+    monkeypatch.setattr(
+        llm_any_mod.AnyLLM, "generate_json", staticmethod(fake_generate_json)
+    )
     monkeypatch.setattr(llm_any_mod.AnyLLM, "judge_json", staticmethod(fake_judge_json))
 
     # Run summarizer on simple input text
@@ -49,4 +55,3 @@ def test_hce_summarization_with_mocks(monkeypatch):
     md = result.metadata or {}
     # HCE path should extract at least one claim via mocks
     assert md.get("claims_extracted", 0) >= 1
-

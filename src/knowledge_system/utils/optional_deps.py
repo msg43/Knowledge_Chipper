@@ -8,8 +8,8 @@ while lazily fetching optional features without requiring terminal usage.
 from __future__ import annotations
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -25,7 +25,14 @@ def get_vendor_dir() -> str:
 
     base: Path
     if sys.platform == "darwin":
-        base = Path.home() / "Library" / "Application Support" / "KnowledgeChipper" / "vendor" / py_tag
+        base = (
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "KnowledgeChipper"
+            / "vendor"
+            / py_tag
+        )
     elif os.name == "nt":
         # Windows: %APPDATA%\KnowledgeChipper\vendor\pyX.Y
         appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
@@ -71,8 +78,7 @@ def install_package(package_spec: str) -> bool:
     try:
         proc = subprocess.run(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             check=False,
             env=env,
         )
@@ -81,7 +87,7 @@ def install_package(package_spec: str) -> bool:
         return False
 
 
-def ensure_module(module_name: str, package_spec: Optional[str] = None):
+def ensure_module(module_name: str, package_spec: str | None = None):
     """Ensure a module is importable; install it into vendor if missing.
 
     - module_name: import path (e.g., "supabase")
@@ -98,5 +104,3 @@ def ensure_module(module_name: str, package_spec: Optional[str] = None):
             __import__(module_name)
             return sys.modules[module_name]
         raise
-
-

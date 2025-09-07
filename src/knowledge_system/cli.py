@@ -16,12 +16,19 @@ from rich.console import Console
 # Suppress common ML/audio library warnings for CLI usage
 try:
     from .utils.warning_suppressions import suppress_ml_library_warnings
+
     suppress_ml_library_warnings()
 except ImportError:
     # Fallback warning suppression if utility import fails
-    warnings.filterwarnings("ignore", category=UserWarning, module="torchaudio._backend.utils")
-    warnings.filterwarnings("ignore", category=UserWarning, module="pyannote.audio.models.blocks.pooling")
-    warnings.filterwarnings("ignore", message=".*std\\(\\): degrees of freedom.*", category=UserWarning)
+    warnings.filterwarnings(
+        "ignore", category=UserWarning, module="torchaudio._backend.utils"
+    )
+    warnings.filterwarnings(
+        "ignore", category=UserWarning, module="pyannote.audio.models.blocks.pooling"
+    )
+    warnings.filterwarnings(
+        "ignore", message=".*std\\(\\): degrees of freedom.*", category=UserWarning
+    )
 
 # Import modular commands
 from .commands import database, moc, process, summarize, transcribe
@@ -174,11 +181,11 @@ main.add_command(database)
 # Import and add upload command
 try:
     from .commands.upload import upload
+
     main.add_command(upload)
 except ImportError as e:
     # OAuth dependencies not available
     pass
-
 
 
 # Models subcommands
@@ -735,9 +742,7 @@ def flag() -> None:
     from .utils.cache_management import create_manual_clear_flag
 
     create_manual_clear_flag()
-    click.echo(
-        "✅ Created cache clear flag. Cache will be cleared on next app startup."
-    )
+    click.echo("✅ Created cache clear flag. Cache will be cleared on next app startup.")
 
 
 # Add the cache command group to main CLI

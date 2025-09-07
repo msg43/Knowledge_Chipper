@@ -38,8 +38,17 @@ class BrightDataSessionManager:
         self.password = self._get_credential("BD_PASS", "bright_data_password")
         self.api_key = getattr(self.settings.api_keys, "bright_data_api_key", None)
 
-        # Bright Data configuration
-        self.proxy_endpoint = "zproxy.lum-superproxy.io:22225"
+        # Bright Data configuration - updated for new SSL certificate (September 2024)
+        self.proxy_endpoint = "brd.superproxy.io:33335"
+
+        # SSL certificate path for restricted accounts
+        self.ssl_cert_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "config",
+            "brightdata_proxy_ca",
+            "New SSL certifcate - MUST BE USED WITH PORT 33335",
+            "BrightData SSL certificate (port 33335).crt",
+        )
         self.session_cache = {}  # Cache active sessions per video
 
         logger.info("Bright Data session manager initialized")
@@ -57,8 +66,14 @@ class BrightDataSessionManager:
         except AttributeError:
             return None
 
-    def _validate_credentials(self) -> bool:
-        """Validate that required Bright Data credentials are available."""
+    def _validate_credentials(self, log_missing: bool = True) -> bool:
+        """
+        Validate that required Bright Data credentials are available.
+
+        Args:
+            log_missing: Whether to log missing credentials as errors (default: True).
+                        Set to False when proxy credentials are optional.
+        """
         missing = []
 
         if not self.customer_id:
@@ -69,7 +84,12 @@ class BrightDataSessionManager:
             missing.append("BD_PASS (password)")
 
         if missing:
-            logger.error(f"Missing Bright Data credentials: {', '.join(missing)}")
+            if log_missing:
+                logger.error(f"Missing Bright Data credentials: {', '.join(missing)}")
+            else:
+                logger.debug(
+                    f"Bright Data proxy credentials not configured: {', '.join(missing)}"
+                )
             return False
 
         return True
@@ -183,6 +203,27 @@ class BrightDataSessionManager:
             return None
 
         return {"http": proxy_url, "https": proxy_url}
+
+    def get_requests_config_for_file(
+        self, file_id: str, session_type: str = "audio_download", timeout: int = 30
+    ) -> dict[str, any] | None:
+        """
+        Get complete requests configuration with proxy and SSL certificate for a specific file.
+
+        Args:
+            file_id: Unique identifier for the file
+            session_type: Type of session needed
+            timeout: Request timeout in seconds
+
+        Returns:
+            Complete requests configuration dictionary, or None if failed
+        """
+        proxy_dict = self.get_proxy_dict_for_file(file_id, session_type)
+        if proxy_dict:
+            return BrightDataProxyConfig.get_requests_config(
+                proxy_dict, timeout, self.ssl_cert_path
+            )
+        return None
 
     def update_session_usage(
         self,
@@ -301,7 +342,10 @@ class BrightDataProxyConfig:
 
     @classmethod
     def get_requests_config(
-        cls, proxy_dict: dict[str, str], timeout: int = DEFAULT_TIMEOUT
+        cls,
+        proxy_dict: dict[str, str],
+        timeout: int = DEFAULT_TIMEOUT,
+        ssl_cert_path: str = None,
     ) -> dict[str, any]:
         """
         Get requests library configuration for Bright Data proxy.
@@ -309,16 +353,28 @@ class BrightDataProxyConfig:
         Args:
             proxy_dict: Proxy dictionary from session manager
             timeout: Request timeout in seconds
+            ssl_cert_path: Path to SSL certificate for restricted accounts
 
         Returns:
             Dictionary of requests configuration
         """
-        return {
+        config = {
             "proxies": proxy_dict,
             "timeout": timeout,
-            "verify": True,  # Keep SSL verification enabled
             "headers": {"User-Agent": "Knowledge-System/1.0 (Bright-Data-Integration)"},
         }
+
+        # For proxy connections to brd.superproxy.io:33335, use the SSL certificate
+        # This is for restricted accounts that require SSL certificate authentication
+        if ssl_cert_path and os.path.exists(ssl_cert_path):
+            config["verify"] = ssl_cert_path
+            logger.debug(
+                f"Using Bright Data SSL certificate for proxy: {ssl_cert_path}"
+            )
+        else:
+            config["verify"] = True  # Keep SSL verification enabled
+
+        return config
 
     @classmethod
     def estimate_cost(

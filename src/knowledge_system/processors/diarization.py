@@ -1,6 +1,6 @@
+import warnings
 from pathlib import Path
 from typing import Any
-import warnings
 
 from knowledge_system.logger import get_logger
 from knowledge_system.processors.base import BaseProcessor, ProcessorResult
@@ -12,12 +12,19 @@ logger = get_logger(__name__)
 # Suppress ML library warnings for diarization processing
 try:
     from ..utils.warning_suppressions import suppress_ml_library_warnings
+
     suppress_ml_library_warnings()
 except ImportError:
     # Fallback warning suppression for PyAnnote/TorchAudio
-    warnings.filterwarnings("ignore", category=UserWarning, module="torchaudio._backend.utils")
-    warnings.filterwarnings("ignore", category=UserWarning, module="pyannote.audio.models.blocks.pooling")
-    warnings.filterwarnings("ignore", message=".*std\\(\\): degrees of freedom.*", category=UserWarning)
+    warnings.filterwarnings(
+        "ignore", category=UserWarning, module="torchaudio._backend.utils"
+    )
+    warnings.filterwarnings(
+        "ignore", category=UserWarning, module="pyannote.audio.models.blocks.pooling"
+    )
+    warnings.filterwarnings(
+        "ignore", message=".*std\\(\\): degrees of freedom.*", category=UserWarning
+    )
 
 # Lazy loading of diarization dependencies
 PIPELINE_AVAILABLE = False
@@ -158,7 +165,7 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                 if self.device and self.device != "cpu":
                     try:
                         import torch
-                        
+
                         logger.info(
                             f"Moving diarization pipeline to device: {self.device}"
                         )
@@ -166,7 +173,7 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                             self.progress_callback(
                                 f"Moving model to {self.device}...", 80
                             )
-                        
+
                         # Convert device string to torch.device object
                         torch_device = torch.device(self.device)
                         pipeline = pipeline.to(torch_device)
@@ -244,8 +251,9 @@ class SpeakerDiarizationProcessor(BaseProcessor):
             logger.info(f"Starting diarization processing for: {path}")
 
             # Create ETA calculator for progress tracking
-            from ..utils.eta_calculator import ETACalculator
             import time
+
+            from ..utils.eta_calculator import ETACalculator
 
             start_time = time.time()
             eta_calc = ETACalculator() if self.progress_callback else None
@@ -279,46 +287,66 @@ class SpeakerDiarizationProcessor(BaseProcessor):
 
             # Add progress monitoring during diarization
             import threading
+
             progress_stop_event = None
-            
-            if self.progress_callback and audio_duration:
+
+            if self.progress_callback:
 
                 def progress_monitor(stop_event):
+                    phase_start_time = time.time()
                     while not stop_event.is_set():
                         elapsed = time.time() - start_time
-                        # Rough estimate: diarization typically takes 0.1-0.3x real-time
-                        estimated_completion = (
-                            audio_duration * 0.2
-                        )  # 20% of audio duration
-                        
-                        # Use a more generous timeout to prevent infinite loops
-                        max_timeout = max(estimated_completion, 120)  # At least 2 minutes
-                        if elapsed >= max_timeout:
-                            logger.warning(f"Diarization progress monitoring timeout after {elapsed:.1f}s")
-                            break
-                            
-                        progress_percent = min(
-                            45, int((elapsed / estimated_completion) * 45)
-                        )
+
+                        # Dynamic progress estimation based on elapsed time
+                        # Use exponential progress curve that approaches but never exceeds 80%
+                        # This leaves room for segment processing (80-100%)
+                        max_analysis_progress = 80.0
+
+                        # Adaptive estimation - starts slow, accelerates, then slows as it approaches completion
+                        if elapsed < 5:
+                            progress_percent = min(10, elapsed * 2)
+                            phase = "initializing models"
+                        elif elapsed < 15:
+                            progress_percent = min(25, 10 + (elapsed - 5) * 1.5)
+                            phase = "detecting speech segments"
+                        elif elapsed < 30:
+                            progress_percent = min(50, 25 + (elapsed - 15) * 1.67)
+                            phase = "extracting speaker embeddings"
+                        else:
+                            # Asymptotic approach to max_analysis_progress
+                            progress_factor = 1 - (1 / (1 + (elapsed - 30) / 20))
+                            progress_percent = min(
+                                max_analysis_progress,
+                                50 + (max_analysis_progress - 50) * progress_factor,
+                            )
+                            phase = "clustering speakers"
+
+                        # Calculate ETA using the ETACalculator
+                        eta_str = ""
+                        if eta_calc:
+                            eta_text, eta_seconds = eta_calc.update(progress_percent)
+                            if eta_text:
+                                eta_str = f", ETA: {eta_text}"
+
                         self.progress_callback(
-                            f"🎙️ Analyzing speakers... ({elapsed:.1f}s elapsed)",
-                            progress_percent,
+                            f"🎙️ Analyzing speakers - {phase}... ({elapsed:.1f}s elapsed{eta_str})",
+                            int(progress_percent),
                         )
-                        
+
                         # Check for stop event more frequently
-                        if stop_event.wait(timeout=2):  # 2 second timeout
+                        if stop_event.wait(
+                            timeout=3
+                        ):  # 3 second timeout for smoother updates
                             break
 
                 progress_stop_event = threading.Event()
                 progress_thread = threading.Thread(
-                    target=progress_monitor, 
-                    args=(progress_stop_event,), 
-                    daemon=True
+                    target=progress_monitor, args=(progress_stop_event,), daemon=True
                 )
                 progress_thread.start()
 
             diarization = self._pipeline(str(path))
-            
+
             # Stop the progress monitor thread
             if progress_stop_event:
                 progress_stop_event.set()
@@ -328,11 +356,12 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                 elapsed_time = time.time() - start_time
                 self.progress_callback(
                     f"🎙️ Speaker analysis complete ({elapsed_time:.1f}s) - Processing segments...",
-                    50,
+                    80,
                 )
 
             segments = []
             segment_count = 0
+            total_segment_estimate = None  # Will be estimated as we process
 
             # Process segments with progress updates
             for turn, _, speaker in diarization.itertracks(yield_label=True):
@@ -341,20 +370,34 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                 )
                 segment_count += 1
 
-                # Provide progress updates every 10 segments using single line update with ETA
-                if segment_count % 10 == 0 and self.progress_callback:
-                    progress_percent = min(90, 50 + (segment_count * 2))  # Progress from 50% to 90%
-                    
+                # Provide progress updates every 5 segments for more granular feedback
+                if segment_count % 5 == 0 and self.progress_callback:
+                    # Estimate total segments based on audio duration if available
+                    if audio_duration and not total_segment_estimate:
+                        # Rough estimate: 1 segment per 3-10 seconds of audio
+                        total_segment_estimate = max(10, int(audio_duration / 5))
+
+                    # Calculate progress from 80% to 95% based on segment processing
+                    if total_segment_estimate:
+                        segment_progress = min(
+                            0.95, segment_count / total_segment_estimate
+                        )
+                        progress_percent = 80 + (segment_progress * 15)  # 80% to 95%
+                    else:
+                        # Fallback: gradual increase from 80% approaching 95%
+                        progress_factor = 1 - (1 / (1 + segment_count / 20))
+                        progress_percent = 80 + (progress_factor * 15)
+
                     # Calculate ETA if available
                     eta_str = ""
                     if eta_calc:
                         eta_text, _ = eta_calc.update(progress_percent)
                         if eta_text:
                             eta_str = f" | ETA: {eta_text}"
-                    
+
                     self.progress_callback(
                         f"🎙️ Processing speaker segments: {segment_count} found...{eta_str}",
-                        progress_percent
+                        int(progress_percent),
                     )
 
             # Final progress update

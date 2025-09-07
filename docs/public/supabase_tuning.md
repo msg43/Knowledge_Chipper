@@ -29,5 +29,3 @@ Outputs are written under `output/supabase_tuning/<timestamp>/`:
 - function_ddl.sql: function definition (if `--signature` provided)
 
 Apply relevant indexes carefully in production, prefer `CONCURRENTLY`, and consider switching to keyset pagination instead of large OFFSETs.
-
-

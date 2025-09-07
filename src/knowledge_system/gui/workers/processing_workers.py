@@ -71,31 +71,32 @@ class EnhancedSummarizationWorker(QThread):
 
                     if result.success:
                         logger.info(f"Successfully summarized: {file_path}")
-                        
+
                         # Export to GetReceipts if enabled and successful
-                        if (
-                            self.gui_settings.get("export_getreceipts", False)
-                            and result.metadata.get("hce_data")
-                        ):
+                        if self.gui_settings.get(
+                            "export_getreceipts", False
+                        ) and result.metadata.get("hce_data"):
                             try:
-                                from ...utils.getreceipts_exporter import create_exporter_from_settings
                                 from ...config import get_settings
-                                
+                                from ...utils.getreceipts_exporter import (
+                                    create_exporter_from_settings,
+                                )
+
                                 # Create exporter from settings
                                 settings = get_settings()
                                 exporter = create_exporter_from_settings(settings)
-                                
+
                                 # Get HCE pipeline outputs from result metadata
                                 hce_data = result.metadata["hce_data"]
-                                
+
                                 # Build source info for the claim
                                 source_info = {
                                     "title": file_path.stem,
                                     "url": getattr(file_path, "url", None),
                                     "date": result.metadata.get("timestamp"),
-                                    "duration": None
+                                    "duration": None,
                                 }
-                                
+
                                 # Emit GetReceipts export starting signal
                                 progress = SummarizationProgress(
                                     current_file=str(file_path),
@@ -104,18 +105,20 @@ class EnhancedSummarizationWorker(QThread):
                                     file_percent=95.0,
                                 )
                                 self.progress_updated.emit(progress)
-                                
+
                                 # Export to GetReceipts
                                 export_result = exporter.export_hce_pipeline_outputs(
                                     hce_data,
                                     source_info=source_info,
-                                    episode_context=str(file_path)[:1000]
+                                    episode_context=str(file_path)[:1000],
                                 )
-                                
+
                                 if export_result["success"]:
                                     claims_exported = export_result["claims_exported"]
-                                    logger.info(f"✅ Exported {claims_exported} claims to GetReceipts for {file_path}")
-                                    
+                                    logger.info(
+                                        f"✅ Exported {claims_exported} claims to GetReceipts for {file_path}"
+                                    )
+
                                     # Emit success signal with GetReceipts info
                                     progress = SummarizationProgress(
                                         current_file=str(file_path),
@@ -124,16 +127,24 @@ class EnhancedSummarizationWorker(QThread):
                                         file_percent=100.0,
                                     )
                                     self.progress_updated.emit(progress)
-                                    
+
                                     # Log claim URLs for user reference
-                                    for result_item in export_result.get("results", [])[:3]:  # Show first 3
-                                        if result_item.get("success") and result_item.get("url"):
+                                    for result_item in export_result.get("results", [])[
+                                        :3
+                                    ]:  # Show first 3
+                                        if result_item.get(
+                                            "success"
+                                        ) and result_item.get("url"):
                                             claim_url = f"https://getreceipts-web.vercel.app/claim/{result_item['url']}"
                                             logger.info(f"📄 View claim: {claim_url}")
                                 else:
-                                    error_msg = export_result.get("error", "Unknown export error")
-                                    logger.warning(f"⚠ GetReceipts export failed for {file_path}: {error_msg}")
-                                    
+                                    error_msg = export_result.get(
+                                        "error", "Unknown export error"
+                                    )
+                                    logger.warning(
+                                        f"⚠ GetReceipts export failed for {file_path}: {error_msg}"
+                                    )
+
                                     # Emit warning signal
                                     progress = SummarizationProgress(
                                         current_file=str(file_path),
@@ -142,9 +153,11 @@ class EnhancedSummarizationWorker(QThread):
                                         file_percent=100.0,
                                     )
                                     self.progress_updated.emit(progress)
-                                    
+
                             except Exception as e:
-                                logger.error(f"GetReceipts export error for {file_path}: {e}")
+                                logger.error(
+                                    f"GetReceipts export error for {file_path}: {e}"
+                                )
                                 # Don't fail the entire operation for export errors
                                 progress = SummarizationProgress(
                                     current_file=str(file_path),
@@ -153,7 +166,7 @@ class EnhancedSummarizationWorker(QThread):
                                     file_percent=100.0,
                                 )
                                 self.progress_updated.emit(progress)
-                        
+
                     else:
                         logger.error(
                             f"Failed to summarize {file_path}: {result.errors}"
@@ -182,6 +195,9 @@ class EnhancedTranscriptionWorker(QThread):
     file_completed = pyqtSignal(int, int)  # current, total
     processing_finished = pyqtSignal()
     processing_error = pyqtSignal(str)
+    speaker_assignment_requested = pyqtSignal(
+        object, str, object, object
+    )  # speaker_data_list, recording_path, metadata, result_callback
 
     def __init__(self, files, settings, gui_settings, parent=None) -> None:
         super().__init__(parent)
@@ -189,6 +205,51 @@ class EnhancedTranscriptionWorker(QThread):
         self.settings = settings
         self.gui_settings = gui_settings
         self.should_stop = False
+        self._speaker_assignment_result = None
+        self._speaker_assignment_event = None
+
+    def _speaker_assignment_callback(
+        self, speaker_data_list, recording_path, metadata=None
+    ):
+        """
+        Thread-safe callback for speaker assignment requests from worker thread.
+        This method emits a signal to request the dialog be shown on the main thread,
+        then waits for the result.
+        """
+        import threading
+
+        # Create event to wait for result
+        self._speaker_assignment_event = threading.Event()
+        self._speaker_assignment_result = None
+
+        # Emit signal to main thread
+        self.speaker_assignment_requested.emit(
+            speaker_data_list,
+            recording_path,
+            metadata,
+            self._on_speaker_assignment_result,
+        )
+
+        # Wait for main thread to handle the dialog and return result
+        from ...logger import get_logger
+
+        logger = get_logger(__name__)
+        logger.info("Worker waiting for speaker assignment result from main thread...")
+        self._speaker_assignment_event.wait(timeout=300)  # 5 minute timeout
+
+        # Return the result
+        result = self._speaker_assignment_result
+        self._speaker_assignment_result = None
+        self._speaker_assignment_event = None
+
+        logger.info(f"Worker received speaker assignment result: {result}")
+        return result
+
+    def _on_speaker_assignment_result(self, result):
+        """Called by main thread when speaker assignment is complete."""
+        self._speaker_assignment_result = result
+        if self._speaker_assignment_event:
+            self._speaker_assignment_event.set()
 
     def run(self):
         """Run the transcription process with TRUE parallel processing."""
@@ -329,6 +390,7 @@ class EnhancedTranscriptionWorker(QThread):
             device=self.gui_settings["device"],
             enable_diarization=enable_diarization,
             require_diarization=enable_diarization,  # Strict mode: if diarization enabled, require it
+            speaker_assignment_callback=self._speaker_assignment_callback,
             **{
                 k: v
                 for k, v in self.gui_settings.items()

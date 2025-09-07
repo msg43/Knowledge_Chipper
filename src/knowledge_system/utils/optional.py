@@ -15,5 +15,3 @@ def require(module_name: str, install_hint: str):
             f"Optional dependency '{module_name}' is required for this feature.\n"
             f"Install with: {install_hint}"
         ) from exc
-
-

@@ -2,39 +2,43 @@
 Cloud Uploads Tab
 
 OAuth-based upload system for uploading claims and associated data
-directly to GetReceipts.org via authenticated user uploads.
+directly to Skipthepodcast.com via authenticated user uploads.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QGroupBox,
-    QPushButton,
-    QLabel,
+    QCheckBox,
     QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
     QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSplitter,
     QTableWidget,
     QTableWidgetItem,
-    QLineEdit,
-    QSplitter,
-    QHeaderView,
-    QProgressBar,
     QTextEdit,
-    QCheckBox,
+    QVBoxLayout,
+    QWidget,
 )
 
 from ...config import get_settings
+from ...integrations import (
+    check_getreceipts_availability,
+    get_upload_summary,
+    upload_to_getreceipts,
+)
 from ...logger import get_logger
 from ...services.claims_upload_service import ClaimsUploadService, ClaimUploadData
-from ...cloud.oauth import GetReceiptsUploader, get_config, set_production
 from ..components.base_tab import BaseTab
 
 logger = get_logger(__name__)
@@ -42,12 +46,14 @@ logger = get_logger(__name__)
 
 class DatabaseUploadWorker(QThread):
     """Worker thread for uploading claims data via GetReceipts OAuth."""
-    
-    progress = pyqtSignal(int, int, str)  # current, total, message
-    finished = pyqtSignal(int, int)       # success_count, total_count
-    error = pyqtSignal(str)               # error_message
 
-    def __init__(self, claims_data: List[ClaimUploadData], uploader: GetReceiptsUploader):
+    progress = pyqtSignal(int, int, str)  # current, total, message
+    finished = pyqtSignal(int, int)  # success_count, total_count
+    error = pyqtSignal(str)  # error_message
+
+    def __init__(
+        self, claims_data: list[ClaimUploadData], uploader: GetReceiptsUploader
+    ):
         super().__init__()
         self.claims_data = claims_data
         self.uploader = uploader
@@ -66,64 +72,72 @@ class DatabaseUploadWorker(QThread):
         try:
             # Convert claims data to GetReceipts format and upload
             session_data = self._convert_to_getreceipts_format()
-            
-            self.progress.emit(0, total_count, "🔄 Starting upload to GetReceipts.org...")
-            
+
+            self.progress.emit(
+                0, total_count, "🔄 Starting upload to Skipthepodcast.com..."
+            )
+
             # Upload all data at once using the GetReceipts uploader
             upload_results = self.uploader.upload_session_data(session_data)
-            
+
             # Count successes based on upload results
-            success_count = sum(len(data) if data else 0 for data in upload_results.values())
-            
-            self.progress.emit(total_count, total_count, f"✅ Upload completed! {success_count} records uploaded")
-            
+            success_count = sum(
+                len(data) if data else 0 for data in upload_results.values()
+            )
+
+            self.progress.emit(
+                total_count,
+                total_count,
+                f"✅ Upload completed! {success_count} records uploaded",
+            )
+
         except Exception as e:
             logger.error(f"Error uploading to GetReceipts: {e}")
             self.error.emit(f"Upload failed: {str(e)}")
 
         self.finished.emit(success_count, total_count)
 
-    def _convert_to_getreceipts_format(self) -> Dict[str, Any]:
+    def _convert_to_getreceipts_format(self) -> dict[str, Any]:
         """Convert Knowledge_Chipper claims data to GetReceipts format."""
         session_data = {
-            'episodes': [],
-            'claims': [],
-            'evidence_spans': [],
-            'people': [],
-            'jargon': [],
-            'concepts': [],
-            'relations': []
+            "episodes": [],
+            "claims": [],
+            "evidence_spans": [],
+            "people": [],
+            "jargon": [],
+            "concepts": [],
+            "relations": [],
         }
-        
+
         # Track unique episodes
         seen_episodes = set()
-        
+
         for claim in self.claims_data:
             # Add episode data (if not already added)
             if claim.episode_data and claim.episode_id not in seen_episodes:
-                session_data['episodes'].append(claim.episode_data)
+                session_data["episodes"].append(claim.episode_data)
                 seen_episodes.add(claim.episode_id)
-            
+
             # Add claim data
             claim_dict = {
-                'claim_id': claim.claim_id,
-                'canonical': claim.canonical,
-                'episode_id': claim.episode_id,
-                'claim_type': claim.claim_type,
-                'tier': claim.tier,
-                'scores_json': claim.scores_json,
-                'first_mention_ts': claim.first_mention_ts,
-                'inserted_at': claim.inserted_at
+                "claim_id": claim.claim_id,
+                "canonical": claim.canonical,
+                "episode_id": claim.episode_id,
+                "claim_type": claim.claim_type,
+                "tier": claim.tier,
+                "scores_json": claim.scores_json,
+                "first_mention_ts": claim.first_mention_ts,
+                "inserted_at": claim.inserted_at,
             }
-            session_data['claims'].append(claim_dict)
-            
+            session_data["claims"].append(claim_dict)
+
             # Add associated data
-            session_data['evidence_spans'].extend(claim.evidence_spans)
-            session_data['people'].extend(claim.people)
-            session_data['jargon'].extend(claim.jargon)
-            session_data['concepts'].extend(claim.concepts)
-            session_data['relations'].extend(claim.relations)
-        
+            session_data["evidence_spans"].extend(claim.evidence_spans)
+            session_data["people"].extend(claim.people)
+            session_data["jargon"].extend(claim.jargon)
+            session_data["concepts"].extend(claim.concepts)
+            session_data["relations"].extend(claim.relations)
+
         return session_data
 
     def stop(self) -> None:
@@ -132,23 +146,29 @@ class DatabaseUploadWorker(QThread):
 
 
 class CloudUploadsTab(BaseTab):
-    """Tab for uploading claims data to GetReceipts.org via OAuth."""
+    """Tab for uploading claims data to Skipthepodcast.com via OAuth."""
 
     def __init__(self, parent=None) -> None:
-        self.upload_worker: Optional[DatabaseUploadWorker] = None
+        self.upload_worker: DatabaseUploadWorker | None = None
         self.tab_name = "Cloud Uploads"
-        self.uploader: Optional[GetReceiptsUploader] = None
-        self.authenticated_user: Optional[Dict[str, Any]] = None
-        self.claims_service: Optional[ClaimsUploadService] = None
-        self.claims_data: List[ClaimUploadData] = []
-        
+        self.uploader: GetReceiptsUploader | None = None
+        self.authenticated_user: dict[str, Any] | None = None
+        self.claims_service: ClaimsUploadService | None = None
+        self.claims_data: list[ClaimUploadData] = []
+
+        # Initialize OAuth-related attributes
+        self._oauth_auth = None
+        self._auth_thread = None
+        self._check_timer = None
+        self._progress_dialog = None
+
         # Initialize UI attributes to None before calling super().__init__
         self.claims_table = None
         self.upload_btn = None
         self.status_label = None
         self.progress_bar = None
         self.upload_log = None
-        
+
         super().__init__(parent)
 
     def _setup_ui(self) -> None:
@@ -199,7 +219,7 @@ class CloudUploadsTab(BaseTab):
 
     def _create_auth_section(self) -> QGroupBox:
         """Create authentication section."""
-        group = QGroupBox("GetReceipts Authentication")
+        group = QGroupBox("Skipthepodcast Authentication")
         layout = QVBoxLayout(group)
 
         # Auth status
@@ -209,7 +229,7 @@ class CloudUploadsTab(BaseTab):
 
         # Info text about OAuth flow
         info_text = QLabel(
-            "🔐 Sign in via GetReceipts.org to upload your claims data.\n"
+            "🔐 Sign in via Skipthepodcast.com to upload your claims data.\n"
             "This will open your browser for secure authentication."
         )
         info_text.setWordWrap(True)
@@ -220,7 +240,7 @@ class CloudUploadsTab(BaseTab):
         layout.addWidget(info_text)
 
         # OAuth authentication button
-        self.oauth_btn = QPushButton("🌐 Sign In via GetReceipts")
+        self.oauth_btn = QPushButton("🌐 Sign In via Skipthepodcast.com")
         self.oauth_btn.setStyleSheet(
             "QPushButton { padding: 10px; font-size: 14px; background-color: #2196F3; color: white; border: none; border-radius: 6px; }"
             "QPushButton:hover { background-color: #1976D2; }"
@@ -235,8 +255,7 @@ class CloudUploadsTab(BaseTab):
         self.logout_btn.clicked.connect(self._sign_out)
         layout.addWidget(self.logout_btn)
 
-        # Legacy email/password section (collapsible)
-        self._create_legacy_auth_section(layout)
+        # Legacy email/password section removed - OAuth is the primary auth method
 
         self._refresh_auth_ui()
         return group
@@ -244,8 +263,12 @@ class CloudUploadsTab(BaseTab):
     def _create_legacy_auth_section(self, parent_layout: QVBoxLayout) -> None:
         """Create collapsible legacy email/password auth section."""
         # Expandable section for legacy auth
-        self.legacy_auth_toggle = QPushButton("▶ Advanced: Direct Email/Password Sign-In")
-        self.legacy_auth_toggle.setStyleSheet("text-align: left; border: none; padding: 5px;")
+        self.legacy_auth_toggle = QPushButton(
+            "▶ Advanced: Direct Email/Password Sign-In"
+        )
+        self.legacy_auth_toggle.setStyleSheet(
+            "text-align: left; border: none; padding: 5px;"
+        )
         self.legacy_auth_toggle.clicked.connect(self._toggle_legacy_auth)
         parent_layout.addWidget(self.legacy_auth_toggle)
 
@@ -261,7 +284,7 @@ class CloudUploadsTab(BaseTab):
         self.password_edit = QLineEdit()
         self.password_edit.setPlaceholderText("Password")
         self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        
+
         auth_layout.addWidget(self.email_edit)
         auth_layout.addWidget(self.password_edit)
         legacy_layout.addLayout(auth_layout)
@@ -285,7 +308,7 @@ class CloudUploadsTab(BaseTab):
         """Toggle visibility of legacy auth section."""
         is_visible = self.legacy_auth_widget.isVisible()
         self.legacy_auth_widget.setVisible(not is_visible)
-        
+
         if is_visible:
             self.legacy_auth_toggle.setText("▶ Advanced: Direct Email/Password Sign-In")
         else:
@@ -301,10 +324,10 @@ class CloudUploadsTab(BaseTab):
         self.db_path_edit = QLineEdit()
         self.db_path_edit.setPlaceholderText("Select SQLite database file...")
         self.db_path_edit.setReadOnly(True)
-        
+
         browse_btn = QPushButton("Browse...")
         browse_btn.clicked.connect(self._browse_database)
-        
+
         file_layout.addWidget(self.db_path_edit)
         file_layout.addWidget(browse_btn)
         layout.addLayout(file_layout)
@@ -348,29 +371,33 @@ class CloudUploadsTab(BaseTab):
         group = QGroupBox("Claims Ready for Upload")
         layout = QVBoxLayout(group)
 
-        # Info label
-        info_label = QLabel("📋 Select claims to upload to Supabase. All associated data (episodes, people, concepts, evidence) will be included automatically.")
-        info_label.setWordWrap(True)
-        info_label.setStyleSheet("color: #666; font-style: italic; margin-bottom: 8px; padding: 8px; background-color: #f5f5f5; border-radius: 4px;")
-        layout.addWidget(info_label)
+        # Info label removed as requested
 
         # Claims table
         self.claims_table = QTableWidget()
         self.claims_table.setColumnCount(6)
-        self.claims_table.setHorizontalHeaderLabels([
-            "Select", "Claim Text", "Type", "Tier", "Episode", "Inserted"
-        ])
-        
+        self.claims_table.setHorizontalHeaderLabels(
+            ["Select", "Claim Text", "Type", "Tier", "Episode", "Inserted"]
+        )
+
         # Configure table
         header = self.claims_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)  # Select column
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)          # Claim text
+        header.setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )  # Select column
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)  # Claim text
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)  # Type
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)  # Tier
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)  # Episode
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)  # Inserted
-        
-        self.claims_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        header.setSectionResizeMode(
+            4, QHeaderView.ResizeMode.ResizeToContents
+        )  # Episode
+        header.setSectionResizeMode(
+            5, QHeaderView.ResizeMode.ResizeToContents
+        )  # Inserted
+
+        self.claims_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
         self.claims_table.setAlternatingRowColors(True)
         layout.addWidget(self.claims_table)
 
@@ -380,7 +407,7 @@ class CloudUploadsTab(BaseTab):
         select_none_btn = QPushButton("Select None")
         select_all_btn.clicked.connect(self._select_all_claims)
         select_none_btn.clicked.connect(self._select_no_claims)
-        
+
         selection_layout.addWidget(select_all_btn)
         selection_layout.addWidget(select_none_btn)
         selection_layout.addStretch()
@@ -398,11 +425,11 @@ class CloudUploadsTab(BaseTab):
         self.upload_btn = QPushButton("Upload Selected Claims")
         self.upload_btn.clicked.connect(self._start_upload)
         self.upload_btn.setEnabled(False)
-        
+
         self.stop_btn = QPushButton("Stop Upload")
         self.stop_btn.clicked.connect(self._stop_upload)
         self.stop_btn.setEnabled(False)
-        
+
         upload_layout.addWidget(self.upload_btn)
         upload_layout.addWidget(self.stop_btn)
         upload_layout.addStretch()
@@ -420,7 +447,7 @@ class CloudUploadsTab(BaseTab):
         # Upload log
         log_label = QLabel("Upload Log:")
         layout.addWidget(log_label)
-        
+
         self.upload_log = QTextEdit()
         self.upload_log.setMaximumHeight(150)
         self.upload_log.setReadOnly(True)
@@ -434,18 +461,20 @@ class CloudUploadsTab(BaseTab):
             # Try to find the default database
             default_path = Path.cwd() / "knowledge_system.db"
             if default_path.exists():
-                if hasattr(self, 'db_path_edit') and self.db_path_edit:
+                if hasattr(self, "db_path_edit") and self.db_path_edit:
                     self.db_path_edit.setText(str(default_path))
                 self._setup_claims_service(default_path)
-                if hasattr(self, 'scan_btn') and self.scan_btn:
+                if hasattr(self, "scan_btn") and self.scan_btn:
                     self.scan_btn.setEnabled(True)
                 self._update_database_stats()
             else:
-                if hasattr(self, 'status_label') and self.status_label:
-                    self.status_label.setText("Default database not found. Please select a database file.")
+                if hasattr(self, "status_label") and self.status_label:
+                    self.status_label.setText(
+                        "Default database not found. Please select a database file."
+                    )
         except Exception as e:
             logger.error(f"Error loading default database: {e}")
-            if hasattr(self, 'status_label') and self.status_label:
+            if hasattr(self, "status_label") and self.status_label:
                 self.status_label.setText("Error loading default database")
 
     def _browse_database(self) -> None:
@@ -454,12 +483,12 @@ class CloudUploadsTab(BaseTab):
             self,
             "Select SQLite Database",
             str(Path.cwd()),
-            "SQLite Database (*.db *.sqlite *.sqlite3);;All Files (*)"
+            "SQLite Database (*.db *.sqlite *.sqlite3);;All Files (*)",
         )
-        
+
         if file_path:
             db_path = Path(file_path)
-            
+
             # Show warning if not the default database
             if db_path.name != "knowledge_system.db":
                 reply = QMessageBox.question(
@@ -469,12 +498,12 @@ class CloudUploadsTab(BaseTab):
                     "This may cause issues if the database doesn't have the expected schema or data.\n\n"
                     "Are you sure you want to continue?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.No
+                    QMessageBox.StandardButton.No,
                 )
-                
+
                 if reply == QMessageBox.StandardButton.No:
                     return
-            
+
             self.db_path_edit.setText(str(db_path))
             self._setup_claims_service(db_path)
             self.scan_btn.setEnabled(True)
@@ -484,37 +513,37 @@ class CloudUploadsTab(BaseTab):
         """Setup the claims service with the selected database."""
         try:
             self.claims_service = ClaimsUploadService(db_path)
-            
+
             # Validate database
             is_valid, message = self.claims_service.is_database_valid()
             if not is_valid:
                 logger.warning(f"Invalid database: {message}")
-                if hasattr(self, 'scan_btn') and self.scan_btn:
+                if hasattr(self, "scan_btn") and self.scan_btn:
                     self.scan_btn.setEnabled(False)
                 return
-            
-            if hasattr(self, 'status_label') and self.status_label:
+
+            if hasattr(self, "status_label") and self.status_label:
                 self.status_label.setText(f"Database loaded: {db_path.name}")
-            
+
         except Exception as e:
             logger.error(f"Error setting up claims service: {e}")
-            if hasattr(self, 'scan_btn') and self.scan_btn:
+            if hasattr(self, "scan_btn") and self.scan_btn:
                 self.scan_btn.setEnabled(False)
 
     def _update_database_stats(self) -> None:
         """Update database statistics display."""
         if not self.claims_service:
             return
-        
+
         try:
             stats = self.claims_service.get_database_stats()
             stats_text = f"""Total Claims: {stats.get('total_claims', 0)}
 Unuploaded: {stats.get('unuploaded_claims', 0)}
 Uploaded: {stats.get('uploaded_claims', 0)}
 Episodes: {stats.get('total_episodes', 0)}"""
-            
+
             self.stats_label.setText(stats_text)
-            
+
         except Exception as e:
             logger.error(f"Error updating database stats: {e}")
 
@@ -522,17 +551,19 @@ Episodes: {stats.get('total_episodes', 0)}"""
         """Load claims from the database."""
         if not self.claims_service:
             return
-        
+
         try:
             self.claims_data = self.claims_service.get_unuploaded_claims()
             self._populate_claims_table()
             self._update_upload_button_state()
-            
+
             if self.claims_data:
-                self.status_label.setText(f"Loaded {len(self.claims_data)} unuploaded claims")
+                self.status_label.setText(
+                    f"Loaded {len(self.claims_data)} unuploaded claims"
+                )
             else:
                 self.status_label.setText("No unuploaded claims found")
-                
+
         except Exception as e:
             logger.error(f"Error loading claims: {e}")
             QMessageBox.critical(self, "Error", f"Error loading claims: {str(e)}")
@@ -540,21 +571,25 @@ Episodes: {stats.get('total_episodes', 0)}"""
     def _populate_claims_table(self) -> None:
         """Populate the claims table with data."""
         self.claims_table.setRowCount(len(self.claims_data))
-        
+
         for row, claim in enumerate(self.claims_data):
             # Checkbox for selection (all selected by default)
             checkbox = QCheckBox()
             checkbox.setChecked(True)
             checkbox.stateChanged.connect(self._update_upload_button_state)
             self.claims_table.setCellWidget(row, 0, checkbox)
-            
+
             # Claim text (truncated)
-            claim_text = claim.canonical[:100] + "..." if len(claim.canonical) > 100 else claim.canonical
+            claim_text = (
+                claim.canonical[:100] + "..."
+                if len(claim.canonical) > 100
+                else claim.canonical
+            )
             self.claims_table.setItem(row, 1, QTableWidgetItem(claim_text))
-            
+
             # Type
             self.claims_table.setItem(row, 2, QTableWidgetItem(claim.claim_type or ""))
-            
+
             # Tier
             tier_item = QTableWidgetItem(claim.tier or "")
             if claim.tier == "A":
@@ -564,15 +599,15 @@ Episodes: {stats.get('total_episodes', 0)}"""
             elif claim.tier == "C":
                 tier_item.setBackground(Qt.GlobalColor.red)
             self.claims_table.setItem(row, 3, tier_item)
-            
+
             # Episode
             episode_title = ""
             if claim.episode_data:
-                episode_title = claim.episode_data.get('title', '')[:30]
+                episode_title = claim.episode_data.get("title", "")[:30]
                 if len(episode_title) > 30:
                     episode_title += "..."
             self.claims_table.setItem(row, 4, QTableWidgetItem(episode_title))
-            
+
             # Inserted date
             inserted_date = claim.inserted_at[:10] if claim.inserted_at else ""
             self.claims_table.setItem(row, 5, QTableWidgetItem(inserted_date))
@@ -591,11 +626,11 @@ Episodes: {stats.get('total_episodes', 0)}"""
             if checkbox:
                 checkbox.setChecked(False)
 
-    def _get_selected_claims(self) -> List[ClaimUploadData]:
+    def _get_selected_claims(self) -> list[ClaimUploadData]:
         """Get list of selected claims."""
         if not self.claims_table:
             return []
-            
+
         selected = []
         for row in range(self.claims_table.rowCount()):
             checkbox = self.claims_table.cellWidget(row, 0)
@@ -608,25 +643,31 @@ Episodes: {stats.get('total_episodes', 0)}"""
         # Check if UI elements exist before accessing them
         if not self.claims_table or not self.upload_btn:
             return
-            
+
         selected_claims = self._get_selected_claims()
-        is_authenticated = self.uploader is not None and self.authenticated_user is not None
-        
+        is_authenticated = (
+            self.uploader is not None and self.authenticated_user is not None
+        )
+
         self.upload_btn.setEnabled(
-            len(selected_claims) > 0 and 
-            is_authenticated and 
-            not (self.upload_worker and self.upload_worker.isRunning())
+            len(selected_claims) > 0
+            and is_authenticated
+            and not (self.upload_worker and self.upload_worker.isRunning())
         )
 
     def _start_upload(self) -> None:
         """Start uploading selected claims via GetReceipts."""
         selected_claims = self._get_selected_claims()
         if not selected_claims:
-            QMessageBox.information(self, "No Selection", "Please select claims to upload.")
+            QMessageBox.information(
+                self, "No Selection", "Please select claims to upload."
+            )
             return
 
         if not self.uploader or not self.authenticated_user:
-            QMessageBox.warning(self, "Not Authenticated", "Please sign in to GetReceipts first.")
+            QMessageBox.warning(
+                self, "Not Authenticated", "Please sign in to Skipthepodcast first."
+            )
             return
 
         # Start upload worker
@@ -643,7 +684,7 @@ Episodes: {stats.get('total_episodes', 0)}"""
         self.progress_bar.setVisible(True)
         self.progress_bar.setMaximum(len(selected_claims))
         self.progress_bar.setValue(0)
-        
+
         self.upload_log.clear()
         self.upload_log.append(f"Starting upload of {len(selected_claims)} claims...")
         self.status_label.setText("Uploading...")
@@ -658,7 +699,9 @@ Episodes: {stats.get('total_episodes', 0)}"""
         """Handle upload progress updates."""
         self.progress_bar.setValue(current)
         self.upload_log.append(f"[{current}/{total}] {message}")
-        self.upload_log.verticalScrollBar().setValue(self.upload_log.verticalScrollBar().maximum())
+        self.upload_log.verticalScrollBar().setValue(
+            self.upload_log.verticalScrollBar().maximum()
+        )
 
     def _on_upload_finished(self, success_count: int, total_count: int) -> None:
         """Handle upload completion."""
@@ -666,137 +709,367 @@ Episodes: {stats.get('total_episodes', 0)}"""
         self.upload_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
 
-        self.upload_log.append(f"\n✅ Upload completed: {success_count}/{total_count} claims uploaded successfully")
-        
+        self.upload_log.append(
+            f"\n✅ Upload completed: {success_count}/{total_count} claims uploaded successfully"
+        )
+
         if success_count > 0:
             # Mark successful claims as uploaded
             if self.claims_service:
                 selected_claims = self._get_selected_claims()
-                successful_ids = [(claim.episode_id, claim.claim_id) for claim in selected_claims[:success_count]]
+                successful_ids = [
+                    (claim.episode_id, claim.claim_id)
+                    for claim in selected_claims[:success_count]
+                ]
                 self.claims_service.mark_claims_uploaded(successful_ids)
-            
+
             # Reload claims to update the list
             self._load_claims()
             self._update_database_stats()
 
-        self.status_label.setText(f"Upload completed: {success_count}/{total_count} successful")
+        self.status_label.setText(
+            f"Upload completed: {success_count}/{total_count} successful"
+        )
 
         if success_count == total_count:
-            QMessageBox.information(self, "Upload Complete", f"Successfully uploaded {success_count} claims!")
+            QMessageBox.information(
+                self,
+                "Upload Complete",
+                f"Successfully uploaded {success_count} claims!",
+            )
         else:
-            QMessageBox.warning(self, "Upload Partially Complete", 
-                              f"Uploaded {success_count} out of {total_count} claims. Check the log for details.")
+            QMessageBox.warning(
+                self,
+                "Upload Partially Complete",
+                f"Uploaded {success_count} out of {total_count} claims. Check the log for details.",
+            )
 
     def _on_upload_error(self, error_message: str) -> None:
         """Handle upload errors."""
         self.progress_bar.setVisible(False)
         self.upload_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
-        
+
         self.upload_log.append(f"❌ Upload error: {error_message}")
         self.status_label.setText(f"Upload error: {error_message}")
-        
+
         QMessageBox.critical(self, "Upload Error", f"Upload failed: {error_message}")
 
     # Authentication methods
     def _refresh_auth_ui(self) -> None:
         """Refresh authentication UI state."""
-        is_authenticated = self.uploader is not None and self.authenticated_user is not None
-        
+        is_authenticated = (
+            self.uploader is not None and self.authenticated_user is not None
+        )
+
         # Update OAuth button
         self.oauth_btn.setEnabled(not is_authenticated)
-        
+
         # Update legacy auth buttons (if they exist)
-        if hasattr(self, 'login_btn'):
+        if hasattr(self, "login_btn"):
             self.login_btn.setEnabled(not is_authenticated)
-        
+
         # Update logout button
         self.logout_btn.setEnabled(is_authenticated)
-        
+
         if is_authenticated and self.authenticated_user:
-            email = self.authenticated_user.get('email', 'Unknown')
-            name = self.authenticated_user.get('name', email)
+            email = self.authenticated_user.get("email", "Unknown")
+            name = self.authenticated_user.get("name", email)
             self.auth_status_label.setText(f"✅ Signed in as: {name}")
             self.auth_status_label.setStyleSheet("color: #4CAF50;")
             self.oauth_btn.setText("✅ Signed In")
         else:
             self.auth_status_label.setText("❌ Not authenticated")
             self.auth_status_label.setStyleSheet("color: #F44336;")
-            self.oauth_btn.setText("🌐 Sign In via GetReceipts")
-        
+            self.oauth_btn.setText("🌐 Sign In via Skipthepodcast.com")
+
         self._update_upload_button_state()
 
     def _sign_in_with_oauth(self) -> None:
         """Sign in using GetReceipts OAuth flow."""
+        # Store reference for cancellation
+        self._oauth_auth = None
+
         try:
-            # Initialize GetReceipts configuration
+            # Initialize GetReceipts configuration using the new OAuth package
+            import os
+            import sys
+
+            oauth_package_path = os.path.join(
+                os.path.dirname(
+                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                ),
+                "knowledge_chipper_oauth",
+            )
+            if oauth_package_path not in sys.path:
+                sys.path.append(oauth_package_path)
+
+            from getreceipts_config import get_config, set_production
+            from getreceipts_uploader import GetReceiptsUploader
+
+            set_production()  # Ensure we're using production URLs for OAuth
             config = get_config()
             self.uploader = GetReceiptsUploader(
-                supabase_url=config['supabase_url'],
-                supabase_anon_key=config['supabase_anon_key'],
-                base_url=config['base_url']
+                supabase_url=config["supabase_url"],
+                supabase_anon_key=config["supabase_anon_key"],
+                base_url=config["base_url"],
             )
-            
-            # Show progress dialog
+
+            # Store auth reference for potential cancellation
+            self._oauth_auth = self.uploader.auth
+
+            # Show progress dialog with proper cancellation handling
+            from PyQt6.QtCore import Qt, QTimer
             from PyQt6.QtWidgets import QProgressDialog
-            from PyQt6.QtCore import Qt
-            
-            progress = QProgressDialog("Waiting for authentication...", "Cancel", 0, 0, self)
-            progress.setWindowTitle("GetReceipts Authentication")
+
+            progress = QProgressDialog(
+                "Waiting for authentication...", "Cancel", 0, 0, self
+            )
+            progress.setWindowTitle("Skipthepodcast Authentication")
             progress.setWindowModality(Qt.WindowModality.WindowModal)
-            progress.setAutoClose(True)
-            progress.setAutoReset(True)
+            progress.setAutoClose(False)  # Manual control
+            progress.setAutoReset(False)  # Manual control
+
+            # Handle cancellation
+            def on_cancelled():
+                try:
+                    logger.info("OAuth authentication cancelled by user")
+
+                    # Stop the timer first
+                    if hasattr(self, "_check_timer") and self._check_timer:
+                        self._check_timer.stop()
+
+                    # Cancel OAuth authentication
+                    if self._oauth_auth and hasattr(
+                        self._oauth_auth, "cancel_authentication"
+                    ):
+                        self._oauth_auth.cancel_authentication()
+
+                    # Terminate authentication thread if running
+                    if (
+                        hasattr(self, "_auth_thread")
+                        and self._auth_thread
+                        and self._auth_thread.isRunning()
+                    ):
+                        self._auth_thread.terminate()
+                        self._auth_thread.wait(
+                            1000
+                        )  # Wait up to 1 second for termination
+
+                    # Clear authentication state
+                    self.uploader = None
+                    self.authenticated_user = None
+                    self._oauth_auth = None
+
+                    # Refresh UI
+                    self._refresh_auth_ui()
+
+                except Exception as e:
+                    logger.warning(f"Error during OAuth cancellation: {e}")
+                finally:
+                    try:
+                        if "progress" in locals() and progress:
+                            progress.close()
+                    except Exception as e:
+                        logger.warning(f"Error closing progress dialog: {e}")
+
+            progress.canceled.connect(on_cancelled)
             progress.show()
-            
+
             # Update progress text to show steps
             progress.setLabelText(
-                "🌐 Opening GetReceipts.org in your browser...\n\n"
-                "1. Sign in or create account on GetReceipts.org\n"
+                "🌐 Opening Skipthepodcast.com in your browser...\n\n"
+                "1. Sign in or create account on Skipthepodcast.com\n"
                 "2. Authorize Knowledge_Chipper access\n"
                 "3. Return to this app when complete\n\n"
-                "Waiting for authentication..."
+                "Waiting for authentication...\n\n"
+                "Click Cancel to abort the authentication process."
             )
-            
-            # Start OAuth authentication flow
-            auth_result = self.uploader.authenticate()
-            
-            progress.close()
-            
+
+            # Create a timer to periodically check if dialog was cancelled
+            check_timer = QTimer()
+            auth_completed = False
+            auth_result = None
+            auth_error = None
+
+            def check_progress():
+                nonlocal auth_completed, auth_result, auth_error
+                try:
+                    if progress.wasCanceled():
+                        check_timer.stop()
+                        logger.info("OAuth progress dialog was cancelled")
+
+                        # Cleanup and terminate authentication
+                        if self._oauth_auth and hasattr(
+                            self._oauth_auth, "cancel_authentication"
+                        ):
+                            try:
+                                self._oauth_auth.cancel_authentication()
+                            except Exception as e:
+                                logger.warning(f"Error canceling OAuth: {e}")
+
+                        # Terminate thread if still running
+                        if (
+                            hasattr(self, "_auth_thread")
+                            and self._auth_thread
+                            and self._auth_thread.isRunning()
+                        ):
+                            self._auth_thread.terminate()
+                            self._auth_thread.wait(1000)
+
+                        # Clear references
+                        self._auth_thread = None
+                        self._check_timer = None
+                        self._progress_dialog = None
+
+                        return
+
+                    # Check if authentication completed (this will be set by the thread)
+                    if auth_completed:
+                        check_timer.stop()
+
+                        # Close progress dialog
+                        try:
+                            progress.close()
+                        except Exception as e:
+                            logger.warning(f"Error closing progress dialog: {e}")
+
+                        # Clean up thread
+                        if hasattr(self, "_auth_thread") and self._auth_thread:
+                            if self._auth_thread.isRunning():
+                                self._auth_thread.wait(1000)
+                            self._auth_thread = None
+
+                        # Clear references
+                        self._check_timer = None
+                        self._progress_dialog = None
+
+                        if auth_error:
+                            # Handle error in main thread
+                            try:
+                                self._handle_oauth_error(auth_error)
+                            except Exception as e:
+                                logger.error(f"Error handling OAuth error: {e}")
+                        elif auth_result:
+                            # Handle success in main thread
+                            try:
+                                self._handle_oauth_success(auth_result)
+                            except Exception as e:
+                                logger.error(f"Error handling OAuth success: {e}")
+                except Exception as e:
+                    logger.error(f"Error in OAuth progress check: {e}")
+                    try:
+                        check_timer.stop()
+                        progress.close()
+                    except:
+                        pass
+
+            check_timer.timeout.connect(check_progress)
+            check_timer.start(500)  # Check every 500ms
+
+            # Start authentication in a separate thread to avoid blocking
+            from PyQt6.QtCore import QThread
+
+            class AuthThread(QThread):
+                def run(self):
+                    nonlocal auth_completed, auth_result, auth_error
+                    try:
+                        auth_result = self.parent().uploader.authenticate()
+                    except Exception as e:
+                        auth_error = e
+                    finally:
+                        auth_completed = True
+
+            auth_thread = AuthThread(self)
+
+            # Store references to prevent garbage collection
+            self._auth_thread = auth_thread
+            self._check_timer = check_timer
+            self._progress_dialog = progress
+
+            auth_thread.start()
+
+            # Return immediately - results will be handled by the timer
+            return
+
+        except Exception as e:
+            if "progress" in locals():
+                progress.close()
+            self._handle_oauth_error(e)
+
+    def _handle_oauth_success(self, auth_result):
+        """Handle successful OAuth authentication."""
+        try:
             # Store authentication result
-            self.authenticated_user = auth_result['user_info']
-            
+            self.authenticated_user = auth_result["user_info"]
+
             self._refresh_auth_ui()
             QMessageBox.information(
                 self,
                 "Authentication Successful",
                 f"Successfully signed in as {self.authenticated_user['name']}!\n\n"
-                "You can now upload your claims data to GetReceipts.org."
+                "You can now upload your claims data to Skipthepodcast.com.",
             )
-                
         except Exception as e:
-            if 'progress' in locals():
-                progress.close()
-            logger.error(f"OAuth authentication error: {e}")
-            QMessageBox.critical(self, "Authentication Error", f"OAuth error: {str(e)}")
-            
-            # Clear authentication state on error
-            self.uploader = None
-            self.authenticated_user = None
-            self._refresh_auth_ui()
+            logger.error(f"Error handling OAuth success: {e}")
+            self._handle_oauth_error(e)
+
+    def _handle_oauth_error(self, error):
+        """Handle OAuth authentication error."""
+        logger.error(f"OAuth authentication error: {error}")
+
+        # Handle specific OAuth endpoint unavailable error differently
+        error_message = str(error)
+        if "OAuth authentication is not yet available" in error_message:
+            # Show a more detailed dialog for OAuth unavailability
+            from PyQt6.QtWidgets import QMessageBox, QTextEdit
+
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("OAuth Not Available")
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            msg_box.setText("Sign-in via Skipthepodcast.com is not yet available")
+
+            # Create detailed text widget
+            details = QTextEdit()
+            details.setPlainText(error_message)
+            details.setReadOnly(True)
+            details.setMaximumHeight(300)
+            msg_box.setDetailedText(error_message)
+
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg_box.exec()
+        elif "cancelled by user" in error_message.lower():
+            # Don't show error dialog for user cancellation
+            logger.info("OAuth authentication cancelled by user")
+        else:
+            # Show regular error dialog for other authentication errors
+            QMessageBox.critical(
+                self, "Authentication Error", f"OAuth error: {str(error)}"
+            )
+
+        # Clear authentication state on error
+        self.uploader = None
+        self.authenticated_user = None
+        self._oauth_auth = None
+        self._refresh_auth_ui()
 
     def _sign_in(self) -> None:
         """Sign in to Supabase."""
         if not self.auth or not self.auth.is_available():
-            QMessageBox.warning(self, "Auth Unavailable", "Supabase authentication is not available")
+            QMessageBox.warning(
+                self, "Auth Unavailable", "Supabase authentication is not available"
+            )
             return
-        
+
         email = self.email_edit.text().strip()
         password = self.password_edit.text()
-        
+
         if not email or not password:
-            QMessageBox.information(self, "Missing Credentials", "Please enter email and password")
+            QMessageBox.information(
+                self, "Missing Credentials", "Please enter email and password"
+            )
             return
-        
+
         success, message = self.auth.sign_in(email, password)
         if success:
             self._refresh_auth_ui()
@@ -807,11 +1080,14 @@ Episodes: {stats.get('total_episodes', 0)}"""
     def _sign_up(self) -> None:
         """Sign up for Supabase account."""
         if not self.auth or not self.auth.is_available():
-            QMessageBox.warning(self, "Auth Unavailable", "Supabase authentication is not available")
+            QMessageBox.warning(
+                self, "Auth Unavailable", "Supabase authentication is not available"
+            )
             return
-        
+
         try:
             from ..dialogs.sign_up_dialog import SignUpDialog
+
             dialog = SignUpDialog(self)
             if dialog.exec():
                 email, password = dialog.get_values()
@@ -821,7 +1097,7 @@ Episodes: {stats.get('total_episodes', 0)}"""
                         QMessageBox.information(
                             self,
                             "Check Your Email",
-                            "Account created. Check your email to verify before signing in."
+                            "Account created. Check your email to verify before signing in.",
                         )
                     else:
                         QMessageBox.warning(self, "Sign Up Failed", message)
@@ -833,9 +1109,7 @@ Episodes: {stats.get('total_episodes', 0)}"""
         self.uploader = None
         self.authenticated_user = None
         self._refresh_auth_ui()
-        
+
         QMessageBox.information(
-            self,
-            "Signed Out",
-            "Successfully signed out of GetReceipts.org"
+            self, "Signed Out", "Successfully signed out of Skipthepodcast.com"
         )

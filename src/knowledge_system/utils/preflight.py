@@ -36,7 +36,9 @@ def check_ffmpeg() -> None:
         )
     code, _, err = _run(["ffmpeg", "-version"])
     if code != 0:
-        raise PreflightError(f"FFmpeg present but not runnable: {err or 'unknown error'}")
+        raise PreflightError(
+            f"FFmpeg present but not runnable: {err or 'unknown error'}"
+        )
 
 
 def check_yt_dlp() -> None:
@@ -53,5 +55,3 @@ def quick_preflight() -> None:
     """Run minimal, fast checks. Raises PreflightError on problems."""
     check_ffmpeg()
     check_yt_dlp()
-
-

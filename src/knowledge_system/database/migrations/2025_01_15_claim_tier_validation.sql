@@ -30,22 +30,22 @@ CREATE INDEX IF NOT EXISTS idx_claim_validations_date ON claim_tier_validations(
 
 -- Create view for validation analytics
 CREATE VIEW IF NOT EXISTS claim_validation_analytics AS
-SELECT 
+SELECT
     COUNT(*) as total_validations,
     SUM(CASE WHEN is_modified THEN 1 ELSE 0 END) as modified_count,
     SUM(CASE WHEN is_modified THEN 0 ELSE 1 END) as confirmed_count,
     ROUND(100.0 * SUM(CASE WHEN is_modified THEN 0 ELSE 1 END) / COUNT(*), 2) as accuracy_rate,
-    
+
     -- Tier-specific accuracy
     SUM(CASE WHEN original_tier = 'A' AND NOT is_modified THEN 1 ELSE 0 END) as tier_a_correct,
     SUM(CASE WHEN original_tier = 'A' THEN 1 ELSE 0 END) as tier_a_total,
-    
+
     SUM(CASE WHEN original_tier = 'B' AND NOT is_modified THEN 1 ELSE 0 END) as tier_b_correct,
     SUM(CASE WHEN original_tier = 'B' THEN 1 ELSE 0 END) as tier_b_total,
-    
+
     SUM(CASE WHEN original_tier = 'C' AND NOT is_modified THEN 1 ELSE 0 END) as tier_c_correct,
     SUM(CASE WHEN original_tier = 'C' THEN 1 ELSE 0 END) as tier_c_total,
-    
+
     -- Common corrections
     SUM(CASE WHEN original_tier = 'A' AND validated_tier = 'B' THEN 1 ELSE 0 END) as a_to_b_corrections,
     SUM(CASE WHEN original_tier = 'A' AND validated_tier = 'C' THEN 1 ELSE 0 END) as a_to_c_corrections,
@@ -53,7 +53,7 @@ SELECT
     SUM(CASE WHEN original_tier = 'B' AND validated_tier = 'C' THEN 1 ELSE 0 END) as b_to_c_corrections,
     SUM(CASE WHEN original_tier = 'C' AND validated_tier = 'A' THEN 1 ELSE 0 END) as c_to_a_corrections,
     SUM(CASE WHEN original_tier = 'C' AND validated_tier = 'B' THEN 1 ELSE 0 END) as c_to_b_corrections,
-    
+
     model_used,
     DATE(validated_at) as validation_date
 FROM claim_tier_validations

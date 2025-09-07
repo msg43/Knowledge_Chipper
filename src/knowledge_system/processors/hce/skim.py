@@ -1,9 +1,8 @@
 from pathlib import Path
-from ...config import get_settings
-from .types import EpisodeBundle, Milestone
 
+from ...config import get_settings
 from .models.llm_any import AnyLLM
-from .types import Milestone, Segment
+from .types import EpisodeBundle, Milestone, Segment
 
 
 class Skimmer:
@@ -54,7 +53,9 @@ class Skimmer:
         return milestones
 
 
-def skim_episode(episode: EpisodeBundle, model_uri: str | None = None) -> list[Milestone]:
+def skim_episode(
+    episode: EpisodeBundle, model_uri: str | None = None
+) -> list[Milestone]:
     """Compatibility wrapper used by HCEPipeline.
 
     If model_uri is provided, uses that model; otherwise falls back to settings.

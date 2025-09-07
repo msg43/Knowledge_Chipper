@@ -42,7 +42,7 @@ def get_app_icon() -> QIcon | None:
     """Get the application icon as a QIcon."""
     if QIcon is None:
         return None
-    
+
     for icon_path in get_icon_paths():
         if icon_path.exists():
             try:
@@ -56,7 +56,7 @@ def get_app_pixmap(size: tuple[int, int] | None = None) -> QPixmap | None:
     """Get the application icon as a QPixmap."""
     if QPixmap is None:
         return None
-        
+
     for icon_path in get_icon_paths():
         if icon_path.exists():
             try:

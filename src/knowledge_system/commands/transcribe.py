@@ -244,6 +244,7 @@ def format_transcript_content(
         # Format Whisper output with proper timestamps
         if isinstance(transcript_data, dict) and "segments" in transcript_data:
             # Whisper format with segments
+            previous_speaker = None
             for segment in transcript_data["segments"]:
                 text = segment.get("text", "").strip()
                 speaker = segment.get("speaker")
@@ -253,20 +254,73 @@ def format_transcript_content(
                     # Only add the segment if there's still text after bracket removal
                     if text.strip():
                         if speaker:
-                            # Convert speaker ID to human-readable format
-                            speaker_num = speaker.replace("SPEAKER_", "").zfill(2)
-                            try:
-                                speaker_number = int(speaker_num) + 1
-                                content += f"**Speaker {speaker_number}** "
-                            except (ValueError, AttributeError):
-                                # Fallback if speaker format is unexpected
-                                content += f"**{speaker}** "
+                            # Check if this is already a meaningful name (from speaker attribution)
+                            # vs a generic speaker ID that needs conversion
+                            if speaker.startswith("SPEAKER_") or speaker.startswith(
+                                "Speaker "
+                            ):
+                                # Convert generic speaker ID to human-readable format
+                                speaker_num = (
+                                    speaker.replace("SPEAKER_", "")
+                                    .replace("Speaker ", "")
+                                    .zfill(2)
+                                )
+                                try:
+                                    speaker_number = int(speaker_num) + 1
+                                    speaker_label = f"**Speaker {speaker_number}**"
+                                except (ValueError, AttributeError):
+                                    # Fallback if speaker format is unexpected
+                                    speaker_label = f"**{speaker}**"
+                            else:
+                                # This is already a meaningful name from speaker attribution
+                                speaker_label = f"**{speaker}**"
+                        else:
+                            speaker_label = ""
+
                         if timestamps:
                             start_time = format_timestamp(segment.get("start", 0))
                             end_time = format_timestamp(segment.get("end", 0))
-                            content += f"**{start_time} - {end_time}** {text}\n\n"
+
+                            # Format with proper line breaks and YouTube timestamp links
+                            if video_id:
+                                # Create hyperlinked timestamp for YouTube videos
+                                start_seconds = segment.get("start", 0)
+                                youtube_url = f"https://www.youtube.com/watch?v={video_id}&t={int(start_seconds)}s"
+                                timestamp_display = (
+                                    f"[{start_time} - {end_time}]({youtube_url})"
+                                )
+                            else:
+                                timestamp_display = f"**{start_time} - {end_time}**"
+
+                            # Add speaker change separator for better readability
+                            if (
+                                speaker_label
+                                and speaker != previous_speaker
+                                and previous_speaker is not None
+                            ):
+                                content += "---\n\n"
+
+                            if speaker_label:
+                                content += f"{speaker_label}\n{timestamp_display}\n\n{text}\n\n"
+                            else:
+                                content += f"{timestamp_display}\n\n{text}\n\n"
                         else:
-                            content += f"{text}\n\n"
+                            # Add speaker change separator for better readability
+                            if (
+                                speaker_label
+                                and speaker != previous_speaker
+                                and previous_speaker is not None
+                            ):
+                                content += "---\n\n"
+
+                            if speaker_label:
+                                content += f"{speaker_label}\n\n{text}\n\n"
+                            else:
+                                content += f"{text}\n\n"
+
+                        # Update previous speaker for next iteration
+                        if speaker:
+                            previous_speaker = speaker
         elif isinstance(transcript_data, str):
             # Plain text format - also remove bracketed content
             cleaned_text = strip_bracketed_content(transcript_data)
@@ -814,7 +868,7 @@ def transcribe(
 
             # Get HuggingFace token for diarization
             hf_token = getattr(ctx.settings.api_keys, "huggingface_token", None)
-            
+
             # Create audio processor
             processor = AudioProcessor(
                 device=device,

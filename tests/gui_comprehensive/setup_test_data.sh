@@ -40,7 +40,7 @@ from datasets import load_dataset
 FIXTURES_DIR = Path(os.environ["FIXTURES_DIR"])
 WORK_DIR = Path(os.environ["WORK_DIR"])
 AUDIO = FIXTURES_DIR / "audio"
-VIDEO = FIXTURES_DIR / "video" 
+VIDEO = FIXTURES_DIR / "video"
 DOCS = FIXTURES_DIR / "documents"
 
 SAMPLE_RATE=16000
@@ -378,7 +378,7 @@ for i in range(1, 101):
 
 Section {((i-1)//10)+1}.{((i-1)%10)+1}: Advanced Configuration Options
 
-This section covers detailed configuration parameters for the Knowledge Chipper system. 
+This section covers detailed configuration parameters for the Knowledge Chipper system.
 Understanding these settings is crucial for optimal performance in your specific environment.
 
 Configuration Parameters:
@@ -446,10 +446,10 @@ news_html = """<!DOCTYPE html>
         <h1>Speech Tech Summit Draws Record Crowd</h1>
         <p><em>Published: January 15, 2024 | By: Tech News Reporter</em></p>
     </header>
-    
+
     <main>
         <p>The annual Speech Technology Summit concluded yesterday with record attendance of over 5,000 participants from around the globe, marking a 40% increase from last year's event.</p>
-        
+
         <h2>Key Highlights</h2>
         <ul>
             <li>Breakthrough in real-time multilingual translation</li>
@@ -457,14 +457,14 @@ news_html = """<!DOCTYPE html>
             <li>Privacy-preserving edge computing solutions</li>
             <li>Integration of speech tech with AR/VR platforms</li>
         </ul>
-        
+
         <h2>Industry Impact</h2>
         <p>The summit showcased significant advances in automatic speech recognition, with several companies demonstrating systems capable of real-time transcription in noisy environments with unprecedented accuracy.</p>
-        
+
         <blockquote>
             "We're witnessing a paradigm shift in how speech technology integrates with our daily lives," said Dr. Sarah Chen, keynote speaker and AI research director at Stanford University.
         </blockquote>
-        
+
         <h2>Future Outlook</h2>
         <p>Looking ahead, the industry consensus points toward increased focus on:</p>
         <ol>
@@ -473,10 +473,10 @@ news_html = """<!DOCTYPE html>
             <li>Accessibility improvements for diverse populations</li>
             <li>Energy-efficient model architectures</li>
         </ol>
-        
+
         <p>The next Speech Tech Summit is scheduled for January 2025 in San Francisco.</p>
     </main>
-    
+
     <footer>
         <p>&copy; 2024 Tech News Network. All rights reserved.</p>
     </footer>
@@ -489,20 +489,20 @@ news_html = """<!DOCTYPE html>
 try:
     from reportlab.pdfgen import canvas
     from reportlab.lib.pagesizes import letter
-    
+
     # Create research paper PDF
     pdf_path = DOCS / "research_paper.pdf"
     c = canvas.Canvas(str(pdf_path), pagesize=letter)
     width, height = letter
-    
+
     # Title page
     c.setFont("Helvetica-Bold", 16)
     c.drawString(50, height - 50, "A Study on Robust Speaker Diarization")
     c.drawString(50, height - 70, "under Realistic Noise Conditions")
-    
+
     c.setFont("Helvetica", 12)
     c.drawString(50, height - 120, "Abstract")
-    
+
     # Split text into lines and add to PDF
     text_lines = research_content.split('\n')
     y_position = height - 150
@@ -512,11 +512,11 @@ try:
             y_position = height - 50
         c.drawString(50, y_position, line[:80])  # Truncate long lines
         y_position -= 15
-    
+
     c.save()
-    
+
     print("Created PDF files using reportlab")
-    
+
 except ImportError:
     # Create text versions if reportlab not available
     (DOCS/"research_paper.pdf.txt").write_text(f"PDF placeholder: {research_content}", encoding="utf-8")

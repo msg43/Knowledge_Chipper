@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import os
+import platform
 import shutil
 import subprocess
 import tempfile
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-import platform
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -80,9 +80,15 @@ class FFmpegInstaller(QThread):
     def _download(self, url: str, dest: Path) -> None:
         """Download a URL to dest with timeouts and lightweight progress updates."""
         self.progress_updated.emit("⬇️ Downloading FFmpeg…", 20)
-        req = urllib.request.Request(url, headers={"User-Agent": "Knowledge-Chipper/3.x (macOS)"})
-        with urllib.request.urlopen(req, timeout=60) as response, open(dest, "wb") as out:
-            total_str = response.headers.get("Content-Length") or response.headers.get("content-length")
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "Knowledge-Chipper/3.x (macOS)"}
+        )
+        with urllib.request.urlopen(req, timeout=60) as response, open(
+            dest, "wb"
+        ) as out:
+            total_str = response.headers.get("Content-Length") or response.headers.get(
+                "content-length"
+            )
             total = int(total_str) if (total_str and total_str.isdigit()) else 0
             downloaded = 0
             chunk_size = 1024 * 1024  # 1 MiB
@@ -97,11 +103,17 @@ class FFmpegInstaller(QThread):
                 if total > 0:
                     pct = int(20 + (30 * downloaded / total))  # map into 20-50 range
                     if pct >= next_emit:
-                        self.progress_updated.emit(f"⬇️ Downloading FFmpeg… ({downloaded // (1024*1024)} MiB)", min(pct, 50))
+                        self.progress_updated.emit(
+                            f"⬇️ Downloading FFmpeg… ({downloaded // (1024*1024)} MiB)",
+                            min(pct, 50),
+                        )
                         next_emit = pct + 5
                 else:
                     if downloaded - next_emit >= 8 * 1024 * 1024:
-                        self.progress_updated.emit(f"⬇️ Downloading FFmpeg… ({downloaded // (1024*1024)} MiB)", 30)
+                        self.progress_updated.emit(
+                            f"⬇️ Downloading FFmpeg… ({downloaded // (1024*1024)} MiB)",
+                            30,
+                        )
                         next_emit = downloaded
 
     def _sha256(self, path: Path) -> str:
@@ -147,18 +159,28 @@ class FFmpegInstaller(QThread):
                             or "ffmpeg_download"
                         )
                         tmp_path = Path(tmpdir) / archive_name
-                        phase = "⬇️ Downloading FFmpeg..." if idx == 0 else "⬇️ Downloading FFmpeg (fallback source)..."
+                        phase = (
+                            "⬇️ Downloading FFmpeg..."
+                            if idx == 0
+                            else "⬇️ Downloading FFmpeg (fallback source)..."
+                        )
                         self.progress_updated.emit(phase, 20)
                         self._download(release.url, tmp_path)
 
                         # Step 3: Verify (60%)
-                        self.progress_updated.emit("🔍 Verifying download integrity...", 60)
+                        self.progress_updated.emit(
+                            "🔍 Verifying download integrity...", 60
+                        )
                         if release.sha256:
                             digest = self._sha256(tmp_path)
                             if digest.lower() != release.sha256.lower():
-                                raise RuntimeError("FFmpeg checksum verification failed")
+                                raise RuntimeError(
+                                    "FFmpeg checksum verification failed"
+                                )
                         else:
-                            self.progress_updated.emit("🔍 Using trusted source - skipping checksum", 60)
+                            self.progress_updated.emit(
+                                "🔍 Using trusted source - skipping checksum", 60
+                            )
 
                         # Step 4: Extract (70%)
                         self.progress_updated.emit("📦 Extracting FFmpeg files...", 70)
@@ -174,9 +196,13 @@ class FFmpegInstaller(QThread):
                         ffprobe_src: Path | None = None
                         for p in extract_dir.rglob("*"):
                             if p.is_file():
-                                if p.name == release.ffmpeg_name and os.access(p, os.X_OK):
+                                if p.name == release.ffmpeg_name and os.access(
+                                    p, os.X_OK
+                                ):
                                     ffmpeg_src = p
-                                elif p.name == release.ffprobe_name and os.access(p, os.X_OK):
+                                elif p.name == release.ffprobe_name and os.access(
+                                    p, os.X_OK
+                                ):
                                     ffprobe_src = p
 
                         if not ffmpeg_src:
@@ -199,9 +225,13 @@ class FFmpegInstaller(QThread):
                                     capture_output=True,
                                     text=True,
                                 )
-                                archs_out = (archs.stdout or archs.stderr or "").strip().lower()
+                                archs_out = (
+                                    (archs.stdout or archs.stderr or "").strip().lower()
+                                )
                                 if machine == "arm64" and "arm64" not in archs_out:
-                                    raise RuntimeError("Incompatible architecture: x86_64-only candidate on arm64")
+                                    raise RuntimeError(
+                                        "Incompatible architecture: x86_64-only candidate on arm64"
+                                    )
                             except FileNotFoundError:
                                 # lipo not available; rely on run-time validation below
                                 pass
@@ -211,7 +241,9 @@ class FFmpegInstaller(QThread):
                         ffmpeg_dst = BIN_DIR / "ffmpeg"
                         # Copy without metadata to avoid quarantine propagation or slow xattrs
                         self.progress_updated.emit("📄 Copying binary...", 80)
-                        with open(ffmpeg_src, "rb") as _src, open(ffmpeg_dst, "wb") as _dst:
+                        with open(ffmpeg_src, "rb") as _src, open(
+                            ffmpeg_dst, "wb"
+                        ) as _dst:
                             shutil.copyfileobj(_src, _dst, length=1024 * 1024)
                         # Permissions
                         self.progress_updated.emit("🔑 Setting permissions...", 82)
@@ -219,19 +251,34 @@ class FFmpegInstaller(QThread):
 
                         if ffprobe_src:
                             ffprobe_dst = BIN_DIR / "ffprobe"
-                            with open(ffprobe_src, "rb") as _src, open(ffprobe_dst, "wb") as _dst:
+                            with open(ffprobe_src, "rb") as _src, open(
+                                ffprobe_dst, "wb"
+                            ) as _dst:
                                 shutil.copyfileobj(_src, _dst, length=1024 * 1024)
                             ffprobe_dst.chmod(0o755)
 
                         # Step 6: Final setup (90%)
-                        self.progress_updated.emit("🛡️ Configuring security permissions...", 90)
+                        self.progress_updated.emit(
+                            "🛡️ Configuring security permissions...", 90
+                        )
                         try:
-                            subprocess.run(["xattr", "-d", "com.apple.quarantine", str(ffmpeg_dst)], check=False, timeout=5)
+                            subprocess.run(
+                                [
+                                    "xattr",
+                                    "-d",
+                                    "com.apple.quarantine",
+                                    str(ffmpeg_dst),
+                                ],
+                                check=False,
+                                timeout=5,
+                            )
                         except Exception:
                             pass
 
                         # Step 7: Validate (95%)
-                        self.progress_updated.emit("✅ Validating FFmpeg installation...", 95)
+                        self.progress_updated.emit(
+                            "✅ Validating FFmpeg installation...", 95
+                        )
                         # Report process architecture for troubleshooting
                         try:
                             self.progress_updated.emit(
@@ -241,27 +288,42 @@ class FFmpegInstaller(QThread):
                         except Exception:
                             pass
 
-                        result = subprocess.run([str(ffmpeg_dst), "-version"], capture_output=True, text=True, timeout=10)
+                        result = subprocess.run(
+                            [str(ffmpeg_dst), "-version"],
+                            capture_output=True,
+                            text=True,
+                            timeout=10,
+                        )
                         if result.returncode != 0:
                             # If we hit Exec format error or bad CPU type, try the next candidate
                             err = (result.stderr or result.stdout or "").lower()
                             if "exec format error" in err or "bad cpu type" in err:
-                                raise RuntimeError("Architecture mismatch while validating binary")
-                            raise RuntimeError(f"FFmpeg validation failed: {result.stderr}")
+                                raise RuntimeError(
+                                    "Architecture mismatch while validating binary"
+                                )
+                            raise RuntimeError(
+                                f"FFmpeg validation failed: {result.stderr}"
+                            )
 
                         # Step 8: Complete (100%)
-                        self.progress_updated.emit("🎉 FFmpeg installation completed successfully!", 100)
+                        self.progress_updated.emit(
+                            "🎉 FFmpeg installation completed successfully!", 100
+                        )
                         msg = (
                             "FFmpeg installed successfully!\n\nEnabled features:\n• YouTube video downloads\n• Audio format conversions\n• Video file processing\n\nInstalled to: "
                             f"{BIN_DIR}"
                         )
                         self.installation_finished.emit(True, msg)
-                        self.finished.emit(True, "FFmpeg installed successfully", str(ffmpeg_dst))
+                        self.finished.emit(
+                            True, "FFmpeg installed successfully", str(ffmpeg_dst)
+                        )
                         return
                 except Exception as e:  # Try next release
                     last_error = e
                     if idx < len(releases) - 1:
-                        self.progress_updated.emit("↩️ Candidate failed, trying next source…", 60)
+                        self.progress_updated.emit(
+                            "↩️ Candidate failed, trying next source…", 60
+                        )
                         continue
                     # All candidates failed; present a clear, user-friendly message
                     friendly = (
@@ -273,7 +335,7 @@ class FFmpegInstaller(QThread):
         except Exception as e:
             error_msg = f"FFmpeg installation failed: {e}"
             logger.error(error_msg)
-            
+
             # Emit both new and legacy signals for compatibility
             self.installation_finished.emit(False, error_msg)
             self.finished.emit(False, str(e), "")

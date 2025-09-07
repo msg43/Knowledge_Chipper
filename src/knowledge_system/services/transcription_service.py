@@ -51,9 +51,10 @@ class TranscriptionService:
 
         # Get HuggingFace token for diarization
         from ..config import get_settings
+
         settings = get_settings()
         hf_token = getattr(settings.api_keys, "huggingface_token", None)
-        
+
         # Initialize processors
         self.audio_processor = AudioProcessor(
             normalize_audio=normalize_audio,
@@ -71,6 +72,7 @@ class TranscriptionService:
         """Lazy initialization of YouTube transcript processor."""
         if self._youtube_transcript_processor is None:
             from ..processors.youtube_transcript import YouTubeTranscriptProcessor
+
             self._youtube_transcript_processor = YouTubeTranscriptProcessor()
         return self._youtube_transcript_processor
 
@@ -132,7 +134,9 @@ class TranscriptionService:
             # Bright Data API key is required for transcript extraction via Bright Data's API,
             # but proxy credentials (BD_CUST/BD_ZONE/BD_PASS) are NOT required here.
             # We only validate the presence/format of the API key and proceed.
-            bright_data_api_key = getattr(settings.api_keys, "bright_data_api_key", None)
+            bright_data_api_key = getattr(
+                settings.api_keys, "bright_data_api_key", None
+            )
             if not bright_data_api_key:
                 return {
                     "success": False,
@@ -362,12 +366,14 @@ def transcribe_file(
     service = TranscriptionService(
         whisper_model=model,
         normalize_audio=normalize,
-        download_thumbnails=download_thumbnails if download_thumbnails is not None else True,
+        download_thumbnails=download_thumbnails
+        if download_thumbnails is not None
+        else True,
         temp_dir=temp_dir,
     )
     return service.transcribe_input(
-        input_path, 
+        input_path,
         download_thumbnails=download_thumbnails,
         output_dir=output_dir,
-        include_timestamps=include_timestamps
+        include_timestamps=include_timestamps,
     )

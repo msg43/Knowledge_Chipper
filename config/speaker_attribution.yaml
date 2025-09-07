@@ -42,6 +42,6 @@ speaker_profiles:
     - american accent
     - precise diction
     - analytical tone
-# video_mappings: 
+# video_mappings:
 # Removed - video-specific mappings are now handled through database learning system
 # The system will learn speaker patterns automatically from user corrections

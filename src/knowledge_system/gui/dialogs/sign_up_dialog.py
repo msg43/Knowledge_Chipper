@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton
+from PyQt6.QtWidgets import (
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+)
 
 
 class SignUpDialog(QDialog):
@@ -30,5 +37,3 @@ class SignUpDialog(QDialog):
 
     def get_values(self) -> tuple[str, str]:
         return self.email.text().strip(), self.password.text()
-
-

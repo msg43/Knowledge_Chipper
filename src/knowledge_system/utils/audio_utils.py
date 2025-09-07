@@ -124,51 +124,56 @@ class FFmpegAudioProcessor:
             # Run FFmpeg with non-blocking approach
             import threading
             import time
-            
+
             process = subprocess.Popen(
-                cmd, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE, 
-                text=True
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
             )
 
             # Simple approach: wait for completion with timeout and periodic progress updates
             start_time = time.time()
-            
+
             # Provide initial progress update
             if progress_callback:
                 progress_callback("Starting audio conversion...", 0)
-            
+
             # Calculate reasonable timeout based on input duration
             total_duration = self._get_audio_duration_quick(input_path)
             if total_duration:
                 # Rule of thumb: FFmpeg typically converts at 10-50x real-time speed
                 # Use very conservative estimate: 2x real-time + 5 minute buffer
-                timeout_seconds = max(600, total_duration * 2 + 300)  # Minimum 10 minutes
-                logger.info(f"Setting conversion timeout to {timeout_seconds/60:.1f} minutes for {total_duration/60:.1f} minute audio")
+                timeout_seconds = max(
+                    600, total_duration * 2 + 300
+                )  # Minimum 10 minutes
+                logger.info(
+                    f"Setting conversion timeout to {timeout_seconds/60:.1f} minutes for {total_duration/60:.1f} minute audio"
+                )
             else:
                 # Unknown duration - use generous default
                 timeout_seconds = 3600  # 1 hour default
                 logger.info("Could not determine audio duration, using 1 hour timeout")
-            
+
             try:
                 # Wait for process completion with calculated timeout
                 stdout, stderr = process.communicate(timeout=timeout_seconds)
-                
+
                 # Success progress update
                 if progress_callback:
                     elapsed = time.time() - start_time
                     progress_callback(f"Conversion completed in {elapsed:.1f}s", 100)
-                    
+
             except subprocess.TimeoutExpired:
                 process.kill()
                 stdout, stderr = process.communicate()
                 timeout_mins = timeout_seconds / 60
-                logger.error(f"FFmpeg conversion timed out after {timeout_mins:.1f} minutes")
+                logger.error(
+                    f"FFmpeg conversion timed out after {timeout_mins:.1f} minutes"
+                )
                 if progress_callback:
-                    progress_callback(f"Conversion timed out after {timeout_mins:.1f}min", 0)
+                    progress_callback(
+                        f"Conversion timed out after {timeout_mins:.1f}min", 0
+                    )
                 return False
-            
+
             if process.returncode != 0:
                 logger.error(f"FFmpeg conversion failed with code {process.returncode}")
                 logger.error(f"FFmpeg stderr: {stderr}")
@@ -192,8 +197,14 @@ class FFmpegAudioProcessor:
         try:
             ffprobe = self._ffprobe_path or self._resolve_binary("ffprobe") or "ffprobe"
             cmd = [
-                ffprobe, "-v", "quiet", "-show_entries", "format=duration",
-                "-of", "csv=p=0", str(file_path)
+                ffprobe,
+                "-v",
+                "quiet",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "csv=p=0",
+                str(file_path),
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
@@ -386,7 +397,13 @@ def convert_audio_file(
 ) -> bool:
     """Convenience function for audio conversion."""
     return ffmpeg_processor.convert_audio(
-        input_path, output_path, target_format, normalize, sample_rate, channels, progress_callback
+        input_path,
+        output_path,
+        target_format,
+        normalize,
+        sample_rate,
+        channels,
+        progress_callback,
     )
 
 

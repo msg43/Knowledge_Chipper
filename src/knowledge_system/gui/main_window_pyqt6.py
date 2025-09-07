@@ -9,7 +9,7 @@ import queue
 import sys
 from typing import Any
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import (
     QLabel,
@@ -87,6 +87,10 @@ def _update_state_version(version: str) -> None:
 class MainWindow(QMainWindow):
     """Streamlined main application window for Knowledge System using PyQt6."""
 
+    # Thread-safe signals for dialog creation
+    show_ffmpeg_dialog_signal = pyqtSignal()
+    show_model_dialog_signal = pyqtSignal()
+
     def __init__(self) -> None:
         """Initialize the main window."""
         super().__init__()
@@ -122,6 +126,10 @@ class MainWindow(QMainWindow):
         # Set custom icon for the window
         self._set_window_icon()
 
+        # Connect thread-safe dialog signals
+        self.show_ffmpeg_dialog_signal.connect(self._show_first_run_ffmpeg_dialog)
+        self.show_model_dialog_signal.connect(self._show_first_run_model_dialog)
+
         # Start message processor
         self.message_timer = QTimer()
         self.message_timer.timeout.connect(self._process_messages)
@@ -132,16 +140,25 @@ class MainWindow(QMainWindow):
 
         # Check for updates if enabled (skip during testing)
         # Note: Update check disabled to prevent 404 errors during testing
-        # self._check_for_updates_on_launch()
+        # Defer update check to prevent thread safety issues during initialization
+        QTimer.singleShot(3000, self._check_for_updates_on_launch)
 
         # Monthly FFmpeg check (lightweight)
         self._ffmpeg_monthly_check()
 
-        # First-run FFmpeg setup (if needed)
-        self._check_first_run_ffmpeg_setup()
+        # Delay first-run setup to ensure GUI is fully ready and avoid thread violations
+        QTimer.singleShot(500, self._delayed_first_run_setup)
 
-        # First-run model setup (if needed)
-        self._check_first_run_model_setup()
+    def _delayed_first_run_setup(self) -> None:
+        """Delayed first-run setup to ensure GUI is fully initialized before creating dialogs."""
+        try:
+            # First-run FFmpeg setup (if needed)
+            self._check_first_run_ffmpeg_setup()
+
+            # First-run model setup (if needed)
+            self._check_first_run_model_setup()
+        except Exception as e:
+            logger.warning(f"Delayed first-run setup failed: {e}")
 
     def _set_window_icon(self) -> None:
         """Set the custom window icon."""
@@ -158,9 +175,7 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self) -> None:
         """Set up the streamlined main UI."""
-        self.setWindowTitle(
-            f"Skip the Podcast v{__version__} - Your Personal Knowledge Assistant"
-        )
+        self.setWindowTitle("Skip the Podcast")
         # Make window resizable with reasonable default size and minimum size
         self.resize(1200, 800)  # Default size
         self.setMinimumSize(800, 600)  # Minimum size to ensure usability
@@ -181,12 +196,13 @@ class MainWindow(QMainWindow):
 
         # Settings tab will be added last to appear on the far right
 
-        # Create progress widget
+        # Create progress widget (kept for compatibility but not added to layout to prevent overlap)
         self.progress_widget = EnhancedProgressBar()
         self.progress_widget.cancellation_requested.connect(
             self._handle_progress_cancellation
         )
-        main_layout.addWidget(self.progress_widget)
+        # NOTE: Intentionally NOT adding to layout to prevent overlapping with tab-specific progress displays
+        # main_layout.addWidget(self.progress_widget)  # Commented out to fix blue box overlap issue
 
         # Create status bar with version info
         self.status_bar = QStatusBar()
@@ -249,10 +265,6 @@ class MainWindow(QMainWindow):
             watcher_tab = WatcherTab(self)
             self.tabs.addTab(watcher_tab, "File Watcher")
 
-        # Settings tab (far right)
-        self.api_keys_tab = APIKeysTab(self)
-        self.tabs.addTab(self.api_keys_tab, "⚙️ Settings")
-
         # Cloud uploads (manual) tab
         try:
             from .tabs import CloudUploadsTab
@@ -262,6 +274,10 @@ class MainWindow(QMainWindow):
                 self.tabs.addTab(cloud_uploads_tab, "☁️ Cloud Uploads")
         except Exception as e:
             logger.warning(f"Cloud Uploads tab disabled: {e}")
+
+        # Settings tab (far right)
+        self.api_keys_tab = APIKeysTab(self)
+        self.tabs.addTab(self.api_keys_tab, "⚙️ Settings")
 
         # Cloud sync status tab - DISABLED for redesign (saved for future re-tooling)
         # TODO: Re-enable when bidirectional sync is needed
@@ -525,10 +541,10 @@ class MainWindow(QMainWindow):
                 return
             setattr(self, "_ffmpeg_first_run_dialog_open", True)
 
-            # Use QTimer to show dialog after main window is fully loaded
+            # Use QTimer to emit signal after main window is fully loaded (thread-safe)
             from PyQt6.QtCore import QTimer
 
-            QTimer.singleShot(1000, self._show_first_run_ffmpeg_dialog)
+            QTimer.singleShot(1000, self.show_ffmpeg_dialog_signal.emit)
 
         except (ImportError, AttributeError) as e:
             logger.warning(f"First-run FFmpeg setup failed: {e}")
@@ -611,10 +627,10 @@ class MainWindow(QMainWindow):
             gui.set_value("⚙️ Settings", "model_first_run_shown", True)
             gui.save()
 
-            # Use QTimer to show dialog after main window is fully loaded (after FFmpeg dialog)
+            # Use QTimer to emit signal after main window is fully loaded (thread-safe)
             from PyQt6.QtCore import QTimer
 
-            QTimer.singleShot(2000, self._show_first_run_model_dialog)
+            QTimer.singleShot(2000, self.show_model_dialog_signal.emit)
 
         except (ImportError, AttributeError) as e:
             logger.warning(f"First-run model setup failed: {e}")
@@ -695,7 +711,16 @@ def launch_gui() -> None:
         # Create the QApplication
         app = QApplication(sys.argv)
 
-        # For macOS: Additional setup to avoid rocket ship icon
+        # For macOS: Additional setup to avoid rocket ship icon and thread safety
+        # CRITICAL: Ensure Qt initializes properly on macOS main thread
+        if sys.platform == "darwin":
+            # Force Qt to use the main thread for all window operations
+            try:
+                app.setAttribute(
+                    Qt.ApplicationAttribute.AA_DontCreateNativeWidgetSiblings, True
+                )
+            except Exception:
+                pass
         if sys.platform == "darwin":
             try:
                 # Set the activation policy to regular application
@@ -703,6 +728,15 @@ def launch_gui() -> None:
 
                 ns_app = NSApplication.sharedApplication()
                 ns_app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
+
+                # Ensure we're on the main thread for macOS operations
+                import threading
+
+                if not threading.current_thread() is threading.main_thread():
+                    logger.warning(
+                        "GUI launch not on main thread - this may cause issues on macOS"
+                    )
+
             except ImportError:
                 # AppKit not available, use alternative approach
                 # Set process name to help with icon association

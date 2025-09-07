@@ -5,7 +5,7 @@ Based on Wikidata's structured categories methodology (https://www.wikidata.org/
 
 **ANALYSIS FACTORS:**
 - Claims and their subject matter
-- Entities (people, organizations) and their domains  
+- Entities (people, organizations) and their domains
 - Concepts and mental models discussed
 - Technical jargon and specialized terminology
 - Depth and frequency of coverage for each topic
@@ -18,7 +18,7 @@ Number of Claims: {num_claims}
 {claims_sample}
 
 **KEY ENTITIES:** {entities}
-**CONCEPTS DISCUSSED:** {concepts} 
+**CONCEPTS DISCUSSED:** {concepts}
 **TECHNICAL TERMS:** {jargon}
 **ENTITY TYPES:** {entity_types}
 **CLAIM TYPES:** {claim_types}
@@ -40,7 +40,7 @@ Identify 3-8 structured categories that best represent what this episode covers.
 
 **COMMON WIKIDATA CATEGORIES:**
 - Artificial Intelligence (Q11660)
-- Economics (Q8134) 
+- Economics (Q8134)
 - Technology (Q11016)
 - Science (Q336)
 - Philosophy (Q5891)
@@ -59,7 +59,7 @@ Identify 3-8 structured categories that best represent what this episode covers.
     "supporting_claim_ids": ["claim_001", "claim_003", "claim_007"]
   }},
   {{
-    "category_name": "Technology Ethics", 
+    "category_name": "Technology Ethics",
     "confidence": 0.7,
     "wikidata_qid": null,
     "frequency_score": 0.4,

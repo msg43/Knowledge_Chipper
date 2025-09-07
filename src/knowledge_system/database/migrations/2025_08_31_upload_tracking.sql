@@ -12,7 +12,7 @@ CREATE INDEX IF NOT EXISTS idx_claims_last_uploaded ON claims(last_uploaded_at);
 
 -- Create view for unuploaded claims
 CREATE VIEW IF NOT EXISTS unuploaded_claims AS
-SELECT 
+SELECT
     c.*,
     e.title as episode_title,
     e.video_id

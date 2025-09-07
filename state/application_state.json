@@ -4,7 +4,7 @@
     "started_at": 1756171487.15303,
     "last_activity": 1756171507.7872121,
     "user_agent": null,
-    "version": "3.1.3",
+    "version": "3.1.4",
     "operations_count": 0,
     "files_processed": 0,
     "errors_count": 0
@@ -36,5 +36,5 @@
   "active_operations": {},
   "cache": {},
   "last_saved": 1756171513.518641,
-  "version": "3.1.3"
+  "version": "3.1.4"
 }

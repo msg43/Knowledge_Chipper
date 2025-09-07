@@ -12,12 +12,12 @@ from typing import Any
 from PyQt6.QtCore import QProcess, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
-    QVBoxLayout,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QPlainTextEdit,
     QProgressBar,
+    QPushButton,
+    QVBoxLayout,
 )
 
 from ...logger import get_logger
@@ -140,9 +140,12 @@ class DiarizationSetupDialog(QDialog):
             return
 
         # Fallback: install packages directly in case extras resolution failed inside the app bundle
-        self._append("\n⚠️ Extras installation failed. Trying direct package install fallback...\n")
+        self._append(
+            "\n⚠️ Extras installation failed. Trying direct package install fallback...\n"
+        )
         try:
             import sys
+
             fallback_cmd = [
                 sys.executable,
                 "-m",
@@ -154,7 +157,9 @@ class DiarizationSetupDialog(QDialog):
             ]
             self._append("Fallback command: " + " ".join(fallback_cmd))
             self._process = QProcess(self)
-            self._process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+            self._process.setProcessChannelMode(
+                QProcess.ProcessChannelMode.MergedChannels
+            )
             self._process.readyReadStandardOutput.connect(self._on_output)
             self._process.finished.connect(self._on_fallback_finished)
             self.progress.setVisible(True)
@@ -168,16 +173,18 @@ class DiarizationSetupDialog(QDialog):
             self.cancel_btn.setEnabled(True)
             self.install_btn.setEnabled(True)
 
-    def _on_fallback_finished(self, exit_code: int, _status: QProcess.ExitStatus) -> None:
+    def _on_fallback_finished(
+        self, exit_code: int, _status: QProcess.ExitStatus
+    ) -> None:
         self.progress.setVisible(False)
         success = exit_code == 0
         if success:
             self._append("\n✅ Fallback installation finished successfully.")
         else:
-            self._append("\n❌ Fallback installation failed. Please run manually:\n  pip install torch>=2.1.0 transformers>=4.35.0 pyannote.audio>=3.1.0")
+            self._append(
+                "\n❌ Fallback installation failed. Please run manually:\n  pip install torch>=2.1.0 transformers>=4.35.0 pyannote.audio>=3.1.0"
+            )
         self.installation_completed.emit(success)
         self.cancel_btn.setText("Close")
         self.cancel_btn.setEnabled(True)
         self.install_btn.setEnabled(not success)
-
-

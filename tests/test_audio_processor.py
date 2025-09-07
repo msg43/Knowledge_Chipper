@@ -1,12 +1,14 @@
 """Test audio processor functionality."""
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 def test_audio_processor_import():
     """Test that audio processor can be imported."""
     try:
         from knowledge_system.processors.audio_processor import AudioProcessor
+
         assert AudioProcessor is not None
     except ImportError:
         # If module structure is different, just pass
@@ -17,6 +19,7 @@ def test_audio_utils_import():
     """Test that audio utilities can be imported."""
     try:
         from knowledge_system.utils.audio_utils import get_audio_duration
+
         assert get_audio_duration is not None
     except ImportError:
         # If module doesn't exist, just pass

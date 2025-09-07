@@ -1,6 +1,6 @@
 # Skip the Podcast Desktop
 
-**Version:** 3.1.3 | **Build Date:** 2025-01-27 
+**Version:** 3.1.4 | **Build Date:** 2025-09-06 
 
 Skip the Podcast Desktop - A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 
@@ -9,6 +9,18 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 **🔍 HCE Features:** Advanced claim extraction with A/B/C confidence tiers + real-time contradiction detection + semantic deduplication + entity recognition (people/concepts) + relationship mapping + evidence citations + Obsidian integration with auto-tagging + comprehensive search and filtering.
 
 ## 🎉 What's New (Latest Updates)
+
+### 🛠️ **Enhanced FFMPEG Setup for Diarization (January 2025)**
+- **Pre-Process FFMPEG Check**: Cloud transcription now checks for FFMPEG before starting when diarization is enabled
+- **Interactive Installation Dialog**: User-friendly dialog allows installing FFMPEG or canceling transcription while preserving all settings
+- **Settings Preservation**: All user selections (URLs, output directory, options) retained when canceling FFMPEG installation
+- **Improved User Experience**: No more console-only warnings - clear GUI guidance for required dependencies
+
+### 🛠️ **macOS Threading Stability Fix (January 2025)**
+- **Resolved NSWindow Threading Crash**: Fixed critical macOS-specific crash where GUI dialogs were created on wrong threads
+- **Thread-Safe Dialog Creation**: Implemented proper signal-slot mechanism for all first-run setup dialogs
+- **Improved Startup Reliability**: Enhanced application launch stability on macOS with proper main thread enforcement
+- **Better Error Handling**: Added comprehensive thread safety checks for all GUI component creation
 
 ### 🔐 **GetReceipts.org OAuth Integration (January 2025)**
 - **Seamless Cloud Sync**: Direct OAuth-based uploads to GetReceipts.org with complete user attribution
@@ -48,6 +60,13 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 - **Direct Database Upload**: Cloud Uploads tab now uploads claims data directly to Supabase database (not file storage)
 - **Hardcoded Connection**: All users connect to shared Supabase instance with individual authentication
 - **Smart Change Tracking**: Only uploads new/modified claims since last upload with automatic status tracking
+
+### 🛡️ **Smart YouTube Proxy Protection (September 2025)**
+- **Intelligent Fallback**: When Bright Data proxy fails, single video downloads are allowed but bulk downloads (2+ URLs) are blocked to prevent YouTube IP bans
+- **Anti-Bot Protection**: Sophisticated detection prevents users from triggering YouTube's rate limiting while maintaining functionality for legitimate single-video use
+- **Clear User Guidance**: Prominent warnings explain the risks and encourage proper proxy configuration for bulk operations
+
+### ☁️ **Cloud Database Features**
 - **One-Way Sync**: Desktop always overwrites cloud data for conflict-free uploads
 - **Complete Data Upload**: Claims upload with all associated episodes, people, concepts, evidence, and relations
 - **Simplified UI**: Browse SQLite database → Select claims → Upload to cloud database
@@ -476,8 +495,8 @@ Your_Output_Folder/
 
 The desktop app has tabs for different operations:
 
-- **🎬 YouTube Extraction**: Process YouTube videos and playlists with speaker diarization support
-- **🎵 Local Transcription**: Process local audio/video files with quality retry and GPU acceleration
+- **🎬 YouTube Extraction**: Process YouTube videos and playlists with enhanced cloud progress tracking and detailed error reporting
+- **🎵 Local Transcription**: Process local audio/video files with real-time progress, ETA estimates, and comprehensive completion summaries
 - **📝 Summarization**: Create summaries from transcripts with claim tier validation
 - **📊 Process Management**: Full pipeline processing with transcription, summarization, and MOC generation
 - **🔍 Claim Search**: Explore and search extracted claims across all processed content
@@ -1122,6 +1141,61 @@ The system includes advanced quality detection that automatically identifies tra
 - **Repetition Patterns**: Identifies stuck loops and hallucinations
 - **Content Coherence**: Validates realistic speech patterns
 - **Language Consistency**: Ensures proper language detection
+
+## 📊 Enhanced Progress Reporting
+
+### Real-Time Progress Tracking
+
+**🎯 What's New:** Completely redesigned progress reporting system with comprehensive feedback:
+
+**Local Transcription Progress:**
+- **📈 Real-time Statistics**: See completed, failed, and total file counts with live updates
+- **⏱️ ETA Estimates**: Accurate time remaining based on actual processing speed
+- **🎤 Current Status**: Know exactly what's happening (downloading model, processing file, etc.)
+- **📊 Performance Metrics**: Files per minute and processing speed indicators
+- **🔄 Retry Controls**: One-click retry for failed files with enhanced error analysis
+
+**Cloud Transcription Progress:**
+- **☁️ Service Status**: Live connection status and API health monitoring
+- **🔗 URL Processing**: Track progress through individual URLs with detailed status
+- **📥 Operation Details**: See current operation (downloading, processing, extracting)
+- **📈 Success Rates**: Real-time success/failure statistics
+
+### Enhanced Error Reporting
+
+**🚨 Smart Error Analysis:** Contextual error messages with actionable solutions:
+
+**Automatic Error Classification:**
+- **🔑 API Key Issues**: Immediate detection with specific fix instructions
+- **🤖 Model Access Problems**: Clear guidance on model availability and requirements
+- **🌐 Network Issues**: Network troubleshooting with service status links
+- **⏱️ Rate Limiting**: Specific guidance on usage limits and solutions
+- **📁 File Access**: Detailed file permission and path guidance
+- **🎵 Audio Processing**: FFmpeg and codec issue resolution
+- **💾 Memory Issues**: Memory optimization suggestions
+
+**Enhanced Error Dialog Features:**
+- **💡 Contextual Solutions**: Step-by-step fixes based on error type
+- **🌐 Help Links**: Direct links to relevant documentation and service status
+- **📋 Copy Error Details**: One-click copying of technical details for support
+- **⚠️ Warning vs Error**: Clear distinction between warnings and critical errors
+
+### Completion Summaries
+
+**🎉 Detailed Results:** Comprehensive completion reports show:
+
+**Local Transcription Summary:**
+- **📊 Processing Statistics**: Files processed, success rates, total time
+- **⚡ Performance Metrics**: Processing speed, character counts, quality scores
+- **📂 File-by-File Results**: Detailed list with character counts and status
+- **⚠️ Failed Files Analysis**: Specific error details with retry options
+- **🚀 Next Steps Guidance**: Clear instructions on what to do with your transcripts
+
+**Cloud Transcription Summary:**
+- **🌐 Service Statistics**: URL processing rates and service performance
+- **☁️ Account Information**: Credit usage and service status
+- **📈 Quality Metrics**: Cloud processing quality and optimization details
+- **🔗 Dashboard Access**: Direct links to your SkipThePodcast.com account
 
 **💡 Intelligent Warnings:**
 When retries are disabled and quality issues are detected:

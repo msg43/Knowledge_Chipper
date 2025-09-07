@@ -205,39 +205,39 @@ jobs:
         python -m venv "$MACOS_PATH/venv"
         "$MACOS_PATH/venv/bin/python" -m pip install --upgrade pip
         "$MACOS_PATH/venv/bin/python" -m pip install -r requirements.txt
-        
+
         # Verify critical dependencies are installed
         echo "🔍 Verifying critical dependencies..."
         "$MACOS_PATH/venv/bin/python" -c "import sqlalchemy; print('✅ SQLAlchemy:', sqlalchemy.__version__)" || {
             echo "❌ SQLAlchemy missing, installing..."
             "$MACOS_PATH/venv/bin/python" -m pip install sqlalchemy alembic
         }
-        
+
         "$MACOS_PATH/venv/bin/python" -c "import psutil; print('✅ psutil:', psutil.__version__)" || {
             echo "❌ psutil missing, installing..."
             "$MACOS_PATH/venv/bin/python" -m pip install psutil
         }
-        
+
         "$MACOS_PATH/venv/bin/python" -c "import openai; print('✅ OpenAI:', openai.__version__)" || {
             echo "❌ OpenAI missing, installing..."
             "$MACOS_PATH/venv/bin/python" -m pip install openai
         }
-        
+
         "$MACOS_PATH/venv/bin/python" -c "import beautifulsoup4; print('✅ BeautifulSoup4 available')" || {
             echo "❌ beautifulsoup4 missing, installing..."
             "$MACOS_PATH/venv/bin/python" -m pip install beautifulsoup4
         }
-        
+
         "$MACOS_PATH/venv/bin/python" -c "import youtube_transcript_api; print('✅ youtube-transcript-api available')" || {
             echo "❌ youtube-transcript-api missing, installing..."
             "$MACOS_PATH/venv/bin/python" -m pip install youtube-transcript-api
         }
-        
+
         "$MACOS_PATH/venv/bin/python" -c "import pydantic_settings; print('✅ pydantic-settings available')" || {
             echo "❌ pydantic-settings missing, installing..."
             "$MACOS_PATH/venv/bin/python" -m pip install pydantic-settings
         }
-        
+
         # Install the package in editable mode (need to copy setup files first)
         cp pyproject.toml "$MACOS_PATH/" || true
         cd "$MACOS_PATH" && "$MACOS_PATH/venv/bin/python" -m pip install -e . && cd -
@@ -275,24 +275,24 @@ jobs:
         #!/bin/bash
         APP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
         LOG_FILE="$APP_DIR/logs/knowledge_system.log"
-        
+
         # Ensure logs directory exists and is writable
         mkdir -p "$APP_DIR/logs"
         touch "$LOG_FILE"
         chmod 666 "$LOG_FILE"
-        
+
         # Log the version being launched
         if [ -f "$APP_DIR/version.txt" ]; then
             echo "Launching Knowledge Chipper:" >> "$LOG_FILE"
             cat "$APP_DIR/version.txt" >> "$LOG_FILE"
         fi
-        
+
         # Activate virtual environment
         source "$APP_DIR/venv/bin/activate"
-        
+
         # Set PYTHONPATH to include src directory
         export PYTHONPATH="$APP_DIR/src:$PYTHONPATH"
-        
+
         # Launch the GUI with debug output
         cd "$APP_DIR"
         echo "Current directory: $(pwd)" >> "$LOG_FILE"
@@ -301,7 +301,7 @@ jobs:
         echo "Virtual env: $VIRTUAL_ENV" >> "$LOG_FILE"
         echo "Architecture: $(arch)" >> "$LOG_FILE"
         echo "Launching GUI..." >> "$LOG_FILE"
-        
+
         # Force native ARM64 execution using the venv python explicitly
         # First check if we're on Apple Silicon
         if [[ "$(uname -m)" == "arm64" ]]; then

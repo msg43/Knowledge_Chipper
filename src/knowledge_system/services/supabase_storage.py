@@ -13,8 +13,7 @@ from typing import Optional, Tuple
 
 from ..config import get_settings
 from ..logger import get_logger
-from ..utils.optional_deps import ensure_module, add_vendor_to_sys_path
-
+from ..utils.optional_deps import add_vendor_to_sys_path, ensure_module
 
 logger = get_logger(__name__)
 
@@ -29,10 +28,10 @@ class SupabaseStorageService:
 
     def __init__(
         self,
-        supabase_url: Optional[str] = None,
-        supabase_key: Optional[str] = None,
-        bucket: Optional[str] = None,
-        client: Optional[object] = None,
+        supabase_url: str | None = None,
+        supabase_key: str | None = None,
+        bucket: str | None = None,
+        client: object | None = None,
     ) -> None:
         settings = get_settings()
 
@@ -56,9 +55,9 @@ class SupabaseStorageService:
         key = key or getattr(settings.cloud, "supabase_key", None)
         bkt = bkt or getattr(settings.cloud, "supabase_bucket", None)
 
-        self.supabase_url: Optional[str] = url
-        self.supabase_key: Optional[str] = key
-        self.bucket: Optional[str] = bkt
+        self.supabase_url: str | None = url
+        self.supabase_key: str | None = key
+        self.bucket: str | None = bkt
         self.client = None
 
         if client is not None:
@@ -84,12 +83,12 @@ class SupabaseStorageService:
     def upload_file(
         self,
         local_path: str | Path,
-        destination_path: Optional[str] = None,
+        destination_path: str | None = None,
         *,
         upsert: bool = True,
-        bucket: Optional[str] = None,
-        subfolder: Optional[str] = None,
-    ) -> Tuple[bool, str]:
+        bucket: str | None = None,
+        subfolder: str | None = None,
+    ) -> tuple[bool, str]:
         """Upload a single file to Supabase Storage.
 
         Returns (success, message).
@@ -107,7 +106,9 @@ class SupabaseStorageService:
         dest_path = destination_path
         if not dest_path:
             try:
-                out_dir = Path(getattr(get_settings().paths, "output_dir", "") or "").expanduser()
+                out_dir = Path(
+                    getattr(get_settings().paths, "output_dir", "") or ""
+                ).expanduser()
                 if out_dir and out_dir.exists():
                     dest_path = str(path.relative_to(out_dir))
                 else:
@@ -129,15 +130,13 @@ class SupabaseStorageService:
         try:
             with open(path, "rb") as f:
                 # Supabase-py v2: storage.from_(bucket).upload(file=f, path=dest, file_options={...})
-                response = (
-                    self.client.storage
-                    .from_(effective_bucket)  # type: ignore[attr-defined]
-                    .upload(file=f, path=dest_path, file_options=file_options)
+                response = self.client.storage.from_(
+                    effective_bucket
+                ).upload(  # type: ignore[attr-defined]
+                    file=f, path=dest_path, file_options=file_options
                 )
             # Some client versions return dict-like; accept as success if no exception
             return True, f"Uploaded to {self.bucket}/{dest_path}"
         except Exception as e:
             logger.error(f"Failed to upload {path}: {e}")
             return False, str(e)
-
-

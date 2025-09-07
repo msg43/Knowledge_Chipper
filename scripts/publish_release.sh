@@ -154,7 +154,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
 else
     # Clone the public repository
     cd "$TEMP_DIR"
-    
+
     # Check if repository is empty (first release)
     if git ls-remote --heads "$PUBLIC_REPO_URL" | grep -q "refs/heads"; then
         log "📥 Cloning existing public repository..."
@@ -166,7 +166,7 @@ else
         cd "$PUBLIC_REPO_NAME"
         git init
         git remote add origin "$PUBLIC_REPO_URL"
-        
+
         # Create initial README for public repo
         cat > README.md << EOF
 # Skip the Podcast
@@ -192,10 +192,10 @@ Download the latest release from the [Releases](https://github.com/msg43/skipthe
 
 MIT License - see the private repository for full details.
 EOF
-        
+
         git add README.md
         git commit -m "Initial commit with README"
-        
+
         if [ "$DRY_RUN" -eq 0 ]; then
             git branch -M main
             git push -u origin main
@@ -213,7 +213,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
     log "[DRY RUN] Would create GitHub release with DMG asset"
 else
     cd "$TEMP_DIR/$PUBLIC_REPO_NAME"
-    
+
     # Update README with current version if it exists
     if [ -f "README.md" ]; then
         if grep -q "**Version:**" README.md; then
@@ -227,7 +227,7 @@ else
             fi
         fi
     fi
-    
+
     # Commit only the README update (no DMG files)
     git add README.md
     if ! git diff --staged --quiet; then
@@ -236,14 +236,14 @@ else
 - Updated Knowledge Chipper to version ${CURRENT_VERSION}
 - Build date: $(date +"%Y-%m-%d")"
     fi
-    
+
     # Create and push tag
     if git tag -l | grep -q "^${TAG_NAME}$"; then
         warning "Tag $TAG_NAME already exists, deleting and recreating..."
         git tag -d "$TAG_NAME" || true
         git push origin --delete "$TAG_NAME" 2>/dev/null || true
     fi
-    
+
     git tag -a "$TAG_NAME" -m "Skip the Podcast v${CURRENT_VERSION}
 
 Release notes:
@@ -252,7 +252,7 @@ Release notes:
 - DMG size: $DMG_SIZE
 
 This is an automated release from the build system."
-    
+
     log "📤 Pushing repository updates and tag..."
     git push origin main
     git push origin "$TAG_NAME"
@@ -261,7 +261,7 @@ fi
 # Check if gh CLI is available for creating the release
 if command -v gh >/dev/null 2>&1; then
     log "🚀 Creating GitHub release with gh CLI..."
-    
+
     if [ "$DRY_RUN" -eq 1 ]; then
         log "[DRY RUN] Would create GitHub release with:"
         log "  Title: Skip the Podcast v${CURRENT_VERSION}"
@@ -270,16 +270,16 @@ if command -v gh >/dev/null 2>&1; then
         log "         README.md (from $PRIVATE_REPO_PATH/README.md)"
     else
         cd "$TEMP_DIR/$PUBLIC_REPO_NAME"
-        
+
         # Check if release already exists and delete it
         if gh release view "$TAG_NAME" --repo "msg43/skipthepodcast.com" >/dev/null 2>&1; then
             warning "Release $TAG_NAME already exists, deleting and recreating..."
             gh release delete "$TAG_NAME" --repo "msg43/skipthepodcast.com" --yes || true
         fi
-        
+
         # Copy README.md from private repo to temp location for upload
         cp "$PRIVATE_REPO_PATH/README.md" "./README.md"
-        
+
         # Create the release with DMG asset and README.md
         gh release create "$TAG_NAME" \
             --repo "msg43/skipthepodcast.com" \

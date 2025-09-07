@@ -83,6 +83,15 @@ class BrightDataAdapter:
                 "privacy_status": BrightDataAdapter._get_privacy_status(
                     bright_data_response
                 ),
+                "related_videos": BrightDataAdapter._get_related_videos(
+                    bright_data_response
+                ),
+                "channel_stats": BrightDataAdapter._get_channel_stats(
+                    bright_data_response
+                ),
+                "video_chapters": BrightDataAdapter._get_video_chapters(
+                    bright_data_response
+                ),
                 "extraction_method": "bright_data_api_scraper",
                 "fetched_at": datetime.now(),
             }
@@ -223,6 +232,7 @@ class BrightDataAdapter:
     @staticmethod
     def _get_title(response: dict[str, Any]) -> str:
         """Extract title from Bright Data response."""
+        # Updated for Web Scraper API response format
         for field in ["title", "videoDetails.title", "snippet.title"]:
             value = BrightDataAdapter._get_nested_field(response, field)
             if value:
@@ -263,7 +273,9 @@ class BrightDataAdapter:
     @staticmethod
     def _get_view_count(response: dict[str, Any]) -> int | None:
         """Extract view count from Bright Data response."""
+        # Updated for Web Scraper API response format
         for field in [
+            "views",  # Web Scraper API field
             "view_count",
             "viewCount",
             "videoDetails.viewCount",
@@ -280,7 +292,8 @@ class BrightDataAdapter:
     @staticmethod
     def _get_like_count(response: dict[str, Any]) -> int | None:
         """Extract like count from Bright Data response."""
-        for field in ["like_count", "likeCount", "statistics.likeCount"]:
+        # Updated for Web Scraper API response format
+        for field in ["likes", "like_count", "likeCount", "statistics.likeCount"]:
             value = BrightDataAdapter._get_nested_field(response, field)
             if value:
                 try:
@@ -292,7 +305,13 @@ class BrightDataAdapter:
     @staticmethod
     def _get_comment_count(response: dict[str, Any]) -> int | None:
         """Extract comment count from Bright Data response."""
-        for field in ["comment_count", "commentCount", "statistics.commentCount"]:
+        # Updated for Web Scraper API response format
+        for field in [
+            "num_comments",
+            "comment_count",
+            "commentCount",
+            "statistics.commentCount",
+        ]:
             value = BrightDataAdapter._get_nested_field(response, field)
             if value:
                 try:
@@ -304,7 +323,9 @@ class BrightDataAdapter:
     @staticmethod
     def _get_uploader(response: dict[str, Any]) -> str:
         """Extract uploader/channel name from Bright Data response."""
+        # Updated for Web Scraper API response format
         for field in [
+            "youtuber",  # Web Scraper API field
             "uploader",
             "channel",
             "videoDetails.author",
@@ -367,7 +388,9 @@ class BrightDataAdapter:
     @staticmethod
     def _get_thumbnail_url(response: dict[str, Any]) -> str | None:
         """Extract thumbnail URL from Bright Data response."""
+        # Updated for Web Scraper API response format
         for field in [
+            "preview_image",  # Web Scraper API field
             "thumbnail",
             "thumbnails.high.url",
             "snippet.thumbnails.high.url",
@@ -401,7 +424,8 @@ class BrightDataAdapter:
     @staticmethod
     def _get_transcript_data(response: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract transcript data from Bright Data response."""
-        for field in ["transcript", "captions", "subtitles"]:
+        # Updated for Web Scraper API response format
+        for field in ["transcript", "formatted_transcript", "captions", "subtitles"]:
             value = BrightDataAdapter._get_nested_field(response, field)
             if value and isinstance(value, list):
                 return value
@@ -421,6 +445,56 @@ class BrightDataAdapter:
                     text_parts.append(str(text).strip())
 
         return " ".join(text_parts)
+
+    @staticmethod
+    def _get_related_videos(response: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract related videos from Bright Data response."""
+        for field in ["related_videos", "recommendations", "suggested_videos"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value and isinstance(value, list):
+                return value
+        return []
+
+    @staticmethod
+    def _get_channel_stats(response: dict[str, Any]) -> dict[str, Any]:
+        """Extract channel statistics from Bright Data response."""
+        stats = {}
+
+        # Extract subscriber count
+        subscribers = BrightDataAdapter._get_nested_field(response, "subscribers")
+        if subscribers:
+            stats["subscribers"] = subscribers
+
+        # Extract verification status
+        verified = BrightDataAdapter._get_nested_field(response, "verified")
+        if verified is not None:
+            stats["verified"] = verified
+
+        # Extract channel URL
+        channel_url = BrightDataAdapter._get_nested_field(response, "channel_url")
+        if channel_url:
+            stats["channel_url"] = channel_url
+
+        # Extract handle name
+        handle_name = BrightDataAdapter._get_nested_field(response, "handle_name")
+        if handle_name:
+            stats["handle_name"] = handle_name
+
+        # Extract avatar image
+        avatar_img = BrightDataAdapter._get_nested_field(response, "avatar_img_channel")
+        if avatar_img:
+            stats["avatar_img_channel"] = avatar_img
+
+        return stats
+
+    @staticmethod
+    def _get_video_chapters(response: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract video chapters/timestamps from Bright Data response."""
+        for field in ["chapters", "video_chapters", "timestamps", "segments"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value and isinstance(value, list):
+                return value
+        return []
 
     @staticmethod
     def _is_manual_transcript(response: dict[str, Any]) -> bool:
@@ -540,6 +614,98 @@ class BrightDataAdapter:
             transcript_data=[],
             fetched_at=datetime.now(),
         )
+
+    @staticmethod
+    def _get_related_videos(response: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract related videos from Bright Data response."""
+        # Updated for Web Scraper API response format
+        for field in ["related_videos", "recommendations", "suggested_videos"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value and isinstance(value, list):
+                # Clean and structure the related videos data
+                related = []
+                for video in value[:10]:  # Limit to 10 related videos
+                    if isinstance(video, dict):
+                        related_video = {
+                            "video_id": video.get("video_id", ""),
+                            "title": video.get("title", ""),
+                            "url": video.get("url", ""),
+                            "thumbnail": video.get("thumbnail", ""),
+                            "duration": video.get("duration", ""),
+                            "uploader": video.get("uploader", video.get("channel", "")),
+                            "view_count": video.get(
+                                "views", video.get("view_count", 0)
+                            ),
+                        }
+                        related.append(related_video)
+                return related
+        return []
+
+    @staticmethod
+    def _get_channel_stats(response: dict[str, Any]) -> dict[str, Any]:
+        """Extract detailed channel statistics from Bright Data response."""
+        # Updated for Web Scraper API response format
+        channel_stats = {}
+
+        # Basic channel info
+        for field in ["subscribers", "subscriber_count"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                channel_stats["subscribers"] = BrightDataAdapter._parse_count(value)
+                break
+
+        # Channel verification status
+        for field in ["verified", "is_verified"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value is not None:
+                channel_stats["verified"] = bool(value)
+                break
+
+        # Channel avatar/image
+        for field in ["avatar_img_channel", "channel_avatar", "channel_image"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                channel_stats["avatar_url"] = str(value)
+                break
+
+        # Channel URL
+        for field in ["channel_url", "uploader_url"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                channel_stats["channel_url"] = str(value)
+                break
+
+        # Channel handle/username
+        for field in ["handle_name", "channel_handle", "username"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value:
+                channel_stats["handle"] = str(value)
+                break
+
+        return channel_stats
+
+    @staticmethod
+    def _get_video_chapters(response: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract video chapters/timestamps from Bright Data response."""
+        # Updated for Web Scraper API response format
+        for field in ["chapters", "video_chapters", "timestamps", "segments"]:
+            value = BrightDataAdapter._get_nested_field(response, field)
+            if value and isinstance(value, list):
+                chapters = []
+                for chapter in value:
+                    if isinstance(chapter, dict):
+                        chapter_data = {
+                            "title": chapter.get("title", chapter.get("name", "")),
+                            "start_time": chapter.get(
+                                "start_time", chapter.get("start", 0)
+                            ),
+                            "end_time": chapter.get("end_time", chapter.get("end", 0)),
+                            "duration": chapter.get("duration", 0),
+                            "thumbnail": chapter.get("thumbnail", ""),
+                        }
+                        chapters.append(chapter_data)
+                return chapters
+        return []
 
 
 # Convenience functions
