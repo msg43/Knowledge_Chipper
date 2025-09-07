@@ -798,18 +798,26 @@ class YouTubeTab(BaseTab):
             self.file_input.setEnabled(False)
             self.browse_btn.setEnabled(False)
 
-            # BUGFIX: Reset URL input styling and apply disabled styling to file input
-            self.url_input.setStyleSheet("")  # Reset URL input to default
-            self.file_input.setStyleSheet("color: gray;")  # Gray out file input
+            # BUGFIX: Reset URL input styling with proper font and apply disabled styling to file input
+            self.url_input.setStyleSheet(
+                "font-family: 'Arial', sans-serif;"
+            )  # Reset URL input with font
+            self.file_input.setStyleSheet(
+                "color: gray; font-family: 'Arial', sans-serif;"
+            )  # Gray out file input with font
         else:
             # Enable file input, disable URL input
             self.url_input.setEnabled(False)
             self.file_input.setEnabled(True)
             self.browse_btn.setEnabled(True)
 
-            # BUGFIX: Reset file input styling and apply disabled styling to URL input
-            self.url_input.setStyleSheet("color: gray;")  # Gray out URL input
-            self.file_input.setStyleSheet("")  # Reset file input to default
+            # BUGFIX: Reset file input styling with proper font and apply disabled styling to URL input
+            self.url_input.setStyleSheet(
+                "color: gray; font-family: 'Arial', sans-serif;"
+            )  # Gray out URL input with font
+            self.file_input.setStyleSheet(
+                "font-family: 'Arial', sans-serif;"
+            )  # Reset file input with font
 
         # Save the radio button state change
         self._save_settings()
@@ -1643,6 +1651,35 @@ class YouTubeTab(BaseTab):
         self.extraction_worker.start()
 
         self.status_updated.emit("YouTube extraction in progress...")
+
+    def _handle_speaker_assignment_request(
+        self, speaker_data_list, recording_path, metadata, result_callback
+    ):
+        """
+        Handle speaker assignment request from worker thread.
+        Ensures the dialog is shown on the main thread and returns assignments
+        via the provided callback.
+        """
+        try:
+            logger.info("Main thread handling speaker assignment request (YouTubeTab)")
+            # Import dialog lazily to avoid circular deps
+            from ..dialogs.speaker_assignment_dialog import (
+                show_speaker_assignment_dialog,
+            )
+
+            # Show dialog (main thread guarded by show_speaker_assignment_dialog itself)
+            assignments = show_speaker_assignment_dialog(
+                speaker_data_list, recording_path, metadata, self
+            )
+
+            # Return assignments through callback to unblock worker
+            if callable(result_callback):
+                result_callback(assignments)
+        except Exception as e:
+            logger.error(f"Error in YouTube speaker assignment dialog: {e}")
+            # Return None on error
+            if callable(result_callback):
+                result_callback(None)
 
     def _handle_batch_status(self, status: dict) -> None:
         """Handle batch status updates from YouTubeBatchWorker."""

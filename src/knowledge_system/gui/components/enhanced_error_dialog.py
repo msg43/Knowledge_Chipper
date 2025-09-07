@@ -173,10 +173,7 @@ class EnhancedErrorDialog(QDialog):
         header_layout.addWidget(self.error_icon)
 
         self.error_title = QLabel("Error Occurred")
-        title_font = QFont()
-        title_font.setBold(True)
-        title_font.setPointSize(14)
-        self.error_title.setFont(title_font)
+        self.error_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         self.error_title.setStyleSheet("color: #d32f2f; margin-left: 10px;")
         header_layout.addWidget(self.error_title)
 
@@ -193,9 +190,7 @@ class EnhancedErrorDialog(QDialog):
 
         # Solutions section
         self.solutions_label = QLabel("💡 Suggested Solutions:")
-        solutions_font = QFont()
-        solutions_font.setBold(True)
-        self.solutions_label.setFont(solutions_font)
+        self.solutions_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         self.solutions_label.setStyleSheet("color: #2e7d32; margin-top: 10px;")
         layout.addWidget(self.solutions_label)
 
@@ -222,9 +217,7 @@ class EnhancedErrorDialog(QDialog):
 
         # Technical details (collapsible)
         self.technical_label = QLabel("🔧 Technical Details:")
-        technical_font = QFont()
-        technical_font.setBold(True)
-        self.technical_label.setFont(technical_font)
+        self.technical_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         self.technical_label.setStyleSheet("color: #333; margin-top: 15px;")
         layout.addWidget(self.technical_label)
 
@@ -237,7 +230,7 @@ class EnhancedErrorDialog(QDialog):
                 border: 1px solid #ddd;
                 border-radius: 5px;
                 background-color: #f5f5f5;
-                font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+                font-family: 'Courier New', monospace;
                 font-size: 10px;
             }
         """

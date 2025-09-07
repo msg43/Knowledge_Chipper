@@ -378,10 +378,7 @@ class ClaimValidationDialog(QDialog):
         header_layout = QVBoxLayout()
 
         title_label = QLabel("Claim Tier Validation")
-        title_font = QFont()
-        title_font.setBold(True)
-        title_font.setPointSize(16)
-        title_label.setFont(title_font)
+        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_layout.addWidget(title_label)
 

@@ -133,7 +133,7 @@ class RichLogDisplay(QFrame):
                 background-color: #1e1e1e;
                 color: #ffffff;
                 border: none;
-                font-family: 'Consolas', 'Monaco', monospace;
+                font-family: 'Courier New', monospace;
                 font-size: 11px;
                 line-height: 1.4;
             }
@@ -141,25 +141,7 @@ class RichLogDisplay(QFrame):
         )
 
         # Set monospace font for better log formatting
-        # Try to use best available monospace font for log display
-        font_families = [
-            "Consolas",
-            "Monaco",
-            "DejaVu Sans Mono",
-            "Liberation Mono",
-            "Courier New",
-            "monospace",
-        ]
-        font = None
-
-        for family in font_families:
-            font = QFont(family, 11)
-            if font.exactMatch():
-                break
-
-        if not font or not font.exactMatch():
-            font = QFont("monospace", 11)
-
+        font = QFont("Courier New", 11)
         self.log_text.setFont(font)
 
         layout.addWidget(self.log_text)

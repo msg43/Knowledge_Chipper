@@ -108,7 +108,9 @@ class FFmpegSetupDialog(QDialog):
 
         self.progress_text = QTextEdit()
         self.progress_text.setMaximumHeight(100)
-        self.progress_text.setStyleSheet("font-family: monospace; font-size: 11px;")
+        self.progress_text.setStyleSheet(
+            "font-family: 'Courier New', monospace; font-size: 11px;"
+        )
         progress_layout.addWidget(self.progress_text)
 
         layout.addWidget(self.progress_frame)

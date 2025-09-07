@@ -301,20 +301,24 @@ class MainWindow(QMainWindow):
             """
             QMainWindow {
                 background-color: #1e1e1e;
+                font-family: 'Arial', sans-serif;
             }
             QTabWidget::pane {
                 background-color: #2d2d2d;
                 border: 1px solid #3c3c3c;
+                font-family: 'Arial', sans-serif;
             }
             QTabBar::tab {
                 background-color: #2d2d2d;
                 color: #cccccc;
                 padding: 8px 16px;
                 margin-right: 2px;
+                font-family: 'Arial', sans-serif;
             }
             QTabBar::tab:selected {
                 background-color: #007acc;
                 color: white;
+                font-family: 'Arial', sans-serif;
             }
             QGroupBox {
                 background-color: #2d2d2d;
@@ -322,15 +326,18 @@ class MainWindow(QMainWindow):
                 border-radius: 5px;
                 margin-top: 10px;
                 font-weight: bold;
+                font-family: 'Arial', sans-serif;
             }
             QGroupBox::title {
                 color: #ffffff;
                 subcontrol-origin: margin;
                 left: 10px;
                 padding: 0 5px 0 5px;
+                font-family: 'Arial', sans-serif;
             }
             QLabel {
                 color: #cccccc;
+                font-family: 'Arial', sans-serif;
             }
             QPushButton {
                 background-color: #007acc;
@@ -338,6 +345,7 @@ class MainWindow(QMainWindow):
                 border: none;
                 padding: 6px 12px;
                 border-radius: 3px;
+                font-family: 'Arial', sans-serif;
             }
             QPushButton:hover {
                 background-color: #005a9e;
@@ -350,12 +358,14 @@ class MainWindow(QMainWindow):
                 color: #ffffff;
                 border: 1px solid #4c4c4c;
                 border-radius: 3px;
+                font-family: 'Arial', sans-serif;
             }
             QTextEdit {
                 background-color: #3c3c3c;
                 color: #ffffff;
                 border: 1px solid #4c4c4c;
                 border-radius: 3px;
+                font-family: 'Arial', sans-serif;
             }
             QLineEdit {
                 background-color: #3c3c3c;
@@ -363,6 +373,7 @@ class MainWindow(QMainWindow):
                 border: 1px solid #4c4c4c;
                 border-radius: 3px;
                 padding: 4px;
+                font-family: 'Arial', sans-serif;
             }
             QComboBox {
                 background-color: #3c3c3c;
@@ -370,15 +381,18 @@ class MainWindow(QMainWindow):
                 border: 1px solid #4c4c4c;
                 border-radius: 3px;
                 padding: 4px;
+                font-family: 'Arial', sans-serif;
             }
             QCheckBox {
                 color: #cccccc;
+                font-family: 'Arial', sans-serif;
             }
             QProgressBar {
                 background-color: #3c3c3c;
                 border: 1px solid #4c4c4c;
                 border-radius: 3px;
                 text-align: center;
+                font-family: 'Arial', sans-serif;
             }
             QProgressBar::chunk {
                 background-color: #007acc;

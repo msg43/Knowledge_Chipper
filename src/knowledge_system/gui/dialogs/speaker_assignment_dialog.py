@@ -141,8 +141,12 @@ class SpeakerCard(QFrame):
         samples_layout = QVBoxLayout(samples_group)
 
         self.samples_text = QTextEdit()
-        self.samples_text.setMaximumHeight(160)  # Increased height for 5 segments
-        self.samples_text.setFont(QFont("Arial", 9))
+        self.samples_text.setMaximumHeight(
+            250
+        )  # Increased height to fit 5 segments comfortably
+        self.samples_text.setFont(
+            QFont("Arial", 10)
+        )  # Slightly larger font for readability
         self.samples_text.setReadOnly(True)
 
         # Add first 5 speaking segments with timestamps for better identification
@@ -327,12 +331,33 @@ class SpeakerAssignmentDialog(QDialog):
         if self.metadata:
             self._trigger_llm_validation()
 
+    def _get_display_name(self) -> str:
+        """Get display name for the recording, preferring sanitized metadata title."""
+        # Check if we have title in metadata (for YouTube videos)
+        if self.metadata and "title" in self.metadata:
+            title = self.metadata["title"]
+            if title and title.strip():
+                # Sanitize the title for display (similar to filename sanitization)
+                import re
+
+                sanitized = re.sub(r'[<>:"/\\|?*]', "_", title)
+                sanitized = re.sub(r"_+", "_", sanitized).strip("_")
+                return sanitized[:80] + "..." if len(sanitized) > 80 else sanitized
+
+        # Fallback to filename
+        return Path(self.recording_path).name
+
     def _setup_ui(self):
         """Setup the main dialog UI."""
         self.setWindowTitle("Speaker Identification")
         self.setModal(True)
         self.setMinimumSize(900, 600)
-        self.resize(1200, 700)
+
+        # Set full height but keep current width
+        from PyQt6.QtWidgets import QApplication
+
+        screen = QApplication.primaryScreen().availableGeometry()
+        self.resize(1200, screen.height() - 50)  # Full height minus small margin
 
         # Main layout
         main_layout = QVBoxLayout(self)
@@ -370,8 +395,9 @@ class SpeakerAssignmentDialog(QDialog):
         title_layout.addWidget(title_label)
 
         if self.recording_path:
-            file_name = Path(self.recording_path).name
-            info_label = QLabel(f"Recording: {file_name}")
+            # Use sanitized title from metadata if available, otherwise use filename
+            display_name = self._get_display_name()
+            info_label = QLabel(f"Recording: {display_name}")
             info_label.setFont(QFont("Arial", 10))
             info_label.setStyleSheet("color: #666;")
             title_layout.addWidget(info_label)

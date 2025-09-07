@@ -200,7 +200,7 @@ class SpeakerAttributionTab(QWidget):
         self.transcript_text.setStyleSheet(
             """
             QTextEdit {
-                font-family: Consolas, monospace;
+                font-family: 'Courier New', monospace;
                 font-size: 11pt;
                 background-color: #2b2b2b;
                 color: #ffffff;
@@ -280,7 +280,7 @@ class SpeakerAttributionTab(QWidget):
         self.speaker_samples_text = QTextEdit()
         self.speaker_samples_text.setReadOnly(True)
         self.speaker_samples_text.setStyleSheet(
-            "QTextEdit { font-family: Consolas, monospace; font-size: 10pt; }"
+            "QTextEdit { font-family: 'Courier New', monospace; font-size: 10pt; }"
         )
         samples_layout.addWidget(self.speaker_samples_text)
         layout.addWidget(samples_group)

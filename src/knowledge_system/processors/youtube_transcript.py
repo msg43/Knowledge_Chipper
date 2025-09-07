@@ -203,6 +203,8 @@ class YouTubeTranscript(BaseModel):
             for segment in self.transcript_data:
                 start_time = segment.get("start", 0)
                 text = segment.get("text", "").strip()
+                speaker = segment.get("speaker", "")
+
                 if text:
                     # Remove bracketed content like [music], [applause], etc.
                     text = strip_bracketed_content(text)
@@ -219,10 +221,26 @@ class YouTubeTranscript(BaseModel):
                         else:
                             timestamp_display = f"**{timestamp}**"
 
-                        # Format with proper line breaks
-                        lines.append(f"{timestamp_display}")
-                        lines.append("")
-                        lines.append(text)
+                        # Format with speaker information if available (for diarized transcripts)
+                        if speaker:
+                            # Convert speaker ID to human-readable format
+                            speaker_display = speaker
+                            if speaker.startswith("SPEAKER_"):
+                                speaker_num = speaker.replace("SPEAKER_", "")
+                                try:
+                                    speaker_number = int(speaker_num) + 1
+                                    speaker_display = f"Speaker {speaker_number}"
+                                except (ValueError, TypeError):
+                                    speaker_display = speaker
+                            lines.append(
+                                f"{timestamp_display} **({speaker_display})**: {text}"
+                            )
+                        else:
+                            # Regular format for non-diarized transcripts
+                            lines.append(f"{timestamp_display}")
+                            lines.append("")
+                            lines.append(text)
+
                         lines.append("")
         else:
             # Plain text transcript - also remove bracketed content
@@ -1118,27 +1136,35 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                         )
                         return None
 
-                    # Convert segments to transcript format
+                    # Convert segments to transcript format with proper diarization structure
                     transcript_data = []
                     full_text_parts = []
+                    diarized_segments = (
+                        []
+                    )  # Store segments with speaker info for proper formatting
 
                     for segment in segments:
                         start_time = segment.get("start", 0)
+                        end_time = segment.get("end", start_time)
                         text = segment.get("text", "").strip()
                         speaker = segment.get("speaker", "")
 
                         if text:
-                            # Add to transcript data
-                            transcript_data.append(
-                                {
-                                    "start": start_time,
-                                    "duration": segment.get("end", start_time)
-                                    - start_time,
-                                    "text": text,
-                                }
-                            )
+                            # Add to transcript data with speaker information
+                            segment_data = {
+                                "start": start_time,
+                                "duration": end_time - start_time,
+                                "text": text,
+                            }
 
-                            # Add to full text with speaker labels
+                            # Add speaker info if available
+                            if speaker:
+                                segment_data["speaker"] = speaker
+
+                            transcript_data.append(segment_data)
+                            diarized_segments.append(segment_data)
+
+                            # Add to full text with speaker labels for backward compatibility
                             if speaker:
                                 # Convert speaker ID to human-readable format
                                 speaker_num = speaker.replace("SPEAKER_", "").zfill(2)

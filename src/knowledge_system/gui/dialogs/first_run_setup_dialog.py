@@ -149,10 +149,7 @@ class FirstRunSetupDialog(QDialog):
 
         # Title
         title_label = QLabel("🚀 Welcome to Skip the Podcast Desktop")
-        title_font = QFont()
-        title_font.setPointSize(18)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
+        title_label.setFont(QFont("Arial", 18, QFont.Weight.Bold))
         header_layout.addWidget(title_label)
 
         header_layout.addStretch()
@@ -180,7 +177,7 @@ class FirstRunSetupDialog(QDialog):
 
         # Models section header
         models_header = QLabel("🧠 AI Models (Choose what to download now)")
-        models_header.setFont(QFont("", 12, QFont.Weight.Bold))
+        models_header.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         models_layout.addWidget(models_header)
 
         # Model checkboxes with descriptions
@@ -214,7 +211,7 @@ class FirstRunSetupDialog(QDialog):
 
             # Main checkbox
             checkbox = QCheckBox(title)
-            checkbox.setFont(QFont("", 10, QFont.Weight.Bold))
+            checkbox.setFont(QFont("Arial", 10, QFont.Weight.Bold))
             checkbox.setChecked(default_checked)
             checkbox.stateChanged.connect(self._update_selected_models)
             self.model_checkboxes[model_name] = checkbox
