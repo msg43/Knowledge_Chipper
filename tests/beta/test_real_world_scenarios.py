@@ -311,7 +311,8 @@ class ResourcePressureTest(BetaTestFramework):
             final_pressure, final_msg = monitor.check_memory_pressure()
 
             # Clean up memory pressure
-            del memory_hog
+            if memory_hog is not None:
+                del memory_hog
 
             return {
                 "initial_pressure": initial_pressure,
