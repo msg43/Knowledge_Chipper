@@ -272,9 +272,9 @@ class ResourcePressureTest(BetaTestFramework):
     def test_memory_pressure_scenario(self):
         """Test processing under memory pressure."""
         # Create memory pressure
-        memory_hog = self.simulate_memory_pressure()
-
+        memory_hog = None
         try:
+            memory_hog = self.simulate_memory_pressure()
             # Create test files
             test_files = self.create_test_files(10, size_range=(50, 100))
 
@@ -322,10 +322,11 @@ class ResourcePressureTest(BetaTestFramework):
 
         except Exception as e:
             # Clean up on error
-            try:
-                del memory_hog
-            except:
-                pass
+            if memory_hog is not None:
+                try:
+                    del memory_hog
+                except:
+                    pass
             raise e
 
     def test_disk_space_scenario(self):

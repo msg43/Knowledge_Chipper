@@ -1,20 +1,74 @@
-[bandit]
 # Bandit configuration for Knowledge Chipper
 # Skip specific tests for legitimate system operations
 
 # B404: subprocess import - Required for legitimate system operations
 # B603: subprocess without shell=True - Our calls use lists, which is safer
 # B607: partial executable paths - We use system commands like 'open' and 'osascript'
-skips = B404,B603,B607
-
-# Only scan Python files in src directory
-include = src/
-
-# Exclude test files and configuration
-exclude_dirs = tests,venv,build,dist,scripts/.app_build
+skips:
+  - B404
+  - B603
+  - B607
 
 # Set confidence level
-confidence = HIGH
+confidence: HIGH
 
-# Report format
-format = json
+# Only scan specific paths
+tests:
+  - B101
+  - B102
+  - B103
+  - B104
+  - B105
+  - B106
+  - B107
+  - B108
+  - B110
+  - B112
+  - B201
+  - B301
+  - B302
+  - B303
+  - B304
+  - B305
+  - B306
+  - B307
+  - B308
+  - B309
+  - B310
+  - B311
+  - B312
+  - B313
+  - B314
+  - B315
+  - B316
+  - B317
+  - B318
+  - B319
+  - B320
+  - B321
+  - B322
+  - B323
+  - B324
+  - B325
+  - B401
+  - B402
+  - B403
+  - B501
+  - B502
+  - B503
+  - B504
+  - B505
+  - B506
+  - B507
+  - B601
+  - B602
+  - B604
+  - B605
+  - B606
+  - B608
+  - B609
+  - B610
+  - B611
+  - B701
+  - B702
+  - B703

@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """HCE health checks and validation utilities."""
+
+from __future__ import annotations
 
 from importlib import import_module
 

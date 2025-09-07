@@ -1455,6 +1455,8 @@ class APIKeysTab(BaseTab):
             self.test_process.terminate()
 
             # Wait a bit for graceful shutdown
+            import subprocess  # nosec B404 # Required for test execution
+
             try:
                 self.test_process.wait(timeout=5)
             except subprocess.TimeoutExpired:  # type: ignore

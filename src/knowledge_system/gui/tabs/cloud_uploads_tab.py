@@ -31,6 +31,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from knowledge_system.cloud.oauth.getreceipts_uploader import GetReceiptsUploader
+
 from ...config import get_settings
 from ...integrations import (
     check_getreceipts_availability,
