@@ -377,7 +377,7 @@ fi""",
                     'if [ -w "$MACOS_PATH/logs" ]; then chmod 777 "$MACOS_PATH/logs"; fi',
                 )
                 .replace(
-                    'sudo chown "$CURRENT_USER:staff" "$MACOS_PATH/build_macos_app.sh"',
+                    'sudo chown "$CURRENT_USER:staf" "$MACOS_PATH/build_macos_app.sh"',
                     ": # skip chown of build_macos_app.sh in user install",
                 )
                 .replace(

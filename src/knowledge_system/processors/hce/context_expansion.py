@@ -6,7 +6,6 @@ extended conversational context using smart boundary detection.
 """
 
 import logging
-from typing import List
 
 from .types import EvidenceSpan, Segment
 
@@ -93,7 +92,7 @@ def find_conversational_boundaries(
 
     # Expand backwards to find natural boundary
     current_speaker = segment_times[quote_segment_idx][2].speaker
-    current_topic = segment_times[quote_segment_idx][2].topic_guess
+    segment_times[quote_segment_idx][2].topic_guess
 
     # Look backwards for speaker/topic changes or time limit
     for i in range(quote_segment_idx - 1, -1, -1):

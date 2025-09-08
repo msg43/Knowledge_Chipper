@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Tuple
 
 
 def _approx_tokens(text: str) -> int:

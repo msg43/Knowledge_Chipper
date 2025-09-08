@@ -305,7 +305,7 @@ class ResourceCoordinator:
                 # System at capacity: Operations must wait or process sequentially
                 logger.warning(
                     f"⚠️ System at memory capacity ({current_total}/{max_system_concurrent} concurrent processes). "
-                    f"New operations will be queued or run sequentially."
+                    "New operations will be queued or run sequentially."
                 )
                 return 0  # Signal that operation should wait
 

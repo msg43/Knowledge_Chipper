@@ -208,9 +208,11 @@ class SummarizerProcessor(BaseProcessor):
             models=StageModelConfig(
                 miner=model_uri,
                 judge=model_uri,
-                flagship_judge=flagship_judge_uri
-                if self.hce_options.get("enable_routing", True)
-                else None,
+                flagship_judge=(
+                    flagship_judge_uri
+                    if self.hce_options.get("enable_routing", True)
+                    else None
+                ),
                 embedder="local://bge-small-en-v1.5",
                 reranker="local://bge-reranker-base",
             ),
@@ -662,7 +664,6 @@ class SummarizerProcessor(BaseProcessor):
         Returns:
             Dictionary mapping source file paths to summary metadata
         """
-        import json
         import os
         from datetime import datetime
 

@@ -6,14 +6,11 @@ suggestions, keyboard shortcuts, and intuitive columnar layout.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QKeySequence, QPalette, QShortcut
+from PyQt6.QtGui import QFont, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
-    QApplication,
     QCheckBox,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFrame,
@@ -26,7 +23,6 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QSplitter,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -34,9 +30,10 @@ from PyQt6.QtWidgets import (
 
 from ...database.speaker_models import SpeakerAssignmentModel, get_speaker_db_service
 from ...logger import get_logger
-from ...processors.speaker_processor import SpeakerAssignment, SpeakerData
+from ...processors.speaker_processor import SpeakerData
 from ...utils.llm_speaker_validator import LLMSpeakerValidator
-from ...utils.speaker_intelligence import SpeakerNameSuggester
+
+# Pattern-based suggestions removed - LLM only approach
 
 logger = get_logger(__name__)
 
@@ -207,7 +204,7 @@ class SpeakerCard(QFrame):
         self.setLineWidth(2)
 
         # Apply color-coded border
-        style = f"""
+        style = """
         SpeakerCard {{
             border: 2px solid {self.color};
             border-radius: 8px;
@@ -232,7 +229,6 @@ class SpeakerCard(QFrame):
     def _on_switch_clicked(self):
         """Handle switch button click."""
         # This will be handled by the parent dialog
-        pass
 
     def _on_focus_in(self, event):
         """Handle focus in event."""
@@ -314,7 +310,6 @@ class SpeakerAssignmentDialog(QDialog):
         self.current_focus_index = 0
         self.assignments: dict[str, str] = {}
 
-        self.name_suggester = SpeakerNameSuggester()
         self.db_service = get_speaker_db_service()
         self.llm_validator = LLMSpeakerValidator()
 
@@ -742,56 +737,24 @@ class SpeakerAssignmentDialog(QDialog):
             QMessageBox.warning(self, "Error", f"Failed to complete assignments: {e}")
 
     def _auto_assign_from_metadata(self):
-        """Auto-assign speakers based on metadata suggestions."""
+        """Auto-assignment removed - LLM suggestions are already shown in the dialog."""
         try:
-            if not hasattr(self, "metadata") or not self.metadata:
-                QMessageBox.information(
-                    self,
-                    "No Metadata",
-                    "No metadata available for auto-assignment.\nTry manual assignment using the first 5 segments shown.",
-                )
-                return
-
-            # Use metadata to suggest names
-            metadata_suggestions = self.name_suggester._extract_names_from_metadata(
-                self.metadata
-            )
-
-            if not metadata_suggestions:
-                QMessageBox.information(
-                    self,
-                    "No Suggestions",
-                    "No speaker names could be extracted from metadata.\nPlease assign manually using the speech samples.",
-                )
-                return
-
-            # Auto-assign to speakers in order of confidence
-            speaker_ids = list(self.speaker_cards.keys())
-            assigned_count = 0
-
-            for i, (suggested_name, confidence) in enumerate(
-                metadata_suggestions[: len(speaker_ids)]
-            ):
-                if i < len(speaker_ids):
-                    speaker_id = speaker_ids[i]
-                    card = self.speaker_cards[speaker_id]
-                    card.set_assigned_name(suggested_name)
-                    self.assignments[speaker_id] = suggested_name
-                    assigned_count += 1
-
+            # LLM suggestions are already displayed when dialog opens
+            # This button is no longer needed since we're LLM-only
             QMessageBox.information(
                 self,
-                "Auto-Assignment Complete",
-                f"Assigned {assigned_count} speakers from metadata.\nReview and adjust as needed, then press Ctrl+Enter to finish.",
+                "LLM-Only Approach",
+                "Speaker suggestions are provided by LLM when the dialog opens.\n\n"
+                "The suggested names shown are based on LLM analysis of metadata and transcript.\n"
+                "Please review and adjust the names as needed, then press Ctrl+Enter to finish.",
             )
 
-            logger.info(f"Auto-assigned {assigned_count} speakers from metadata")
+            logger.info(
+                "Auto-assign from metadata clicked - informed user about LLM-only approach"
+            )
 
         except Exception as e:
-            logger.error(f"Error in auto-assign from metadata: {e}")
-            QMessageBox.warning(
-                self, "Auto-Assignment Error", f"Failed to auto-assign: {e}"
-            )
+            logger.error(f"Error in auto-assign message: {e}")
 
     def _quick_assign_speaker(self, target_speaker_num: int):
         """Quick assign current speaker to target speaker number (Ctrl+1,2,3...)."""
@@ -1013,7 +976,7 @@ class SpeakerAssignmentDialog(QDialog):
                 "Incomplete Assignments",
                 f"The following speakers don't have names assigned:\n"
                 f"{', '.join(missing_assignments)}\n\n"
-                f"Do you want to continue anyway?",
+                "Do you want to continue anyway?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
@@ -1063,8 +1026,7 @@ class SpeakerAssignmentDialog(QDialog):
 
                 self.db_service.create_speaker_assignment(assignment_data)
 
-                # Learn voice patterns (placeholder for future audio analysis)
-                self.name_suggester.learn_speaker_voice_patterns(speaker_id, {}, name)
+                # Voice pattern learning removed - LLM-only approach
 
             logger.info(f"Saved {len(assignments)} speaker assignments to database")
 

@@ -100,7 +100,7 @@ class DatabaseMigrationManager:
 
     def _create_alembic_config(self, config_path: Path) -> None:
         """Create an Alembic configuration file."""
-        config_content = f"""# Alembic Configuration for Knowledge System
+        config_content = """# Alembic Configuration for Knowledge System
 
 [alembic]
 # Path to migration scripts

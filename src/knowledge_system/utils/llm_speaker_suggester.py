@@ -6,7 +6,6 @@ User can override anything in the popup dialog.
 """
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
 
 from ..config import get_settings
 from ..logger import get_logger
@@ -50,8 +49,21 @@ class LLMSpeakerSuggester:
         try:
             # Check if cloud LLM is configured
             if (
-                self.settings.llm.provider in ["openai", "anthropic"]
+                self.settings.llm.provider == "openai"
                 and self.settings.api_keys.openai_api_key
+            ):
+                self.llm_client = UnifiedLLMClient(
+                    provider=self.settings.llm.provider,
+                    model=self.settings.llm.model,
+                    temperature=0.3,
+                )
+                logger.info(
+                    f"Using configured LLM: {self.settings.llm.provider}/{self.settings.llm.model}"
+                )
+                return True
+            elif (
+                self.settings.llm.provider == "anthropic"
+                and self.settings.api_keys.anthropic_api_key
             ):
                 self.llm_client = UnifiedLLMClient(
                     provider=self.settings.llm.provider,
@@ -124,20 +136,37 @@ class LLMSpeakerSuggester:
             return self._simple_fallback(speaker_segments)
 
         try:
+            # Debug logging
+            logger.debug(f"LLM suggester called with {len(speaker_segments)} speakers")
+            logger.debug(
+                f"Metadata keys: {list(metadata.keys()) if metadata else 'None'}"
+            )
+            for speaker_id, segments in speaker_segments.items():
+                logger.debug(f"  {speaker_id}: {len(segments)} segments")
+
             # Create simple prompt with metadata + first 5 statements per speaker
             prompt = self._create_simple_prompt(speaker_segments, metadata)
 
+            # Debug log the prompt
+            logger.debug(f"Generated prompt (first 500 chars): {prompt[:500]}...")
+
             # Get LLM suggestions
             response = self.llm_client.generate(prompt=prompt)
+
+            # Debug log the response
+            logger.debug(f"LLM response (first 500 chars): {response.content[:500]}...")
 
             # Parse response
             suggestions = self._parse_suggestions(response.content, speaker_segments)
 
             logger.info(f"LLM suggested names for {len(suggestions)} speakers")
+            for speaker_id, (name, conf) in suggestions.items():
+                logger.info(f"  {speaker_id} -> '{name}' (confidence: {conf:.2f})")
+
             return suggestions
 
         except Exception as e:
-            logger.error(f"LLM suggestion failed: {e}")
+            logger.error(f"LLM suggestion failed: {e}", exc_info=True)
             return self._simple_fallback(speaker_segments)
 
     def _create_simple_prompt(
@@ -173,8 +202,8 @@ class LLMSpeakerSuggester:
             segments_sorted = sorted(
                 segments,
                 key=lambda s: (
-                    s.get("start", float("inf")),
-                    s.get("end", float("inf")),
+                    s.get("start", float("in")),
+                    s.get("end", float("in")),
                 ),
             )
 
@@ -188,6 +217,11 @@ class LLMSpeakerSuggester:
                     statements.append(text)
                 if len(statements) >= 5:
                     break
+
+            # Debug logging
+            logger.debug(
+                f"Speaker {speaker_id} has {len(statements)} statements extracted from {len(segments)} total segments"
+            )
 
             speaker_section = f"\n{speaker_id}:"
             for i, statement in enumerate(statements, 1):
@@ -214,10 +248,8 @@ class LLMSpeakerSuggester:
         prompt = (
             "You are labeling speakers in an interview/podcast transcript.\n\n"
             "INSTRUCTIONS:\n"
-            "- The ONLY purpose is to identify proper names of people and map each to the correct speaker ID.\n"
-            "- Do NOT use roles or descriptions (e.g., Host, Guest, Interviewer). Output personal names only.\n"
-            "- Use the metadata and early speech samples to infer the real names.\n"
-            "- If you cannot determine a proper name, use 'Unknown' as the name.\n"
+            "- The ONLY purpose is to identify proper names in the metadata and transcript snippets and then map each to the correct speaker ID.  \n"
+            "- Do NOT use roles or descriptions (e.g., Host, Guest, Interviewer). Use only the exact names you have found in your analysis of the metadata and transcript snippets only.\n"
             "- Output STRICTLY VALID JSON ONLY. No markdown, no prose, no comments.\n"
             "- Keys MUST EXACTLY match the speaker IDs provided. Do not add or remove keys.\n"
             "- Confidence is a number between 0.1 and 1.0.\n\n"
@@ -314,35 +346,17 @@ class LLMSpeakerSuggester:
     def _simple_fallback(
         self, speaker_segments: dict[str, list[dict]]
     ) -> dict[str, tuple[str, float]]:
-        """Smart fallback when LLM is not available."""
+        """Simple generic names when LLM is not available (LLM or nothing approach)."""
         suggestions = {}
 
-        # Sort speakers by speaking time to identify likely roles
-        speaker_durations = {}
-        for speaker_id, segments in speaker_segments.items():
-            total_duration = sum(
-                seg.get("end", 0) - seg.get("start", 0)
-                for seg in segments
-                if seg.get("start") is not None and seg.get("end") is not None
-            )
-            speaker_durations[speaker_id] = total_duration
+        # Just assign generic numbered names - no pattern analysis
+        for speaker_id in sorted(speaker_segments.keys()):
+            # Extract speaker number from ID (e.g., SPEAKER_00 -> 00)
+            speaker_num = speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
+            generic_name = f"Speaker {int(speaker_num) + 1}"
+            suggestions[speaker_id] = (generic_name, 0.2)  # Low confidence
 
-        sorted_speakers = sorted(
-            speaker_durations.items(), key=lambda x: x[1], reverse=True
-        )
-
-        # Assign role-based names based on speaking patterns
-        for i, (speaker_id, duration) in enumerate(sorted_speakers):
-            if i == 0 and len(sorted_speakers) > 1:
-                # Longest speaker is likely host/interviewer
-                suggestions[speaker_id] = ("Host", 0.6)
-            elif i == 1:
-                # Second speaker is likely guest/interviewee
-                suggestions[speaker_id] = ("Guest", 0.6)
-            else:
-                # Additional speakers
-                suggestions[speaker_id] = (f"Speaker {i + 1}", 0.4)
-
+        logger.info("No LLM available - using generic speaker names")
         return suggestions
 
 

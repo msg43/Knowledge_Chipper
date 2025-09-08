@@ -1369,6 +1369,100 @@ class AudioProcessor(BaseProcessor):
                                     saved_file
                                 )
 
+                        # Save to database if database service is available
+                        db_service = kwargs.get("db_service")
+                        if not db_service:
+                            # Try to create a database service if not provided
+                            try:
+                                from ..database.service import DatabaseService
+
+                                db_service = DatabaseService()
+                            except Exception as e:
+                                logger.debug(f"Could not create database service: {e}")
+
+                        if db_service and final_data:
+                            try:
+                                # Create consistent media ID from file path for re-runs
+                                import hashlib
+                                from datetime import datetime
+
+                                # Use hash of absolute path for consistent ID across re-runs
+                                path_hash = hashlib.md5(
+                                    str(path.absolute()).encode()
+                                ).hexdigest()[:8]
+                                media_id = f"audio_{path.stem}_{path_hash}"
+
+                                # Extract metadata for media source
+                                title = path.stem.replace("_", " ").title()
+                                file_url = f"file://{path.absolute()}"
+
+                                # Check if media source already exists (for re-runs)
+                                existing_video = db_service.get_video(media_id)
+                                if not existing_video:
+                                    # Create media source record
+                                    db_service.create_video(
+                                        video_id=media_id,
+                                        title=title,
+                                        url=file_url,
+                                        source_type="audio_file",
+                                        duration=audio_duration,
+                                        upload_date=datetime.now().isoformat(),
+                                        file_path=str(path),
+                                        file_size=(
+                                            path.stat().st_size if path.exists() else 0
+                                        ),
+                                    )
+                                    logger.info(
+                                        f"Created media source record: {media_id}"
+                                    )
+
+                                # Extract transcript data
+                                transcript_text = final_data.get("text", "")
+                                segments = final_data.get("segments", [])
+                                language = final_data.get("language", "en")
+
+                                # Prepare diarization segments if available
+                                diarization_segments_json = None
+                                if diarization_enabled and segments:
+                                    # Check if segments have speaker information
+                                    if any(seg.get("speaker") for seg in segments):
+                                        diarization_segments_json = segments
+
+                                # Create transcript record (overwrites existing for re-runs)
+                                transcript_record = db_service.create_transcript(
+                                    video_id=media_id,
+                                    language=language,
+                                    is_manual=False,
+                                    transcript_text=transcript_text,
+                                    transcript_segments=segments,
+                                    transcript_type="whisper",
+                                    whisper_model=model_name,
+                                    device_used=device or self.device,
+                                    diarization_enabled=diarization_enabled,
+                                    diarization_segments_json=diarization_segments_json,
+                                    include_timestamps=include_timestamps,
+                                    processing_time_seconds=enhanced_metadata.get(
+                                        "processing_time_seconds"
+                                    ),
+                                )
+
+                                if transcript_record:
+                                    logger.info(
+                                        f"Saved transcript to database: {transcript_record.transcript_id}"
+                                    )
+                                    enhanced_metadata[
+                                        "database_transcript_id"
+                                    ] = transcript_record.transcript_id
+                                    enhanced_metadata["database_media_id"] = media_id
+                                else:
+                                    logger.warning(
+                                        "Failed to save transcript to database"
+                                    )
+
+                            except Exception as e:
+                                logger.error(f"Error saving to database: {e}")
+                                # Don't fail the transcription if database save fails
+
                         # Clean up temporary file before returning success
                         if output_path and output_path.exists():
                             output_path.unlink(missing_ok=True)

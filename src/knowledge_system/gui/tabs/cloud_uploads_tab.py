@@ -7,9 +7,8 @@ directly to Skipthepodcast.com via authenticated user uploads.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -33,12 +32,6 @@ from PyQt6.QtWidgets import (
 
 from knowledge_system.cloud.oauth.getreceipts_uploader import GetReceiptsUploader
 
-from ...config import get_settings
-from ...integrations import (
-    check_getreceipts_availability,
-    get_upload_summary,
-    upload_to_getreceipts,
-)
 from ...logger import get_logger
 from ...services.claims_upload_service import ClaimsUploadService, ClaimUploadData
 from ..components.base_tab import BaseTab
@@ -197,7 +190,6 @@ class CloudUploadsTab(BaseTab):
     def _connect_signals(self) -> None:
         """Connect internal signals. Override to prevent base class errors."""
         # No additional signal connections needed beyond what's in the UI setup
-        pass
 
     def _create_left_panel(self) -> QWidget:
         """Create left panel with auth and database controls."""
@@ -539,7 +531,7 @@ class CloudUploadsTab(BaseTab):
 
         try:
             stats = self.claims_service.get_database_stats()
-            stats_text = f"""Total Claims: {stats.get('total_claims', 0)}
+            stats_text = """Total Claims: {stats.get('total_claims', 0)}
 Unuploaded: {stats.get('unuploaded_claims', 0)}
 Uploaded: {stats.get('uploaded_claims', 0)}
 Episodes: {stats.get('total_episodes', 0)}"""

@@ -10,7 +10,7 @@ import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 from sqlalchemy import (
@@ -644,9 +644,9 @@ class SpeakerDatabaseService:
                 {
                     "name": voice.name,
                     "usage_count": voice.usage_count,
-                    "last_used": voice.last_used.isoformat()
-                    if voice.last_used
-                    else None,
+                    "last_used": (
+                        voice.last_used.isoformat() if voice.last_used else None
+                    ),
                 }
                 for voice in voices
             ]
@@ -680,7 +680,7 @@ class SpeakerDatabaseService:
             with self.get_session() as session:
                 results = (
                     session.query(SpeakerAssignment.recording_path)
-                    .filter(SpeakerAssignment.user_confirmed == False)
+                    .filter(SpeakerAssignment.user_confirmed.is_(False))
                     .distinct()
                     .all()
                 )
@@ -696,7 +696,7 @@ class SpeakerDatabaseService:
                 assignments = (
                     session.query(SpeakerAssignment)
                     .filter(
-                        SpeakerAssignment.user_confirmed == False,
+                        SpeakerAssignment.user_confirmed.is_(False),
                         SpeakerAssignment.suggested_name.isnot(None),
                     )
                     .all()

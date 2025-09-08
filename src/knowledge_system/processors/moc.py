@@ -619,7 +619,7 @@ class MOCProcessor(BaseProcessor):
             speaker_data_list: Optional list of SpeakerData objects with timing info
         """
         try:
-            from ..database.speaker_models import get_speaker_db_service
+            pass
 
             # Load existing MOC data or create new
             moc_data = MOCData()

@@ -6,7 +6,6 @@ across all components of the Knowledge Chipper system.
 """
 
 import os
-from typing import Optional
 
 from PyQt6.QtWidgets import QApplication
 

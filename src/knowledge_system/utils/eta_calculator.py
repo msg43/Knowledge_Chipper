@@ -5,7 +5,6 @@ Provides accurate time estimation based on progress tracking.
 """
 
 import time
-from typing import Optional, Tuple
 
 
 class ETACalculator:

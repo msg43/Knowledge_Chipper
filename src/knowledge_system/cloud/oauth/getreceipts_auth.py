@@ -15,12 +15,11 @@ Author: GetReceipts.org Team
 License: MIT
 """
 
-import json
 import threading
 import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Dict, Optional
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import requests
@@ -83,7 +82,7 @@ class GetReceiptsAuth:
 
         # Check if OAuth endpoint is available before proceeding
         try:
-            print(f"🔍 Checking OAuth endpoint availability...")
+            print("🔍 Checking OAuth endpoint availability...")
             response = requests.head(oauth_url, timeout=10, allow_redirects=True)
             if response.status_code == 404:
                 raise Exception(
@@ -214,7 +213,7 @@ class GetReceiptsAuth:
                         self.send_response(400)
                         self.send_header("Content-type", "text/html")
                         self.end_headers()
-                        error_html = f"""
+                        error_html = """
                         <html>
                         <head><title>Authentication Failed</title></head>
                         <body>
@@ -242,7 +241,7 @@ class GetReceiptsAuth:
             try:
                 test_socket.bind(("localhost", self.callback_port))
                 test_socket.close()
-            except OSError as e:
+            except OSError:
                 test_socket.close()
                 result_dict[
                     "error"

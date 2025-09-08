@@ -14,23 +14,8 @@ Migration includes:
 
 import logging
 from datetime import datetime
-from pathlib import Path
-from typing import Optional
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    Float,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-    create_engine,
-    inspect,
-    text,
-)
-from sqlalchemy.exc import OperationalError
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -118,7 +103,7 @@ class Migration001:
                 while offset < record_count:
                     session.execute(
                         text(
-                            f"""
+                            """
                         INSERT INTO media_sources (
                             media_id, source_type, title, url, description,
                             uploader, uploader_id, upload_date, duration_seconds,

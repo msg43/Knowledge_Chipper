@@ -2,19 +2,12 @@
 
 import re
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
-from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCharFormat, QTextCursor
-from PyQt6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QScrollArea,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import QFrame, QTextEdit, QVBoxLayout
 
 
 class LogCapture(QObject):
@@ -79,7 +72,7 @@ class LogCapture(QObject):
 
             # Emit signal to GUI
             self.log_captured.emit(level, module, formatted_message)
-        except Exception as e:
+        except Exception:
             # Don't break logging if there's an error
             pass
 
@@ -232,7 +225,7 @@ class RichLogDisplay(QFrame):
             "ERROR": "#dc3545",
             "CRITICAL": "#dc3545",
         }
-        level_color = level_colors.get(level, "#ffffff")
+        level_color = level_colors.get(level, "#fffff")
 
         # Create formatted text
         format_normal = QTextCharFormat()

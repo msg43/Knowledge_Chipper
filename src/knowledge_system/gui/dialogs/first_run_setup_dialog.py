@@ -2,12 +2,8 @@
 First-run setup dialog for downloading essential models and dependencies.
 """
 
-import sys
-from pathlib import Path
-from typing import Optional
-
 from PyQt6.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QPixmap
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QCheckBox,
     QDialog,

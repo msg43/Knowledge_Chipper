@@ -653,11 +653,11 @@ class YouTubeTranscriptProcessor(BaseProcessor):
 
                                 else:
                                     logger.debug(
-                                        f"Empty response, data still processing..."
+                                        "Empty response, data still processing..."
                                     )
 
                             elif poll_response.status_code == 202:
-                                logger.debug(f"Status 202: Still processing...")
+                                logger.debug("Status 202: Still processing...")
 
                             elif poll_response.status_code == 404:
                                 logger.error(
@@ -958,7 +958,6 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     )
 
                     # No WebShare usage; proceed without proxy by default
-                    use_proxy = False
 
                     # Configure yt-dlp with Webshare proxy - use HTTPS for secure connections
                     proxy_url = None
@@ -1475,7 +1474,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                                 error_file_path = output_dir / error_filename
 
                                 # Write error file with details
-                                error_content = f"""# Diarization Error Report
+                                error_content = """# Diarization Error Report
 
 **Video:** {transcript.title}
 **Video ID:** {transcript.video_id}
@@ -1688,6 +1687,73 @@ Diarization processing failed for this video. The transcript was not saved to al
 
                                         # Add transcript to list only after successful file save
                                         transcripts.append(transcript)
+
+                                        # Save to database
+                                        db_service = kwargs.get("db_service")
+                                        if not db_service:
+                                            try:
+                                                from ..database.service import (
+                                                    DatabaseService,
+                                                )
+
+                                                db_service = DatabaseService()
+                                            except Exception as e:
+                                                logger.debug(
+                                                    f"Could not create database service: {e}"
+                                                )
+
+                                        if db_service and transcript:
+                                            try:
+                                                # Create/update media source record
+                                                video_metadata = {
+                                                    "uploader": transcript.uploader
+                                                    or "",
+                                                    "upload_date": transcript.upload_date,
+                                                    "description": transcript.description
+                                                    or "",
+                                                    "duration": transcript.duration,
+                                                    "view_count": transcript.view_count,
+                                                    "thumbnail_url": transcript.thumbnail_url,
+                                                    "tags": transcript.tags or [],
+                                                    "source_type": "youtube",
+                                                }
+
+                                                video_record = db_service.create_video(
+                                                    video_id=transcript.video_id,
+                                                    title=transcript.title,
+                                                    url=transcript.url,
+                                                    **video_metadata,
+                                                )
+
+                                                if video_record:
+                                                    logger.info(
+                                                        f"Saved/updated video record: {transcript.video_id}"
+                                                    )
+
+                                                # Create/update transcript record
+                                                transcript_segments = (
+                                                    transcript.transcript_data or []
+                                                )
+                                                transcript_record = db_service.create_transcript(
+                                                    video_id=transcript.video_id,
+                                                    language=transcript.language,
+                                                    is_manual=transcript.is_manual,
+                                                    transcript_text=transcript.transcript_text,
+                                                    transcript_segments=transcript_segments,
+                                                    transcript_type="youtube_api",
+                                                    include_timestamps=include_timestamps,
+                                                )
+
+                                                if transcript_record:
+                                                    logger.info(
+                                                        f"Saved/updated transcript record: {transcript_record.transcript_id}"
+                                                    )
+
+                                            except Exception as e:
+                                                logger.error(
+                                                    f"Error saving to database: {e}"
+                                                )
+                                                # Don't fail the transcript extraction if database save fails
 
                                         # Update index with successfully saved video
                                         if (
@@ -1969,6 +2035,86 @@ Diarization processing failed for this video. The transcript was not saved to al
                                                 logger.info(
                                                     f"✅ Saved diarized transcript: {filepath}"
                                                 )
+
+                                                # Save diarized transcript to database
+                                                db_service = kwargs.get("db_service")
+                                                if not db_service:
+                                                    try:
+                                                        from ..database.service import (
+                                                            DatabaseService,
+                                                        )
+
+                                                        db_service = DatabaseService()
+                                                    except Exception as e:
+                                                        logger.debug(
+                                                            f"Could not create database service: {e}"
+                                                        )
+
+                                                if db_service and transcript:
+                                                    try:
+                                                        # Create/update media source record
+                                                        video_metadata = {
+                                                            "uploader": transcript.uploader
+                                                            or "",
+                                                            "upload_date": transcript.upload_date,
+                                                            "description": transcript.description
+                                                            or "",
+                                                            "duration": transcript.duration,
+                                                            "view_count": transcript.view_count,
+                                                            "thumbnail_url": transcript.thumbnail_url,
+                                                            "tags": transcript.tags
+                                                            or [],
+                                                            "source_type": "youtube",
+                                                        }
+
+                                                        video_record = db_service.create_video(
+                                                            video_id=transcript.video_id,
+                                                            title=transcript.title,
+                                                            url=transcript.url,
+                                                            **video_metadata,
+                                                        )
+
+                                                        if video_record:
+                                                            logger.info(
+                                                                f"Saved/updated video record: {transcript.video_id}"
+                                                            )
+
+                                                        # Create/update transcript record with diarization data
+                                                        transcript_segments = (
+                                                            transcript.transcript_data
+                                                            or []
+                                                        )
+                                                        diarization_segments = (
+                                                            transcript_segments
+                                                            if any(
+                                                                seg.get("speaker")
+                                                                for seg in transcript_segments
+                                                            )
+                                                            else None
+                                                        )
+
+                                                        transcript_record = db_service.create_transcript(
+                                                            video_id=transcript.video_id,
+                                                            language=transcript.language,
+                                                            is_manual=transcript.is_manual,
+                                                            transcript_text=transcript.transcript_text,
+                                                            transcript_segments=transcript_segments,
+                                                            transcript_type="diarized",
+                                                            diarization_enabled=True,
+                                                            diarization_segments_json=diarization_segments,
+                                                            include_timestamps=include_timestamps,
+                                                        )
+
+                                                        if transcript_record:
+                                                            logger.info(
+                                                                f"Saved/updated diarized transcript record: {transcript_record.transcript_id}"
+                                                            )
+
+                                                    except Exception as e:
+                                                        logger.error(
+                                                            f"Error saving diarized transcript to database: {e}"
+                                                        )
+                                                        # Don't fail the transcript extraction if database save fails
                                             else:
                                                 logger.error(
                                                     f"❌ Diarized transcript file not created: {filepath}"

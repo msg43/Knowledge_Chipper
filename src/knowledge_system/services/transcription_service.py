@@ -12,7 +12,6 @@ from typing import Any
 from ..logger import get_logger
 from ..processors.audio_processor import AudioProcessor
 from ..processors.youtube_download import YouTubeDownloadProcessor
-from ..processors.youtube_transcript import YouTubeTranscriptProcessor
 
 logger = get_logger(__name__)
 
@@ -367,9 +366,9 @@ def transcribe_file(
     service = TranscriptionService(
         whisper_model=model,
         normalize_audio=normalize,
-        download_thumbnails=download_thumbnails
-        if download_thumbnails is not None
-        else True,
+        download_thumbnails=(
+            download_thumbnails if download_thumbnails is not None else True
+        ),
         temp_dir=temp_dir,
     )
     return service.transcribe_input(

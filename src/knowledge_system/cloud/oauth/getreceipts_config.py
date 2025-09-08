@@ -19,7 +19,7 @@ License: MIT
 """
 
 import os
-from typing import Any, Dict
+from typing import Any
 
 # Development Configuration (Default)
 # Use this when GetReceipts.org is running locally

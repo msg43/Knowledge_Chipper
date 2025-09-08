@@ -108,7 +108,7 @@ class FFmpegAudioProcessor:
 
             # Add audio filters for normalization
             if normalize:
-                cmd.extend(["-af", "loudnorm"])
+                cmd.extend(["-a", "loudnorm"])
 
             # Add sample rate conversion
             if sample_rate:
@@ -122,7 +122,6 @@ class FFmpegAudioProcessor:
             cmd.extend(["-y", str(output_path)])  # -y to overwrite
 
             # Run FFmpeg with non-blocking approach
-            import threading
             import time
 
             process = subprocess.Popen(
@@ -202,7 +201,7 @@ class FFmpegAudioProcessor:
                 "quiet",
                 "-show_entries",
                 "format=duration",
-                "-of",
+                "-o",
                 "csv=p=0",
                 str(file_path),
             ]
@@ -317,7 +316,7 @@ class FFmpegAudioProcessor:
                 "quiet",
                 "-show_entries",
                 "format=duration",
-                "-of",
+                "-o",
                 "csv=p=0",
                 str(file_path),
             ]
@@ -357,7 +356,7 @@ class FFmpegAudioProcessor:
                 ffmpeg,
                 "-i",
                 str(input_path),
-                "-af",
+                "-a",
                 "loudnorm=I=-16:TP=-1.5:LRA=11",  # Standard normalization
                 "-y",
                 str(output_path),

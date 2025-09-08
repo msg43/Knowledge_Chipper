@@ -7,11 +7,9 @@ on localhost:8080 to receive authentication tokens.
 
 from __future__ import annotations
 
-import json
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
 from ..logger import get_logger
@@ -121,7 +119,7 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
 
     def _send_error_response(self, error: str, description: str) -> None:
         """Send error response to browser."""
-        html_response = f"""
+        html_response = """
         <!DOCTYPE html>
         <html>
         <head>

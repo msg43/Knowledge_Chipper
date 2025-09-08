@@ -7,7 +7,7 @@ speakers for improved readability and visual distinction.
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..logger import get_logger
 
@@ -586,7 +586,7 @@ def save_color_coded_transcript(
 
 
 def extract_speaker_statistics(
-    transcript_data: dict[str, Any]
+    transcript_data: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
     """
     Extract speaker statistics from transcript data.

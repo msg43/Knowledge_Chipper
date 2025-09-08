@@ -11,9 +11,8 @@ organizes knowledge.
 """
 
 import logging
-from collections import Counter, defaultdict
+from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Set
 
 from .models.llm_any import AnyLLM
 from .types import PipelineOutputs, ScoredClaim, StructuredCategory
@@ -253,8 +252,6 @@ def analyze_structured_categories(
     Returns:
         List of structured categories
     """
-    from ...config import get_settings
-    from .models.llm_factory import create_llm
 
     # Currently disabled - return empty list until prompt template is created
     # TODO: Create structured categories prompt template

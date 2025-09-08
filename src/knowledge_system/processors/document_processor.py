@@ -5,11 +5,10 @@ Handles processing of documents (PDF, DOCX, TXT, MD) with author attribution
 and metadata extraction for whitepapers, academic papers, and general documents.
 """
 
-import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from ..database import DatabaseService
 from ..logger import get_logger
@@ -88,7 +87,7 @@ class DocumentProcessor(BaseProcessor):
     @property
     def supported_formats(self) -> list[str]:
         """Return list of supported formats."""
-        return [".pdf", ".txt", ".md", ".docx", ".doc", ".rtf"]
+        return [".pd", ".txt", ".md", ".docx", ".doc", ".rt"]
 
     def validate(self, input_data: Any) -> None:
         """Validate input document."""
@@ -248,13 +247,13 @@ class DocumentProcessor(BaseProcessor):
             self.validate(file_path)
 
             # Read the document content based on type
-            if file_path.suffix.lower() == ".pdf":
+            if file_path.suffix.lower() == ".pd":
                 text = self._process_pdf(file_path)
             elif file_path.suffix.lower() in [".txt", ".md"]:
                 text = file_path.read_text(encoding="utf-8")
             elif file_path.suffix.lower() in [".docx", ".doc"]:
                 text = self._process_docx(file_path)
-            elif file_path.suffix.lower() == ".rtf":
+            elif file_path.suffix.lower() == ".rt":
                 text = self._process_rtf(file_path)
             else:
                 return ProcessorResult(
@@ -316,9 +315,11 @@ class DocumentProcessor(BaseProcessor):
                     "processing_time": datetime.now().isoformat(),
                     "db_records": {
                         "media_sources": media_id,
-                        "transcripts": transcript_record.transcript_id
-                        if transcript_record
-                        else None,
+                        "transcripts": (
+                            transcript_record.transcript_id
+                            if transcript_record
+                            else None
+                        ),
                     },
                 },
             )

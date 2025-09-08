@@ -460,10 +460,10 @@ class ClaimSearchTab(BaseTab):
             return
 
         claim = result["claim"]
-        video = result["video"]
+        result["video"]
 
         # Format claim details
-        details = f"""# Claim Details
+        details = """# Claim Details
 
 ## Claim
 **Text:** {claim.get('canonical', '')}

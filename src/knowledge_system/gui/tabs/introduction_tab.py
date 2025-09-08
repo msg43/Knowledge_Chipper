@@ -1,6 +1,5 @@
 """Introduction tab providing comprehensive guidance for new users."""
 
-from pathlib import Path
 from typing import Any
 
 from PyQt6.QtCore import Qt, pyqtSignal

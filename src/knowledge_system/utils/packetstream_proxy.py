@@ -8,8 +8,6 @@ Based on: https://github.com/packetstream/packetstream-examples
 import os
 import random
 import time
-from typing import Dict, List, Optional, Tuple
-from urllib.parse import urlparse
 
 import requests
 
@@ -251,6 +249,73 @@ class PacketStreamProxyManager:
         # All retries failed
         raise last_exception
 
+    def test_proxy_connectivity(
+        self, timeout: int = 10, max_retries: int = 3, retry_callback=None
+    ) -> tuple[bool, str]:
+        """
+        Test if PacketStream proxy is working properly with retry logic.
+
+        Args:
+            timeout: Connection timeout in seconds per attempt
+            max_retries: Maximum number of retry attempts
+            retry_callback: Optional callback function to report retry progress
+
+        Returns:
+            Tuple of (success: bool, message: str)
+        """
+        if not self.credentials_available:
+            return False, "PacketStream credentials not configured"
+
+        proxy_config = self._get_proxy_config(use_socks5=False)
+        proxy_url = proxy_config["https"]
+        proxies = {"http": proxy_url, "https": proxy_url}
+
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                if retry_callback and attempt > 0:
+                    retry_callback(f"Retry attempt {attempt + 1}/{max_retries}...")
+
+                # Test with a simple HTTP request
+                response = requests.get(
+                    "http://httpbin.org/ip", proxies=proxies, timeout=timeout
+                )
+
+                if response.status_code == 200:
+                    ip_data = response.json()
+                    proxy_ip = ip_data.get("origin", "unknown")
+                    success_msg = f"PacketStream proxy working (IP: {proxy_ip})"
+                    if attempt > 0:
+                        success_msg += f" - succeeded on attempt {attempt + 1}"
+                    return True, success_msg
+                else:
+                    last_error = f"Proxy returned HTTP {response.status_code}"
+
+            except requests.exceptions.ConnectTimeout:
+                last_error = "PacketStream proxy connection timeout"
+            except requests.exceptions.ProxyError as e:
+                last_error = f"PacketStream proxy error: {str(e)}"
+            except requests.exceptions.RequestException as e:
+                last_error = f"Network error: {str(e)}"
+            except Exception as e:
+                last_error = f"Unexpected error: {str(e)}"
+
+            # Wait before retrying (exponential backoff)
+            if attempt < max_retries - 1:
+                wait_time = 2**attempt  # 1s, 2s, 4s...
+                if retry_callback:
+                    retry_callback(
+                        f"Connection failed: {last_error}. Retrying in {wait_time}s..."
+                    )
+                time.sleep(wait_time)
+
+        # All retries failed
+        return (
+            False,
+            f"All {max_retries} connection attempts failed. Last error: {last_error}",
+        )
+
     def get_youtube_data(self, video_url: str, session_id: str = None) -> dict | None:
         """
         Example: Extract YouTube video data using yt-dlp through PacketStream proxy.
@@ -313,12 +378,12 @@ def test_packetstream_proxy():
         success, ip_info = proxy_manager.test_connection()
 
         if success:
-            print(f"✅ Proxy connection successful!")
+            print("✅ Proxy connection successful!")
             print(f"📍 Current IP: {ip_info.get('origin', 'Unknown')}")
 
             # Test IP rotation
             print("\n🔄 Testing IP rotation...")
-            session2 = proxy_manager.rotate_session()
+            proxy_manager.rotate_session()
             success2, ip_info2 = proxy_manager.test_connection()
 
             if success2:

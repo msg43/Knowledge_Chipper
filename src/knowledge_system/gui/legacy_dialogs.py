@@ -243,7 +243,7 @@ class ModelDownloadDialogLegacy(QDialog):
         layout.addWidget(header_label)
 
         # Model info
-        info_text = f"""
+        info_text = """
 <h3>{self.model_name}</h3>
 <p><b>Size:</b> {self.model_info.size_display}</p>
 <p><b>Format:</b> {self.model_info.format}</p>
@@ -649,7 +649,7 @@ class ProcessingProgressDialog(QDialog):
                 self,
                 "Cancel Processing",
                 f"Are you sure you want to cancel {self.operation_name.lower()}?\n\n"
-                f"This will stop processing and may leave some files incomplete.",
+                "This will stop processing and may leave some files incomplete.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,  # Default to No for safety
             )
@@ -942,8 +942,8 @@ class ModelDownloadDialog(QDialog):
         # Description
         desc_label = QLabel(
             f"The model '{self.model_name}' is not available locally.\n\n"
-            f"Would you like to download it now? This may take several minutes depending on the model size.\n\n"
-            f"Note: Summarization will be disabled until the download completes."
+            "Would you like to download it now? This may take several minutes depending on the model size.\n\n"
+            "Note: Summarization will be disabled until the download completes."
         )
         desc_label.setWordWrap(True)
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)

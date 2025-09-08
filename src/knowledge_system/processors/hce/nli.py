@@ -16,7 +16,7 @@ class NLI:
             Entailment score in [0,1] where 1.0 means strong entailment
         """
         try:
-            prompt = f"""Analyze the logical relationship between these statements:
+            prompt = """Analyze the logical relationship between these statements:
 
 Premise: "{premise}"
 Hypothesis: "{hypothesis}"

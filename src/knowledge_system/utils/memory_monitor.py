@@ -14,13 +14,11 @@ Features:
 
 import gc
 import logging
-import os
 import tempfile
 import threading
 import time
 import weakref
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import psutil
 

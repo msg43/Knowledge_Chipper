@@ -559,10 +559,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     error_msg = d.get("error", "Unknown error")
                     if "timeout" in error_msg.lower():
                         progress_callback(
-                            f"⏱️ Download timeout - retrying (YouTube may be throttling)..."
+                            "⏱️ Download timeout - retrying (YouTube may be throttling)..."
                         )
                     elif "connection" in error_msg.lower():
-                        progress_callback(f"🔗 Connection issue - retrying...")
+                        progress_callback("🔗 Connection issue - retrying...")
                     else:
                         progress_callback(f"❌ Download error: {error_msg}")
 
@@ -639,7 +639,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         logger.info(f"Testing {proxy_type} connectivity for: {url}")
                         if progress_callback and not use_bright_data:
                             progress_callback(
-                                f"⚠️ WARNING: Using direct connection (no proxy protection)"
+                                "⚠️ WARNING: Using direct connection (no proxy protection)"
                             )
                         if progress_callback:
                             progress_callback(
@@ -697,17 +697,17 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     if progress_callback:
                         if "403" in error_msg or "forbidden" in error_msg.lower():
                             progress_callback(
-                                f"❌ Access denied - YouTube may be blocking this proxy IP"
+                                "❌ Access denied - YouTube may be blocking this proxy IP"
                             )
                         elif "404" in error_msg or "not found" in error_msg.lower():
                             progress_callback(f"❌ Video not found or private: {url}")
                         elif "timeout" in error_msg.lower():
                             progress_callback(
-                                f"❌ Proxy connection timeout - Proxy service may have connectivity issues"
+                                "❌ Proxy connection timeout - Proxy service may have connectivity issues"
                             )
                         elif "proxy" in error_msg.lower():
                             progress_callback(
-                                f"❌ Proxy error: Check proxy credentials and account status"
+                                "❌ Proxy error: Check proxy credentials and account status"
                             )
                         else:
                             progress_callback(
@@ -716,11 +716,11 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                     # Continue with default settings if metadata extraction fails
                     logger.warning(
-                        f"Continuing with default concurrency settings due to metadata failure"
+                        "Continuing with default concurrency settings due to metadata failure"
                     )
                     if progress_callback:
                         progress_callback(
-                            f"⚠️ Using default settings - attempting download anyway..."
+                            "⚠️ Using default settings - attempting download anyway..."
                         )
 
                 # Attempt the actual download with enhanced error handling
@@ -749,7 +749,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             logger.warning(f"No info extracted for {url}")
                             if progress_callback:
                                 progress_callback(
-                                    f"⚠️ No video information returned - video may be unavailable"
+                                    "⚠️ No video information returned - video may be unavailable"
                                 )
                             continue
 
@@ -813,9 +813,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                         logger.info(f"✅ Successfully downloaded audio for: {url}")
                         if progress_callback:
-                            progress_callback(
-                                f"✅ Audio download completed successfully"
-                            )
+                            progress_callback("✅ Audio download completed successfully")
 
                     except Exception as download_error:
                         download_error_msg = str(download_error)
@@ -826,36 +824,36 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         if progress_callback:
                             if "HTTP Error 403" in download_error_msg:
                                 progress_callback(
-                                    f"❌ Download blocked (403) - YouTube detected proxy"
+                                    "❌ Download blocked (403) - YouTube detected proxy"
                                 )
                                 progress_callback(
-                                    f"   Try again later or check proxy IP rotation"
+                                    "   Try again later or check proxy IP rotation"
                                 )
                             elif "HTTP Error 429" in download_error_msg:
                                 progress_callback(
-                                    f"❌ Rate limited (429) - too many requests"
+                                    "❌ Rate limited (429) - too many requests"
                                 )
                                 progress_callback(
-                                    f"   YouTube is throttling this proxy IP"
+                                    "   YouTube is throttling this proxy IP"
                                 )
                             elif "HTTP Error 404" in download_error_msg:
                                 progress_callback(
-                                    f"❌ Video not found (404) - may be private or deleted"
+                                    "❌ Video not found (404) - may be private or deleted"
                                 )
                             elif "timeout" in download_error_msg.lower():
                                 progress_callback(
-                                    f"❌ Download timeout - connection too slow"
+                                    "❌ Download timeout - connection too slow"
                                 )
                                 progress_callback(
-                                    f"   Try reducing concurrent connections or check proxy service status"
+                                    "   Try reducing concurrent connections or check proxy service status"
                                 )
                             elif "proxy" in download_error_msg.lower():
-                                progress_callback(f"❌ Proxy connection failed")
+                                progress_callback("❌ Proxy connection failed")
                                 progress_callback(
-                                    f"   Check proxy account status and credentials"
+                                    "   Check proxy account status and credentials"
                                 )
                             elif "certificate" in download_error_msg.lower():
-                                progress_callback(f"❌ SSL certificate issue with proxy")
+                                progress_callback("❌ SSL certificate issue with proxy")
                             else:
                                 progress_callback(
                                     f"❌ Download error: {download_error_msg}"

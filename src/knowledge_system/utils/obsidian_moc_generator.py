@@ -7,12 +7,10 @@ These pages create dynamic, self-updating collections of people, mental models, 
 and content across your knowledge base.
 """
 
-from datetime import datetime
-
 
 def generate_people_page() -> str:
     """Generate People.md with dataview query for aggregating people mentions."""
-    return f"""# People Directory
+    return """# People Directory
 
 *This page automatically aggregates people mentioned across all your content.*
 
@@ -60,7 +58,7 @@ SORT count(rows) DESC
 
 def generate_mental_models_page() -> str:
     """Generate Mental_Models.md with dataview query for aggregating mental models."""
-    return f"""# Mental Models Collection
+    return """# Mental Models Collection
 
 *Automatically aggregates mental models and frameworks across your knowledge base.*
 
@@ -116,7 +114,7 @@ SORT file.mtime DESC
 
 def generate_jargon_page() -> str:
     """Generate Jargon.md with dataview query for aggregating terminology."""
-    return f"""# Jargon & Terminology
+    return """# Jargon & Terminology
 
 *Automatically aggregates jargon and terminology across your knowledge base.*
 
@@ -173,7 +171,7 @@ SORT file.mtime DESC
 
 def generate_main_moc_page() -> str:
     """Generate main MOC.md with comprehensive dataview queries."""
-    return f"""# Knowledge Map - Main MOC
+    return """# Knowledge Map - Main MOC
 
 *Central hub for your knowledge base with dynamic content aggregation.*
 

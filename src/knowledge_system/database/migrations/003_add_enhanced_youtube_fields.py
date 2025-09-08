@@ -15,8 +15,6 @@ import logging
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
-from ..models import Base
-
 logger = logging.getLogger(__name__)
 
 

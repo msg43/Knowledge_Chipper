@@ -5,21 +5,6 @@ Adds enhanced columns to speaker_assignments table and creates speaker_processin
 to support comprehensive speaker attribution learning and eliminate sidecar file dependency.
 """
 
-from datetime import datetime
-from pathlib import Path
-from typing import Any
-
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    Float,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session
 

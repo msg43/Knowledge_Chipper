@@ -6,7 +6,6 @@ extras via pip, with non-interactive output and success detection.
 
 from __future__ import annotations
 
-import subprocess
 from typing import Any
 
 from PyQt6.QtCore import QProcess, pyqtSignal

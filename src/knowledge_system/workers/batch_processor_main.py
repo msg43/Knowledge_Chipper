@@ -24,13 +24,12 @@ Features:
 import argparse
 import json
 import logging
-import os
 import signal
 import sys
 import time
 import traceback
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Add parent directories to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -443,7 +442,6 @@ def setup_logging(level: str):
 def load_environment_variables():
     """Load environment variables for API keys and other settings."""
     # Load from various sources - environment, config files, etc.
-    pass
 
 
 def main():

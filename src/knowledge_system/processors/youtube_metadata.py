@@ -10,7 +10,6 @@ Uses residential proxies to avoid bot detection while providing reliable metadat
 """
 
 import json
-import os
 import re
 import time
 from datetime import datetime
@@ -366,12 +365,10 @@ class YouTubeMetadataProcessor(BaseProcessor):
                                     return None
 
                             else:
-                                logger.debug(
-                                    f"Empty response, data still processing..."
-                                )
+                                logger.debug("Empty response, data still processing...")
 
                         elif poll_response.status_code == 202:
-                            logger.debug(f"Status 202: Still processing...")
+                            logger.debug("Status 202: Still processing...")
 
                         elif poll_response.status_code == 404:
                             logger.error(f"Snapshot {snapshot_id} not found or expired")
@@ -477,7 +474,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
                 f"🚫 Skipping direct yt-dlp for {video_id} (>2 videos, would trigger bot detection)"
             )
             logger.info(
-                f"💡 For bulk operations, configure PacketStream credentials in Settings > API Keys"
+                "💡 For bulk operations, configure PacketStream credentials in Settings > API Keys"
             )
 
         # Method 3: Bright Data (CONSERVED but DISABLED)

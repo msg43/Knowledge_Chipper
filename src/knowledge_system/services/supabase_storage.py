@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import mimetypes
 from pathlib import Path
-from typing import Optional, Tuple
 
 from ..config import get_settings
 from ..logger import get_logger

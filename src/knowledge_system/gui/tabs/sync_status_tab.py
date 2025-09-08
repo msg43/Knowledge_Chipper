@@ -7,10 +7,9 @@ with Supabase, including conflict resolution and sync history.
 
 import json
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QComboBox,
     QGroupBox,
@@ -28,14 +27,12 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ...config import get_settings
 from ...logger import get_logger
 from ...services.supabase_sync import (
     ConflictResolution,
     SupabaseSyncService,
     SyncConflict,
     SyncResult,
-    SyncStatus,
 )
 
 logger = get_logger(__name__)
@@ -230,7 +227,7 @@ class SyncStatusTab(QWidget):
         self.use_remote_btn.setEnabled(False)
         conflict_buttons.addWidget(self.use_remote_btn)
 
-        self.view_diff_btn = QPushButton("View Diff")
+        self.view_diff_btn = QPushButton("View Dif")
         self.view_diff_btn.clicked.connect(self.view_conflict_diff)
         self.view_diff_btn.setEnabled(False)
         conflict_buttons.addWidget(self.view_diff_btn)

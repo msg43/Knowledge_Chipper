@@ -16,7 +16,7 @@ License: MIT
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from supabase import Client, create_client
 
@@ -197,9 +197,9 @@ class GetReceiptsUploader:
 
             supabase_claim = {
                 "slug": claim["claim_id"],  # Use claim_id as slug
-                "text_short": claim["canonical"][:500]
-                if claim.get("canonical")
-                else "",
+                "text_short": (
+                    claim["canonical"][:500] if claim.get("canonical") else ""
+                ),
                 "text_long": claim.get("canonical"),
                 "episode_id": claim.get("episode_id"),
                 # Claim classification
@@ -390,7 +390,7 @@ class GetReceiptsUploader:
             target_uuid = self._get_claim_uuid(relation.get("target_claim_id"))
 
             if not (source_uuid and target_uuid):
-                print(f"⚠️ Skipping relationship: missing claim references")
+                print("⚠️ Skipping relationship: missing claim references")
                 continue
 
             supabase_rel = {
@@ -438,7 +438,7 @@ class GetReceiptsUploader:
             return "youtube"
         elif any(ext in url_lower for ext in [".mp3", ".wav", ".m4a"]):
             return "audio"
-        elif any(ext in url_lower for ext in [".pdf", ".doc", ".txt"]):
+        elif any(ext in url_lower for ext in [".pd", ".doc", ".txt"]):
             return "document"
         else:
             return "unknown"

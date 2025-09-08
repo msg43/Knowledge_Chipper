@@ -122,7 +122,7 @@ class EnhancedSummarizationWorker(QThread):
                                     # Emit success signal with GetReceipts info
                                     progress = SummarizationProgress(
                                         current_file=str(file_path),
-                                        current_step=f"GetReceipts Export Complete",
+                                        current_step="GetReceipts Export Complete",
                                         status=f"✅ Exported {claims_exported} claims to GetReceipts",
                                         file_percent=100.0,
                                     )
@@ -423,7 +423,7 @@ class ProcessingReport:
             "total_tokens_consumed": 0,
             "total_processing_time": 0.0,
             "longest_input_length": 0,
-            "shortest_input_length": float("inf"),
+            "shortest_input_length": float("in"),
             "average_compression_ratio": 0.0,
             "total_input_length": 0,
             "total_summary_length": 0,
@@ -451,7 +451,7 @@ class ProcessingReport:
                 stats["tokens_per_second"] = (
                     stats["total_tokens_consumed"] / stats["total_processing_time"]
                 )
-            if stats["shortest_input_length"] == float("inf"):
+            if stats["shortest_input_length"] == float("in"):
                 stats["shortest_input_length"] = 0
 
     def add_success(

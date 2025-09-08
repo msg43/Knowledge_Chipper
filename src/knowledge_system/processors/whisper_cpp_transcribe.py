@@ -367,7 +367,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 "quiet",
                 "-show_entries",
                 "format=duration",
-                "-of",
+                "-o",
                 "csv=p=0",
                 str(input_path),
             ]
@@ -475,7 +475,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                     whisper_cmd,
                     "-m",
                     str(model_path),
-                    "-f",
+                    "-",
                     str(audio_path),
                 ]
 
@@ -782,9 +782,9 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                         "quiet",
                         "-show_entries",
                         "format=duration",
-                        "-of",
+                        "-o",
                         "csv=p=0",
-                        cmd[cmd.index("-f") + 1],
+                        cmd[cmd.index("-") + 1],
                     ]
                     probe_result = subprocess.run(
                         probe_cmd, capture_output=True, text=True, timeout=5

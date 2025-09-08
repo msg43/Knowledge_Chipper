@@ -168,9 +168,7 @@ class ModelCache:
 
             # Check if we need to evict models to make room
             if self._total_memory_mb + estimated_memory > self.max_memory_mb:
-                logger.info(
-                    f"Cache memory limit would be exceeded, evicting LRU models"
-                )
+                logger.info("Cache memory limit would be exceeded, evicting LRU models")
                 self._evict_lru_models(estimated_memory)
 
             # Load the model

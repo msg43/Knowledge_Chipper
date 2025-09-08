@@ -7,6 +7,7 @@ Automates the deployment and validation of the HCE (Hybrid Claim Extractor) syst
 
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # Add src to path for imports
@@ -222,7 +223,6 @@ The HCE system is ready for production use!
 def main():
     """Run HCE deployment."""
     import argparse
-    from datetime import datetime
 
     parser = argparse.ArgumentParser(description="Deploy HCE system")
     parser.add_argument(

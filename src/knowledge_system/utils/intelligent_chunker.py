@@ -9,11 +9,10 @@ through AI models, with support for:
 - Cross-chunk context preservation
 """
 
-import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from ..logger import get_logger
 from ..utils.text_utils import (

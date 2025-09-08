@@ -6,21 +6,17 @@ allowing bulk operations and consistent speaker assignments across files.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
-from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QPixmap
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFrame,
-    QGridLayout,
     QGroupBox,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -29,18 +25,15 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSplitter,
-    QTableWidget,
-    QTableWidgetItem,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
 from ...database.speaker_models import get_speaker_db_service
 from ...logger import get_logger
-from ...processors.speaker_processor import SpeakerAssignment, SpeakerData
-from ...utils.speaker_intelligence import SpeakerNameSuggester
-from .speaker_assignment_dialog import SpeakerAssignmentDialog
+from ...processors.speaker_processor import SpeakerData
+
+# Pattern-based suggestions removed - LLM only approach
 
 logger = get_logger(__name__)
 
@@ -169,7 +162,6 @@ class BatchSpeakerAssignmentDialog(QDialog):
         self.completed_assignments: dict[str, dict[str, str]] = {}
         self.consistent_speakers: dict[str, str] = {}  # For cross-recording consistency
 
-        self.name_suggester = SpeakerNameSuggester()
         self.db_service = get_speaker_db_service()
 
         self._setup_ui()
@@ -442,10 +434,8 @@ class BatchSpeakerAssignmentDialog(QDialog):
             )
 
             if folder_path:
-                # Get suggestions for consistent speakers in this folder
-                consistency_analysis = self.name_suggester.analyze_speaker_consistency(
-                    folder_path
-                )
+                # Consistency analysis removed - LLM only approach
+                consistency_analysis = {}
                 consistent_speakers = consistency_analysis.get(
                     "consistent_speakers", []
                 )
@@ -719,7 +709,7 @@ class BatchSpeakerAssignmentDialog(QDialog):
                 self,
                 "Incomplete Assignments",
                 f"{unprocessed_count} recordings don't have speaker assignments.\n"
-                f"Do you want to process only the completed recordings?",
+                "Do you want to process only the completed recordings?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )

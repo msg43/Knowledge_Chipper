@@ -78,11 +78,11 @@ register_processor(
     url_patterns=[r"https?://(www\.)?(youtube\.com|youtu\.be)/.*/?"],
     name="YouTubeDownloadProcessor",
 )
-register_processor(PDFProcessor, extensions=[".pdf"], name="PDFProcessor")
+register_processor(PDFProcessor, extensions=[".pd"], name="PDFProcessor")
 register_processor(HTMLProcessor, extensions=[".html", ".htm"], name="HTMLProcessor")
 register_processor(
     DocumentProcessor,
-    extensions=[".txt", ".md", ".docx", ".doc", ".rtf"],
+    extensions=[".txt", ".md", ".docx", ".doc", ".rt"],
     name="DocumentProcessor",
 )
 register_processor(

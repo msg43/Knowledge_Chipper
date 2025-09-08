@@ -64,8 +64,6 @@ def extract_relations(claims: list[ScoredClaim], model_uri: str) -> list[Relatio
 
     This function provides the interface expected by the pipeline.
     """
-    from ...config import get_settings
-    from .models.llm_factory import create_llm
 
     # Currently disabled - return empty list until prompt template is created
     # TODO: Create relations extraction prompt template

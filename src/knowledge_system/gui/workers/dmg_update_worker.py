@@ -7,8 +7,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict
-from urllib.parse import urlparse
+from typing import Any
 from urllib.request import urlopen, urlretrieve
 
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -320,7 +319,7 @@ class DMGUpdateWorker(QThread):
                             return Path(mount_path)
 
             # Fallback: check common mount point
-            common_mount = Path(f"/Volumes/Knowledge Chipper")
+            common_mount = Path("/Volumes/Knowledge Chipper")
             if common_mount.exists():
                 return common_mount
 

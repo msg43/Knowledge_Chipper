@@ -348,10 +348,10 @@ class CostTracker:
     def _format_summary_report(self, report: dict[str, any]) -> str:
         """Format report as human-readable summary."""
         try:
-            summary = report["cost_summary"]
+            report["cost_summary"]
             suggestions = report["optimization_suggestions"]
 
-            report_text = f"""
+            report_text = """
 BRIGHT DATA COST REPORT
 {'-' * 50}
 Period: {report['report_metadata']['period_days']} days

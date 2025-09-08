@@ -26,6 +26,6 @@ def write_md(path: Path, claims: list[ScoredClaim]):
         lines.append(f"- **[{c.claim_type}]** [{ev}] {c.canonical}  (tier {tier})")
         if s:
             lines.append(
-                f"  importance {s.get('importance',0):.2f} · novelty {s.get('novelty',0):.2f} · controversy {s.get('controversy',0):.2f} · fragility {s.get('fragility',0):.2f}"
+                f"  importance {s.get('importance', 0):.2f} · novelty {s.get('novelty', 0):.2f} · controversy {s.get('controversy', 0):.2f} · fragility {s.get('fragility', 0):.2f}"
             )
     path.write_text("\n".join(lines))

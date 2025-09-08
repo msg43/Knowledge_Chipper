@@ -12,11 +12,8 @@ Features:
 """
 
 import json
-import os
-import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import psutil
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
@@ -28,7 +25,6 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QLabel,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -37,7 +33,6 @@ from PyQt6.QtWidgets import (
 )
 
 from ...logger import get_logger
-from ...utils.tracking import ProgressTracker
 
 logger = get_logger(__name__)
 
@@ -437,9 +432,9 @@ class CrashRecoveryDialog(QDialog):
             reply = QMessageBox.question(
                 self,
                 "Confirm Deletion",
-                f"Are you sure you want to delete this checkpoint?\n\n"
+                "Are you sure you want to delete this checkpoint?\n\n"
                 f"Job: {self.selected_checkpoint['job_name']}\n"
-                f"This action cannot be undone.",
+                "This action cannot be undone.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
@@ -451,10 +446,10 @@ class CrashRecoveryDialog(QDialog):
             reply = QMessageBox.question(
                 self,
                 "Confirm Restart",
-                f"Are you sure you want to restart this job from the beginning?\n\n"
+                "Are you sure you want to restart this job from the beginning?\n\n"
                 f"Job: {self.selected_checkpoint['job_name']}\n"
                 f"Progress: {self.selected_checkpoint['progress_percent']:.1f}% completed\n\n"
-                f"This will discard all current progress.",
+                "This will discard all current progress.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )

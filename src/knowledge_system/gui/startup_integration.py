@@ -13,10 +13,8 @@ Features:
 - Analytics system startup
 """
 
-import logging
 import sys
-from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QMessageBox
@@ -266,9 +264,9 @@ class StartupIntegration:
                 return
 
             message = (
-                f"Failed to initialize process isolation system:\n\n"
+                "Failed to initialize process isolation system:\n\n"
                 f"{error_message}\n\n"
-                f"The application will continue in compatibility mode."
+                "The application will continue in compatibility mode."
             )
 
             QMessageBox.critical(self.main_window, "Initialization Error", message)

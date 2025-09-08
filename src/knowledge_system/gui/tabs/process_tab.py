@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import QProcess, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import QProcess, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -18,9 +18,7 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QProgressBar,
     QPushButton,
-    QSplitter,
     QVBoxLayout,
-    QWidget,
 )
 
 from ...logger import get_logger
@@ -216,7 +214,7 @@ class ProcessPipelineWorker(QProcess):
                 raise ValueError("Output directory not set")
 
             cmd = self._build_command()
-            env = self._prepare_environment()
+            self._prepare_environment()
 
             logger.info(f"Starting worker process with command: {' '.join(cmd[:5])}...")
 
@@ -444,7 +442,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
                 ".mp4",
                 ".avi",
                 ".mkv",
-                ".pdf",
+                ".pd",
                 ".txt",
                 ".md",
             ]

@@ -492,7 +492,7 @@ def extract_video_id_from_url(url: str) -> str | None:
 )
 @click.option(
     "--format",
-    "-f",
+    "-",
     type=click.Choice(["txt", "md", "srt", "vtt"]),
     default="md",
     help="Output format",
@@ -576,7 +576,7 @@ def transcribe(
             with open(batch_urls, encoding="utf-8") as f:
                 content = f.read()
 
-            if content.startswith("{\\rtf"):
+            if content.startswith("{\\rt"):
                 # RTF file detected - extract URLs from RTF content
                 if not ctx.quiet:
                     console.print("[dim]RTF file detected, extracting URLs...[/dim]")

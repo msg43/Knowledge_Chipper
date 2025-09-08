@@ -1,10 +1,9 @@
 """Enhanced progress display component for transcription operations."""
 
 import time
-from typing import Any, Dict, Optional
 
 from PyQt6.QtCore import QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -12,9 +11,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QProgressBar,
     QPushButton,
-    QTextEdit,
     QVBoxLayout,
-    QWidget,
 )
 
 
@@ -416,7 +413,6 @@ class CloudTranscriptionStatusDisplay(QFrame):
 
     def set_connection_status(self, connected: bool, message: str = "") -> None:
         """No-op - only showing progress bar."""
-        pass
 
     def set_error(self, error_message: str) -> None:
         """Show error by hiding the progress bar."""

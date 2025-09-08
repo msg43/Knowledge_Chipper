@@ -6,10 +6,8 @@ This is the core AI that ships with the app and works out-of-the-box.
 """
 
 import asyncio
-import time
 from collections.abc import Callable
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from ..config import get_settings
 from ..logger import get_logger

@@ -102,7 +102,7 @@ class BatchProcessor:
                 "quiet",
                 "-show_entries",
                 "format=duration",
-                "-of",
+                "-o",
                 "csv=p=0",
                 str(file_path),
             ]
@@ -339,7 +339,7 @@ class BatchProcessor:
                 )
                 return False
             else:
-                logger.info(f"Emergency cleanup successful, proceeding with caution")
+                logger.info("Emergency cleanup successful, proceeding with caution")
                 return True
         elif current_usage > 0.85:  # 85-90% usage - High pressure
             logger.warning(
@@ -780,7 +780,7 @@ def test_batch_processing():
     # Test batch processor initialization
     processor = BatchProcessor(max_concurrent_files=max_concurrent, strategy=strategy)
 
-    print(f"✅ Batch processor initialized")
+    print("✅ Batch processor initialized")
 
     print("✅ All batch processing tests passed")
 

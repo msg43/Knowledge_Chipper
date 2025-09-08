@@ -167,7 +167,7 @@ class YouTubeBatchWorker(QThread):
         self.successful_urls = []
         self.downloaded_audio_files = {}  # url -> file_path mapping
 
-        logger.info(f"YouTube batch worker initialized:")
+        logger.info("YouTube batch worker initialized:")
         logger.info(f"  - URLs to process: {len(urls)}")
         logger.info(
             f"  - Processing mode: {'Download-all' if self.download_all_mode else 'Conveyor belt'}"
@@ -261,7 +261,7 @@ class YouTubeBatchWorker(QThread):
                 # Conveyor belt mode is more conservative
                 optimal = base_limit
 
-            logger.info(f"Concurrency calculation:")
+            logger.info("Concurrency calculation:")
             logger.info(f"  - Hardware limit: {hardware_limit}")
             logger.info(f"  - Memory limit: {memory_limit}")
             logger.info(f"  - CPU limit: {cpu_limit}")

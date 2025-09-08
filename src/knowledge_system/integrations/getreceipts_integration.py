@@ -11,10 +11,9 @@ Usage:
     results = upload_to_getreceipts(session_data)
 """
 
-import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 # Add the OAuth package to the path
 oauth_package_path = (

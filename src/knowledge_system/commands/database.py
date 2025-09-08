@@ -36,7 +36,7 @@ def database(ctx: CLIContext):
 )
 @click.option(
     "--formats",
-    "-f",
+    "-",
     multiple=True,
     default=["md", "srt", "txt"],
     help="File formats to generate (md, srt, vtt, txt, json)",
@@ -175,13 +175,13 @@ def stats(ctx: CLIContext, days: int):
         usage_summary = cost_tracker.get_usage_summary(days)
 
         # Display video statistics
-        click.echo(f"📹 Videos:")
+        click.echo("📹 Videos:")
         click.echo(f"   • Total Processed: {stats.get('total_videos', 0):,}")
         click.echo(f"   • Completed: {stats.get('completed_videos', 0):,}")
         click.echo(f"   • Completion Rate: {stats.get('completion_rate', 0):.1%}")
 
         # Display cost statistics
-        click.echo(f"\n💰 Costs:")
+        click.echo("\n💰 Costs:")
         click.echo(
             f"   • Total Bright Data Cost: ${stats.get('total_bright_data_cost', 0):.4f}"
         )
@@ -196,7 +196,7 @@ def stats(ctx: CLIContext, days: int):
         )
 
         # Display processing statistics
-        click.echo(f"\n⚡ Processing:")
+        click.echo("\n⚡ Processing:")
         click.echo(f"   • Total Tokens: {stats.get('total_tokens_consumed', 0):,}")
         click.echo(
             f"   • Processing Time: {stats.get('total_processing_time_hours', 0):.1f} hours"
@@ -205,7 +205,7 @@ def stats(ctx: CLIContext, days: int):
         # Display optimization suggestions
         suggestions = usage_summary.get("optimization_suggestions", [])
         if suggestions:
-            click.echo(f"\n💡 Optimization Suggestions:")
+            click.echo("\n💡 Optimization Suggestions:")
             for i, suggestion in enumerate(suggestions, 1):
                 click.echo(f"   {i}. {suggestion}")
 
@@ -245,7 +245,7 @@ def budget(ctx: CLIContext, budget: float | None):
             click.echo(click.style(f"✅ {alert_message}", fg="green"))
 
         # Display budget breakdown
-        click.echo(f"\n📊 Budget Breakdown:")
+        click.echo("\n📊 Budget Breakdown:")
         click.echo(f"   • Current Spend: ${budget_status['current_spend']:.4f}")
         click.echo(f"   • Budget Used: {budget_status['budget_percentage_used']:.1f}%")
         click.echo(
@@ -258,7 +258,7 @@ def budget(ctx: CLIContext, budget: float | None):
         # Display recommendations
         recommendations = budget_status.get("recommendations", [])
         if recommendations:
-            click.echo(f"\n💡 Recommendations:")
+            click.echo("\n💡 Recommendations:")
             for i, recommendation in enumerate(recommendations, 1):
                 click.echo(f"   {i}. {recommendation}")
 
@@ -450,7 +450,7 @@ def migrate_state(ctx: CLIContext, state_dir: str | None, backup: bool, cleanup:
             click.echo("ℹ️  No legacy state files found - nothing to migrate")
             return
 
-        click.echo(f"\n🔧 Migration options:")
+        click.echo("\n🔧 Migration options:")
         click.echo(f"   • Backup files: {'Yes' if backup else 'No'}")
         click.echo(f"   • Cleanup after: {'Yes' if cleanup else 'No'}")
         click.echo()
@@ -460,7 +460,7 @@ def migrate_state(ctx: CLIContext, state_dir: str | None, backup: bool, cleanup:
 
         # Display results
         if results["success"]:
-            click.echo(f"✅ Migration completed successfully!")
+            click.echo("✅ Migration completed successfully!")
             click.echo(f"   Records migrated: {results['total_records_migrated']}")
             click.echo(f"   Files processed: {len(results['files_processed'])}")
 
@@ -489,19 +489,19 @@ def migrate_state(ctx: CLIContext, state_dir: str | None, backup: bool, cleanup:
 
             # Cleanup if requested
             if cleanup:
-                click.echo(f"\n🧹 Cleaning up legacy files...")
+                click.echo("\n🧹 Cleaning up legacy files...")
                 cleanup_results = migrator.cleanup_legacy_files(confirm=True)
 
                 if cleanup_results["success"]:
                     removed_count = len(cleanup_results["files_removed"])
                     click.echo(f"✅ Removed {removed_count} legacy files")
                 else:
-                    click.echo(f"⚠️  Cleanup completed with errors:")
+                    click.echo("⚠️  Cleanup completed with errors:")
                     for error in cleanup_results["errors"]:
                         click.echo(f"   • {error}")
 
         else:
-            click.echo(f"❌ Migration failed with errors:")
+            click.echo("❌ Migration failed with errors:")
             for error in results["errors"]:
                 click.echo(f"   • {error}")
             ctx.exit(1)

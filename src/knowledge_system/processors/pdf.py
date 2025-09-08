@@ -28,15 +28,15 @@ class PDFProcessor(BaseProcessor):
 
     @property
     def supported_formats(self) -> list[str]:
-        return [".pdf"]
+        return [".pd"]
 
     def validate_input(self, input_data: Any) -> bool:
         if isinstance(input_data, (str, Path)):
             path = Path(input_data)
-            if path.is_file() and path.suffix.lower() == ".pdf":
+            if path.is_file() and path.suffix.lower() == ".pd":
                 return True
             if path.is_dir():
-                return any(f.suffix.lower() == ".pdf" for f in path.iterdir())
+                return any(f.suffix.lower() == ".pd" for f in path.iterdir())
         return False
 
     def _extract_text_pypdf2(self, pdf_path: Path) -> dict[str, Any]:
@@ -88,10 +88,10 @@ class PDFProcessor(BaseProcessor):
             logger.info(f"PDF Processor absolute path: {path.absolute()}")
             logger.info(f"PDF Processor path exists: {path.exists()}")
 
-            if path.is_file() and path.suffix.lower() == ".pdf":
+            if path.is_file() and path.suffix.lower() == ".pd":
                 paths = [path]
             elif path.is_dir():
-                paths = [f for f in path.iterdir() if f.suffix.lower() == ".pdf"]
+                paths = [f for f in path.iterdir() if f.suffix.lower() == ".pd"]
 
         logger.info(
             f"PDF Processor will process {len(paths)} files: {[str(p) for p in paths]}"

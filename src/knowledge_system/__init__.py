@@ -63,13 +63,13 @@ def _resolve_version() -> str:
     return "0.0.0"
 
 
-__version__ = _resolve_version()
-__author__ = "Skip the Podcast Desktop"
-__email__ = "dev@knowledge-system.local"
-
 # Core imports
 from .config import Settings, get_settings
 from .logger import get_logger
+
+__version__ = _resolve_version()
+__author__ = "Skip the Podcast Desktop"
+__email__ = "dev@knowledge-system.local"
 
 
 def gui_main() -> None:

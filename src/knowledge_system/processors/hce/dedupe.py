@@ -125,7 +125,7 @@ class Deduper:
             )
 
         # Sort evidence by timestamp if available
-        all_evidence.sort(key=lambda e: e.t0 if e.t0 is not None else float("inf"))
+        all_evidence.sort(key=lambda e: e.t0 if e.t0 is not None else float("in"))
 
         return ConsolidatedClaim(
             episode_id=representative.episode_id,

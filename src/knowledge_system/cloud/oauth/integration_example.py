@@ -13,7 +13,7 @@ License: MIT
 
 import json
 import time
-from typing import Any, Dict
+from typing import Any
 
 from .getreceipts_config import (
     get_config,
@@ -159,7 +159,7 @@ def test_authentication():
         uploader = GetReceiptsUploader()
         auth_result = uploader.authenticate()
 
-        print(f"✅ Authentication successful!")
+        print("✅ Authentication successful!")
         print(f"   User: {auth_result['user_info']['name']}")
         print(f"   Email: {auth_result['user_info']['email']}")
         print(f"   ID: {auth_result['user_info']['id']}")
@@ -189,7 +189,7 @@ def test_data_upload(uploader: GetReceiptsUploader):
         # Upload data
         results = uploader.upload_session_data(session_data)
 
-        print(f"\n✅ Upload completed successfully!")
+        print("\n✅ Upload completed successfully!")
         print("📊 Upload results:")
         for table, data in results.items():
             count = len(data) if data else 0

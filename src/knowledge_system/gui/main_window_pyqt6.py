@@ -53,7 +53,6 @@ from .tabs import (
     SpeakerAttributionTab,
     SummarizationTab,
     SummaryCleanupTab,
-    SyncStatusTab,
     TranscriptionTab,
     WatcherTab,
     YouTubeTab,
@@ -533,7 +532,6 @@ class MainWindow(QMainWindow):
             import shutil
 
             from .core.settings_manager import get_gui_settings_manager
-            from .dialogs.ffmpeg_setup_dialog import FFmpegSetupDialog
 
             gui = get_gui_settings_manager()
 
@@ -579,7 +577,7 @@ class MainWindow(QMainWindow):
             from .dialogs.ffmpeg_setup_dialog import FFmpegSetupDialog
 
             dialog = FFmpegSetupDialog(self)
-            result = dialog.exec()
+            dialog.exec()
             # Persist the flag after the user has seen the dialog once
             try:
                 from .core.settings_manager import get_gui_settings_manager

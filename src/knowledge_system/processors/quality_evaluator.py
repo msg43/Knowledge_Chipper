@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
-from ..config import get_settings
 from ..logger import get_logger
 from ..utils.llm_providers import LLMResponse, UnifiedLLMClient
 from .base import BaseProcessor, ProcessorResult
@@ -139,9 +138,9 @@ class QualityEvaluator(BaseProcessor):
                     "input_characteristics": {
                         "original_length": len(original_text),
                         "summary_length": len(summary),
-                        "compression_ratio": len(summary) / len(original_text)
-                        if original_text
-                        else 0,
+                        "compression_ratio": (
+                            len(summary) / len(original_text) if original_text else 0
+                        ),
                     },
                 }
             )
@@ -292,7 +291,7 @@ class QualityEvaluator(BaseProcessor):
             original_text[:2000] + "..." if len(original_text) > 2000 else original_text
         )
 
-        return f"""Please evaluate the quality of this summary on a scale of 0.0 to 1.0 for each criterion.
+        return """Please evaluate the quality of this summary on a scale of 0.0 to 1.0 for each criterion.
 
 ORIGINAL TEXT (first 2000 chars):
 {original_preview}
@@ -327,13 +326,13 @@ Respond ONLY in valid JSON format:
         """Create evaluation prompt for transcript quality assessment."""
         duration = audio_metadata.get("duration_seconds", 0)
         word_count = len(transcript.split()) if transcript else 0
-        wpm = (word_count / (duration / 60)) if duration > 0 else 0
+        (word_count / (duration / 60)) if duration > 0 else 0
 
         transcript_preview = (
             transcript[:2000] + "..." if len(transcript) > 2000 else transcript
         )
 
-        return f"""Please evaluate the quality of this transcript on a scale of 0.0 to 1.0 for each criterion.
+        return """Please evaluate the quality of this transcript on a scale of 0.0 to 1.0 for each criterion.
 
 TRANSCRIPT (first 2000 chars):
 {transcript_preview}
@@ -382,7 +381,7 @@ Respond ONLY in valid JSON format:
             ],
         }
 
-        return f"""Please evaluate the quality of this MOC (Map of Content) extraction on a scale of 0.0 to 1.0.
+        return """Please evaluate the quality of this MOC (Map of Content) extraction on a scale of 0.0 to 1.0.
 
 SOURCE CONTENT (first 1500 chars):
 {source_preview}

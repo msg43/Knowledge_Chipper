@@ -6,11 +6,9 @@ the standard Knowledge System pipeline for transcription and analysis.
 """
 
 import re
-import xml.etree.ElementTree as ET
 from datetime import datetime
-from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 import requests
 

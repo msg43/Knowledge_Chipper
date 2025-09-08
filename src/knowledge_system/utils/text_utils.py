@@ -561,7 +561,7 @@ def generate_chunk_summary_prompt(
         chunk_prompt = f"{original_prompt_template}\n\n{chunk.content}"
 
     # Add chunk-specific instructions
-    chunk_instructions = f"""
+    chunk_instructions = """
 
 {chunk_info}. Please provide a focused summary of this section that:
 1. Captures the main points and key information
@@ -605,7 +605,7 @@ def reassemble_chunk_summaries(
     )
 
     # Create reassembly prompt
-    reassembly_prompt = f"""I have summarized a long document in sections. Please create a final, coherent summary that combines these section summaries into a unified whole.
+    reassembly_prompt = """I have summarized a long document in sections. Please create a final, coherent summary that combines these section summaries into a unified whole.
 
 Section summaries to combine:
 {combined_summaries}

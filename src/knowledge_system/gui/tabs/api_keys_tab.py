@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
 from ...logger import get_logger
 from ..components.base_tab import BaseTab
 from ..workers.dmg_update_worker import DMGUpdateWorker
-from ..workers.ffmpeg_installer import FFmpegInstaller, FFmpegRelease
+from ..workers.ffmpeg_installer import FFmpegInstaller
 from ..workers.update_worker import UpdateWorker
 
 logger = get_logger(__name__)
@@ -104,6 +104,17 @@ class APIKeysTab(BaseTab):
 
         # API Key Input Fields - moved below instructions
         layout = QGridLayout()
+        # Keep inputs full-width and remove inter-column gaps so trailing widgets sit flush
+        try:
+            layout.setHorizontalSpacing(0)
+        except Exception:
+            pass
+        try:
+            layout.setColumnStretch(0, 0)
+            layout.setColumnStretch(1, 1)
+            layout.setColumnStretch(2, 0)
+        except Exception:
+            pass
         layout.addWidget(QLabel("🗝️ API Keys"), 0, 0, 1, 2)
         layout.addWidget(QFrame(), 1, 0, 1, 2)  # Separator
 
@@ -145,7 +156,8 @@ class APIKeysTab(BaseTab):
         self.huggingface_token_edit = QLineEdit()
         self.huggingface_token_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.huggingface_token_edit.setPlaceholderText("hf_...")
-        # Inline blue help button next to the info icon
+
+        # Create help button
         self.hf_token_help_btn = QPushButton("Help me get HF Token")
         self.hf_token_help_btn.setToolTip(
             "Show step-by-step instructions and open the Hugging Face sign-up page"
@@ -165,6 +177,7 @@ class APIKeysTab(BaseTab):
             """
         )
         self.hf_token_help_btn.clicked.connect(self._show_hf_token_help)
+
         self._add_field_with_info(
             layout,
             "HuggingFace Token:",
@@ -178,7 +191,6 @@ class APIKeysTab(BaseTab):
             4,
             0,
             trailing_widgets=[self.hf_token_help_btn],
-            place_info_in_trailing=True,
         )
 
         # Bright Data API Key (hidden in UI)
@@ -1187,7 +1199,7 @@ class APIKeysTab(BaseTab):
         self._update_completed = True
 
         # Reset auto update tracking
-        was_auto = self._current_update_is_auto
+        self._current_update_is_auto
         self._current_update_is_auto = False
 
         # Close progress dialog
@@ -1218,7 +1230,7 @@ class APIKeysTab(BaseTab):
                 self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
 
                 # Show restart dialog with auto-restart option
-                from PyQt6.QtWidgets import QMessageBox, QPushButton
+                from PyQt6.QtWidgets import QMessageBox
 
                 msg_box = QMessageBox(self)
                 msg_box.setWindowTitle("Update Complete")
@@ -1346,11 +1358,11 @@ class APIKeysTab(BaseTab):
                 self,
                 f"Run {test_name}",
                 f"This will run {test_name} which may take some time:\n\n"
-                f"• Quick Tests: 5-10 minutes\n"
-                f"• Regular Tests: 1-2 hours\n"
-                f"• Extended Tests: 2+ hours\n\n"
-                f"The test will run in the background without blocking the app.\n"
-                f"Use the Cancel Test button to stop if needed.\n\n"
+                "• Quick Tests: 5-10 minutes\n"
+                "• Regular Tests: 1-2 hours\n"
+                "• Extended Tests: 2+ hours\n\n"
+                "The test will run in the background without blocking the app.\n"
+                "Use the Cancel Test button to stop if needed.\n\n"
                 f"Continue with {test_name}?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes,
@@ -1440,7 +1452,7 @@ class APIKeysTab(BaseTab):
             self._handle_test_completion(poll_result)
         else:
             # Process is still running - update status
-            elapsed = getattr(self, "_test_start_time", 0)
+            getattr(self, "_test_start_time", 0)
             if hasattr(self, "_test_start_time"):
                 import time
 
@@ -1553,7 +1565,7 @@ class APIKeysTab(BaseTab):
     def _handle_test_error(self, error_msg: str) -> None:
         """Handle test execution errors."""
         self.append_log(f"❌ {error_msg}")
-        self.status_label.setText(f"❌ Test error")
+        self.status_label.setText("❌ Test error")
         self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
 
         # Clean up on error
@@ -1670,10 +1682,10 @@ class APIKeysTab(BaseTab):
                 return
 
             # Open Terminal and run the original script
-            script_dir = str(script_path.parent)
-            script_name = script_path.name
+            str(script_path.parent)
+            script_path.name
 
-            apple_script = f"""
+            apple_script = """
 tell application "Terminal"
   activate
   do script "cd {script_dir}; echo '🏗️ Running fallback updater…'; bash {script_name}; echo ''; echo '✅ Update finished. Please restart Knowledge Chipper and close this window.'"
@@ -1718,8 +1730,8 @@ end tell
                 )
                 return
 
-            script_dir = str(script_path.parent)
-            script_name = script_path.name
+            str(script_path.parent)
+            script_path.name
 
             self.append_log(
                 "🔐 Admin install requested. A Terminal window will open and WILL prompt for your macOS password."
@@ -1741,7 +1753,7 @@ end tell
             # Disable update actions during admin install to avoid conflicts
             self._set_admin_install_in_progress(True)
 
-            apple_script = f"""
+            apple_script = """
 tell application "Terminal"
   activate
   do script "cd {script_dir}; echo '🧹 Removing user-space copy (if any)...'; rm -rf \"$HOME/Applications/Knowledge_Chipper.app\"; echo '🏗️ Running admin installer to /Applications...'; bash {script_name}; echo ''; echo '✅ Admin install complete. You can close this window.'"
@@ -1786,7 +1798,7 @@ end tell
         self._update_completed = True
 
         # Reset auto update tracking
-        was_auto = self._current_update_is_auto
+        self._current_update_is_auto
         self._current_update_is_auto = False
 
         # Close progress dialog

@@ -7,8 +7,7 @@ for the diarization-based speaker identification system.
 
 import re
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -435,7 +434,7 @@ class SpeakerProcessor(BaseProcessor):
         transcript_segments: list[dict[str, Any]] | None = None,
     ) -> tuple[str | None, float]:
         """
-        Enhanced speaker name suggestion using metadata, transcript context, and learning.
+        LLM-only speaker name suggestion. No pattern-based fallbacks.
 
         Args:
             speaker_data: Speaker data with segments and text
@@ -448,109 +447,75 @@ class SpeakerProcessor(BaseProcessor):
         try:
             # Collect all text for this speaker
             speaker_texts = [seg.text for seg in speaker_data.segments]
-            full_transcript_text = ""
 
-            if transcript_segments:
-                full_transcript_text = " ".join(
-                    [seg.get("text", "") for seg in transcript_segments]
-                )
+            # Try LLM-based suggestions (LLM or nothing approach)
+            if metadata or speaker_texts:
+                try:
+                    from ..utils.llm_speaker_suggester import (
+                        suggest_speaker_names_with_llm,
+                    )
 
-            # Try intelligent metadata-based suggestions first (highest priority)
-            if metadata:
-                from ..utils.speaker_intelligence import SpeakerNameSuggester
-
-                suggester = SpeakerNameSuggester()
-
-                metadata_suggestions = suggester.suggest_names_from_context(
-                    speaker_texts, metadata
-                )
-
-                if metadata_suggestions:
-                    # Take the highest confidence suggestion
-                    best_suggestion = metadata_suggestions[0]
-                    suggested_name, confidence = best_suggestion
-
-                    speaker_data.suggestion_method = "metadata_analysis"
-                    speaker_data.suggestion_metadata = {
-                        "metadata_used": True,
-                        "all_suggestions": metadata_suggestions,
-                        "metadata_fields": list(metadata.keys()),
-                        "speaker_text_length": len(" ".join(speaker_texts)),
+                    # Prepare speaker segments for LLM
+                    # The LLM expects a dict mapping speaker_id to list of segments
+                    speaker_segments_for_llm = {
+                        speaker_data.speaker_id: [
+                            {"text": seg.text, "start": seg.start, "end": seg.end}
+                            for seg in speaker_data.segments
+                        ]
                     }
 
-                    logger.info(
-                        f"Enhanced suggestion for {speaker_data.speaker_id}: '{suggested_name}' (confidence: {confidence:.2f}) from metadata"
+                    # Call LLM suggester
+                    llm_suggestions = suggest_speaker_names_with_llm(
+                        speaker_segments_for_llm, metadata
                     )
-                    return suggested_name, confidence
 
-            # Try learning-based suggestions using historical data
-            try:
-                from ..services.speaker_learning_service import (
-                    get_speaker_learning_service,
-                )
+                    if speaker_data.speaker_id in llm_suggestions:
+                        suggested_name, confidence = llm_suggestions[
+                            speaker_data.speaker_id
+                        ]
 
-                learning_service = get_speaker_learning_service()
-
-                # Create speaker data dict for learning service
-                learning_data = [
-                    {
-                        "speaker_id": speaker_data.speaker_id,
-                        "text_samples": speaker_texts,
-                        "total_duration": speaker_data.total_duration,
-                        "segment_count": speaker_data.segment_count,
-                    }
-                ]
-
-                learned_suggestions = (
-                    learning_service.suggest_assignments_from_learning(
-                        "current_session", learning_data
-                    )
-                )
-
-                if speaker_data.speaker_id in learned_suggestions:
-                    suggested_name, confidence = learned_suggestions[
-                        speaker_data.speaker_id
-                    ]
-                    if confidence > 0.5:
-                        speaker_data.suggestion_method = "learning_based"
+                        # Return whatever the LLM suggests (even if generic)
+                        speaker_data.suggestion_method = "llm_analysis"
                         speaker_data.suggestion_metadata = {
-                            "learning_used": True,
-                            "learned_confidence": confidence,
+                            "llm_used": True,
+                            "metadata_fields": (
+                                list(metadata.keys()) if metadata else []
+                            ),
                             "speaker_text_length": len(" ".join(speaker_texts)),
                         }
 
                         logger.info(
-                            f"Enhanced suggestion for {speaker_data.speaker_id}: '{suggested_name}' (confidence: {confidence:.2f}) from learning"
+                            f"LLM suggestion for {speaker_data.speaker_id}: '{suggested_name}' (confidence: {confidence:.2f})"
                         )
                         return suggested_name, confidence
 
-            except Exception as e:
-                logger.debug(f"Learning service not available or failed: {e}")
+                except Exception as e:
+                    logger.debug(f"LLM suggester not available or failed: {e}")
 
-            # Fallback to original pattern-based suggestion
-            suggested_name, confidence = self._suggest_speaker_name(speaker_data)
+            # No pattern-based fallback - just return generic name
+            # Extract speaker number from ID (e.g., SPEAKER_00 -> 00)
+            speaker_num = (
+                speaker_data.speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
+            )
+            generic_name = f"Speaker {int(speaker_num) + 1}"
 
-            # Mark as enhanced fallback
-            if speaker_data.suggestion_method != "error":
-                speaker_data.suggestion_method = (
-                    f"enhanced_fallback:{speaker_data.suggestion_method}"
-                )
-                if "suggestion_metadata" not in speaker_data.suggestion_metadata:
-                    speaker_data.suggestion_metadata = {}
-                speaker_data.suggestion_metadata["enhanced_fallback"] = True
-                speaker_data.suggestion_metadata["metadata_available"] = (
-                    metadata is not None
-                )
-                speaker_data.suggestion_metadata["transcript_available"] = (
-                    transcript_segments is not None
-                )
+            speaker_data.suggestion_method = "generic_fallback"
+            speaker_data.suggestion_metadata = {
+                "reason": "LLM not available - using generic name",
+            }
 
-            return suggested_name, confidence
+            logger.info(
+                f"No LLM available for {speaker_data.speaker_id}: using generic '{generic_name}'"
+            )
+            return generic_name, 0.2  # Low confidence for generic names
 
         except Exception as e:
             logger.error(f"Error in enhanced speaker suggestion: {e}")
-            # Ultimate fallback to original method
-            return self._suggest_speaker_name(speaker_data)
+            # Return generic name on error
+            speaker_num = (
+                speaker_data.speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
+            )
+            return f"Speaker {int(speaker_num) + 1}", 0.1
 
     def _prepare_database_assignment(
         self, speaker_data: SpeakerData, assigned_name: str = None

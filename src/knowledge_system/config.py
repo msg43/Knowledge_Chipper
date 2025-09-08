@@ -430,10 +430,10 @@ class HCEConfig(BaseModel):
         description="Minimum claim tier to include",
     )
     max_claims_per_document: int | None = Field(
-        default=None,
-        ge=1,
+        default=0,
+        ge=0,
         le=1000,
-        description="Maximum claims to extract per document",
+        description="Maximum claims to extract per document (0 = unlimited)",
     )
 
     # Analysis settings

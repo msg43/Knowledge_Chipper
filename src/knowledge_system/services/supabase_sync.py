@@ -7,11 +7,10 @@ and Supabase cloud storage with conflict resolution.
 
 import hashlib
 import json
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -307,7 +306,7 @@ class SupabaseSyncService:
                 # Get local records pending sync
                 pending_records = session.execute(
                     text(
-                        f"""
+                        """
                         SELECT * FROM {table_name}
                         WHERE sync_status IN ('pending', 'error')
                         OR sync_checksum IS NULL
@@ -348,7 +347,7 @@ class SupabaseSyncService:
                         # Update local sync status
                         session.execute(
                             text(
-                                f"""
+                                """
                                 UPDATE {table_name}
                                 SET sync_status = 'synced',
                                     sync_checksum = :checksum,
@@ -369,7 +368,7 @@ class SupabaseSyncService:
                         # Mark as error
                         session.execute(
                             text(
-                                f"""
+                                """
                                 UPDATE {table_name}
                                 SET sync_status = 'error'
                                 WHERE {pk_field} = :id
@@ -415,7 +414,7 @@ class SupabaseSyncService:
         with self.db.get_session() as session:
             result = session.execute(
                 text(
-                    f"""
+                    """
                     SELECT MAX(last_synced) as last_sync
                     FROM {table_name}
                     WHERE sync_status = 'synced'
@@ -444,7 +443,7 @@ class SupabaseSyncService:
                 params[key] = value
 
         if set_clauses:
-            query = f"""
+            query = """
                 UPDATE {table_name}
                 SET {', '.join(set_clauses)}
                 WHERE {pk_field} = :id
@@ -466,7 +465,7 @@ class SupabaseSyncService:
                 values.append(f":{key}")
                 params[key] = value
 
-        query = f"""
+        query = """
             INSERT INTO {table_name} ({', '.join(columns)})
             VALUES ({', '.join(values)})
         """
@@ -477,7 +476,7 @@ class SupabaseSyncService:
         with self.db.get_session() as session:
             session.execute(
                 text(
-                    f"""
+                    """
                     UPDATE {table_name}
                     SET sync_status = 'synced'
                     WHERE sync_status = 'pending'
@@ -550,7 +549,7 @@ class SupabaseSyncService:
                 # Count records by sync status
                 result = session.execute(
                     text(
-                        f"""
+                        """
                         SELECT
                             sync_status,
                             COUNT(*) as count

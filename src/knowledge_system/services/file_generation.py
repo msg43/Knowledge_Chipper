@@ -134,7 +134,7 @@ class FileGenerationService:
                 transcript_content = transcript.transcript_text
 
             # Generate markdown content
-            markdown_content = f"""---
+            markdown_content = """---
 {yaml.dump(frontmatter, default_flow_style=False)}---
 
 # {video.title}
@@ -258,7 +258,7 @@ class FileGenerationService:
                 )
             else:
                 # Legacy format for non-HCE summaries
-                markdown_content = f"""---
+                markdown_content = """---
 {yaml.dump(frontmatter, default_flow_style=False)}---
 
 # Summary: {video.title}
@@ -500,9 +500,6 @@ class FileGenerationService:
     # Helper methods
     def _generate_hce_markdown(self, video, summary, hce_data, frontmatter) -> str:
         """Generate enhanced HCE-specific markdown content."""
-        from datetime import datetime
-
-        import yaml
 
         # Extract claim data
         claims = hce_data.get("claims", [])
@@ -517,7 +514,7 @@ class FileGenerationService:
         tier_c_claims = [c for c in claims if c.get("tier") == "C"]
 
         # Generate markdown content
-        markdown_content = f"""---
+        markdown_content = """---
 {yaml.dump(frontmatter, default_flow_style=False)}---
 
 # Claim Analysis: {video.title}
@@ -674,7 +671,7 @@ class FileGenerationService:
                     markdown_content += f"- [[{name}]]\n"
             markdown_content += "\n"
 
-        markdown_content += f"""---
+        markdown_content += """---
 *Generated from Knowledge System database on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
 *Processed using HCE (Hybrid Claim Extractor) v2.0*
 """
@@ -1038,7 +1035,7 @@ class FileGenerationService:
             claims = hce_data.get("claims", [])
 
             # Generate markdown content
-            markdown_content = f"""# Claims Report: {video.title}
+            markdown_content = """# Claims Report: {video.title}
 
 **Source:** [{video.url}]({video.url})
 **Processing Type:** HCE Claim Extraction
@@ -1077,14 +1074,14 @@ class FileGenerationService:
                         if evidence:
                             markdown_content += "  - Evidence:\n"
                             for ev in evidence[:2]:  # Show max 2 evidence items
-                                markdown_content += f"    - \"{ev.get('text', '')}\"\n"
+                                markdown_content += "    - \"{ev.get('text', '')}\"\n"
 
                         markdown_content += "\n"
 
                     markdown_content += "\n"
 
             # Add statistics
-            markdown_content += f"""## Statistics
+            markdown_content += """## Statistics
 
 - **Tier A (High Quality):** {len(tier_groups['A'])} claims
 - **Tier B (Medium Quality):** {len(tier_groups['B'])} claims
@@ -1104,7 +1101,7 @@ class FileGenerationService:
             ):
                 markdown_content += f"- **{ct.title()}:** {count} claims\n"
 
-            markdown_content += f"\n---\n*Generated from HCE analysis*"
+            markdown_content += "\n---\n*Generated from HCE analysis*"
 
             # Save to file
             filename = self._sanitize_filename(
@@ -1179,7 +1176,7 @@ class FileGenerationService:
                         contradictions.append((claim1, claim2))
 
             # Generate report
-            markdown_content = f"""# Contradiction Analysis: {video.title}
+            markdown_content = """# Contradiction Analysis: {video.title}
 
 **Source:** [{video.url}]({video.url})
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
@@ -1261,7 +1258,7 @@ class FileGenerationService:
             claims = hce_data.get("claims", [])
 
             # Generate evidence mapping
-            markdown_content = f"""# Evidence Mapping: {video.title}
+            markdown_content = """# Evidence Mapping: {video.title}
 
 **Source:** [{video.url}]({video.url})
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}

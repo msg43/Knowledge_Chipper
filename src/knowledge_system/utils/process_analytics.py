@@ -18,9 +18,9 @@ import sqlite3
 import threading
 import time
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import psutil
 
@@ -467,9 +467,11 @@ class ProcessAnalytics:
             return {
                 "memory_percent": psutil.virtual_memory().percent,
                 "cpu_percent": psutil.cpu_percent(),
-                "disk_usage": psutil.disk_usage("/").percent
-                if hasattr(psutil.disk_usage("/"), "percent")
-                else None,
+                "disk_usage": (
+                    psutil.disk_usage("/").percent
+                    if hasattr(psutil.disk_usage("/"), "percent")
+                    else None
+                ),
                 "process_count": len(psutil.pids()),
                 "timestamp": time.time(),
             }

@@ -2229,7 +2229,7 @@ class SummarizationTab(BaseTab):
                 self.append_log(f"✅ Model '{clean_model_name}' downloaded successfully")
                 self._continue_processing_after_model_check()
             else:
-                self.append_log(f"❌ Model download cancelled or failed")
+                self.append_log("❌ Model download cancelled or failed")
 
         # Connect signals
         dialog.download_progress.connect(on_download_progress)
@@ -2386,7 +2386,7 @@ class SummarizationTab(BaseTab):
             self.show_warning(
                 "Model Check Failed",
                 f"Could not check model availability: {str(e)}\n\n"
-                f"Please ensure Ollama is properly installed and running.",
+                "Please ensure Ollama is properly installed and running.",
             )
             return False
 
@@ -2407,7 +2407,7 @@ class SummarizationTab(BaseTab):
         folder_path = QFileDialog.getExistingDirectory(self, "Select Folder")
         if folder_path:
             folder = Path(folder_path)
-            extensions = [".txt", ".md", ".pdf", ".html", ".htm", ".json"]
+            extensions = [".txt", ".md", ".pd", ".html", ".htm", ".json"]
 
             for file_path in folder.rglob("*"):
                 if file_path.suffix.lower() in extensions:
@@ -2476,9 +2476,9 @@ class SummarizationTab(BaseTab):
 
         # Show feedback to user with safety information
         if provider == "openai":
-            self.append_log(f"🔄 Refreshed OpenAI models from API")
+            self.append_log("🔄 Refreshed OpenAI models from API")
         elif provider == "anthropic":
-            self.append_log(f"🔄 Anthropic models (manually maintained)")
+            self.append_log("🔄 Anthropic models (manually maintained)")
         elif provider == "local":
             model_count = self.model_combo.count()
             if model_count > 0:
@@ -3086,7 +3086,7 @@ class SummarizationTab(BaseTab):
                 flagship_routed = analytics.get("flagship_routed_count", 0)
                 local_processed = analytics.get("local_processed_count", 0)
                 if flagship_routed > 0 or local_processed > 0:
-                    self.append_log(f"   🎯 Routing Analytics:")
+                    self.append_log("   🎯 Routing Analytics:")
                     if local_processed > 0:
                         self.append_log(
                             f"      📱 Local Judge: {local_processed} claims"
@@ -3114,12 +3114,12 @@ class SummarizationTab(BaseTab):
                 sample_contradictions = analytics.get("sample_contradictions", [])
                 for i, contradiction in enumerate(sample_contradictions, 1):
                     self.append_log(f"      {i}. \"{contradiction['claim1']}\"")
-                    self.append_log(f"         vs. \"{contradiction['claim2']}\"")
+                    self.append_log("         vs. \"{contradiction['claim2']}\"")
 
             # Show top claims
             top_claims = analytics.get("top_claims", [])
             if top_claims:
-                self.append_log(f"   🏆 Top Claims:")
+                self.append_log("   🏆 Top Claims:")
                 for i, claim in enumerate(top_claims, 1):
                     tier_icon = "🥇" if claim["tier"] == "A" else "🥈"
                     self.append_log(
@@ -3570,11 +3570,11 @@ class SummarizationTab(BaseTab):
                 "Template File Missing",
                 f"The template file for '{analysis_type}' was not found:\n\n"
                 f"Expected: {template_path}\n\n"
-                f"To fix this:\n"
+                "To fix this:\n"
                 f"1. Create the file '{template_path}'\n"
-                f"2. Add your custom prompt template\n"
+                "2. Add your custom prompt template\n"
                 f"3. Include {{text}} placeholder where content should go\n\n"
-                f"The template path has been cleared. You can manually specify a different template file or create the missing one.",
+                "The template path has been cleared. You can manually specify a different template file or create the missing one.",
             )
 
         # Trigger settings save after template path is updated
@@ -3866,7 +3866,7 @@ class SummarizationTab(BaseTab):
         try:
             from ...database.service import DatabaseService
 
-            db = DatabaseService()
+            DatabaseService()
 
             # Get recent claims from the database
             # This is a simplified implementation - in practice you'd want to get
@@ -3918,8 +3918,8 @@ class SummarizationTab(BaseTab):
             )
             confirmed_claims = total_claims - modified_claims
 
-            self.append_log(f"\n✅ Claim validation completed!")
-            self.append_log(f"📊 Validation Summary:")
+            self.append_log("\n✅ Claim validation completed!")
+            self.append_log("📊 Validation Summary:")
             self.append_log(f"   • Total claims validated: {total_claims}")
             self.append_log(f"   • Confirmed as correct: {confirmed_claims}")
             self.append_log(f"   • Modified by user: {modified_claims}")
@@ -3946,8 +3946,8 @@ class SummarizationTab(BaseTab):
         # Stop rich log display
         self.rich_log_display.stop_processing()
 
-        self.append_log(f"\n✅ Enhanced summarization completed!")
-        self.append_log(f"📊 Final Summary:")
+        self.append_log("\n✅ Enhanced summarization completed!")
+        self.append_log("📊 Final Summary:")
         self.append_log(f"   • Successfully processed: {success_count} files")
         if failure_count > 0:
             self.append_log(f"   • Failed to process: {failure_count} files")

@@ -186,7 +186,7 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                         )
                         if self.progress_callback:
                             self.progress_callback(
-                                f"Using CPU for diarization (GPU failed)", 80
+                                "Using CPU for diarization (GPU failed)", 80
                             )
 
                 return pipeline
@@ -270,7 +270,7 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                     "quiet",
                     "-show_entries",
                     "format=duration",
-                    "-of",
+                    "-o",
                     "csv=p=0",
                     str(path),
                 ]
@@ -293,7 +293,7 @@ class SpeakerDiarizationProcessor(BaseProcessor):
             if self.progress_callback:
 
                 def progress_monitor(stop_event):
-                    phase_start_time = time.time()
+                    time.time()
                     while not stop_event.is_set():
                         elapsed = time.time() - start_time
 
@@ -426,6 +426,10 @@ class SpeakerDiarizationProcessor(BaseProcessor):
 
 def is_diarization_available() -> bool:
     """Check if diarization is available without loading dependencies."""
+    # Force a fresh check each time to avoid caching issues in GUI context
+    global PIPELINE_AVAILABLE, PIPELINE
+    PIPELINE_AVAILABLE = False
+    PIPELINE = None
     return _check_diarization_dependencies()
 
 

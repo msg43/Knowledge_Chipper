@@ -7,7 +7,6 @@ Provides multiple detection methods with a clear priority hierarchy.
 
 import re
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import yaml
 

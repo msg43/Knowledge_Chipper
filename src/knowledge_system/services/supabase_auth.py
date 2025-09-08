@@ -8,7 +8,6 @@ are performed as authenticated users (not anon).
 from __future__ import annotations
 
 import webbrowser
-from typing import Any, Dict, Optional
 
 from ..config import get_settings
 from ..logger import get_logger

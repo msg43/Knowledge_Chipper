@@ -178,14 +178,14 @@ class OpenAIProvider(BaseLLMProvider):
                         f"❌ Context length exceeded! Model {self.model} has a maximum context of {max_context} tokens, but {requested} tokens were requested."
                     )
                     logger.error(
-                        f"💡 Try: 1) Using a model with larger context window, 2) Reducing input size, or 3) Enabling chunking"
+                        "💡 Try: 1) Using a model with larger context window, 2) Reducing input size, or 3) Enabling chunking"
                     )
 
                     # Re-raise with more helpful message
                     raise ValueError(
                         f"Context length exceeded for {self.model}. "
                         f"Maximum: {max_context} tokens, Requested: {requested} tokens. "
-                        f"Consider using a model with larger context window or reducing input size."
+                        "Consider using a model with larger context window or reducing input size."
                     ) from e
 
             # Re-raise original exception if not context length error
@@ -263,13 +263,13 @@ class AnthropicProvider(BaseLLMProvider):
                 if numbers:
                     logger.error(f"❌ Token limit exceeded for {self.model}!")
                     logger.error(
-                        f"💡 Try: 1) Using a different model, 2) Reducing input size, or 3) Enabling chunking"
+                        "💡 Try: 1) Using a different model, 2) Reducing input size, or 3) Enabling chunking"
                     )
 
                     # Re-raise with more helpful message
                     raise ValueError(
                         f"Token limit exceeded for {self.model}. "
-                        f"Consider reducing input size or using chunking."
+                        "Consider reducing input size or using chunking."
                     ) from e
 
             # Re-raise original exception if not token limit error

@@ -16,7 +16,7 @@ class DiscourseTagger:
         """
         try:
             # Analyze segment text for discourse type
-            prompt = f"""Analyze this text segment and classify its discourse type:
+            prompt = """Analyze this text segment and classify its discourse type:
 
 Text: "{seg.text}"
 

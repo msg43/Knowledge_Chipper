@@ -183,7 +183,7 @@ try:
     from .commands.upload import upload
 
     main.add_command(upload)
-except ImportError as e:
+except ImportError:
     # OAuth dependencies not available
     pass
 
@@ -271,7 +271,7 @@ def models_refresh(provider: str | None) -> None:
     "--patterns",
     "-p",
     multiple=True,
-    default=["*.mp4", "*.mp3", "*.wav", "*.pdf"],
+    default=["*.mp4", "*.mp3", "*.wav", "*.pd"],
     help="File patterns to watch for",
 )
 @click.option(
@@ -326,7 +326,7 @@ def watch(
 
     Examples:
         knowledge-system watch ./input/
-        knowledge-system watch ~/Downloads --patterns "*.mp4" "*.pdf"
+        knowledge-system watch ~/Downloads --patterns "*.mp4" "*.pd"
         knowledge-system watch ./videos --no-summarize --debounce 10
     """
 
@@ -646,7 +646,7 @@ def info(ctx: CLIContext, file_path: Path) -> None:
                         ".mkv",
                     ],
                 ),
-                ("PDFProcessor", PDFProcessor, [".pdf"]),
+                ("PDFProcessor", PDFProcessor, [".pd"]),
                 (
                     "SummarizerProcessor",
                     SummarizerProcessor,

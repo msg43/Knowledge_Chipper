@@ -408,12 +408,11 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
         from ..config import get_settings
         from ..utils.packetstream_proxy import PacketStreamProxyManager
 
-        settings = get_settings()
+        get_settings()
 
         # Check if PacketStream credentials are available
         use_proxy = False
         proxy_manager = None
-        proxy_url = None
 
         try:
             proxy_manager = PacketStreamProxyManager()
@@ -444,7 +443,7 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
                         current_proxy_url = proxy_manager.get_proxy_url()
                         if current_proxy_url:
                             logger.debug(
-                                f"Using PacketStream proxy for playlist expansion"
+                                "Using PacketStream proxy for playlist expansion"
                             )
                     except Exception as e:
                         logger.warning(f"Failed to get PacketStream proxy URL: {e}")

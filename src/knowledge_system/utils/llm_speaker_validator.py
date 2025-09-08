@@ -7,8 +7,7 @@ before presenting them to the user for final confirmation.
 """
 
 import json
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from ..config import get_settings
 from ..logger import get_logger
@@ -118,9 +117,9 @@ class LLMSpeakerValidator:
                 "sample_texts": segment_texts[:5],  # Limit to 5 for analysis
                 "segment_count": len(speaker_segments),
                 "total_duration": total_duration,
-                "first_appearance": first_segments[0].get("start", 0)
-                if first_segments
-                else 0,
+                "first_appearance": (
+                    first_segments[0].get("start", 0) if first_segments else 0
+                ),
             }
 
         return analysis_data
@@ -149,15 +148,15 @@ class LLMSpeakerValidator:
         # Build speaker analysis section
         speaker_sections = []
         for speaker_id, data in speakers.items():
-            assigned_name = data["assigned_name"]
+            data["assigned_name"]
             sample_texts = data["sample_texts"]
             duration = data["total_duration"]
-            segment_count = data["segment_count"]
+            data["segment_count"]
 
             mins, secs = divmod(int(duration), 60)
             duration_str = f"{mins}:{secs:02d}"
 
-            speaker_section = f"""
+            speaker_section = """
 SPEAKER: {assigned_name} (ID: {speaker_id})
 - Total speaking time: {duration_str} ({segment_count} segments)
 - Sample speech content:
@@ -171,7 +170,7 @@ SPEAKER: {assigned_name} (ID: {speaker_id})
 
         speakers_text = "\n".join(speaker_sections)
 
-        prompt = f"""You are an expert at analyzing podcast/interview transcripts to validate speaker identity assignments. Your task is to analyze the proposed speaker assignments and determine if they are accurate based on the speech content and context.
+        prompt = """You are an expert at analyzing podcast/interview transcripts to validate speaker identity assignments. Your task is to analyze the proposed speaker assignments and determine if they are accurate based on the speech content and context.
 
 CONTEXT:
 {context}

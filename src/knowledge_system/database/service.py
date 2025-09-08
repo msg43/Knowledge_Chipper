@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import desc, func, or_
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..logger import get_logger
@@ -113,19 +112,42 @@ class DatabaseService:
     def create_video(
         self, video_id: str, title: str, url: str, **metadata
     ) -> Video | None:
-        """Create a new video record."""
+        """Create a new video record or update existing one for re-runs."""
         try:
             with self.get_session() as session:
-                video = Video(video_id=video_id, title=title, url=url, **metadata)
-                session.add(video)
-                session.commit()
-                logger.info(f"Created video record: {video_id}")
-                return video
-        except IntegrityError:
-            logger.warning(f"Video {video_id} already exists")
-            return self.get_video(video_id)
+                # Check for existing video
+                existing_video = (
+                    session.query(Video).filter(Video.video_id == video_id).first()
+                )
+
+                if existing_video:
+                    # Update existing video for re-runs
+                    logger.info(f"Updating existing video record: {video_id}")
+
+                    # Update core fields
+                    existing_video.title = title
+                    existing_video.url = url
+                    existing_video.processed_at = (
+                        datetime.utcnow()
+                    )  # Update processing timestamp
+
+                    # Update metadata fields
+                    for key, value in metadata.items():
+                        if hasattr(existing_video, key):
+                            setattr(existing_video, key, value)
+
+                    session.commit()
+                    logger.info(f"Updated video record: {video_id}")
+                    return existing_video
+                else:
+                    # Create new video
+                    video = Video(video_id=video_id, title=title, url=url, **metadata)
+                    session.add(video)
+                    session.commit()
+                    logger.info(f"Created video record: {video_id}")
+                    return video
         except Exception as e:
-            logger.error(f"Failed to create video {video_id}: {e}")
+            logger.error(f"Failed to create/update video {video_id}: {e}")
             return None
 
     def get_video(self, video_id: str) -> Video | None:
@@ -212,27 +234,75 @@ class DatabaseService:
         transcript_segments: list[dict[str, Any]],
         **metadata,
     ) -> Transcript | None:
-        """Create a new transcript record."""
+        """Create a new transcript record or update existing one for re-runs."""
         try:
-            transcript_id = f"{video_id}_{language}_{uuid.uuid4().hex[:8]}"
-
             with self.get_session() as session:
-                transcript = Transcript(
-                    transcript_id=transcript_id,
-                    video_id=video_id,
-                    language=language,
-                    is_manual=is_manual,
-                    transcript_text=transcript_text,
-                    transcript_segments_json=transcript_segments,
-                    segment_count=len(transcript_segments),
-                    **metadata,
+                # Check for existing transcript for this video_id and language
+                existing_transcript = (
+                    session.query(Transcript)
+                    .filter(
+                        Transcript.video_id == video_id,
+                        Transcript.language == language,
+                    )
+                    .order_by(desc(Transcript.created_at))
+                    .first()
                 )
-                session.add(transcript)
-                session.commit()
-                logger.info(f"Created transcript: {transcript_id}")
-                return transcript
+
+                if existing_transcript:
+                    # Update existing transcript for re-runs
+                    logger.info(
+                        f"Updating existing transcript for {video_id} (language: {language})"
+                    )
+
+                    # Update fields
+                    existing_transcript.transcript_text = transcript_text
+                    existing_transcript.transcript_segments_json = transcript_segments
+                    existing_transcript.segment_count = len(transcript_segments)
+                    existing_transcript.is_manual = is_manual
+                    existing_transcript.created_at = (
+                        datetime.utcnow()
+                    )  # Update timestamp
+
+                    # Update metadata fields
+                    for key, value in metadata.items():
+                        if hasattr(existing_transcript, key):
+                            setattr(existing_transcript, key, value)
+
+                    session.commit()
+                    # Ensure all attributes are loaded before detaching
+                    _ = existing_transcript.transcript_id  # Force attribute loading
+                    session.expunge(
+                        existing_transcript
+                    )  # Detach from session to prevent refresh errors
+                    logger.info(
+                        f"Updated transcript: {existing_transcript.transcript_id}"
+                    )
+                    return existing_transcript
+                else:
+                    # Create new transcript
+                    transcript_id = f"{video_id}_{language}_{uuid.uuid4().hex[:8]}"
+
+                    transcript = Transcript(
+                        transcript_id=transcript_id,
+                        video_id=video_id,
+                        language=language,
+                        is_manual=is_manual,
+                        transcript_text=transcript_text,
+                        transcript_segments_json=transcript_segments,
+                        segment_count=len(transcript_segments),
+                        **metadata,
+                    )
+                    session.add(transcript)
+                    session.commit()
+                    # Ensure all attributes are loaded before detaching
+                    _ = transcript.transcript_id  # Force attribute loading
+                    session.expunge(
+                        transcript
+                    )  # Detach from session to prevent refresh errors
+                    logger.info(f"Created transcript: {transcript_id}")
+                    return transcript
         except Exception as e:
-            logger.error(f"Failed to create transcript for {video_id}: {e}")
+            logger.error(f"Failed to create/update transcript for {video_id}: {e}")
             return None
 
     def get_transcripts_for_video(self, video_id: str) -> list[Transcript]:
@@ -946,7 +1016,7 @@ class DatabaseService:
                 # User corrections
                 user_corrections = (
                     session.query(QualityRating)
-                    .filter(QualityRating.is_user_corrected == True)
+                    .filter(QualityRating.is_user_corrected.is_(True))
                     .count()
                 )
 
@@ -986,9 +1056,11 @@ class DatabaseService:
                 return {
                     "total_ratings": total_ratings,
                     "user_corrections": user_corrections,
-                    "correction_percentage": (user_corrections / total_ratings * 100)
-                    if total_ratings > 0
-                    else 0,
+                    "correction_percentage": (
+                        (user_corrections / total_ratings * 100)
+                        if total_ratings > 0
+                        else 0
+                    ),
                     "avg_drift": avg_drift,
                     "avg_user_rating": avg_user_rating,
                     "avg_llm_rating": avg_llm_rating,
@@ -1151,9 +1223,9 @@ class DatabaseService:
                             "criteria_scores": rating.criteria_scores,
                             "user_feedback": rating.user_feedback,
                             "rated_by_user": rating.rated_by_user,
-                            "rated_at": rating.rated_at.isoformat()
-                            if rating.rated_at
-                            else None,
+                            "rated_at": (
+                                rating.rated_at.isoformat() if rating.rated_at else None
+                            ),
                             "model_used": rating.model_used,
                             "prompt_template": rating.prompt_template,
                             "input_characteristics": rating.input_characteristics,
@@ -1429,9 +1501,11 @@ class DatabaseService:
                     tier_stats[f"tier_{tier.lower()}"] = {
                         "total": len(tier_validations),
                         "correct": tier_correct,
-                        "accuracy": tier_correct / len(tier_validations)
-                        if tier_validations
-                        else 0,
+                        "accuracy": (
+                            tier_correct / len(tier_validations)
+                            if tier_validations
+                            else 0
+                        ),
                     }
 
                 return {
@@ -1439,9 +1513,9 @@ class DatabaseService:
                     "total_validations": total_validations,
                     "confirmed_count": confirmed_count,
                     "modified_count": modified_count,
-                    "accuracy_rate": confirmed_count / total_validations
-                    if total_validations
-                    else 0,
+                    "accuracy_rate": (
+                        confirmed_count / total_validations if total_validations else 0
+                    ),
                     "tier_statistics": tier_stats,
                     "session_start": min(v.validated_at for v in validations),
                     "session_end": max(v.validated_at for v in validations),
@@ -1575,9 +1649,11 @@ class DatabaseService:
                                 "claim_text": v.claim_text,
                                 "claim_type": v.claim_type,
                                 "validated_by_user": v.validated_by_user,
-                                "validated_at": v.validated_at.isoformat()
-                                if v.validated_at
-                                else None,
+                                "validated_at": (
+                                    v.validated_at.isoformat()
+                                    if v.validated_at
+                                    else None
+                                ),
                                 "model_used": v.model_used,
                                 "validation_session_id": v.validation_session_id,
                             }

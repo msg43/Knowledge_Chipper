@@ -5,10 +5,10 @@ Popup dialog for validating HCE claim tier assignments (A/B/C).
 Users can confirm or modify the LLM-assigned tiers for individual claims.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QPalette
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QDialog,
@@ -117,9 +117,9 @@ class ClaimCard(QFrame):
             )
 
             # Style the buttons
-            color = self._get_tier_color(tier)
+            self._get_tier_color(tier)
             btn.setStyleSheet(
-                f"""
+                """
                 QRadioButton {{
                     font-weight: bold;
                     padding: 5px;
@@ -291,9 +291,9 @@ class ClaimCard(QFrame):
         """Update card styling based on state."""
         if self.is_confirmed:
             # Confirmed state
-            color = self._get_tier_color(self.current_tier)
+            self._get_tier_color(self.current_tier)
             self.setStyleSheet(
-                f"""
+                """
                 QFrame {{
                     background-color: #f8f9fa;
                     border: 3px solid {color};
@@ -588,8 +588,9 @@ class ClaimValidationDialog(QDialog):
             "total_claims": len(self.claims_data),
             "confirmed_claims": self.confirmed_count,
             "modified_claims": self.modified_count,
-            "accuracy_rate": (self.confirmed_count - self.modified_count)
-            / len(self.claims_data)
-            if self.claims_data
-            else 0,
+            "accuracy_rate": (
+                (self.confirmed_count - self.modified_count) / len(self.claims_data)
+                if self.claims_data
+                else 0
+            ),
         }

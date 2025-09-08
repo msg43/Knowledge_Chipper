@@ -6,7 +6,6 @@ Provides OAuth-based uploading of claims data to GetReceipts.org
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 from rich.console import Console
@@ -77,7 +76,7 @@ def upload(
         # Get upload statistics
         stats = upload_service.get_database_stats()
         if not ctx.quiet:
-            console.print(f"📊 Database Statistics:")
+            console.print("📊 Database Statistics:")
             console.print(f"   Total claims: {stats.get('total_claims', 0)}")
             console.print(f"   Unuploaded: {stats.get('unuploaded_claims', 0)}")
             console.print(f"   Previously uploaded: {stats.get('uploaded_claims', 0)}")
@@ -126,7 +125,7 @@ def upload(
             console.print("[blue]🌐 Using production GetReceipts.org[/blue]")
 
         # Start OAuth authentication and upload
-        console.print(f"[blue]🔐 Starting OAuth authentication...[/blue]")
+        console.print("[blue]🔐 Starting OAuth authentication...[/blue]")
 
         from ..cloud.oauth import upload_to_getreceipts
 
@@ -157,10 +156,10 @@ def upload(
         claim_ids = [(claim.episode_id, claim.claim_id) for claim in claims_to_upload]
         upload_service.mark_claims_uploaded(claim_ids)
 
-        console.print(f"\n[green]🎉 Upload completed successfully![/green]")
+        console.print("\n[green]🎉 Upload completed successfully![/green]")
 
     except KeyboardInterrupt:
-        console.print(f"\n[yellow]⚠️ Upload cancelled by user[/yellow]")
+        console.print("\n[yellow]⚠️ Upload cancelled by user[/yellow]")
         sys.exit(1)
     except Exception as e:
         logger.error(f"Upload failed: {e}")

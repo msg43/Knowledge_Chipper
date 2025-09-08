@@ -7,7 +7,6 @@ Provides proper macOS directory paths following Apple's guidelines.
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict
 
 from ..logger import get_logger
 

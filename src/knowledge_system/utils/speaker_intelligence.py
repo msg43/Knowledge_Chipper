@@ -9,7 +9,7 @@ import re
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from ..database.speaker_models import SpeakerVoiceModel, get_speaker_db_service
 from ..logger import get_logger
@@ -401,7 +401,7 @@ class SpeakerNameSuggester:
         # Analyze speaking patterns
         total_length = len(all_text)
         segment_count = len(segments)
-        avg_segment_length = total_length / segment_count if segment_count > 0 else 0
+        total_length / segment_count if segment_count > 0 else 0
 
         # Check for meeting leadership patterns
         if self.patterns["meeting_leader"].search(all_text):

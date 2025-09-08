@@ -5,13 +5,11 @@ Uses yt-dlp with PacketStream residential proxies for reliable metadata extracti
 while avoiding bot detection and rate limiting.
 """
 
-import json
 import os
 import re
 import time
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 try:
     import yt_dlp
@@ -430,7 +428,7 @@ def test_youtube_metadata_proxy():
             metadata = result.data.get("metadata", [])
             if metadata:
                 video = metadata[0]
-                print(f"✅ Success!")
+                print("✅ Success!")
                 print(f"   Title: {video.get('title', 'N/A')}")
                 print(f"   Duration: {video.get('duration', 'N/A')} seconds")
                 print(f"   Views: {video.get('view_count', 'N/A'):,}")

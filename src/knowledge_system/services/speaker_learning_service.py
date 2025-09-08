@@ -8,13 +8,9 @@ Provides auto-assignment suggestions based on accumulated learning.
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-from ..database.speaker_models import (
-    SpeakerAssignmentModel,
-    SpeakerProcessingSessionModel,
-    get_speaker_db_service,
-)
+from ..database.speaker_models import get_speaker_db_service
 from ..logger import get_logger
 
 logger = get_logger(__name__)
@@ -126,7 +122,7 @@ class SpeakerLearningService:
                     session.query(SpeakerAssignment)
                     .filter(
                         SpeakerAssignment.recording_path.like(f"{parent_dir}%"),
-                        SpeakerAssignment.user_confirmed == True,
+                        SpeakerAssignment.user_confirmed.is_(True),
                     )
                     .all()
                 )
@@ -136,7 +132,7 @@ class SpeakerLearningService:
                     session.query(SpeakerAssignment)
                     .filter(
                         SpeakerAssignment.recording_path.like(f"%{file_prefix}%"),
-                        SpeakerAssignment.user_confirmed == True,
+                        SpeakerAssignment.user_confirmed.is_(True),
                     )
                     .all()
                 )
@@ -256,7 +252,7 @@ class SpeakerLearningService:
                         SpeakerAssignment.processing_metadata_json.like(
                             f"%{content_type}%"
                         ),
-                        SpeakerAssignment.user_confirmed == True,
+                        SpeakerAssignment.user_confirmed.is_(True),
                     )
                     .all()
                 )
@@ -329,7 +325,7 @@ class SpeakerLearningService:
             # For now, return generic suggestions based on speaking patterns
 
             duration = speaker_data.get("total_duration", 0)
-            segment_count = speaker_data.get("segment_count", 0)
+            speaker_data.get("segment_count", 0)
 
             # Simple heuristic based on speaking time
             if duration > 300:  # More than 5 minutes
@@ -354,7 +350,7 @@ class SpeakerLearningService:
                     session.query(SpeakerAssignment)
                     .filter(
                         SpeakerAssignment.recording_path.like(f"%{channel_id}%"),
-                        SpeakerAssignment.user_confirmed == True,
+                        SpeakerAssignment.user_confirmed.is_(True),
                     )
                     .all()
                 )

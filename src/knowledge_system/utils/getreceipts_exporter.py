@@ -3,11 +3,8 @@ Enhanced GetReceipts integration for Knowledge_Chipper
 Maps HCE PipelineOutputs to GetReceipts RF-1 format with rich knowledge artifacts
 """
 
-import json
 import time
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
-from urllib.parse import urlparse
+from typing import TYPE_CHECKING, Any
 
 import requests
 from pydantic import BaseModel
@@ -147,9 +144,9 @@ class GetReceiptsExporter:
                 "success": False,
                 "error": str(e),
                 "episode_id": pipeline_outputs.episode_id,
-                "claims_processed": len(pipeline_outputs.claims)
-                if pipeline_outputs.claims
-                else 0,
+                "claims_processed": (
+                    len(pipeline_outputs.claims) if pipeline_outputs.claims else 0
+                ),
                 "claims_exported": 0,
             }
 
@@ -338,7 +335,7 @@ class GetReceiptsExporter:
         # Add scoring context
         scores = claim.scores
         if scores:
-            description_parts.append(f"\n\nConfidence Metrics:")
+            description_parts.append("\n\nConfidence Metrics:")
             if "importance" in scores:
                 description_parts.append(f"• Importance: {scores['importance']:.2f}")
             if "confidence_final" in scores:
@@ -393,7 +390,7 @@ class GetReceiptsExporter:
                 url = source_info["url"]
                 if "youtube.com" in url or "youtu.be" in url:
                     source_type = "video"
-                elif any(ext in url.lower() for ext in [".pdf", ".doc", ".txt"]):
+                elif any(ext in url.lower() for ext in [".pd", ".doc", ".txt"]):
                     source_type = "document"
                 else:
                     source_type = "article"
@@ -504,7 +501,7 @@ class GetReceiptsExporter:
 
                 if response.status_code == 200 or response.status_code == 201:
                     result = response.json()
-                    logger.info(f"✅ Receipt submitted successfully")
+                    logger.info("✅ Receipt submitted successfully")
                     return {
                         "success": True,
                         "status_code": response.status_code,
@@ -595,7 +592,7 @@ class GetReceiptsExporter:
 
 
 def create_exporter_from_settings(
-    settings: dict[str, Any] | None = None
+    settings: dict[str, Any] | None = None,
 ) -> GetReceiptsExporter:
     """Create GetReceipts exporter from settings configuration."""
 

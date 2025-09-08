@@ -9,7 +9,6 @@ This module analyzes claims to determine whether they are:
 
 import logging
 from pathlib import Path
-from typing import List
 
 from .models.llm_any import AnyLLM
 from .types import ScoredClaim, TemporalityScore, TemporalityType
@@ -112,8 +111,6 @@ def analyze_temporality(claims: list[ScoredClaim], model_uri: str) -> list[Score
     Returns:
         List of claims with temporality populated
     """
-    from ...config import get_settings
-    from .models.llm_any import AnyLLM
 
     # Currently disabled - return claims unchanged until prompt template is created
     # TODO: Create temporality analysis prompt template
@@ -143,7 +140,7 @@ def is_timeless_claim(claim_text: str) -> bool:
         "never",
         "fundamental",
         "principle",
-        "law of",
+        "law o",
         "theorem",
         "mathematical",
         "physical law",

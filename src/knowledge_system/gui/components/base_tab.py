@@ -222,6 +222,11 @@ class BaseTab(QWidget):
         widget_container = QWidget()
         widget_container.setLayout(widget_layout)
 
+        # Small right margin to labels to preserve spacing from input
+        try:
+            label.setContentsMargins(0, 0, 6, 0)
+        except Exception:
+            pass
         layout.addWidget(label, row, col)
         layout.addWidget(widget_container, row, col + 1)
         if trailing_container:

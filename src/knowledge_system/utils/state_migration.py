@@ -108,7 +108,7 @@ class StateMigrator:
 
             # Log migration summary
             if migration_results["success"]:
-                logger.info(f"✅ State migration completed successfully")
+                logger.info("✅ State migration completed successfully")
                 logger.info(
                     f"   Total records migrated: {migration_results['total_records_migrated']}"
                 )
@@ -116,7 +116,7 @@ class StateMigrator:
                     f"   Files processed: {len(migration_results['files_processed'])}"
                 )
             else:
-                logger.warning(f"⚠️ State migration completed with errors")
+                logger.warning("⚠️ State migration completed with errors")
                 logger.warning(f"   Errors: {len(migration_results['errors'])}")
                 logger.warning(f"   Warnings: {len(migration_results['warnings'])}")
 

@@ -1,8 +1,6 @@
 """Completion summary component for transcription operations."""
 
-import time
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -14,8 +12,6 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
-    QScrollArea,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -255,7 +251,7 @@ class TranscriptionCompletionSummary(QDialog):
         """Create a statistics widget."""
         widget = QWidget()
         widget.setStyleSheet(
-            f"""
+            """
             QWidget {{
                 background-color: {color};
                 border-radius: 8px;
@@ -586,9 +582,9 @@ class CloudTranscriptionSummary(QDialog):
         # Service information
         self.service_info.setText(
             f"🔗 Service Status: {service_status}\n"
-            f"⚡ Processing Method: Cloud-based AI transcription\n"
-            f"🎯 Quality Level: Premium (cloud-optimized models)\n"
-            f"📁 Output Location: Automatically saved to your output folder"
+            "⚡ Processing Method: Cloud-based AI transcription\n"
+            "🎯 Quality Level: Premium (cloud-optimized models)\n"
+            "📁 Output Location: Automatically saved to your output folder"
         )
 
         self.show()

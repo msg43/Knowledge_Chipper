@@ -1,6 +1,6 @@
 # Skip the Podcast Desktop
 
-**Version:** 3.1.5 | **Build Date:** 2025-01-27 
+**Version:** 3.1.7 | **Build Date:** 2025-01-29 
 
 Skip the Podcast Desktop - A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 
@@ -10,12 +10,31 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 
 ## 🎉 What's New (Latest Updates)
 
+### 🤖 **LLM-Only Speaker Suggestions (January 2025)**
+- **LLM-Only Approach**: Speaker suggestions now use ONLY LLM analysis - no pattern-based fallbacks
+- **Automatic Name Detection**: LLM analyzes metadata and first 5 statements to identify real speaker names
+- **Improved Accuracy**: Correctly identifies speakers like "John Smith" or "Sarah Johnson" from context
+- **Generic Fallback**: When LLM unavailable, uses simple generic names (Speaker 1, Speaker 2, etc.)
+- **User Confirmation**: All LLM suggestions require user review and confirmation
+- **Enhanced Debug Logging**: Comprehensive logging to track LLM suggestions and responses
+- **API Key Support**: Works with both OpenAI and Anthropic API keys
+
+### 💾 **Automatic Database Persistence for All Transcriptions (January 2025)**
+- **Universal Database Storage**: Every cloud and local transcription now automatically saves to SQLite database
+- **Intelligent Re-run Handling**: Re-processing the same video/audio file overwrites existing database entries
+- **Consistent Media IDs**: Uses file path hashing to generate stable IDs across multiple runs  
+- **Complete Metadata Preservation**: Stores full transcripts, segments, diarization data, and all metadata
+- **Zero Configuration**: Database persistence happens automatically without any user setup
+- **YouTube Support**: All YouTube transcripts (API and diarized) now persist to database with full metadata
+- **Audio File Support**: Local audio transcriptions save with consistent IDs based on file path
+- **Transparent Operation**: Database saves occur silently in background without affecting workflow
+
 ### 🤖 **MVP AI System for Speaker Attribution (January 2025)**
 - **Zero-Setup AI**: Built-in offline AI system automatically identifies speakers without API keys or internet
 - **Pre-Installed Ready**: MVP AI installs during .dmg setup (default) - no delays during urgent transcription work
 - **Intelligent Speaker Recognition**: Analyzes conversation context to suggest real names (e.g., "Joe Rogan", "Elon Musk") instead of generic labels
 - **Instant Results**: Works immediately on first use - no waiting for model downloads during workflows
-- **Smart Fallback**: If cloud AI unavailable, MVP AI provides speaker suggestions with no configuration required
+- **LLM-Only Mode**: MVP AI provides speaker suggestions only when cloud LLM unavailable - no pattern-based analysis
 - **Installation Choice**: Users can opt-out during setup, but most get professional speaker attribution by default
 - **Performance Metrics**: Real-time status display shows model info, service health, and performance indicators
 - **Error Recovery**: User-friendly error dialogs with specific troubleshooting steps and alternatives
@@ -67,9 +86,9 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 
 ### 🗣️ **Enhanced Speaker Attribution System (August 2025)**
 - **Database-Only Storage**: Eliminated sidecar files in favor of comprehensive SQLite database storage
-- **Intelligent Learning System**: AI learns from user corrections to automatically suggest speaker names for future recordings
-- **Pattern Recognition**: Detects speakers based on content analysis, channel patterns, and voice characteristics
-- **Auto-Assignment Queue**: Shows recordings needing review with pre-filled AI suggestions based on learned patterns
+- **LLM-Based Suggestions**: AI uses LLM to analyze metadata and transcript for speaker identification
+- **User Confirmation Required**: All speaker suggestions require user review and confirmation
+- **Auto-Assignment Queue**: Shows recordings needing review with LLM-generated suggestions
 - **Enhanced Sample Segments**: Displays first 5 speaking segments for quick speaker identification
 - **Simplified UI**: Removed redundant auto-assign and export buttons, streamlined for database workflow
 
