@@ -155,10 +155,16 @@ class TestProcessIsolation(ProcessIsolationTestCase):
         self.assertIsInstance(adaptive_size, int)
         self.assertGreater(adaptive_size, 0)
 
-    @pytest.mark.skip(reason="ProgressTracker API changed - needs fixing")
     def test_checkpoint_creation_and_loading(self):
         """Test checkpoint creation and loading functionality."""
-        tracker = ProgressTracker(self.output_dir, enable_checkpoints=True)
+        # Use the correct API - this is testing the old tracking.py ProgressTracker
+        from knowledge_system.utils.tracking import ProgressTracker
+
+        tracker = ProgressTracker(
+            operation_name="test_operation",
+            total_tasks=5,
+            checkpoint_file=self.output_dir / "test_checkpoint.json",
+        )
 
         # Test checkpoint creation
         test_result = {
@@ -167,19 +173,21 @@ class TestProcessIsolation(ProcessIsolationTestCase):
             "output_path": str(self.output_dir / "output.txt"),
         }
 
-        tracker.complete_task(self.test_files[0], test_result)
+        # First add the task before completing it
+        tracker.add_task(str(self.test_files[0]), str(self.test_files[0]), "test_task")
+        tracker.complete_task(str(self.test_files[0]), test_result)
 
-        # Verify checkpoint was created
-        self.assertTrue(tracker.has_checkpoint())
+        # Verify checkpoint was created (check if checkpoint file exists)
+        self.assertTrue(tracker.checkpoint_file.exists())
 
-        # Test checkpoint loading
-        checkpoint_data = tracker.load_checkpoint()
-        self.assertIsInstance(checkpoint_data, dict)
-        self.assertIn("completed_files", checkpoint_data)
-
-        # Test resumption detection
-        tracker_2 = ProgressTracker(self.output_dir, enable_checkpoints=True)
-        self.assertTrue(tracker_2.has_checkpoint())
+        # Test checkpoint loading by creating a new tracker
+        new_tracker = ProgressTracker(
+            operation_name="test_operation",
+            total_tasks=5,
+            checkpoint_file=tracker.checkpoint_file,
+        )
+        # The new tracker should have loaded the checkpoint automatically
+        self.assertGreater(new_tracker.completed_count, 0)
 
 
 class TestErrorHandling(ProcessIsolationTestCase):
@@ -253,15 +261,14 @@ class TestErrorHandling(ProcessIsolationTestCase):
 class TestCrashRecovery(ProcessIsolationTestCase):
     """Test crash recovery and checkpoint restoration."""
 
-    @pytest.mark.skip(reason="CrashRecoveryDialog API needs updating")
     def test_checkpoint_detection(self):
         """Test detection of existing checkpoint files."""
         from knowledge_system.gui.dialogs.crash_recovery_dialog import (
             CrashRecoveryDialog,
         )
 
-        # Create a mock checkpoint file
-        checkpoint_file = self.temp_dir / "test_checkpoint.json"
+        # Create a mock checkpoint file in current directory (one of the search locations)
+        checkpoint_file = Path.cwd() / "kc_checkpoint_test.json"
         checkpoint_data = {
             "total_files": 5,
             "completed_files": ["file1.mp3", "file2.mp3"],
@@ -270,11 +277,16 @@ class TestCrashRecovery(ProcessIsolationTestCase):
             "job_name": "Test Job",
         }
 
-        with open(checkpoint_file, "w") as f:
-            json.dump(checkpoint_data, f)
+        try:
+            with open(checkpoint_file, "w") as f:
+                json.dump(checkpoint_data, f)
 
-        # Test checkpoint detection
-        self.assertTrue(CrashRecoveryDialog.check_for_checkpoints())
+            # Test checkpoint detection
+            self.assertTrue(CrashRecoveryDialog.check_for_checkpoints())
+        finally:
+            # Cleanup the test checkpoint file
+            if checkpoint_file.exists():
+                checkpoint_file.unlink()
 
     def test_checkpoint_analysis(self):
         """Test checkpoint file analysis."""
@@ -402,21 +414,34 @@ class TestIntegrationScenarios(ProcessIsolationTestCase):
         job_info = dialog._analyze_checkpoint(checkpoint_file)
         self.assertIsNone(job_info)  # Should return None for corrupted file
 
-    @pytest.mark.skip(reason="ProgressTracker API changed - needs fixing")
     def test_concurrent_checkpoint_access(self):
         """Test concurrent access to checkpoint files."""
-        tracker1 = ProgressTracker(self.output_dir, enable_checkpoints=True)
-        tracker2 = ProgressTracker(self.output_dir, enable_checkpoints=True)
+        from knowledge_system.utils.tracking import ProgressTracker
+
+        tracker1 = ProgressTracker(
+            operation_name="test_operation_1",
+            total_tasks=5,
+            checkpoint_file=self.output_dir / "test_checkpoint_1.json",
+        )
+        tracker2 = ProgressTracker(
+            operation_name="test_operation_2",
+            total_tasks=5,
+            checkpoint_file=self.output_dir / "test_checkpoint_2.json",
+        )
 
         # Both trackers should be able to work with same directory
         test_result = {"success": True, "output_path": "test.txt"}
 
+        # Add tasks first
+        tracker1.add_task("file1.mp3", "file1.mp3", "test_task")
+        tracker2.add_task("file2.mp3", "file2.mp3", "test_task")
+
         tracker1.complete_task("file1.mp3", test_result)
         tracker2.complete_task("file2.mp3", test_result)
 
-        # Both should have valid checkpoints
-        self.assertTrue(tracker1.has_checkpoint())
-        self.assertTrue(tracker2.has_checkpoint())
+        # Both should have valid checkpoints (files exist)
+        self.assertTrue(tracker1.checkpoint_file.exists())
+        self.assertTrue(tracker2.checkpoint_file.exists())
 
 
 def run_process_isolation_tests():
