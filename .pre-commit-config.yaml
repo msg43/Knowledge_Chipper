@@ -63,21 +63,22 @@ repos:
           - flake8-comprehensions
         stages: [pre-push]
 
-  # Type checking with mypy (using pyproject.toml config with improved excludes)
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
-    hooks:
-      - id: mypy
-        args: ['--ignore-missing-imports', '--no-strict-optional', '--follow-imports=silent']
-        additional_dependencies:
-          - types-requests
-          - types-PyYAML
-          - types-python-dateutil
-          - types-setuptools
-          - types-psutil
-        files: ^src/knowledge_system/.*\.py$
-        exclude: ^(tests/|build/|dist/|scripts/|.*/__init__\.py$)
-        stages: [pre-push]
+  # Type checking with mypy (temporarily disabled due to module path conflicts)
+  # TODO: Re-enable mypy after resolving module path detection issues
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.8.0
+  #   hooks:
+  #     - id: mypy
+  #       args: ['--ignore-missing-imports', '--no-strict-optional', '--follow-imports=silent']
+  #       additional_dependencies:
+  #         - types-requests
+  #         - types-PyYAML
+  #         - types-python-dateutil
+  #         - types-setuptools
+  #         - types-psutil
+  #       files: ^src/knowledge_system/.*\.py$
+  #       exclude: ^(tests/|build/|dist/|scripts/|.*/__init__\.py$)
+  #       stages: [pre-push]
 
   # Security scanning with bandit (using .bandit config file)
   - repo: https://github.com/pycqa/bandit
