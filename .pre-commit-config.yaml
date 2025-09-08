@@ -76,7 +76,7 @@ repos:
           - types-setuptools
           - types-psutil
         files: ^src/knowledge_system/.*\.py$
-        exclude: ^(tests/|build/|dist/|scripts/|src/knowledge_system/__init__\.py)
+        exclude: ^(tests/|build/|dist/|scripts/|.*/__init__\.py$)
         stages: [pre-push]
 
   # Security scanning with bandit (using .bandit config file)
