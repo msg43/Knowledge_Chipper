@@ -294,7 +294,9 @@ class SummarizerProcessor(BaseProcessor):
         if source_file:
             episode_id = f"file_{source_file.stem}_{int(time.time())}"
         else:
-            text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
+            text_hash = hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()[
+                :8
+            ]
             episode_id = f"text_{text_hash}_{int(time.time())}"
 
         # Split text into segments (paragraphs)

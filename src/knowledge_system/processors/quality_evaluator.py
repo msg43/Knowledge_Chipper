@@ -489,7 +489,7 @@ Respond ONLY in valid JSON format:
         import hashlib
 
         content_hash = hashlib.md5(
-            f"{content_type}:{content}:{context}".encode()
+            f"{content_type}:{content}:{context}".encode(), usedforsecurity=False
         ).hexdigest()
         return f"{content_type}_{content_hash[:16]}"
 

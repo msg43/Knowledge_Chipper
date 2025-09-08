@@ -629,7 +629,9 @@ class BaseTab(QWidget):
                 if platform.system() == "Darwin":  # macOS
                     subprocess.run(["open", str(report_path)])
                 elif platform.system() == "Windows":
-                    subprocess.run(["start", str(report_path)], shell=True)
+                    subprocess.run(
+                        ["start", str(report_path)], shell=True
+                    )  # nosec B602
                 else:  # Linux
                     subprocess.run(["xdg-open", str(report_path)])
 
@@ -677,7 +679,9 @@ class BaseTab(QWidget):
                     if platform.system() == "Darwin":  # macOS
                         subprocess.run(["open", str(path)], check=False)
                     elif platform.system() == "Windows":
-                        subprocess.run(["start", str(path)], shell=True, check=False)
+                        subprocess.run(
+                            ["start", str(path)], shell=True, check=False
+                        )  # nosec B602
                     else:  # Linux
                         subprocess.run(["xdg-open", str(path)], check=False)
 

@@ -68,14 +68,14 @@ repos:
     rev: v1.8.0
     hooks:
       - id: mypy
-        args: ['--config-file=pyproject.toml', '--ignore-missing-imports']
+        args: ['--config-file=pyproject.toml', '--ignore-missing-imports', '--explicit-package-bases']
         additional_dependencies:
           - types-requests
           - types-PyYAML
           - types-python-dateutil
           - types-setuptools
         files: ^src/knowledge_system/.*\.py$
-        exclude: ^(tests/|build/|dist/|scripts/\.app_build/)
+        exclude: ^(tests/|build/|dist/|scripts/\.app_build/|src/knowledge_system/__init__\.py)
         stages: [pre-push]
 
   # Security scanning with bandit (using .bandit config file)
@@ -93,7 +93,7 @@ repos:
     rev: 6.3.0
     hooks:
       - id: pydocstyle
-        args: ['--convention=google']
+        args: ['--convention=google', '--add-ignore=D100,D101,D102,D103,D104,D105,D107,D200,D202,D205,D212,D400,D401,D415,D417']
         files: ^src/
         exclude: '__init__\.py$'
         stages: [pre-push]

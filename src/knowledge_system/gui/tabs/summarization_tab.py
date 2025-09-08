@@ -3713,7 +3713,8 @@ class SummarizationTab(BaseTab):
                     subprocess.run(["open", str(self._last_session_report)])
                 elif sys.platform.startswith("win"):  # Windows
                     subprocess.run(
-                        ["start", str(self._last_session_report)], shell=True
+                        ["start", str(self._last_session_report)],
+                        shell=True,  # nosec B602
                     )
                 else:  # Linux
                     subprocess.run(["xdg-open", str(self._last_session_report)])

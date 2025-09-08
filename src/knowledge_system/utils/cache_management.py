@@ -166,7 +166,7 @@ def _get_cache_state(project_root: Path) -> dict:
         "setup.py",
     ]
 
-    hasher = hashlib.md5()
+    hasher = hashlib.md5(usedforsecurity=False)
     file_count = 0
 
     for pattern in key_patterns:
@@ -187,7 +187,7 @@ def _get_cache_state(project_root: Path) -> dict:
     if requirements_file.exists():
         try:
             with open(requirements_file, "rb") as f:
-                req_hasher = hashlib.md5()
+                req_hasher = hashlib.md5(usedforsecurity=False)
                 req_hasher.update(f.read())
                 state["requirements_hash"] = req_hasher.hexdigest()
         except OSError:

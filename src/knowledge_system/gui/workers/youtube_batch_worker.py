@@ -768,7 +768,7 @@ class YouTubeBatchWorker(QThread):
             # Fallback: use hash of URL
             import hashlib
 
-            return hashlib.md5(url.encode()).hexdigest()[:11]
+            return hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:11]
 
     def _process_single_url_with_audio(
         self, url: str, audio_file: Path

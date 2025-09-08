@@ -354,7 +354,7 @@ def extract_video_id(url: str) -> str:
     # Fallback: use a hash of the URL
     import hashlib
 
-    return hashlib.md5(url.encode()).hexdigest()[:8]
+    return hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:8]
 
 
 def is_playlist_url(url: str) -> bool:

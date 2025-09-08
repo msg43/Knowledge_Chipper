@@ -27,6 +27,17 @@ class LLMSpeakerSuggester:
     def _initialize_llm(self):
         """Initialize LLM client for suggestions."""
         try:
+            # Check if basic LLM configuration exists
+            if (
+                not self.settings.llm.provider
+                or not self.settings.api_keys.openai_api_key
+            ):
+                logger.info(
+                    "LLM not configured yet - speaker suggestions will use simple fallback"
+                )
+                self.llm_client = None
+                return
+
             self.llm_client = UnifiedLLMClient(
                 provider=self.settings.llm.provider,
                 model=self.settings.llm.model,
@@ -34,7 +45,9 @@ class LLMSpeakerSuggester:
             )
             logger.info(f"LLM Speaker Suggester ready")
         except Exception as e:
-            logger.warning(f"LLM not available for speaker suggestions: {e}")
+            logger.info(
+                f"LLM not available for speaker suggestions - using simple names: {e}"
+            )
             self.llm_client = None
 
     def suggest_speaker_names(
@@ -195,12 +208,34 @@ Confidence scale: 0.9+ = very sure, 0.7-0.8 = confident, 0.5-0.6 = decent guess,
     def _simple_fallback(
         self, speaker_segments: dict[str, list[dict]]
     ) -> dict[str, tuple[str, float]]:
-        """Simple fallback when LLM is not available."""
+        """Smart fallback when LLM is not available."""
         suggestions = {}
 
-        # Just use Speaker 1, Speaker 2, etc.
-        for i, speaker_id in enumerate(sorted(speaker_segments.keys()), 1):
-            suggestions[speaker_id] = (f"Speaker {i}", 0.3)
+        # Sort speakers by speaking time to identify likely roles
+        speaker_durations = {}
+        for speaker_id, segments in speaker_segments.items():
+            total_duration = sum(
+                seg.get("end", 0) - seg.get("start", 0)
+                for seg in segments
+                if seg.get("start") is not None and seg.get("end") is not None
+            )
+            speaker_durations[speaker_id] = total_duration
+
+        sorted_speakers = sorted(
+            speaker_durations.items(), key=lambda x: x[1], reverse=True
+        )
+
+        # Assign role-based names based on speaking patterns
+        for i, (speaker_id, duration) in enumerate(sorted_speakers):
+            if i == 0 and len(sorted_speakers) > 1:
+                # Longest speaker is likely host/interviewer
+                suggestions[speaker_id] = ("Host", 0.6)
+            elif i == 1:
+                # Second speaker is likely guest/interviewee
+                suggestions[speaker_id] = ("Guest", 0.6)
+            else:
+                # Additional speakers
+                suggestions[speaker_id] = (f"Speaker {i + 1}", 0.4)
 
         return suggestions
 
