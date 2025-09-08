@@ -139,6 +139,11 @@ class BrightDataAdapter:
             transcript_data = BrightDataAdapter._get_transcript_data(
                 bright_data_response
             )
+            # Normalize transcript segments to standard structure with start/end/duration/text
+            transcript_data = BrightDataAdapter._normalize_transcript_segments(
+                transcript_data
+            )
+
             transcript_text = BrightDataAdapter._get_transcript_text(transcript_data)
 
             # Map to YouTubeTranscript fields
@@ -445,6 +450,146 @@ class BrightDataAdapter:
                     text_parts.append(str(text).strip())
 
         return " ".join(text_parts)
+
+    @staticmethod
+    def _parse_time_value(value: Any) -> float | None:
+        """Parse various time formats (seconds, ms, HH:MM:SS.mmm) into seconds."""
+        if value is None:
+            return None
+        try:
+            # Numeric seconds or ms
+            if isinstance(value, (int, float)):
+                # Heuristic: values > 10000 likely in milliseconds
+                return float(value) / 1000.0 if float(value) > 10000 else float(value)
+            s = str(value).strip()
+            # ISO-like or clock format HH:MM:SS.mmm or MM:SS
+            if ":" in s:
+                parts = s.split(":")
+                parts = [p for p in parts if p != ""]
+                if len(parts) == 3:
+                    h = float(parts[0])
+                    m = float(parts[1])
+                    sec = float(parts[2].replace(",", "."))
+                    return h * 3600 + m * 60 + sec
+                if len(parts) == 2:
+                    m = float(parts[0])
+                    sec = float(parts[1].replace(",", "."))
+                    return m * 60 + sec
+            # Plain number string (seconds or ms)
+            f = float(s)
+            return f / 1000.0 if f > 10000 else f
+        except Exception:
+            return None
+
+    @staticmethod
+    def _normalize_transcript_segments(
+        segments: list[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]]:
+        """Normalize heterogeneous Bright Data transcript segments to {start,duration,text,speaker?}.
+
+        Supports keys commonly seen in scraper outputs:
+        - text keys: text, caption, content, line
+        - start keys: start, begin, start_time, startTime, startMs, start_ms, tStartMs, offset
+        - end keys: end, end_time, endTime, endMs, end_ms, tEndMs
+        - duration keys: duration, dur, durationMs, duration_ms
+        - speaker keys: speaker, speaker_name, name
+        """
+        if not segments:
+            return []
+
+        normalized: list[dict[str, Any]] = []
+
+        for raw in segments:
+            if not isinstance(raw, dict):
+                continue
+
+            # Text
+            text = (
+                raw.get("text")
+                or raw.get("caption")
+                or raw.get("content")
+                or raw.get("line")
+                or ""
+            )
+            text = str(text).strip()
+            if not text:
+                continue
+
+            # Start
+            start_candidates = [
+                raw.get("start"),
+                raw.get("begin"),
+                raw.get("start_time"),
+                raw.get("startTime"),
+                raw.get("startMs"),
+                raw.get("start_ms"),
+                raw.get("tStartMs"),
+                raw.get("offset"),
+            ]
+            start = None
+            for v in start_candidates:
+                start = BrightDataAdapter._parse_time_value(v)
+                if start is not None:
+                    break
+            if start is None:
+                # Fallback: attempt to parse index * 3s later in calling code
+                start = 0.0
+
+            # End / duration
+            end_candidates = [
+                raw.get("end"),
+                raw.get("end_time"),
+                raw.get("endTime"),
+                raw.get("endMs"),
+                raw.get("end_ms"),
+                raw.get("tEndMs"),
+            ]
+            end = None
+            for v in end_candidates:
+                end = BrightDataAdapter._parse_time_value(v)
+                if end is not None:
+                    break
+
+            duration_candidates = [
+                raw.get("duration"),
+                raw.get("dur"),
+                raw.get("durationMs"),
+                raw.get("duration_ms"),
+            ]
+            duration = None
+            for v in duration_candidates:
+                duration = BrightDataAdapter._parse_time_value(v)
+                if duration is not None:
+                    break
+
+            # Derive missing time value
+            if end is None and duration is not None:
+                end = start + duration
+            if duration is None and end is not None:
+                duration = max(0.0, end - start)
+
+            # Speaker (optional)
+            speaker = raw.get("speaker") or raw.get("speaker_name") or raw.get("name")
+            if speaker:
+                speaker = str(speaker).strip()
+
+            normalized_seg = {
+                "start": float(start or 0.0),
+                "duration": float(duration or 0.0),
+                "text": text,
+            }
+            if speaker:
+                normalized_seg["speaker"] = speaker
+
+            normalized.append(normalized_seg)
+
+        # Ensure segments are sorted by start time
+        try:
+            normalized.sort(key=lambda s: s.get("start", 0.0))
+        except Exception:
+            pass
+
+        return normalized
 
     @staticmethod
     def _get_related_videos(response: dict[str, Any]) -> list[dict[str, Any]]:

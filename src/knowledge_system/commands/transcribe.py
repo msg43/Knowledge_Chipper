@@ -245,7 +245,10 @@ def format_transcript_content(
         if isinstance(transcript_data, dict) and "segments" in transcript_data:
             # Whisper format with segments
             previous_speaker = None
-            for segment in transcript_data["segments"]:
+
+            # Precompute end times when missing (use duration or next segment start)
+            segments = transcript_data["segments"]
+            for idx, segment in enumerate(segments):
                 text = segment.get("text", "").strip()
                 speaker = segment.get("speaker")
                 if text:
@@ -253,6 +256,41 @@ def format_transcript_content(
                     text = strip_bracketed_content(text)
                     # Only add the segment if there's still text after bracket removal
                     if text.strip():
+                        # Compute timestamps with robust end-time fallback
+                        start_seconds = float(segment.get("start", 0) or 0)
+                        end_seconds = segment.get("end")
+
+                        if end_seconds is None:
+                            duration_val = segment.get("duration")
+                            if duration_val is not None:
+                                try:
+                                    end_seconds = float(start_seconds) + float(
+                                        duration_val
+                                    )
+                                except Exception:
+                                    end_seconds = None
+
+                        if end_seconds is None:
+                            # Use next segment start if available, else default +3s
+                            next_start = None
+                            for j in range(idx + 1, len(segments)):
+                                next_text = segments[j].get("text", "").strip()
+                                if next_text:
+                                    next_start = segments[j].get("start")
+                                    break
+                            try:
+                                end_seconds = (
+                                    float(next_start)
+                                    if next_start is not None
+                                    else start_seconds + 3.0
+                                )
+                            except Exception:
+                                end_seconds = start_seconds + 3.0
+
+                        start_time = format_timestamp(start_seconds)
+                        end_time = format_timestamp(end_seconds)
+
+                        # Determine speaker label
                         if speaker:
                             # Check if this is already a meaningful name (from speaker attribution)
                             # vs a generic speaker ID that needs conversion
@@ -278,13 +316,9 @@ def format_transcript_content(
                             speaker_label = ""
 
                         if timestamps:
-                            start_time = format_timestamp(segment.get("start", 0))
-                            end_time = format_timestamp(segment.get("end", 0))
-
                             # Format with proper line breaks and YouTube timestamp links
                             if video_id:
                                 # Create hyperlinked timestamp for YouTube videos
-                                start_seconds = segment.get("start", 0)
                                 youtube_url = f"https://www.youtube.com/watch?v={video_id}&t={int(start_seconds)}s"
                                 timestamp_display = (
                                     f"[{start_time} - {end_time}]({youtube_url})"

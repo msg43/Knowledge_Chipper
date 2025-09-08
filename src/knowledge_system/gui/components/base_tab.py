@@ -126,6 +126,7 @@ class BaseTab(QWidget):
         row: int,
         col: int,
         trailing_widgets: list[Any] | None = None,
+        place_info_in_trailing: bool = False,
     ) -> None:
         """Add a field with label and enhanced tooltip to a grid layout."""
         from PyQt6.QtCore import Qt
@@ -178,11 +179,14 @@ class BaseTab(QWidget):
         """
         )
 
-        widget_layout.addWidget(info_label)
+        if not place_info_in_trailing:
+            widget_layout.addWidget(info_label)
 
         # Prepare optional trailing widgets in a separate grid column to preserve field width
         trailing_container = None
-        if trailing_widgets:
+        # We need a trailing container if extra widgets are provided or if the info icon
+        # should be placed there for tight adjacency with trailing widgets (e.g., inline help)
+        if trailing_widgets or place_info_in_trailing:
             from PyQt6.QtWidgets import QHBoxLayout as _QHBoxLayout
 
             trailing_layout = _QHBoxLayout()
@@ -190,6 +194,12 @@ class BaseTab(QWidget):
             trailing_layout.setSpacing(8)
             # Keep items flush-left
             trailing_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+            # If requested, put the info icon first in the trailing area
+            if place_info_in_trailing:
+                try:
+                    trailing_layout.addWidget(info_label)
+                except Exception:
+                    pass
             for extra_widget in trailing_widgets:
                 try:
                     trailing_layout.addWidget(extra_widget)

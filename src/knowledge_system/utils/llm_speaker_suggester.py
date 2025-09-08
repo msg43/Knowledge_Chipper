@@ -214,9 +214,10 @@ class LLMSpeakerSuggester:
         prompt = (
             "You are labeling speakers in an interview/podcast transcript.\n\n"
             "INSTRUCTIONS:\n"
-            "- Use the metadata and the early speech samples to identify who is who.\n"
-            "- If you recognize real names from metadata, use those.\n"
-            '- Otherwise use concise roles like "Host", "Guest", "Interviewer".\n'
+            "- The ONLY purpose is to identify proper names of people and map each to the correct speaker ID.\n"
+            "- Do NOT use roles or descriptions (e.g., Host, Guest, Interviewer). Output personal names only.\n"
+            "- Use the metadata and early speech samples to infer the real names.\n"
+            "- If you cannot determine a proper name, use 'Unknown' as the name.\n"
             "- Output STRICTLY VALID JSON ONLY. No markdown, no prose, no comments.\n"
             "- Keys MUST EXACTLY match the speaker IDs provided. Do not add or remove keys.\n"
             "- Confidence is a number between 0.1 and 1.0.\n\n"

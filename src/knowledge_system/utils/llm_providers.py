@@ -92,6 +92,21 @@ class OpenAIProvider(BaseLLMProvider):
 
             logger.info(f"🔍 OpenAI API call - Model requested: '{actual_model}'")
 
+            # Helper: detect if the prompt explicitly requests JSON-only output
+            def _wants_json_output(text: str) -> bool:
+                t = (text or "").lower()
+                return any(
+                    key in t
+                    for key in [
+                        "strictly valid json",
+                        "respond in json",
+                        "return only a single json object",
+                        "json format",
+                    ]
+                )
+
+            wants_json = _wants_json_output(prompt)
+
             # Debug: Log exact parameters being sent
             api_params = {
                 "model": actual_model,
@@ -99,11 +114,26 @@ class OpenAIProvider(BaseLLMProvider):
                 "temperature": self.temperature,
                 "max_tokens": 4096,  # Set reasonable default to avoid context errors
             }
+            if wants_json:
+                # Use JSON response format where supported (e.g., GPT-4o family)
+                api_params["response_format"] = {"type": "json_object"}
             logger.info(
                 f"🔍 API Parameters: model={api_params['model']}, temp={api_params['temperature']}, max_tokens={api_params['max_tokens']}, prompt_len={len(prompt)}"
             )
 
-            response = client.chat.completions.create(**api_params)
+            try:
+                response = client.chat.completions.create(**api_params)
+            except Exception as inner_e:
+                # Some models may not support response_format; retry without it
+                msg = str(inner_e).lower()
+                if wants_json and ("response_format" in msg or "json_object" in msg):
+                    logger.info(
+                        "Model does not support response_format=json_object; retrying without JSON mode"
+                    )
+                    api_params.pop("response_format", None)
+                    response = client.chat.completions.create(**api_params)
+                else:
+                    raise
             logger.info(
                 f"🔍 OpenAI API response - Model used: '{response.model if hasattr(response, 'model') else 'unknown'}'"
             )
@@ -295,6 +325,22 @@ class LocalLLMProvider(BaseLLMProvider):
 
             settings = get_settings()
             max_predict_tokens = settings.local_config.num_predict
+
+            # Helper: detect if the prompt explicitly requests JSON-only output
+            def _wants_json_output(text: str) -> bool:
+                t = (text or "").lower()
+                return any(
+                    key in t
+                    for key in [
+                        "strictly valid json",
+                        "respond in json",
+                        "return only a single json object",
+                        "json format",
+                    ]
+                )
+
+            wants_json = _wants_json_output(prompt)
+
             payload = {
                 "model": self.model,
                 "prompt": prompt,
@@ -309,6 +355,9 @@ class LocalLLMProvider(BaseLLMProvider):
                     "num_ctx": settings.local_config.num_ctx,
                 },
             }
+            if wants_json:
+                # Instruct Ollama to enforce JSON output where supported
+                payload["format"] = "json"
 
             start_time = time.time()
             response = requests.post(

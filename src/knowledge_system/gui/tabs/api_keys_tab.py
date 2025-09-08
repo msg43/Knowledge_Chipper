@@ -178,6 +178,7 @@ class APIKeysTab(BaseTab):
             4,
             0,
             trailing_widgets=[self.hf_token_help_btn],
+            place_info_in_trailing=True,
         )
 
         # Bright Data API Key (hidden in UI)
