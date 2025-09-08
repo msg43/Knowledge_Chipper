@@ -1,6 +1,6 @@
 # Skip the Podcast Desktop
 
-**Version:** 3.1.4 | **Build Date:** 2025-01-10 
+**Version:** 3.1.5 | **Build Date:** 2025-01-07 
 
 Skip the Podcast Desktop - A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 
@@ -9,6 +9,16 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 **🔍 HCE Features:** Advanced claim extraction with A/B/C confidence tiers + real-time contradiction detection + semantic deduplication + entity recognition (people/concepts) + relationship mapping + evidence citations + Obsidian integration with auto-tagging + comprehensive search and filtering.
 
 ## 🎉 What's New (Latest Updates)
+
+### 🤖 **MVP AI System for Speaker Attribution (January 2025)**
+- **Zero-Setup AI**: Built-in offline AI system automatically identifies speakers without API keys or internet
+- **Pre-Installed Ready**: MVP AI installs during .dmg setup (default) - no delays during urgent transcription work
+- **Intelligent Speaker Recognition**: Analyzes conversation context to suggest real names (e.g., "Joe Rogan", "Elon Musk") instead of generic labels
+- **Instant Results**: Works immediately on first use - no waiting for model downloads during workflows
+- **Smart Fallback**: If cloud AI unavailable, MVP AI provides speaker suggestions with no configuration required
+- **Installation Choice**: Users can opt-out during setup, but most get professional speaker attribution by default
+- **Performance Metrics**: Real-time status display shows model info, service health, and performance indicators
+- **Error Recovery**: User-friendly error dialogs with specific troubleshooting steps and alternatives
 
 ### 🛠️ **Enhanced FFMPEG Setup for Diarization (January 2025)**
 - **Pre-Process FFMPEG Check**: Cloud transcription now checks for FFMPEG before starting when diarization is enabled
@@ -62,9 +72,10 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 - **Smart Change Tracking**: Only uploads new/modified claims since last upload with automatic status tracking
 
 ### 🛡️ **Smart YouTube Proxy Protection (September 2025)**
-- **Intelligent Fallback**: When Bright Data proxy fails, single video downloads are allowed but bulk downloads (2+ URLs) are blocked to prevent YouTube IP bans
-- **Anti-Bot Protection**: Sophisticated detection prevents users from triggering YouTube's rate limiting while maintaining functionality for legitimate single-video use
-- **Clear User Guidance**: Prominent warnings explain the risks and encourage proper proxy configuration for bulk operations
+- **PacketStream Integration**: Uses PacketStream residential proxies to avoid YouTube's anti-bot detection
+- **Clear Warnings**: Prominent warnings when PacketStream is not configured, explaining YouTube blocking risks
+- **Anti-Bot Protection**: Sophisticated detection prevents users from triggering YouTube's rate limiting while maintaining functionality for legitimate use
+- **Graceful Fallback**: When PacketStream is unavailable, direct access is used with clear warnings about potential blocking
 
 ### ☁️ **Cloud Database Features**
 - **One-Way Sync**: Desktop always overwrites cloud data for conflict-free uploads

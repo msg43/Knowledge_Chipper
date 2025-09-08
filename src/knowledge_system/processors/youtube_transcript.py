@@ -1,9 +1,9 @@
 """
 Advanced YouTube Transcript Processor
 
-Uses Bright Data YouTube API Scrapers for transcript and metadata extraction.
+Uses youtube-transcript-api with PacketStream proxies for transcript extraction.
 
-Bright Data provides direct JSON responses, automatic IP rotation, and cost efficiency.
+PacketStream provides reliable residential proxies for accessing YouTube transcripts.
 """
 
 import json
@@ -200,6 +200,7 @@ class YouTubeTranscript(BaseModel):
 
         # Format transcript with timestamps if available
         if self.transcript_data and include_timestamps:
+            previous_speaker = None
             for segment in self.transcript_data:
                 start_time = segment.get("start", 0)
                 text = segment.get("text", "").strip()
@@ -210,19 +211,59 @@ class YouTubeTranscript(BaseModel):
                     text = strip_bracketed_content(text)
                     # Only add the segment if there's still text after bracket removal
                     if text.strip():
-                        minutes = int(start_time // 60)
-                        seconds = int(start_time % 60)
-                        timestamp = f"{minutes:02d}:{seconds:02d}"
+                        # Calculate start timestamp
+                        start_minutes = int(start_time // 60)
+                        start_seconds = int(start_time % 60)
+                        start_timestamp = f"{start_minutes:02d}:{start_seconds:02d}"
 
-                        # Create hyperlinked timestamp for YouTube videos
+                        # Calculate end timestamp (use duration if available, otherwise estimate)
+                        duration = segment.get("duration")
+                        if duration is not None:
+                            end_time = start_time + duration
+                        else:
+                            # Estimate end time as start of next segment or +3 seconds if last
+                            # Find next segment with text
+                            current_index = self.transcript_data.index(segment)
+                            next_segment = None
+                            for i in range(
+                                current_index + 1, len(self.transcript_data)
+                            ):
+                                next_seg = self.transcript_data[i]
+                                if next_seg.get("text", "").strip():
+                                    next_segment = next_seg
+                                    break
+
+                            if next_segment:
+                                end_time = next_segment.get("start", start_time + 3)
+                            else:
+                                end_time = start_time + 3  # Default 3 second segment
+
+                        end_minutes = int(end_time // 60)
+                        end_seconds = int(end_time % 60)
+                        end_timestamp = f"{end_minutes:02d}:{end_seconds:02d}"
+
+                        # Create hyperlinked timestamp for YouTube videos with start and end times
                         if self.video_id:
                             youtube_url = f"https://www.youtube.com/watch?v={self.video_id}&t={int(start_time)}s"
-                            timestamp_display = f"[{timestamp}]({youtube_url})"
+                            timestamp_display = (
+                                f"[{start_timestamp} - {end_timestamp}]({youtube_url})"
+                            )
                         else:
-                            timestamp_display = f"**{timestamp}**"
+                            timestamp_display = (
+                                f"**{start_timestamp} - {end_timestamp}**"
+                            )
 
                         # Format with speaker information if available (for diarized transcripts)
                         if speaker:
+                            # Add speaker change separator for better readability
+                            if (
+                                speaker != previous_speaker
+                                and previous_speaker is not None
+                            ):
+                                lines.append("---")
+                                lines.append("")
+
+                            # Use proper diarization formatting with line breaks and proper speaker labels
                             # Convert speaker ID to human-readable format
                             speaker_display = speaker
                             if speaker.startswith("SPEAKER_"):
@@ -232,16 +273,21 @@ class YouTubeTranscript(BaseModel):
                                     speaker_display = f"Speaker {speaker_number}"
                                 except (ValueError, TypeError):
                                     speaker_display = speaker
-                            lines.append(
-                                f"{timestamp_display} **({speaker_display})**: {text}"
-                            )
+
+                            # Use the proper format with line breaks between speaker, timestamp, and text
+                            lines.append(f"**{speaker_display}**")
+                            lines.append(f"{timestamp_display}")
+                            lines.append("")
+                            lines.append(text)
+                            lines.append("")
+
+                            previous_speaker = speaker
                         else:
                             # Regular format for non-diarized transcripts
                             lines.append(f"{timestamp_display}")
                             lines.append("")
                             lines.append(text)
-
-                        lines.append("")
+                            lines.append("")
         else:
             # Plain text transcript - also remove bracketed content
             transcript_text = strip_bracketed_content(self.transcript_text)
@@ -291,7 +337,7 @@ class YouTubeTranscript(BaseModel):
 
 
 class YouTubeTranscriptProcessor(BaseProcessor):
-    """YouTube transcript processor using Bright Data only."""
+    """YouTube transcript processor using youtube-transcript-api with PacketStream proxies."""
 
     def __init__(
         self,
@@ -314,59 +360,47 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         from ..config import get_settings
 
         self.settings = get_settings()
-        self.use_bright_data = False
-        self.bright_data_api_key = None
+        self.use_proxy = False
+        self.proxy_manager = None
 
-        # Configure Bright Data (required)
-        self._configure_bright_data()
-        if not self.use_bright_data:
-            from ..errors import YouTubeAPIError
+        # Configure PacketStream proxy (optional)
+        self._configure_packetstream_proxy()
+        # Note: No requirement for API keys - youtube-transcript-api works without them
 
-            raise YouTubeAPIError(
-                "Bright Data API key is required for YouTube transcript extraction. "
-                "Please configure your Bright Data API Key in Settings."
-            )
-
-    def _configure_bright_data(self):
-        """Configure Bright Data YouTube API Scraper (preferred method)."""
+    def _configure_packetstream_proxy(self):
+        """Configure PacketStream proxy for YouTube transcript access (optional)."""
         try:
-            if requests is None:
-                from ..errors import YouTubeAPIError
+            from ..utils.packetstream_proxy import PacketStreamProxyManager
 
-                raise YouTubeAPIError(
-                    "requests library not available - cannot use Bright Data"
-                )
-
-            # Primary: from settings
-            self.bright_data_api_key = getattr(
-                self.settings.api_keys, "bright_data_api_key", None
-            )
-            # Fallback: environment variables
-            if not self.bright_data_api_key:
-                import os
-
-                self.bright_data_api_key = (
-                    os.getenv("BRIGHT_DATA_API_KEY")
-                    or os.getenv("BRIGHTDATA_API_KEY")
-                    or os.getenv("BD_API_KEY")
-                )
-
-            # Accept UUID- or token-style keys (minimum length safety check)
-            if self.bright_data_api_key and len(self.bright_data_api_key) >= 10:
-                self.use_bright_data = True
-                logger.info(
-                    "✅ Configured Bright Data YouTube API Scraper for transcript extraction"
-                )
-                return
+            self.proxy_manager = PacketStreamProxyManager()
+            if self.proxy_manager.username and self.proxy_manager.auth_key:
+                self.use_proxy = True
+                logger.info("✅ Configured PacketStream proxy for transcript extraction")
             else:
-                logger.warning("Bright Data API key missing or invalid")
+                logger.warning("⚠️ PACKETSTREAM PROXY NOT CONFIGURED")
+                logger.warning(
+                    "⚠️ Using direct access - YouTube may trigger anti-bot detection!"
+                )
+                logger.warning(
+                    "⚠️ For reliable YouTube access, configure PacketStream in Settings > API Keys"
+                )
+                self.use_proxy = False
 
         except Exception as e:
-            logger.warning(f"Failed to configure Bright Data: {e}")
+            logger.warning(f"⚠️ PACKETSTREAM PROXY NOT AVAILABLE: {e}")
+            logger.warning(
+                "⚠️ Using direct access - YouTube may block requests due to anti-bot detection!"
+            )
+            logger.warning(
+                "⚠️ For reliable access, configure PacketStream credentials in Settings > API Keys"
+            )
+            self.use_proxy = False
 
     def _configure_webshare_transcript_api(self):
         """Deprecated: WebShare support removed."""
-        raise ImportError("WebShare support has been removed. Use Bright Data.")
+        raise ImportError(
+            "WebShare support has been removed. Use PacketStream proxy or direct access."
+        )
 
     @property
     def supported_formats(self) -> list[str]:
@@ -398,7 +432,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
     def _fetch_video_transcript(
         self, url: str, cancellation_token: CancellationToken | None = None
     ) -> YouTubeTranscript | None:
-        """Fetch transcript for a single video using proxy-based YouTube Transcript API."""
+        """Fetch transcript for a single video using youtube-transcript-api with PacketStream proxy."""
 
         logger.info(f"Fetching transcript for: {url}")
 
@@ -1166,15 +1200,22 @@ class YouTubeTranscriptProcessor(BaseProcessor):
 
                             # Add to full text with speaker labels for backward compatibility
                             if speaker:
-                                # Convert speaker ID to human-readable format
-                                speaker_num = speaker.replace("SPEAKER_", "").zfill(2)
-                                try:
-                                    speaker_number = int(speaker_num) + 1
-                                    full_text_parts.append(
-                                        f"(Speaker {speaker_number}): {text}"
+                                # Check if this is a meaningful name (from speaker attribution) vs generic ID
+                                if speaker.startswith("SPEAKER_"):
+                                    # Convert generic speaker ID to human-readable format
+                                    speaker_num = speaker.replace("SPEAKER_", "").zfill(
+                                        2
                                     )
-                                except (ValueError, AttributeError):
-                                    # Fallback if speaker format is unexpected
+                                    try:
+                                        speaker_number = int(speaker_num) + 1
+                                        full_text_parts.append(
+                                            f"(Speaker {speaker_number}): {text}"
+                                        )
+                                    except (ValueError, AttributeError):
+                                        # Fallback if speaker format is unexpected
+                                        full_text_parts.append(f"({speaker}): {text}")
+                                else:
+                                    # This is already a meaningful name from speaker attribution
                                     full_text_parts.append(f"({speaker}): {text}")
                             else:
                                 full_text_parts.append(text)
@@ -1829,14 +1870,85 @@ Diarization processing failed for this video. The transcript was not saved to al
                                             )
 
                                             if output_format == "md":
-                                                content = transcript.to_markdown(
-                                                    include_timestamps=include_timestamps,
-                                                    include_analysis=include_analysis,
-                                                    vault_path=vault_path_obj,
-                                                    output_dir=output_dir,
-                                                    strip_interjections=strip_interjections,
-                                                    interjections_file=interjections_file_obj,
-                                                )
+                                                # For diarized transcripts, use the proper formatting function
+                                                if (
+                                                    hasattr(
+                                                        transcript, "transcript_data"
+                                                    )
+                                                    and transcript.transcript_data
+                                                ):
+                                                    # Check if this is a diarized transcript by looking for speaker data
+                                                    has_speakers = any(
+                                                        segment.get("speaker")
+                                                        for segment in transcript.transcript_data
+                                                    )
+
+                                                    if has_speakers:
+                                                        # Use the proper diarization formatting
+                                                        from ..commands.transcribe import (
+                                                            format_transcript_content,
+                                                        )
+
+                                                        # Convert transcript data to the format expected by format_transcript_content
+                                                        transcript_segments = []
+                                                        for (
+                                                            segment
+                                                        ) in transcript.transcript_data:
+                                                            segment_copy = dict(segment)
+                                                            # Convert duration back to end time
+                                                            if (
+                                                                "duration"
+                                                                in segment_copy
+                                                            ):
+                                                                segment_copy["end"] = (
+                                                                    segment_copy[
+                                                                        "start"
+                                                                    ]
+                                                                    + segment_copy[
+                                                                        "duration"
+                                                                    ]
+                                                                )
+                                                                del segment_copy[
+                                                                    "duration"
+                                                                ]
+                                                            transcript_segments.append(
+                                                                segment_copy
+                                                            )
+
+                                                        transcript_format_data = {
+                                                            "segments": transcript_segments
+                                                        }
+
+                                                        content = format_transcript_content(
+                                                            transcript_data=transcript_format_data,
+                                                            source_name=transcript.title
+                                                            or "YouTube Video",
+                                                            model="diarized",  # Indicate this is diarized
+                                                            device="gpu",  # Default for diarization
+                                                            format="md",
+                                                            video_id=transcript.video_id,
+                                                            timestamps=include_timestamps,
+                                                        )
+                                                    else:
+                                                        # Use regular markdown formatting for non-diarized
+                                                        content = transcript.to_markdown(
+                                                            include_timestamps=include_timestamps,
+                                                            include_analysis=include_analysis,
+                                                            vault_path=vault_path_obj,
+                                                            output_dir=output_dir,
+                                                            strip_interjections=strip_interjections,
+                                                            interjections_file=interjections_file_obj,
+                                                        )
+                                                else:
+                                                    # Fallback to regular markdown formatting
+                                                    content = transcript.to_markdown(
+                                                        include_timestamps=include_timestamps,
+                                                        include_analysis=include_analysis,
+                                                        vault_path=vault_path_obj,
+                                                        output_dir=output_dir,
+                                                        strip_interjections=strip_interjections,
+                                                        interjections_file=interjections_file_obj,
+                                                    )
                                             elif output_format == "srt":
                                                 content = transcript.to_srt(
                                                     strip_interjections=strip_interjections,

@@ -180,27 +180,33 @@ fi
 
 # Install Ollama (optional for local LLM)
 echo
-echo -e "${BLUE}🦙 Local LLM Setup (Optional)${NC}"
-echo "Ollama enables local AI processing (no API keys needed)."
-read -p "Install Ollama for local LLM support? (y/N): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+echo -e "${BLUE}🤖 Installing MVP AI System...${NC}"
+echo "Setting up built-in AI for automatic speaker attribution (works offline, no API keys needed)"
+echo "This enables smart speaker identification in transcriptions (e.g., 'Joe Rogan' instead of 'SPEAKER_00')"
+echo ""
+
+if [ -f "scripts/setup_mvp_llm.sh" ]; then
+    bash scripts/setup_mvp_llm.sh
+else
+    echo -e "${YELLOW}⚠️  MVP AI setup script not found. Using fallback method...${NC}"
     if ! command_exists ollama; then
         echo -e "${BLUE}📦 Installing Ollama...${NC}"
         brew install ollama
-
-        echo -e "${BLUE}🤖 Would you like to download a recommended model?${NC}"
-        echo "Recommended: qwen2.5:7b-instruct (4.7GB) - Good balance of speed and quality"
-        read -p "Download qwen2.5:7b-instruct? (y/N): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${BLUE}📥 Downloading qwen2.5:7b-instruct...${NC}"
-            echo "This may take several minutes..."
-            ollama pull qwen2.5:7b-instruct || echo -e "${YELLOW}⚠️  Download failed, you can try again later with: ollama pull qwen2.5:7b-instruct${NC}"
-        fi
-    else
-        echo -e "${GREEN}✅ Ollama already installed${NC}"
     fi
+
+    echo -e "${BLUE}📥 Setting up MVP AI model...${NC}"
+    ollama serve > /dev/null 2>&1 &
+    sleep 3
+
+    # Check if model already exists
+    if ! ollama list | grep -q "llama3.2:3b"; then
+        echo -e "${BLUE}📥 Downloading AI model (llama3.2:3b)...${NC}"
+        ollama pull llama3.2:3b || echo -e "${YELLOW}⚠️  Download failed, you can try again later${NC}"
+    else
+        echo -e "${GREEN}✅ AI model already available${NC}"
+    fi
+
+    kill $! 2>/dev/null || true
 fi
 
 # Make launch script executable

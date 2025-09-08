@@ -406,44 +406,29 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
         import yt_dlp
 
         from ..config import get_settings
-        from ..database import DatabaseService
-        from ..utils.bright_data import BrightDataSessionManager
+        from ..utils.packetstream_proxy import PacketStreamProxyManager
 
         settings = get_settings()
 
-        # Bright Data API key (no proxy credentials required for playlist expansion)
-        bright_data_api_key = getattr(settings.api_keys, "bright_data_api_key", None)
-        if not bright_data_api_key:
-            import os
-
-            bright_data_api_key = (
-                os.getenv("BRIGHT_DATA_API_KEY")
-                or os.getenv("BRIGHTDATA_API_KEY")
-                or os.getenv("BD_API_KEY")
-            )
-
-        use_bright_data = bool(
-            bright_data_api_key and len(str(bright_data_api_key)) >= 10
-        )
+        # Check if PacketStream credentials are available
+        use_proxy = False
+        proxy_manager = None
         proxy_url = None
-        session_manager = None
 
-        # If proxy credentials are available, use sessions for better reliability; otherwise, proceed without proxy
-        if use_bright_data:
-            try:
-                db_service = DatabaseService()
-                session_manager = BrightDataSessionManager(db_service)
-                if session_manager._validate_credentials(log_missing=False):
-                    logger.info(
-                        "Using Bright Data residential proxies for playlist expansion"
-                    )
-                else:
-                    logger.info(
-                        "Bright Data proxy credentials not configured; using API-only method"
-                    )
-                    session_manager = None
-            except Exception as e:
-                logger.warning(f"Bright Data initialization failed (non-fatal): {e}")
+        try:
+            proxy_manager = PacketStreamProxyManager()
+            if proxy_manager.username and proxy_manager.auth_key:
+                use_proxy = True
+                logger.info(
+                    "Using PacketStream residential proxies for playlist expansion"
+                )
+            else:
+                logger.info(
+                    "PacketStream proxy credentials not configured; using direct method"
+                )
+        except Exception as e:
+            logger.info(f"PacketStream proxy not available (using direct method): {e}")
+            use_proxy = False
 
         expanded_urls = []
         playlist_info = []
@@ -452,34 +437,17 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
             if is_playlist_url(url):
                 logger.info(f"Expanding playlist: {url}")
 
-                # Create Bright Data session for this playlist if using Bright Data
-                current_proxy_url = proxy_url
-                session_id = None
-                playlist_id = None
-
-                if use_bright_data and session_manager:
-                    # Extract playlist ID for session
-                    import re
-
-                    playlist_match = re.search(r"list=([a-zA-Z0-9_-]+)", url)
-                    if playlist_match:
-                        playlist_id = playlist_match.group(1)
-                        session_id = session_manager.create_session_for_file(
-                            playlist_id, "metadata_scrape"
-                        )
-                        current_proxy_url = session_manager.get_proxy_url_for_file(
-                            playlist_id, "metadata_scrape"
-                        )
-
+                # Get proxy URL if using PacketStream
+                current_proxy_url = None
+                if use_proxy and proxy_manager:
+                    try:
+                        current_proxy_url = proxy_manager.get_proxy_url()
                         if current_proxy_url:
-                            logger.info(
-                                f"Created Bright Data session for playlist {playlist_id}"
+                            logger.debug(
+                                f"Using PacketStream proxy for playlist expansion"
                             )
-                        else:
-                            logger.warning(
-                                f"Failed to create Bright Data session for playlist, using fallback"
-                            )
-                            current_proxy_url = proxy_url
+                    except Exception as e:
+                        logger.warning(f"Failed to get PacketStream proxy URL: {e}")
 
                 ydl_opts = {
                     "quiet": True,
@@ -522,23 +490,7 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
                                 f"Expanded playlist '{playlist_title}' to {playlist_count} videos"
                             )
 
-                            # Track usage for Bright Data
-                            if use_bright_data and session_id and session_manager:
-                                try:
-                                    # Track playlist expansion cost (lightweight operation)
-                                    session_manager.update_session_usage(
-                                        session_id,
-                                        requests_count=1,
-                                        data_downloaded_bytes=1024,  # Minimal data for metadata
-                                        cost=0.001,  # Small cost for metadata scraping
-                                    )
-                                    logger.debug(
-                                        f"Tracked Bright Data usage for playlist expansion"
-                                    )
-                                except Exception as cost_error:
-                                    logger.warning(
-                                        f"Failed to track Bright Data costs: {cost_error}"
-                                    )
+                            # Playlist expansion successful
 
                         else:
                             logger.warning(f"No entries found in playlist: {url}")
@@ -548,17 +500,8 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
                     expanded_urls.append(url)  # Keep original if expansion fails
 
                 finally:
-                    # Clean up Bright Data session for this playlist
-                    if use_bright_data and playlist_id and session_manager:
-                        try:
-                            session_manager.end_session_for_file(playlist_id)
-                            logger.debug(
-                                f"Ended Bright Data session for playlist {playlist_id}"
-                            )
-                        except Exception as cleanup_error:
-                            logger.warning(
-                                f"Failed to cleanup session for playlist: {cleanup_error}"
-                            )
+                    # No cleanup needed for PacketStream (handled automatically)
+                    pass
             else:
                 expanded_urls.append(url)
 

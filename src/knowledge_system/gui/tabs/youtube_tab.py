@@ -4,7 +4,7 @@ import os  # Added for os.access
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -284,12 +284,31 @@ class YouTubeExtractionWorker(QThread):
                     # Create progress callback to forward diarization progress to GUI
                     def progress_callback(message: str, percent: int = 0):
                         """Forward diarization progress messages to GUI console."""
-                        # Emit progress update with detailed message
-                        self.progress_updated.emit(
-                            i,
-                            total_urls,
-                            f"🎙️ {global_progress} ({percent}%) {message}",
-                        )
+                        # Handle MVP LLM setup progress specifically
+                        if "🤖" in message and any(
+                            stage in message.lower()
+                            for stage in [
+                                "checking",
+                                "installing_ollama",
+                                "starting_service",
+                                "downloading_model",
+                                "configuring",
+                                "complete",
+                            ]
+                        ):
+                            # MVP LLM setup progress - show with special formatting
+                            self.progress_updated.emit(
+                                i,
+                                total_urls,
+                                f"🤖 AI Setup: {message.replace('🤖 ', '')} ({percent}%)",
+                            )
+                        else:
+                            # Regular diarization progress
+                            self.progress_updated.emit(
+                                i,
+                                total_urls,
+                                f"🎙️ {global_progress} ({percent}%) {message}",
+                            )
 
                     # Pass cancellation token and progress callback to processor
                     enable_diarization = self.config.get("enable_diarization", False)
@@ -973,7 +992,7 @@ class YouTubeTab(BaseTab):
             "• Downloads transcripts for all provided URLs\n"
             "• Downloads thumbnails for each video\n"
             "• Processes both individual videos and playlists\n"
-            "• Requires Bright Data API key for YouTube access\n"
+            "• Can use PacketStream proxy for reliable YouTube access\n"
             "• Progress will be shown in real-time below"
         )
         # Make green and take 3/4 of the width
@@ -1303,42 +1322,36 @@ class YouTubeTab(BaseTab):
                 self._reset_button_state()
                 return
 
-        # Check Bright Data API key from settings
-        self.append_log("🔐 Checking Bright Data API credentials...")
-        bright_data_api_key = getattr(
-            self.settings.api_keys, "bright_data_api_key", None
-        )
+        # Check PacketStream proxy configuration (optional)
+        self.append_log("🔐 Checking proxy configuration...")
+        packetstream_available = False
+        try:
+            from ...utils.packetstream_proxy import PacketStreamProxyManager
 
-        if not bright_data_api_key or len(str(bright_data_api_key).strip()) == 0:
-            self.append_log("❌ Bright Data API key missing!")
-            self._reset_button_state()
-            self.show_error(
-                "Bright Data API Key Required",
-                "YouTube transcription requires a Bright Data API key to avoid anti-bot restrictions.\n\n"
-                "Please:\n"
-                "1. Go to the 'API Keys' tab\n"
-                "2. Enter your Bright Data API key\n"
-                "3. Click 'Save API Keys'\n"
-                "4. Return here to start processing\n\n"
-                "💡 Get your API key at: https://brightdata.com/\n\n"
-                "Note: Without this key, YouTube processing will fail due to anti-bot protections.",
+            proxy_manager = PacketStreamProxyManager()
+            if proxy_manager.username and proxy_manager.auth_key:
+                self.append_log(
+                    "✅ PacketStream proxy configured - YouTube anti-bot protection enabled"
+                )
+                packetstream_available = True
+            else:
+                self.append_log("⚠️ PACKETSTREAM PROXY NOT CONFIGURED")
+                self.append_log("⚠️ Using direct access - YouTube may block requests!")
+                self.append_log(
+                    "⚠️ Configure PacketStream Username and Auth Key in Settings tab for reliable access"
+                )
+        except Exception as e:
+            self.append_log("⚠️ PACKETSTREAM PROXY NOT AVAILABLE")
+            self.append_log(
+                "⚠️ YouTube may trigger anti-bot detection - configure PacketStream in Settings tab"
             )
-            return
 
-        # Validate API key format (basic check)
-        api_key_str = str(bright_data_api_key).strip()
-        if len(api_key_str) < 10:
-            self.append_log("❌ Bright Data API key appears invalid!")
-            self._reset_button_state()
-            self.show_error(
-                "Invalid Bright Data API Key",
-                "The Bright Data API key appears to be invalid (too short).\n\n"
-                "Please check your API key in the 'API Keys' tab and ensure it's entered correctly.\n\n"
-                "💡 Get your API key at: https://brightdata.com/",
-            )
-            return
-
-        self.append_log("✅ Bright Data API key configured")
+        # Show popup warning if PacketStream is not available
+        if not packetstream_available:
+            if not self._show_packetstream_warning_dialog():
+                # User cancelled or chose to configure PacketStream
+                self._reset_button_state()
+                return
 
         # Use async URL collection to prevent GUI blocking
         self.append_log("📋 Collecting URLs from input...")
@@ -1493,22 +1506,9 @@ class YouTubeTab(BaseTab):
 
     def _validate_non_filesystem_inputs(self) -> bool:
         """Validate inputs that don't require filesystem access."""
-        # Check Bright Data API key (required for YouTube processing)
-        bright_data_api_key = getattr(
-            self.settings.api_keys, "bright_data_api_key", None
-        )
-
-        if not bright_data_api_key:
-            self.append_log("❌ Bright Data API key missing!")
-            self.show_error(
-                "Missing Bright Data API Key",
-                "YouTube processing requires a Bright Data API key for reliable access.\n\n"
-                "Please configure your Bright Data API Key in the Settings tab.\n\n"
-                "Bright Data provides pay-per-request residential proxies for YouTube access.\n\n"
-                "Sign up at: https://brightdata.com/",
-            )
-            self._reset_button_state()
-            return False
+        # PacketStream proxy is optional - no validation required
+        # YouTube processing can work without proxy but may be rate-limited
+        self.append_log("✅ YouTube processing validation passed")
 
         # Check speaker diarization requirements if enabled
         if self.diarization_checkbox.isChecked():
@@ -1714,6 +1714,106 @@ class YouTubeTab(BaseTab):
     def _handle_resource_warning(self, warning: str) -> None:
         """Handle resource warnings from YouTubeBatchWorker."""
         self.append_log(f"⚠️ Resource Warning: {warning}")
+
+    def _show_packetstream_warning_dialog(self) -> bool:
+        """
+        Show PacketStream warning dialog when proxy is not configured.
+
+        Returns:
+            True if user wants to continue, False if cancelled
+        """
+        # Check if user has disabled this warning
+        if (
+            hasattr(self, "_packetstream_warning_disabled")
+            and self._packetstream_warning_disabled
+        ):
+            return True
+
+        dialog = QMessageBox(self)
+        dialog.setIcon(QMessageBox.Icon.Warning)
+        dialog.setWindowTitle("YouTube Anti-Bot Protection Recommended")
+
+        message = (
+            "🚨 <b>YouTube Anti-Bot Detection Risk</b><br/><br/>"
+            "YouTube may block direct requests due to their anti-bot detection system. "
+            "This can result in:<br/>"
+            '• "Sign in to confirm you\'re not a bot" errors<br/>'
+            "• Rate limiting and IP blocking<br/>"
+            "• Failed transcript extraction<br/><br/>"
+            "<b>Recommended Solution:</b><br/>"
+            "Go to the <b>Settings tab</b> and enter your PacketStream credentials:<br/>"
+            "• PacketStream Username<br/>"
+            "• PacketStream Auth Key (proxy password)<br/><br/>"
+            "Would you like to continue without proxy protection?"
+        )
+
+        dialog.setText(message)
+        dialog.setTextFormat(Qt.TextFormat.RichText)  # Rich text format
+
+        # Custom buttons
+        continue_btn = dialog.addButton(
+            "Continue Anyway", QMessageBox.ButtonRole.AcceptRole
+        )
+        configure_btn = dialog.addButton(
+            "Go to Settings", QMessageBox.ButtonRole.ActionRole
+        )
+        cancel_btn = dialog.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+
+        # Add "Don't show again" checkbox
+        dont_show_checkbox = QCheckBox("Don't show this warning again")
+        dialog.setCheckBox(dont_show_checkbox)
+
+        # Set default button
+        dialog.setDefaultButton(configure_btn)
+
+        # Show dialog
+        result = dialog.exec()
+        clicked_button = dialog.clickedButton()
+
+        # Handle "Don't show again" checkbox
+        if dont_show_checkbox.isChecked():
+            self._packetstream_warning_disabled = True
+            # Save this preference to settings if needed
+
+        # Handle button clicks
+        if clicked_button == configure_btn:
+            # Switch to Settings tab
+            try:
+                main_window = self.parent()
+                while main_window and not hasattr(main_window, "tab_widget"):
+                    main_window = main_window.parent()
+
+                if main_window and hasattr(main_window, "tab_widget"):
+                    # Find Settings tab index
+                    tab_widget = main_window.tab_widget
+                    for i in range(tab_widget.count()):
+                        tab_text = tab_widget.tabText(i).lower()
+                        if "setting" in tab_text or "api" in tab_text:
+                            tab_widget.setCurrentIndex(i)
+                            self.append_log(
+                                "📝 Switched to Settings tab - enter PacketStream Username and Auth Key"
+                            )
+                            break
+                    else:
+                        self.append_log(
+                            "⚠️ Could not find Settings tab - please navigate manually"
+                        )
+                else:
+                    self.append_log(
+                        "⚠️ Could not switch tabs - please navigate to Settings manually"
+                    )
+            except Exception as e:
+                self.append_log(f"⚠️ Error switching to Settings tab: {e}")
+            return False  # Don't continue processing
+
+        elif clicked_button == continue_btn:
+            self.append_log(
+                "⚠️ Proceeding without PacketStream proxy - YouTube may block requests"
+            )
+            return True  # Continue processing
+
+        else:  # Cancel button or dialog closed
+            return False  # Don't continue processing
 
     def _stop_processing(self):
         """Stop the currently running extraction process."""
@@ -2257,20 +2357,8 @@ class YouTubeTab(BaseTab):
             )
             return False
 
-        # Check Bright Data API key (required for YouTube processing)
-        bright_data_api_key = getattr(
-            self.settings.api_keys, "bright_data_api_key", None
-        )
-
-        if not bright_data_api_key:
-            self.show_error(
-                "Missing Bright Data API Key",
-                "YouTube processing requires a Bright Data API key for reliable access.\n\n"
-                "Please configure your Bright Data API Key in the Settings tab.\n\n"
-                "Bright Data provides pay-per-request residential proxies for YouTube access.\n\n"
-                "Sign up at: https://brightdata.com/",
-            )
-            return False
+        # PacketStream proxy is optional - YouTube processing can work without it
+        # (though it may be rate-limited)
 
         # Check speaker diarization requirements if enabled
         if self.diarization_checkbox.isChecked():

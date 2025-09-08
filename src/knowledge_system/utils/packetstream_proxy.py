@@ -32,21 +32,20 @@ class PacketStreamProxyManager:
         # If not found, try to load from app config
         if not self.username or not self.auth_key:
             try:
-                from ..config import KnowledgeSystemConfig
+                from ..config import get_settings
 
-                config = KnowledgeSystemConfig()
-                self.username = self.username or config.api_keys.packetstream_username
-                self.auth_key = self.auth_key or config.api_keys.packetstream_auth_key
+                settings = get_settings()
+                self.username = self.username or getattr(
+                    settings.api_keys, "packetstream_username", None
+                )
+                self.auth_key = self.auth_key or getattr(
+                    settings.api_keys, "packetstream_auth_key", None
+                )
             except Exception:
                 pass  # Config loading failed, use what we have
 
-        if not self.username or not self.auth_key:
-            raise ValueError(
-                "PacketStream credentials required. Set via:\n"
-                "1. Environment variables: PACKETSTREAM_USERNAME and PACKETSTREAM_AUTH_KEY\n"
-                "2. GUI Settings tab: PacketStream Username and Auth Key\n"
-                "3. Pass directly to constructor"
-            )
+        # Initialize even without credentials (for graceful degradation)
+        self.credentials_available = bool(self.username and self.auth_key)
 
         # PacketStream proxy endpoints
         self.proxy_endpoints = [
@@ -68,16 +67,11 @@ class PacketStreamProxyManager:
         Returns:
             Dict with proxy configuration for requests library
         """
-        if use_socks5:
-            proxy_url = (
-                f"socks5h://{self.username}:{self.auth_key}@proxy.packetstream.io:31113"
-            )
-            return {"http": proxy_url, "https": proxy_url}
-        else:
-            proxy_url = (
-                f"http://{self.username}:{self.auth_key}@proxy.packetstream.io:31112"
-            )
-            return {"http": proxy_url, "https": proxy_url}
+        if not self.credentials_available:
+            raise ValueError("PacketStream credentials not available")
+
+        proxy_url = self.get_proxy_url(use_socks5)
+        return {"http": proxy_url, "https": proxy_url}
 
     def create_session(
         self, session_id: str = None, use_socks5: bool = False
@@ -96,7 +90,9 @@ class PacketStreamProxyManager:
             session_id = f"session_{int(time.time())}_{random.randint(1000, 9999)}"
 
         session = requests.Session()
-        session.proxies = self._get_proxy_config(use_socks5=use_socks5)
+        if self.credentials_available:
+            session.proxies = self._get_proxy_config(use_socks5=use_socks5)
+        # If no credentials, session will use direct connection
 
         # Set realistic headers to avoid detection
         session.headers.update(
@@ -116,6 +112,26 @@ class PacketStreamProxyManager:
         self.current_session_id = session_id
 
         return session
+
+    def get_proxy_url(self, use_socks5: bool = False) -> str | None:
+        """
+        Get proxy URL string for use with other libraries.
+
+        Args:
+            use_socks5: Whether to use SOCKS5 proxy (default: HTTP)
+
+        Returns:
+            Proxy URL string or None if credentials not available
+        """
+        if not self.credentials_available:
+            return None
+
+        if use_socks5:
+            return (
+                f"socks5h://{self.username}:{self.auth_key}@proxy.packetstream.io:31113"
+            )
+        else:
+            return f"http://{self.username}:{self.auth_key}@proxy.packetstream.io:31112"
 
     def get_session(self, session_id: str = None) -> requests.Session:
         """

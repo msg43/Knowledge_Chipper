@@ -150,17 +150,17 @@ class TestDiarizationFormatting(unittest.TestCase):
             "https://www.youtube.com/watch?v=test_video_123&t=12s", markdown_content
         )
 
-        # Check that timestamps are properly formatted as links
+        # Check that timestamps are properly formatted as links with ranges
         self.assertIn(
-            "[00:00](https://www.youtube.com/watch?v=test_video_123&t=0s)",
+            "[00:00 - 00:05](https://www.youtube.com/watch?v=test_video_123&t=0s)",
             markdown_content,
         )
         self.assertIn(
-            "[00:05](https://www.youtube.com/watch?v=test_video_123&t=5s)",
+            "[00:05 - 00:12](https://www.youtube.com/watch?v=test_video_123&t=5s)",
             markdown_content,
         )
         self.assertIn(
-            "[00:12](https://www.youtube.com/watch?v=test_video_123&t=12s)",
+            "[00:12 - 00:15](https://www.youtube.com/watch?v=test_video_123&t=12s)",
             markdown_content,
         )
 
@@ -353,6 +353,152 @@ class TestDiarizationFormatting(unittest.TestCase):
                 enhanced_fallback_used,
                 "Enhanced fallback should be used when metadata doesn't yield suggestions",
             )
+
+    def test_youtube_transcript_speaker_assignment_integration(self):
+        """Test that YouTube transcript processor preserves speaker assignments from AudioProcessor."""
+        # Test data that simulates what AudioProcessor would return after speaker assignment
+        segments_with_assignments = [
+            {
+                "start": 0.0,
+                "end": 3.5,
+                "text": "Hello everyone, welcome to the Joe Rogan Experience.",
+                "speaker": "Joe Rogan",  # Assigned name, not SPEAKER_00
+                "original_speaker_id": "SPEAKER_00",
+            },
+            {
+                "start": 4.0,
+                "end": 7.2,
+                "text": "Thanks Joe, I'm excited to be here to discuss AI.",
+                "speaker": "Sam Altman",  # Assigned name, not SPEAKER_01
+                "original_speaker_id": "SPEAKER_01",
+            },
+            {
+                "start": 8.0,
+                "end": 12.1,
+                "text": "Let's start with your work at OpenAI, Sam.",
+                "speaker": "Joe Rogan",  # Assigned name, not SPEAKER_00
+                "original_speaker_id": "SPEAKER_00",
+            },
+        ]
+
+        # Create a transcript using the format
+        content = format_transcript_content(
+            transcript_data={"segments": segments_with_assignments},
+            source_name="Joe Rogan Experience #1234 - Sam Altman",
+            model="base",
+            device="cpu",
+            format="md",
+            video_id="test_video_123",
+            timestamps=True,
+        )
+
+        # Should have real speaker names from assignments
+        self.assertIn("**Joe Rogan**", content)
+        self.assertIn("**Sam Altman**", content)
+
+        # Should not have generic speaker labels
+        self.assertNotIn("**Speaker 1**", content)
+        self.assertNotIn("**Speaker 2**", content)
+
+        # Should still have proper formatting with hyperlinked timestamps
+        self.assertIn("https://www.youtube.com/watch?v=test_video_123&t=0s", content)
+        self.assertIn("https://www.youtube.com/watch?v=test_video_123&t=4s", content)
+
+        # Should have speaker change separators between different speakers
+        self.assertIn("---", content)
+
+        # Should preserve text content
+        self.assertIn("Hello everyone, welcome to the Joe Rogan Experience.", content)
+        self.assertIn("Thanks Joe, I'm excited to be here to discuss AI.", content)
+
+        print("Generated content with speaker assignments:")
+        print(content[:500] + "..." if len(content) > 500 else content)
+
+    def test_youtube_transcript_to_markdown_with_diarization(self):
+        """Test that YouTubeTranscript.to_markdown uses proper diarization formatting when speakers are present."""
+        from src.knowledge_system.processors.youtube_transcript import YouTubeTranscript
+
+        # Create sample transcript data with speaker assignments (as would come from speaker dialog)
+        transcript_data_with_speakers = [
+            {
+                "start": 0.0,
+                "duration": 3.5,
+                "text": "Hello everyone, welcome to the Joe Rogan Experience.",
+                "speaker": "Joe Rogan",  # Assigned name, not SPEAKER_00
+            },
+            {
+                "start": 4.0,
+                "duration": 3.2,
+                "text": "Thanks Joe, I'm excited to be here to discuss AI.",
+                "speaker": "Sam Altman",  # Assigned name, not SPEAKER_01
+            },
+            {
+                "start": 8.0,
+                "duration": 4.1,
+                "text": "Let's start with your work at OpenAI, Sam.",
+                "speaker": "Joe Rogan",  # Assigned name, not SPEAKER_00
+            },
+        ]
+
+        # Create a YouTube transcript with diarization data
+        transcript = YouTubeTranscript(
+            video_id="test_video_123",
+            title="Joe Rogan Experience #1234 - Sam Altman",
+            url="https://www.youtube.com/watch?v=test_video_123",
+            language="en",
+            is_manual=False,
+            transcript_text="Joe Rogan: Hello everyone... Sam Altman: Thanks Joe...",
+            transcript_data=transcript_data_with_speakers,
+            duration=600,
+            uploader="PowerfulJRE",
+            upload_date="2024-01-01",
+            description="Joe Rogan sits down with Sam Altman",
+            view_count=1000000,
+            tags=["podcast", "AI"],
+            thumbnail_url="https://example.com/thumb.jpg",
+        )
+
+        # Test the markdown formatting - this should now use format_transcript_content for diarized content
+        markdown_content = transcript.to_markdown(include_timestamps=True)
+
+        print("YouTube transcript markdown output:")
+        print(
+            markdown_content[:800] + "..."
+            if len(markdown_content) > 800
+            else markdown_content
+        )
+
+        # Should have real speaker names formatted properly with line breaks
+        self.assertIn("**Joe Rogan**", markdown_content)
+        self.assertIn("**Sam Altman**", markdown_content)
+
+        # Should not have generic speaker labels
+        self.assertNotIn("**Speaker 1**", markdown_content)
+        self.assertNotIn("**Speaker 2**", markdown_content)
+
+        # Should have proper line breaks (not wall of text)
+        # Each speaker should be on their own line
+        lines = markdown_content.split("\n")
+        joe_rogan_lines = [line for line in lines if "**Joe Rogan**" in line]
+        sam_altman_lines = [line for line in lines if "**Sam Altman**" in line]
+
+        self.assertGreater(
+            len(joe_rogan_lines), 0, "Should have Joe Rogan speaker lines"
+        )
+        self.assertGreater(
+            len(sam_altman_lines), 0, "Should have Sam Altman speaker lines"
+        )
+
+        # Should have hyperlinked timestamps for YouTube
+        self.assertIn(
+            "https://www.youtube.com/watch?v=test_video_123&t=0s", markdown_content
+        )
+        self.assertIn(
+            "https://www.youtube.com/watch?v=test_video_123&t=4s", markdown_content
+        )
+
+        # Should have speaker separators
+        self.assertIn("---", markdown_content)
 
 
 if __name__ == "__main__":

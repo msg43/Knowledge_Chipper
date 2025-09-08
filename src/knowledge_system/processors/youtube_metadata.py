@@ -153,53 +153,35 @@ class YouTubeMetadataProcessor(BaseProcessor):
         super().__init__(name or "youtube_metadata")
 
         self.settings = get_settings()
-        self.use_bright_data = False
-        self.bright_data_api_key = None
+        self.use_proxy = False
+        self.proxy_manager = None
 
-        # Configure Bright Data (optional - for fallback use only)
-        self._configure_bright_data()
-        # Note: Bright Data is no longer required as PacketStream is the primary method
-        # with direct yt-dlp as fallback for small batches
+        # Configure PacketStream proxy (optional)
+        self._configure_packetstream_proxy()
+        # Note: PacketStream is optional - we can use direct yt-dlp for metadata extraction
 
-    def _configure_bright_data(self):
-        """Configure Bright Data YouTube API Scraper (preferred method)."""
+    def _configure_packetstream_proxy(self):
+        """Configure PacketStream proxy for YouTube metadata access (optional)."""
         try:
-            if requests is None:
-                logger.warning(
-                    "requests library not available - cannot use Bright Data"
-                )
-                return
+            from ..utils.packetstream_proxy import PacketStreamProxyManager
 
-            # Primary from settings
-            self.bright_data_api_key = getattr(
-                self.settings.api_keys, "bright_data_api_key", None
-            )
-            # Fallbacks from environment
-            if not self.bright_data_api_key:
-                import os
-
-                self.bright_data_api_key = (
-                    os.getenv("BRIGHT_DATA_API_KEY")
-                    or os.getenv("BRIGHTDATA_API_KEY")
-                    or os.getenv("BD_API_KEY")
-                )
-
-            # Accept UUID- or token-style keys (minimum length safety check)
-            if self.bright_data_api_key and len(self.bright_data_api_key) >= 10:
-                self.use_bright_data = True
-                logger.info(
-                    "✅ Configured Bright Data YouTube API Scraper for metadata extraction"
-                )
-                return
+            self.proxy_manager = PacketStreamProxyManager()
+            if self.proxy_manager.username and self.proxy_manager.auth_key:
+                self.use_proxy = True
+                logger.info("✅ Configured PacketStream proxy for metadata extraction")
             else:
                 logger.warning(
-                    "Bright Data API key missing or invalid - metadata extraction will be limited"
+                    "⚠️ PACKETSTREAM PROXY NOT CONFIGURED for metadata extraction"
                 )
+                logger.warning("⚠️ Using direct access - may hit YouTube rate limits!")
+                self.use_proxy = False
 
         except Exception as e:
+            logger.warning(f"⚠️ PACKETSTREAM PROXY NOT AVAILABLE for metadata: {e}")
             logger.warning(
-                f"Failed to configure Bright Data: {e} - metadata extraction will be limited"
+                "⚠️ Using direct access - may encounter YouTube anti-bot detection!"
             )
+            self.use_proxy = False
 
     @property
     def supported_formats(self) -> list[str]:

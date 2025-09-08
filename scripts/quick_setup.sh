@@ -54,6 +54,26 @@ mkdir -p ~/Documents/KnowledgeSystem/transcripts/Thumbnails
 # Set permissions
 chmod +x launch_gui.command 2>/dev/null || true
 
+# Quick MVP AI Setup (no prompts)
+echo "🤖 Setting up MVP AI System..."
+if [ -f "scripts/setup_mvp_llm.sh" ]; then
+    # Run MVP setup in quiet mode
+    QUIET_MODE=1 bash scripts/setup_mvp_llm.sh || echo "⚠️  MVP AI setup failed, skipping..."
+else
+    # Fallback: quick Ollama + model install
+    if command -v brew &> /dev/null && ! command -v ollama &> /dev/null; then
+        echo "📦 Installing Ollama..."
+        brew install ollama &> /dev/null || true
+    fi
+    if command -v ollama &> /dev/null; then
+        echo "📥 Downloading AI model..."
+        ollama serve &> /dev/null &
+        sleep 3
+        ollama pull llama3.2:3b &> /dev/null || true
+        kill $! 2>/dev/null || true
+    fi
+fi
+
 # Test
 if python -m knowledge_system --help > /dev/null 2>&1; then
     echo "✅ Setup complete!"

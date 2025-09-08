@@ -179,7 +179,7 @@ class APIKeysTab(BaseTab):
             "• Cost: Pay-per-GB pricing model\n"
             "• Benefits: Residential IPs, sticky sessions, automatic rotation\n"
             "• Alternative to: Bright Data for reliable YouTube access",
-            6,
+            5,
             0,
         )
 
@@ -197,7 +197,7 @@ class APIKeysTab(BaseTab):
             "• Security: Stored securely in local credentials file\n"
             "• Format: Alphanumeric string provided by PacketStream\n"
             "• Required for: All PacketStream proxy operations",
-            7,
+            6,
             0,
         )
 

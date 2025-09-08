@@ -447,6 +447,10 @@ class AudioProcessor(BaseProcessor):
                     logger.debug(f"Could not setup MVP LLM: {e}")
                     fallback_ready = False
 
+                    # Show user-friendly error if in GUI mode
+                    if kwargs.get("gui_mode", False):
+                        self._show_mvp_llm_error(e)
+
                 if fallback_ready:
                     logger.info("✅ MVP LLM ready for speaker suggestions")
                 elif self.progress_callback:
@@ -454,6 +458,10 @@ class AudioProcessor(BaseProcessor):
 
             except Exception as e:
                 logger.debug(f"MVP LLM setup skipped: {e}")
+
+                # Show user-friendly error if in GUI mode and error is significant
+                if kwargs.get("gui_mode", False) and "permission" in str(e).lower():
+                    self._show_mvp_llm_error(e)
 
             # Check if we're in GUI mode and can show dialog
             show_dialog = kwargs.get("show_speaker_dialog", True)
@@ -1524,6 +1532,39 @@ class AudioProcessor(BaseProcessor):
         )
 
         return processor_results
+
+    def _show_mvp_llm_error(self, error: Exception):
+        """Show user-friendly error dialog for MVP LLM setup issues."""
+        try:
+            # Import here to avoid circular imports
+            from ..gui.components.enhanced_error_dialog import show_enhanced_error
+
+            error_msg = str(error)
+
+            # Determine error context for better categorization
+            if "ollama" in error_msg.lower():
+                context = "mvp_llm_setup"
+            elif "permission" in error_msg.lower() or "denied" in error_msg.lower():
+                context = "mvp_llm_setup"
+            elif "connection" in error_msg.lower() or "service" in error_msg.lower():
+                context = "mvp_llm_service"
+            elif "model" in error_msg.lower():
+                context = "mvp_llm_model"
+            else:
+                context = "mvp_llm_setup"
+
+            # Show enhanced error dialog
+            show_enhanced_error(
+                parent=None,  # Will find active window
+                title="MVP AI System Issue",
+                message=f"The built-in AI system encountered an issue: {error_msg}",
+                details=str(error),
+                context=context,
+            )
+
+        except Exception as e:
+            # Fallback to simple logging
+            logger.warning(f"Could not show MVP LLM error dialog: {e}")
 
 
 def process_audio_for_transcription(
