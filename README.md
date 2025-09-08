@@ -1,6 +1,6 @@
 # Skip the Podcast Desktop
 
-**Version:** 3.1.5 | **Build Date:** 2025-01-07 
+**Version:** 3.1.5 | **Build Date:** 2025-01-27 
 
 Skip the Podcast Desktop - A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 
@@ -19,6 +19,13 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 - **Installation Choice**: Users can opt-out during setup, but most get professional speaker attribution by default
 - **Performance Metrics**: Real-time status display shows model info, service health, and performance indicators
 - **Error Recovery**: User-friendly error dialogs with specific troubleshooting steps and alternatives
+
+### 🎬 **Silent FFMPEG Bundling in DMG Installer (January 2025)**
+- **Zero-Setup YouTube Transcription**: FFMPEG automatically included in .dmg distributions - works immediately after install
+- **Silent Installation**: No user prompts or manual setup required - FFMPEG bundled during build process
+- **Platform Optimization**: Automatically selects ARM64 or Intel builds with architecture validation
+- **Smart Detection**: App automatically discovers and uses bundled FFMPEG with fallback to system installations
+- **Seamless Integration**: Launch script automatically configures environment variables for bundled FFMPEG
 
 ### 🛠️ **Enhanced FFMPEG Setup for Diarization (January 2025)**
 - **Pre-Process FFMPEG Check**: Cloud transcription now checks for FFMPEG before starting when diarization is enabled
@@ -420,7 +427,33 @@ pip install -e ".[diarization]"
 - ✅ Tests the installation and provides next steps
 - ✅ Can launch the GUI immediately when complete
 
+**📦 Download Sizes:**
+- **Whisper "base" model**: ~150MB (for speech recognition and transcription)
+- **Fallback LLM model**: ~2GB (automatically installed for speaker diarization backup)
+  - Ensures speaker attribution works even without cloud AI setup
+  - Downloads silently in background on first use
+  - Provides offline capability for identifying speakers (e.g., "Joe Rogan", "Guest")
+
 **Setup time:** 2-5 minutes (vs 15+ minutes manual)
+
+### Admin Install for Enhanced Security
+
+If you installed via DMG download, you can upgrade your installation to system-level security using the **Admin Install** feature in Settings:
+
+**What Admin Install Does:**
+- **Complete Rebuild**: Completely removes existing app and rebuilds fresh with latest code from GitHub
+- **Permission Upgrade**: Changes ownership from user (`user:staff`) to system (`root:wheel`) for enhanced macOS security
+- **System Integration**: Installs to `/Applications` with proper system-level permissions for better Gatekeeper trust
+- **Virtual Environment Rebuild**: Recreates Python environment with proper root ownership for stability
+- **HCE Module Installation**: Ensures all required modules are properly installed with correct permissions
+
+**When to Use Admin Install:**
+- After installing via DMG to get enhanced system integration
+- When experiencing permission-related issues
+- For production/work environments requiring enhanced security
+- When sharing the Mac with multiple users (system-wide access)
+
+**Important**: Admin Install requires your macOS password and will prompt you in Terminal. The process pulls the latest code and completely rebuilds the app, so you'll get any updates automatically.
 
 ### Manual Installation (Alternative)
 

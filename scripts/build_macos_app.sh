@@ -372,6 +372,14 @@ if [ -f "\$APP_DIR/version.txt" ]; then
     cat "\$APP_DIR/version.txt" >> "\$LOG_FILE"
 fi
 
+# Check for bundled FFMPEG and set up environment
+if [ -f "\$APP_DIR/setup_bundled_ffmpeg.sh" ]; then
+    echo "Setting up bundled FFMPEG..." >> "\$LOG_FILE"
+    source "\$APP_DIR/setup_bundled_ffmpeg.sh"
+    echo "FFMPEG_PATH: \$FFMPEG_PATH" >> "\$LOG_FILE"
+    echo "FFPROBE_PATH: \$FFPROBE_PATH" >> "\$LOG_FILE"
+fi
+
 # Set up Python environment
 source "\$APP_DIR/venv/bin/activate"
 export PYTHONPATH="\$APP_DIR/src:\$PYTHONPATH"
@@ -504,6 +512,24 @@ else
 fi
 
 echo "✨ App bundle created successfully! Version: $CURRENT_VERSION"
+
+# Install FFMPEG into the app bundle for DMG distribution [[memory:7770522]]
+if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-0}" != "1" ]; }; then
+  echo "🎬 Installing FFMPEG into app bundle for DMG distribution..."
+  echo "##PERCENT## 98 Installing FFMPEG"
+
+  if [ -f "$SCRIPT_DIR/silent_ffmpeg_installer.py" ]; then
+    # Use our silent installer to embed FFMPEG in the app bundle
+    if "$PYTHON_BIN" "$SCRIPT_DIR/silent_ffmpeg_installer.py" --app-bundle "$BUILD_APP_PATH" --quiet; then
+      echo "✅ FFMPEG successfully installed in app bundle"
+    else
+      echo "⚠️ FFMPEG installation failed - DMG will not include FFMPEG"
+    fi
+  else
+    echo "⚠️ Silent FFMPEG installer not found - DMG will not include FFMPEG"
+  fi
+fi
+
 echo "##PERCENT## 100 Complete"
 echo "🎯 Large model files excluded - they'll download automatically when needed"
 if [ "$SKIP_INSTALL" -eq 0 ]; then

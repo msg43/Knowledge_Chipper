@@ -174,6 +174,7 @@ class TranscriptionService:
                 output_dir=output_dir,
                 include_timestamps=include_timestamps,
                 include_analysis=True,
+                enable_diarization=enable_diarization,
                 overwrite=overwrite,
             )
 

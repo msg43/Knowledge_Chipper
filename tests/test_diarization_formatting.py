@@ -274,7 +274,7 @@ class TestDiarizationFormatting(unittest.TestCase):
     def test_enhanced_speaker_intelligence(self):
         """Test that enhanced speaker intelligence uses metadata for suggestions."""
         # Import the enhanced speaker processor
-        from src.knowledge_system.processors.speaker_processor import SpeakerProcessor
+        from knowledge_system.processors.speaker_processor import SpeakerProcessor
 
         # Sample diarization segments
         diarization_segments = [

@@ -30,11 +30,11 @@ import psutil
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 
-from knowledge_system.config.process_isolation import ProcessIsolationConfig
 from knowledge_system.gui.dialogs.crash_recovery_dialog import CrashRecoveryManager
 from knowledge_system.gui.tabs.process_tab import ProcessPipelineWorker
 from knowledge_system.utils.memory_monitor import MemoryMonitor
 from knowledge_system.utils.process_analytics import ProcessAnalytics
+from knowledge_system.utils.process_isolation import ProcessIsolationConfig
 
 
 class BetaTestFramework:

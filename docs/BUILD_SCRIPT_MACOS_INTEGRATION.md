@@ -162,14 +162,53 @@ bash scripts/release_dmg_to_public.sh
 ~/Documents/Knowledge Chipper/
 ```
 
+## 🎬 **FFMPEG Bundling for DMG Distribution**
+
+### **Silent FFMPEG Installation**
+The build script now automatically includes FFMPEG in .dmg distributions to eliminate setup friction:
+
+```bash
+# NEW: Silent FFMPEG bundling during DMG creation
+if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-0}" != "1" ]; }; then
+  echo "🎬 Installing FFMPEG into app bundle for DMG distribution..."
+  "$PYTHON_BIN" "$SCRIPT_DIR/silent_ffmpeg_installer.py" --app-bundle "$BUILD_APP_PATH" --quiet
+fi
+```
+
+### **How It Works**
+1. **Platform Detection**: Automatically selects ARM64 or Intel FFMPEG builds
+2. **Multiple Sources**: Uses primary + fallback download URLs for reliability  
+3. **Architecture Validation**: Ensures compatibility with target system
+4. **Silent Installation**: No user interaction required during build
+5. **App Bundle Integration**: Installs to `Contents/MacOS/Library/Application Support/Knowledge_Chipper/bin/`
+
+### **Runtime Detection**
+The launch script automatically detects and configures bundled FFMPEG:
+
+```bash
+# Check for bundled FFMPEG and set up environment
+if [ -f "$APP_DIR/setup_bundled_ffmpeg.sh" ]; then
+    source "$APP_DIR/setup_bundled_ffmpeg.sh"
+    # Sets FFMPEG_PATH, FFPROBE_PATH, and updates PATH
+fi
+```
+
+### **User Experience Benefits**
+- ✅ **Zero Setup**: YouTube transcription works immediately after .dmg install
+- ✅ **No Manual Installation**: Eliminates FFMPEG installation prompts
+- ✅ **Automatic Detection**: App prefers bundled FFMPEG over system versions
+- ✅ **Fallback Support**: Still supports user-installed FFMPEG if preferred
+
 ## 🎊 **Summary**
 
-The build script now fully integrates with the macOS standard file locations:
+The build script now fully integrates with the macOS standard file locations and includes FFMPEG bundling:
 
 - ✅ **Builds properly** with new path system
 - ✅ **Creates documentation** for users
 - ✅ **Initializes paths** on first launch
+- ✅ **Bundles FFMPEG** in DMG distributions
+- ✅ **Silent installation** with no user interaction
 - ✅ **Maintains compatibility** with existing workflows
 - ✅ **Follows macOS standards** throughout
 
-Ready for production builds with professional macOS app behavior! 🚀
+Ready for production builds with professional macOS app behavior and zero-setup YouTube transcription! 🚀

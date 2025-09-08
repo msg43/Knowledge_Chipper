@@ -125,6 +125,7 @@ class BaseTab(QWidget):
         tooltip: str,
         row: int,
         col: int,
+        trailing_widgets: list[Any] | None = None,
     ) -> None:
         """Add a field with label and enhanced tooltip to a grid layout."""
         from PyQt6.QtCore import Qt
@@ -148,6 +149,14 @@ class BaseTab(QWidget):
 
         # Add the main widget
         widget_layout.addWidget(widget)
+        # Ensure the main input expands horizontally
+        try:
+            current_policy = widget.sizePolicy()
+            widget.setSizePolicy(
+                QSizePolicy.Policy.Expanding, current_policy.verticalPolicy()
+            )
+        except Exception:
+            pass
 
         # Create a small, subtle info indicator using text
         info_label = QLabel("ⓘ")
@@ -170,6 +179,33 @@ class BaseTab(QWidget):
         )
 
         widget_layout.addWidget(info_label)
+
+        # Prepare optional trailing widgets in a separate grid column to preserve field width
+        trailing_container = None
+        if trailing_widgets:
+            from PyQt6.QtWidgets import QHBoxLayout as _QHBoxLayout
+
+            trailing_layout = _QHBoxLayout()
+            trailing_layout.setContentsMargins(0, 0, 0, 0)
+            trailing_layout.setSpacing(8)
+            # Keep items flush-left
+            trailing_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+            for extra_widget in trailing_widgets:
+                try:
+                    trailing_layout.addWidget(extra_widget)
+                except Exception:
+                    # Avoid UI crashes if a widget is invalid
+                    pass
+            trailing_layout.addStretch()
+            trailing_container = QWidget()
+            trailing_container.setLayout(trailing_layout)
+            try:
+                current_policy = trailing_container.sizePolicy()
+                trailing_container.setSizePolicy(
+                    QSizePolicy.Policy.Minimum, current_policy.verticalPolicy()
+                )
+            except Exception:
+                pass
         widget_layout.addStretch()  # Push everything to the left
 
         # Create a container widget for the layout
@@ -178,6 +214,23 @@ class BaseTab(QWidget):
 
         layout.addWidget(label, row, col)
         layout.addWidget(widget_container, row, col + 1)
+        if trailing_container:
+            # Place trailing widgets column and align left so the button sits flush-left
+            layout.addWidget(
+                trailing_container,
+                row,
+                col + 2,
+                1,
+                1,
+                Qt.AlignmentFlag.AlignLeft,
+            )
+            # Ensure the input column stretches while trailing remains compact
+            try:
+                layout.setColumnStretch(col, 0)
+                layout.setColumnStretch(col + 1, 1)
+                layout.setColumnStretch(col + 2, 0)
+            except Exception:
+                pass
 
     def append_log(self, message: str, force_update: bool = True) -> None:
         """Append a message to the output log with immediate GUI update."""

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.knowledge_system.processors.summarizer import SummarizerProcessor
+from knowledge_system.processors.summarizer import SummarizerProcessor
 
 
 def test_processor_honors_use_skim_flag(tmp_path: Path):

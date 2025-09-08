@@ -143,7 +143,7 @@ class LLMSpeakerSuggester:
     def _create_simple_prompt(
         self, speaker_segments: dict[str, list[dict]], metadata: dict | None
     ) -> str:
-        """Create simple LLM prompt with metadata + first 5 statements."""
+        """Create strict JSON-only prompt with metadata + first 5 statements."""
 
         # Build metadata section
         metadata_text = "No metadata available"
@@ -163,13 +163,27 @@ class LLMSpeakerSuggester:
             if parts:
                 metadata_text = "\n".join(parts)
 
-        # Build speaker sections with first 5 statements
-        speaker_sections = []
-        for speaker_id, segments in speaker_segments.items():
+        # Build speaker sections with first 5 statements (sorted chronologically)
+        speaker_sections: list[str] = []
+        # Use a stable order for keys to reduce variability between runs
+        ordered_speaker_ids = sorted(speaker_segments.keys())
+        for speaker_id in ordered_speaker_ids:
+            segments = speaker_segments.get(speaker_id, [])
+            # Sort by start time if available
+            segments_sorted = sorted(
+                segments,
+                key=lambda s: (
+                    s.get("start", float("inf")),
+                    s.get("end", float("inf")),
+                ),
+            )
+
             # Get first 5 non-empty statements
-            statements = []
-            for seg in segments[:10]:  # Look at first 10 segments to find 5 good ones
-                text = seg.get("text", "").strip()
+            statements: list[str] = []
+            for seg in segments_sorted[
+                :10
+            ]:  # Look at first 10 segments to find 5 good ones
+                text = str(seg.get("text", "")).strip()
                 if text and len(text) > 10:  # Only substantial statements
                     statements.append(text)
                 if len(statements) >= 5:
@@ -190,28 +204,27 @@ class LLMSpeakerSuggester:
 
         speakers_text = "".join(speaker_sections)
 
-        prompt = f"""Based on the metadata and speech samples, guess who each speaker is.
+        # Build a strict JSON skeleton with the exact keys we expect
+        skeleton_lines = [
+            f'    "{sid}": {{"name": "", "confidence": 0.5}}'
+            for sid in ordered_speaker_ids
+        ]
+        json_skeleton = "{\n" + ",\n".join(skeleton_lines) + "\n}"
 
-METADATA:
-{metadata_text}
-
-SPEAKERS AND THEIR FIRST STATEMENTS:
-{speakers_text}
-
-Look for:
-- Names mentioned in title/description
-- Speaking patterns (who asks questions vs answers)
-- Context clues about roles (host, guest, expert, etc.)
-
-If you can identify actual names, use them. Otherwise, use descriptive roles like "Host", "Guest", "Interviewer".
-
-Respond in JSON format:
-{{
-    "SPEAKER_00": {{"name": "Best guess name", "confidence": 0.8}},
-    "SPEAKER_01": {{"name": "Best guess name", "confidence": 0.7}}
-}}
-
-Confidence scale: 0.9+ = very sure, 0.7-0.8 = confident, 0.5-0.6 = decent guess, 0.3-0.4 = uncertain"""
+        prompt = (
+            "You are labeling speakers in an interview/podcast transcript.\n\n"
+            "INSTRUCTIONS:\n"
+            "- Use the metadata and the early speech samples to identify who is who.\n"
+            "- If you recognize real names from metadata, use those.\n"
+            '- Otherwise use concise roles like "Host", "Guest", "Interviewer".\n'
+            "- Output STRICTLY VALID JSON ONLY. No markdown, no prose, no comments.\n"
+            "- Keys MUST EXACTLY match the speaker IDs provided. Do not add or remove keys.\n"
+            "- Confidence is a number between 0.1 and 1.0.\n\n"
+            f"METADATA:\n{metadata_text}\n\n"
+            f"SPEAKERS AND THEIR FIRST STATEMENTS:\n{speakers_text}\n\n"
+            "Return only a single JSON object matching this skeleton (fill in values):\n"
+            f"{json_skeleton}\n"
+        )
 
         return prompt
 
@@ -220,8 +233,18 @@ Confidence scale: 0.9+ = very sure, 0.7-0.8 = confident, 0.5-0.6 = decent guess,
     ) -> dict[str, tuple[str, float]]:
         """Parse LLM response into suggestions."""
         try:
-            # Extract JSON from response
-            response_text = response.strip()
+            # Extract JSON from response (strip any leading prose or markdown fences)
+            response_text = (response or "").strip()
+            if response_text.startswith("```"):
+                # Remove markdown fence if present
+                # e.g., ```json\n{...}\n```
+                parts = response_text.split("```")
+                # Choose the largest brace-containing part
+                candidates = [p for p in parts if "{" in p and "}" in p]
+                response_text = (
+                    max(candidates, key=len) if candidates else response_text
+                )
+
             start_idx = response_text.find("{")
             end_idx = response_text.rfind("}") + 1
 
@@ -232,17 +255,45 @@ Confidence scale: 0.9+ = very sure, 0.7-0.8 = confident, 0.5-0.6 = decent guess,
                 logger.warning("No JSON found in LLM response")
                 return self._simple_fallback(speaker_segments)
 
-            suggestions = {}
+            # Normalize keys from the model (e.g., SPEAKER_0 -> SPEAKER_00)
+            def normalize_key(k: str) -> str:
+                k = str(k).strip().upper().replace(" ", "_")
+                # Extract numeric suffix if present
+                import re
 
+                m = re.search(r"SPEAKER[_\-\s]*(\d+)$", k)
+                if m:
+                    num = int(m.group(1))
+                    return f"SPEAKER_{num:02d}"
+                return k
+
+            normalized_llm = {normalize_key(k): v for k, v in dict(llm_result).items()}
+
+            suggestions: dict[str, tuple[str, float]] = {}
             for speaker_id in speaker_segments.keys():
+                candidate = None
                 if speaker_id in llm_result:
-                    suggestion_data = llm_result[speaker_id]
-                    suggested_name = suggestion_data.get(
-                        "name", f"Speaker {speaker_id[-2:]}"
-                    )
-                    confidence = float(suggestion_data.get("confidence", 0.5))
+                    candidate = llm_result[speaker_id]
+                else:
+                    norm_id = normalize_key(speaker_id)
+                    if norm_id in normalized_llm:
+                        candidate = normalized_llm[norm_id]
 
-                    # Validate confidence range
+                if isinstance(candidate, dict):
+                    suggested_name = str(
+                        candidate.get("name", f"Speaker {speaker_id[-2:]}")
+                    ).strip()
+                    # Sanitize name
+                    if len(suggested_name) > 60:
+                        suggested_name = suggested_name[:57] + "..."
+                    if "\n" in suggested_name:
+                        suggested_name = " ".join(suggested_name.split())
+
+                    conf_raw = candidate.get("confidence", 0.5)
+                    try:
+                        confidence = float(conf_raw)
+                    except Exception:
+                        confidence = 0.5
                     confidence = max(0.1, min(1.0, confidence))
 
                     suggestions[speaker_id] = (suggested_name, confidence)

@@ -3,7 +3,8 @@
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, QUrl, pyqtSignal
+from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QCheckBox,
     QFrame,
@@ -144,6 +145,26 @@ class APIKeysTab(BaseTab):
         self.huggingface_token_edit = QLineEdit()
         self.huggingface_token_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.huggingface_token_edit.setPlaceholderText("hf_...")
+        # Inline blue help button next to the info icon
+        self.hf_token_help_btn = QPushButton("Help me get HF Token")
+        self.hf_token_help_btn.setToolTip(
+            "Show step-by-step instructions and open the Hugging Face sign-up page"
+        )
+        self.hf_token_help_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                font-weight: bold;
+                padding: 6px 10px;
+                font-size: 12px;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #1976D2; }
+            QPushButton:pressed { background-color: #0D47A1; }
+            """
+        )
+        self.hf_token_help_btn.clicked.connect(self._show_hf_token_help)
         self._add_field_with_info(
             layout,
             "HuggingFace Token:",
@@ -156,6 +177,7 @@ class APIKeysTab(BaseTab):
             "• Note: Only needed if you want to identify different speakers in transcriptions",
             4,
             0,
+            trailing_widgets=[self.hf_token_help_btn],
         )
 
         # Bright Data API Key (hidden in UI)
@@ -594,6 +616,44 @@ class APIKeysTab(BaseTab):
         main_layout.addLayout(tests_layout)
 
         main_layout.addStretch()
+
+    def _show_hf_token_help(self) -> None:
+        """Show a popup with instructions to obtain a free Hugging Face token."""
+        try:
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Hugging Face Token Setup")
+            msg.setIcon(QMessageBox.Icon.Information)
+
+            # Plain text instructions + URLs (easy to copy)
+            message = (
+                "Get a free Hugging Face token in three steps:\n\n"
+                "1) Create a free account: https://huggingface.co/join\n"
+                "2) Generate a token: https://huggingface.co/settings/tokens (New token → Read)\n"
+                "3) Paste the token (starts with 'hf_') into Settings → HuggingFace Token and click Save.\n\n"
+                "Tip: For diarization, you may need to accept access to the pyannote model:\n"
+                "https://huggingface.co/pyannote/speaker-diarization-3.1"
+            )
+            msg.setText(message)
+
+            # Add action buttons to open URLs directly
+            open_signup_btn = msg.addButton(
+                "Open Sign‑Up Page", QMessageBox.ButtonRole.ActionRole
+            )
+            open_tokens_btn = msg.addButton(
+                "Open Token Page", QMessageBox.ButtonRole.ActionRole
+            )
+            msg.addButton(QMessageBox.StandardButton.Ok)
+
+            msg.exec()
+
+            clicked = msg.clickedButton()
+            if clicked == open_signup_btn:
+                QDesktopServices.openUrl(QUrl("https://huggingface.co/join"))
+            elif clicked == open_tokens_btn:
+                QDesktopServices.openUrl(QUrl("https://huggingface.co/settings/tokens"))
+        except Exception as e:
+            # Non-fatal UI error; log and continue
+            logger.error(f"Failed to show HF token help dialog: {e}")
 
     def _load_existing_values(self) -> None:
         """Load existing API key values from settings."""
@@ -1643,19 +1703,17 @@ end tell
             import subprocess  # nosec B404 # Required for Terminal automation
             from pathlib import Path
 
-            script_path = (
-                Path.home()
-                / "Projects"
-                / "Knowledge_Chipper"
-                / "scripts"
-                / "build_macos_app.sh"
-            )
+            # Use the actual workspace path instead of hardcoded path
+            workspace_path = Path(__file__).parent.parent.parent.parent.parent
+            script_path = workspace_path / "scripts" / "build_macos_app.sh"
             if not script_path.exists():
-                self.append_log("❌ Could not find build script for admin install")
+                self.append_log(
+                    f"❌ Could not find build script for admin install at: {script_path}"
+                )
                 QMessageBox.critical(
                     self,
                     "Admin Install",
-                    "Build script not found. Ensure the repository exists at ~/Projects/Knowledge_Chipper.",
+                    f"Build script not found at:\n{script_path}\n\nEnsure the script exists in the project's scripts directory.",
                 )
                 return
 
@@ -1663,7 +1721,20 @@ end tell
             script_name = script_path.name
 
             self.append_log(
-                "🔐 Admin install requested. A Terminal window will open and may prompt for your macOS password."
+                "🔐 Admin install requested. A Terminal window will open and WILL prompt for your macOS password."
+            )
+
+            # Notify user about sudo requirement as per user preferences
+            QMessageBox.information(
+                self,
+                "Admin Install",
+                "📱 Ready to proceed with admin install.\n\n"
+                "A Terminal window will open and prompt for your macOS password.\n"
+                "Please be ready to enter your password when prompted.\n\n"
+                "The install will:\n"
+                "• Remove any user-space copy of the app\n"
+                "• Install the app to /Applications (system-wide)\n"
+                "• Require administrator privileges",
             )
 
             # Disable update actions during admin install to avoid conflicts
