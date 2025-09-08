@@ -155,22 +155,34 @@ class YouTubeMetadataProxyProcessor(BaseProcessor):
                 },
             }
 
-            # Add proxy configuration if available
-            if self.proxy_manager:
-                proxy_config = self.proxy_manager._get_proxy_config(use_socks5=False)
-                proxy_url = proxy_config["https"]
-                ydl_opts["proxy"] = proxy_url
-                self.logger.debug(
-                    f"Using PacketStream proxy for {video_id} (port 31112)"
-                )
-            else:
-                self.logger.debug(f"Using direct connection for {video_id}")
-
-            # Extract metadata (simple retry for network issues)
+            # Extract metadata with proxy rotation on retries
             max_retries = 2
             for attempt in range(max_retries):
                 try:
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    # Configure proxy for this attempt (rotate IP on retries)
+                    current_ydl_opts = ydl_opts.copy()
+                    if self.proxy_manager:
+                        if attempt > 0:
+                            # Rotate to new IP for retry attempts
+                            self.logger.debug(
+                                f"Rotating PacketStream IP for retry attempt {attempt + 1}"
+                            )
+                            self.proxy_manager.rotate_session()
+
+                        proxy_config = self.proxy_manager._get_proxy_config(
+                            use_socks5=False
+                        )
+                        proxy_url = proxy_config["https"]
+                        current_ydl_opts["proxy"] = proxy_url
+                        self.logger.debug(
+                            f"Using PacketStream proxy for {video_id} (attempt {attempt + 1})"
+                        )
+                    else:
+                        self.logger.debug(
+                            f"Using direct connection for {video_id} (attempt {attempt + 1})"
+                        )
+
+                    with yt_dlp.YoutubeDL(current_ydl_opts) as ydl:
                         info = ydl.extract_info(url, download=False)
 
                     if info:

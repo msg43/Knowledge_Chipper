@@ -237,7 +237,7 @@ def should_use_parallel_processing(
 
     Args:
         enable_diarization: Whether diarization is enabled
-        audio_duration_seconds: Duration of audio file
+        audio_duration_seconds: Duration of audio file (can be None)
         system_cores: Number of CPU cores available
 
     Returns:
@@ -245,6 +245,10 @@ def should_use_parallel_processing(
     """
     # Only use parallel processing if diarization is enabled
     if not enable_diarization:
+        return False
+
+    # Handle None duration
+    if audio_duration_seconds is None:
         return False
 
     # Only worth it for longer files (overhead of parallelization)

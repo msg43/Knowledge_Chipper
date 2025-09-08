@@ -102,7 +102,7 @@ class BatchProcessor:
                 "quiet",
                 "-show_entries",
                 "format=duration",
-                "-o",
+                "-of",
                 "csv=p=0",
                 str(file_path),
             ]

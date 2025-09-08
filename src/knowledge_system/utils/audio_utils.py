@@ -108,7 +108,7 @@ class FFmpegAudioProcessor:
 
             # Add audio filters for normalization
             if normalize:
-                cmd.extend(["-a", "loudnorm"])
+                cmd.extend(["-af", "loudnorm"])
 
             # Add sample rate conversion
             if sample_rate:
@@ -201,7 +201,7 @@ class FFmpegAudioProcessor:
                 "quiet",
                 "-show_entries",
                 "format=duration",
-                "-o",
+                "-of",
                 "csv=p=0",
                 str(file_path),
             ]
@@ -316,7 +316,7 @@ class FFmpegAudioProcessor:
                 "quiet",
                 "-show_entries",
                 "format=duration",
-                "-o",
+                "-of",
                 "csv=p=0",
                 str(file_path),
             ]
@@ -356,7 +356,7 @@ class FFmpegAudioProcessor:
                 ffmpeg,
                 "-i",
                 str(input_path),
-                "-a",
+                "-af",
                 "loudnorm=I=-16:TP=-1.5:LRA=11",  # Standard normalization
                 "-y",
                 str(output_path),

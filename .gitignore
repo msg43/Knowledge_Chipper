@@ -201,7 +201,10 @@ config/settings.yaml
 # Whisper model files
 *.bin
 *.pt
-models/
+# Ignore whisper/AI model files but not our source code
+whisper_models/
+downloaded_models/
+.cache/models/
 
 # Cache directories
 cache/

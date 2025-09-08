@@ -1026,7 +1026,7 @@ class AudioProcessor(BaseProcessor):
                     return ProcessorResult(success=False, errors=[error_msg])
 
                 # Apply Apple Silicon optimizations if available
-                audio_duration = audio_metadata.get("duration_seconds", 3600.0)
+                audio_duration = audio_metadata.get("duration_seconds") or 3600.0
                 optimized_kwargs = kwargs.copy()
 
                 # Get optimized settings for Apple Silicon
@@ -1071,8 +1071,13 @@ class AudioProcessor(BaseProcessor):
                 )
 
                 if use_streaming:
+                    duration_str = (
+                        f"{audio_duration/60:.1f}"
+                        if audio_duration
+                        else "unknown duration"
+                    )
                     logger.info(
-                        f"🌊 Using streaming processing for {audio_duration/60:.1f} minute file"
+                        f"🌊 Using streaming processing for {duration_str} minute file"
                     )
                     return self._process_with_streaming(
                         path,

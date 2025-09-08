@@ -470,13 +470,17 @@ def should_use_streaming_processing(
     Determine if streaming processing should be used based on file duration and available memory.
 
     Args:
-        audio_duration_seconds: Duration of audio file
+        audio_duration_seconds: Duration of audio file (can be None)
         memory_gb: Available system memory in GB
         min_duration_for_streaming: Minimum duration to consider streaming (seconds)
 
     Returns:
         True if streaming processing is recommended
     """
+    # Handle None duration
+    if audio_duration_seconds is None:
+        return False
+
     # Only use streaming for long files
     if audio_duration_seconds < min_duration_for_streaming:
         return False
