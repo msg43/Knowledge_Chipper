@@ -895,7 +895,6 @@ Episodes: {stats.get('total_episodes', 0)}"""
             auth_error = None
 
             def check_progress():
-                nonlocal auth_completed, auth_result, auth_error
                 try:
                     if progress.wasCanceled():
                         check_timer.stop()

@@ -158,6 +158,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
             else self.download_thumbnails
         )
 
+        # Extract optional services from kwargs
+        session_manager = kwargs.get("session_manager")
+        db_service = kwargs.get("db_service")
+
         urls = extract_urls(input_data)
         if not urls:
             return ProcessorResult(
@@ -236,63 +240,65 @@ class YouTubeDownloadProcessor(BaseProcessor):
         thumbnails_dir = output_dir / "Thumbnails"
         thumbnails_dir.mkdir(exist_ok=True)
 
-        # PROXY CONFIGURATION - Bright Data (required)
+        # PROXY CONFIGURATION - PacketStream (optional)
         from ..config import get_settings
-        from ..database import DatabaseService
-        from ..utils.bright_data import BrightDataSessionManager
         from ..utils.deduplication import VideoDeduplicationService
+        from ..utils.packetstream_proxy import PacketStreamProxyManager
 
         settings = get_settings()
 
         # Initialize deduplication service for cost optimization
         dedup_service = VideoDeduplicationService()
 
-        # Bright Data (required)
-        bright_data_api_key = getattr(settings.api_keys, "bright_data_api_key", None)
-        use_bright_data = False
+        # PacketStream proxy (optional)
+        use_proxy = False
+        proxy_manager = None
         proxy_url = None
-        session_manager = None
 
-        if bright_data_api_key:
-            try:
-                # Initialize Bright Data session manager
-                db_service = DatabaseService()
-                session_manager = BrightDataSessionManager(db_service)
-
-                # Validate credentials
-                if session_manager._validate_credentials():
-                    use_bright_data = True
-                    logger.info(
-                        "Using Bright Data residential proxies for YouTube processing"
+        try:
+            proxy_manager = PacketStreamProxyManager()
+            if proxy_manager.username and proxy_manager.auth_key:
+                use_proxy = True
+                logger.info(
+                    "Using PacketStream residential proxies for YouTube processing"
+                )
+                if progress_callback:
+                    progress_callback("🌐 Using PacketStream residential proxies...")
+            else:
+                logger.warning("⚠️ PACKETSTREAM CREDENTIALS NOT CONFIGURED")
+                logger.warning(
+                    "⚠️ Using direct access - YouTube may block bulk downloads!"
+                )
+                if progress_callback:
+                    progress_callback(
+                        "⚠️ PacketStream not configured - risk of YouTube blocking..."
                     )
-                    if progress_callback:
-                        progress_callback("🌐 Using Bright Data residential proxies...")
-                else:
-                    logger.warning("Bright Data credentials incomplete")
-            except Exception as e:
-                logger.warning(f"Bright Data initialization failed: {e}")
-
-        if not use_bright_data:
-            return ProcessorResult(
-                success=False,
-                errors=[
-                    "Bright Data API key is required for YouTube processing. Please configure your Bright Data API Key in Settings."
-                ],
+        except Exception as e:
+            logger.warning(f"⚠️ PACKETSTREAM PROXY NOT AVAILABLE: {e}")
+            logger.warning(
+                "⚠️ Using direct access - YouTube may trigger anti-bot detection for downloads!"
             )
+            logger.warning(
+                "⚠️ For reliable bulk downloads, configure PacketStream in Settings > API Keys"
+            )
+            if progress_callback:
+                progress_callback(
+                    "⚠️ PacketStream proxy not configured - using direct access (may be blocked)..."
+                )
+
+        # Note: PacketStream is optional - we can proceed without it (but may get rate limited)
 
         # PROXY TESTING AND CONFIGURATION
-        if use_bright_data:
-            # Test Bright Data proxy by creating a session for first URL
-            logger.info("Testing Bright Data proxy connectivity...")
+        if use_proxy and proxy_manager:
+            # Test PacketStream proxy connectivity
+            logger.info("Testing PacketStream proxy connectivity...")
             if progress_callback:
-                progress_callback("🔐 Testing Bright Data proxy...")
+                progress_callback("🔐 Testing PacketStream proxy...")
 
             try:
                 # Extract first video ID for session creation
                 test_video_id = "test_connection"  # We'll use a generic test ID
-                proxy_url = session_manager.get_proxy_url_for_file(
-                    test_video_id, "audio_download"
-                )
+                proxy_url = proxy_manager.get_proxy_url() if proxy_manager else None
 
                 if proxy_url:
                     # Test proxy connectivity
