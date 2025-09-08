@@ -2,7 +2,7 @@ import pytest
 
 
 @pytest.mark.skip(
-    reason="Complex HCE mocking - requires proper ConsolidatedClaim structure and pipeline setup"
+    reason="HCE mocking complex - ConsolidatedClaim.evidence_spans attribute issue"
 )
 def test_hce_summarization_with_mocks(monkeypatch):
     # Patch HCE validation to pass
