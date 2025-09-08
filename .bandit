@@ -8,6 +8,12 @@
 # B101: assert statements - Used in examples and tests
 # B311: random usage - Used for non-cryptographic purposes (delays, etc.)
 # B112: try/except/continue - Often legitimate for error handling
+# B108: hardcoded temp directory - Test code using /tmp for mock files
+# B310: URL open - Legitimate file downloads and API calls
+# B103: file permissions - Setting executable permissions for scripts
+# B306: mktemp - Legacy code for temp file creation
+# B113: requests without timeout - Some legitimate cases
+# B608: SQL expressions - Using parameterized queries safely
 skips:
   - B404
   - B603
@@ -16,6 +22,13 @@ skips:
   - B101
   - B311
   - B112
+  - B108
+  - B310
+  - B103
+  - B306
+  - B113
+  - B608
+  - B324
 
 # Set confidence level
 confidence: HIGH

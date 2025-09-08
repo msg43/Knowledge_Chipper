@@ -1388,7 +1388,7 @@ class AudioProcessor(BaseProcessor):
 
                                 # Use hash of absolute path for consistent ID across re-runs
                                 path_hash = hashlib.md5(
-                                    str(path.absolute()).encode()
+                                    str(path.absolute()).encode(), usedforsecurity=False
                                 ).hexdigest()[:8]
                                 media_id = f"audio_{path.stem}_{path_hash}"
 

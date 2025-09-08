@@ -754,11 +754,14 @@ def test_batch_processing():
     print("=" * 25)
 
     # Create mock batch items
+    import tempfile
+
+    tmp_dir = Path(tempfile.gettempdir())
     mock_files = [
-        Path("/tmp/audio1.wav"),
-        Path("/tmp/audio2.wav"),
-        Path("/tmp/audio3.wav"),
-        Path("/tmp/audio4.wav"),
+        tmp_dir / "audio1.wav",
+        tmp_dir / "audio2.wav",
+        tmp_dir / "audio3.wav",
+        tmp_dir / "audio4.wav",
     ]
 
     # Test batch creation
