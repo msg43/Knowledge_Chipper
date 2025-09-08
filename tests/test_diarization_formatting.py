@@ -357,22 +357,16 @@ class TestDiarizationFormatting(unittest.TestCase):
                 f"(confidence={speaker_data.confidence_score:.2f}, method={speaker_data.suggestion_method})"
             )
 
-        # Verify that metadata was used for suggestions
-        metadata_used = any(
-            speaker_data.suggestion_method.startswith("metadata_analysis")
+        # Verify that intelligent suggestions were made using either metadata analysis or LLM analysis
+        intelligent_suggestions_used = any(
+            speaker_data.suggestion_method in ["metadata_analysis", "llm_analysis"]
             for speaker_data in speaker_data_list
         )
 
-        # If metadata suggestions weren't used, at least verify enhanced fallback was used
-        if not metadata_used:
-            enhanced_fallback_used = any(
-                "enhanced_fallback" in speaker_data.suggestion_method
-                for speaker_data in speaker_data_list
-            )
-            self.assertTrue(
-                enhanced_fallback_used,
-                "Enhanced fallback should be used when metadata doesn't yield suggestions",
-            )
+        self.assertTrue(
+            intelligent_suggestions_used,
+            "Either metadata analysis or LLM analysis should be used for intelligent suggestions",
+        )
 
     def test_youtube_transcript_speaker_assignment_integration(self):
         """Test that YouTube transcript processor preserves speaker assignments from AudioProcessor."""
