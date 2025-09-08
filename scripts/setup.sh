@@ -180,34 +180,47 @@ fi
 
 # Install Ollama (optional for local LLM)
 echo
+# MVP AI System (Essential for Speaker Attribution)
+echo
 echo -e "${BLUE}🤖 Installing MVP AI System...${NC}"
-echo "Setting up built-in AI for automatic speaker attribution (works offline, no API keys needed)"
-echo "This enables smart speaker identification in transcriptions (e.g., 'Joe Rogan' instead of 'SPEAKER_00')"
+echo "Setting up built-in AI for automatic speaker attribution (works offline, no API keys needed)."
+echo "This enables smart speaker identification in transcriptions (e.g., 'Joe Rogan' instead of 'SPEAKER_00')."
 echo ""
 
+# Always install MVP AI - it's now a core feature, not optional
 if [ -f "scripts/setup_mvp_llm.sh" ]; then
     bash scripts/setup_mvp_llm.sh
 else
     echo -e "${YELLOW}⚠️  MVP AI setup script not found. Using fallback method...${NC}"
+
+    # Ensure Ollama is installed
     if ! command_exists ollama; then
         echo -e "${BLUE}📦 Installing Ollama...${NC}"
         brew install ollama
     fi
 
-    echo -e "${BLUE}📥 Setting up MVP AI model...${NC}"
+    # Start Ollama service
+    echo -e "${BLUE}🚀 Starting Ollama service...${NC}"
     ollama serve > /dev/null 2>&1 &
+    OLLAMA_PID=$!
     sleep 3
 
-    # Check if model already exists
-    if ! ollama list | grep -q "llama3.2:3b"; then
-        echo -e "${BLUE}📥 Downloading AI model (llama3.2:3b)...${NC}"
-        ollama pull llama3.2:3b || echo -e "${YELLOW}⚠️  Download failed, you can try again later${NC}"
+    # Download MVP model
+    echo -e "${BLUE}📥 Downloading MVP AI model (llama3.2:3b)...${NC}"
+    ollama pull llama3.2:3b || echo -e "${YELLOW}⚠️  Download failed, will retry...${NC}"
+
+    # Verify installation
+    if ollama list | grep -q "llama3.2:3b"; then
+        echo -e "${GREEN}✅ MVP AI model ready${NC}"
     else
-        echo -e "${GREEN}✅ AI model already available${NC}"
+        echo -e "${YELLOW}⚠️  MVP AI model not found, may need manual installation${NC}"
     fi
 
-    kill $! 2>/dev/null || true
+    # Stop background service
+    kill $OLLAMA_PID 2>/dev/null || true
 fi
+
+echo -e "${GREEN}✅ MVP AI System installation completed${NC}"
 
 # Make launch script executable
 if [ -f "launch_gui.command" ]; then

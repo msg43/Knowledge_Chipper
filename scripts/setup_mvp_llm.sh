@@ -19,6 +19,7 @@ else
     echo -e "${BLUE}${BOLD}🤖 Setting up MVP AI System${NC}"
     echo "=============================="
     echo "Installing built-in AI for speaker attribution (works offline, no API keys needed)"
+    echo "This is now a core feature that enables professional speaker identification."
     echo ""
 fi
 

@@ -221,9 +221,6 @@ class MainWindow(QMainWindow):
         # Show ready message on the left side
         self.status_bar.showMessage("Ready")
 
-        # Initialize MVP LLM status tracking
-        self._mvp_llm_status = "unknown"
-
         # Create modular tabs - all business logic is in the tab classes
         self._create_tabs()
 
@@ -424,31 +421,6 @@ class MainWindow(QMainWindow):
             pass
 
         self.status_bar.showMessage(f"Operation cancelled: {reason}")
-
-    def update_mvp_llm_status(self, status: str, details: str = ""):
-        """Update MVP LLM status in the status bar."""
-        self._mvp_llm_status = status
-
-        if status == "checking":
-            message = f"🤖 Checking AI system... {details}"
-        elif status == "installing_ollama":
-            message = f"🤖 Installing AI engine... {details}"
-        elif status == "downloading_model":
-            message = f"🤖 Downloading AI model... {details}"
-        elif status == "configuring":
-            message = f"🤖 Configuring AI system... {details}"
-        elif status == "ready":
-            message = "🤖 AI system ready"
-            # Auto-clear after 3 seconds
-            from PyQt6.QtCore import QTimer
-
-            QTimer.singleShot(3000, lambda: self.status_bar.showMessage("Ready"))
-        elif status == "error":
-            message = f"🤖 AI setup failed: {details}"
-        else:
-            message = f"🤖 {status}: {details}"
-
-        self.status_bar.showMessage(message)
 
     def _load_api_keys_to_environment(self) -> None:
         """Load API keys to environment variables for processors to use."""

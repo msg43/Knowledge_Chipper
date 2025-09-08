@@ -136,9 +136,6 @@ class FirstRunSetupDialog(QDialog):
         # Model selection
         self._create_model_selection(layout)
 
-        # MVP LLM selection
-        self._create_mvp_llm_selection(layout)
-
         # Progress section (initially hidden)
         self._create_progress_section(layout)
 
@@ -240,50 +237,6 @@ class FirstRunSetupDialog(QDialog):
         # Update initial selection
         self._update_selected_models()
 
-    def _create_mvp_llm_selection(self, layout: QVBoxLayout):
-        """Create the MVP LLM setup selection section."""
-        mvp_widget = QWidget()
-        mvp_layout = QVBoxLayout(mvp_widget)
-
-        # MVP LLM section header
-        mvp_header = QLabel("🤖 Built-in AI System (Recommended)")
-        mvp_header.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        mvp_layout.addWidget(mvp_header)
-
-        # MVP LLM checkbox
-        self.mvp_llm_checkbox = QCheckBox(
-            "Enable built-in AI for speaker identification"
-        )
-        self.mvp_llm_checkbox.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-        self.mvp_llm_checkbox.setChecked(True)  # Default enabled
-        mvp_layout.addWidget(self.mvp_llm_checkbox)
-
-        # Description
-        desc_label = QLabel(
-            "   🎯 Automatically identifies speakers in conversations (e.g., 'Joe Rogan', 'Elon Musk')\n"
-            "   🌐 Works completely offline - no internet required\n"
-            "   💰 No API key or subscription needed\n"
-            "   📱 Downloads a small AI model (~2GB) on first use\n"
-            "   ⚡ Makes transcriptions much more useful and readable"
-        )
-        desc_label.setStyleSheet("color: #666; margin-left: 20px;")
-        desc_label.setWordWrap(True)
-        mvp_layout.addWidget(desc_label)
-
-        # Benefits note
-        benefits_label = QLabel(
-            "💡 Why enable this? Instead of seeing 'SPEAKER_00' and 'SPEAKER_01', you'll see actual names "
-            "like 'Host' and 'Guest' or specific people when the AI can identify them from context."
-        )
-        benefits_label.setStyleSheet(
-            "color: #4caf50; font-weight: bold; margin: 10px 20px; "
-            "padding: 10px; background: #e8f5e8; border-radius: 5px;"
-        )
-        benefits_label.setWordWrap(True)
-        mvp_layout.addWidget(benefits_label)
-
-        layout.addWidget(mvp_widget)
-
     def _create_progress_section(self, layout: QVBoxLayout):
         """Create the progress section."""
         self.progress_widget = QWidget()
@@ -364,8 +317,6 @@ class FirstRunSetupDialog(QDialog):
 
     def _skip_setup(self):
         """Skip the setup."""
-        # Even if skipping Whisper models, save MVP LLM preference
-        self._save_mvp_llm_preference()
 
         self.setup_completed.emit(True)
         self.accept()
@@ -467,33 +418,9 @@ class FirstRunSetupDialog(QDialog):
 
     def _complete_setup(self, success: bool):
         """Complete the setup process."""
-        # Save MVP LLM preference
-        self._save_mvp_llm_preference()
 
         self.setup_completed.emit(success)
         self.accept()
-
-    def _save_mvp_llm_preference(self):
-        """Save the user's MVP LLM preference."""
-        try:
-            if hasattr(self, "mvp_llm_checkbox"):
-                enable_mvp = self.mvp_llm_checkbox.isChecked()
-
-                # Save to settings for future reference
-                from ...config import get_settings
-
-                settings = get_settings()
-
-                # Store the preference (this will be used by the auto-setup logic)
-                if hasattr(settings, "mvp_llm"):
-                    settings.mvp_llm.enabled = enable_mvp
-
-                logger.info(
-                    f"MVP LLM preference saved: {'enabled' if enable_mvp else 'disabled'}"
-                )
-
-        except Exception as e:
-            logger.warning(f"Could not save MVP LLM preference: {e}")
 
     def closeEvent(self, event):
         """Handle dialog close event."""
