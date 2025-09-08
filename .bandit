@@ -6,12 +6,16 @@
 # B607: partial executable paths - We use system commands like 'open' and 'osascript'
 # B110: try/except/pass - Often legitimate for error handling
 # B101: assert statements - Used in examples and tests
+# B311: random usage - Used for non-cryptographic purposes (delays, etc.)
+# B112: try/except/continue - Often legitimate for error handling
 skips:
   - B404
   - B603
   - B607
   - B110
   - B101
+  - B311
+  - B112
 
 # Set confidence level
 confidence: HIGH
