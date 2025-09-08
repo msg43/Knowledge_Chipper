@@ -1,9 +1,7 @@
 import pytest
 
 
-@pytest.mark.skip(
-    reason="HCE mocking complex - ConsolidatedClaim.evidence_spans attribute issue"
-)
+@pytest.mark.skip(reason="Complex HCE mocking - ConsolidatedClaim.evidence_spans issue")
 def test_hce_summarization_with_mocks(monkeypatch):
     # Patch HCE validation to pass
     def mock_validate_hce():
@@ -25,7 +23,7 @@ def test_hce_summarization_with_mocks(monkeypatch):
     sys.modules["sentence_transformers"] = sentence_transformers
 
     # Patch AnyLLM to avoid network/API calls
-    from knowledge_system.processors.hce.models import llm_any as llm_any_mod
+    from knowledge_system.processors.hce.models.llm_any import AnyLLM
 
     def fake_generate_json(prompt: str):
         # Return one candidate claim for miner/glossary/concepts/people
@@ -61,10 +59,8 @@ def test_hce_summarization_with_mocks(monkeypatch):
             "decision": "accept",
         }
 
-    monkeypatch.setattr(
-        llm_any_mod.AnyLLM, "generate_json", staticmethod(fake_generate_json)
-    )
-    monkeypatch.setattr(llm_any_mod.AnyLLM, "judge_json", staticmethod(fake_judge_json))
+    monkeypatch.setattr(AnyLLM, "generate_json", staticmethod(fake_generate_json))
+    monkeypatch.setattr(AnyLLM, "judge_json", staticmethod(fake_judge_json))
 
     # Run summarizer on simple input text
     from knowledge_system.processors.summarizer import SummarizerProcessor
