@@ -407,6 +407,54 @@ class AudioProcessor(BaseProcessor):
 
             logger.info(f"🎭 Found {len(speaker_data_list)} speakers for assignment")
 
+            # Ensure fallback LLM is ready for speaker suggestions
+            if self.progress_callback:
+                self.progress_callback("🤖 Preparing AI speaker suggestions...")
+
+            try:
+                import asyncio
+
+                from ..utils.mvp_llm_setup import ensure_mvp_llm_ready
+
+                def setup_progress(progress_info):
+                    if self.progress_callback and progress_info.get("step"):
+                        step = progress_info["step"]
+                        detail = progress_info.get("detail", "")
+                        self.progress_callback(f"🤖 {step}: {detail}")
+
+                # Try to ensure fallback LLM is ready (non-blocking)
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # We're in an async context, run in thread
+                        import concurrent.futures
+
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(
+                                lambda: asyncio.run(
+                                    ensure_mvp_llm_ready(setup_progress)
+                                )
+                            )
+                            fallback_ready = future.result(
+                                timeout=30
+                            )  # 30 second timeout
+                    else:
+                        # We can run directly
+                        fallback_ready = asyncio.run(
+                            ensure_mvp_llm_ready(setup_progress)
+                        )
+                except Exception as e:
+                    logger.debug(f"Could not setup MVP LLM: {e}")
+                    fallback_ready = False
+
+                if fallback_ready:
+                    logger.info("✅ MVP LLM ready for speaker suggestions")
+                elif self.progress_callback:
+                    self.progress_callback("💡 Using basic speaker suggestions (no LLM)")
+
+            except Exception as e:
+                logger.debug(f"MVP LLM setup skipped: {e}")
+
             # Check if we're in GUI mode and can show dialog
             show_dialog = kwargs.get("show_speaker_dialog", True)
             gui_mode = kwargs.get("gui_mode", False)

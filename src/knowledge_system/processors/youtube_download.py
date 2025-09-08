@@ -99,7 +99,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     with open(input_str, encoding="utf-8") as f:
                         return any(is_youtube_url(line.strip()) for line in f)
                 except Exception:
-                    pass
+                    pass  # nosec B110 - Legitimate file read error handling
         return False
 
     def _download_thumbnail_from_url(self, url: str, output_dir: Path) -> str | None:

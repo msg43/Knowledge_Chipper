@@ -806,8 +806,8 @@ Episodes: {stats.get('total_episodes', 0)}"""
             if oauth_package_path not in sys.path:
                 sys.path.append(oauth_package_path)
 
-            from getreceipts_config import get_config, set_production
-            from getreceipts_uploader import GetReceiptsUploader
+            from getreceipts_config import get_config, set_production  # type: ignore
+            from getreceipts_uploader import GetReceiptsUploader  # type: ignore
 
             set_production()  # Ensure we're using production URLs for OAuth
             config = get_config()

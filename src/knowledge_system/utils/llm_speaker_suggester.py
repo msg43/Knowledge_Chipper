@@ -27,28 +27,82 @@ class LLMSpeakerSuggester:
     def _initialize_llm(self):
         """Initialize LLM client for suggestions."""
         try:
-            # Check if basic LLM configuration exists
-            if (
-                not self.settings.llm.provider
-                or not self.settings.api_keys.openai_api_key
-            ):
-                logger.info(
-                    "LLM not configured yet - speaker suggestions will use simple fallback"
-                )
-                self.llm_client = None
+            # Try to use configured LLM (cloud or local)
+            if self._try_configured_llm():
                 return
 
-            self.llm_client = UnifiedLLMClient(
-                provider=self.settings.llm.provider,
-                model=self.settings.llm.model,
-                temperature=0.3,  # Slightly higher for more creative name suggestions
-            )
-            logger.info(f"LLM Speaker Suggester ready")
-        except Exception as e:
+            # Try to use MVP LLM if available
+            if self._try_mvp_llm():
+                return
+
+            # No LLM available
             logger.info(
-                f"LLM not available for speaker suggestions - using simple names: {e}"
+                "No LLM available - speaker suggestions will use smart fallback"
             )
             self.llm_client = None
+
+        except Exception as e:
+            logger.info(f"LLM initialization failed - using smart fallback: {e}")
+            self.llm_client = None
+
+    def _try_configured_llm(self) -> bool:
+        """Try to initialize with user's configured LLM."""
+        try:
+            # Check if cloud LLM is configured
+            if (
+                self.settings.llm.provider in ["openai", "anthropic"]
+                and self.settings.api_keys.openai_api_key
+            ):
+                self.llm_client = UnifiedLLMClient(
+                    provider=self.settings.llm.provider,
+                    model=self.settings.llm.model,
+                    temperature=0.3,
+                )
+                logger.info(
+                    f"Using configured LLM: {self.settings.llm.provider}/{self.settings.llm.model}"
+                )
+                return True
+
+            # Check if local LLM is configured
+            if self.settings.llm.provider == "local":
+                self.llm_client = UnifiedLLMClient(
+                    provider="local",
+                    model=self.settings.llm.local_model,
+                    temperature=0.3,
+                )
+                logger.info(
+                    f"Using configured local LLM: {self.settings.llm.local_model}"
+                )
+                return True
+
+            return False
+
+        except Exception as e:
+            logger.debug(f"Configured LLM not available: {e}")
+            return False
+
+    def _try_mvp_llm(self) -> bool:
+        """Try to initialize with MVP LLM."""
+        try:
+            from .mvp_llm_setup import get_mvp_llm_setup
+
+            setup = get_mvp_llm_setup()
+            if setup.is_mvp_ready():
+                mvp_model = setup.get_available_mvp_model()
+                if mvp_model:
+                    self.llm_client = UnifiedLLMClient(
+                        provider="local",
+                        model=mvp_model,
+                        temperature=0.3,
+                    )
+                    logger.info(f"Using MVP LLM: {mvp_model}")
+                    return True
+
+            return False
+
+        except Exception as e:
+            logger.debug(f"MVP LLM not available: {e}")
+            return False
 
     def suggest_speaker_names(
         self,

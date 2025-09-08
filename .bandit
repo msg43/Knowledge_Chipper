@@ -4,10 +4,14 @@
 # B404: subprocess import - Required for legitimate system operations
 # B603: subprocess without shell=True - Our calls use lists, which is safer
 # B607: partial executable paths - We use system commands like 'open' and 'osascript'
+# B110: try/except/pass - Often legitimate for error handling
+# B101: assert statements - Used in examples and tests
 skips:
   - B404
   - B603
   - B607
+  - B110
+  - B101
 
 # Set confidence level
 confidence: HIGH

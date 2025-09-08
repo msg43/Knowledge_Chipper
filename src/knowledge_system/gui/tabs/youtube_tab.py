@@ -2522,6 +2522,7 @@ class YouTubeTab(BaseTab):
                     or str(Path.cwd()),
                     "output_format": self.format_combo.currentText(),
                     "transcription_model": self.transcription_model_combo.currentText(),
+                    "include_timestamps": True,  # Always enabled for YouTube transcripts
                     "overwrite_existing": self.overwrite_checkbox.isChecked(),
                     "enable_speaker_diarization": self.diarization_checkbox.isChecked(),
                     "download_all_audio": self.download_all_checkbox.isChecked(),

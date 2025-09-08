@@ -1048,7 +1048,7 @@ class APIKeysTab(BaseTab):
                 self.update_progress_dialog.setSizeGripEnabled(False)
                 # Subtle styling and monospace label for better readability of logs
                 self.update_progress_dialog.setStyleSheet(
-                    "QProgressDialog QLabel { font-family: Menlo, Monaco, monospace; font-size: 12px; }"
+                    "QProgressDialog QLabel { font-family: 'Courier New', monospace; font-size: 12px; }"
                 )
                 self.update_progress_dialog.show()
 
@@ -1193,7 +1193,7 @@ class APIKeysTab(BaseTab):
                 or "Already on latest version" in message
             ):
                 # Show positive status for being up to date
-                from ....__init__ import __version__
+                from knowledge_system import __version__
 
                 self.status_label.setText(
                     f"✅ You're on the latest version ({__version__})"
@@ -1812,7 +1812,7 @@ end tell
             self.update_progress_dialog.setMinimumDuration(0)
             self.update_progress_dialog.setMinimumWidth(520)
             self.update_progress_dialog.setStyleSheet(
-                "QProgressDialog QLabel { font-family: Menlo, Monaco, monospace; font-size: 12px; }"
+                "QProgressDialog QLabel { font-family: 'Courier New', monospace; font-size: 12px; }"
             )
             self.update_progress_dialog.canceled.connect(self._cancel_ffmpeg_install)
             self.update_progress_dialog.show()
