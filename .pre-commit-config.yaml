@@ -55,7 +55,7 @@ repos:
         args:
           - '--max-line-length=100'  # Slightly more lenient than Black's 88 for comments
           - '--max-complexity=10'
-          - '--select=E9,F63,F7,F82'  # Critical errors only for now
+          - '--select=E9,F63,F7,F82,F821'  # Critical errors + undefined names (skip F401 unused imports for now)
           - '--extend-ignore=E203,W503'  # Black compatibility
         additional_dependencies:
           - flake8-docstrings
@@ -89,6 +89,18 @@ repos:
         files: ^src/.*\.py$
         exclude: ^(tests/|config/credentials\.yaml|config/client_secret.*\.json|config/youtube_oauth2_credentials\.json|.*\.env)
         stages: [pre-push]
+
+  # Test collection verification (catch import errors before push)
+  - repo: local
+    hooks:
+      - id: pytest-check-collection
+        name: Check pytest can collect all tests
+        entry: pytest
+        language: python
+        args: ['--collect-only', '-q', '--tb=short']
+        files: ^(src/|tests/).*\.py$
+        stages: [pre-push]
+        pass_filenames: false
 
   # Docstring style checking
   - repo: https://github.com/pycqa/pydocstyle
