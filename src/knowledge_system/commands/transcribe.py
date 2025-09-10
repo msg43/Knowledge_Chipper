@@ -317,8 +317,14 @@ def format_transcript_content(
 
                         if timestamps:
                             # Format with proper line breaks and YouTube timestamp links
-                            if video_id:
-                                # Create hyperlinked timestamp for YouTube videos
+                            if (
+                                video_id is not None
+                                and isinstance(video_id, str)
+                                and video_id != "youtube_video"
+                                and video_id != ""
+                                and len(video_id) == 11
+                            ):
+                                # Create hyperlinked timestamp for YouTube videos (only for valid video IDs)
                                 youtube_url = f"https://www.youtube.com/watch?v={video_id}&t={int(start_seconds)}s"
                                 timestamp_display = (
                                     f"[{start_time} - {end_time}]({youtube_url})"
@@ -459,11 +465,10 @@ def is_transcript_too_short(transcript_text: Any, min_words: int = 50) -> bool:
 
 
 def extract_video_id_from_url(url: str) -> str | None:
-    """Extract YouTube video ID from URL."""
-    video_id_match = re.search(
-        r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]+)", url
-    )
-    return video_id_match.group(1) if video_id_match else None
+    """Extract YouTube video ID from URL using unified extractor."""
+    from ..utils.video_id_extractor import VideoIDExtractor
+
+    return VideoIDExtractor.extract_video_id(url)
 
 
 @click.command()

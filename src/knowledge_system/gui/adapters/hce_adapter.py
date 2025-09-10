@@ -110,10 +110,10 @@ class HCEAdapter:
                             status += f" ({', '.join(stat_parts)})"
 
                     progress_obj = SummarizationProgress(
-                        current_chunk=int(progress * 100),
+                        chunk_number=int(progress * 100),
                         total_chunks=100,
                         status=status,
-                        current_operation=f"HCE: {stage}",
+                        current_step=f"HCE: {stage}",
                     )
                     progress_callback(progress_obj)
 

@@ -87,7 +87,11 @@ class DocumentProcessor(BaseProcessor):
     @property
     def supported_formats(self) -> list[str]:
         """Return list of supported formats."""
-        return [".pd", ".txt", ".md", ".docx", ".doc", ".rt"]
+        return [".pdf", ".txt", ".md", ".docx", ".doc", ".rt"]
+
+    def validate_input(self, input_data: Any) -> bool:
+        """Validate input data for document processing."""
+        return validate_document_input(input_data)
 
     def validate(self, input_data: Any) -> None:
         """Validate input document."""
@@ -247,7 +251,7 @@ class DocumentProcessor(BaseProcessor):
             self.validate(file_path)
 
             # Read the document content based on type
-            if file_path.suffix.lower() == ".pd":
+            if file_path.suffix.lower() == ".pdf":
                 text = self._process_pdf(file_path)
             elif file_path.suffix.lower() in [".txt", ".md"]:
                 text = file_path.read_text(encoding="utf-8")

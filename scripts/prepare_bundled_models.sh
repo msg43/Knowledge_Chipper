@@ -19,7 +19,7 @@ HF_TOKEN="${HF_TOKEN:-}"
 if [ -z "$HF_TOKEN" ]; then
     # Try to read from credentials
     if [ -f "$PROJECT_ROOT/config/credentials.yaml" ]; then
-        HF_TOKEN=$(grep -A1 "huggingface_token:" "$PROJECT_ROOT/config/credentials.yaml" | tail -1 | sed 's/.*: //' | tr -d '"' | tr -d "'")
+        HF_TOKEN=$(grep "huggingface_token:" "$PROJECT_ROOT/config/credentials.yaml" | sed 's/.*: //' | tr -d '"' | tr -d "'")
     fi
 fi
 

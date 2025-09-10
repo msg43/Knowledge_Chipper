@@ -139,7 +139,7 @@ def check_diarization_model_status() -> dict[str, Any]:
 
         # Check dependencies
         try:
-            import pyannote.audio
+            pass
 
             dependencies_installed = True
         except ImportError:

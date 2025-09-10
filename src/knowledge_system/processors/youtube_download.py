@@ -113,20 +113,14 @@ class YouTubeDownloadProcessor(BaseProcessor):
             return None
 
     def _extract_video_id(self, url: str) -> str:
-        """Extract video ID from YouTube URL."""
-        import re
+        """Extract video ID from YouTube URL using unified extractor with fallback."""
+        from ..utils.video_id_extractor import VideoIDExtractor
 
-        patterns = [
-            r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]+)",
-            r"youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)",
-        ]
+        video_id = VideoIDExtractor.extract_video_id(url)
+        if video_id:
+            return video_id
 
-        for pattern in patterns:
-            match = re.search(pattern, url)
-            if match:
-                return match.group(1)
-
-        # Fallback: use a hash of the URL
+        # Fallback for non-standard URLs: use a hash of the URL
         import hashlib
 
         return hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:8]

@@ -118,10 +118,7 @@ class YouTubeBatchWorker(QThread):
     resource_warning = pyqtSignal(str)  # resource warnings
     memory_pressure = pyqtSignal(int, str)  # pressure level, message
 
-    # Speaker assignment signal
-    speaker_assignment_requested = pyqtSignal(
-        list, str, dict, str
-    )  # speaker_data_list, recording_path, metadata, task_id
+    # Speaker assignment is handled post-processing via Speaker Attribution tab
 
     # Final signals
     extraction_finished = pyqtSignal(dict)  # final results
@@ -134,9 +131,7 @@ class YouTubeBatchWorker(QThread):
         self.should_stop = False
         self.cancellation_token = CancellationToken()
 
-        # Speaker assignment support for batch processing
-        self._speaker_assignment_callback = None
-        self._setup_speaker_assignment_callback()
+        # Speaker assignment is handled post-processing via Speaker Attribution tab
 
         # Processing mode selection
         self.download_all_mode = config.get("download_all_mode", False)
@@ -205,38 +200,7 @@ class YouTubeBatchWorker(QThread):
         logger.info(f"  - Initial max concurrent: {self.initial_concurrency}")
         logger.info(f"  - Audio storage: {self.audio_storage_dir}")
 
-    def _setup_speaker_assignment_callback(self):
-        """Setup speaker assignment callback for batch processing."""
-
-        def speaker_assignment_callback(
-            speaker_data_list, recording_path, metadata=None
-        ):
-            """Handle speaker assignment requests during batch processing."""
-            try:
-                # Use the non-blocking queue-based approach like single video processing
-                from ...utils.speaker_assignment_queue import (
-                    get_speaker_assignment_queue,
-                )
-
-                queue = get_speaker_assignment_queue()
-                task_id = queue.add_task(speaker_data_list, recording_path, metadata)
-
-                # Emit signal to parent to show dialog on main thread
-                self.speaker_assignment_requested.emit(
-                    speaker_data_list, recording_path, metadata or {}, task_id
-                )
-
-                # Wait for assignment (no timeout - user can take their time)
-                # The file is already safely written to SQLite, so we can wait indefinitely
-                # User can always modify assignments later via Speaker Attribution tab
-                assignments = queue.wait_for_completion(task_id, timeout=None)
-                return assignments
-
-            except Exception as e:
-                logger.error(f"Error in speaker assignment callback: {e}")
-                return None  # Fallback to LLM suggestions
-
-        self._speaker_assignment_callback = speaker_assignment_callback
+    # Speaker assignment callback removed - using Speaker Attribution tab workflow instead
 
     def _calculate_optimal_batch_size(self) -> int:
         """Calculate optimal batch size based on available disk space and mode."""
@@ -1042,14 +1006,7 @@ class YouTubeBatchWorker(QThread):
                 overwrite=self.config.get("overwrite", False),
                 enable_diarization=enable_diarization,
                 gui_mode=not testing_mode,  # Enable GUI mode unless testing
-                show_speaker_dialog=(
-                    enable_diarization
-                    and not testing_mode
-                    and self.config.get("enable_speaker_assignment", True)
-                ),  # Allow speaker dialogs in batch mode if requested
-                speaker_assignment_callback=getattr(
-                    self, "_speaker_assignment_callback", None
-                ),
+                show_speaker_dialog=False,  # NEVER show dialogs in batch mode - use Speaker Attribution tab instead
                 cancellation_token=self.cancellation_token,
                 progress_callback=progress_callback,  # Pass our progress callback
             )

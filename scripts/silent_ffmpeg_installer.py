@@ -82,9 +82,10 @@ class SilentFFmpegInstaller:
         req = urllib.request.Request(
             url, headers={"User-Agent": "Knowledge-Chipper/3.x (macOS)"}
         )
-        with urllib.request.urlopen(req, timeout=60) as response, open(
-            dest, "wb"
-        ) as out:
+        with (
+            urllib.request.urlopen(req, timeout=60) as response,
+            open(dest, "wb") as out,
+        ):
             total_str = response.headers.get("Content-Length") or response.headers.get(
                 "content-length"
             )
@@ -263,9 +264,10 @@ class SilentFFmpegInstaller:
                         self.progress_callback("🔧 Installing FFmpeg...", 80)
                         # Copy without metadata to avoid quarantine propagation or slow xattrs
                         self.progress_callback("📄 Copying binary...", 80)
-                        with open(ffmpeg_src, "rb") as _src, open(
-                            ffmpeg_dst, "wb"
-                        ) as _dst:
+                        with (
+                            open(ffmpeg_src, "rb") as _src,
+                            open(ffmpeg_dst, "wb") as _dst,
+                        ):
                             shutil.copyfileobj(_src, _dst, length=1024 * 1024)
                         # Permissions
                         self.progress_callback("🔑 Setting permissions...", 82)
@@ -273,9 +275,10 @@ class SilentFFmpegInstaller:
 
                         if ffprobe_src:
                             ffprobe_dst = self.bin_dir / "ffprobe"
-                            with open(ffprobe_src, "rb") as _src, open(
-                                ffprobe_dst, "wb"
-                            ) as _dst:
+                            with (
+                                open(ffprobe_src, "rb") as _src,
+                                open(ffprobe_dst, "wb") as _dst,
+                            ):
                                 shutil.copyfileobj(_src, _dst, length=1024 * 1024)
                             ffprobe_dst.chmod(0o755)
 

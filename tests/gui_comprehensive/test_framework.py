@@ -11,13 +11,11 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from PyQt6.QtCore import QEventLoop, QTimer
-from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 try:

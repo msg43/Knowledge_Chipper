@@ -3,8 +3,8 @@
 ## 📊 **Model Size Impact on DMG**
 
 ### Current DMG Size (as of January 2025)
-- **Full DMG**: ~4GB (includes FFMPEG, Pyannote, Whisper, Ollama, Llama 3.2:3b)
-- **Minimal DMG**: ~1GB (models download on first use)
+- **Full DMG**: ~1.8GB (includes FFMPEG, Pyannote, Whisper, Voice Models + Ollama auto-download)
+- **Minimal DMG**: ~1GB (all models download on first use)
 
 ### Voice Fingerprinting Model Sizes
 | Model | Size | Purpose | Update Frequency |
@@ -15,8 +15,8 @@
 | **Total Voice Models** | **~410MB** | Combined voice fingerprinting | - |
 
 ### DMG Size Impact
-- **With Voice Fingerprinting**: ~4.4GB (+410MB, +10% increase)
-- **Without Voice Fingerprinting**: ~4GB (current size)
+- **With Voice Fingerprinting**: ~1.8GB (+410MB voice models bundled)
+- **Without Voice Fingerprinting**: ~1.4GB (GitHub 2GB compliant)
 
 ### Model Download Strategy
 ```python

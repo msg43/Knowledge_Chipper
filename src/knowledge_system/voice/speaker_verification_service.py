@@ -7,7 +7,7 @@ speaker identification system for enhanced accuracy.
 
 import asyncio
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 

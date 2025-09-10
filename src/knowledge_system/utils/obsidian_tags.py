@@ -5,7 +5,6 @@ Handles conversion between YAML frontmatter tags and Obsidian hashtag format.
 """
 
 import re
-from typing import List, Set
 
 
 def sanitize_tag_for_obsidian(tag: str) -> str:

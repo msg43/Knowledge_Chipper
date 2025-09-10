@@ -210,19 +210,10 @@ class YouTubeMetadataProcessor(BaseProcessor):
         return False
 
     def _extract_video_id(self, url: str) -> str | None:
-        """Extract video ID from YouTube URL."""
-        patterns = [
-            r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]+)",
-            r"youtube\.com/embed/([a-zA-Z0-9_-]+)",
-            r"youtube\.com/v/([a-zA-Z0-9_-]+)",
-        ]
+        """Extract video ID from YouTube URL using unified extractor."""
+        from ..utils.video_id_extractor import VideoIDExtractor
 
-        for pattern in patterns:
-            match = re.search(pattern, url)
-            if match:
-                return match.group(1)
-
-        return None
+        return VideoIDExtractor.extract_video_id(url)
 
     def _extract_metadata(self, url: str) -> YouTubeMetadata | None:
         """Extract metadata using Bright Data (required)."""

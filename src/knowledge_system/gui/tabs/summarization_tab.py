@@ -404,16 +404,142 @@ class EnhancedSummarizationWorker(QThread):
                     self.cancellation_token.cancel("User requested stop")
                     break
 
-                result = processor.process(
-                    file_path_obj,
-                    prompt_template=template_path,
-                    progress_callback=enhanced_progress_callback,
-                    cancellation_token=self.cancellation_token,
-                    prefer_template_summary=self.gui_settings.get(
-                        "prompt_driven_mode", False
-                    ),
-                    allow_llm_fallback=True,  # Enable fallback for better reliability
-                )
+                # Handle different file types
+                if file_path_obj.suffix.lower() == ".pdf":
+                    # Extract text from PDF first
+                    enhanced_progress_callback(
+                        SummarizationProgress(
+                            current_file=file_path,
+                            current_step="📄 Extracting text from PDF...",
+                            percent=0.0,
+                            status="extracting_pdf",
+                        )
+                    )
+
+                    from ...processors.pdf import PDFProcessor
+
+                    pdf_processor = PDFProcessor()
+                    pdf_result = pdf_processor.process(file_path_obj)
+
+                    if not pdf_result.success:
+                        self.processing_error.emit(
+                            f"PDF extraction failed for {file_path_obj.name}: {'; '.join(pdf_result.errors)}"
+                        )
+                        failure_count += 1
+                        continue
+
+                    pdf_results = pdf_result.data.get("results", [])
+                    if not pdf_results:
+                        self.processing_error.emit(
+                            f"No text extracted from PDF: {file_path_obj.name}"
+                        )
+                        failure_count += 1
+                        continue
+
+                    text_to_summarize = pdf_results[0]["text"]
+                    if not text_to_summarize.strip():
+                        self.processing_error.emit(
+                            f"PDF appears to be empty or contains no readable text: {file_path_obj.name}"
+                        )
+                        failure_count += 1
+                        continue
+
+                    enhanced_progress_callback(
+                        SummarizationProgress(
+                            current_file=file_path,
+                            current_step=f"✓ Extracted {len(text_to_summarize):,} characters",
+                            percent=10.0,
+                            status="pdf_extracted",
+                        )
+                    )
+
+                    # Process the extracted text
+                    result = processor.process(
+                        text_to_summarize,
+                        prompt_template=template_path,
+                        progress_callback=enhanced_progress_callback,
+                        cancellation_token=self.cancellation_token,
+                        prefer_template_summary=self.gui_settings.get(
+                            "prompt_driven_mode", False
+                        ),
+                        allow_llm_fallback=True,
+                    )
+                elif file_path_obj.suffix.lower() in {".docx", ".doc", ".rt"}:
+                    # Extract text from document files first
+                    doc_type = (
+                        "Word document"
+                        if file_path_obj.suffix.lower() in {".docx", ".doc"}
+                        else "RTF document"
+                    )
+                    enhanced_progress_callback(
+                        SummarizationProgress(
+                            current_file=file_path,
+                            current_step=f"📄 Extracting text from {doc_type}...",
+                            percent=0.0,
+                            status="extracting_document",
+                        )
+                    )
+
+                    from ...processors.document_processor import DocumentProcessor
+
+                    doc_processor = DocumentProcessor()
+                    doc_result = doc_processor.process(file_path_obj)
+
+                    if not doc_result.success:
+                        self.processing_error.emit(
+                            f"Document extraction failed for {file_path_obj.name}: {'; '.join(doc_result.errors)}"
+                        )
+                        failure_count += 1
+                        continue
+
+                    doc_results = doc_result.data.get("results", [])
+                    if not doc_results:
+                        self.processing_error.emit(
+                            f"No text extracted from document: {file_path_obj.name}"
+                        )
+                        failure_count += 1
+                        continue
+
+                    text_to_summarize = doc_results[0]["text"]
+                    if not text_to_summarize.strip():
+                        self.processing_error.emit(
+                            f"Document appears to be empty or contains no readable text: {file_path_obj.name}"
+                        )
+                        failure_count += 1
+                        continue
+
+                    enhanced_progress_callback(
+                        SummarizationProgress(
+                            current_file=file_path,
+                            current_step=f"✓ Extracted {len(text_to_summarize):,} characters",
+                            percent=10.0,
+                            status="document_extracted",
+                        )
+                    )
+
+                    # Process the extracted text
+                    result = processor.process(
+                        text_to_summarize,
+                        prompt_template=template_path,
+                        progress_callback=enhanced_progress_callback,
+                        cancellation_token=self.cancellation_token,
+                        prefer_template_summary=self.gui_settings.get(
+                            "prompt_driven_mode", False
+                        ),
+                        allow_llm_fallback=True,
+                    )
+                else:
+                    # Handle text/markdown/HTML/JSON files directly
+                    result = processor.process(
+                        file_path_obj,
+                        prompt_template=template_path,
+                        progress_callback=enhanced_progress_callback,
+                        cancellation_token=self.cancellation_token,
+                        prefer_template_summary=self.gui_settings.get(
+                            "prompt_driven_mode", False
+                        ),
+                        allow_llm_fallback=True,  # Enable fallback for better reliability
+                    )
 
                 if result.success:
                     # File completed successfully - update character counter
@@ -1074,7 +1200,7 @@ class SummarizationTab(BaseTab):
 
         # Add supported file types info
         supported_types_label = QLabel(
-            "Supported formats: PDF (.pdf), Text (.txt), Markdown (.md), HTML (.html, .htm), JSON (.json)"
+            "Supported formats: PDF (.pdf), Text (.txt), Markdown (.md), HTML (.html, .htm), JSON (.json), Word (.docx, .doc), RTF (.rt)"
         )
         supported_types_label.setStyleSheet(
             "color: #666; font-style: italic; margin-bottom: 8px;"
@@ -2400,7 +2526,7 @@ class SummarizationTab(BaseTab):
             self,
             "Select Files to Summarize",
             str(Path.home()),
-            "All Supported (*.txt *.md *.pdf *.html *.htm *.json);;Text Files (*.txt);;Markdown Files (*.md);;PDF Files (*.pdf);;HTML Files (*.html *.htm);;JSON Files (*.json);;All Files (*)",
+            "All Supported (*.txt *.md *.pdf *.html *.htm *.json *.docx *.doc *.rt);;Text Files (*.txt);;Markdown Files (*.md);;PDF Files (*.pdf);;HTML Files (*.html *.htm);;JSON Files (*.json);;Word Documents (*.docx *.doc);;Rich Text (*.rt);;All Files (*)",
         )
 
         for file_path in files:
@@ -2411,7 +2537,17 @@ class SummarizationTab(BaseTab):
         folder_path = QFileDialog.getExistingDirectory(self, "Select Folder")
         if folder_path:
             folder = Path(folder_path)
-            extensions = [".txt", ".md", ".pd", ".html", ".htm", ".json"]
+            extensions = [
+                ".txt",
+                ".md",
+                ".pdf",
+                ".html",
+                ".htm",
+                ".json",
+                ".docx",
+                ".doc",
+                ".rt",
+            ]
 
             for file_path in folder.rglob("*"):
                 if file_path.suffix.lower() in extensions:

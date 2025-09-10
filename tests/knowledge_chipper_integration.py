@@ -9,9 +9,8 @@ USAGE FOR LLM:
 Simply call publish_to_getreceipts() with your extracted data.
 """
 
-import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -91,9 +90,9 @@ def publish_to_getreceipts(
             # Create RF-1 format for this claim
             rf1_claim = {
                 "claim_text": claim_text,
-                "claim_long": transcript[:1000]
-                if len(transcript) > 1000
-                else transcript,
+                "claim_long": (
+                    transcript[:1000] if len(transcript) > 1000 else transcript
+                ),
                 "topics": topics,
                 "sources": [
                     {

@@ -1125,9 +1125,11 @@ class SpeakerAttributionTab(QWidget):
                         mapping.channel_name,
                         mapping.host_name,
                         str(mapping.use_count),
-                        mapping.updated_at.strftime("%Y-%m-%d %H:%M")
-                        if mapping.updated_at
-                        else "",
+                        (
+                            mapping.updated_at.strftime("%Y-%m-%d %H:%M")
+                            if mapping.updated_at
+                            else ""
+                        ),
                     ]
                 )
                 # Store the full mapping object for reference

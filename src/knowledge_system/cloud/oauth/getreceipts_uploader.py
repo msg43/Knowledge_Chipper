@@ -438,7 +438,7 @@ class GetReceiptsUploader:
             return "youtube"
         elif any(ext in url_lower for ext in [".mp3", ".wav", ".m4a"]):
             return "audio"
-        elif any(ext in url_lower for ext in [".pd", ".doc", ".txt"]):
+        elif any(ext in url_lower for ext in [".pdf", ".doc", ".txt"]):
             return "document"
         else:
             return "unknown"

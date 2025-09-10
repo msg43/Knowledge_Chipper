@@ -12,18 +12,15 @@ Features:
 - Persistent voice profile database
 """
 
-import json
-import logging
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import librosa
 import numpy as np
 import torch
 import torch.nn.functional as F
 from scipy.spatial.distance import cosine
-from sklearn.metrics.pairwise import cosine_similarity
 
 # Suppress specific warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -39,7 +36,6 @@ except ImportError:
 
 try:
     # Try importing speechbrain for ECAPA-TDNN
-    import speechbrain as sb
     from speechbrain.pretrained import EncoderClassifier
 
     HAS_SPEECHBRAIN = True

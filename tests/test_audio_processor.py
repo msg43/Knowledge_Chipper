@@ -1,5 +1,5 @@
 """Test audio processor functionality."""
-from pathlib import Path
+
 
 import pytest
 
@@ -30,4 +30,3 @@ def test_audio_utils_import():
 def test_audio_processing():
     """Test actual audio processing (skipped for CI)."""
     # This would test actual audio processing but requires files
-    pass

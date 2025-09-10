@@ -99,9 +99,9 @@ def validate_document_input(input_path: str | Path) -> bool:
     Returns:
         True if input is a valid document file, False otherwise
     """
-    document_formats = [".pd", ".docx", ".doc", ".txt", ".md", ".rt"]
+    document_formats = [".pdf", ".docx", ".doc", ".txt", ".md", ".rt"]
 
-    document_formats = [".pd", ".docx", ".doc", ".txt", ".md", ".rt"]
+    document_formats = [".pdf", ".docx", ".doc", ".txt", ".md", ".rt"]
     return validate_file_input(input_path, document_formats)
 
 

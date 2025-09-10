@@ -241,16 +241,16 @@ class MainWindow(QMainWindow):
         transcription_tab = TranscriptionTab(self)
         self.tabs.addTab(transcription_tab, "Local Transcription")
 
+        # Speaker attribution tab for managing speaker identification
+        speaker_attribution_tab = SpeakerAttributionTab(self)
+        self.tabs.addTab(speaker_attribution_tab, "🎙️ Speaker Attribution")
+
         summarization_tab = SummarizationTab(self)
         self.tabs.addTab(summarization_tab, "Summarization")
 
         # Claim search tab for exploring extracted claims
         claim_search_tab = ClaimSearchTab(self)
         self.tabs.addTab(claim_search_tab, "🔍 Claim Search")
-
-        # Speaker attribution tab for managing speaker identification
-        speaker_attribution_tab = SpeakerAttributionTab(self)
-        self.tabs.addTab(speaker_attribution_tab, "🎙️ Speaker Attribution")
 
         # Summary cleanup tab for post-processing review
         summary_cleanup_tab = SummaryCleanupTab(self)

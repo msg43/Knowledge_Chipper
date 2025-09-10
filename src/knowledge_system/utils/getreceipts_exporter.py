@@ -390,7 +390,7 @@ class GetReceiptsExporter:
                 url = source_info["url"]
                 if "youtube.com" in url or "youtu.be" in url:
                     source_type = "video"
-                elif any(ext in url.lower() for ext in [".pd", ".doc", ".txt"]):
+                elif any(ext in url.lower() for ext in [".pdf", ".doc", ".txt"]):
                     source_type = "document"
                 else:
                     source_type = "article"

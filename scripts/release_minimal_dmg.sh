@@ -84,7 +84,7 @@ if [ ! -f "$DMG_FILE" ]; then
 
     # Check for HF token (still needed for pyannote)
     if [ -z "$HF_TOKEN" ] && [ -f "$PROJECT_ROOT/config/credentials.yaml" ]; then
-        HF_TOKEN=$(grep -A1 "huggingface_token:" "$PROJECT_ROOT/config/credentials.yaml" | tail -1 | sed 's/.*: //' | tr -d '"' | tr -d "'")
+        HF_TOKEN=$(grep "huggingface_token:" "$PROJECT_ROOT/config/credentials.yaml" | sed 's/.*: //' | tr -d '"' | tr -d "'")
     fi
     export HF_TOKEN
 

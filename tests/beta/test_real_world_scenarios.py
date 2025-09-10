@@ -13,21 +13,17 @@ Test Categories:
 5. User experience validation
 """
 
-import asyncio
 import json
 import os
 import random
-import shutil
 import tempfile
 import time
-import unittest
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
-from unittest.mock import Mock, patch
+from typing import Any
+from unittest.mock import patch
 
 import psutil
-from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 
 from knowledge_system.gui.dialogs.crash_recovery_dialog import CrashRecoveryManager
@@ -644,9 +640,11 @@ def generate_beta_test_summary(results: dict[str, Any]) -> dict[str, Any]:
             "passed": category_passed,
             "failed": category_failed,
             "duration": category_duration,
-            "success_rate": category_passed / (category_passed + category_failed)
-            if (category_passed + category_failed) > 0
-            else 0,
+            "success_rate": (
+                category_passed / (category_passed + category_failed)
+                if (category_passed + category_failed) > 0
+                else 0
+            ),
         }
 
     overall_success_rate = passed_tests / total_tests if total_tests > 0 else 0
@@ -658,11 +656,13 @@ def generate_beta_test_summary(results: dict[str, Any]) -> dict[str, Any]:
         "overall_success_rate": overall_success_rate,
         "total_duration": total_duration,
         "categories": categories_summary,
-        "recommendation": "PROCEED"
-        if overall_success_rate >= 0.9
-        else "REVIEW"
-        if overall_success_rate >= 0.8
-        else "BLOCK",
+        "recommendation": (
+            "PROCEED"
+            if overall_success_rate >= 0.9
+            else "REVIEW"
+            if overall_success_rate >= 0.8
+            else "BLOCK"
+        ),
     }
 
 

@@ -8,7 +8,6 @@ for both CLI and GUI modes, with maximum parallelization based on system constra
 import gc
 import os
 import shutil
-import tempfile
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -18,7 +17,6 @@ from typing import Any
 import psutil
 
 from ..logger import get_logger
-from ..processors.youtube_transcript import YouTubeTranscriptProcessor
 from ..utils.cancellation import CancellationToken
 from ..utils.hardware_detection import HardwareDetector
 from ..utils.youtube_utils import expand_playlist_urls_with_metadata, is_youtube_url
@@ -143,10 +141,7 @@ class UnifiedBatchProcessor:
 
     def _determine_processing_strategy(self):
         """Determine optimal processing strategy based on item count and resources."""
-        from ..utils.batch_processing import (
-            calculate_memory_safe_concurrency,
-            determine_optimal_batch_strategy,
-        )
+        from ..utils.batch_processing import calculate_memory_safe_concurrency
 
         # Check if we should use batch processing (>3 items triggers advanced processing)
         if self.total_items <= 3:
@@ -271,9 +266,9 @@ class UnifiedBatchProcessor:
                 "total_items": self.total_items,
                 "youtube_urls": len(self.expanded_youtube_urls),
                 "local_files": len(self.local_files),
-                "processing_mode": "batch"
-                if self.use_batch_processing
-                else "sequential",
+                "processing_mode": (
+                    "batch" if self.use_batch_processing else "sequential"
+                ),
             }
 
         except Exception as e:
@@ -310,7 +305,6 @@ class UnifiedBatchProcessor:
 
     def _download_youtube_parallel(self, urls: list[str]) -> dict[str, Path]:
         """Download YouTube audio files in parallel with optimized concurrency."""
-        from ..processors.youtube_transcript import YouTubeTranscriptProcessor
 
         logger.info(
             f"Starting parallel downloads: {len(urls)} URLs with {self.download_concurrency} concurrent sessions"

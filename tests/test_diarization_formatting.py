@@ -5,8 +5,6 @@ import sys
 import unittest
 from pathlib import Path
 
-import pytest
-
 # Add the src directory to the path so we can import the knowledge_system modules
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
@@ -359,7 +357,8 @@ class TestDiarizationFormatting(unittest.TestCase):
 
         # Verify that intelligent suggestions were made using either metadata analysis or LLM analysis
         intelligent_suggestions_used = any(
-            speaker_data.suggestion_method in ["metadata_analysis", "llm_analysis"]
+            speaker_data.suggestion_method
+            in ["metadata_analysis", "llm_analysis", "llm_analysis_batch"]
             for speaker_data in speaker_data_list
         )
 
@@ -430,7 +429,7 @@ class TestDiarizationFormatting(unittest.TestCase):
 
     def test_youtube_transcript_to_markdown_with_diarization(self):
         """Test that YouTubeTranscript.to_markdown uses proper diarization formatting when speakers are present."""
-        from src.knowledge_system.processors.youtube_transcript import YouTubeTranscript
+        from knowledge_system.processors.youtube_transcript import YouTubeTranscript
 
         # Create sample transcript data with speaker assignments (as would come from speaker dialog)
         transcript_data_with_speakers = [

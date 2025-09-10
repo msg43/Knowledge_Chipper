@@ -5,7 +5,6 @@ Interactive script to help set up the HuggingFace token for pyannote diarization
 """
 
 import os
-import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent

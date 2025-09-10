@@ -19,9 +19,11 @@ repos:
         stages: [pre-push]
       - id: check-xml
         stages: [pre-push]
-      - id: check-added-large-files
-        args: ['--maxkb=10000']  # 10MB limit for large files
-        stages: [pre-push]
+      # Disabled: check-added-large-files causes hanging due to large test fixtures
+      # Using .gitignore patterns instead for large file management
+      # - id: check-added-large-files
+      #   args: ['--maxkb=10000']  # 10MB limit for large files
+      #   stages: [pre-push]
       - id: check-merge-conflict
       - id: debug-statements
         stages: [pre-push]

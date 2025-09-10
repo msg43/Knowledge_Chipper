@@ -1,5 +1,5 @@
 """Test input pipeline integration."""
-from pathlib import Path
+
 
 import pytest
 
@@ -29,4 +29,3 @@ def test_pipeline_imports():
 def test_basic_file_processing():
     """Test basic file processing pipeline (skipped for CI)."""
     # This would test actual file processing but is skipped for CI
-    pass

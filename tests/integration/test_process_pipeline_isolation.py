@@ -6,27 +6,17 @@ that the GUI remains responsive even when worker processes crash.
 """
 
 import json
-import os
-import signal
 import tempfile
 import time
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import psutil
-import pytest
-from PyQt6.QtCore import QEventLoop, QTimer
-from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from knowledge_system.gui.tabs.process_tab import ProcessPipelineWorker
-from knowledge_system.utils.ipc_communication import (
-    IPCCommunicator,
-    ProcessCommunicationManager,
-)
+from knowledge_system.utils.ipc_communication import ProcessCommunicationManager
 from knowledge_system.utils.memory_monitor import MemoryMonitor
-from knowledge_system.utils.tracking import ProgressTracker
 
 
 class ProcessIsolationTestCase(unittest.TestCase):
@@ -239,13 +229,12 @@ class TestErrorHandling(ProcessIsolationTestCase):
         worker.set_output_directory(self.output_dir)
 
         # Mock QProcess methods
-        with patch.object(worker, "state") as mock_state, patch.object(
-            worker, "terminate"
-        ) as mock_terminate, patch.object(
-            worker, "waitForFinished"
-        ) as mock_wait, patch.object(
-            worker, "kill"
-        ) as mock_kill:
+        with (
+            patch.object(worker, "state") as mock_state,
+            patch.object(worker, "terminate") as mock_terminate,
+            patch.object(worker, "waitForFinished") as mock_wait,
+            patch.object(worker, "kill") as mock_kill,
+        ):
             # Simulate running process
             mock_state.return_value = worker.ProcessState.Running
             mock_wait.return_value = True  # Terminates gracefully

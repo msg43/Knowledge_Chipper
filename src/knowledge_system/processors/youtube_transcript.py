@@ -424,14 +424,10 @@ class YouTubeTranscriptProcessor(BaseProcessor):
         return False
 
     def _extract_video_id(self, url: str) -> str | None:
-        """Extract video ID from YouTube URL."""
-        if "youtu.be/" in url:
-            return url.split("youtu.be/")[1].split("?")[0]
-        elif "watch?v=" in url:
-            return url.split("watch?v=")[1].split("&")[0]
-        else:
-            logger.error(f"Could not extract video ID from URL: {url}")
-            return None
+        """Extract video ID from YouTube URL using unified extractor."""
+        from ..utils.video_id_extractor import VideoIDExtractor
+
+        return VideoIDExtractor.extract_video_id(url)
 
     def _validate_webshare_config(self) -> list[str]:
         """Deprecated: WebShare validation removed."""

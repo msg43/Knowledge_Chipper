@@ -1,7 +1,6 @@
 """Embedder implementation with caching support."""
 
 import logging
-from typing import List, Union
 
 import numpy as np
 

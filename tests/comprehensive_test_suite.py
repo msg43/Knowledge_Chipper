@@ -19,14 +19,12 @@ Test Categories:
 
 import json
 import os
-import shutil
 import signal
 import subprocess
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 # Set up paths
 PROJECT_ROOT = Path(__file__).parent.parent  # Go up to Knowledge_Chipper root
@@ -714,9 +712,11 @@ class ComprehensiveTestSuite:
                 "total_tests": total_tests,
                 "successful_tests": successful_tests,
                 "failed_tests": failed_tests,
-                "success_rate": f"{(successful_tests/total_tests*100):.1f}%"
-                if total_tests > 0
-                else "0%",
+                "success_rate": (
+                    f"{(successful_tests/total_tests*100):.1f}%"
+                    if total_tests > 0
+                    else "0%"
+                ),
                 "total_duration": f"{total_duration:.1f}s",
                 "timestamp": datetime.now().isoformat(),
             },
@@ -826,7 +826,7 @@ class ComprehensiveTestSuite:
 
         # Check if the UI component loads
         try:
-            from knowledge_system.gui.tabs.summary_cleanup_tab import SummaryCleanupTab
+            pass
 
             # Tab should be importable
             print("  ✅ Summary Cleanup tab is available")

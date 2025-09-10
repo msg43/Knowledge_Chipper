@@ -5,16 +5,14 @@ This script scans markdown files and converts YAML frontmatter tags
 to proper Obsidian hashtags for better tag visibility and functionality.
 """
 
-import os
 import sys
 from pathlib import Path
-from typing import List, Optional
 
 # Add the src directory to the path so we can import our modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from logger import get_logger
-from utils.obsidian_tags import add_obsidian_hashtags_to_content
+from knowledge_system.logger import get_logger
+from knowledge_system.utils.obsidian_tags import add_obsidian_hashtags_to_content
 
 logger = get_logger(__name__)
 

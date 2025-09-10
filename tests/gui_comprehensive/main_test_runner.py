@@ -6,11 +6,9 @@ Supports different test modes and configurations.
 """
 
 import argparse
-import atexit
 import signal
 import sys
 from pathlib import Path
-from typing import Optional
 
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
@@ -22,7 +20,7 @@ except ImportError:
     from test_orchestrator import TestOrchestrator
 
 try:
-    from src.knowledge_system.logger import get_logger
+    from knowledge_system.logger import get_logger
 except ImportError:
     import logging
 

@@ -70,6 +70,39 @@ class MVPLLMSetup:
     def should_auto_setup(self) -> bool:
         """Check if we should automatically set up MVP LLM."""
         try:
+            # Check for bundled auto-install configuration
+            import json
+            from pathlib import Path
+
+            # Try to find the auto-install marker in app bundle
+            try:
+                # Check if we're in an app bundle
+                app_dir = Path(__file__).parent.parent.parent.parent
+                if app_dir.name.endswith(".app"):
+                    auto_install_marker = (
+                        app_dir
+                        / "Contents"
+                        / "MacOS"
+                        / ".config"
+                        / "ollama_auto_install.json"
+                    )
+                else:
+                    # Development environment - check in MacOS subdirectory
+                    auto_install_marker = (
+                        app_dir / "MacOS" / ".config" / "ollama_auto_install.json"
+                    )
+
+                if auto_install_marker.exists():
+                    with open(auto_install_marker) as f:
+                        config = json.load(f)
+                    if config.get("auto_install", False):
+                        logger.info(
+                            "Found bundled auto-install configuration - will set up MVP LLM"
+                        )
+                        return True
+            except Exception as e:
+                logger.debug(f"No auto-install config found: {e}")
+
             # Don't auto-setup if user has configured cloud LLM
             if (
                 self.settings.llm.provider in ["openai", "anthropic"]

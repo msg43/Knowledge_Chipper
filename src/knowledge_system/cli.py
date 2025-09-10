@@ -271,7 +271,7 @@ def models_refresh(provider: str | None) -> None:
     "--patterns",
     "-p",
     multiple=True,
-    default=["*.mp4", "*.mp3", "*.wav", "*.pd"],
+    default=["*.mp4", "*.mp3", "*.wav", "*.pdf"],
     help="File patterns to watch for",
 )
 @click.option(
@@ -326,7 +326,7 @@ def watch(
 
     Examples:
         knowledge-system watch ./input/
-        knowledge-system watch ~/Downloads --patterns "*.mp4" "*.pd"
+        knowledge-system watch ~/Downloads --patterns "*.mp4" "*.pdf"
         knowledge-system watch ./videos --no-summarize --debounce 10
     """
 
@@ -646,7 +646,7 @@ def info(ctx: CLIContext, file_path: Path) -> None:
                         ".mkv",
                     ],
                 ),
-                ("PDFProcessor", PDFProcessor, [".pd"]),
+                ("PDFProcessor", PDFProcessor, [".pdf"]),
                 (
                     "SummarizerProcessor",
                     SummarizerProcessor,

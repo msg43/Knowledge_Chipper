@@ -2,7 +2,7 @@
 
 import hashlib
 import logging
-import pickle
+import pickle  # nosec B403 # Safe: Only used for local caching, not untrusted data
 from pathlib import Path
 from typing import Any
 
@@ -87,7 +87,9 @@ class EmbeddingCache:
         if disk_path.exists():
             try:
                 with open(disk_path, "rb") as f:
-                    data = pickle.load(f)
+                    data = pickle.load(
+                        f
+                    )  # nosec B301 # Safe: Only loading local cache files
 
                 embedding = data["embedding"]
                 timestamp = data["timestamp"]

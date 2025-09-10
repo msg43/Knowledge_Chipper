@@ -126,7 +126,7 @@ def _extract_youtube_url_from_file(file_path: Path) -> str | None:
     "--patterns",
     "-p",
     multiple=True,
-    default=["*.pd", "*.txt", "*.md"],
+    default=["*.pdf", "*.txt", "*.md"],
     help="File patterns to process (when input is a folder)",
 )
 @click.option(
@@ -256,7 +256,7 @@ def summarize(
          knowledge-system summarize ./transcripts/ --recursive --progress
          knowledge-system summarize text.txt --template custom_prompt.txt
          knowledge-system summarize file.md --update-md
-         knowledge-system summarize ./docs/ --patterns "*.pd" "*.md"
+         knowledge-system summarize ./docs/ --patterns "*.pdf" "*.md"
     """
     settings = ctx.get_settings()
 
@@ -510,7 +510,7 @@ def summarize(
 
             try:
                 # Handle different file types
-                if file_path.suffix.lower() == ".pd":
+                if file_path.suffix.lower() == ".pdf":
                     if not ctx.quiet:
                         console.print("[blue]📄 Extracting text from PDF...[/blue]")
 

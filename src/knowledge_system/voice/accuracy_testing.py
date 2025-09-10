@@ -7,11 +7,9 @@ standard datasets.
 """
 
 import json
-import random
 import time
-from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 from sklearn.metrics import roc_curve

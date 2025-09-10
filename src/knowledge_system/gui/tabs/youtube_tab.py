@@ -1605,6 +1605,23 @@ class YouTubeTab(BaseTab):
     ) -> None:
         """Finalize configuration and start the processing worker."""
         self.append_log(f"🚀 Ready to process {len(urls)} URLs")
+
+        # Expand playlists to get actual video count
+        try:
+            from ...utils.youtube_utils import expand_playlist_urls_with_metadata
+
+            expansion_result = expand_playlist_urls_with_metadata(urls)
+            expanded_urls = expansion_result["expanded_urls"]
+            total_video_count = len(expanded_urls)
+
+            if total_video_count != len(urls):
+                self.append_log(
+                    f"📋 Expanded {len(urls)} URLs to {total_video_count} videos"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to expand URLs for counting: {e}")
+            total_video_count = len(urls)  # Fallback to URL count
+
         self.append_log("-" * 50)
 
         # Configure extraction
@@ -1614,7 +1631,6 @@ class YouTubeTab(BaseTab):
             "timestamps": False,  # Do not include timestamps for YouTube transcripts
             "overwrite": self.overwrite_checkbox.isChecked(),
             "enable_diarization": enable_diarization,
-            "enable_speaker_assignment": enable_diarization,  # Enable speaker dialogs when diarization is on
             "transcription_model": self.transcription_model_combo.currentText(),  # Pass selected model
             "download_all_mode": self.download_all_checkbox.isChecked(),
             "parallel_downloads": self.parallel_downloads_checkbox.isChecked(),
@@ -1622,12 +1638,15 @@ class YouTubeTab(BaseTab):
 
         # Choose worker based on processing requirements
         # UNIFIED RULE: Use batch processing for >3 items (matching CLI behavior)
+        # Now uses expanded video count instead of URL count
         logger.info(
-            f"🔍 Batch worker decision: enable_diarization={config['enable_diarization']}, urls={len(urls)}"
+            f"🔍 Batch worker decision: enable_diarization={config['enable_diarization']}, "
+            f"urls={len(urls)}, expanded_videos={total_video_count}"
         )
-        use_batch_worker = len(urls) > 3  # Unified rule: >3 items use batch processing
+        use_batch_worker = total_video_count > 3  # Use expanded count for decision
         logger.info(
-            f"🔍 Using unified batch processing: {use_batch_worker} (>3 items rule)"
+            f"🔍 Using unified batch processing: {use_batch_worker} "
+            f"({total_video_count} videos > 3 threshold)"
         )
 
         if use_batch_worker:
@@ -1673,9 +1692,7 @@ class YouTubeTab(BaseTab):
         self.extraction_worker.batch_status.connect(self._handle_batch_status)
         self.extraction_worker.memory_pressure.connect(self._handle_memory_pressure)
         self.extraction_worker.resource_warning.connect(self._handle_resource_warning)
-        self.extraction_worker.speaker_assignment_requested.connect(
-            self._handle_batch_speaker_assignment_request
-        )
+        # Speaker assignment handled via Speaker Attribution tab instead of popups
         self.extraction_worker.extraction_finished.connect(self._extraction_finished)
         self.extraction_worker.extraction_error.connect(self._extraction_error)
 
@@ -1780,64 +1797,7 @@ class YouTubeTab(BaseTab):
                 queue = get_speaker_assignment_queue()
                 queue.complete_task(task_id, None)
 
-    def _handle_batch_speaker_assignment_request(
-        self, speaker_data_list, recording_path, metadata, task_id
-    ):
-        """
-        Handle speaker assignment request from batch worker thread.
-        Similar to single video processing but for batch mode.
-        """
-        try:
-            logger.info(
-                f"Batch mode showing speaker assignment dialog for task {task_id}"
-            )
-
-            # Import dialog and queue lazily to avoid circular deps
-            from knowledge_system.utils.speaker_assignment_queue import (
-                get_speaker_assignment_queue,
-            )
-
-            from ..dialogs.speaker_assignment_dialog import SpeakerAssignmentDialog
-
-            queue = get_speaker_assignment_queue()
-
-            # Create and show dialog (non-modal so batch processing can continue)
-            dialog = SpeakerAssignmentDialog(
-                speaker_data_list, recording_path, metadata, self
-            )
-
-            # Connect completion signal to update the task in queue
-            def on_dialog_completed():
-                assignments = dialog.get_assignments()
-                queue.complete_task(task_id, assignments)
-                logger.info(f"Batch speaker assignment completed for task {task_id}")
-
-            def on_dialog_cancelled():
-                queue.complete_task(task_id, None)
-                logger.info(f"Batch speaker assignment cancelled for task {task_id}")
-
-            dialog.speaker_assignments_completed.connect(on_dialog_completed)
-            dialog.assignment_cancelled.connect(on_dialog_cancelled)
-
-            # Show dialog non-modally to allow batch processing to continue
-            dialog.show()  # Non-modal - allows multiple dialogs and parallel processing
-
-            # Append info to log
-            self.append_log(
-                f"🎭 Speaker assignment dialog opened for {Path(recording_path).name}. "
-                f"Batch processing continues in parallel..."
-            )
-
-        except Exception as e:
-            logger.error(f"Error showing batch speaker assignment dialog: {e}")
-            # Mark task as failed
-            if task_id:
-                from knowledge_system.utils.speaker_assignment_queue import (
-                    get_speaker_assignment_queue,
-                )
-
-                queue = get_speaker_assignment_queue()
-                queue.complete_task(task_id, None)
+    # Batch speaker assignment dialogs removed - using Speaker Attribution tab workflow instead
 
     def _handle_batch_status(self, status: dict) -> None:
         """Handle batch status updates from YouTubeBatchWorker."""
@@ -2235,12 +2195,19 @@ class YouTubeTab(BaseTab):
             and results.get("failed_urls")
             and self.extraction_worker
         ):
-            log_file, csv_file = self.extraction_worker._write_failure_log(
-                results["failed_urls"]
-            )
-            if log_file and csv_file:
-                self.append_log(f"\n📋 Failed extractions logged to: {log_file}")
-                self.append_log(f"🔄 Failed URLs saved for retry to: {csv_file}")
+            # Handle different worker types
+            if hasattr(self.extraction_worker, "_write_failure_log"):
+                # YouTubeExtractionWorker returns tuple
+                log_file, csv_file = self.extraction_worker._write_failure_log(
+                    results["failed_urls"]
+                )
+                if log_file and csv_file:
+                    self.append_log(f"\n📋 Failed extractions logged to: {log_file}")
+                    self.append_log(f"🔄 Failed URLs saved for retry to: {csv_file}")
+            elif hasattr(self.extraction_worker, "_save_failed_urls_for_retry"):
+                # YouTubeBatchWorker already saved URLs, just log the info
+                # The batch worker logs this internally, so we don't need to do anything here
+                pass
                 self.append_log(
                     "   💡 Tip: You can load the CSV file directly to retry failed extractions"
                 )

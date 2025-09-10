@@ -6,13 +6,11 @@ to prevent hanging tests and ensure proper resource management.
 """
 
 import os
-import signal
 import subprocess
 import threading
 import time
 from collections.abc import Callable
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import psutil
 

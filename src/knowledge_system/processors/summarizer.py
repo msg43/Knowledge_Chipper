@@ -164,7 +164,7 @@ class SummarizerProcessor(BaseProcessor):
 
     @property
     def supported_formats(self) -> list[str]:
-        return [".txt", ".md", ".json", ".html", ".htm"]
+        return [".txt", ".md", ".json", ".html", ".htm", ".docx", ".doc", ".rt"]
 
     def __init__(
         self,
@@ -454,6 +454,28 @@ class SummarizerProcessor(BaseProcessor):
                             f"HTML extraction failed, using raw file text: {e}"
                         )
                         text = input_data.read_text(encoding="utf-8")
+                # If document format, extract text using DocumentProcessor
+                elif input_data.suffix.lower() in {".docx", ".doc", ".rt"}:
+                    try:
+                        from .document_processor import DocumentProcessor
+
+                        doc_processor = DocumentProcessor()
+                        doc_result = doc_processor.process(input_data)
+                        if doc_result.success and doc_result.data:
+                            results = doc_result.data.get("results", [])
+                            if results:
+                                text = results[0]["text"]
+                            else:
+                                raise Exception("No text extracted from document")
+                        else:
+                            raise Exception(
+                                f"Document processing failed: {'; '.join(doc_result.errors or ['Unknown error'])}"
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            f"Document extraction failed, attempting raw file read: {e}"
+                        )
+                        text = input_data.read_text(encoding="utf-8")
                 else:
                     text = input_data.read_text(encoding="utf-8")
                 source_file = input_data
@@ -475,10 +497,10 @@ class SummarizerProcessor(BaseProcessor):
 
                 progress_callback(
                     SummarizationProgress(
-                        current_chunk=0,
+                        chunk_number=0,
                         total_chunks=1,
                         status="Extracting claims...",
-                        current_operation="HCE Pipeline",
+                        current_step="HCE Pipeline",
                     )
                 )
 

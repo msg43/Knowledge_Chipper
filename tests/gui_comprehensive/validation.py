@@ -7,11 +7,10 @@ test success criteria.
 
 import json
 import mimetypes
-import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 # Add the src directory to the Python path
 try:
@@ -347,9 +346,9 @@ class OutputValidator:
             "expected_seconds": expected_time,
             "file_size_mb": file_size_mb,
             "operation_type": operation_type,
-            "performance_ratio": duration_seconds / expected_time
-            if expected_time > 0
-            else float("inf"),
+            "performance_ratio": (
+                duration_seconds / expected_time if expected_time > 0 else float("inf")
+            ),
         }
 
         return ValidationResult(
@@ -482,9 +481,9 @@ class OutputValidator:
                 "total_validations": total_results,
                 "valid_count": valid_results,
                 "invalid_count": total_results - valid_results,
-                "success_rate": (valid_results / total_results * 100)
-                if total_results > 0
-                else 0.0,
+                "success_rate": (
+                    (valid_results / total_results * 100) if total_results > 0 else 0.0
+                ),
                 "average_score": average_score,
             },
             "errors": all_errors,

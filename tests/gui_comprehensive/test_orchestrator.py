@@ -7,15 +7,13 @@ of input types, GUI tabs, and processing operations.
 
 import json
 import os
-import signal
 import subprocess
 import sys
 import time
 import traceback
 from datetime import datetime
-from itertools import product
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from PyQt6.QtWidgets import QApplication
 
@@ -827,14 +825,18 @@ class TestOrchestrator:
                 # Create file existence validation result
                 existence_result = ValidationResult(
                     is_valid=len(files_found) >= len(expected_files),
-                    score=len(files_found) / len(expected_files)
-                    if expected_files
-                    else 1.0,
-                    errors=[]
-                    if len(files_found) >= len(expected_files)
-                    else [
-                        f"Missing output files: {set(expected_files) - {f.name for f in files_found}}"
-                    ],
+                    score=(
+                        len(files_found) / len(expected_files)
+                        if expected_files
+                        else 1.0
+                    ),
+                    errors=(
+                        []
+                        if len(files_found) >= len(expected_files)
+                        else [
+                            f"Missing output files: {set(expected_files) - {f.name for f in files_found}}"
+                        ]
+                    ),
                     warnings=[],
                     metadata={
                         "expected_files": expected_files,
@@ -1209,9 +1211,11 @@ class TestOrchestrator:
         try:
             report = {
                 "test_run": {
-                    "start_time": self.overall_start_time.isoformat()
-                    if self.overall_start_time
-                    else None,
+                    "start_time": (
+                        self.overall_start_time.isoformat()
+                        if self.overall_start_time
+                        else None
+                    ),
                     "end_time": datetime.now().isoformat(),
                     "total_suites": len(self.suite_results),
                 },
@@ -1248,7 +1252,6 @@ class TestOrchestrator:
     def _perform_aggressive_cleanup(self) -> None:
         """Perform aggressive cleanup of stuck processes and GUI state."""
         import os
-        import signal
         import time
 
         import psutil

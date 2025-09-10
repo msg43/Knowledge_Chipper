@@ -5,19 +5,15 @@ Provides high-level automation functions for interacting with the Knowledge Chip
 using PyQt6 testing capabilities.
 """
 
-import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
-from PyQt6.QtCore import QPoint, Qt
+from PyQt6.QtCore import Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
-    QFileDialog,
-    QGroupBox,
-    QLabel,
     QLineEdit,
     QListWidget,
     QPushButton,
@@ -790,9 +786,11 @@ class GUIAutomation:
                     if btn.isVisible()
                 ],
                 "total_buttons": len(buttons),
-                "window_title": self.main_window.windowTitle()
-                if hasattr(self.main_window, "windowTitle")
-                else "Unknown",
+                "window_title": (
+                    self.main_window.windowTitle()
+                    if hasattr(self.main_window, "windowTitle")
+                    else "Unknown"
+                ),
             }
 
             # System State
@@ -822,10 +820,11 @@ class GUIAutomation:
                                 "pid": proc.info["pid"],
                                 "name": proc.info["name"],
                                 "cpu_percent": proc.info["cpu_percent"],
-                                "memory_mb": proc.info["memory_info"].rss
-                                / (1024 * 1024)
-                                if proc.info["memory_info"]
-                                else 0,
+                                "memory_mb": (
+                                    proc.info["memory_info"].rss / (1024 * 1024)
+                                    if proc.info["memory_info"]
+                                    else 0
+                                ),
                                 "cmdline": " ".join(proc.info.get("cmdline", []))[:100]
                                 + "...",
                             }

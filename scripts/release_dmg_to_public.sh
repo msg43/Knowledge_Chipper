@@ -31,11 +31,11 @@ print(data['project']['version'])
 
 echo -e "${BLUE}📋 Current version:${NC} $CURRENT_VERSION"
 echo -e "${BLUE}📦 This will:${NC}"
-echo "   1. Build a FULL DMG with all models (~4GB)"
+echo "   1. Build a FULL DMG with essential models (~2.0GB)"
 echo "   2. Create a tagged release on GitHub"
 echo "   3. Upload the DMG to the public repository"
 echo
-echo -e "${YELLOW}📌 Note:${NC} This now defaults to FULL build with all models bundled"
+echo -e "${YELLOW}📌 Note:${NC} FULL build includes essential models + MVP LLM auto-download (GitHub 2GB compliant)"
 echo
 echo -e "${YELLOW}🔗 Target repository:${NC} https://github.com/msg43/skipthepodcast.com"
 echo
@@ -79,7 +79,7 @@ if [ ! -f "$DMG_FILE" ]; then
 
     # Check for HF token
     if [ -z "$HF_TOKEN" ] && [ -f "$PROJECT_ROOT/config/credentials.yaml" ]; then
-        HF_TOKEN=$(grep -A1 "huggingface_token:" "$PROJECT_ROOT/config/credentials.yaml" | tail -1 | sed 's/.*: //' | tr -d '"' | tr -d "'")
+        HF_TOKEN=$(grep "huggingface_token:" "$PROJECT_ROOT/config/credentials.yaml" | sed 's/.*: //' | tr -d '"' | tr -d "'")
     fi
     export HF_TOKEN
 

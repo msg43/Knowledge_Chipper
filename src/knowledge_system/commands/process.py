@@ -57,7 +57,7 @@ from .transcribe import _generate_obsidian_link, format_transcript_content
         "*.avi",
         "*.mov",
         "*.mkv",
-        "*.pd",
+        "*.pdf",
         "*.txt",
         "*.md",
     ],
@@ -209,7 +209,7 @@ def process(
      Examples:
          knowledge-system process video.mp4
          knowledge-system process ./videos/ --recursive
-         knowledge-system process ./content/ --no-transcribe --patterns "*.pd" "*.txt"
+         knowledge-system process ./content/ --no-transcribe --patterns "*.pdf" "*.txt"
          knowledge-system process audio.wav --output ./results --dry-run
     """
     settings = ctx.get_settings()

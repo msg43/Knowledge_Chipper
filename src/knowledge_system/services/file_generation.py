@@ -53,8 +53,15 @@ def _format_segments_to_markdown_transcript(
         start_time = segment.get("start", 0)
 
         # Format timestamp with hyperlink for YouTube videos
-        if include_timestamps and video_id:
-            # Create hyperlinked timestamp for YouTube videos
+        if (
+            include_timestamps
+            and video_id is not None
+            and isinstance(video_id, str)
+            and video_id != "youtube_video"
+            and video_id != ""
+            and len(video_id) == 11
+        ):
+            # Create hyperlinked timestamp for YouTube videos (only for valid video IDs)
             timestamp_str = _format_timestamp_for_display(start_time)
             youtube_url = (
                 f"https://www.youtube.com/watch?v={video_id}&t={int(start_time)}s"

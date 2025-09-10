@@ -560,7 +560,7 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
 
   # Check for HF token
   if [ -z "$HF_TOKEN" ] && [ -f "$SCRIPT_DIR/../config/credentials.yaml" ]; then
-    HF_TOKEN=$(grep -A1 "huggingface_token:" "$SCRIPT_DIR/../config/credentials.yaml" | tail -1 | sed 's/.*: //' | tr -d '"' | tr -d "'")
+    HF_TOKEN=$(grep "huggingface_token:" "$SCRIPT_DIR/../config/credentials.yaml" | sed 's/.*: //' | tr -d '"' | tr -d "'")
   fi
 
   if [ ! -z "$HF_TOKEN" ] && [ "$HF_TOKEN" != "your_huggingface_token_here" ]; then

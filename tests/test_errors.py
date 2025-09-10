@@ -1,5 +1,5 @@
 """Test error handling modules."""
-import pytest
+
 
 from knowledge_system.errors import (
     ConfigurationError,

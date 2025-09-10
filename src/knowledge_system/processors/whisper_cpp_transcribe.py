@@ -490,7 +490,8 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             )
             if self.progress_callback:
                 self.progress_callback(
-                    f"📊 Analyzed {filename}: {duration_str}, ready for transcription", 8
+                    f"📊 Analyzed {filename}: {duration_str}, ready for transcription",
+                    8,
                 )
         else:
             logger.warning(f"⚠️ Could not determine duration for {filename}")

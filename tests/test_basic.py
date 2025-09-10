@@ -1,4 +1,5 @@
 """Basic test to ensure CI pipeline works."""
+
 import pytest
 
 from knowledge_system import __version__

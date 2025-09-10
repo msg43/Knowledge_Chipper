@@ -396,7 +396,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             self,
             "Select Files to Process",
             "",
-            "All Supported (*.mp3 *.wav *.m4a *.mp4 *.avi *.mkv *.pdf *.txt *.md);;Audio Files (*.mp3 *.wav *.m4a);;Video Files (*.mp4 *.avi *.mkv);;Documents (*.pdf *.txt *.md)",
+            "All Supported (*.mp3 *.wav *.m4a *.mp4 *.avi *.mkv *.pdf *.txt *.md *.docx *.doc *.rt *.html *.htm);;Audio Files (*.mp3 *.wav *.m4a);;Video Files (*.mp4 *.avi *.mkv);;Documents (*.pdf *.txt *.md *.docx *.doc *.rt *.html *.htm)",
         )
 
         for file_path in files:
@@ -407,24 +407,26 @@ class ProcessTab(BaseTab, FileOperationsMixin):
         directory = QFileDialog.getExistingDirectory(self, "Select Directory", "")
 
         if directory:
-            supported_extensions = [
+            extensions = [
                 ".mp3",
                 ".wav",
                 ".m4a",
                 ".mp4",
                 ".avi",
                 ".mkv",
-                ".pd",
+                ".pdf",
                 ".txt",
                 ".md",
+                ".docx",
+                ".doc",
+                ".rt",
+                ".html",
+                ".htm",
             ]
             directory_path = Path(directory)
 
             for file_path in directory_path.rglob("*"):
-                if (
-                    file_path.is_file()
-                    and file_path.suffix.lower() in supported_extensions
-                ):
+                if file_path.is_file() and file_path.suffix.lower() in extensions:
                     self.files_list.addItem(str(file_path))
 
     def _clear_files(self) -> None:

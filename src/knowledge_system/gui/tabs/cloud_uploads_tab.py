@@ -791,12 +791,27 @@ Episodes: {stats.get('total_episodes', 0)}"""
 
             oauth_package_path = os.path.join(
                 os.path.dirname(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(
+                        os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    )
                 ),
                 "knowledge_chipper_oauth",
             )
             if oauth_package_path not in sys.path:
                 sys.path.append(oauth_package_path)
+
+            # Check if the OAuth module files exist before importing
+            config_path = os.path.join(oauth_package_path, "getreceipts_config.py")
+            uploader_path = os.path.join(oauth_package_path, "getreceipts_uploader.py")
+
+            if not os.path.exists(config_path):
+                raise ImportError(
+                    f"OAuth authentication is not yet available. Missing config module at {config_path}"
+                )
+            if not os.path.exists(uploader_path):
+                raise ImportError(
+                    f"OAuth authentication is not yet available. Missing uploader module at {uploader_path}"
+                )
 
             from getreceipts_config import get_config, set_production  # type: ignore
             from getreceipts_uploader import GetReceiptsUploader  # type: ignore
@@ -964,16 +979,20 @@ Episodes: {stats.get('total_episodes', 0)}"""
             from PyQt6.QtCore import QThread
 
             class AuthThread(QThread):
+                def __init__(self, parent, uploader):
+                    super().__init__(parent)
+                    self.uploader = uploader
+
                 def run(self):
                     nonlocal auth_completed, auth_result, auth_error
                     try:
-                        auth_result = self.parent().uploader.authenticate()
+                        auth_result = self.uploader.authenticate()
                     except Exception as e:
                         auth_error = e
                     finally:
                         auth_completed = True
 
-            auth_thread = AuthThread(self)
+            auth_thread = AuthThread(self, self.uploader)
 
             # Store references to prevent garbage collection
             self._auth_thread = auth_thread
@@ -985,6 +1004,18 @@ Episodes: {stats.get('total_episodes', 0)}"""
             # Return immediately - results will be handled by the timer
             return
 
+        except ImportError as e:
+            # Handle missing OAuth dependencies with specific messaging
+            error_msg = str(e)
+            if "OAuth authentication is not yet available" in error_msg:
+                self._handle_oauth_error(e)
+            else:
+                # Handle other import errors
+                self._handle_oauth_error(
+                    ImportError(
+                        f"OAuth authentication is not yet available: {error_msg}"
+                    )
+                )
         except Exception as e:
             if "progress" in locals():
                 progress.close()
@@ -1015,7 +1046,7 @@ Episodes: {stats.get('total_episodes', 0)}"""
         error_message = str(error)
         if "OAuth authentication is not yet available" in error_message:
             # Show a more detailed dialog for OAuth unavailability
-            from PyQt6.QtWidgets import QMessageBox, QTextEdit
+            from PyQt6.QtWidgets import QTextEdit
 
             msg_box = QMessageBox(self)
             msg_box.setWindowTitle("OAuth Not Available")

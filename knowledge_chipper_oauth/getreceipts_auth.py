@@ -49,6 +49,7 @@ class GetReceiptsAuth:
         self.access_token = None
         self.user_info = None
         self.auth_server = None
+        self._cancelled = False
 
     def authenticate(self) -> dict[str, Any]:
         """
@@ -68,7 +69,18 @@ class GetReceiptsAuth:
         """
         print("🔐 Starting authentication with GetReceipts.org...")
 
-        # Start local callback server
+        # Start callback server in background thread first
+        auth_result = {}
+        server_thread = threading.Thread(
+            target=self._start_callback_server, args=(auth_result,)
+        )
+        server_thread.daemon = True
+        server_thread.start()
+
+        # Give the server a moment to start and potentially choose an alternative port
+        time.sleep(0.5)
+
+        # Build callback URL with the actual port being used
         callback_url = f"http://localhost:{self.callback_port}/auth/callback"
         oauth_url = f"{self.base_url}/auth/signin"
 
@@ -79,14 +91,6 @@ class GetReceiptsAuth:
 
         print(f"🌐 Opening browser to: {full_oauth_url}")
 
-        # Start callback server in background thread
-        auth_result = {}
-        server_thread = threading.Thread(
-            target=self._start_callback_server, args=(auth_result,)
-        )
-        server_thread.daemon = True
-        server_thread.start()
-
         # Open browser to OAuth page
         webbrowser.open(full_oauth_url)
 
@@ -95,10 +99,17 @@ class GetReceiptsAuth:
         timeout = 300  # 5 minutes
         start_time = time.time()
 
-        while not auth_result and (time.time() - start_time) < timeout:
+        while (
+            not auth_result
+            and (time.time() - start_time) < timeout
+            and not self._cancelled
+        ):
             time.sleep(1)
 
         # Check results
+        if self._cancelled:
+            raise Exception("Authentication cancelled by user")
+
         if not auth_result:
             raise Exception("Authentication timeout - please try again")
 
@@ -206,7 +217,26 @@ class GetReceiptsAuth:
 
         # Start the callback server
         try:
-            server = HTTPServer(("localhost", self.callback_port), CallbackHandler)
+            # Try to bind to the callback port, if it fails try alternative ports
+            ports_to_try = [self.callback_port, 8081, 8082, 8083, 8084]
+            server = None
+
+            for port in ports_to_try:
+                try:
+                    server = HTTPServer(("localhost", port), CallbackHandler)
+                    print(f"🌐 Callback server started on port {port}")
+                    self.callback_port = port  # Update the port we're actually using
+                    break
+                except OSError as e:
+                    if "Address already in use" in str(e) and port != ports_to_try[-1]:
+                        print(f"⚠️  Port {port} in use, trying next port...")
+                        continue
+                    else:
+                        raise e
+
+            if not server:
+                raise Exception("Could not bind to any available port")
+
             server.timeout = 1
 
             # Handle requests until we get a result
@@ -214,6 +244,7 @@ class GetReceiptsAuth:
                 server.handle_request()
 
             server.server_close()
+            print(f"🔐 Callback server on port {self.callback_port} closed")
         except Exception as e:
             result_dict["error"] = f"Callback server error: {str(e)}"
 
@@ -252,6 +283,16 @@ class GetReceiptsAuth:
             Dictionary with user id, email, and name, or None if not authenticated
         """
         return self.user_info if self.is_authenticated() else None
+
+    def cancel_authentication(self):
+        """
+        Cancel ongoing authentication process
+
+        This method sets a flag that will cause the authentication
+        loop to exit gracefully.
+        """
+        print("🚫 Cancelling OAuth authentication...")
+        self._cancelled = True
 
 
 # Example usage
