@@ -53,8 +53,8 @@ def judge_claims(
     prompt_path = Path(__file__).parent / "prompts" / "judge.txt"
 
     # Partition claims if flagship set provided
-    flagship_set = set(flagship_claims or [])
-    local_bucket = [c for c in claims if c not in flagship_set]
+    flagship_claim_ids = {c.claim_id for c in (flagship_claims or [])}
+    local_bucket = [c for c in claims if c.claim_id not in flagship_claim_ids]
     judged: list[ScoredClaim] = []
 
     if local_bucket:

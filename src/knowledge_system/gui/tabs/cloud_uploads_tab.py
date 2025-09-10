@@ -8,7 +8,10 @@ directly to Skipthepodcast.com via authenticated user uploads.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from getreceipts_uploader import GetReceiptsUploader
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -30,11 +33,12 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from knowledge_system.cloud.oauth.getreceipts_uploader import GetReceiptsUploader
-
 from ...logger import get_logger
 from ...services.claims_upload_service import ClaimsUploadService, ClaimUploadData
 from ..components.base_tab import BaseTab
+
+# Note: OAuth implementation now uses dynamic import from knowledge_chipper_oauth/
+
 
 logger = get_logger(__name__)
 
@@ -890,7 +894,10 @@ Episodes: {stats.get('total_episodes', 0)}"""
                 "🌐 Opening Skipthepodcast.com in your browser...\n\n"
                 "1. Sign in or create account on Skipthepodcast.com\n"
                 "2. Authorize Knowledge_Chipper access\n"
-                "3. Return to this app when complete\n\n"
+                "3. Browser should redirect back automatically\n\n"
+                "⚠️ If browser stays on dashboard after login:\n"
+                "   • Look for 'Return to Knowledge Chipper' link\n"
+                "   • Or check the console for manual instructions\n\n"
                 "Waiting for authentication...\n\n"
                 "Click Cancel to abort the authentication process."
             )

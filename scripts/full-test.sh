@@ -129,7 +129,12 @@ verify_dependencies() {
 
     # Optional dependencies
     python -c "import PyQt6" 2>/dev/null && print_success "PyQt6 available (GUI enabled)" || print_warning "PyQt6 missing (GUI disabled)"
-    python -c "import whisper" 2>/dev/null && print_success "Whisper available" || print_warning "Whisper missing (local transcription disabled)"
+    # Check for whisper.cpp binaries (the actual implementation used)
+    if command -v whisper-cli >/dev/null 2>&1 || command -v whisper-cpp >/dev/null 2>&1 || command -v whisper >/dev/null 2>&1; then
+        print_success "Whisper.cpp binary available"
+    else
+        print_warning "Whisper.cpp binary missing (local transcription disabled)"
+    fi
     python -c "import pyannote.audio" 2>/dev/null && print_success "pyannote.audio available" || print_warning "pyannote.audio missing (diarization disabled)"
 
     if [[ $failed -eq 1 ]]; then

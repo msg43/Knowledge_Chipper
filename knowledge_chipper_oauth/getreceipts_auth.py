@@ -71,14 +71,18 @@ class GetReceiptsAuth:
 
         # Start callback server in background thread first
         auth_result = {}
+        server_ready = threading.Event()
         server_thread = threading.Thread(
-            target=self._start_callback_server, args=(auth_result,)
+            target=self._start_callback_server, args=(auth_result, server_ready)
         )
         server_thread.daemon = True
         server_thread.start()
 
-        # Give the server a moment to start and potentially choose an alternative port
-        time.sleep(0.5)
+        # Wait for server to be ready before proceeding
+        print("🔄 Starting callback server...")
+        if not server_ready.wait(timeout=5):
+            raise Exception("Callback server failed to start within 5 seconds")
+        print(f"✅ Callback server ready on port {self.callback_port}")
 
         # Build callback URL with the actual port being used
         callback_url = f"http://localhost:{self.callback_port}/auth/callback"
@@ -90,6 +94,14 @@ class GetReceiptsAuth:
         )
 
         print(f"🌐 Opening browser to: {full_oauth_url}")
+        print("")
+        print("📋 IMPORTANT: If the browser doesn't automatically redirect back:")
+        print("   1. After signing in successfully on Skipthepodcast.com")
+        print("   2. Look for a 'Return to Knowledge Chipper' button or link")
+        print("   3. Or manually navigate to:")
+        print(f"      {callback_url}")
+        print("   4. If you see tokens in the URL, the authentication worked")
+        print("")
 
         # Open browser to OAuth page
         webbrowser.open(full_oauth_url)
@@ -98,6 +110,7 @@ class GetReceiptsAuth:
         print("⏳ Waiting for authentication... (complete sign-in in browser)")
         timeout = 300  # 5 minutes
         start_time = time.time()
+        last_progress_time = start_time
 
         while (
             not auth_result
@@ -106,12 +119,34 @@ class GetReceiptsAuth:
         ):
             time.sleep(1)
 
+            # Show progress every 30 seconds
+            current_time = time.time()
+            if current_time - last_progress_time >= 30:
+                elapsed = int(current_time - start_time)
+                remaining = int(timeout - elapsed)
+                print(
+                    f"⏳ Still waiting... ({elapsed}s elapsed, {remaining}s remaining)"
+                )
+                print(
+                    "   💡 If stuck: Check browser for 'Return to Knowledge Chipper' link"
+                )
+                last_progress_time = current_time
+
         # Check results
         if self._cancelled:
             raise Exception("Authentication cancelled by user")
 
         if not auth_result:
-            raise Exception("Authentication timeout - please try again")
+            raise Exception(
+                "⏰ Authentication timeout - the browser didn't redirect back to Knowledge Chipper.\n\n"
+                "🔧 This usually means Skipthepodcast.com hasn't implemented the automatic redirect yet.\n\n"
+                "📋 What to try:\n"
+                "   1. Check if you successfully signed in on Skipthepodcast.com\n"
+                "   2. Look for a 'Return to Knowledge Chipper' button or link\n"
+                f"   3. Manually copy this URL to your browser: {callback_url}\n"
+                "   4. Contact the Skipthepodcast.com team to implement OAuth redirects\n\n"
+                "🔄 You can try the authentication again or use the manual callback method."
+            )
 
         if "error" in auth_result:
             raise Exception(f"Authentication failed: {auth_result['error']}")
@@ -127,7 +162,9 @@ class GetReceiptsAuth:
         print(f"✅ Authentication successful! Welcome, {self.user_info['name']}")
         return {"access_token": self.access_token, "user_info": self.user_info}
 
-    def _start_callback_server(self, result_dict: dict):
+    def _start_callback_server(
+        self, result_dict: dict, server_ready: threading.Event = None
+    ):
         """
         Start HTTP server to handle OAuth callback
 
@@ -136,6 +173,7 @@ class GetReceiptsAuth:
 
         Args:
             result_dict: Shared dictionary to store authentication results
+            server_ready: Event to signal when server is ready (optional)
         """
 
         class CallbackHandler(BaseHTTPRequestHandler):
@@ -151,6 +189,9 @@ class GetReceiptsAuth:
                         result_dict.update(
                             {
                                 "access_token": query_params["access_token"][0],
+                                "refresh_token": query_params.get(
+                                    "refresh_token", [""]
+                                )[0],
                                 "user_id": query_params.get("user_id", [""])[0],
                                 "user_email": query_params.get("user_email", [""])[0],
                                 "user_name": query_params.get("user_name", [""])[0],
@@ -161,23 +202,50 @@ class GetReceiptsAuth:
                         self.send_response(200)
                         self.send_header("Content-type", "text/html")
                         self.end_headers()
+                        # Log successful callback for debugging
+                        print(f"📥 OAuth callback received successfully")
+                        print(
+                            f"   Access token: {'✅' if query_params.get('access_token') else '❌'}"
+                        )
+                        print(
+                            f"   Refresh token: {'✅' if query_params.get('refresh_token') else '❌'}"
+                        )
+                        print(
+                            f"   User ID: {'✅' if query_params.get('user_id') else '❌'}"
+                        )
+                        print(
+                            f"   User email: {'✅' if query_params.get('user_email') else '❌'}"
+                        )
+                        print(
+                            f"   User name: {'✅' if query_params.get('user_name') else '❌'}"
+                        )
+
                         html_content = """
                         <html>
                         <head>
                             <title>Authentication Successful</title>
                             <style>
-                                body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                                body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
                                 .success { color: #4CAF50; }
-                                .container { max-width: 500px; margin: 0 auto; }
+                                .container { max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                                .info { background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; }
                             </style>
                         </head>
                         <body>
                             <div class="container">
                                 <h1 class="success">✅ Authentication Successful!</h1>
-                                <p>You have successfully authenticated with GetReceipts.org.</p>
-                                <p><strong>You can now close this window and return to Knowledge_Chipper.</strong></p>
+                                <p>You have successfully authenticated with Skipthepodcast.com.</p>
+                                <div class="info">
+                                    <p><strong>✅ Authentication data has been sent to Knowledge_Chipper</strong></p>
+                                    <p>You can now close this browser window and return to the Knowledge_Chipper application.</p>
+                                </div>
+                                <p><em>This window will automatically close in 3 seconds...</em></p>
                                 <script>
-                                    setTimeout(() => window.close(), 2000);
+                                    setTimeout(() => {
+                                        try { window.close(); } catch(e) {
+                                            document.body.innerHTML = '<h2>✅ You can safely close this window now</h2>';
+                                        }
+                                    }, 3000);
                                 </script>
                             </div>
                         </body>
@@ -236,6 +304,10 @@ class GetReceiptsAuth:
 
             if not server:
                 raise Exception("Could not bind to any available port")
+
+            # Signal that server is ready
+            if server_ready:
+                server_ready.set()
 
             server.timeout = 1
 

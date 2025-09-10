@@ -73,10 +73,26 @@ class AnyLLM:
 
             content = response.choices[0].message.content
 
-            # Try to parse as JSON
+            # Try to parse as JSON, handling markdown code blocks
             import json
+            import re
 
-            return json.loads(content)
+            # Clean up the response - remove markdown code blocks if present
+            json_content = content
+
+            # Look for JSON in markdown code blocks
+            json_match = re.search(
+                r"```(?:json)?\s*(\[.*?\]|\{.*?\})\s*```", content, re.DOTALL
+            )
+            if json_match:
+                json_content = json_match.group(1)
+            else:
+                # Look for JSON without code blocks
+                json_match = re.search(r"(\[.*?\]|\{.*?\})", content, re.DOTALL)
+                if json_match:
+                    json_content = json_match.group(1)
+
+            return json.loads(json_content)
 
         except Exception as e:
             import logging
@@ -102,10 +118,26 @@ class AnyLLM:
 
             content = response.content[0].text
 
-            # Try to parse as JSON
+            # Try to parse as JSON, handling markdown code blocks
             import json
+            import re
 
-            return json.loads(content)
+            # Clean up the response - remove markdown code blocks if present
+            json_content = content
+
+            # Look for JSON in markdown code blocks
+            json_match = re.search(
+                r"```(?:json)?\s*(\[.*?\]|\{.*?\})\s*```", content, re.DOTALL
+            )
+            if json_match:
+                json_content = json_match.group(1)
+            else:
+                # Look for JSON without code blocks
+                json_match = re.search(r"(\[.*?\]|\{.*?\})", content, re.DOTALL)
+                if json_match:
+                    json_content = json_match.group(1)
+
+            return json.loads(json_content)
 
         except Exception as e:
             import logging
@@ -130,10 +162,26 @@ class AnyLLM:
 
             content = response.get("response", "")
 
-            # Try to parse as JSON
+            # Try to parse as JSON, handling markdown code blocks
             import json
+            import re
 
-            return json.loads(content)
+            # Clean up the response - remove markdown code blocks if present
+            json_content = content
+
+            # Look for JSON in markdown code blocks
+            json_match = re.search(
+                r"```(?:json)?\s*(\[.*?\]|\{.*?\})\s*```", content, re.DOTALL
+            )
+            if json_match:
+                json_content = json_match.group(1)
+            else:
+                # Look for JSON without code blocks
+                json_match = re.search(r"(\[.*?\]|\{.*?\})", content, re.DOTALL)
+                if json_match:
+                    json_content = json_match.group(1)
+
+            return json.loads(json_content)
 
         except Exception as e:
             import logging
@@ -143,10 +191,67 @@ class AnyLLM:
             return []
 
     def _call_local(self, prompt: str):
-        """Call local model."""
-        # Placeholder for local model calls
-        import logging
+        """Call local model via Ollama HTTP API."""
+        try:
+            import requests
 
-        logger = logging.getLogger(__name__)
-        logger.warning(f"Local model calls not fully implemented for {self.model_uri}")
-        return []
+            from ....config import get_settings
+
+            settings = get_settings()
+            base_url = settings.local_config.base_url.rstrip("/")
+
+            # Extract model name from URI (e.g., "local://llama3.2:latest" -> "llama3.2:latest")
+            model_name = urlparse(self.model_uri).netloc
+            if not model_name:
+                # Fallback: try to get the model name after the ://
+                model_name = (
+                    self.model_uri.split("://")[-1]
+                    if "://" in self.model_uri
+                    else self.model_uri
+                )
+
+            url = f"{base_url}/api/generate"
+
+            payload = {
+                "model": model_name,
+                "prompt": prompt,
+                "options": {
+                    "temperature": 0.1,
+                    "num_predict": 2000,
+                },
+                "stream": False,
+            }
+
+            response = requests.post(url, json=payload, timeout=60)
+            response.raise_for_status()
+
+            result = response.json()
+            content = result.get("response", "")
+
+            # Try to parse as JSON, handling markdown code blocks
+            import json
+            import re
+
+            # Clean up the response - remove markdown code blocks if present
+            json_content = content
+
+            # Look for JSON in markdown code blocks
+            json_match = re.search(
+                r"```(?:json)?\s*(\[.*?\]|\{.*?\})\s*```", content, re.DOTALL
+            )
+            if json_match:
+                json_content = json_match.group(1)
+            else:
+                # Look for JSON without code blocks
+                json_match = re.search(r"(\[.*?\]|\{.*?\})", content, re.DOTALL)
+                if json_match:
+                    json_content = json_match.group(1)
+
+            return json.loads(json_content)
+
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Local model call failed for {self.model_uri}: {e}")
+            return []

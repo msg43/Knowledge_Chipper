@@ -1,6 +1,5 @@
 """Test error handling modules."""
 
-
 from knowledge_system.errors import (
     ConfigurationError,
     KnowledgeSystemError,

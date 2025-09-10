@@ -182,6 +182,12 @@ clean:
 	find . -type f -name "*.pyc" -delete || true
 	@echo "✅ Cleanup complete!"
 
+# Show troubleshooting guide for push failures
+troubleshoot:
+	@echo "📋 Push Failure Troubleshooting Guide"
+	@echo "====================================="
+	@cat scripts/troubleshoot-push-failures.md
+
 # === HCE COMMANDS (inherited from Makefile.hce) ===
 
 hce-test:

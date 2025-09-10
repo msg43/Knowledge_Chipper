@@ -60,10 +60,14 @@ class GetReceiptsUploader:
         """
         auth_result = self.auth.authenticate()
 
-        # Set Supabase auth session using the access token
-        self.supabase.auth.set_session(
-            auth_result["access_token"], None  # refresh_token not needed for this flow
-        )
+        # Set Supabase auth session using the access and refresh tokens
+        refresh_token = auth_result.get("refresh_token") or None
+        self.supabase.auth.set_session(auth_result["access_token"], refresh_token)
+
+        if refresh_token:
+            print("🔄 Supabase session established with refresh token")
+        else:
+            print("⚠️  Supabase session established without refresh token")
 
         self.authenticated = True
         print(f"🔐 Supabase session established for: {auth_result['user_info']['name']}")

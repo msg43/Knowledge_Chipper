@@ -31,3 +31,25 @@ class GlossaryExtractor:
                     )
                 )
         return out
+
+
+def extract_jargon(
+    episode, model_uri: str = "local://llama3.2:latest"
+) -> list[JargonTerm]:
+    """Compatibility wrapper used by HCEPipeline to extract jargon terms."""
+    from pathlib import Path
+
+    # For now, we'll use a simple approach
+    # In a full implementation, this would extract jargon terms
+    try:
+        from .models.llm_any import AnyLLM
+
+        # Use provided model URI
+        llm = AnyLLM(model_uri)
+        prompt_path = Path(__file__).parent / "prompts" / "glossary_detect.txt"
+
+        extractor = GlossaryExtractor(llm, prompt_path)
+        return extractor.detect(episode.episode_id, episode.segments)
+    except Exception:
+        # Return empty list if extraction fails
+        return []

@@ -243,7 +243,16 @@ def expand_evidence_context(
     evidence.context_t0 = seconds_to_timestamp(context_start)
     evidence.context_t1 = seconds_to_timestamp(context_end)
     evidence.context_text = context_text
-    evidence.context_type = method
+
+    # Map method to valid context_type
+    if method == "conversational_boundary":
+        evidence.context_type = "extended"
+    elif method == "fixed_window":
+        evidence.context_type = "extended"
+    elif method == "segment":
+        evidence.context_type = "segment"
+    else:
+        evidence.context_type = "exact"
 
     return evidence
 

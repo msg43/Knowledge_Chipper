@@ -61,14 +61,11 @@ def skim_episode(
     If model_uri is provided, uses that model; otherwise falls back to settings.
     """
     settings = get_settings()
-    # Use provided model or fall back to miner/default model
+    # Use provided model or fall back to configured model
     resolved_model_uri = model_uri
     if not resolved_model_uri:
-        resolved_model_uri = (
-            f"openai://{settings.hce.miner_model}"
-            if settings.llm.provider == "openai"
-            else f"{settings.llm.provider}://{settings.llm.model}"
-        )
+        # Use the configured provider and model, not hardcoded OpenAI
+        resolved_model_uri = f"{settings.llm.provider}://{settings.llm.local_model if settings.llm.provider == 'local' else settings.llm.model}"
     llm = AnyLLM(resolved_model_uri)
     prompt_path = Path(__file__).parent / "prompts" / "skim.txt"
     sk = Skimmer(llm, prompt_path)

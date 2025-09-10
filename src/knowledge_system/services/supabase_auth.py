@@ -123,8 +123,8 @@ class SupabaseAuthService:
             # Start local callback server
             logger.info("Starting OAuth callback server on localhost:8080")
 
-            # Construct OAuth URL with callback
-            oauth_url = "https://www.skipthepodcast.com/api/auth/signin?redirect_to=knowledge_chipper&return_url=http://localhost:8080/auth/callback"
+            # Construct OAuth URL with callback (updated to match current implementation)
+            oauth_url = "https://www.skipthepodcast.com/auth/signin?redirect_to=knowledge_chipper&return_url=http://localhost:8080/auth/callback"
 
             # Open browser to OAuth URL
             logger.info(f"Opening browser to: {oauth_url}")

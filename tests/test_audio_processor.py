@@ -1,6 +1,5 @@
 """Test audio processor functionality."""
 
-
 import pytest
 
 

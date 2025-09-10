@@ -3,6 +3,9 @@ OAuth Callback Server
 
 Handles OAuth callbacks from GetReceipts by running a local HTTP server
 on localhost:8080 to receive authentication tokens.
+
+NOTE: This is a legacy OAuth implementation. The primary OAuth system
+is now located in knowledge_chipper_oauth/ directory.
 """
 
 from __future__ import annotations

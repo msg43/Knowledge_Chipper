@@ -32,3 +32,25 @@ class ConceptExtractor:
                     )
                 )
         return out
+
+
+def extract_concepts(
+    episode, scored_claims, model_uri: str = "local://llama3.2:latest"
+) -> list[MentalModel]:
+    """Compatibility wrapper used by HCEPipeline to extract concepts."""
+    from pathlib import Path
+
+    # For now, we'll use a simple approach
+    # In a full implementation, this would use the scored claims to inform concept extraction
+    try:
+        from .models.llm_any import AnyLLM
+
+        # Use provided model URI
+        llm = AnyLLM(model_uri)
+        prompt_path = Path(__file__).parent / "prompts" / "concepts_detect.txt"
+
+        extractor = ConceptExtractor(llm, prompt_path)
+        return extractor.detect(episode.episode_id, episode.segments)
+    except Exception:
+        # Return empty list if extraction fails
+        return []

@@ -1,6 +1,5 @@
 """Test logger functionality."""
 
-
 from knowledge_system.logger import get_logger
 
 

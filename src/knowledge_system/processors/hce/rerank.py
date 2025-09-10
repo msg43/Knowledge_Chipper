@@ -34,6 +34,9 @@ def rerank_claims(
     pairs = [("", c.consolidated) for c in consolidated]
     # Fallback CrossEncoder scoring
     try:
+        # Fix reranker model name if it's a local:// scheme
+        if reranker_model.startswith("local://"):
+            reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
         ce = CrossEncoder(reranker_model)
         scores = ce.score(pairs)
     except Exception:

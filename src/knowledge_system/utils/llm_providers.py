@@ -571,3 +571,39 @@ def call_llm_dict(
     """Convenience function to call any LLM provider and return dictionary."""
     client = UnifiedLLMClient(provider, model, temperature)
     return client.generate_dict(prompt, progress_callback)
+
+
+def get_openai_client():
+    """Get an OpenAI client for backward compatibility."""
+    try:
+        import openai
+
+        settings = get_settings()
+        if not settings.api_keys.openai_api_key:
+            raise ValueError("OpenAI API key not configured")
+        return openai.OpenAI(api_key=settings.api_keys.openai_api_key)
+    except ImportError:
+        raise ImportError(
+            "OpenAI library not installed. Install with: pip install openai"
+        )
+
+
+def get_anthropic_client():
+    """Get an Anthropic client for backward compatibility."""
+    try:
+        import anthropic
+
+        settings = get_settings()
+        if not settings.api_keys.anthropic_api_key:
+            raise ValueError("Anthropic API key not configured")
+        return anthropic.Anthropic(api_key=settings.api_keys.anthropic_api_key)
+    except ImportError:
+        raise ImportError(
+            "Anthropic library not installed. Install with: pip install anthropic"
+        )
+
+
+def get_local_client():
+    """Get a local LLM client for backward compatibility."""
+    settings = get_settings()
+    return UnifiedLLMClient("local", settings.llm.local_model)

@@ -60,25 +60,41 @@ class HCEPipeline:
             except Exception as e:
                 logger.warning(f"Skim failed, continuing without milestones: {e}")
 
-        # Step 2: Mine candidate claims
-        candidates = miner.mine_claims(episode, self.config.models.miner)
+        # Step 2: Mine candidate claims (without deduplication)
+        # We need to mine candidates first, then do evidence linking, then dedupe
+        from pathlib import Path
+
+        from .hce.miner import Miner
+        from .hce.models.llm_any import AnyLLM
+
+        # Create miner directly to get candidates
+        miner_llm = AnyLLM(self.config.models.miner)
+        miner_prompt = Path(__file__).parent / "hce" / "prompts" / "miner.txt"
+        miner_obj = Miner(miner_llm, miner_prompt)
+
+        # Mine candidates from each segment
+        candidates = []
+        for seg in episode.segments:
+            candidates.extend(miner_obj.mine_segment(seg))
 
         # Step 3: Extract evidence
         with_evidence = evidence.link_evidence(candidates, episode.segments)
 
         # Step 4: Deduplicate claims
-        consolidated = dedupe.deduplicate_claims(with_evidence)
+        from .hce.dedupe import Deduper
+        from .hce.models.embedder import Embedder
+
+        # Create deduper with embedder (use standard model)
+        embedder_model = self.config.models.embedder
+        if embedder_model.startswith("local://"):
+            # Use standard sentence-transformers model instead of local scheme
+            embedder_model = "all-MiniLM-L6-v2"
+        embedder = Embedder(embedder_model)
+        deduper = Deduper(embedder)
+        consolidated = deduper.cluster(with_evidence)
 
         # Step 5: Rerank claims
-        policy = rerank_policy.AdaptiveRerankPolicy(
-            base_density=self.config.rerank.base_density,
-            min_keep=self.config.rerank.min_keep,
-            max_keep=self.config.rerank.max_keep,
-            percentile_floor=self.config.rerank.percentile_floor,
-        )
-        reranked = rerank.rerank_claims(
-            consolidated, policy, self.config.models.reranker
-        )
+        reranked = rerank.rerank_claims(consolidated, None, self.config.models.reranker)
 
         # Step 6: Route claims to appropriate judge
         to_flagship, keep_local = router.route_claims(
@@ -107,11 +123,25 @@ class HCEPipeline:
         )
 
         # Step 8: Extract entities
-        people_mentions = people.extract_people(
-            episode, self.config.models.people_disambiguator
-        )
-        mental_models = concepts.extract_concepts(episode, scored)
-        jargon_terms = glossary.extract_jargon(episode)
+        try:
+            people_mentions = people.extract_people(
+                episode, self.config.models.people_disambiguator
+            )
+        except Exception as e:
+            logger.warning(f"People extraction failed: {e}")
+            people_mentions = []
+
+        try:
+            mental_models = concepts.extract_concepts(episode, scored, model_uri)
+        except Exception as e:
+            logger.warning(f"Concepts extraction failed: {e}")
+            mental_models = []
+
+        try:
+            jargon_terms = glossary.extract_jargon(episode, model_uri)
+        except Exception as e:
+            logger.warning(f"Jargon extraction failed: {e}")
+            jargon_terms = []
 
         # Step 9: Analyze claim temporality
         from .hce.temporality import analyze_temporality
@@ -119,9 +149,13 @@ class HCEPipeline:
         scored_with_temporality = analyze_temporality(scored, self.config.models.judge)
 
         # Step 10: Extract relations
-        claim_relations = relations.extract_relations(
-            scored_with_temporality, self.config.models.judge
-        )
+        try:
+            claim_relations = relations.extract_relations(
+                scored_with_temporality, self.config.models.judge
+            )
+        except Exception as e:
+            logger.warning(f"Relations extraction failed: {e}")
+            claim_relations = []
 
         # Create initial pipeline outputs for category analysis
         initial_outputs = PipelineOutputs(
@@ -135,11 +169,15 @@ class HCEPipeline:
         )
 
         # Step 11: Analyze structured categories
-        from .hce.structured_categories import analyze_structured_categories
+        try:
+            from .hce.structured_categories import analyze_structured_categories
 
-        episode_categories = analyze_structured_categories(
-            initial_outputs, self.config.models.judge
-        )
+            episode_categories = analyze_structured_categories(
+                initial_outputs, self.config.models.judge
+            )
+        except Exception as e:
+            logger.warning(f"Structured categories analysis failed: {e}")
+            episode_categories = []
 
         # Return final outputs with categories
         return PipelineOutputs(
@@ -164,7 +202,7 @@ class SummarizerProcessor(BaseProcessor):
 
     @property
     def supported_formats(self) -> list[str]:
-        return [".txt", ".md", ".json", ".html", ".htm", ".docx", ".doc", ".rt"]
+        return [".txt", ".md", ".json", ".html", ".htm", ".pdf", ".docx", ".doc", ".rt"]
 
     def __init__(
         self,
@@ -213,8 +251,10 @@ class SummarizerProcessor(BaseProcessor):
                     if self.hce_options.get("enable_routing", True)
                     else None
                 ),
-                embedder="local://bge-small-en-v1.5",
-                reranker="local://bge-reranker-base",
+                embedder="all-MiniLM-L6-v2",  # Use standard sentence-transformers model
+                reranker="cross-encoder/ms-marco-MiniLM-L-6-v2",  # Use standard cross-encoder model
+                people_disambiguator=model_uri,  # Use same model for people extraction
+                skim=model_uri,  # Use same model for skimming
             ),
             use_skim=self.hce_options.get("use_skim", True),
             router_uncertainty_threshold=self.hce_options.get(
@@ -445,8 +485,30 @@ class SummarizerProcessor(BaseProcessor):
 
             # Read text content
             if isinstance(input_data, Path):
+                # If PDF, extract text using PDFProcessor
+                if input_data.suffix.lower() == ".pdf":
+                    try:
+                        from .pdf import PDFProcessor
+
+                        pdf_processor = PDFProcessor()
+                        pdf_result = pdf_processor.process(input_data)
+                        if pdf_result.success and pdf_result.data:
+                            results = pdf_result.data.get("results", [])
+                            if results:
+                                text = results[0]["text"]
+                            else:
+                                raise Exception("No text extracted from PDF")
+                        else:
+                            raise Exception(
+                                f"PDF processing failed: {'; '.join(pdf_result.errors or ['Unknown error'])}"
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            f"PDF extraction failed, attempting raw file read: {e}"
+                        )
+                        text = input_data.read_text(encoding="utf-8")
                 # If HTML, extract readable text instead of raw markup
-                if input_data.suffix.lower() in {".html", ".htm"}:
+                elif input_data.suffix.lower() in {".html", ".htm"}:
                     try:
                         text = fetch_html_text(input_data)
                     except Exception as e:

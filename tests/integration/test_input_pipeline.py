@@ -1,6 +1,5 @@
 """Test input pipeline integration."""
 
-
 import pytest
 
 from knowledge_system.config import Settings

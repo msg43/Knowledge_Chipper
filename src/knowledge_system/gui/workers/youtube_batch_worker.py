@@ -328,10 +328,11 @@ class YouTubeBatchWorker(QThread):
                     f"Good memory availability ({memory.percent:.1f}%) - allowing {base_download_limit} concurrent downloads"
                 )
 
-            # Conservative PacketStream limit (can handle more but be respectful)
+            # PacketStream limit - with sticky sessions providing different IPs
+            # We can use the full 12 concurrent sessions
             final_concurrency = min(
                 download_concurrency, 12
-            )  # Max 12 concurrent sessions
+            )  # Max 12 concurrent sessions with different IPs
 
             logger.info(f"Download concurrency: {final_concurrency} parallel sessions")
             return final_concurrency
@@ -1293,6 +1294,23 @@ class YouTubeBatchWorker(QThread):
     ) -> Path | None:
         """Download a single URL using a specific PacketStream session."""
         try:
+            # Add random delay (0-5 seconds) to make downloads look more natural
+            import random
+
+            delay = random.uniform(0, 5)
+            logger.info(
+                f"🎲 Waiting {delay:.1f}s before starting download for session {session_id}"
+            )
+
+            # Sleep in small increments to allow cancellation checks
+            elapsed = 0
+            while elapsed < delay:
+                if self.should_stop or self.cancellation_token.is_cancelled():
+                    logger.debug(f"Download cancelled during delay for {session_id}")
+                    return None
+                time.sleep(0.1)  # Sleep 100ms at a time
+                elapsed += 0.1
+
             # Create unique filename for this audio
             video_id = self._extract_video_id(url)
             audio_file = self.audio_storage_dir / f"{video_id}_{global_index}.wav"
@@ -1307,18 +1325,30 @@ class YouTubeBatchWorker(QThread):
                 logger.debug(f"Download cancelled before starting for {video_id}")
                 return None
 
-            # Get proxy URL from session
+            # Get proxy URL - PacketStream handles session rotation internally
             from ...utils.packetstream_proxy import PacketStreamProxyManager
 
             proxy_manager = PacketStreamProxyManager()
             proxy_url = proxy_manager.get_proxy_url()
 
-            if not proxy_url:
+            # Note: PacketStream automatically rotates IPs for each new connection
+            # No need to modify the URL - each download will get a different IP
+            if proxy_url:
+                logger.info(
+                    f"🌐 Using PacketStream proxy for {session_id} (rotating residential IP)"
+                )
+            else:
                 logger.warning(
                     f"No proxy URL available for session {session_id}, using direct connection"
                 )
 
             import yt_dlp
+
+            # Get YouTube authentication strategy (cookies, browser auth, etc.)
+            from ...utils.youtube_utils import get_auth_strategy
+
+            auth_options = get_auth_strategy()
+            logger.info(f"🍪 Using authentication strategy: {list(auth_options.keys())}")
 
             # Flag to track if download was cancelled
             download_cancelled = False
@@ -1359,7 +1389,10 @@ class YouTubeBatchWorker(QThread):
                 "retries": 2,  # Limited retries for faster failure detection
             }
 
-            # Add proxy if available
+            # Merge authentication options (cookies, browser auth, etc.)
+            ydl_opts.update(auth_options)
+
+            # Add proxy if available (proxy takes precedence over auth strategy proxy)
             if proxy_url:
                 ydl_opts["proxy"] = proxy_url
 

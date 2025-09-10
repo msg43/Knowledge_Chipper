@@ -8,14 +8,14 @@ ModelURI = (
 
 
 class StageModelConfig(BaseModel):
-    miner: ModelURI = "ollama://qwen2.5:14b-instruct"
+    miner: ModelURI = "local://llama3.2:latest"
     heavy_miner: ModelURI | None = None
-    judge: ModelURI = "openai://gpt-5-large"
+    judge: ModelURI = "local://llama3.2:latest"
     flagship_judge: ModelURI | None = None
-    embedder: ModelURI = "local://bge-small-en-v1.5"
-    reranker: ModelURI = "local://bge-reranker-base"
+    embedder: ModelURI = "all-MiniLM-L6-v2"
+    reranker: ModelURI = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     people_disambiguator: ModelURI | None = None
-    nli: ModelURI | None = "local://nli-mini"
+    nli: ModelURI | None = None
     skim: ModelURI | None = None
 
 

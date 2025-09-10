@@ -115,3 +115,22 @@ class PeopleExtractor:
             m.external_ids = js.get("external_ids", {})
             out.append(m)
         return out
+
+
+def extract_people(episode, people_disambiguator_model_uri: str) -> list[PersonMention]:
+    """Compatibility wrapper used by HCEPipeline to extract people."""
+    from pathlib import Path
+
+    # Build LLM from provided model URI
+    llm = AnyLLM(people_disambiguator_model_uri)
+
+    # Get prompt paths
+    detect_prompt = Path(__file__).parent / "prompts" / "people_detect.txt"
+    disambig_prompt = Path(__file__).parent / "prompts" / "people_disambiguate.txt"
+
+    # Create extractor
+    extractor = PeopleExtractor(llm, detect_prompt, disambig_prompt)
+
+    # Extract and disambiguate
+    mentions = extractor.detect(episode.episode_id, episode.segments)
+    return extractor.disambiguate(mentions)
