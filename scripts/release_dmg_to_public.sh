@@ -31,9 +31,11 @@ print(data['project']['version'])
 
 echo -e "${BLUE}📋 Current version:${NC} $CURRENT_VERSION"
 echo -e "${BLUE}📦 This will:${NC}"
-echo "   1. Build a DMG (or use existing)"
+echo "   1. Build a FULL DMG with all models (~4GB)"
 echo "   2. Create a tagged release on GitHub"
 echo "   3. Upload the DMG to the public repository"
+echo
+echo -e "${YELLOW}📌 Note:${NC} This now defaults to FULL build with all models bundled"
 echo
 echo -e "${YELLOW}🔗 Target repository:${NC} https://github.com/msg43/skipthepodcast.com"
 echo
@@ -70,8 +72,18 @@ echo "🚀 Starting release process..."
 
 # Step 1: Build DMG if needed
 if [ ! -f "$DMG_FILE" ]; then
-    echo "🏗️ Building DMG..."
-    bash "$SCRIPT_DIR/build_macos_app.sh" --make-dmg --skip-install
+    echo "🏗️ Building FULL DMG with all models..."
+
+    # Default to full build with all models bundled
+    export BUNDLE_ALL_MODELS=1
+
+    # Check for HF token
+    if [ -z "$HF_TOKEN" ] && [ -f "$PROJECT_ROOT/config/credentials.yaml" ]; then
+        HF_TOKEN=$(grep -A1 "huggingface_token:" "$PROJECT_ROOT/config/credentials.yaml" | tail -1 | sed 's/.*: //' | tr -d '"' | tr -d "'")
+    fi
+    export HF_TOKEN
+
+    bash "$SCRIPT_DIR/build_macos_app.sh" --make-dmg --skip-install --bundle-all
 
     if [ ! -f "$DMG_FILE" ]; then
         echo "❌ Failed to create DMG"

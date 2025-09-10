@@ -132,11 +132,15 @@ class BatchProcessor:
         return sorted_items
 
     def _update_progress(self, message: str, current: int = None, total: int = None):
-        """Update progress callback if available."""
+        """Update progress callback with completion percentage and remaining count."""
         if self.progress_callback:
             if current is not None and total is not None:
                 percent = (current / total) * 100 if total > 0 else 0
-                self.progress_callback(f"{message} ({current}/{total}, {percent:.1f}%)")
+                remaining = total - current
+                remaining_str = f", {remaining} left" if remaining > 0 else ""
+                self.progress_callback(
+                    f"{message} ({current}/{total}{remaining_str}, {percent:.1f}%)"
+                )
             else:
                 self.progress_callback(message)
 
@@ -164,7 +168,9 @@ class BatchProcessor:
         logger.info(
             f"Starting batch processing: {len(items)} files, strategy={self.strategy.value}"
         )
-        self._update_progress("Starting batch processing", 0, len(items))
+        self._update_progress(
+            f"Starting batch processing of {len(items)} files", 0, len(items)
+        )
 
         # Sort items for optimal processing
         sorted_items = self._sort_batch_items(items)
@@ -529,16 +535,18 @@ def calculate_memory_safe_concurrency(
     """
     import psutil
 
-    # Memory requirements per video (conservative estimates)
+    # Memory requirements per video (REALISTIC estimates for audio-only processing)
     memory_per_video = {
-        "whisper_model": 2.5,  # whisper.cpp model in RAM
-        "diarization_model": 1.5,  # pyannote.audio model
-        "audio_buffers": 0.8,  # Raw audio + converted formats
-        "processing_overhead": 1.2,  # Temporary buffers, gradients, etc.
-        "safety_margin": 1.0,  # Additional buffer for spikes
+        "whisper_model": 0.14,  # whisper.cpp base model in RAM (~140MB)
+        "diarization_model": 0.5,  # pyannote.audio model (~500MB)
+        "audio_buffers": 0.1,  # Raw audio + converted formats (~100MB for 10min video)
+        "processing_overhead": 0.2,  # Temporary buffers, etc. (~200MB)
+        "safety_margin": 0.16,  # Additional buffer for spikes (~160MB)
     }
 
-    total_memory_per_video = sum(memory_per_video.values())  # ~7GB per video
+    total_memory_per_video = sum(
+        memory_per_video.values()
+    )  # ~1.1GB per video (REALISTIC)
 
     # System memory budget (conservative)
     memory_budget = {
@@ -553,47 +561,72 @@ def calculate_memory_safe_concurrency(
     # Calculate theoretical max based on memory
     memory_based_max = max(1, int(usable_memory // total_memory_per_video))
 
-    # Calculate CPU-based limit (don't oversubscribe cores)
-    cpu_based_max = max(1, available_cores // 3)  # Reserve cores for system
+    # Calculate CPU-based limit for ML workloads (less CPU-intensive due to GPU/Neural Engine)
+    if available_cores >= 20:  # High-end systems (M2 Ultra, etc.)
+        cpu_based_max = min(
+            12, available_cores // 2
+        )  # Can handle more concurrent ML tasks
+    elif available_cores >= 12:  # Mid-high systems
+        cpu_based_max = min(8, available_cores // 2)
+    elif available_cores >= 8:  # Standard systems
+        cpu_based_max = min(6, available_cores // 2)
+    else:  # Lower-end systems
+        cpu_based_max = max(1, available_cores // 3)  # More conservative
 
     # Take the more conservative limit
     theoretical_max = min(memory_based_max, cpu_based_max)
 
-    # Check current memory pressure and adjust
+    # Check current memory pressure using HYBRID approach (absolute + percentage)
     current_memory = psutil.virtual_memory()
-    current_usage = current_memory.percent / 100.0
+    current_usage_percent = current_memory.percent / 100.0
+    free_memory_gb = current_memory.available / (1024**3)
 
-    # Dynamic adjustment based on current memory pressure
-    if current_usage > 0.85:  # 85%+ usage
-        adjusted_max = 1  # Force sequential
+    # Calculate how many videos we can fit in FREE memory (with safety buffer)
+    free_memory_budget = max(0, free_memory_gb - 8.0)  # Reserve 8GB for system
+    free_memory_based_max = int(free_memory_budget // total_memory_per_video)
+
+    # Use HYBRID logic: free memory capacity AND percentage pressure
+    if free_memory_gb < 4.0:  # Critical: <4GB free regardless of percentage
+        adjusted_max = 1
         logger.warning(
-            f"High memory pressure ({current_usage:.1%}), limiting to sequential processing"
+            f"CRITICAL: Only {free_memory_gb:.1f}GB free memory - limiting to sequential processing"
         )
-    elif current_usage > 0.75:  # 75-85% usage
-        adjusted_max = min(2, theoretical_max)
+    elif free_memory_gb < 8.0:  # Low: <8GB free
+        adjusted_max = min(2, theoretical_max, free_memory_based_max)
         logger.info(
-            f"Moderate memory pressure ({current_usage:.1%}), limiting to 2 concurrent files"
+            f"LOW FREE MEMORY: {free_memory_gb:.1f}GB free ({current_usage_percent:.1%} used) - limiting to 2 concurrent"
         )
-    elif current_usage > 0.65:  # 65-75% usage
-        adjusted_max = min(3, theoretical_max)
+    elif (
+        current_usage_percent > 0.90
+    ):  # Very high percentage (but adequate free memory)
+        adjusted_max = min(theoretical_max // 2, free_memory_based_max)  # Half capacity
         logger.info(
-            f"Some memory pressure ({current_usage:.1%}), limiting to 3 concurrent files"
+            f"HIGH MEMORY PRESSURE: {current_usage_percent:.1%} used, {free_memory_gb:.1f}GB free - limiting to {adjusted_max} concurrent"
         )
-    else:  # <65% usage
-        adjusted_max = theoretical_max
+    elif current_usage_percent > 0.80:  # High percentage
+        adjusted_max = min(
+            int(theoretical_max * 0.75), free_memory_based_max
+        )  # 75% capacity
         logger.info(
-            f"Good memory availability ({current_usage:.1%}), allowing {theoretical_max} concurrent files"
+            f"MODERATE MEMORY PRESSURE: {current_usage_percent:.1%} used, {free_memory_gb:.1f}GB free - limiting to {adjusted_max} concurrent"
+        )
+    else:  # Good free memory AND reasonable percentage
+        adjusted_max = min(theoretical_max, free_memory_based_max)
+        logger.info(
+            f"EXCELLENT MEMORY AVAILABILITY: {free_memory_gb:.1f}GB free ({current_usage_percent:.1%} used) - allowing {adjusted_max} concurrent"
         )
 
-    # Apply hard system-specific limits
-    if available_memory_gb >= 64:  # High-end systems (64GB+)
-        final_max = min(adjusted_max, 4)
+    # Apply realistic system-specific limits (updated for 1.1GB per video budget)
+    if available_memory_gb >= 128:  # Ultra high-end systems (128GB+)
+        final_max = min(adjusted_max, 12)  # Can handle 12+ concurrent with 1.1GB each
+    elif available_memory_gb >= 64:  # High-end systems (64-128GB)
+        final_max = min(adjusted_max, 8)  # Can handle 8+ concurrent
     elif available_memory_gb >= 32:  # Mid-high systems (32-64GB)
-        final_max = min(adjusted_max, 3)
+        final_max = min(adjusted_max, 6)  # Can handle 6+ concurrent
     elif available_memory_gb >= 16:  # Standard systems (16-32GB)
-        final_max = min(adjusted_max, 2)
+        final_max = min(adjusted_max, 3)  # Can handle 3+ concurrent
     else:  # Lower-end systems (<16GB)
-        final_max = 1
+        final_max = min(adjusted_max, 2)  # Conservative for low-end systems
 
     logger.info(
         f"Memory budget: {usable_memory:.1f}GB usable, {total_memory_per_video:.1f}GB per video"

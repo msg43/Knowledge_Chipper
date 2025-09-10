@@ -164,8 +164,8 @@ class YouTubeMetadataProxyProcessor(BaseProcessor):
                     if self.proxy_manager:
                         if attempt > 0:
                             # Rotate to new IP for retry attempts
-                            self.logger.debug(
-                                f"Rotating PacketStream IP for retry attempt {attempt + 1}"
+                            self.logger.info(
+                                f"🔄 Rotating PacketStream IP for retry attempt {attempt + 1} ({video_id})"
                             )
                             self.proxy_manager.rotate_session()
 
@@ -174,12 +174,12 @@ class YouTubeMetadataProxyProcessor(BaseProcessor):
                         )
                         proxy_url = proxy_config["https"]
                         current_ydl_opts["proxy"] = proxy_url
-                        self.logger.debug(
-                            f"Using PacketStream proxy for {video_id} (attempt {attempt + 1})"
+                        self.logger.info(
+                            f"🌐 Using PacketStream proxy for {video_id} (attempt {attempt + 1})"
                         )
                     else:
-                        self.logger.debug(
-                            f"Using direct connection for {video_id} (attempt {attempt + 1})"
+                        self.logger.info(
+                            f"🔗 Using direct connection for {video_id} (attempt {attempt + 1})"
                         )
 
                     with yt_dlp.YoutubeDL(current_ydl_opts) as ydl:

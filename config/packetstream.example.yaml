@@ -9,7 +9,7 @@ packetstream:
 
   # Proxy settings
   proxy_endpoints:
-    http: "proxy.packetstream.io:31111"
+    http: "proxy.packetstream.io:31112"
     socks5: "proxy.packetstream.io:31113"
 
   # Connection settings

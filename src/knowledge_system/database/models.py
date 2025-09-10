@@ -180,6 +180,11 @@ class Transcript(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     processing_time_seconds = Column(Float)
 
+    # Speaker assignment tracking
+    speaker_assignments = Column(JSONEncodedType)  # {speaker_id: assigned_name}
+    speaker_assignment_completed = Column(Boolean, default=False)
+    speaker_assignment_completed_at = Column(DateTime)
+
     # Relationships
     video = relationship("MediaSource", back_populates="transcripts")
     summaries = relationship("Summary", back_populates="transcript")

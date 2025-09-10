@@ -28,16 +28,27 @@ class LLMSpeakerValidator:
     def _initialize_llm(self):
         """Initialize LLM client for validation."""
         try:
-            self.llm_client = UnifiedLLMClient(
-                provider=self.settings.llm.provider,
-                model=self.settings.llm.model,
-                temperature=0.1,  # Low temperature for consistent analysis
-            )
-            logger.info(
-                f"LLM Speaker Validator initialized with {self.settings.llm.provider}/{self.settings.llm.model}"
-            )
+            # Always use MVP LLM (local Llama3.2-3B) for speaker validation per user preference
+            from .mvp_llm_setup import MVPLLMSetup
+
+            mvp_setup = MVPLLMSetup()
+
+            # Check if MVP LLM is available
+            available_model = mvp_setup.get_available_mvp_model()
+            if available_model:
+                self.llm_client = UnifiedLLMClient(
+                    provider="local",
+                    model=available_model,
+                    temperature=0.1,  # Low temperature for consistent analysis
+                )
+                logger.info(
+                    f"LLM Speaker Validator initialized with MVP LLM: local/{available_model}"
+                )
+            else:
+                logger.warning("MVP LLM not available for speaker validation")
+                self.llm_client = None
         except Exception as e:
-            logger.warning(f"Failed to initialize LLM for speaker validation: {e}")
+            logger.warning(f"Failed to initialize MVP LLM for speaker validation: {e}")
             self.llm_client = None
 
     def validate_speaker_assignments(

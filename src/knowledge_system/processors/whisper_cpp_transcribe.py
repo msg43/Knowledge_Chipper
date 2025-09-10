@@ -321,6 +321,60 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 use_coreml=self.use_coreml,
             )
 
+    def _is_16khz_mono_wav(self, input_path: Path) -> bool:
+        """Check if audio file is already 16kHz mono WAV format."""
+        if input_path.suffix.lower() != ".wav":
+            return False
+
+        try:
+            import subprocess
+
+            # Use ffprobe to check format
+            probe_cmd = [
+                "ffprobe",
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
+                "-show_streams",
+                str(input_path),
+            ]
+
+            result = subprocess.run(probe_cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                return False
+
+            import json
+
+            data = json.loads(result.stdout)
+
+            # Check first audio stream
+            for stream in data.get("streams", []):
+                if stream.get("codec_type") == "audio":
+                    sample_rate = int(stream.get("sample_rate", 0))
+                    channels = int(stream.get("channels", 0))
+                    codec_name = stream.get("codec_name", "")
+
+                    # Check if it's 16kHz mono PCM
+                    is_16khz_mono = (
+                        sample_rate == 16000
+                        and channels == 1
+                        and codec_name in ["pcm_s16le", "pcm_s16be", "pcm_s8", "pcm_u8"]
+                    )
+
+                    if is_16khz_mono:
+                        logger.info(
+                            f"Audio already in 16kHz mono WAV format: {input_path}"
+                        )
+
+                    return is_16khz_mono
+
+            return False
+
+        except Exception as e:
+            logger.debug(f"Could not probe audio format: {e}")
+            return False
+
     def _convert_to_wav(self, input_path: Path) -> Path:
         """Convert audio to 16kHz WAV format required by whisper.cpp."""
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
@@ -404,18 +458,47 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
     def _process_audio(self, input_path: Path, **kwargs: Any) -> ProcessorResult:
         """Process audio using native whisper.cpp CLI."""
-        logger.info("Processing audio with native whisper.cpp")
+        import time
 
-        # Emit initial progress
+        start_time = time.time()
+
+        # Initialize variables that may be used in exception handlers
+        audio_duration_seconds = None
+
+        # Get file info for better logging context
+        filename = input_path.name
+        file_size_mb = input_path.stat().st_size / (1024 * 1024)
+        logger.info(
+            f"🎤 Starting transcription of '{filename}' ({file_size_mb:.1f}MB) with whisper.cpp"
+        )
+
+        # Emit initial progress with file context
         if self.progress_callback:
-            self.progress_callback("🎤 Initializing whisper.cpp transcription...", 5)
+            self.progress_callback(
+                f"🎤 Initializing transcription for {filename} ({file_size_mb:.1f}MB)...",
+                5,
+            )
 
         # Extract audio duration for quality validation
         audio_duration_seconds = self._get_audio_duration(input_path)
         if audio_duration_seconds:
+            duration_str = f"{audio_duration_seconds:.1f}s"
+            if audio_duration_seconds >= 60:
+                duration_str += f" ({audio_duration_seconds/60:.1f}min)"
             logger.info(
-                f"Audio duration: {audio_duration_seconds:.1f} seconds ({audio_duration_seconds/60:.1f} minutes)"
+                f"📊 Audio analysis: {duration_str} duration, {file_size_mb:.1f}MB file"
             )
+            if self.progress_callback:
+                self.progress_callback(
+                    f"📊 Analyzed {filename}: {duration_str}, ready for transcription", 8
+                )
+        else:
+            logger.warning(f"⚠️ Could not determine duration for {filename}")
+            if self.progress_callback:
+                self.progress_callback(
+                    f"⚠️ Duration unknown for {filename}, proceeding with transcription",
+                    8,
+                )
 
         temp_wav = None
         try:
@@ -439,29 +522,51 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 )
 
             if self.progress_callback:
-                self.progress_callback(f"✅ Using {whisper_cmd} for transcription", 10)
+                self.progress_callback(
+                    f"✅ Using {whisper_cmd} for {filename} transcription", 10
+                )
 
-            # Convert to WAV if needed
-            if input_path.suffix.lower() != ".wav":
+            # Check if conversion is needed
+            if self._is_16khz_mono_wav(input_path):
+                # Already in the correct format, skip conversion
+                audio_path = input_path
                 if self.progress_callback:
-                    self.progress_callback("🔄 Converting audio to WAV format...", 15)
+                    self.progress_callback(
+                        f"✅ {filename} already in optimal 16kHz mono WAV format", 20
+                    )
+                logger.info(
+                    f"📁 Skipping conversion for {filename} - already optimized format"
+                )
+            else:
+                # Need to convert to 16kHz mono WAV
+                if self.progress_callback:
+                    self.progress_callback(
+                        f"🔄 Converting {filename} to 16kHz mono WAV format...", 15
+                    )
                 temp_wav = self._convert_to_wav(input_path)
                 audio_path = temp_wav
                 if self.progress_callback:
-                    self.progress_callback("✅ Audio conversion completed", 25)
-            else:
-                audio_path = input_path
-                if self.progress_callback:
-                    self.progress_callback("✅ Audio already in WAV format", 20)
+                    self.progress_callback(
+                        f"✅ Audio conversion of {filename} completed", 25
+                    )
 
             # Download model if needed
             if self.progress_callback:
                 self.progress_callback(
-                    f"📥 Ensuring model '{self.model_name}' is available...", 30
+                    f"📥 Ensuring Whisper '{self.model_name}' model is available for {filename}...",
+                    30,
                 )
             model_path = self._download_model(self.model_name)
             if self.progress_callback:
-                self.progress_callback(f"✅ Model '{self.model_name}' ready", 40)
+                model_size_mb = (
+                    model_path.stat().st_size / (1024 * 1024)
+                    if model_path.exists()
+                    else 0
+                )
+                self.progress_callback(
+                    f"✅ Whisper '{self.model_name}' model ready ({model_size_mb:.0f}MB)",
+                    40,
+                )
 
             # Create temp directory for output
             import tempfile
@@ -475,7 +580,6 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                     whisper_cmd,
                     "-m",
                     str(model_path),
-                    "-",
                     str(audio_path),
                 ]
 
@@ -510,15 +614,30 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 )
 
                 if self.progress_callback:
-                    self.progress_callback("🎯 Running whisper.cpp transcription...", 50)
+                    transcription_msg = (
+                        f"🎯 Running whisper.cpp transcription on {filename}"
+                    )
+                    if audio_duration_seconds:
+                        transcription_msg += (
+                            f" ({audio_duration_seconds/60:.1f}min audio)"
+                        )
+                    self.progress_callback(transcription_msg + "...", 50)
 
                 logger.info(f"Running command: {' '.join(cmd)}")
 
                 # Use real-time progress monitoring instead of blocking subprocess.run
-                result = self._run_whisper_with_progress(cmd)
+                result = self._run_whisper_with_progress(cmd, audio_duration_seconds)
 
                 if self.progress_callback:
-                    self.progress_callback("✅ Whisper.cpp processing completed", 80)
+                    transcription_time = time.time() - start_time
+                    speed_info = ""
+                    if audio_duration_seconds and transcription_time > 0:
+                        speed_ratio = audio_duration_seconds / transcription_time
+                        speed_info = f" ({speed_ratio:.1f}x realtime)"
+                    self.progress_callback(
+                        f"✅ Whisper.cpp transcription of {filename} completed{speed_info}",
+                        80,
+                    )
 
                 # Look for JSON output file
                 json_file = output_base.with_suffix(".json")
@@ -709,8 +828,11 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             if temp_wav and temp_wav.exists():
                 temp_wav.unlink(missing_ok=True)
 
-    def _run_whisper_with_progress(self, cmd) -> subprocess.CompletedProcess:
+    def _run_whisper_with_progress(
+        self, cmd, audio_duration_seconds=None
+    ) -> subprocess.CompletedProcess:
         """Run whisper.cpp with real-time progress monitoring."""
+        import queue
         import threading
         import time
         from collections import namedtuple
@@ -725,6 +847,32 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         progress_end = 80  # We end monitoring at 80%
         progress_range = progress_end - progress_start
 
+        # Get audio duration before starting the process to avoid subprocess in thread
+        estimated_duration = 120  # Default 2 minutes if unknown
+        try:
+            # Try to get actual audio duration using ffprobe
+            audio_file = cmd[cmd.index("-") + 1] if "-" in cmd else None
+            if audio_file:
+                probe_cmd = [
+                    "ffprobe",
+                    "-v",
+                    "quiet",
+                    "-show_entries",
+                    "format=duration",
+                    "-o",
+                    "csv=p=0",
+                    audio_file,
+                ]
+                probe_result = subprocess.run(
+                    probe_cmd, capture_output=True, text=True, timeout=5
+                )
+                if probe_result.returncode == 0 and probe_result.stdout.strip():
+                    estimated_duration = float(probe_result.stdout.strip())
+                    logger.debug(f"Audio duration: {estimated_duration}s")
+        except (subprocess.SubprocessError, ValueError, OSError) as e:
+            # Fallback to default if ffprobe fails
+            logger.debug(f"Failed to get audio duration with ffprobe: {e}")
+
         # Use Popen for real-time monitoring
         process = subprocess.Popen(
             cmd,
@@ -735,112 +883,110 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             universal_newlines=True,
         )
 
+        # Use queues to safely collect output from threads
+        stdout_queue = queue.Queue()
+        stderr_queue = queue.Queue()
+
+        def read_stream(stream, output_queue, stream_name):
+            """Read from a stream and put lines into a queue."""
+            try:
+                for line in iter(stream.readline, ""):
+                    if line:
+                        output_queue.put(line)
+                        # Parse progress from the line
+                        if self.progress_callback:
+                            elapsed = time.time() - start_time
+                            self._parse_whisper_output_for_progress(
+                                line.strip(), elapsed
+                            )
+            except Exception as e:
+                logger.debug(f"Error reading {stream_name}: {e}")
+            finally:
+                stream.close()
+
+        # Start threads to read stdout and stderr
+        stdout_thread = threading.Thread(
+            target=read_stream,
+            args=(process.stdout, stdout_queue, "stdout"),
+            daemon=True,
+        )
+        stderr_thread = threading.Thread(
+            target=read_stream,
+            args=(process.stderr, stderr_queue, "stderr"),
+            daemon=True,
+        )
+
+        stdout_thread.start()
+        stderr_thread.start()
+
+        # Monitor progress while process runs
+        while process.poll() is None:
+            elapsed = time.time() - start_time
+
+            # Estimate progress based on elapsed time
+            # Estimate progress: assume processing takes 0.2x real-time on average
+            processing_speed = 0.2  # 20% of real-time
+            estimated_completion_time = estimated_duration * processing_speed
+
+            if estimated_completion_time > 0:
+                time_progress = min(1.0, elapsed / estimated_completion_time)
+                current_progress = progress_start + (time_progress * progress_range)
+
+                if self.progress_callback and elapsed > 2:  # Don't spam early progress
+                    # Calculate processing speed info
+                    speed_info = ""
+                    if audio_duration_seconds and elapsed > 5:
+                        processing_speed = audio_duration_seconds / elapsed
+                        if processing_speed > 1:
+                            speed_info = f", {processing_speed:.1f}x realtime"
+                        else:
+                            speed_info = (
+                                f", {1/processing_speed:.1f}x slower than realtime"
+                            )
+
+                    # Get file info for context
+                    # Extract filename from command (the input file is usually the last argument)
+                    try:
+                        filename = Path(cmd[-5]).name if len(cmd) > 5 else "audio"
+                    except:
+                        filename = "audio"
+
+                    self.progress_callback(
+                        f"🎯 Transcribing {filename} ({elapsed:.0f}s elapsed, ~{current_progress:.0f}% complete{speed_info})...",
+                        int(current_progress),
+                    )
+
+            time.sleep(0.5)  # Check every 500ms
+
+        # Process has finished, wait for it
+        return_code = process.wait()
+
+        # Give threads time to finish reading
+        stdout_thread.join(timeout=2)
+        stderr_thread.join(timeout=2)
+
+        # Collect all output
         stdout_lines = []
         stderr_lines = []
 
-        def monitor_progress():
-            """Monitor progress in a separate thread."""
+        while not stdout_queue.empty():
+            stdout_lines.append(stdout_queue.get_nowait())
 
-            # Monitor both stdout and stderr for progress indicators
-            while process.poll() is None:
-                elapsed = time.time() - start_time
+        while not stderr_queue.empty():
+            stderr_lines.append(stderr_queue.get_nowait())
 
-                # Read available output without blocking
-                try:
-                    # Check if there's stdout data
-                    if process.stdout and process.stdout.readable():
-                        line = process.stdout.readline()
-                        if line:
-                            stdout_lines.append(line)
-                            # Look for progress indicators in output
-                            if self.progress_callback:
-                                self._parse_whisper_output_for_progress(line, elapsed)
+        full_stdout = "".join(stdout_lines)
+        full_stderr = "".join(stderr_lines)
 
-                    # Check if there's stderr data
-                    if process.stderr and process.stderr.readable():
-                        line = process.stderr.readline()
-                        if line:
-                            stderr_lines.append(line)
-                            # Look for progress indicators in stderr
-                            if self.progress_callback:
-                                self._parse_whisper_output_for_progress(line, elapsed)
-
-                except (OSError, UnicodeDecodeError) as e:
-                    # Handle any read errors gracefully
-                    logger.debug(f"Error reading stderr: {e}")
-
-                # Estimate progress based on elapsed time (fallback)
-                # Rough estimate: most audio files take 0.1x - 0.3x real-time to process
-                estimated_duration = 120  # Default 2 minutes if unknown
-                try:
-                    # Try to get actual audio duration using ffprobe
-                    import subprocess
-
-                    probe_cmd = [
-                        "ffprobe",
-                        "-v",
-                        "quiet",
-                        "-show_entries",
-                        "format=duration",
-                        "-o",
-                        "csv=p=0",
-                        cmd[cmd.index("-") + 1],
-                    ]
-                    probe_result = subprocess.run(
-                        probe_cmd, capture_output=True, text=True, timeout=5
-                    )
-                    if probe_result.returncode == 0 and probe_result.stdout.strip():
-                        estimated_duration = float(probe_result.stdout.strip())
-                except (subprocess.SubprocessError, ValueError, OSError) as e:
-                    # Fallback to default if ffprobe fails
-                    logger.debug(f"Failed to get audio duration with ffprobe: {e}")
-
-                # Estimate progress: assume processing takes 0.2x real-time on average
-                processing_speed = 0.2  # 20% of real-time
-                estimated_completion_time = estimated_duration * processing_speed
-
-                if estimated_completion_time > 0:
-                    time_progress = min(1.0, elapsed / estimated_completion_time)
-                    current_progress = progress_start + (time_progress * progress_range)
-
-                    if (
-                        self.progress_callback and elapsed > 2
-                    ):  # Don't spam early progress
-                        self.progress_callback(
-                            f"🎯 Processing audio ({elapsed:.0f}s elapsed, ~{current_progress:.0f}% complete)...",
-                            int(current_progress),
-                        )
-
-                time.sleep(0.5)  # Check every 500ms
-
-        # Start progress monitoring in background
-        progress_thread = threading.Thread(target=monitor_progress, daemon=True)
-        progress_thread.start()
-
-        # Wait for process completion
-        try:
-            stdout, stderr = process.communicate(timeout=3600)  # 1 hour timeout
-        except subprocess.TimeoutExpired:
-            process.kill()
-            stdout, stderr = process.communicate()
-            raise Exception("Whisper.cpp process timed out")
-
-        # Combine all output
-        full_stdout = "".join(stdout_lines) + stdout
-        full_stderr = "".join(stderr_lines) + stderr
-
-        # Wait for progress thread to finish
-        progress_thread.join(timeout=1)
-
-        if process.returncode != 0:
-            error_msg = f"Whisper.cpp failed with return code {process.returncode}"
+        if return_code != 0:
+            error_msg = f"Whisper.cpp failed with return code {return_code}"
             if full_stderr:
                 error_msg += f"\nStderr: {full_stderr}"
             raise subprocess.CalledProcessError(
-                process.returncode, cmd, full_stdout, full_stderr
+                return_code, cmd, full_stdout, full_stderr
             )
 
-        return CompletedProcess(full_stdout, full_stderr, process.returncode)
+        return CompletedProcess(full_stdout, full_stderr, return_code)
 
     def _parse_whisper_output_for_progress(self, line: str, elapsed_time: float):
         """Parse whisper.cpp output for progress indicators."""

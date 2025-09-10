@@ -289,7 +289,13 @@ class EnhancedTranscriptionWorker(QThread):
                 break
 
             try:
-                logger.info(f"Processing file {i+1}/{len(self.files)}: {file_path}")
+                remaining_files = len(self.files) - i - 1
+                remaining_str = (
+                    f" ({remaining_files} files left)" if remaining_files > 0 else ""
+                )
+                logger.info(
+                    f"Processing file {i+1}/{len(self.files)}: {file_path}{remaining_str}"
+                )
                 result = processor.process(
                     input_data=file_path, **self.gui_settings.get("kwargs", {})
                 )

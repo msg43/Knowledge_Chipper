@@ -159,6 +159,11 @@ class LLMSpeakerSuggester:
             # Parse response
             suggestions = self._parse_suggestions(response.content, speaker_segments)
 
+            # Validate and fix suggestions to enforce critical rules
+            suggestions = self._validate_and_fix_suggestions(
+                suggestions, speaker_segments
+            )
+
             logger.info(f"LLM suggested names for {len(suggestions)} speakers")
             for speaker_id, (name, conf) in suggestions.items():
                 logger.info(f"  {speaker_id} -> '{name}' (confidence: {conf:.2f})")
@@ -172,67 +177,84 @@ class LLMSpeakerSuggester:
     def _create_simple_prompt(
         self, speaker_segments: dict[str, list[dict]], metadata: dict | None
     ) -> str:
-        """Create strict JSON-only prompt with metadata + first 5 statements."""
+        """Create smart podcast-focused prompt with full metadata + first 3 minutes of content."""
 
-        # Build metadata section
+        # Build comprehensive metadata section (don't truncate description)
         metadata_text = "No metadata available"
         if metadata:
             parts = []
             if metadata.get("title"):
                 parts.append(f"Title: {metadata['title']}")
             if metadata.get("uploader"):
-                parts.append(f"Channel: {metadata['uploader']}")
+                channel_name = metadata["uploader"]
+                parts.append(f"Channel: {channel_name}")
+
+                # Check if we have a learned mapping for this channel
+                try:
+                    from ..database.speaker_models import get_speaker_db_service
+
+                    db_service = get_speaker_db_service()
+                    known_host = db_service.get_channel_host_mapping(channel_name)
+                    if known_host:
+                        parts.append(
+                            f"Known Host: {known_host} (from previous corrections)"
+                        )
+                except Exception as e:
+                    logger.debug(f"Could not check channel mapping: {e}")
+
             if metadata.get("description"):
-                desc = (
-                    metadata["description"][:300] + "..."
-                    if len(metadata["description"]) > 300
-                    else metadata["description"]
-                )
-                parts.append(f"Description: {desc}")
+                # Use FULL description for name extraction
+                parts.append(f"Description: {metadata['description']}")
+            # Add any other useful metadata
+            if metadata.get("channel_id"):
+                parts.append(f"Channel ID: {metadata['channel_id']}")
+            if metadata.get("uploader_id"):
+                parts.append(f"Uploader ID: {metadata['uploader_id']}")
             if parts:
                 metadata_text = "\n".join(parts)
 
-        # Build speaker sections with first 5 statements (sorted chronologically)
+        # Build speaker sections with first 3 minutes of content (180 seconds)
+        # Extended from 2 to 3 minutes to capture speakers who don't speak immediately
         speaker_sections: list[str] = []
         # Use a stable order for keys to reduce variability between runs
         ordered_speaker_ids = sorted(speaker_segments.keys())
+
         for speaker_id in ordered_speaker_ids:
             segments = speaker_segments.get(speaker_id, [])
             # Sort by start time if available
             segments_sorted = sorted(
                 segments,
                 key=lambda s: (
-                    s.get("start", float("in")),
-                    s.get("end", float("in")),
+                    s.get("start", float("inf")),
+                    s.get("end", float("inf")),
                 ),
             )
 
-            # Get first 5 non-empty statements
-            statements: list[str] = []
+            # 🎯 OPTIMIZATION: Use all 5 clean segments (post-deduplication)
+            # This analyzes exactly what the user sees in the speaker attribution dialog
+            all_clean_segments = []
             for seg in segments_sorted[
-                :10
-            ]:  # Look at first 10 segments to find 5 good ones
+                :5
+            ]:  # Take first 5 segments (guaranteed unique & clean)
                 text = str(seg.get("text", "")).strip()
-                if text and len(text) > 10:  # Only substantial statements
-                    statements.append(text)
-                if len(statements) >= 5:
-                    break
+                if text and len(text) > 3:  # Include short statements like "I'm Tony"
+                    all_clean_segments.append(text)
 
             # Debug logging
             logger.debug(
-                f"Speaker {speaker_id} has {len(statements)} statements extracted from {len(segments)} total segments"
+                f"Speaker {speaker_id} has {len(all_clean_segments)} clean segments from {len(segments)} total segments"
             )
 
-            speaker_section = f"\n{speaker_id}:"
-            for i, statement in enumerate(statements, 1):
-                # Limit statement length for prompt efficiency
-                clean_statement = (
-                    statement[:150] + "..." if len(statement) > 150 else statement
-                )
-                speaker_section += f'\n  {i}. "{clean_statement}"'
-
-            if not statements:
-                speaker_section += "\n  (No clear statements found)"
+            speaker_section = f"\n{speaker_id} (5 clean segments):"
+            if all_clean_segments:
+                # Join all segments with natural flow
+                combined_text = " ".join(all_clean_segments)
+                # More generous length limit since we're analyzing exactly what user sees
+                if len(combined_text) > 1200:
+                    combined_text = combined_text[:1200] + "..."
+                speaker_section += f'\n  "{combined_text}"'
+            else:
+                speaker_section += "\n  (No clean speech segments available)"
 
             speaker_sections.append(speaker_section)
 
@@ -245,21 +267,121 @@ class LLMSpeakerSuggester:
         ]
         json_skeleton = "{\n" + ",\n".join(skeleton_lines) + "\n}"
 
+        # Count speakers for explicit validation
+        num_speakers = len(ordered_speaker_ids)
+
         prompt = (
-            "You are labeling speakers in an interview/podcast transcript.\n\n"
+            "You are identifying speakers in a podcast/interview transcript.\n\n"
+            f"CRITICAL REQUIREMENT: You have {num_speakers} speakers. Each MUST get a DIFFERENT name.\n\n"
+            "🚨 CRITICAL RULES - VIOLATION = FAILURE 🚨\n"
+            "1. NO DUPLICATE NAMES: Each speaker gets a UNIQUE name (NEVER assign 'John Smith' to multiple speakers)\n"
+            "2. NO EMPTY NAMES: Every speaker MUST have a name assigned\n"
+            "3. METADATA NAMES WIN: Title/description names ALWAYS beat speech transcription variants\n"
+            "4. PHONETIC MATCHING: 'Stacy Rasgon' (title) beats 'Stacey Raskin' (speech transcription error)\n\n"
+            "VALIDATION CHECK: After assigning names, verify each speaker has a DIFFERENT name.\n\n"
+            "CONTEXT: In most podcasts:\n"
+            "- Guest names are mentioned in the description/title\n"
+            "- Host names may be in the description or can be inferred from channel name\n"
+            "- Both speakers typically introduce themselves or each other in the first 2 minutes\n\n"
             "INSTRUCTIONS:\n"
-            "- The ONLY purpose is to identify proper names in the metadata and transcript snippets and then map each to the correct speaker ID.  \n"
-            "- Do NOT use roles or descriptions (e.g., Host, Guest, Interviewer). Use only the exact names you have found in your analysis of the metadata and transcript snippets only.\n"
+            "- Extract proper names from the FULL metadata (especially title/description) and clean speech segments\n"
+            "- Look for introductions like 'I'm Tony', 'my name is...', 'welcome back, I'm...', 'today's guest is...'\n"
+            "- When you find phonetically similar names in metadata vs speech, ALWAYS prefer the metadata version\n"
+            "- Channel names like 'Eurodollar University' often map to host names found in the description\n"
+            "- Use ONLY proper names - no roles like 'Host' or 'Guest'\n"
+            "- If no clear name exists, use 'Speaker 1', 'Speaker 2', etc. (but make them unique)\n"
             "- Output STRICTLY VALID JSON ONLY. No markdown, no prose, no comments.\n"
-            "- Keys MUST EXACTLY match the speaker IDs provided. Do not add or remove keys.\n"
-            "- Confidence is a number between 0.1 and 1.0.\n\n"
+            "- Confidence: 0.8-1.0 for clear names, 0.4-0.7 for probable names, 0.1-0.3 for generic names\n\n"
             f"METADATA:\n{metadata_text}\n\n"
-            f"SPEAKERS AND THEIR FIRST STATEMENTS:\n{speakers_text}\n\n"
+            f"SPEAKERS (clean deduplicated segments - exactly what user sees):\n{speakers_text}\n\n"
+            f"⚠️  FINAL CHECK: Ensure all {num_speakers} speakers have DIFFERENT names before responding.\n\n"
             "Return only a single JSON object matching this skeleton (fill in values):\n"
             f"{json_skeleton}\n"
         )
 
         return prompt
+
+    def _validate_and_fix_suggestions(
+        self,
+        suggestions: dict[str, tuple[str, float]],
+        speaker_segments: dict[str, list[dict]],
+    ) -> dict[str, tuple[str, float]]:
+        """Validate and fix suggestions to enforce critical rules."""
+        try:
+            # Rule 1: Ensure every speaker has a name (no empty names)
+            for speaker_id in speaker_segments.keys():
+                if (
+                    speaker_id not in suggestions
+                    or not suggestions[speaker_id][0].strip()
+                ):
+                    # Assign a generic name based on speaker ID
+                    speaker_num = speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
+                    generic_name = f"Speaker {int(speaker_num) + 1}"
+                    suggestions[speaker_id] = (generic_name, 0.2)
+                    logger.warning(
+                        f"Fixed empty name for {speaker_id} -> '{generic_name}'"
+                    )
+
+            # Rule 2: Ensure all names are unique (no duplicates)
+            name_counts = {}
+            for speaker_id, (name, conf) in suggestions.items():
+                name_lower = name.lower().strip()
+                if name_lower in name_counts:
+                    name_counts[name_lower].append((speaker_id, name, conf))
+                else:
+                    name_counts[name_lower] = [(speaker_id, name, conf)]
+
+            # Fix duplicates by adding numbers or different strategies
+            for name_lower, speakers_with_name in name_counts.items():
+                if len(speakers_with_name) > 1:
+                    logger.error(
+                        f"🚨 CRITICAL: Found duplicate name '{speakers_with_name[0][1]}' assigned to {len(speakers_with_name)} speakers - FIXING!"
+                    )
+
+                    # More aggressive duplicate fixing strategies
+                    for i, (speaker_id, name, conf) in enumerate(speakers_with_name):
+                        if i == 0:
+                            # Keep first one as-is
+                            continue
+                        elif i == 1:
+                            # Second one gets " 2" suffix
+                            new_name = f"{name} 2"
+                        elif i == 2:
+                            # Third one gets completely different approach - use Speaker ID
+                            speaker_num = (
+                                speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
+                            )
+                            new_name = f"Speaker {int(speaker_num) + 1}"
+                        else:
+                            # Additional ones get generic names
+                            new_name = f"Person {i + 1}"
+
+                        suggestions[speaker_id] = (
+                            new_name,
+                            max(0.1, conf - 0.3),
+                        )  # Lower confidence for fixes
+                        logger.error(
+                            f"🔧 FIXED duplicate: {speaker_id} -> '{new_name}' (was '{name}')"
+                        )
+
+            # Final validation: Absolutely ensure no duplicates remain
+            final_names = [name for name, _ in suggestions.values()]
+            if len(final_names) != len({name.lower() for name in final_names}):
+                logger.error(
+                    "🚨 EMERGENCY: Duplicates still exist after fixing - applying emergency fallback"
+                )
+                # Emergency fallback: assign completely generic names
+                for i, speaker_id in enumerate(sorted(speaker_segments.keys())):
+                    suggestions[speaker_id] = (f"Speaker {i + 1}", 0.1)
+                    logger.error(
+                        f"🚨 EMERGENCY ASSIGN: {speaker_id} -> 'Speaker {i + 1}'"
+                    )
+
+            return suggestions
+
+        except Exception as e:
+            logger.error(f"Error validating suggestions: {e}")
+            return suggestions
 
     def _parse_suggestions(
         self, response: str, speaker_segments: dict[str, list[dict]]

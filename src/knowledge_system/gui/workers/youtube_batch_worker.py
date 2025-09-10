@@ -25,6 +25,7 @@ from ...logger import get_logger
 from ...processors.youtube_transcript import YouTubeTranscriptProcessor
 from ...utils.cancellation import CancellationToken
 from ...utils.hardware_detection import HardwareDetector
+from ...utils.realtime_monitor import RealtimeResourceManager
 
 logger = get_logger(__name__)
 
@@ -130,9 +131,24 @@ class YouTubeBatchWorker(QThread):
 
         # Processing mode selection
         self.download_all_mode = config.get("download_all_mode", False)
+        self.parallel_downloads = config.get("parallel_downloads", True)
 
         # Resource management
         self.memory_handler = MemoryPressureHandler()
+
+        # Real-time resource monitoring
+        output_dir = Path(config.get("output_dir", "."))
+        self.resource_manager = RealtimeResourceManager(
+            watch_path=output_dir,
+            disk_warning_gb=5.0,  # Warn at 5GB free
+            disk_critical_gb=2.0,  # Critical at 2GB free
+            memory_warning_percent=85.0,
+            memory_critical_percent=95.0,
+        )
+
+        # Set up resource management callbacks
+        self.resource_manager.set_pause_callback(self._pause_for_resources)
+        self.resource_manager.set_stop_callback(self._stop_for_resources)
 
         # Conveyor belt vs download-all settings
         if self.download_all_mode:
@@ -166,11 +182,15 @@ class YouTubeBatchWorker(QThread):
         self.failed_urls = []
         self.successful_urls = []
         self.downloaded_audio_files = {}  # url -> file_path mapping
+        self.start_time = time.time()  # Track actual processing time
 
         logger.info("YouTube batch worker initialized:")
         logger.info(f"  - URLs to process: {len(urls)}")
         logger.info(
             f"  - Processing mode: {'Download-all' if self.download_all_mode else 'Conveyor belt'}"
+        )
+        logger.info(
+            f"  - Parallel downloads: {'Enabled' if self.parallel_downloads else 'Disabled'}"
         )
         logger.info(f"  - Batch size: {self.batch_size}")
         logger.info(f"  - Initial max concurrent: {self.initial_concurrency}")
@@ -183,8 +203,8 @@ class YouTubeBatchWorker(QThread):
             disk_usage = shutil.disk_usage(output_dir)
             available_gb = disk_usage.free / (1024**3)
 
-            # Estimate space needed per audio file (50MB average)
-            space_per_audio_gb = 0.05
+            # Realistic space needed per audio file (~10MB for 10min video = 1MB/min)
+            space_per_audio_gb = 0.01  # 10MB average
 
             if self.download_all_mode:
                 # Check if we have space for ALL audio files
@@ -273,12 +293,56 @@ class YouTubeBatchWorker(QThread):
             logger.error(f"Error calculating concurrency: {e}")
             return 3  # Safe default
 
+    def _calculate_download_concurrency(self) -> int:
+        """Calculate safe download concurrency for parallel downloads."""
+        try:
+            # Use existing hardware detection
+            detector = HardwareDetector()
+            specs = detector.detect_hardware()
+
+            # Downloads are network I/O bound, not CPU/memory intensive
+            # Base limit on CPU cores but can be higher than processing concurrency
+            base_download_limit = min(8, max(4, specs.cpu_cores))
+
+            # Check current system load using existing memory handler
+            memory = psutil.virtual_memory()
+            if memory.percent > 85:
+                download_concurrency = 2  # Conservative when memory is high
+                logger.info(
+                    f"High memory usage ({memory.percent:.1f}%) - limiting downloads to 2 concurrent"
+                )
+            elif memory.percent > 70:
+                download_concurrency = min(4, base_download_limit)
+                logger.info(
+                    f"Moderate memory usage ({memory.percent:.1f}%) - limiting downloads to 4 concurrent"
+                )
+            else:
+                download_concurrency = base_download_limit
+                logger.info(
+                    f"Good memory availability ({memory.percent:.1f}%) - allowing {base_download_limit} concurrent downloads"
+                )
+
+            # Conservative PacketStream limit (can handle more but be respectful)
+            final_concurrency = min(
+                download_concurrency, 12
+            )  # Max 12 concurrent sessions
+
+            logger.info(f"Download concurrency: {final_concurrency} parallel sessions")
+            return final_concurrency
+
+        except Exception as e:
+            logger.error(f"Error calculating download concurrency: {e}")
+            return 3  # Safe default
+
     def run(self):
         """Main processing loop with enhanced resource management."""
         try:
             logger.info(
                 f"Starting enhanced YouTube batch processing: {len(self.urls)} URLs"
             )
+
+            # Start real-time resource monitoring
+            self.resource_manager.start_monitoring()
 
             # Emit initialization progress
             self.progress_updated.emit(
@@ -308,6 +372,17 @@ class YouTubeBatchWorker(QThread):
             )
             self._cleanup_storage()
 
+            # Stop resource monitoring
+            self.resource_manager.stop_monitoring()
+
+            # Calculate actual processing time
+            actual_processing_time = time.time() - self.start_time
+
+            # Save failed URLs to file for easy retry if there are any failures
+            failed_urls_file = None
+            if self.failed_count > 0 and self.failed_urls:
+                failed_urls_file = self._save_failed_urls_for_retry()
+
             final_results = {
                 "successful": self.successful_count,
                 "failed": self.failed_count,
@@ -317,6 +392,8 @@ class YouTubeBatchWorker(QThread):
                 "processing_mode": (
                     "download-all" if self.download_all_mode else "conveyor-belt"
                 ),
+                "processing_time": actual_processing_time,
+                "failed_urls_file": failed_urls_file,  # Path to saved failed URLs file
             }
 
             logger.info(
@@ -338,30 +415,62 @@ class YouTubeBatchWorker(QThread):
             0, len(self.urls), "📥 Phase 1: Downloading all audio files..."
         )
 
+        # Use parallel downloads for better performance if enabled
         download_success_count = 0
-        for i, url in enumerate(self.urls):
-            if self.should_stop or self.cancellation_token.is_cancelled():
-                break
-
-            # Emit progress with more detail and immediate flush
-            progress_msg = f"📥 Downloading audio {i+1}/{len(self.urls)}: {url[:50]}..."
-            self.progress_updated.emit(i, len(self.urls), progress_msg)
-
-            # Force signal processing
-            import time
-
-            time.sleep(0.001)  # Brief pause to ensure signal processing
-
-            audio_file = self._download_audio_persistent(url, i)
-            if audio_file and audio_file.exists():
-                self.downloaded_audio_files[url] = audio_file
-                download_success_count += 1
+        try:
+            if self.parallel_downloads:
                 logger.info(
-                    f"Downloaded: {audio_file} ({audio_file.stat().st_size / 1024 / 1024:.1f}MB)"
+                    "🚀 Parallel downloads enabled - using multiple PacketStream sessions"
                 )
+                downloaded_files = self._download_batch_parallel(self.urls)
             else:
-                logger.error(f"Failed to download audio for {url}")
-                self._record_failure(url, "Audio download failed")
+                logger.info(
+                    "🔄 Parallel downloads disabled - using sequential downloads"
+                )
+                downloaded_files = self._download_batch_direct(self.urls)
+            for url, audio_file in downloaded_files.items():
+                if audio_file and audio_file.exists():
+                    self.downloaded_audio_files[url] = audio_file
+                    download_success_count += 1
+                    logger.info(
+                        f"Downloaded: {audio_file} ({audio_file.stat().st_size / 1024 / 1024:.1f}MB)"
+                    )
+                else:
+                    logger.error(f"Failed to download audio for {url}")
+                    self._record_failure(url, "Audio download failed")
+
+            # Record failures for URLs that weren't downloaded
+            for url in self.urls:
+                if url not in downloaded_files:
+                    logger.error(f"Failed to download audio for {url}")
+                    self._record_failure(url, "Audio download failed")
+
+        except Exception as e:
+            logger.error(f"Parallel download failed, falling back to sequential: {e}")
+            # Fallback to sequential downloads
+            for i, url in enumerate(self.urls):
+                if self.should_stop or self.cancellation_token.is_cancelled():
+                    break
+
+                # Emit progress with more detail and immediate flush
+                progress_msg = (
+                    f"📥 Downloading audio {i+1}/{len(self.urls)}: {url[:50]}..."
+                )
+                self.progress_updated.emit(i, len(self.urls), progress_msg)
+
+                # Force signal processing
+                time.sleep(0.001)  # Brief pause to ensure signal processing
+
+                audio_file = self._download_audio_persistent(url, i)
+                if audio_file and audio_file.exists():
+                    self.downloaded_audio_files[url] = audio_file
+                    download_success_count += 1
+                    logger.info(
+                        f"Downloaded: {audio_file} ({audio_file.stat().st_size / 1024 / 1024:.1f}MB)"
+                    )
+                else:
+                    logger.error(f"Failed to download audio for {url}")
+                    self._record_failure(url, "Audio download failed")
 
         logger.info(
             f"Download phase complete: {download_success_count}/{len(self.urls)} audio files downloaded"
@@ -372,7 +481,7 @@ class YouTubeBatchWorker(QThread):
             self.progress_updated.emit(
                 0,
                 len(self.downloaded_audio_files),
-                "🎙️ Phase 2: Processing audio with diarization...",
+                f"🎙️ Phase 2: Processing {len(self.downloaded_audio_files)} audio files with diarization...",
             )
             self._process_all_downloaded_audio()
 
@@ -492,8 +601,8 @@ class YouTubeBatchWorker(QThread):
             disk_usage = shutil.disk_usage(output_dir)
             available_gb = disk_usage.free / (1024**3)
 
-            # Estimate space needed for this batch
-            space_per_audio_gb = 0.05  # 50MB in GB
+            # Realistic space needed for this batch
+            space_per_audio_gb = 0.01  # 10MB in GB
             required_gb = batch_size * space_per_audio_gb * 1.2  # 20% buffer
 
             if available_gb < required_gb:
@@ -513,39 +622,78 @@ class YouTubeBatchWorker(QThread):
         Process a batch using the conveyor belt approach with enhanced memory monitoring.
         """
 
-        # Step 1: Download audio files for the batch
+        # Step 1: Download audio files for the batch in parallel
         audio_files = {}  # url -> audio_file_path mapping
 
-        for i, url in enumerate(batch_urls):
-            if self.should_stop or self.cancellation_token.is_cancelled():
-                break
-
-            try:
-                global_index = batch_offset + i
-                self.progress_updated.emit(
-                    global_index,
-                    len(self.urls),
-                    f"Downloading audio for video {global_index + 1}/{len(self.urls)}",
+        try:
+            # Use parallel downloads for better performance if enabled
+            if self.parallel_downloads:
+                logger.info(
+                    f"🚀 Starting parallel download of {len(batch_urls)} URLs in batch"
                 )
+                downloaded_files = self._download_batch_parallel(
+                    batch_urls, batch_offset
+                )
+            else:
+                logger.info(
+                    f"🔄 Starting sequential download of {len(batch_urls)} URLs in batch"
+                )
+                downloaded_files = self._download_batch_direct(batch_urls, batch_offset)
 
-                audio_file = self._download_audio_persistent(url, global_index)
-                if audio_file and audio_file.exists():
-                    audio_files[url] = audio_file
-                    logger.info(
-                        f"Downloaded audio: {audio_file} ({audio_file.stat().st_size / 1024 / 1024:.1f}MB)"
-                    )
+            for url in batch_urls:
+                if url in downloaded_files:
+                    audio_file = downloaded_files[url]
+                    if audio_file and audio_file.exists():
+                        audio_files[url] = audio_file
+                        logger.info(
+                            f"Downloaded audio: {audio_file} ({audio_file.stat().st_size / 1024 / 1024:.1f}MB)"
+                        )
+                    else:
+                        logger.error(f"Failed to download audio for {url}")
+                        self._record_failure(url, "Audio download failed")
                 else:
                     logger.error(f"Failed to download audio for {url}")
                     self._record_failure(url, "Audio download failed")
 
-            except Exception as e:
-                logger.error(f"Error downloading audio for {url}: {e}")
-                self._record_failure(url, f"Audio download error: {str(e)}")
+        except Exception as e:
+            logger.error(f"Parallel download failed, falling back to sequential: {e}")
+            # Fallback to sequential downloads for this batch
+            for i, url in enumerate(batch_urls):
+                if self.should_stop or self.cancellation_token.is_cancelled():
+                    break
+
+                try:
+                    global_index = batch_offset + i
+                    remaining_videos = len(self.urls) - global_index - 1
+                    remaining_str = (
+                        f" ({remaining_videos} videos left)"
+                        if remaining_videos > 0
+                        else ""
+                    )
+                    self.progress_updated.emit(
+                        global_index,
+                        len(self.urls),
+                        f"Downloading audio for video {global_index + 1}/{len(self.urls)}{remaining_str}",
+                    )
+
+                    audio_file = self._download_audio_persistent(url, global_index)
+                    if audio_file and audio_file.exists():
+                        audio_files[url] = audio_file
+                        logger.info(
+                            f"Downloaded audio: {audio_file} ({audio_file.stat().st_size / 1024 / 1024:.1f}MB)"
+                        )
+                    else:
+                        logger.error(f"Failed to download audio for {url}")
+                        self._record_failure(url, "Audio download failed")
+
+                except Exception as e:
+                    logger.error(f"Error downloading audio for {url}: {e}")
+                    self._record_failure(url, f"Audio download error: {str(e)}")
 
         # Step 2: Process downloaded audio files with parallel diarization and memory monitoring
         if audio_files:
             logger.info(
-                f"Processing {len(audio_files)} downloaded audio files with diarization"
+                f"Processing {len(audio_files)} downloaded audio files with diarization ({len(audio_files)} files to process)"
             )
             self._process_audio_files_parallel_with_memory_monitoring(
                 audio_files, batch_offset
@@ -770,6 +918,59 @@ class YouTubeBatchWorker(QThread):
 
             return hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:11]
 
+    def _get_video_title(self, url: str) -> str:
+        """Get video title from YouTube URL."""
+        try:
+            import yt_dlp
+
+            ydl_opts = {
+                "quiet": True,
+                "no_warnings": True,
+                "extract_flat": True,  # Only get metadata, don't download
+                "socket_timeout": 10,  # Quick timeout for metadata only
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                if info:
+                    return info.get("title", f"Video {self._extract_video_id(url)}")
+                else:
+                    return f"Video {self._extract_video_id(url)}"
+
+        except Exception as e:
+            logger.debug(f"Could not get title for {url}: {e}")
+            return f"Video {self._extract_video_id(url)}"
+
+    def _categorize_error(self, error: str) -> str:
+        """Categorize error for better display in summary."""
+        error_lower = error.lower()
+
+        if any(keyword in error_lower for keyword in ["copyright", "blocked", "claim"]):
+            return "copyright"
+        elif any(
+            keyword in error_lower
+            for keyword in ["private", "unavailable", "deleted", "removed"]
+        ):
+            return "unavailable"
+        elif any(
+            keyword in error_lower
+            for keyword in ["network", "connection", "timeout", "proxy"]
+        ):
+            return "network"
+        elif any(
+            keyword in error_lower for keyword in ["rate limit", "too many", "quota"]
+        ):
+            return "rate_limit"
+        elif any(
+            keyword in error_lower
+            for keyword in ["permission", "access", "forbidden", "403"]
+        ):
+            return "permission"
+        elif any(keyword in error_lower for keyword in ["format", "quality", "stream"]):
+            return "format"
+        else:
+            return "other"
+
     def _process_single_url_with_audio(
         self, url: str, audio_file: Path
     ) -> tuple[bool, str]:
@@ -824,11 +1025,26 @@ class YouTubeBatchWorker(QThread):
             self.url_completed.emit(url, None, f"❌ {video_id}: {error_msg}")
             return False, error_msg
 
-    def _record_success(self, url: str, message: str):
-        """Record successful processing."""
+    def _record_success(self, url: str, message: str, title: str | None = None):
+        """Record successful processing with enhanced details."""
         self.successful_count += 1
         self.processed_count += 1
-        self.successful_urls.append(url)
+
+        # Get video title if not provided
+        if title is None:
+            try:
+                title = self._get_video_title(url)
+            except Exception:
+                title = f"Video {self._extract_video_id(url)}"
+
+        success_info = {
+            "url": url,
+            "title": title,
+            "video_id": self._extract_video_id(url),
+            "message": message,
+        }
+
+        self.successful_urls.append(success_info)
         self.url_completed.emit(url, True, message)
         self.progress_updated.emit(
             self.processed_count,
@@ -836,11 +1052,30 @@ class YouTubeBatchWorker(QThread):
             f"✅ Completed {self.processed_count}/{len(self.urls)} ({self.successful_count} successful)",
         )
 
-    def _record_failure(self, url: str, error: str):
-        """Record failed processing."""
+    def _record_failure(self, url: str, error: str, title: str | None = None):
+        """Record failed processing with enhanced error details."""
         self.failed_count += 1
         self.processed_count += 1
-        self.failed_urls.append({"url": url, "error": error})
+
+        # Get video title if not provided
+        if title is None:
+            try:
+                title = self._get_video_title(url)
+            except Exception:
+                title = f"Video {self._extract_video_id(url)}"
+
+        # Categorize error type for better display
+        error_category = self._categorize_error(error)
+
+        failure_info = {
+            "url": url,
+            "error": error,
+            "title": title,
+            "error_category": error_category,
+            "video_id": self._extract_video_id(url),
+        }
+
+        self.failed_urls.append(failure_info)
         self.url_completed.emit(url, False, f"❌ {error}")
         self.progress_updated.emit(
             self.processed_count,
@@ -917,10 +1152,297 @@ class YouTubeBatchWorker(QThread):
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
 
+    def _download_batch_parallel(
+        self, urls: list[str], batch_offset: int = 0
+    ) -> dict[str, Path]:
+        """Download multiple URLs in parallel using different PacketStream sessions."""
+        try:
+            # Calculate safe download concurrency
+            max_concurrent_downloads = self._calculate_download_concurrency()
+
+            # Import PacketStream manager
+            from ...utils.packetstream_proxy import PacketStreamProxyManager
+
+            # Create multiple PacketStream sessions (different IPs)
+            proxy_manager = PacketStreamProxyManager()
+            sessions = []
+
+            if proxy_manager.credentials_available:
+                # Create multiple sessions for different IPs
+                for i in range(max_concurrent_downloads):
+                    session_id = (
+                        f"download_session_{i}_{int(time.time())}_{batch_offset}"
+                    )
+                    try:
+                        session = proxy_manager.create_session(session_id)
+                        sessions.append((session_id, session))
+                        logger.debug(f"Created PacketStream session: {session_id}")
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to create PacketStream session {i}: {e}"
+                        )
+
+                if not sessions:
+                    logger.warning(
+                        "No PacketStream sessions available, falling back to direct downloads"
+                    )
+                    return self._download_batch_direct(urls, batch_offset)
+                else:
+                    logger.info(
+                        f"Using {len(sessions)} PacketStream sessions for parallel downloads"
+                    )
+            else:
+                logger.info(
+                    "PacketStream credentials not available, using direct downloads"
+                )
+                return self._download_batch_direct(urls, batch_offset)
+
+            # Download with parallel sessions
+            downloaded_files = {}
+
+            with ThreadPoolExecutor(max_workers=len(sessions)) as executor:
+                # Submit downloads distributed across sessions
+                futures = {}
+
+                for i, url in enumerate(urls):
+                    if self.should_stop or self.cancellation_token.is_cancelled():
+                        break
+
+                    # Distribute URLs across available sessions
+                    session_id, session = sessions[i % len(sessions)]
+                    global_index = batch_offset + i
+
+                    future = executor.submit(
+                        self._download_with_session,
+                        url,
+                        session,
+                        session_id,
+                        global_index,
+                    )
+                    futures[future] = (url, global_index)
+
+                # Collect results with progress tracking
+                completed = 0
+                for future in as_completed(
+                    futures, timeout=600
+                ):  # 10 min total timeout
+                    if self.should_stop or self.cancellation_token.is_cancelled():
+                        # Cancel remaining futures
+                        for f in futures:
+                            if not f.done():
+                                f.cancel()
+                        break
+
+                    url, global_index = futures[future]
+                    try:
+                        audio_file = future.result()
+                        if audio_file and audio_file.exists():
+                            downloaded_files[url] = audio_file
+
+                            # Emit progress update
+                            remaining_videos = len(self.urls) - global_index - 1
+                            remaining_str = (
+                                f" ({remaining_videos} videos left)"
+                                if remaining_videos > 0
+                                else ""
+                            )
+                            self.progress_updated.emit(
+                                global_index,
+                                len(self.urls),
+                                f"✅ Downloaded audio {global_index + 1}/{len(self.urls)}{remaining_str}",
+                            )
+                        else:
+                            logger.error(f"❌ Download failed for {url}")
+
+                    except Exception as e:
+                        logger.error(f"❌ Download error for {url}: {e}")
+
+                    completed += 1
+
+                    # Check memory pressure after each completion
+                    (
+                        pressure_level,
+                        pressure_msg,
+                    ) = self.memory_handler.check_memory_pressure()
+                    if pressure_level >= 3:  # Emergency pressure
+                        logger.warning(
+                            "Emergency memory pressure during downloads - stopping parallel downloads"
+                        )
+                        # Cancel remaining downloads
+                        for f in futures:
+                            if not f.done():
+                                f.cancel()
+                        break
+
+            logger.info(
+                f"Parallel download completed: {len(downloaded_files)}/{len(urls)} successful"
+            )
+            return downloaded_files
+
+        except Exception as e:
+            logger.error(f"Parallel download system failed: {e}")
+            # Fallback to direct downloads
+            return self._download_batch_direct(urls, batch_offset)
+
+    def _download_with_session(
+        self, url: str, session, session_id: str, global_index: int
+    ) -> Path | None:
+        """Download a single URL using a specific PacketStream session."""
+        try:
+            # Create unique filename for this audio
+            video_id = self._extract_video_id(url)
+            audio_file = self.audio_storage_dir / f"{video_id}_{global_index}.wav"
+
+            # Skip if already exists (resuming from previous run)
+            if audio_file.exists():
+                logger.debug(f"Audio file already exists: {audio_file}")
+                return audio_file
+
+            # Check cancellation before starting
+            if self.should_stop or self.cancellation_token.is_cancelled():
+                logger.debug(f"Download cancelled before starting for {video_id}")
+                return None
+
+            # Get proxy URL from session
+            from ...utils.packetstream_proxy import PacketStreamProxyManager
+
+            proxy_manager = PacketStreamProxyManager()
+            proxy_url = proxy_manager.get_proxy_url()
+
+            if not proxy_url:
+                logger.warning(
+                    f"No proxy URL available for session {session_id}, using direct connection"
+                )
+
+            import yt_dlp
+
+            # Flag to track if download was cancelled
+            download_cancelled = False
+
+            # Track download progress and check for cancellation
+            def progress_hook(d):
+                nonlocal download_cancelled
+
+                # Check for cancellation during download
+                if self.should_stop or self.cancellation_token.is_cancelled():
+                    download_cancelled = True
+                    logger.debug(f"Download cancelled during progress for {video_id}")
+                    raise Exception("Download cancelled by user")
+
+                if (
+                    d["status"] == "downloading"
+                    and "total_bytes" in d
+                    and d["total_bytes"]
+                ):
+                    percent = (d["downloaded_bytes"] / d["total_bytes"]) * 100
+                    # Only log major progress milestones to avoid spam
+                    if percent % 25 < 1:  # Log at 25%, 50%, 75%, 100%
+                        logger.debug(
+                            f"📥 {video_id} ({session_id}): {percent:.0f}% complete"
+                        )
+
+            # Configure yt-dlp with session proxy
+            ydl_opts = {
+                "format": "250/249/140/worst",  # Use lowest quality audio to minimize file size
+                "outtmpl": str(audio_file.with_suffix(".%(ext)s")),
+                "extractaudio": True,
+                "audioformat": "wav",
+                "audioquality": 9,  # Lowest quality setting for minimum file size
+                "quiet": True,
+                "no_warnings": True,
+                "progress_hooks": [progress_hook],
+                "socket_timeout": 60,  # 1 minute timeout per chunk
+                "retries": 2,  # Limited retries for faster failure detection
+            }
+
+            # Add proxy if available
+            if proxy_url:
+                ydl_opts["proxy"] = proxy_url
+
+            # Download with cancellation handling
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+            except Exception as e:
+                if (
+                    download_cancelled
+                    or self.should_stop
+                    or self.cancellation_token.is_cancelled()
+                ):
+                    logger.debug(f"Download cancelled for {video_id}")
+                    # Clean up any partial download
+                    for partial_file in self.audio_storage_dir.glob(
+                        f"{video_id}_{global_index}.*"
+                    ):
+                        try:
+                            partial_file.unlink()
+                            logger.debug(f"Cleaned up partial download: {partial_file}")
+                        except Exception:
+                            pass
+                    return None
+                else:
+                    # Re-raise if it's not a cancellation
+                    raise
+
+            # Check cancellation after download but before processing
+            if self.should_stop or self.cancellation_token.is_cancelled():
+                logger.debug(f"Processing cancelled after download for {video_id}")
+                return None
+
+            # Find the downloaded file (yt-dlp may have added extension)
+            for possible_file in self.audio_storage_dir.glob(
+                f"{video_id}_{global_index}.*"
+            ):
+                if possible_file.suffix in [".wav", ".m4a", ".mp3"]:
+                    if possible_file != audio_file:
+                        # Rename to expected .wav extension
+                        possible_file.rename(audio_file)
+                    logger.debug(
+                        f"✅ Successfully downloaded: {video_id} using {session_id}"
+                    )
+                    return audio_file
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error downloading {url} with session {session_id}: {e}")
+            return None
+
+    def _download_batch_direct(
+        self, urls: list[str], batch_offset: int = 0
+    ) -> dict[str, Path]:
+        """Fallback method for direct downloads without PacketStream."""
+        logger.info("Using direct downloads (no PacketStream)")
+        downloaded_files = {}
+
+        for i, url in enumerate(urls):
+            if self.should_stop or self.cancellation_token.is_cancelled():
+                break
+
+            global_index = batch_offset + i
+            remaining_videos = len(self.urls) - global_index - 1
+            remaining_str = (
+                f" ({remaining_videos} videos left)" if remaining_videos > 0 else ""
+            )
+            self.progress_updated.emit(
+                global_index,
+                len(self.urls),
+                f"Downloading audio for video {global_index + 1}/{len(self.urls)}{remaining_str}",
+            )
+
+            audio_file = self._download_audio_persistent(url, global_index)
+            if audio_file and audio_file.exists():
+                downloaded_files[url] = audio_file
+
+        return downloaded_files
+
     def stop(self):
         """Stop processing."""
         self.should_stop = True
         self.cancellation_token.cancel()
+        # Stop resource monitoring
+        if hasattr(self, "resource_manager"):
+            self.resource_manager.stop_monitoring()
 
     def pause(self):
         """Pause processing."""
@@ -929,3 +1451,126 @@ class YouTubeBatchWorker(QThread):
     def resume(self):
         """Resume processing."""
         self.cancellation_token.resume()
+
+    def _pause_for_resources(self):
+        """Pause processing due to resource constraints."""
+        logger.warning("⏸️ Pausing processing due to resource constraints")
+        self.resource_warning.emit(
+            "Pausing downloads due to low disk space or high memory usage"
+        )
+        self.pause()
+
+    def _stop_for_resources(self):
+        """Stop processing due to critical resource issues."""
+        logger.error("🛑 Stopping processing due to critical resource issues")
+        self.extraction_error.emit(
+            "Critical resource issue: insufficient disk space or memory"
+        )
+        self.stop()
+
+    def _save_failed_urls_for_retry(self) -> str | None:
+        """Save failed URLs to a timestamped CSV file for easy retry."""
+        try:
+            from datetime import datetime
+            from pathlib import Path
+
+            # Try to get logs directory from config, fallback to current directory
+            try:
+                from ...config import get_settings
+
+                settings = get_settings()
+                logs_dir = Path(settings.paths.logs).expanduser()
+            except Exception:
+                logs_dir = Path("./logs")
+
+            logs_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create timestamped filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            csv_file = logs_dir / f"failed_youtube_urls_{timestamp}.csv"
+
+            with open(csv_file, "w", encoding="utf-8") as f:
+                # Write header with instructions
+                f.write("# Failed YouTube URLs - Ready for Retry\n")
+                f.write(
+                    f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                )
+                f.write(f"# Total failed: {len(self.failed_urls)}\n")
+                f.write("#\n")
+                f.write("# INSTRUCTIONS FOR RETRY:\n")
+                f.write("# 1. Copy the URLs below (lines without #)\n")
+                f.write("# 2. Paste them into the Cloud Transcription tab\n")
+                f.write("# 3. Click 'Start Transcription' to retry\n")
+                f.write("# 4. Or use 'File -> Open' to load this CSV directly\n")
+                f.write("#\n")
+                f.write("# ERROR SUMMARY:\n")
+
+                # Group errors by category for the header
+                error_categories = {}
+                for failure in self.failed_urls:
+                    category = failure.get("error_category", "other")
+                    if category not in error_categories:
+                        error_categories[category] = 0
+                    error_categories[category] += 1
+
+                for category, count in error_categories.items():
+                    category_name = self._get_category_display_name(category)
+                    f.write(f"# - {category_name}: {count} videos\n")
+
+                f.write("#\n")
+                f.write("# URLs TO RETRY:\n")
+                f.write("#\n")
+
+                # Write URLs grouped by category (most retryable first)
+                retry_priority = [
+                    "network",
+                    "rate_limit",
+                    "format",
+                    "permission",
+                    "unavailable",
+                    "other",
+                    "copyright",
+                ]
+
+                for category in retry_priority:
+                    category_failures = [
+                        f
+                        for f in self.failed_urls
+                        if f.get("error_category") == category
+                    ]
+                    if category_failures:
+                        category_name = self._get_category_display_name(category)
+                        f.write(
+                            f"\n# {category_name} ({len(category_failures)} videos):\n"
+                        )
+
+                        for failure in category_failures:
+                            url = failure.get("url", "")
+                            title = failure.get("title", "Unknown")
+                            error = failure.get("error", "Unknown error")
+
+                            # Write as comment for context
+                            f.write(f"# {title} - {error}\n")
+                            # Write actual URL for processing
+                            if url:
+                                f.write(f"{url}\n")
+
+            logger.info(f"Failed URLs saved for retry: {csv_file}")
+            return str(csv_file)
+
+        except Exception as e:
+            logger.error(f"Could not save failed URLs for retry: {e}")
+            return None
+
+    def _get_category_display_name(self, category: str) -> str:
+        """Get display name for error category."""
+        names = {
+            "copyright": "Copyright/Blocked Content",
+            "unavailable": "Unavailable Videos",
+            "permission": "Access Denied",
+            "network": "Network Issues",
+            "rate_limit": "Rate Limited",
+            "format": "Format/Quality Issues",
+            "other": "Other Errors",
+        }
+        return names.get(category, "Unknown Errors")

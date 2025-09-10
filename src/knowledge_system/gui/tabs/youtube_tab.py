@@ -41,7 +41,9 @@ logger = get_logger(__name__)
 class YouTubeExtractionWorker(QThread):
     """Worker thread for YouTube transcript extraction."""
 
-    progress_updated = pyqtSignal(int, int, str)  # current, total, status
+    progress_updated = pyqtSignal(
+        int, int, str, int
+    )  # current, total, status, current_step
     url_completed = pyqtSignal(str, bool, str)  # url, success, message
     extraction_finished = pyqtSignal(dict)  # final results
     extraction_error = pyqtSignal(str)
@@ -172,7 +174,7 @@ class YouTubeExtractionWorker(QThread):
                 start_msg = (
                     f"🚀 Starting extraction of {total_videos_all_sources} videos"
                 )
-            self.progress_updated.emit(0, total_urls, start_msg)
+            self.progress_updated.emit(0, total_urls, start_msg, 0)
 
             for i, url in enumerate(expanded_urls):
                 # Detailed logging of cancellation check
@@ -192,6 +194,7 @@ class YouTubeExtractionWorker(QThread):
                         i,
                         total_urls,
                         f"❌ Cloud transcription cancelled after {i} URLs",
+                        0,
                     )
                     break
 
@@ -232,6 +235,7 @@ class YouTubeExtractionWorker(QThread):
                     i,
                     total_urls,
                     f"📹 {global_progress} ({percent}%) Processing: {display_title}{playlist_context}",
+                    0,  # Step 0: Starting validation
                 )
 
                 try:
@@ -240,6 +244,7 @@ class YouTubeExtractionWorker(QThread):
                         i,
                         total_urls,
                         f"🔄 {global_progress} ({percent}%) Fetching metadata for: {display_title}{playlist_context}",
+                        1,  # Step 1: Extracting metadata
                     )
 
                     # CRITICAL DEBUG: Log processor call parameters for each URL
@@ -303,13 +308,28 @@ class YouTubeExtractionWorker(QThread):
                                 i,
                                 total_urls,
                                 f"🤖 AI Setup: {message.replace('🤖 ', '')} ({percent}%)",
+                                4,  # Step 4: Diarization/AI processing
                             )
                         else:
                             # Regular diarization progress
+                            # Map diarization stages to steps
+                            step = 3  # Default to step 3 (downloading audio)
+                            if (
+                                "diarization" in message.lower()
+                                or "speaker" in message.lower()
+                            ):
+                                step = 4  # Step 4: Processing diarization
+                            elif (
+                                "downloading" in message.lower()
+                                or "download" in message.lower()
+                            ):
+                                step = 3  # Step 3: Downloading audio
+
                             self.progress_updated.emit(
                                 i,
                                 total_urls,
                                 f"🎙️ {global_progress} ({percent}%) {message}",
+                                step,
                             )
 
                     # Pass cancellation token and progress callback to processor
@@ -370,6 +390,7 @@ class YouTubeExtractionWorker(QThread):
                             i,
                             total_urls,
                             f"📝 {global_progress} ({percent}%) Transcript extracted: {display_actual_title}{playlist_context}",
+                            2,  # Step 2: Fetching transcript complete
                         )
 
                         # Check if files were actually saved or skipped
@@ -384,6 +405,7 @@ class YouTubeExtractionWorker(QThread):
                                 i,
                                 total_urls,
                                 f"💾 {global_progress} ({percent}%) Saved {file_count} file(s): {display_actual_title}{playlist_context}",
+                                5,  # Step 5: Saving file complete
                             )
 
                             results["successful"] += 1
@@ -398,6 +420,7 @@ class YouTubeExtractionWorker(QThread):
                                 i,
                                 total_urls,
                                 f"⏭️ {global_progress} ({percent}%) Skipped existing: {display_actual_title}{playlist_context}",
+                                5,  # Step 5: File handling complete (skipped)
                             )
 
                             # Track skipped files separately
@@ -527,6 +550,7 @@ class YouTubeExtractionWorker(QThread):
                         i,
                         total_urls,
                         f"💥 [{i+1}/{total_urls}] ({percent}%) Exception: {display_title}",
+                        0,  # Step 0: Error occurred during processing
                     )
 
                     # Exception message for this URL
@@ -537,7 +561,9 @@ class YouTubeExtractionWorker(QThread):
 
             # Final progress update
             completion_msg = f"🎉 Cloud transcription complete! ✅ {results['successful']} successful, ❌ {results['failed']} failed out of {total_urls} total URLs"
-            self.progress_updated.emit(total_urls, total_urls, completion_msg)
+            self.progress_updated.emit(
+                total_urls, total_urls, completion_msg, 5
+            )  # Step 5: All processing complete
 
             # Emit completion
             self.extraction_finished.emit(results)
@@ -546,7 +572,9 @@ class YouTubeExtractionWorker(QThread):
             error_msg = f"YouTube extraction failed: {str(e)}"
             logger.error(error_msg)
             self.extraction_error.emit(error_msg)
-            self.progress_updated.emit(0, len(self.urls), f"💥 Fatal error: {error_msg}")
+            self.progress_updated.emit(
+                0, len(self.urls), f"💥 Fatal error: {error_msg}", 0
+            )
 
     def stop(self) -> None:
         """Stop the extraction process."""
@@ -651,30 +679,26 @@ class YouTubeExtractionWorker(QThread):
         self, speaker_data_list, recording_path, metadata=None
     ):
         """
-        Thread-safe callback for speaker assignment requests from worker thread.
-        Emits a signal to the main thread to show the dialog, then waits for result.
+        Non-blocking callback for speaker assignment requests from worker thread.
+        Emits a signal to the main thread to show the dialog but does NOT wait.
         """
-        import threading
+        # Extract task_id if provided
+        task_id = metadata.get("task_id") if metadata else None
 
-        self._speaker_assignment_event = threading.Event()
-        self._speaker_assignment_result = None
-
-        # Emit to main thread with a result callback
+        # Emit to main thread to show dialog (non-blocking)
         self.speaker_assignment_requested.emit(
             speaker_data_list,
             recording_path,
             metadata,
-            self._on_speaker_assignment_result,
+            task_id,  # Pass task_id for tracking
         )
 
-        # Wait up to 5 minutes
-        if self._speaker_assignment_event:
-            self._speaker_assignment_event.wait(timeout=300)
-
-        result = self._speaker_assignment_result
-        self._speaker_assignment_result = None
-        self._speaker_assignment_event = None
-        return result
+        # Return immediately - don't wait for result
+        logger.info(
+            f"Speaker assignment dialog queued for {recording_path}. "
+            f"Processing continues without blocking."
+        )
+        return None  # Non-blocking - assignment will be handled asynchronously
 
     def _on_speaker_assignment_result(self, result):
         self._speaker_assignment_result = result
@@ -921,7 +945,7 @@ class YouTubeTab(BaseTab):
         )
 
         self.overwrite_checkbox = QCheckBox("Overwrite existing transcripts")
-        self.overwrite_checkbox.setChecked(False)
+        self.overwrite_checkbox.setChecked(True)
         self.overwrite_checkbox.toggled.connect(self._on_setting_changed)
         self.overwrite_checkbox.setToolTip(
             "If enabled, existing transcript files will be overwritten.\n"
@@ -972,6 +996,24 @@ class YouTubeTab(BaseTab):
             "• Falls back to normal mode if insufficient space"
         )
         layout.addWidget(self.download_all_checkbox, 3, 2)
+
+        # Parallel downloads checkbox - new feature
+        self.parallel_downloads_checkbox = QCheckBox(
+            "Enable parallel downloads (faster)"
+        )
+        self.parallel_downloads_checkbox.setChecked(True)  # Enabled by default
+        self.parallel_downloads_checkbox.toggled.connect(self._on_setting_changed)
+        self.parallel_downloads_checkbox.setToolTip(
+            "Parallel Downloads - Download multiple videos simultaneously\n"
+            "• 4-8x faster downloads using multiple PacketStream IPs\n"
+            "• Each video downloads through a different IP address\n"
+            "• Better YouTube rate limiting evasion\n"
+            "• Automatic fallback to sequential if system stressed\n"
+            "• Same PacketStream usage (same total data downloaded)\n"
+            "• Smart resource management with memory monitoring\n"
+            "• Falls back to direct downloads if PacketStream unavailable"
+        )
+        layout.addWidget(self.parallel_downloads_checkbox, 4, 0, 1, 3)
 
         group.setLayout(layout)
         return group
@@ -1339,7 +1381,7 @@ class YouTubeTab(BaseTab):
                     self.append_log(f"  🔄 {message}")
 
                 proxy_working, proxy_message = proxy_manager.test_proxy_connectivity(
-                    timeout=8, max_retries=3, retry_callback=retry_callback
+                    timeout=8, max_retries=5, retry_callback=retry_callback
                 )
 
                 if proxy_working:
@@ -1532,12 +1574,11 @@ class YouTubeTab(BaseTab):
 
         # Check speaker diarization requirements if enabled
         if self.diarization_checkbox.isChecked():
-            hf_token = getattr(self.settings.api_keys, "huggingface_token", None)
-            if not hf_token:
-                self.append_log("⚠️ Warning: HuggingFace token missing for diarization")
-                self.append_log(
-                    "   Diarization will use default models (may be slower)"
-                )
+            # For internal company use, models are pre-bundled
+            if os.environ.get("PYANNOTE_BUNDLED") == "true":
+                self.append_log("✅ Using bundled diarization model (internal use)")
+            else:
+                self.append_log("🎙️ Diarization enabled - model will be loaded")
 
         return True
 
@@ -1575,15 +1616,18 @@ class YouTubeTab(BaseTab):
             "enable_diarization": enable_diarization,
             "transcription_model": self.transcription_model_combo.currentText(),  # Pass selected model
             "download_all_mode": self.download_all_checkbox.isChecked(),
+            "parallel_downloads": self.parallel_downloads_checkbox.isChecked(),
         }
 
         # Choose worker based on processing requirements
-        use_batch_worker = (
-            config["enable_diarization"]
-            and len(urls) > 1  # Use batch worker for diarization with multiple URLs
-        ) or len(
-            urls
-        ) > 10  # Or for large batches even without diarization
+        # UNIFIED RULE: Use batch processing for >3 items (matching CLI behavior)
+        logger.info(
+            f"🔍 Batch worker decision: enable_diarization={config['enable_diarization']}, urls={len(urls)}"
+        )
+        use_batch_worker = len(urls) > 3  # Unified rule: >3 items use batch processing
+        logger.info(
+            f"🔍 Using unified batch processing: {use_batch_worker} (>3 items rule)"
+        )
 
         if use_batch_worker:
             self.append_log(
@@ -1673,33 +1717,64 @@ class YouTubeTab(BaseTab):
         self.status_updated.emit("YouTube extraction in progress...")
 
     def _handle_speaker_assignment_request(
-        self, speaker_data_list, recording_path, metadata, result_callback
+        self, speaker_data_list, recording_path, metadata, task_id
     ):
         """
-        Handle speaker assignment request from worker thread.
-        Ensures the dialog is shown on the main thread and returns assignments
-        via the provided callback.
+        Handle speaker assignment request from worker thread (non-blocking).
+        Shows the dialog on the main thread but doesn't wait for completion.
+        The dialog will update the database directly when completed.
         """
         try:
-            logger.info("Main thread handling speaker assignment request (YouTubeTab)")
-            # Import dialog lazily to avoid circular deps
-            from ..dialogs.speaker_assignment_dialog import (
-                show_speaker_assignment_dialog,
+            logger.info(
+                f"Main thread showing speaker assignment dialog for task {task_id}"
             )
 
-            # Show dialog (main thread guarded by show_speaker_assignment_dialog itself)
-            assignments = show_speaker_assignment_dialog(
+            # Import dialog and queue lazily to avoid circular deps
+            from knowledge_system.utils.speaker_assignment_queue import (
+                get_speaker_assignment_queue,
+            )
+
+            from ..dialogs.speaker_assignment_dialog import SpeakerAssignmentDialog
+
+            queue = get_speaker_assignment_queue()
+
+            # Create and show dialog (non-modal so processing can continue)
+            dialog = SpeakerAssignmentDialog(
                 speaker_data_list, recording_path, metadata, self
             )
 
-            # Return assignments through callback to unblock worker
-            if callable(result_callback):
-                result_callback(assignments)
+            # Connect completion signal to update the task in queue
+            def on_dialog_completed():
+                assignments = dialog.get_assignments()
+                queue.complete_task(task_id, assignments)
+                logger.info(f"Speaker assignment completed for task {task_id}")
+
+            def on_dialog_cancelled():
+                queue.complete_task(task_id, None)
+                logger.info(f"Speaker assignment cancelled for task {task_id}")
+
+            dialog.speaker_assignments_completed.connect(on_dialog_completed)
+            dialog.assignment_cancelled.connect(on_dialog_cancelled)
+
+            # Show dialog non-modally to allow other dialogs to stack up
+            dialog.show()  # Non-modal - allows multiple dialogs
+
+            # Append info to log
+            self.append_log(
+                f"🎭 Speaker assignment dialog opened for {Path(recording_path).name}. "
+                f"Processing continues in background..."
+            )
+
         except Exception as e:
-            logger.error(f"Error in YouTube speaker assignment dialog: {e}")
-            # Return None on error
-            if callable(result_callback):
-                result_callback(None)
+            logger.error(f"Error showing speaker assignment dialog: {e}")
+            # Mark task as failed
+            if task_id:
+                from knowledge_system.utils.speaker_assignment_queue import (
+                    get_speaker_assignment_queue,
+                )
+
+                queue = get_speaker_assignment_queue()
+                queue.complete_task(task_id, None)
 
     def _handle_batch_status(self, status: dict) -> None:
         """Handle batch status updates from YouTubeBatchWorker."""
@@ -1936,8 +2011,10 @@ class YouTubeTab(BaseTab):
             # Fallback to YouTube check for backwards compatibility
             return "youtube.com" in url or "youtu.be" in url
 
-    def _update_extraction_progress(self, current: int, total: int, status: str):
-        """Update extraction progress with enhanced messaging."""
+    def _update_extraction_progress(
+        self, current: int, total: int, status: str, current_step: int = 0
+    ):
+        """Update extraction progress with enhanced messaging and granular step tracking."""
         # Prevent re-entrant recursion if progress signals arrive during GUI repaint
         if not hasattr(self, "_progress_update_inflight"):
             self._progress_update_inflight = False
@@ -1946,25 +2023,38 @@ class YouTubeTab(BaseTab):
 
         self._progress_update_inflight = True
         try:
-            # Update enhanced cloud status display
+            # Define the 6 steps for each URL processing
+            step_names = [
+                "🔍 Validating URL",
+                "📋 Extracting metadata",
+                "📝 Fetching transcript",
+                "📥 Downloading audio",
+                "🎙️ Processing diarization",
+                "💾 Saving file",
+            ]
+
+            # Update enhanced cloud status display with step-based progress
             if total > 0:
-                # Determine operation type from status
-                if "downloading" in status.lower() or "download" in status.lower():
-                    operation = f"📥 Downloading audio from URL {current + 1}"
-                elif "processing" in status.lower() or "diarization" in status.lower():
-                    operation = f"🎙️ Processing audio for URL {current + 1}"
-                elif "transcript" in status.lower():
-                    operation = f"📝 Extracting transcript from URL {current + 1}"
-                elif current >= total:
+                # Get current step name if within range
+                step_name = (
+                    step_names[current_step]
+                    if 0 <= current_step < len(step_names)
+                    else "🔄 Processing"
+                )
+
+                if current >= total:
                     operation = "✅ Cloud transcription completed"
+                    current_step = 5  # Last step
                 else:
-                    operation = f"🔄 Processing URL {current + 1}"
+                    operation = f"{step_name} URL {current + 1}"
 
                 self.cloud_status_display.update_cloud_status(
-                    current_url=current + 1,
+                    current_url=current,  # Use 0-based index for URL
                     total_urls=total,
                     current_operation=operation,
                     api_status="Active",
+                    current_step=current_step,
+                    steps_per_url=6,
                 )
             else:
                 # Indeterminate progress
@@ -1973,6 +2063,8 @@ class YouTubeTab(BaseTab):
                     total_urls=0,
                     current_operation=status,
                     api_status="Initializing",
+                    current_step=0,
+                    steps_per_url=6,
                 )
 
             # For download progress and similar repetitive updates, update the same line
@@ -1992,15 +2084,8 @@ class YouTubeTab(BaseTab):
             else:
                 self.append_log(status)
 
-            if total > 0:
-                (current / total) * 100
-
-                # Enhanced progress label with more detail
-                # Legacy progress updates removed - enhanced display handles all progress updates
-                # (progress_label and progress_bar updates moved to enhanced display)
-            else:
-                # Indeterminate progress handled by enhanced display
-                pass
+            # Progress tracking is now handled entirely by the enhanced cloud status display
+            # No additional progress calculations needed here
         finally:
             self._progress_update_inflight = False
 
@@ -2101,6 +2186,18 @@ class YouTubeTab(BaseTab):
                     "\n⚠️ Warning: Could not write failure logs (check logs directory permissions)"
                 )
 
+        # Show information about saved failed URLs file if available
+        if results.get("failed_urls_file"):
+            self.append_log(
+                f"\n💾 Failed URLs saved for retry: {results['failed_urls_file']}"
+            )
+            self.append_log(
+                "   📋 This file contains all failed URLs organized by error type"
+            )
+            self.append_log(
+                "   🔄 Use the 'Retry Failed Videos' button in the summary or load this file manually"
+            )
+
         # Show summary of what files were actually created
         total_processed = results["successful"] + skipped_count
         if total_processed > 0:
@@ -2197,15 +2294,57 @@ class YouTubeTab(BaseTab):
 
         summary = CloudTranscriptionSummary(self)
 
-        # Calculate processing time (mock - would be tracked in real implementation)
-        processing_time = 120.0  # Mock 2 minutes
+        # Connect retry signal to handle retry requests
+        summary.retry_requested.connect(self._handle_retry_request)
+
+        # Use actual processing time from results
+        processing_time = results.get("processing_time", 120.0)
 
         summary.show_cloud_summary(
             successful_urls=results["successful"],
             failed_urls=results["failed"],
             total_processing_time=processing_time,
             service_status="Active",
+            failed_urls_details=results.get("failed_urls", []),
+            successful_urls_details=results.get("urls_processed", []),
         )
+
+    def _handle_retry_request(self, failed_urls: list[str]) -> None:
+        """Handle retry request from the cloud transcription summary."""
+        from PyQt6.QtWidgets import QMessageBox
+
+        try:
+            logger.info(f"Retry requested for {len(failed_urls)} failed URLs")
+
+            # Load the failed URLs back into the input field
+            urls_text = "\n".join(failed_urls)
+            self.url_input.setPlainText(urls_text)
+
+            # Show confirmation message
+            reply = QMessageBox.question(
+                self,
+                "Retry Failed Videos",
+                f"Loaded {len(failed_urls)} failed URLs back into the input field.\n\n"
+                "You can now click 'Start Transcription' to retry these videos, "
+                "or modify the list first if needed.\n\n"
+                "Would you like to start the retry immediately?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+
+            if reply == QMessageBox.StandardButton.Yes:
+                # Start transcription immediately
+                self._start_extraction()
+            else:
+                # Just show a helpful message
+                self.append_log(f"🔄 Loaded {len(failed_urls)} failed URLs for retry")
+                self.append_log("   ✅ Click 'Start Transcription' when ready to retry")
+
+        except Exception as e:
+            logger.error(f"Error handling retry request: {e}")
+            QMessageBox.warning(
+                self, "Retry Error", f"Could not load failed URLs for retry: {str(e)}"
+            )
 
     def _show_payment_required_dialog(self):
         """Show popup dialog for 402 Payment Required error."""
@@ -2285,7 +2424,7 @@ class YouTubeTab(BaseTab):
             # Timestamps are always enabled for YouTube (no longer configurable)
             self.overwrite_checkbox.setChecked(
                 self.gui_settings.get_checkbox_state(
-                    self.tab_name, "overwrite_existing", False
+                    self.tab_name, "overwrite_existing", True
                 )
             )
             self.diarization_checkbox.setChecked(
@@ -2296,6 +2435,11 @@ class YouTubeTab(BaseTab):
             self.download_all_checkbox.setChecked(
                 self.gui_settings.get_checkbox_state(
                     self.tab_name, "download_all_mode", False
+                )
+            )
+            self.parallel_downloads_checkbox.setChecked(
+                self.gui_settings.get_checkbox_state(
+                    self.tab_name, "parallel_downloads", True
                 )
             )
 
@@ -2339,6 +2483,11 @@ class YouTubeTab(BaseTab):
                 self.tab_name,
                 "download_all_mode",
                 self.download_all_checkbox.isChecked(),
+            )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name,
+                "parallel_downloads",
+                self.parallel_downloads_checkbox.isChecked(),
             )
 
             # Save radio button state (use checkbox method for boolean values)

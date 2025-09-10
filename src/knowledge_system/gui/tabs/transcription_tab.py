@@ -698,6 +698,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         layout.addWidget(self.color_coded_checkbox, 6, 0, 1, 2)
 
         self.overwrite_checkbox = QCheckBox("Overwrite existing transcripts")
+        self.overwrite_checkbox.setChecked(True)
         self.overwrite_checkbox.setToolTip(
             "If unchecked, existing transcripts will be skipped"
         )
@@ -1690,7 +1691,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                     widget.blockSignals(False)
             self.overwrite_checkbox.setChecked(
                 self.gui_settings.get_checkbox_state(
-                    self.tab_name, "overwrite_existing", False
+                    self.tab_name, "overwrite_existing", True
                 )
             )
             self.quality_retry_checkbox.setChecked(

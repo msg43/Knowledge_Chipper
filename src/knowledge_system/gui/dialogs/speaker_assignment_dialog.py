@@ -95,17 +95,67 @@ class SpeakerCard(QFrame):
         # Name input section
         name_layout = QVBoxLayout()
 
-        # Name input field
+        # Name input field with priority-based styling
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("Enter speaker name...")
         self.name_input.setFont(QFont("Arial", 11))
 
-        # Pre-fill with suggestion if available
+        # Pre-fill with suggestion and apply priority-based styling
         if self.speaker_data.suggested_name:
             self.name_input.setText(self.speaker_data.suggested_name)
-            self.name_input.selectAll()
+
+            # Visual indicators based on assignment source
+            source = getattr(self.speaker_data, "assignment_source", "ai_suggestion")
+            if source == "manual_override":
+                # Green border for manual overrides
+                self.name_input.setStyleSheet(
+                    """
+                    QLineEdit {
+                        border: 2px solid #4caf50;
+                        background-color: #f0fff0;
+                        font-weight: bold;
+                    }
+                """
+                )
+                self.name_input.setToolTip(
+                    "🎯 Manual assignment (saved from previous session)"
+                )
+            elif source == "ai_suggestion":
+                # Blue border for AI suggestions
+                self.name_input.setStyleSheet(
+                    """
+                    QLineEdit {
+                        border: 2px solid #2196f3;
+                        background-color: #f0f8ff;
+                    }
+                """
+                )
+                self.name_input.setToolTip(
+                    "🤖 AI suggestion (may include learned mappings)"
+                )
+                self.name_input.selectAll()
+            else:
+                # Default styling for no suggestion
+                self.name_input.setStyleSheet("border: 1px solid #ccc;")
 
         name_layout.addWidget(self.name_input)
+
+        # Add priority indicator label
+        if hasattr(self.speaker_data, "assignment_source"):
+            source = self.speaker_data.assignment_source
+            if source == "manual_override":
+                priority_label = QLabel("🎯 Manual Override")
+                priority_label.setStyleSheet(
+                    "color: #4caf50; font-weight: bold; font-size: 9px;"
+                )
+            elif source == "ai_suggestion":
+                priority_label = QLabel("🤖 AI Suggestion")
+                priority_label.setStyleSheet("color: #2196f3; font-size: 9px;")
+            else:
+                priority_label = QLabel("❓ No Suggestion")
+                priority_label.setStyleSheet("color: #666; font-size: 9px;")
+
+            name_layout.addWidget(priority_label)
 
         # Confidence indicator and suggestion info
         if self.speaker_data.suggested_name:
@@ -272,13 +322,12 @@ class SpeakerAssignmentDialog(QDialog):
         parent=None,
     ):
         """
-        Initialize the speaker assignment dialog.
+        Initialize the speaker assignment dialog with priority-based assignments.
 
-        Args:
-            speaker_data_list: List of speaker data objects
-            recording_path: Path to the recording file
-            metadata: Optional YouTube/podcast metadata for auto-assignment
-            parent: Parent widget
+        Priority order:
+        1. Existing manual assignments (highest)
+        2. Channel-to-host mappings
+        3. Fresh AI suggestions (lowest)
         """
         # CRITICAL TESTING SAFETY: Use unified testing mode detection
         from ...logger import get_logger
@@ -317,10 +366,15 @@ class SpeakerAssignmentDialog(QDialog):
         self.llm_validation_result = None
         self.pending_validation = False
 
+        # CRITICAL: Apply priority-based assignment resolution BEFORE UI creation
+        self._resolve_assignment_priorities()
+
         self._setup_ui()
         self._setup_keyboard_shortcuts()
         self._connect_signals()
-        self._load_existing_assignments()
+
+        # No longer needed - assignments already resolved in _resolve_assignment_priorities()
+        # self._load_existing_assignments()
 
         # Automatically trigger LLM validation if metadata is available
         if self.metadata:
@@ -618,24 +672,86 @@ class SpeakerAssignmentDialog(QDialog):
 
         return color_map
 
-    def _load_existing_assignments(self):
-        """Load any existing speaker assignments for this recording."""
+    def _resolve_assignment_priorities(self):
+        """
+        Resolve assignment conflicts by applying strict priority order.
+        This ensures manual assignments always override AI suggestions.
+        """
         try:
+            logger.info("🎯 Resolving speaker assignment priorities...")
+
+            # Get existing manual assignments (highest priority)
+            existing_assignments = {}
             if self.recording_path:
-                existing_assignments = self.db_service.get_assignments_for_recording(
+                db_assignments = self.db_service.get_assignments_for_recording(
                     self.recording_path
                 )
-                for assignment in existing_assignments:
-                    if assignment.speaker_id in self.speaker_cards:
-                        card = self.speaker_cards[assignment.speaker_id]
-                        card.set_assigned_name(assignment.assigned_name)
-                        self.assignments[
-                            assignment.speaker_id
-                        ] = assignment.assigned_name
+                for assignment in db_assignments:
+                    existing_assignments[
+                        assignment.speaker_id
+                    ] = assignment.assigned_name
+                    logger.info(
+                        f"Found existing assignment: {assignment.speaker_id} → '{assignment.assigned_name}'"
+                    )
 
-                logger.info(f"Loaded {len(existing_assignments)} existing assignments")
+            # Apply priority resolution to each speaker
+            priority_stats = {
+                "manual_override": 0,
+                "ai_suggestion": 0,
+                "no_suggestion": 0,
+            }
+
+            for speaker_data in self.speaker_data_list:
+                speaker_id = speaker_data.speaker_id
+
+                # Priority 1: Existing manual assignment (ALWAYS wins)
+                if speaker_id in existing_assignments:
+                    final_name = existing_assignments[speaker_id]
+                    original_suggestion = speaker_data.suggested_name
+                    speaker_data.suggested_name = final_name
+                    speaker_data.assignment_source = "manual_override"
+                    priority_stats["manual_override"] += 1
+
+                    if original_suggestion != final_name:
+                        logger.info(
+                            f"🎯 OVERRIDE: {speaker_id} AI:'{original_suggestion}' → Manual:'{final_name}'"
+                        )
+                    else:
+                        logger.info(
+                            f"🎯 CONFIRMED: {speaker_id} → '{final_name}' (manual matches AI)"
+                        )
+
+                # Priority 2: Keep AI suggestion (may include channel mappings)
+                elif speaker_data.suggested_name:
+                    final_name = speaker_data.suggested_name
+                    speaker_data.assignment_source = "ai_suggestion"
+                    priority_stats["ai_suggestion"] += 1
+                    logger.info(f"🤖 AI suggestion: {speaker_id} → '{final_name}'")
+
+                # Priority 3: No suggestion available
+                else:
+                    speaker_data.suggested_name = ""
+                    speaker_data.assignment_source = "no_suggestion"
+                    priority_stats["no_suggestion"] += 1
+                    logger.info(f"❓ No suggestion: {speaker_id}")
+
+            logger.info(
+                f"✅ Priority resolution complete: {priority_stats['manual_override']} manual, {priority_stats['ai_suggestion']} AI, {priority_stats['no_suggestion']} none"
+            )
+
         except Exception as e:
-            logger.warning(f"Could not load existing assignments: {e}")
+            logger.error(f"❌ Error resolving assignment priorities: {e}")
+            # Continue with original suggestions on error
+
+    def _load_existing_assignments(self):
+        """
+        DEPRECATED: This method is now handled by _resolve_assignment_priorities()
+        Keeping for backward compatibility in case it's called elsewhere.
+        """
+        logger.warning(
+            "⚠️ _load_existing_assignments() called but priority resolution should handle this"
+        )
+        # Don't actually do anything - priorities already resolved
 
     def _move_to_next_speaker(self):
         """Move focus to the next speaker."""
@@ -957,17 +1073,42 @@ class SpeakerAssignmentDialog(QDialog):
                 self._update_focus_state()
 
     def _on_accept(self):
-        """Handle dialog acceptance."""
-        # Collect all assignments
+        """Handle dialog acceptance with detailed change tracking."""
+        logger.info("🎯 Speaker assignment dialog accepted - analyzing changes...")
+
+        # Collect all assignments and track changes
         final_assignments = {}
         missing_assignments = []
+        changes_made = []
 
         for speaker_id, card in self.speaker_cards.items():
-            name = card.get_assigned_name()
-            if name:
-                final_assignments[speaker_id] = name
+            current_name = card.get_assigned_name()
+            original_name = getattr(card.speaker_data, "suggested_name", "")
+            original_source = getattr(card.speaker_data, "assignment_source", "unknown")
+
+            if current_name:
+                final_assignments[speaker_id] = current_name
+
+                # Track changes from original suggestions
+                if current_name != original_name:
+                    change_type = "EDIT" if original_name else "NEW"
+                    changes_made.append(
+                        f"{change_type}: {speaker_id} '{original_name}' → '{current_name}' (was {original_source})"
+                    )
+                else:
+                    changes_made.append(
+                        f"KEPT: {speaker_id} → '{current_name}' ({original_source})"
+                    )
             else:
                 missing_assignments.append(speaker_id)
+
+        # Log the results
+        if changes_made:
+            logger.info(f"📝 User actions on {len(self.speaker_data_list)} speakers:")
+            for change in changes_made:
+                logger.info(f"   {change}")
+        else:
+            logger.info("✅ No changes made to speaker assignments")
 
         # Check for missing assignments
         if missing_assignments:
@@ -1013,25 +1154,139 @@ class SpeakerAssignmentDialog(QDialog):
         logger.info("Reset all assignments to AI suggestions")
 
     def _save_assignments_to_database(self, assignments: dict[str, str]):
-        """Save speaker assignments to database for future learning."""
+        """Save speaker assignments to database with conflict prevention and detailed logging."""
         try:
+            logger.info(
+                f"💾 Saving {len(assignments)} speaker assignments with conflict prevention..."
+            )
+
+            # Get existing assignments for comparison
+            existing_assignments = self.db_service.get_assignments_for_recording(
+                self.recording_path
+            )
+            existing_map = {a.speaker_id: a.assigned_name for a in existing_assignments}
+
+            save_stats = {"updated": 0, "created": 0, "unchanged": 0}
+
             for speaker_id, name in assignments.items():
+                existing_name = existing_map.get(speaker_id)
+
+                if existing_name:
+                    if existing_name != name:
+                        logger.info(
+                            f"🔄 UPDATING: {speaker_id} '{existing_name}' → '{name}'"
+                        )
+                        save_stats["updated"] += 1
+                    else:
+                        logger.info(f"✅ UNCHANGED: {speaker_id} → '{name}'")
+                        save_stats["unchanged"] += 1
+                else:
+                    logger.info(f"🆕 CREATING: {speaker_id} → '{name}'")
+                    save_stats["created"] += 1
+
                 assignment_data = SpeakerAssignmentModel(
                     recording_path=self.recording_path,
                     speaker_id=speaker_id,
                     assigned_name=name,
                     confidence=1.0,  # User-confirmed
                     user_confirmed=True,
+                    suggestion_method="manual_assignment",
                 )
 
                 self.db_service.create_speaker_assignment(assignment_data)
 
-                # Voice pattern learning removed - LLM-only approach
+            # Learn channel-to-host mapping from user corrections
+            self._learn_channel_mappings(assignments)
 
-            logger.info(f"Saved {len(assignments)} speaker assignments to database")
+            logger.info(
+                f"✅ Save complete: {save_stats['created']} created, {save_stats['updated']} updated, {save_stats['unchanged']} unchanged"
+            )
 
         except Exception as e:
-            logger.error(f"Error saving assignments to database: {e}")
+            logger.error(f"❌ Error saving assignments to database: {e}")
+
+    def _learn_channel_mappings(self, assignments: dict[str, str]):
+        """Learn channel-to-host mappings from user assignments."""
+        try:
+            if not self.metadata or not self.metadata.get("uploader"):
+                return
+
+            channel_name = self.metadata["uploader"]
+
+            # Look for patterns that suggest host vs guest
+            # Typically the host speaks first and more frequently
+            if len(assignments) >= 2:
+                # Get speaker speaking stats to identify likely host
+                host_candidate = self._identify_likely_host()
+                if host_candidate and host_candidate in assignments:
+                    host_name = assignments[host_candidate]
+
+                    # Save the channel mapping
+                    self.db_service.create_or_update_channel_mapping(
+                        channel_name=channel_name,
+                        host_name=host_name,
+                        created_by="user_correction",
+                        confidence=0.8,
+                    )
+                    logger.info(
+                        f"Learned channel mapping: {channel_name} -> {host_name}"
+                    )
+
+        except Exception as e:
+            logger.error(f"Error learning channel mappings: {e}")
+
+    def _identify_likely_host(self) -> str | None:
+        """Identify the speaker most likely to be the host based on speaking patterns."""
+        try:
+            # Host typically speaks first and has more segments
+            speaker_stats = {}
+
+            for speaker_data in self.speaker_data_list:
+                speaker_id = speaker_data.speaker_id
+                total_segments = len(speaker_data.segments)
+                first_appearance = min(
+                    (seg.start for seg in speaker_data.segments), default=float("inf")
+                )
+                total_duration = speaker_data.total_duration
+
+                speaker_stats[speaker_id] = {
+                    "segments": total_segments,
+                    "first_appearance": first_appearance,
+                    "duration": total_duration,
+                    "score": 0,
+                }
+
+            # Score speakers (host typically speaks first and more)
+            for speaker_id, stats in speaker_stats.items():
+                # Points for speaking early (within first 30 seconds gets bonus)
+                if stats["first_appearance"] <= 30:
+                    stats["score"] += 3
+                elif stats["first_appearance"] <= 120:  # First 2 minutes
+                    stats["score"] += 1
+
+                # Points for having more segments (more interactive)
+                max_segments = max(
+                    (s["segments"] for s in speaker_stats.values()), default=1
+                )
+                if (
+                    stats["segments"] >= max_segments * 0.8
+                ):  # Top speakers by segment count
+                    stats["score"] += 2
+
+            # Return speaker with highest score
+            if speaker_stats:
+                host_candidate = max(
+                    speaker_stats.keys(), key=lambda k: speaker_stats[k]["score"]
+                )
+                logger.debug(
+                    f"Identified likely host: {host_candidate} with score {speaker_stats[host_candidate]['score']}"
+                )
+                return host_candidate
+
+        except Exception as e:
+            logger.error(f"Error identifying likely host: {e}")
+
+        return None
 
     def get_assignments(self) -> dict[str, str]:
         """Get the current speaker assignments."""

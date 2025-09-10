@@ -222,6 +222,36 @@ fi
 
 echo -e "${GREEN}✅ MVP AI System installation completed${NC}"
 
+# Download all required models
+echo
+echo -e "${BLUE}📦 Downloading required AI models...${NC}"
+echo "This will download Whisper, Diarization, and Ollama models"
+echo "Total download size: ~600MB (one-time download)"
+echo
+
+# Check if credentials exist for diarization
+if [ ! -f "config/credentials.yaml" ]; then
+    echo -e "${YELLOW}⚠️  No credentials.yaml found${NC}"
+    echo "   Copying example credentials file..."
+    cp config/credentials.example.yaml config/credentials.yaml
+    echo "   Please add your API keys to config/credentials.yaml after setup"
+fi
+
+# Run the model downloader script
+echo -e "${BLUE}Starting model downloads...${NC}"
+if python scripts/download_models.py; then
+    echo -e "${GREEN}✅ All models downloaded successfully${NC}"
+else
+    echo -e "${YELLOW}⚠️  Some models failed to download${NC}"
+    echo "   You can run this again later with:"
+    echo "   python scripts/download_models.py"
+    echo
+    echo "   For speaker diarization, you need:"
+    echo "   1. A HuggingFace token from https://huggingface.co/settings/tokens"
+    echo "   2. Accept the license at https://huggingface.co/pyannote/speaker-diarization"
+    echo "   3. Add your token to config/credentials.yaml"
+fi
+
 # Make launch script executable
 if [ -f "launch_gui.command" ]; then
     chmod +x launch_gui.command
@@ -297,6 +327,11 @@ echo "   • Logs: logs/ directory"
 echo
 echo -e "${BLUE}🔧 ${BOLD}Troubleshooting:${NC}"
 echo "   • Check logs in the GUI console output"
+echo "   • Re-download models: python scripts/download_models.py"
+echo "   • Models are cached in:"
+echo "     - Whisper: ~/.cache/whisper-cpp/"
+echo "     - Diarization: ~/.cache/huggingface/hub/"
+echo "     - Ollama: ~/.ollama/models/"
 echo "   • Verify API keys in config/credentials.yaml"
 echo "   • See README.md troubleshooting section"
 echo

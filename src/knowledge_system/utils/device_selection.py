@@ -328,9 +328,9 @@ def set_device_environment(device: str) -> None:
             logger.debug("CUDA environment configured for mixed precision")
 
     elif device == "mps":
-        # MPS optimizations
-        os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-        logger.debug("MPS environment configured with CPU fallback")
+        # MPS optimizations - fail fast to identify unsupported ops
+        os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "0"
+        logger.debug("MPS environment configured without CPU fallback (fail-fast mode)")
 
     elif device == "cpu":
         # CPU optimizations

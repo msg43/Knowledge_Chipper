@@ -18,6 +18,87 @@ from ..logger import get_logger
 logger = get_logger(__name__)
 
 
+def _format_segments_to_markdown_transcript(
+    segments: list[dict],
+    include_speakers: bool = True,
+    include_timestamps: bool = True,
+    diarization_enabled: bool = False,
+) -> str:
+    """
+    Format transcript segments into properly formatted markdown with speaker separation.
+
+    Args:
+        segments: List of transcript segments with start, text, and optionally speaker
+        include_speakers: Whether to include speaker information
+        include_timestamps: Whether to include timestamps
+        diarization_enabled: Whether diarization was performed
+
+    Returns:
+        Formatted markdown transcript content
+    """
+    if not segments:
+        return ""
+
+    content_parts = []
+    previous_speaker = None
+
+    for segment in segments:
+        text = segment.get("text", "").strip()
+        if not text:
+            continue
+
+        speaker = segment.get("speaker", "")
+        start_time = segment.get("start", 0)
+
+        # Format timestamp
+        timestamp_str = _format_timestamp_for_display(start_time)
+
+        # Handle speaker formatting if diarization enabled and speakers should be included
+        if include_speakers and speaker and diarization_enabled:
+            # Add speaker change separator for better readability
+            if speaker != previous_speaker and previous_speaker is not None:
+                content_parts.append("---\n")
+
+            # Convert speaker ID to human-readable format
+            speaker_display = speaker
+            if speaker.startswith("SPEAKER_"):
+                speaker_num = speaker.replace("SPEAKER_", "")
+                try:
+                    speaker_number = int(speaker_num) + 1
+                    speaker_display = f"Speaker {speaker_number}"
+                except (ValueError, TypeError):
+                    speaker_display = speaker
+
+            # Format: **Speaker Name**\n*timestamp*\n\ntext\n
+            content_parts.append(f"**{speaker_display}**")
+            if include_timestamps:
+                content_parts.append(f"*{timestamp_str}*\n")
+            content_parts.append(f"{text}\n")
+
+            previous_speaker = speaker
+        elif include_timestamps:
+            # Format: **timestamp**\n\ntext\n
+            content_parts.append(f"**{timestamp_str}**\n")
+            content_parts.append(f"{text}\n")
+        else:
+            # Plain text format
+            content_parts.append(f"{text}\n")
+
+    return "\n".join(content_parts)
+
+
+def _format_timestamp_for_display(seconds: float) -> str:
+    """Format seconds to MM:SS or HH:MM:SS for display."""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    else:
+        return f"{minutes:02d}:{secs:02d}"
+
+
 class FileGenerationService:
     """
     Service for generating output files from SQLite database data.
@@ -118,25 +199,43 @@ class FileGenerationService:
             # Build transcript content
             transcript_content = ""
 
-            # Use speaker-labeled text if available and requested
-            if include_speakers and transcript.transcript_text_with_speakers:
+            # Prefer building from segments for proper formatting
+            if transcript.transcript_segments_json:
+                # Check if segments actually have speaker data
+                has_speaker_data = any(
+                    segment.get("speaker")
+                    for segment in transcript.transcript_segments_json
+                )
+
+                transcript_content = _format_segments_to_markdown_transcript(
+                    segments=transcript.transcript_segments_json,
+                    include_speakers=include_speakers,
+                    include_timestamps=include_timestamps,
+                    diarization_enabled=has_speaker_data,  # Use actual speaker data presence
+                )
+
+            # Fallback to stored speaker text if segments not available
+            elif include_speakers and transcript.transcript_text_with_speakers:
                 transcript_content = transcript.transcript_text_with_speakers
-            elif include_timestamps and transcript.transcript_segments_json:
-                # Build timestamped transcript from segments
-                segments = transcript.transcript_segments_json
-                for segment in segments:
-                    start_time = self._format_timestamp(segment.get("start", 0))
-                    text = segment.get("text", "").strip()
-                    if text:
-                        transcript_content += f"[{start_time}] {text}\n\n"
             else:
-                # Use plain transcript text
+                # Use plain transcript text as final fallback
                 transcript_content = transcript.transcript_text
 
             # Generate markdown content
-            markdown_content = """---
-{yaml.dump(frontmatter, default_flow_style=False)}---
+            yaml_frontmatter = yaml.dump(frontmatter, default_flow_style=False)
 
+            # Add Obsidian hashtags from database tags
+            hashtags_section = ""
+            if video.tags_json:
+                from ..utils.obsidian_tags import yaml_tags_to_obsidian_hashtags
+
+                hashtags = yaml_tags_to_obsidian_hashtags(video.tags_json)
+                if hashtags:
+                    hashtags_section = f"\n{' '.join(sorted(hashtags))}\n"
+
+            markdown_content = f"""---
+{yaml_frontmatter}---
+{hashtags_section}
 # {video.title}
 
 **Video URL:** [{video.url}]({video.url})
@@ -513,9 +612,11 @@ class FileGenerationService:
         tier_b_claims = [c for c in claims if c.get("tier") == "B"]
         tier_c_claims = [c for c in claims if c.get("tier") == "C"]
 
-        # Generate markdown content
-        markdown_content = """---
-{yaml.dump(frontmatter, default_flow_style=False)}---
+        # Generate markdown content with proper YAML frontmatter
+        yaml_frontmatter = yaml.dump(frontmatter, default_flow_style=False)
+
+        markdown_content = f"""---
+{yaml_frontmatter}---
 
 # Claim Analysis: {video.title}
 
@@ -631,6 +732,13 @@ class FileGenerationService:
         # Generate Obsidian tags from concepts and claim types
         obsidian_tags = set()
 
+        # Add tags from database (converted to hashtag format)
+        if video.tags_json:
+            from ..utils.obsidian_tags import yaml_tags_to_obsidian_hashtags
+
+            db_hashtags = yaml_tags_to_obsidian_hashtags(video.tags_json)
+            obsidian_tags.update(db_hashtags)
+
         # Add video-related tags
         obsidian_tags.add(f"#video/{video.video_id}")
         obsidian_tags.add("#claim-analysis")
@@ -657,9 +765,10 @@ class FileGenerationService:
             obsidian_tags.add("#relations")
 
         # Output tags
-        for tag in sorted(obsidian_tags):
-            markdown_content += f"{tag} "
-        markdown_content += "\n\n"
+        if obsidian_tags:
+            # Format tags in a clean line
+            markdown_content += " ".join(sorted(obsidian_tags))
+            markdown_content += "\n\n"
 
         # Add Obsidian-style wikilinks for people
         if people:
@@ -671,7 +780,7 @@ class FileGenerationService:
                     markdown_content += f"- [[{name}]]\n"
             markdown_content += "\n"
 
-        markdown_content += """---
+        markdown_content += f"""---
 *Generated from Knowledge System database on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
 *Processed using HCE (Hybrid Claim Extractor) v2.0*
 """

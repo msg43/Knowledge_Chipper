@@ -68,6 +68,7 @@ class SpeakerAttributionTab(QWidget):
 
         self.setup_ui()
         self.load_known_speakers()
+        self.load_channel_mappings()
         # Auto-build queue of transcripts needing confirmation and load first
         try:
             self.build_unconfirmed_queue()
@@ -292,6 +293,74 @@ class SpeakerAttributionTab(QWidget):
         known_layout.addWidget(self.known_speakers_listbox)
 
         layout.addWidget(known_group)
+
+        # Channel mappings management
+        channel_group = QGroupBox("Channel-to-Host Mappings")
+        channel_layout = QVBoxLayout(channel_group)
+
+        # Info label
+        info_label = QLabel(
+            "Manage persistent channel-to-host mappings (e.g., 'Eurodollar University' → 'Jeff Snider')"
+        )
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #666; font-size: 10pt; padding: 5px;")
+        channel_layout.addWidget(info_label)
+
+        # Channel mappings list
+        self.channel_mappings_tree = QTreeWidget()
+        self.channel_mappings_tree.setHeaderLabels(
+            ["Channel", "Host", "Uses", "Updated"]
+        )
+        self.channel_mappings_tree.setRootIsDecorated(False)
+        self.channel_mappings_tree.setSelectionMode(
+            QTreeWidget.SelectionMode.SingleSelection
+        )
+        self.channel_mappings_tree.itemSelectionChanged.connect(
+            self.on_channel_mapping_select
+        )
+        channel_layout.addWidget(self.channel_mappings_tree)
+
+        # Controls for channel mappings
+        controls_layout = QHBoxLayout()
+
+        # Add new mapping
+        add_layout = QVBoxLayout()
+        add_layout.addWidget(QLabel("Add/Edit Mapping:"))
+
+        add_form_layout = QHBoxLayout()
+        self.channel_name_edit = QLineEdit()
+        self.channel_name_edit.setPlaceholderText("Channel name...")
+        add_form_layout.addWidget(self.channel_name_edit)
+
+        self.host_name_edit = QLineEdit()
+        self.host_name_edit.setPlaceholderText("Host name...")
+        add_form_layout.addWidget(self.host_name_edit)
+
+        add_layout.addLayout(add_form_layout)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+        self.save_mapping_btn = QPushButton("Save")
+        self.save_mapping_btn.clicked.connect(self.save_channel_mapping)
+        self.save_mapping_btn.setToolTip("Add new mapping or update selected mapping")
+        button_layout.addWidget(self.save_mapping_btn)
+
+        self.delete_mapping_btn = QPushButton("Delete")
+        self.delete_mapping_btn.clicked.connect(self.delete_channel_mapping)
+        self.delete_mapping_btn.setToolTip("Delete selected mapping")
+        self.delete_mapping_btn.setEnabled(False)
+        button_layout.addWidget(self.delete_mapping_btn)
+
+        self.refresh_mappings_btn = QPushButton("Refresh")
+        self.refresh_mappings_btn.clicked.connect(self.load_channel_mappings)
+        self.refresh_mappings_btn.setToolTip("Reload mappings from database")
+        button_layout.addWidget(self.refresh_mappings_btn)
+
+        add_layout.addLayout(button_layout)
+        controls_layout.addLayout(add_layout)
+
+        channel_layout.addLayout(controls_layout)
+        layout.addWidget(channel_group)
 
         return widget
 
@@ -1041,3 +1110,171 @@ class SpeakerAttributionTab(QWidget):
         """Update the status bar."""
         self.status_label.setText(message)
         self.status_update.emit(message)
+
+    # Channel Mapping Management Methods
+
+    def load_channel_mappings(self):
+        """Load channel-to-host mappings from database."""
+        try:
+            self.channel_mappings_tree.clear()
+            mappings = self.db_speakers.get_all_channel_mappings()
+
+            for mapping in mappings:
+                item = QTreeWidgetItem(
+                    [
+                        mapping.channel_name,
+                        mapping.host_name,
+                        str(mapping.use_count),
+                        mapping.updated_at.strftime("%Y-%m-%d %H:%M")
+                        if mapping.updated_at
+                        else "",
+                    ]
+                )
+                # Store the full mapping object for reference
+                item.setData(0, Qt.ItemDataRole.UserRole, mapping)
+                self.channel_mappings_tree.addTopLevelItem(item)
+
+            # Resize columns to content
+            for i in range(self.channel_mappings_tree.columnCount()):
+                self.channel_mappings_tree.resizeColumnToContents(i)
+
+            logger.info(f"Loaded {len(mappings)} channel mappings")
+
+        except Exception as e:
+            logger.error(f"Error loading channel mappings: {e}")
+            QMessageBox.warning(
+                self, "Error", f"Failed to load channel mappings: {str(e)}"
+            )
+
+    def on_channel_mapping_select(self):
+        """Handle selection of a channel mapping."""
+        try:
+            selected_items = self.channel_mappings_tree.selectedItems()
+            if selected_items:
+                item = selected_items[0]
+                mapping = item.data(0, Qt.ItemDataRole.UserRole)
+                if mapping:
+                    # Populate edit fields with selected mapping
+                    self.channel_name_edit.setText(mapping.channel_name)
+                    self.host_name_edit.setText(mapping.host_name)
+                    self.delete_mapping_btn.setEnabled(True)
+                else:
+                    self.delete_mapping_btn.setEnabled(False)
+            else:
+                self.delete_mapping_btn.setEnabled(False)
+
+        except Exception as e:
+            logger.error(f"Error handling channel mapping selection: {e}")
+
+    def save_channel_mapping(self):
+        """Save or update a channel-to-host mapping."""
+        try:
+            channel_name = self.channel_name_edit.text().strip()
+            host_name = self.host_name_edit.text().strip()
+
+            if not channel_name or not host_name:
+                QMessageBox.warning(
+                    self, "Input Error", "Please enter both channel name and host name."
+                )
+                return
+
+            # Check if this is an update or new entry
+            selected_items = self.channel_mappings_tree.selectedItems()
+            if selected_items:
+                item = selected_items[0]
+                mapping = item.data(0, Qt.ItemDataRole.UserRole)
+                if mapping and mapping.channel_name == channel_name:
+                    # Updating existing mapping
+                    action = "updated"
+                else:
+                    # Creating new mapping (channel name changed)
+                    action = "created"
+            else:
+                action = "created"
+
+            success = self.db_speakers.create_or_update_channel_mapping(
+                channel_name=channel_name,
+                host_name=host_name,
+                created_by="manual_gui_edit",
+                confidence=1.0,
+            )
+
+            if success:
+                QMessageBox.information(
+                    self, "Success", f"Mapping {action} successfully!"
+                )
+                # Clear the form
+                self.channel_name_edit.clear()
+                self.host_name_edit.clear()
+                # Reload the list
+                self.load_channel_mappings()
+                logger.info(
+                    f"Successfully {action} mapping: {channel_name} -> {host_name}"
+                )
+            else:
+                QMessageBox.critical(self, "Error", "Failed to save mapping.")
+
+        except Exception as e:
+            logger.error(f"Error saving channel mapping: {e}")
+            QMessageBox.critical(self, "Error", f"Error saving mapping: {str(e)}")
+
+    def delete_channel_mapping(self):
+        """Delete the selected channel-to-host mapping."""
+        try:
+            selected_items = self.channel_mappings_tree.selectedItems()
+            if not selected_items:
+                QMessageBox.warning(
+                    self, "Selection Error", "Please select a mapping to delete."
+                )
+                return
+
+            item = selected_items[0]
+            mapping = item.data(0, Qt.ItemDataRole.UserRole)
+            if not mapping:
+                QMessageBox.warning(self, "Error", "Could not find mapping data.")
+                return
+
+            # Confirm deletion
+            reply = QMessageBox.question(
+                self,
+                "Confirm Deletion",
+                f"Are you sure you want to delete the mapping:\n\n"
+                f"'{mapping.channel_name}' → '{mapping.host_name}'\n\n"
+                f"This mapping has been used {mapping.use_count} times.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+
+            if reply == QMessageBox.StandardButton.Yes:
+                # Delete from database
+                with self.db_speakers.get_session() as session:
+                    from ...database.speaker_models import ChannelHostMapping
+
+                    mapping_to_delete = (
+                        session.query(ChannelHostMapping)
+                        .filter_by(channel_name=mapping.channel_name)
+                        .first()
+                    )
+                    if mapping_to_delete:
+                        session.delete(mapping_to_delete)
+                        session.commit()
+
+                        QMessageBox.information(
+                            self, "Success", "Mapping deleted successfully!"
+                        )
+                        # Clear the form
+                        self.channel_name_edit.clear()
+                        self.host_name_edit.clear()
+                        # Reload the list
+                        self.load_channel_mappings()
+                        logger.info(
+                            f"Successfully deleted mapping: {mapping.channel_name}"
+                        )
+                    else:
+                        QMessageBox.warning(
+                            self, "Error", "Mapping not found in database."
+                        )
+
+        except Exception as e:
+            logger.error(f"Error deleting channel mapping: {e}")
+            QMessageBox.critical(self, "Error", f"Error deleting mapping: {str(e)}")

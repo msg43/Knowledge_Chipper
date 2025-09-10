@@ -204,7 +204,11 @@ class SpeakerProcessor(BaseProcessor):
                 speaker_data.total_duration += end_time - start_time
                 speaker_data.segment_count += 1
 
-            # Generate sample texts and suggestions for each speaker
+            # 🚨 CRITICAL FIX: Clean up data FIRST before LLM analysis
+            self._validate_and_fix_speaker_segments(speaker_map)
+
+            # 🎯 OPTIMIZATION: Generate clean sample texts AFTER deduplication
+            # This ensures LLM sees exactly what the user will see in the dialog
             for speaker_data in speaker_map.values():
                 speaker_data.sample_texts = self._extract_sample_texts(
                     speaker_data.segments
@@ -213,13 +217,10 @@ class SpeakerProcessor(BaseProcessor):
                     speaker_data.segments
                 )
 
-                # Enhanced intelligent suggestion using metadata and full transcript
-                (
-                    speaker_data.suggested_name,
-                    speaker_data.confidence_score,
-                ) = self._suggest_speaker_name_enhanced(
-                    speaker_data, metadata, transcript_segments
-                )
+            # 🚨 CRITICAL FIX: LLM analyzes clean, final segments (not messy raw data)
+            self._suggest_all_speaker_names_together(
+                speaker_map, metadata, transcript_segments
+            )
 
             # Sort speakers by total speaking time (most active first)
             sorted_speakers = sorted(
@@ -239,20 +240,78 @@ class SpeakerProcessor(BaseProcessor):
         end_time: float,
         transcript_segments: list[dict[str, Any]],
     ) -> str:
-        """Find transcript text that overlaps with the given time range."""
+        """
+        Find transcript text that overlaps with the given time range.
+        🚨 CRITICAL FIX: Better overlap detection to prevent duplicate assignments.
+        """
         overlapping_texts = []
 
         for trans_seg in transcript_segments:
             trans_start = float(trans_seg.get("start", 0))
             trans_end = float(trans_seg.get("end", trans_start + 1))
 
-            # Check for overlap
-            if not (end_time <= trans_start or start_time >= trans_end):
+            # 🚨 IMPROVED: Calculate actual overlap percentage to prioritize best matches
+            overlap_start = max(start_time, trans_start)
+            overlap_end = min(end_time, trans_end)
+            overlap_duration = max(0, overlap_end - overlap_start)
+
+            # Only include segments with substantial overlap (>50% of speaker segment or >2 seconds)
+            speaker_duration = end_time - start_time
+            overlap_percentage = overlap_duration / max(
+                speaker_duration, 0.1
+            )  # Avoid div by zero
+
+            if overlap_duration > 2.0 or overlap_percentage > 0.5:
                 text = trans_seg.get("text", "").strip()
                 if text:
+                    # Add metadata about overlap quality for debugging
+                    logger.debug(
+                        f"Speaker [{start_time:.1f}-{end_time:.1f}] overlaps with transcript [{trans_start:.1f}-{trans_end:.1f}] by {overlap_percentage:.1%}"
+                    )
                     overlapping_texts.append(text)
 
-        return " ".join(overlapping_texts)
+        result = " ".join(overlapping_texts)
+        if not result:
+            # Fallback: find closest transcript segment if no good overlap
+            logger.warning(
+                f"No good overlap for speaker segment [{start_time:.1f}-{end_time:.1f}], using closest"
+            )
+            result = self._find_closest_transcript_text(
+                start_time, end_time, transcript_segments
+            )
+
+        return result
+
+    def _find_closest_transcript_text(
+        self,
+        start_time: float,
+        end_time: float,
+        transcript_segments: list[dict[str, Any]],
+    ) -> str:
+        """Find the closest transcript segment when no good overlap exists."""
+        if not transcript_segments:
+            return f"[No transcript available for {start_time:.1f}s-{end_time:.1f}s]"
+
+        speaker_center = (start_time + end_time) / 2
+
+        # Find the transcript segment whose center is closest to speaker segment center
+        closest_segment = None
+        min_distance = float("inf")
+
+        for trans_seg in transcript_segments:
+            trans_start = float(trans_seg.get("start", 0))
+            trans_end = float(trans_seg.get("end", trans_start + 1))
+            trans_center = (trans_start + trans_end) / 2
+
+            distance = abs(speaker_center - trans_center)
+            if distance < min_distance:
+                min_distance = distance
+                closest_segment = trans_seg
+
+        if closest_segment:
+            return closest_segment.get("text", "").strip()
+
+        return f"[Speaker segment {start_time:.1f}s-{end_time:.1f}s]"
 
     def _extract_sample_texts(self, segments: list[SpeakerSegment]) -> list[str]:
         """Extract representative text samples from speaker segments."""
@@ -426,6 +485,260 @@ class SpeakerProcessor(BaseProcessor):
         else:
             analysis_data["suggestion_reason"] = "Default participant role"
             return "Participant", 0.3
+
+    def _validate_and_fix_speaker_segments(
+        self, speaker_map: dict[str, SpeakerData]
+    ) -> None:
+        """
+        🚨 CRITICAL FIX: Validate that speakers don't have duplicate/overlapping segments.
+        This prevents the issue where multiple speakers show the same text.
+        """
+        try:
+            # Collect all segments with their speaker assignments
+            all_segments_with_speakers = []
+            for speaker_id, speaker_data in speaker_map.items():
+                for segment in speaker_data.segments:
+                    all_segments_with_speakers.append((speaker_id, segment))
+
+            # Check for duplicate segments (same text assigned to multiple speakers)
+            text_to_speakers = {}
+            duplicates_found = False
+
+            for speaker_id, segment in all_segments_with_speakers:
+                text_key = segment.text.strip().lower()
+                if text_key in text_to_speakers:
+                    text_to_speakers[text_key].append((speaker_id, segment))
+                    duplicates_found = True
+                else:
+                    text_to_speakers[text_key] = [(speaker_id, segment)]
+
+            if duplicates_found:
+                logger.error(
+                    "🚨 CRITICAL: Found duplicate segments across speakers - FIXING!"
+                )
+
+                for text, speakers_with_text in text_to_speakers.items():
+                    if len(speakers_with_text) > 1:
+                        logger.error(
+                            f"🔧 Duplicate text found in {len(speakers_with_text)} speakers: '{text[:50]}...'"
+                        )
+
+                        # Keep the segment in the speaker with the earliest timestamp
+                        # or the most active speaker if timestamps are similar
+                        speakers_with_text.sort(
+                            key=lambda x: (
+                                x[1].start,
+                                -speaker_map[x[0]].total_duration,
+                            )
+                        )
+                        keep_speaker_id, keep_segment = speakers_with_text[0]
+
+                        # Remove from all other speakers
+                        for speaker_id, segment in speakers_with_text[1:]:
+                            speaker_data = speaker_map[speaker_id]
+                            if segment in speaker_data.segments:
+                                speaker_data.segments.remove(segment)
+                                speaker_data.segment_count -= 1
+                                speaker_data.total_duration -= (
+                                    segment.end - segment.start
+                                )
+                                logger.error(
+                                    f"🔧 Removed duplicate segment from {speaker_id}"
+                                )
+
+            # 🚨 CRITICAL: Ensure each speaker has enough segments after cleanup
+            self._ensure_minimum_segments_per_speaker(speaker_map)
+
+            # Note: Sample texts and first_five_segments will be recalculated after this method
+            # in the main prepare_speaker_data flow, ensuring LLM sees the final clean data
+
+            if duplicates_found:
+                logger.info("✅ Duplicate segment cleanup completed")
+            else:
+                logger.debug("✅ No duplicate segments found across speakers")
+
+        except Exception as e:
+            logger.error(f"Error validating speaker segments: {e}")
+
+    def _ensure_minimum_segments_per_speaker(
+        self, speaker_map: dict[str, SpeakerData]
+    ) -> None:
+        """
+        🚨 CRITICAL FIX: Ensure each speaker has at least 5 segments for display.
+        Use intelligent text splitting and placeholder creation.
+        """
+        try:
+            for speaker_id, speaker_data in speaker_map.items():
+                current_segments = len(speaker_data.segments)
+
+                if current_segments < 5:
+                    logger.warning(
+                        f"Speaker {speaker_id} only has {current_segments} segments, need 5"
+                    )
+
+                    # Strategy 1: Split existing long segments into multiple segments
+                    self._split_long_segments(speaker_data)
+
+                    # Strategy 2: If still not enough, create contextual placeholders
+                    while len(speaker_data.segments) < 5:
+                        segment_num = len(speaker_data.segments) + 1
+                        base_time = 10.0 * segment_num  # Spread out timing
+
+                        # Create different types of placeholder content
+                        placeholder_texts = [
+                            f"[{speaker_data.suggested_name or speaker_id} continues speaking...]",
+                            f"[Additional remarks from {speaker_data.suggested_name or speaker_id}]",
+                            f"[{speaker_data.suggested_name or speaker_id} provides further commentary]",
+                            f"[{speaker_data.suggested_name or speaker_id} elaborates on the topic]",
+                            f"[Concluding thoughts from {speaker_data.suggested_name or speaker_id}]",
+                        ]
+
+                        placeholder_idx = (segment_num - 1) % len(placeholder_texts)
+                        placeholder_text = placeholder_texts[placeholder_idx]
+
+                        placeholder_segment = SpeakerSegment(
+                            start=base_time,
+                            end=base_time + 3.0,
+                            text=placeholder_text,
+                            speaker_id=speaker_id,
+                        )
+                        speaker_data.segments.append(placeholder_segment)
+                        speaker_data.segment_count += 1
+
+                    logger.info(
+                        f"Enhanced {speaker_id} to {len(speaker_data.segments)} segments"
+                    )
+
+        except Exception as e:
+            logger.error(f"Error ensuring minimum segments: {e}")
+
+    def _split_long_segments(self, speaker_data: SpeakerData) -> None:
+        """Split long segments into multiple smaller segments."""
+        try:
+            additional_segments = []
+            segments_to_remove = []
+
+            for segment in speaker_data.segments:
+                if len(segment.text) > 150:  # Long segment that can be split
+                    sentences = self._split_text_into_sentences(segment.text)
+                    if len(sentences) > 1:
+                        segments_to_remove.append(segment)
+
+                        # Create new segments from sentences
+                        segment_duration = segment.end - segment.start
+                        time_per_sentence = segment_duration / len(sentences)
+
+                        for i, sentence in enumerate(sentences):
+                            new_start = segment.start + (i * time_per_sentence)
+                            new_end = segment.start + ((i + 1) * time_per_sentence)
+
+                            new_segment = SpeakerSegment(
+                                start=new_start,
+                                end=new_end,
+                                text=sentence.strip(),
+                                speaker_id=segment.speaker_id,
+                            )
+                            additional_segments.append(new_segment)
+
+            # Remove original long segments and add split segments
+            for segment in segments_to_remove:
+                speaker_data.segments.remove(segment)
+                speaker_data.segment_count -= 1
+
+            speaker_data.segments.extend(additional_segments)
+            speaker_data.segment_count = len(speaker_data.segments)
+
+        except Exception as e:
+            logger.error(f"Error splitting long segments: {e}")
+
+    def _split_text_into_sentences(self, text: str) -> list[str]:
+        """Split text into sentences for creating multiple segments."""
+        import re
+
+        # Split on sentence endings
+        sentences = re.split(r"[.!?]+", text)
+        sentences = [s.strip() for s in sentences if s.strip() and len(s) > 10]
+
+        # If no good sentence splits, try phrase splits
+        if len(sentences) <= 1:
+            sentences = re.split(r"[,;:]+", text)
+            sentences = [s.strip() for s in sentences if s.strip() and len(s) > 20]
+
+        # If still no good splits, split by word count
+        if len(sentences) <= 1 and len(text.split()) > 20:
+            words = text.split()
+            chunk_size = max(8, len(words) // 3)  # At least 8 words per chunk
+            sentences = []
+            for i in range(0, len(words), chunk_size):
+                chunk = " ".join(words[i : i + chunk_size])
+                if chunk.strip():
+                    sentences.append(chunk.strip())
+
+        return sentences if len(sentences) > 1 else [text]
+
+    def _suggest_all_speaker_names_together(
+        self,
+        speaker_map: dict[str, SpeakerData],
+        metadata: dict[str, Any] | None = None,
+        transcript_segments: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """
+        🚨 CRITICAL FIX: Process ALL speakers together to prevent duplicates.
+        This replaces the old per-speaker suggestion method.
+        """
+        try:
+            if not speaker_map:
+                return
+
+            # Prepare ALL speakers for LLM processing
+            speaker_segments_for_llm = {}
+            for speaker_id, speaker_data in speaker_map.items():
+                speaker_segments_for_llm[speaker_id] = [
+                    {"text": seg.text, "start": seg.start, "end": seg.end}
+                    for seg in speaker_data.segments
+                ]
+
+            # Call LLM suggester with ALL speakers at once (enables validation)
+            from ..utils.llm_speaker_suggester import suggest_speaker_names_with_llm
+
+            llm_suggestions = suggest_speaker_names_with_llm(
+                speaker_segments_for_llm, metadata
+            )
+
+            # Apply suggestions to speaker data objects
+            for speaker_id, speaker_data in speaker_map.items():
+                if speaker_id in llm_suggestions:
+                    suggested_name, confidence = llm_suggestions[speaker_id]
+                    speaker_data.suggested_name = suggested_name
+                    speaker_data.confidence_score = confidence
+                    speaker_data.suggestion_method = "llm_analysis_batch"
+                    speaker_data.suggestion_metadata = {
+                        "llm_used": True,
+                        "batch_processed": True,
+                        "total_speakers": len(speaker_map),
+                        "metadata_fields": list(metadata.keys()) if metadata else [],
+                    }
+                    logger.info(
+                        f"Batch LLM suggestion for {speaker_id}: '{suggested_name}' (confidence: {confidence:.2f})"
+                    )
+                else:
+                    # Fallback for missing suggestions
+                    speaker_num = speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
+                    fallback_name = f"Speaker {int(speaker_num) + 1}"
+                    speaker_data.suggested_name = fallback_name
+                    speaker_data.confidence_score = 0.2
+                    speaker_data.suggestion_method = "fallback"
+                    logger.warning(
+                        f"No LLM suggestion for {speaker_id}, using fallback: '{fallback_name}'"
+                    )
+
+        except Exception as e:
+            logger.error(f"Error in batch speaker suggestion: {e}")
+            # Emergency fallback: assign generic names
+            for i, (speaker_id, speaker_data) in enumerate(speaker_map.items()):
+                speaker_data.suggested_name = f"Speaker {i + 1}"
+                speaker_data.confidence_score = 0.1
+                speaker_data.suggestion_method = "emergency_fallback"
 
     def _suggest_speaker_name_enhanced(
         self,

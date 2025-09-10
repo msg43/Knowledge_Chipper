@@ -1,4 +1,7 @@
+import os
+import subprocess
 import warnings
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -68,26 +71,48 @@ class SpeakerDiarizationProcessor(BaseProcessor):
         model: str = "pyannote/speaker-diarization-3.1",
         device: str | None = None,
         hf_token: str | None = None,
-        progress_callback: callable = None,
+        progress_callback: Callable[[str, int], None] | None = None,
+        sensitivity: str = "conservative",
     ) -> None:
         self.model = model
+
+        # Allow MPS to be used - we'll identify and fix specific failures
         self.device = device or self._detect_best_device()
+
         self.hf_token = hf_token
         self.progress_callback = progress_callback
+        self.sensitivity = sensitivity
         self._pipeline = None
         self._dependencies_checked = False
+        self._mps_operations_status = {}  # Track which operations work on MPS
+
+        logger.info(
+            f"Diarization processor initialized with device: {self.device}, sensitivity: {sensitivity}"
+        )
+
+        # Set no-fallback mode for MPS to catch issues early
+        if self.device == "mps":
+            import os
+
+            os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "0"
+            logger.info(
+                "MPS no-fallback mode enabled - will fail fast on unsupported operations"
+            )
+
+        # Track which operations need CPU fallback
+        self._cpu_fallback_ops = set()  # Will be populated as we discover failing ops
 
     def _detect_best_device(self) -> str:
         """Detect the best available device for diarization."""
         try:
             import torch
 
-            if torch.backends.mps.is_available() and torch.backends.mps.is_built():
-                logger.info("Apple Silicon MPS detected for diarization")
-                return "mps"
-            elif torch.cuda.is_available():
+            if torch.cuda.is_available():
                 logger.info("CUDA detected for diarization")
                 return "cuda"
+            elif torch.backends.mps.is_available() and torch.backends.mps.is_built():
+                logger.info("Apple Silicon MPS detected for diarization")
+                return "mps"  # Use MPS - we'll handle specific failures
             else:
                 logger.info("No GPU acceleration available, using CPU for diarization")
                 return "cpu"
@@ -112,6 +137,18 @@ class SpeakerDiarizationProcessor(BaseProcessor):
 
     def _load_pipeline(self) -> None:
         """Lazy load the diarization pipeline."""
+        import sys
+
+        print(
+            f"\n[DIARIZATION DEBUG] _load_pipeline called, device={self.device}",
+            flush=True,
+        )
+        print(
+            f"[DIARIZATION DEBUG] Pipeline status: {self._pipeline is not None}",
+            flush=True,
+        )
+        sys.stdout.flush()
+
         if not self._check_dependencies():
             raise ImportError(
                 "Diarization dependencies not available. "
@@ -119,21 +156,96 @@ class SpeakerDiarizationProcessor(BaseProcessor):
             )
 
         if self._pipeline is None:
-            if self.progress_callback:
-                self.progress_callback(
-                    "Loading diarization model (this may take a moment)...", 20
-                )
+            print(
+                "[DIARIZATION DEBUG] Pipeline is None, starting load process...",
+                flush=True,
+            )
+            sys.stdout.flush()
+            import os
 
-            # Use cached model loading
-            def pipeline_loader():
-                logger.info(f"Loading pyannote.audio pipeline: {self.model}")
+            # Check for bundled model first (in DMG distributions for internal use)
+            bundled_model_path = None
+            if os.environ.get("PYANNOTE_BUNDLED") == "true":
+                bundled_base = os.environ.get("PYANNOTE_MODEL_PATH")
+                if bundled_base:
+                    bundled_model_path = Path(bundled_base) / "speaker-diarization-3.1"
+                    if bundled_model_path.exists():
+                        logger.info(
+                            f"Found bundled diarization model at: {bundled_model_path}"
+                        )
+                        if self.progress_callback:
+                            self.progress_callback(
+                                "Loading bundled diarization model...", 20
+                            )
+
+            # If no bundled model, check both HuggingFace and pyannote caches
+            cached_models = []
+            if not bundled_model_path or not bundled_model_path.exists():
+                # Check both possible cache locations
+                hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+                pyannote_cache = Path.home() / ".cache" / "torch" / "pyannote"
+                model_id = self.model.replace("/", "--")
+
+                # Check HuggingFace cache first
+                if hf_cache.exists():
+                    cached_models = list(hf_cache.glob(f"models--{model_id}*"))
+
+                # Also check pyannote torch cache (where it actually stores models)
+                if not cached_models and pyannote_cache.exists():
+                    cached_models = list(pyannote_cache.glob(f"models--{model_id}*"))
+
+            if cached_models:
+                logger.info(f"Found cached diarization model: {self.model}")
                 if self.progress_callback:
-                    self.progress_callback(f"Downloading/loading {self.model}...", 40)
+                    self.progress_callback("Loading cached diarization model...", 20)
+                # Force offline mode to prevent network checks
+                os.environ["HF_HUB_OFFLINE"] = "1"
+                logger.info("Enabled offline mode for cached model loading")
+            else:
+                logger.warning(
+                    f"Diarization model {self.model} not cached. "
+                    "First run will download ~400MB from HuggingFace. "
+                    "This may take several minutes depending on connection speed."
+                )
+                if self.progress_callback:
+                    self.progress_callback(
+                        "⏬ Downloading diarization model (first time only, ~400MB)...",
+                        20,
+                    )
+
+            # Use cached model loading with timeout
+            def pipeline_loader():
+                logger.info("Pipeline loader started...")
+
+                # Save original offline mode state
+                original_offline = os.environ.get("HF_HUB_OFFLINE", "0")
+
+                # If we have a bundled model, use it directly
+                if bundled_model_path and bundled_model_path.exists():
+                    try:
+                        logger.info(f"Loading bundled model from: {bundled_model_path}")
+                        # Load from bundled path without authentication
+                        if PIPELINE:
+                            pipeline = PIPELINE.from_pretrained(
+                                str(bundled_model_path), use_auth_token=None
+                            )
+                            logger.info("Bundled model loaded successfully")
+                            return pipeline
+                        else:
+                            raise ImportError("PIPELINE not available")
+                    except Exception as e:
+                        logger.warning(f"Failed to load bundled model: {e}")
+                        # Fall back to normal loading
+
+                logger.info(f"Loading pyannote.audio pipeline: {self.model}")
+                if self.progress_callback and not cached_models:
+                    self.progress_callback(
+                        f"⏬ Downloading {self.model} from HuggingFace (this may take a while)...",
+                        40,
+                    )
 
                 # Set HuggingFace token as environment variable for better compatibility
                 # This works around authentication issues in pyannote.audio 3.x
-                import os
-
                 if self.hf_token:
                     os.environ["HF_TOKEN"] = self.hf_token
                     os.environ["HUGGINGFACE_HUB_TOKEN"] = self.hf_token
@@ -141,9 +253,90 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                         "Set HuggingFace environment variables for authentication"
                     )
 
-                pipeline = PIPELINE.from_pretrained(
-                    self.model, use_auth_token=self.hf_token
-                )
+                try:
+                    if PIPELINE:
+                        # Set comprehensive offline mode for cached models
+                        if cached_models:
+                            logger.info(
+                                "Model is cached, setting comprehensive offline mode"
+                            )
+                            os.environ["HF_HUB_OFFLINE"] = "1"
+                            os.environ["TRANSFORMERS_OFFLINE"] = "1"
+                            os.environ["HF_DATASETS_OFFLINE"] = "1"
+                        else:
+                            logger.info("Model not cached, will download if needed")
+
+                        logger.info(
+                            f"Calling PIPELINE.from_pretrained for {self.model}..."
+                        )
+                        # Note: pyannote Pipeline doesn't support local_files_only parameter
+                        pipeline = PIPELINE.from_pretrained(
+                            self.model, use_auth_token=self.hf_token
+                        )
+
+                        # Optimize clustering for CPU/MPS performance
+                        if self.device in ["cpu", "mps"]:
+                            logger.info(
+                                f"Optimizing diarization parameters for {self.device} with {self.sensitivity} sensitivity..."
+                            )
+                            # Use centroid clustering - works on both CPU and MPS
+                            # Avoid spectral clustering which fails on MPS due to eigenvalue decomposition
+                            if hasattr(pipeline, "clustering"):
+                                pipeline.clustering.method = (
+                                    "centroid"  # Works on MPS, faster than spectral
+                                )
+
+                                # Configure clustering based on sensitivity level
+                                if self.sensitivity == "aggressive":
+                                    pipeline.clustering.min_cluster_size = 10
+                                    threshold = 0.6  # Lower threshold = more speakers
+                                    min_duration_on = 0.3
+                                elif self.sensitivity == "balanced":
+                                    pipeline.clustering.min_cluster_size = 15
+                                    threshold = 0.7
+                                    min_duration_on = 0.5
+                                else:  # conservative
+                                    pipeline.clustering.min_cluster_size = (
+                                        25  # Increased for single-speaker bias
+                                    )
+                                    threshold = 0.85  # Much higher threshold = strongly prefer fewer speakers
+                                    min_duration_on = 1.5  # Longer minimum segments
+
+                                # Apply threshold if supported
+                                if hasattr(pipeline.clustering, "threshold"):
+                                    pipeline.clustering.threshold = threshold
+
+                                logger.info(
+                                    f"Applied {self.sensitivity} clustering: min_cluster_size={pipeline.clustering.min_cluster_size}, threshold={threshold}"
+                                )
+
+                            if hasattr(pipeline, "segmentation"):
+                                pipeline.segmentation.min_duration_on = min_duration_on
+                                pipeline.segmentation.min_duration_off = (
+                                    0.5  # Minimum silence between speakers
+                                )
+                        logger.info("PIPELINE.from_pretrained completed successfully")
+                    else:
+                        raise ImportError("PIPELINE not available")
+                except Exception as e:
+                    # Provide more helpful error message
+                    if "401" in str(e) or "authorization" in str(e).lower():
+                        raise RuntimeError(
+                            f"HuggingFace authentication failed for {self.model}. "
+                            "Please check:\n"
+                            "1. Your HuggingFace token is set in settings\n"
+                            "2. You have accepted the model license at https://huggingface.co/pyannote/speaker-diarization\n"
+                            "3. Your token has 'read' permissions"
+                        )
+                    else:
+                        raise
+                finally:
+                    # Restore original offline mode after model loading attempt
+                    if cached_models and original_offline == "0":
+                        logger.info("Restoring original offline mode settings")
+                        os.environ.pop("HF_HUB_OFFLINE", None)
+                        os.environ.pop("TRANSFORMERS_OFFLINE", None)
+                        os.environ.pop("HF_DATASETS_OFFLINE", None)
 
                 # Check if pipeline loaded successfully
                 if pipeline is None:
@@ -162,24 +355,109 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                     )
 
                 # Move pipeline to GPU if available
+                logger.info(f"Pipeline loaded, current device setting: {self.device}")
+
+                # Skip GPU logic entirely if we're using CPU
+                if self.device == "cpu":
+                    logger.info("Using CPU for diarization, skipping GPU transfer")
+                    return pipeline
+
                 if self.device and self.device != "cpu":
                     try:
+                        import sys
+
                         import torch
 
-                        logger.info(
-                            f"Moving diarization pipeline to device: {self.device}"
-                        )
-                        if self.progress_callback:
-                            self.progress_callback(
-                                f"Moving model to {self.device}...", 80
-                            )
+                        logger.info(f"Checking if {self.device} is available...")
 
-                        # Convert device string to torch.device object
-                        torch_device = torch.device(self.device)
-                        pipeline = pipeline.to(torch_device)
-                        logger.info(
-                            f"Diarization pipeline successfully moved to {self.device}"
-                        )
+                        # Check if requested device is available
+                        if (
+                            self.device.startswith("cuda")
+                            and not torch.cuda.is_available()
+                        ):
+                            logger.warning(
+                                "CUDA requested but not available. Using CPU instead."
+                            )
+                            self.device = "cpu"
+                        elif (
+                            self.device == "mps"
+                            and not torch.backends.mps.is_available()
+                        ):
+                            logger.warning(
+                                "MPS (Apple Silicon) requested but not available. Using CPU instead."
+                            )
+                            self.device = "cpu"
+
+                        # Only try to move if we still have a non-CPU device
+                        if self.device != "cpu":
+                            logger.info(
+                                f"Moving diarization pipeline to device: {self.device}"
+                            )
+                            print(
+                                f"\n[DIARIZATION 80%] About to report 80% progress",
+                                flush=True,
+                            )
+                            sys.stdout.flush()
+
+                            if self.progress_callback:
+                                self.progress_callback(
+                                    f"Moving model to {self.device}...", 80
+                                )
+
+                            print(
+                                f"[DIARIZATION 80%] CRITICAL - Reached 80%, device={self.device}",
+                                flush=True,
+                            )
+                            print(
+                                f"[DIARIZATION 80%] Pipeline type: {type(pipeline)}",
+                                flush=True,
+                            )
+                            print(
+                                f"[DIARIZATION 80%] Device requested: {self.device}",
+                                flush=True,
+                            )
+                            sys.stdout.flush()
+
+                            logger.critical(
+                                f"REACHED 80% - About to move pipeline to {self.device}"
+                            )
+                            logger.critical(f"Pipeline type: {type(pipeline)}")
+                            logger.critical(f"Device requested: {self.device}")
+
+                            # Convert device string to torch.device object
+                            torch_device = torch.device(self.device)
+
+                            # Add timeout for GPU transfer
+                            logger.info("Starting GPU transfer...")
+                            import concurrent.futures
+
+                            def move_to_device():
+                                logger.info(
+                                    f"Inside move_to_device, calling pipeline.to({torch_device})"
+                                )
+                                return pipeline.to(torch_device)
+
+                            with concurrent.futures.ThreadPoolExecutor() as executor:
+                                future = executor.submit(move_to_device)
+                                try:
+                                    pipeline = future.result(
+                                        timeout=30
+                                    )  # 30 second timeout
+                                    logger.info(
+                                        f"Diarization pipeline successfully moved to {self.device}"
+                                    )
+                                except concurrent.futures.TimeoutError:
+                                    logger.error(
+                                        f"GPU transfer timed out after 30 seconds. Falling back to CPU."
+                                    )
+                                    self.device = "cpu"
+                                    # Pipeline stays on CPU
+                                except Exception as e:
+                                    logger.error(
+                                        f"Failed to move model to {self.device}: {e}. Using CPU instead."
+                                    )
+                                    self.device = "cpu"
+                                    # Pipeline stays on CPU
                     except Exception as e:
                         logger.warning(
                             f"Failed to move pipeline to {self.device}, falling back to CPU: {e}"
@@ -191,20 +469,37 @@ class SpeakerDiarizationProcessor(BaseProcessor):
 
                 return pipeline
 
-            # Get cached pipeline
-            self._pipeline = cache_diarization_model(
-                model_name=self.model,
-                device=self.device,
-                loader_func=pipeline_loader,
-                hf_token=self.hf_token,
-            )
+            # Get cached pipeline with timeout
+            import concurrent.futures
+
+            logger.info(f"Submitting pipeline to cache with device={self.device}")
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    cache_diarization_model,
+                    model_name=self.model,
+                    device=self.device,
+                    loader_func=pipeline_loader,
+                    hf_token=self.hf_token,
+                )
+                try:
+                    logger.info("Waiting for pipeline to load (max 2 minutes)...")
+                    # 2 minute timeout for model loading/downloading
+                    self._pipeline = future.result(timeout=120)
+                    logger.info("Pipeline loaded successfully from cache!")
+                except concurrent.futures.TimeoutError:
+                    raise RuntimeError(
+                        "Diarization model loading timed out after 2 minutes. "
+                        "This may be due to slow network connection or large model download. "
+                        "Please check your internet connection and try again."
+                    )
 
             if self.progress_callback:
                 self.progress_callback("Diarization pipeline ready!", 100)
             logger.info("pyannote.audio pipeline ready (cached or newly loaded)")
 
-    def validate_input(self, input_path: str | Path) -> bool:
-        return validate_audio_input(input_path)
+    def validate_input(self, input_data: str | Path) -> bool:
+        return validate_audio_input(input_data)
 
     def can_process(self, input_path: str | Path) -> bool:
         return self.validate_input(input_path)
@@ -216,7 +511,7 @@ class SpeakerDiarizationProcessor(BaseProcessor):
         kwargs.get("device", None)
 
         # Handle input_data as input_path for backwards compatibility
-        input_path = input_data
+        input_path = str(input_data)
 
         # Check dependencies first
         if not self._check_dependencies():
@@ -244,11 +539,23 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                     dry_run=dry_run,
                 )
 
+            # Get file info for better logging context
+            filename = Path(path).name
+            try:
+                file_size_mb = Path(path).stat().st_size / (1024 * 1024)
+                file_info = f"({file_size_mb:.1f}MB)"
+            except:
+                file_info = ""
+
             # Report start of actual diarization processing
             if self.progress_callback:
-                self.progress_callback("🎙️ Analyzing speakers in audio...", 0)
+                self.progress_callback(
+                    f"🎙️ Starting speaker analysis for {filename} {file_info}...", 0
+                )
 
-            logger.info(f"Starting diarization processing for: {path}")
+            logger.info(
+                f"🎭 Starting diarization processing for '{filename}' {file_info}"
+            )
 
             # Create ETA calculator for progress tracking
             import time
@@ -262,8 +569,6 @@ class SpeakerDiarizationProcessor(BaseProcessor):
 
             # Estimate audio duration for better progress tracking
             try:
-                import subprocess
-
                 duration_cmd = [
                     "ffprobe",
                     "-v",
@@ -328,10 +633,16 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                             if eta_text:
                                 eta_str = f", ETA: {eta_text}"
 
-                        self.progress_callback(
-                            f"🎙️ Analyzing speakers - {phase}... ({elapsed:.1f}s elapsed{eta_str})",
-                            int(progress_percent),
-                        )
+                        if self.progress_callback:
+                            # Add file context and more detailed progress info
+                            duration_info = ""
+                            if audio_duration:
+                                duration_info = f" | {audio_duration/60:.1f}min audio"
+
+                            self.progress_callback(
+                                f"🎙️ {filename}: {phase}... ({elapsed:.1f}s elapsed{eta_str}{duration_info})",
+                                int(progress_percent),
+                            )
 
                         # Check for stop event more frequently
                         if stop_event.wait(
@@ -345,7 +656,247 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                 )
                 progress_thread.start()
 
-            diarization = self._pipeline(str(path))
+            # Run pipeline with better error handling
+            try:
+                # Add timeout for pipeline execution to prevent indefinite hangs
+                import concurrent.futures
+
+                print(
+                    f"\n[DIARIZATION EXECUTION] About to run pipeline on: {path}",
+                    flush=True,
+                )
+                print(
+                    f"[DIARIZATION EXECUTION] Pipeline type: {type(self._pipeline)}",
+                    flush=True,
+                )
+                print(f"[DIARIZATION EXECUTION] Device: {self.device}", flush=True)
+
+                # Check if pipeline has device attribute
+                if hasattr(self._pipeline, "device"):
+                    print(
+                        f"[DIARIZATION EXECUTION] Pipeline internal device: {self._pipeline.device}",
+                        flush=True,
+                    )
+                if hasattr(self._pipeline, "_models"):
+                    print(
+                        f"[DIARIZATION EXECUTION] Pipeline has models: {list(self._pipeline._models.keys()) if hasattr(self._pipeline._models, 'keys') else 'unknown'}",
+                        flush=True,
+                    )
+
+                import sys
+
+                sys.stdout.flush()
+
+                # Move pipeline components to target device with debugging
+                if self.device in ["mps", "cuda"]:
+                    try:
+                        print(
+                            f"[DIARIZATION EXECUTION] Setting pipeline components to {self.device}...",
+                            flush=True,
+                        )
+                        import torch
+
+                        target_device = torch.device(self.device)
+
+                        # Track which components successfully move to MPS/CUDA
+                        components_moved = []
+                        components_failed = []
+
+                        # Try moving segmentation model
+                        if hasattr(self._pipeline, "_segmentation") and hasattr(
+                            self._pipeline._segmentation, "model"
+                        ):
+                            try:
+                                print(
+                                    f"[DIARIZATION EXECUTION] Moving segmentation model to {self.device}...",
+                                    flush=True,
+                                )
+                                self._pipeline._segmentation.model = (
+                                    self._pipeline._segmentation.model.to(target_device)
+                                )
+                                components_moved.append("segmentation")
+                                print(
+                                    f"[DIARIZATION EXECUTION] ✅ Segmentation model moved to {self.device}",
+                                    flush=True,
+                                )
+                            except Exception as e:
+                                print(
+                                    f"[DIARIZATION EXECUTION] ❌ Segmentation failed on {self.device}: {e}",
+                                    flush=True,
+                                )
+                                components_failed.append(("segmentation", str(e)))
+                                # Move to CPU as fallback
+                                self._pipeline._segmentation.model = (
+                                    self._pipeline._segmentation.model.to(
+                                        torch.device("cpu")
+                                    )
+                                )
+                                self._cpu_fallback_ops.add("segmentation")
+
+                        # Try moving embedding model
+                        if hasattr(self._pipeline, "_embedding") and hasattr(
+                            self._pipeline._embedding, "model_"
+                        ):
+                            try:
+                                print(
+                                    f"[DIARIZATION EXECUTION] Moving embedding model to {self.device}...",
+                                    flush=True,
+                                )
+                                self._pipeline._embedding.model_ = (
+                                    self._pipeline._embedding.model_.to(target_device)
+                                )
+                                components_moved.append("embedding")
+                                print(
+                                    f"[DIARIZATION EXECUTION] ✅ Embedding model moved to {self.device}",
+                                    flush=True,
+                                )
+                            except Exception as e:
+                                print(
+                                    f"[DIARIZATION EXECUTION] ❌ Embedding failed on {self.device}: {e}",
+                                    flush=True,
+                                )
+                                components_failed.append(("embedding", str(e)))
+                                # Move to CPU as fallback
+                                self._pipeline._embedding.model_ = (
+                                    self._pipeline._embedding.model_.to(
+                                        torch.device("cpu")
+                                    )
+                                )
+                                self._cpu_fallback_ops.add("embedding")
+
+                        # Report summary
+                        print(
+                            f"[DIARIZATION EXECUTION] Device setup complete:",
+                            flush=True,
+                        )
+                        print(
+                            f"  - Successfully on {self.device}: {components_moved}",
+                            flush=True,
+                        )
+                        print(
+                            f"  - Failed (using CPU): {[c[0] for c in components_failed]}",
+                            flush=True,
+                        )
+
+                        if components_failed:
+                            logger.warning(
+                                f"Some diarization components require CPU fallback: {components_failed}"
+                            )
+
+                    except Exception as e:
+                        print(
+                            f"[DIARIZATION EXECUTION] Unexpected error during device setup: {e}",
+                            flush=True,
+                        )
+                        logger.error(f"Device setup failed: {e}")
+
+                # TEST: Try running pipeline directly without thread to isolate issue
+                TEST_DIRECT_RUN = False  # Set to True to test direct execution
+                if TEST_DIRECT_RUN:
+                    print(
+                        f"[TEST] Running pipeline directly without thread...",
+                        flush=True,
+                    )
+                    sys.stdout.flush()
+                    try:
+                        diarization = self._pipeline(str(path))
+                        print(f"[TEST] Direct execution succeeded!", flush=True)
+                    except Exception as e:
+                        print(f"[TEST] Direct execution failed: {e}", flush=True)
+                    sys.stdout.flush()
+                    # Exit early for testing
+                    import os
+
+                    os._exit(1)
+
+                sys.stdout.flush()
+
+                def run_pipeline_with_debug(audio_path):
+                    """Wrapper to add debugging inside the thread"""
+                    print(
+                        f"[THREAD] Inside executor thread, about to call pipeline",
+                        flush=True,
+                    )
+                    sys.stdout.flush()
+
+                    try:
+                        result = self._pipeline(audio_path)
+                        print(f"[THREAD] Pipeline returned result", flush=True)
+                        sys.stdout.flush()
+                        return result
+                    except Exception as e:
+                        print(
+                            f"[THREAD] Pipeline raised exception: {type(e).__name__}: {e}",
+                            flush=True,
+                        )
+                        sys.stdout.flush()
+                        raise
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    print(
+                        f"[DIARIZATION EXECUTION] Submitting pipeline to executor...",
+                        flush=True,
+                    )
+                    sys.stdout.flush()
+
+                    future = executor.submit(run_pipeline_with_debug, str(path))
+
+                    print(
+                        f"[DIARIZATION EXECUTION] Waiting for result (5 min timeout)...",
+                        flush=True,
+                    )
+                    sys.stdout.flush()
+
+                    try:
+                        # 5 minute timeout for diarization processing
+                        diarization = future.result(timeout=300)
+
+                        print(
+                            f"[DIARIZATION EXECUTION] Got result! Type: {type(diarization)}",
+                            flush=True,
+                        )
+                        sys.stdout.flush()
+                    except concurrent.futures.TimeoutError:
+                        logger.error("Diarization timed out after 5 minutes")
+                        if self.progress_callback:
+                            self.progress_callback("❌ Diarization timed out", 0)
+                        # Stop the progress monitor thread
+                        if progress_stop_event:
+                            progress_stop_event.set()
+
+                        # Check if this was likely a download timeout
+                        hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+                        model_id = self.model.replace("/", "--")
+                        cached_models = (
+                            list(hf_cache.glob(f"models--{model_id}*"))
+                            if hf_cache.exists()
+                            else []
+                        )
+
+                        if not cached_models:
+                            return ProcessorResult(
+                                success=False,
+                                errors=[
+                                    "Diarization model download timed out. The pyannote model is ~400MB. "
+                                    "Please check your internet connection and try again, or disable diarization "
+                                    "in settings to proceed without speaker identification."
+                                ],
+                            )
+                        else:
+                            return ProcessorResult(
+                                success=False,
+                                errors=[
+                                    "Diarization processing timed out. This may be due to insufficient system resources."
+                                ],
+                            )
+            except Exception as e:
+                logger.error(f"Diarization pipeline error: {e}")
+                if self.progress_callback:
+                    self.progress_callback(f"❌ Diarization error: {str(e)}", 0)
+                # Stop the progress monitor thread
+                if progress_stop_event:
+                    progress_stop_event.set()
+                raise
 
             # Stop the progress monitor thread
             if progress_stop_event:
@@ -395,20 +946,39 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                         if eta_text:
                             eta_str = f" | ETA: {eta_text}"
 
+                    # Estimate remaining segments for better user feedback
+                    if (
+                        total_segment_estimate
+                        and segment_count < total_segment_estimate
+                    ):
+                        remaining_segments = total_segment_estimate - segment_count
+                        segment_info = f"Processing {segment_count} speaker segments (~{remaining_segments} remaining)..."
+                    else:
+                        segment_info = f"Processing {segment_count} speaker segments..."
+
                     self.progress_callback(
-                        f"🎙️ Processing speaker segments: {segment_count} found...{eta_str}",
+                        f"🎙️ {filename}: {segment_info}{eta_str}",
                         int(progress_percent),
                     )
 
             # Final progress update
+            # Calculate final statistics
+            total_time = time.time() - start_time
+            processing_speed = (
+                audio_duration / total_time if audio_duration and total_time > 0 else 0
+            )
+            speed_info = (
+                f" ({processing_speed:.1f}x realtime)" if processing_speed > 0 else ""
+            )
+
             if self.progress_callback:
                 self.progress_callback(
-                    f"✅ Diarization complete! Found {len(segments)} speaker segments",
+                    f"✅ {filename}: Diarization complete! Found {len(segments)} speaker segments{speed_info}",
                     100,
                 )
 
             logger.info(
-                f"Diarization completed successfully: {len(segments)} segments found"
+                f"🎭 Diarization completed for '{filename}': {len(segments)} segments found in {total_time:.1f}s{speed_info}"
             )
 
             return ProcessorResult(

@@ -290,11 +290,15 @@ class EnhancedSummarizationWorker(QThread):
                 batch_progress_start = (characters_completed / total_characters) * 100.0
 
                 # Create enhanced progress object with character-weighted batch progress
+                remaining_files = len(self.files) - i - 1
+                remaining_str = (
+                    f" ({remaining_files} left)" if remaining_files > 0 else ""
+                )
                 progress = SummarizationProgress(
                     current_file=file_path,
                     total_files=len(self.files),
                     completed_files=i,
-                    current_step=f"📄 Starting {file_path_obj.name} ({i+1}/{len(self.files)}) - {current_file_size/1024:.1f}KB",
+                    current_step=f"📄 Starting {file_path_obj.name} ({i+1}/{len(self.files)}{remaining_str}) - {current_file_size/1024:.1f}KB",
                     percent=batch_progress_start,
                     provider=self.gui_settings.get("provider", "openai"),
                     model_name=self.gui_settings.get("model", "gpt-4o-mini-2024-07-18"),

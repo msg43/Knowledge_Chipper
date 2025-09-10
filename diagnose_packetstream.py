@@ -64,13 +64,13 @@ def diagnose_packetstream():
     print("\n3. Testing different proxy URL formats...")
 
     formats_to_test = [
+        f"http://{username}:{auth_key}@proxy.packetstream.io:31112",  # Working port first
         f"http://{username}:{auth_key}@proxy.packetstream.io:31111",
-        f"http://{username}:{auth_key}@proxy.packetstream.io:31112",
         f"http://{username}:{auth_key}@proxy.packetstream.io:31113",
+        f"socks5://{username}:{auth_key}@proxy.packetstream.io:31113",  # Working SOCKS5
         f"socks5://{username}:{auth_key}@proxy.packetstream.io:31111",
-        f"socks5://{username}:{auth_key}@proxy.packetstream.io:31113",
-        f"http://{auth_key}:{username}@proxy.packetstream.io:31111",  # Reversed auth
-        f"http://{username}@proxy.packetstream.io:31111",  # No password
+        f"http://{auth_key}:{username}@proxy.packetstream.io:31112",  # Reversed auth
+        f"http://{username}@proxy.packetstream.io:31112",  # No password
     ]
 
     for i, proxy_url in enumerate(formats_to_test, 1):
@@ -129,14 +129,14 @@ def diagnose_packetstream():
     ]
 
     for endpoint in alt_endpoints:
-        print(f"\n   Testing {endpoint}:31111...")
+        print(f"\n   Testing {endpoint}:31112...")
         try:
             # Test DNS first
             ip = socket.gethostbyname(endpoint)
             print(f"   DNS: {endpoint} → {ip}")
 
             # Test connection
-            proxy_url = f"http://{username}:{auth_key}@{endpoint}:31111"
+            proxy_url = f"http://{username}:{auth_key}@{endpoint}:31112"
             proxies = {"http": proxy_url, "https": proxy_url}
 
             response = requests.get("http://httpbin.org/ip", proxies=proxies, timeout=8)
@@ -155,7 +155,7 @@ def diagnose_packetstream():
     # Test 5: Check if it's a session/timing issue
     print("\n5. Testing session persistence...")
 
-    proxy_url = f"http://{username}:{auth_key}@proxy.packetstream.io:31111"
+    proxy_url = f"http://{username}:{auth_key}@proxy.packetstream.io:31112"
     session = requests.Session()
     session.proxies = {"http": proxy_url, "https": proxy_url}
 

@@ -332,6 +332,57 @@ class DatabaseService:
             logger.error(f"Failed to get transcript {transcript_id}: {e}")
             return None
 
+    def update_transcript(
+        self,
+        transcript_id: str,
+        transcript_text: str | None = None,
+        transcript_segments_json: list[dict[str, Any]] | None = None,
+        speaker_assignments: dict[str, str] | None = None,
+        speaker_assignment_completed: bool = False,
+        **metadata,
+    ) -> bool:
+        """Update an existing transcript with new data."""
+        try:
+            with self.get_session() as session:
+                transcript = (
+                    session.query(Transcript)
+                    .filter(Transcript.transcript_id == transcript_id)
+                    .first()
+                )
+
+                if not transcript:
+                    logger.error(f"Transcript {transcript_id} not found for update")
+                    return False
+
+                # Update fields if provided
+                if transcript_text is not None:
+                    transcript.transcript_text = transcript_text
+
+                if transcript_segments_json is not None:
+                    transcript.transcript_segments_json = transcript_segments_json
+                    transcript.segment_count = len(transcript_segments_json)
+
+                if speaker_assignments is not None:
+                    # Store speaker assignments as metadata
+                    transcript.speaker_assignments = speaker_assignments
+
+                if speaker_assignment_completed:
+                    transcript.speaker_assignment_completed = True
+                    transcript.speaker_assignment_completed_at = datetime.utcnow()
+
+                # Update any additional metadata fields
+                for key, value in metadata.items():
+                    if hasattr(transcript, key):
+                        setattr(transcript, key, value)
+
+                session.commit()
+                logger.info(f"Updated transcript {transcript_id}")
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to update transcript {transcript_id}: {e}")
+            return False
+
     # =============================================================================
     # SUMMARY OPERATIONS
     # =============================================================================

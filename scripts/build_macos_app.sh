@@ -14,6 +14,8 @@ INCREMENTAL=0
 WITH_DIARIZATION=1
 WITH_HCE=1
 WITH_CUDA=0
+# Default to bundling all models for complete offline experience
+BUNDLE_ALL_MODELS=${BUNDLE_ALL_MODELS:-1}
 for arg in "$@"; do
   case "$arg" in
     --no-install|--skip-install)
@@ -38,6 +40,12 @@ for arg in "$@"; do
       WITH_DIARIZATION=1
       WITH_HCE=1
       WITH_CUDA=1
+      ;;
+    --bundle-all)
+      BUNDLE_ALL_MODELS=1
+      ;;
+    --no-bundle)
+      BUNDLE_ALL_MODELS=0
       ;;
   esac
 done
@@ -380,6 +388,23 @@ if [ -f "\$APP_DIR/setup_bundled_ffmpeg.sh" ]; then
     echo "FFPROBE_PATH: \$FFPROBE_PATH" >> "\$LOG_FILE"
 fi
 
+# Check for bundled Pyannote model and set up environment
+if [ -f "\$APP_DIR/setup_bundled_pyannote.sh" ]; then
+    echo "Setting up bundled Pyannote model..." >> "\$LOG_FILE"
+    source "\$APP_DIR/setup_bundled_pyannote.sh"
+    echo "PYANNOTE_MODEL_PATH: \$PYANNOTE_MODEL_PATH" >> "\$LOG_FILE"
+    echo "PYANNOTE_BUNDLED: \$PYANNOTE_BUNDLED" >> "\$LOG_FILE"
+fi
+
+# Check for bundled models (Whisper, Ollama, etc)
+if [ -f "\$APP_DIR/setup_bundled_models.sh" ]; then
+    echo "Setting up bundled models..." >> "\$LOG_FILE"
+    source "\$APP_DIR/setup_bundled_models.sh"
+    echo "MODELS_BUNDLED: \$MODELS_BUNDLED" >> "\$LOG_FILE"
+    echo "WHISPER_CACHE_DIR: \$WHISPER_CACHE_DIR" >> "\$LOG_FILE"
+    echo "OLLAMA_HOME: \$OLLAMA_HOME" >> "\$LOG_FILE"
+fi
+
 # Set up Python environment
 source "\$APP_DIR/venv/bin/activate"
 export PYTHONPATH="\$APP_DIR/src:\$PYTHONPATH"
@@ -516,7 +541,7 @@ echo "✨ App bundle created successfully! Version: $CURRENT_VERSION"
 # Install FFMPEG into the app bundle for DMG distribution [[memory:7770522]]
 if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-0}" != "1" ]; }; then
   echo "🎬 Installing FFMPEG into app bundle for DMG distribution..."
-  echo "##PERCENT## 98 Installing FFMPEG"
+  echo "##PERCENT## 94 Installing FFMPEG"
 
   if [ -f "$SCRIPT_DIR/silent_ffmpeg_installer.py" ]; then
     # Use our silent installer to embed FFMPEG in the app bundle
@@ -528,10 +553,53 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
   else
     echo "⚠️ Silent FFMPEG installer not found - DMG will not include FFMPEG"
   fi
+
+  # Download and install Pyannote diarization model for internal company use
+  echo "🎙️ Downloading Pyannote diarization model (internal use)..."
+  echo "##PERCENT## 97 Downloading Pyannote model"
+
+  # Check for HF token
+  if [ -z "$HF_TOKEN" ] && [ -f "$SCRIPT_DIR/../config/credentials.yaml" ]; then
+    HF_TOKEN=$(grep -A1 "huggingface_token:" "$SCRIPT_DIR/../config/credentials.yaml" | tail -1 | sed 's/.*: //' | tr -d '"' | tr -d "'")
+  fi
+
+  if [ ! -z "$HF_TOKEN" ] && [ "$HF_TOKEN" != "your_huggingface_token_here" ]; then
+    if [ -f "$SCRIPT_DIR/download_pyannote_direct.py" ]; then
+      # Download model directly during build
+      if HF_TOKEN="$HF_TOKEN" "$PYTHON_BIN" "$SCRIPT_DIR/download_pyannote_direct.py" --app-bundle "$BUILD_APP_PATH"; then
+        echo "✅ Pyannote model downloaded and bundled (internal use only)"
+      else
+        echo "⚠️ Pyannote model download failed - DMG will require HF token at runtime"
+      fi
+    else
+      echo "⚠️ Pyannote downloader not found"
+    fi
+  else
+    echo "⚠️ No HuggingFace token found - skipping pyannote bundling"
+    echo "   Users will need to provide token on first use"
+  fi
+
+  # Optionally bundle ALL models for complete offline experience
+  if [ "${BUNDLE_ALL_MODELS:-0}" = "1" ]; then
+    echo "📦 Bundling ALL models for complete offline use..."
+    echo "##PERCENT## 98 Bundling remaining models"
+
+    if [ -f "$SCRIPT_DIR/bundle_all_models.sh" ]; then
+      if bash "$SCRIPT_DIR/bundle_all_models.sh" "$BUILD_APP_PATH"; then
+        echo "✅ All models bundled - DMG will work completely offline (~4GB)"
+      else
+        echo "⚠️ Some models not bundled - they'll download on first use"
+      fi
+    fi
+  fi
 fi
 
 echo "##PERCENT## 100 Complete"
-echo "🎯 Large model files excluded - they'll download automatically when needed"
+if [ "${BUNDLE_ALL_MODELS:-0}" = "1" ]; then
+  echo "🎯 All models bundled for complete offline experience"
+else
+  echo "🎯 Core models bundled - additional models download on first use"
+fi
 if [ "$SKIP_INSTALL" -eq 0 ]; then
   echo "🚀 You can now launch Skip the Podcast Desktop from your Applications folder"
 else

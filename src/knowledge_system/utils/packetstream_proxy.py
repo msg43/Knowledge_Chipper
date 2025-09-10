@@ -197,7 +197,7 @@ class PacketStreamProxyManager:
         url: str,
         method: str = "GET",
         session_id: str = None,
-        retry_count: int = 3,
+        retry_count: int = 5,
         **kwargs,
     ) -> requests.Response:
         """
@@ -250,7 +250,7 @@ class PacketStreamProxyManager:
         raise last_exception
 
     def test_proxy_connectivity(
-        self, timeout: int = 10, max_retries: int = 3, retry_callback=None
+        self, timeout: int = 10, max_retries: int = 5, retry_callback=None
     ) -> tuple[bool, str]:
         """
         Test if PacketStream proxy is working properly with retry logic.
@@ -274,12 +274,25 @@ class PacketStreamProxyManager:
 
         for attempt in range(max_retries):
             try:
-                if retry_callback and attempt > 0:
-                    retry_callback(f"Retry attempt {attempt + 1}/{max_retries}...")
+                # Force IP rotation on retry attempts for better reliability
+                if attempt > 0:
+                    if retry_callback:
+                        retry_callback(f"Retry attempt {attempt + 1}/{max_retries}...")
+                    # Rotate to fresh IP for better success chances
+                    self.rotate_session()
+                    # Regenerate proxy config with new session
+                    proxy_config = self._get_proxy_config(use_socks5=False)
+                    proxy_url = proxy_config["https"]
+                    proxies = {"http": proxy_url, "https": proxy_url}
 
-                # Test with a simple HTTP request
+                # Test with a simple HTTP request - using more reliable endpoint
                 response = requests.get(
-                    "http://httpbin.org/ip", proxies=proxies, timeout=timeout
+                    "http://httpbin.org/ip",
+                    proxies=proxies,
+                    timeout=timeout,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    },
                 )
 
                 if response.status_code == 200:
@@ -288,6 +301,13 @@ class PacketStreamProxyManager:
                     success_msg = f"PacketStream proxy working (IP: {proxy_ip})"
                     if attempt > 0:
                         success_msg += f" - succeeded on attempt {attempt + 1}"
+                    # Log successful PacketStream usage for analytics
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.info(
+                        f"🌐 PacketStream proxy confirmed working - IP: {proxy_ip}"
+                    )
                     return True, success_msg
                 else:
                     last_error = f"Proxy returned HTTP {response.status_code}"
@@ -301,12 +321,16 @@ class PacketStreamProxyManager:
             except Exception as e:
                 last_error = f"Unexpected error: {str(e)}"
 
-            # Wait before retrying (exponential backoff)
+            # Wait before retrying (exponential backoff with jitter)
             if attempt < max_retries - 1:
-                wait_time = 2**attempt  # 1s, 2s, 4s...
+                base_wait = 2**attempt  # 1s, 2s, 4s, 8s...
+                jitter = random.uniform(
+                    0.1, 0.5
+                )  # Add randomness to avoid thundering herd
+                wait_time = base_wait + jitter
                 if retry_callback:
                     retry_callback(
-                        f"Connection failed: {last_error}. Retrying in {wait_time}s..."
+                        f"Connection failed: {last_error}. Retrying in {wait_time:.1f}s..."
                     )
                 time.sleep(wait_time)
 

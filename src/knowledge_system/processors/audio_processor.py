@@ -117,37 +117,49 @@ class AudioProcessor(BaseProcessor):
         try:
             # Report conversion start
             if self.progress_callback:
+                input_size_mb = input_path.stat().st_size / (1024 * 1024)
                 self.progress_callback(
-                    f"🔄 Converting to .{self.target_format} format...", 0
+                    f"🔄 Converting {input_path.name} ({input_size_mb:.1f}MB) to 16kHz mono format...",
+                    0,
                 )
 
-            # Convert audio using FFmpeg
+            # Convert audio to 16kHz mono - optimal for both whisper and pyannote
             success = convert_audio_file(
                 input_path=input_path,
                 output_path=output_path,
                 target_format=self.target_format,
                 normalize=self.normalize_audio,
+                sample_rate=16000,  # 16kHz for both whisper and pyannote
+                channels=1,  # Mono for both processors
                 progress_callback=self.progress_callback,
             )
 
             if success:
                 if self.progress_callback:
+                    output_size_mb = output_path.stat().st_size / (1024 * 1024)
                     self.progress_callback(
-                        f"✅ Conversion to .{self.target_format} complete", 100
+                        f"✅ Conversion of {input_path.name} complete ({output_size_mb:.1f}MB output)",
+                        100,
                     )
-                logger.info(f"Successfully converted {input_path} to {output_path}")
+                logger.info(
+                    f"Successfully converted {input_path} to 16kHz mono {output_path}"
+                )
                 return True
             else:
                 if self.progress_callback:
                     self.progress_callback(
-                        f"❌ Conversion to .{self.target_format} failed", 0
+                        f"❌ Conversion to 16kHz mono .{self.target_format} failed", 0
                     )
-                logger.error(f"Failed to convert {input_path} to {output_path}")
+                logger.error(
+                    f"Failed to convert {input_path} to 16kHz mono {output_path}"
+                )
                 return False
 
         except Exception as e:
             if self.progress_callback:
-                self.progress_callback(f"❌ Conversion error: {str(e)}", 0)
+                self.progress_callback(
+                    f"❌ Conversion error for {input_path.name}: {str(e)}", 0
+                )
             logger.error(f"Audio conversion error: {e}")
             return False
 
@@ -179,10 +191,22 @@ class AudioProcessor(BaseProcessor):
                 return None
 
             logger.info("Running speaker diarization...")
+
+            # Get diarization sensitivity from settings
+            from ..config import get_settings
+
+            settings = get_settings()
+            sensitivity = getattr(
+                settings.speaker_identification,
+                "diarization_sensitivity",
+                "conservative",
+            )
+
             diarizer = SpeakerDiarizationProcessor(
                 hf_token=self.hf_token,
                 device=self.device,
                 progress_callback=self.progress_callback,
+                sensitivity=sensitivity,
             )
             result = diarizer.process(audio_path, **diarization_kwargs)
             if result.success:
@@ -407,61 +431,35 @@ class AudioProcessor(BaseProcessor):
 
             logger.info(f"🎭 Found {len(speaker_data_list)} speakers for assignment")
 
-            # Ensure fallback LLM is ready for speaker suggestions
-            if self.progress_callback:
-                self.progress_callback("🤖 Preparing AI speaker suggestions...")
-
+            # Check if MVP LLM is already available (quick check, no downloads)
+            mvp_available = False
             try:
-                import asyncio
+                from ..utils.mvp_llm_setup import get_mvp_llm_setup
 
-                from ..utils.mvp_llm_setup import ensure_mvp_llm_ready
-
-                def setup_progress(progress_info):
-                    if self.progress_callback and progress_info.get("step"):
-                        step = progress_info["step"]
-                        detail = progress_info.get("detail", "")
-                        self.progress_callback(f"🤖 {step}: {detail}")
-
-                # Try to ensure fallback LLM is ready (non-blocking)
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # We're in an async context, run in thread
-                        import concurrent.futures
-
-                        with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(
-                                lambda: asyncio.run(
-                                    ensure_mvp_llm_ready(setup_progress)
-                                )
-                            )
-                            fallback_ready = future.result(
-                                timeout=30
-                            )  # 30 second timeout
-                    else:
-                        # We can run directly
-                        fallback_ready = asyncio.run(
-                            ensure_mvp_llm_ready(setup_progress)
+                mvp_setup = get_mvp_llm_setup()
+                if mvp_setup.is_mvp_ready():
+                    # LLM is already set up - use it!
+                    mvp_available = True
+                    logger.info("✅ MVP LLM is ready - will use AI speaker suggestions")
+                    if self.progress_callback:
+                        self.progress_callback("🤖 Using AI-powered speaker suggestions")
+                else:
+                    # LLM not ready - don't block to install it
+                    logger.info(
+                        "MVP LLM not ready - using basic suggestions to avoid delays"
+                    )
+                    if self.progress_callback:
+                        self.progress_callback(
+                            "💡 Using basic speaker suggestions (LLM not available)"
                         )
-                except Exception as e:
-                    logger.debug(f"Could not setup MVP LLM: {e}")
-                    fallback_ready = False
-
-                    # Show user-friendly error if in GUI mode
-                    if kwargs.get("gui_mode", False):
-                        self._show_mvp_llm_error(e)
-
-                if fallback_ready:
-                    logger.info("✅ MVP LLM ready for speaker suggestions")
-                elif self.progress_callback:
-                    self.progress_callback("💡 Using basic speaker suggestions (no LLM)")
-
             except Exception as e:
-                logger.debug(f"MVP LLM setup skipped: {e}")
+                logger.debug(f"Could not check MVP LLM status: {e}")
+                if self.progress_callback:
+                    self.progress_callback("💡 Using basic speaker suggestions")
 
-                # Show user-friendly error if in GUI mode and error is significant
-                if kwargs.get("gui_mode", False) and "permission" in str(e).lower():
-                    self._show_mvp_llm_error(e)
+            # Store MVP availability for speaker processor to use
+            if mvp_available:
+                metadata["mvp_llm_available"] = True
 
             # Check if we're in GUI mode and can show dialog
             show_dialog = kwargs.get("show_speaker_dialog", True)
@@ -480,42 +478,68 @@ class AudioProcessor(BaseProcessor):
                 )
                 show_dialog = False
 
-            # Use callback if available (thread-safe), otherwise try direct dialog (legacy)
+            # IMPORTANT: For non-blocking speaker assignment, queue the task
+            # and return immediately with generic speaker IDs
             if (
                 show_dialog
                 and gui_mode
                 and not testing_mode
                 and not os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE")
             ):
-                metadata = kwargs.get("metadata", {})
-                assignments = None
+                # Queue speaker assignment task for later processing
+                from knowledge_system.utils.speaker_assignment_queue import (
+                    get_speaker_assignment_queue,
+                )
 
-                # Prefer callback for thread safety
-                if self.speaker_assignment_callback:
-                    logger.info("Using thread-safe speaker assignment callback")
-                    assignments = self.speaker_assignment_callback(
-                        speaker_data_list, recording_path, metadata
+                queue = get_speaker_assignment_queue()
+
+                # Get video_id and transcript_id from kwargs or enhanced_metadata
+                video_id = (
+                    kwargs.get("video_id")
+                    or kwargs.get("media_id")
+                    or kwargs.get("database_media_id")
+                )
+                transcript_id = kwargs.get("transcript_id") or kwargs.get(
+                    "database_transcript_id"
+                )
+
+                if video_id and transcript_id:
+                    # Queue the assignment task
+                    task_id = queue.add_task(
+                        video_id=video_id,
+                        transcript_id=transcript_id,
+                        speaker_data_list=speaker_data_list,
+                        recording_path=recording_path,
+                        metadata=metadata,
                     )
+
+                    logger.info(
+                        f"Queued speaker assignment task {task_id} for {recording_path}. "
+                        f"Processing will continue without blocking."
+                    )
+
+                    # If we have a callback, use it to trigger the dialog non-blocking
+                    if self.speaker_assignment_callback:
+                        # Pass task_id so the dialog knows which task to complete
+                        enhanced_metadata = metadata.copy()
+                        enhanced_metadata["task_id"] = task_id
+
+                        # This should be non-blocking - just emit a signal
+                        self.speaker_assignment_callback(
+                            speaker_data_list, recording_path, enhanced_metadata
+                        )
                 else:
-                    # Fallback to direct dialog (may cause threading issues)
                     logger.warning(
-                        "Using direct dialog - may cause threading issues in worker threads"
-                    )
-                    assignments = self._show_speaker_assignment_dialog(
-                        speaker_data_list, recording_path, metadata
+                        f"Cannot queue speaker assignment without video_id ({video_id}) "
+                        f"and transcript_id ({transcript_id})"
                     )
 
-                if assignments:
-                    # Apply assignments to transcript data with enhanced storage
-                    updated_data = speaker_processor.apply_speaker_assignments(
-                        transcript_data, assignments, recording_path, speaker_data_list
-                    )
-
-                    logger.info(f"✅ Applied speaker assignments: {assignments}")
-                    return updated_data
-                else:
-                    logger.info("Speaker assignment cancelled or no assignments made")
-                    return transcript_data
+                # Return transcript with generic speaker IDs immediately
+                logger.info(
+                    "Returning transcript with generic speaker IDs. "
+                    "Speaker names will be updated when user completes assignment."
+                )
+                return transcript_data
             else:
                 if testing_mode:
                     logger.info("🧪 Testing mode: Skipping speaker assignment dialog")
@@ -1215,14 +1239,29 @@ class AudioProcessor(BaseProcessor):
                                         if output_path and output_path.exists():
                                             output_path.unlink(missing_ok=True)
 
-                                        return ProcessorResult(
-                                            success=True,  # Mark as success but with quality warning
-                                            data=transcription_result.data,
-                                            metadata=enhanced_metadata,
-                                            errors=[
-                                                f"Quality warning (retry disabled): {failure_reason}"
-                                            ],
+                                        # Check if database save failed - affects success status even with quality warning
+                                        database_save_failed = enhanced_metadata.get(
+                                            "database_save_failed", False
                                         )
+
+                                        if database_save_failed:
+                                            return ProcessorResult(
+                                                success=False,
+                                                errors=[
+                                                    "Transcription completed but database save failed"
+                                                ],
+                                                data=transcription_result.data,
+                                                metadata=enhanced_metadata,
+                                            )
+                                        else:
+                                            return ProcessorResult(
+                                                success=True,  # Mark as success but with quality warning
+                                                data=transcription_result.data,
+                                                metadata=enhanced_metadata,
+                                                errors=[
+                                                    f"Quality warning (retry disabled): {failure_reason}"
+                                                ],
+                                            )
                                     else:
                                         logger.error(
                                             f"Final transcription attempt failed quality validation: {failure_reason}"
@@ -1293,11 +1332,8 @@ class AudioProcessor(BaseProcessor):
                                     )
                                     diarization_successful = True
 
-                            # Trigger speaker assignment dialog if diarization was successful
-                            if diarization_successful and diarization_segments:
-                                final_data = self._handle_speaker_assignment(
-                                    final_data, diarization_segments, str(path), kwargs
-                                )
+                            # Note: Speaker assignment will be handled after database save
+                            # to enable non-blocking processing
 
                             # Check if diarization was required but failed
                             if self.require_diarization and not diarization_successful:
@@ -1410,12 +1446,12 @@ class AudioProcessor(BaseProcessor):
                                         title=title,
                                         url=file_url,
                                         source_type="audio_file",
-                                        duration=audio_duration,
-                                        upload_date=datetime.now().isoformat(),
-                                        file_path=str(path),
-                                        file_size=(
-                                            path.stat().st_size if path.exists() else 0
-                                        ),
+                                        duration_seconds=audio_duration,
+                                        upload_date=datetime.now().strftime(
+                                            "%Y%m%d"
+                                        ),  # YYYYMMDD format
+                                        description=f"Audio file: {path.name}",
+                                        status="completed",
                                     )
                                     logger.info(
                                         f"Created media source record: {media_id}"
@@ -1459,6 +1495,27 @@ class AudioProcessor(BaseProcessor):
                                         "database_transcript_id"
                                     ] = transcript_record.transcript_id
                                     enhanced_metadata["database_media_id"] = media_id
+
+                                    # Handle speaker assignment after database save (non-blocking)
+                                    if diarization_successful and diarization_segments:
+                                        # Pass the transcript_id and media_id for speaker assignment
+                                        kwargs_with_ids = kwargs.copy()
+                                        kwargs_with_ids[
+                                            "transcript_id"
+                                        ] = transcript_record.transcript_id
+                                        kwargs_with_ids["video_id"] = media_id
+                                        kwargs_with_ids[
+                                            "database_transcript_id"
+                                        ] = transcript_record.transcript_id
+                                        kwargs_with_ids["database_media_id"] = media_id
+
+                                        # This will queue the assignment and return immediately
+                                        self._handle_speaker_assignment(
+                                            final_data,
+                                            diarization_segments,
+                                            str(path),
+                                            kwargs_with_ids,
+                                        )
                                 else:
                                     logger.warning(
                                         "Failed to save transcript to database"
@@ -1466,17 +1523,38 @@ class AudioProcessor(BaseProcessor):
 
                             except Exception as e:
                                 logger.error(f"Error saving to database: {e}")
-                                # Don't fail the transcription if database save fails
+                                # IMPORTANT: Database save failure should affect success reporting
+                                # Based on memory requirement: all transcriptions must write to database
+                                enhanced_metadata["database_save_failed"] = True
 
                         # Clean up temporary file before returning success
                         if output_path and output_path.exists():
                             output_path.unlink(missing_ok=True)
 
-                        return ProcessorResult(
-                            success=True,
-                            data=final_data,
-                            metadata=enhanced_metadata,
+                        # Check if database save failed - affects success status
+                        database_save_failed = enhanced_metadata.get(
+                            "database_save_failed", False
                         )
+
+                        if database_save_failed:
+                            # Based on memory requirement: all transcriptions must write to database
+                            logger.error(
+                                "Transcription completed but database save failed - reporting as failure"
+                            )
+                            return ProcessorResult(
+                                success=False,
+                                errors=[
+                                    "Transcription completed but database save failed"
+                                ],
+                                data=final_data,
+                                metadata=enhanced_metadata,
+                            )
+                        else:
+                            return ProcessorResult(
+                                success=True,
+                                data=final_data,
+                                metadata=enhanced_metadata,
+                            )
                 else:
                     # Transcription process failed
                     error_msg = (

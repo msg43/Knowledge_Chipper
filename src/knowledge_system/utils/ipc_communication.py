@@ -79,14 +79,19 @@ class IPCCommunicator:
         message: str,
         progress: int | None = None,
     ):
-        """Send progress update message."""
+        """Send progress update message with remaining count."""
+        remaining_files = max(0, total_files - current_file)
+        remaining_str = f" ({remaining_files} left)" if remaining_files > 0 else ""
+        enhanced_message = f"{message}{remaining_str}"
+
         self._send_message(
             {
                 "type": "PROGRESS",
                 "current_file": current_file,
                 "total_files": total_files,
+                "remaining_files": remaining_files,
                 "stage": stage,
-                "message": message,
+                "message": enhanced_message,
                 "progress_percent": progress,
                 "overall_progress": round(
                     (current_file - 1) / max(1, total_files) * 100, 1

@@ -289,9 +289,17 @@ class YouTubeTranscript(BaseModel):
                             lines.append(text)
                             lines.append("")
         else:
-            # Plain text transcript - also remove bracketed content
-            transcript_text = strip_bracketed_content(self.transcript_text)
-            lines.append(transcript_text)
+            # Plain text transcript - preserve formatting if it looks like markdown
+            transcript_text = self.transcript_text
+
+            # If the text contains markdown formatting (bold speakers), preserve it
+            if "**" in transcript_text and "*" in transcript_text:
+                # This looks like formatted markdown, preserve line breaks
+                lines.append(transcript_text)
+            else:
+                # Apply bracketed content removal for unformatted text
+                transcript_text = strip_bracketed_content(transcript_text)
+                lines.append(transcript_text)
 
         return "\n".join(lines)
 
@@ -923,7 +931,6 @@ class YouTubeTranscriptProcessor(BaseProcessor):
 
         try:
             import tempfile
-            from pathlib import Path
 
             report_progress("🔍 Checking diarization dependencies...", 5)
 
@@ -1123,7 +1130,22 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     )
 
                     # Process the audio file
-                    report_progress("🎯 Processing audio with diarization...", 50)
+                    # Get file info for better context
+                    filename = Path(audio_file).name if audio_file else "audio"
+                    try:
+                        file_size_mb = (
+                            Path(audio_file).stat().st_size / (1024 * 1024)
+                            if audio_file
+                            else 0
+                        )
+                        file_info = f" ({file_size_mb:.1f}MB)"
+                    except:
+                        file_info = ""
+
+                    report_progress(
+                        f"🎯 Processing {filename}{file_info} with speaker diarization...",
+                        50,
+                    )
 
                     # Pass through kwargs to enable speaker assignment dialog if needed
                     process_kwargs = {
@@ -1175,6 +1197,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     diarized_segments = (
                         []
                     )  # Store segments with speaker info for proper formatting
+                    previous_speaker = None  # Track speaker changes for formatting
 
                     for segment in segments:
                         start_time = segment.get("start", 0)
@@ -1197,8 +1220,17 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                             transcript_data.append(segment_data)
                             diarized_segments.append(segment_data)
 
-                            # Add to full text with speaker labels for backward compatibility
+                            # Add to full text with speaker labels formatted for markdown
                             if speaker:
+                                # Add speaker change separator for better readability
+                                if (
+                                    full_text_parts
+                                    and previous_speaker is not None
+                                    and speaker != previous_speaker
+                                ):
+                                    full_text_parts.append("---")
+                                    full_text_parts.append("")
+
                                 # Check if this is a meaningful name (from speaker attribution) vs generic ID
                                 if speaker.startswith("SPEAKER_"):
                                     # Convert generic speaker ID to human-readable format
@@ -1207,17 +1239,27 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                                     )
                                     try:
                                         speaker_number = int(speaker_num) + 1
-                                        full_text_parts.append(
-                                            f"(Speaker {speaker_number}): {text}"
-                                        )
+                                        speaker_display = f"Speaker {speaker_number}"
                                     except (ValueError, AttributeError):
                                         # Fallback if speaker format is unexpected
-                                        full_text_parts.append(f"({speaker}): {text}")
+                                        speaker_display = speaker
                                 else:
                                     # This is already a meaningful name from speaker attribution
-                                    full_text_parts.append(f"({speaker}): {text}")
+                                    speaker_display = speaker
+
+                                # Format with proper markdown structure
+                                full_text_parts.append(f"**{speaker_display}**")
+                                full_text_parts.append(
+                                    f"*{self._format_simple_timestamp(start_time)}*"
+                                )
+                                full_text_parts.append("")
+                                full_text_parts.append(text)
+                                full_text_parts.append("")
+
+                                previous_speaker = speaker
                             else:
                                 full_text_parts.append(text)
+                                full_text_parts.append("")
 
                     # Create updated transcript
                     updated_transcript = YouTubeTranscript(
@@ -1250,6 +1292,17 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             logger.error(f"Diarization processing failed: {e}")
             report_progress(f"❌ Diarization failed: {e}")
             return None
+
+    def _format_simple_timestamp(self, seconds: float) -> str:
+        """Format seconds to MM:SS or HH:MM:SS for display."""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+
+        if hours > 0:
+            return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+        else:
+            return f"{minutes:02d}:{secs:02d}"
 
     def _update_index_file(self, index_file: Path, video_id: str) -> None:
         """Append a new video ID to the index file."""
@@ -1367,6 +1420,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             saved_files = []
             skipped_files = []  # Track files that were skipped due to overwrite=False
             failed_files = []  # Track files that failed processing
+            database_save_failed = False  # Track database save failures
 
             # Build video ID index if overwrite is disabled
             existing_video_ids = set()
@@ -1711,10 +1765,10 @@ Diarization processing failed for this video. The transcript was not saved to al
                                                     "upload_date": transcript.upload_date,
                                                     "description": transcript.description
                                                     or "",
-                                                    "duration": transcript.duration,
+                                                    "duration_seconds": transcript.duration,
                                                     "view_count": transcript.view_count,
                                                     "thumbnail_url": transcript.thumbnail_url,
-                                                    "tags": transcript.tags or [],
+                                                    "tags_json": transcript.tags or [],
                                                     "source_type": "youtube",
                                                 }
 
@@ -1753,7 +1807,8 @@ Diarization processing failed for this video. The transcript was not saved to al
                                                 logger.error(
                                                     f"Error saving to database: {e}"
                                                 )
-                                                # Don't fail the transcript extraction if database save fails
+                                                # Track database save failure - this should affect success reporting
+                                                database_save_failed = True
 
                                         # Update index with successfully saved video
                                         if (
@@ -2059,10 +2114,10 @@ Diarization processing failed for this video. The transcript was not saved to al
                                                             "upload_date": transcript.upload_date,
                                                             "description": transcript.description
                                                             or "",
-                                                            "duration": transcript.duration,
+                                                            "duration_seconds": transcript.duration,
                                                             "view_count": transcript.view_count,
                                                             "thumbnail_url": transcript.thumbnail_url,
-                                                            "tags": transcript.tags
+                                                            "tags_json": transcript.tags
                                                             or [],
                                                             "source_type": "youtube",
                                                         }
@@ -2193,21 +2248,27 @@ Diarization processing failed for this video. The transcript was not saved to al
             files_actually_saved = len(saved_files) > 0
             files_skipped = len(skipped_files) > 0
 
-            # Simplified success logic: ANY of these counts as success
-            # 1. Files were actually saved (new transcripts created)
-            # 2. Files were skipped (existing files, overwrite disabled)
-            # 3. Videos were skipped via index (optimization, already exist)
-            # 4. Transcripts extracted successfully (when no output_dir specified)
+            # Enhanced success logic: Success requires both file AND database operations to succeed
+            # Based on memory requirement: "Every cloud transcription and every local transcription
+            # must always write the results to the sqlite database"
+            # 1. Files were actually saved (new transcripts created) AND database saves succeeded
+            # 2. Files were skipped (existing files, overwrite disabled) - database not affected
+            # 3. Videos were skipped via index (optimization, already exist) - database not affected
+            # 4. Transcripts extracted successfully (when no output_dir specified) AND database saves succeeded
 
             success = (
-                files_actually_saved
-                or files_skipped  # New files saved
-                or (  # Files skipped (already exist)
+                (
+                    files_actually_saved and not database_save_failed
+                )  # New files saved AND db success
+                or files_skipped  # Files skipped (already exist) - database not affected
+                or (  # Skipped via index optimization - database not affected
                     skipped_via_index > 0 and not overwrite_existing
                 )
-                or (  # Skipped via index optimization
-                    transcripts_extracted and not output_dir
-                )  # Transcripts extracted (no file output)
+                or (  # Transcripts extracted (no file output) AND db success
+                    transcripts_extracted
+                    and not output_dir
+                    and not database_save_failed
+                )
             )
 
             # Add error messages for specific failure cases
@@ -2219,13 +2280,18 @@ Diarization processing failed for this video. The transcript was not saved to al
                     )
                 else:
                     errors = errors or []
-                    errors.append(
-                        f"Extracted {len(transcripts)} transcript(s) but failed to save files"
-                    )
+                    if database_save_failed:
+                        errors.append(
+                            f"Extracted {len(transcripts)} transcript(s) and saved {len(saved_files)} files, but database save failed"
+                        )
+                    else:
+                        errors.append(
+                            f"Extracted {len(transcripts)} transcript(s) but failed to save files"
+                        )
 
             # Enhanced logging to clarify success vs failure
             logger.info(
-                f"🔧 NEW CODE: Success determination: files_saved={files_actually_saved}, files_skipped={files_skipped}, skipped_via_index={skipped_via_index}, overwrite={overwrite_existing}"
+                f"🔧 SUCCESS LOGIC: files_saved={files_actually_saved}, files_skipped={files_skipped}, skipped_via_index={skipped_via_index}, overwrite={overwrite_existing}, database_save_failed={database_save_failed}"
             )
             if success and skipped_via_index > 0 and len(transcripts) == 0:
                 logger.info(
@@ -2233,7 +2299,7 @@ Diarization processing failed for this video. The transcript was not saved to al
                 )
             else:
                 logger.info(
-                    f"Transcript processing completed. Success: {success}, Transcripts extracted: {len(transcripts)}, Files saved: {len(saved_files)}, Files skipped: {len(skipped_files)}"
+                    f"Transcript processing completed. Success: {success}, Transcripts extracted: {len(transcripts)}, Files saved: {len(saved_files)}, Files skipped: {len(skipped_files)}, Database save failed: {database_save_failed}"
                 )
 
             # Report index optimization statistics if applicable

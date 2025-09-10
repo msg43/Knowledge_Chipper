@@ -133,9 +133,9 @@ def main(
         "true" if thread_config.tokenizers_parallelism else "false"
     )
 
-    # Keep MPS fallback setting
-    if thread_config.pytorch_enable_mps_fallback:
-        os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+    # Set MPS fallback to 0 for fail-fast behavior (identify unsupported ops)
+    # This helps us identify which specific operations need CPU fallback
+    os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "0"
 
     cli_ctx: CLIContext = ctx.obj
     cli_ctx.verbose = verbose

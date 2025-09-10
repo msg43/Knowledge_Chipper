@@ -455,14 +455,17 @@ class YouTubeMetadataProcessor(BaseProcessor):
             )
 
         # Method 2: Try direct yt-dlp (FALLBACK for small batches ≤2 videos)
+        # NOTE: This fallback may be reducing PacketStream usage for single videos
         if total_urls <= 2:
             logger.info(
-                f"🔄 Attempting direct yt-dlp extraction for {video_id} (≤2 videos)"
+                f"🔄 Attempting direct yt-dlp extraction for {video_id} (≤2 videos) - this reduces PacketStream usage"
             )
             try:
                 metadata = self._extract_metadata_direct_ytdlp(url)
                 if metadata:
-                    logger.info(f"✅ Direct yt-dlp extraction successful for {video_id}")
+                    logger.info(
+                        f"✅ Direct yt-dlp extraction successful for {video_id} - PacketStream not used"
+                    )
                     metadata.extraction_method = "direct_ytdlp"
                     return metadata
                 else:

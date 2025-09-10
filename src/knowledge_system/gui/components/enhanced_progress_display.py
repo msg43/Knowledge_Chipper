@@ -400,14 +400,20 @@ class CloudTranscriptionStatusDisplay(QFrame):
         total_urls: int,
         current_operation: str,
         api_status: str = "",
+        current_step: int = 0,
+        steps_per_url: int = 6,
     ) -> None:
-        """Update ONLY the progress bar - no text updates."""
+        """Update ONLY the progress bar with granular step-based progress."""
         self.show()
 
-        # Update ONLY the progress bar
+        # Calculate granular progress based on steps within each URL
         if total_urls > 0:
-            self.cloud_progress.setMaximum(total_urls)
-            self.cloud_progress.setValue(current_url)
+            total_steps = total_urls * steps_per_url
+            # Add 1 to current_step to show progress for the step being worked on
+            current_step_overall = (current_url * steps_per_url) + current_step + 1
+
+            self.cloud_progress.setMaximum(total_steps)
+            self.cloud_progress.setValue(min(current_step_overall, total_steps))
         else:
             self.cloud_progress.setMaximum(0)  # Indeterminate
 

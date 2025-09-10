@@ -534,6 +534,25 @@ class SpeakerIdentificationConfig(BaseModel):
         default=True, description="Update People.yaml files with speaker information"
     )
 
+    # Advanced diarization settings
+    diarization_sensitivity: str = Field(
+        default="conservative",
+        pattern="^(aggressive|balanced|conservative)$",
+        description="Speaker detection sensitivity: aggressive (more speakers), balanced (default), conservative (fewer speakers)",
+    )
+    min_speaker_duration: float = Field(
+        default=1.0,
+        ge=0.1,
+        le=10.0,
+        description="Minimum duration in seconds for a speaker segment to be considered valid",
+    )
+    speaker_separation_threshold: float = Field(
+        default=0.8,
+        ge=0.1,
+        le=1.0,
+        description="Threshold for considering voices as different speakers (higher = fewer speakers)",
+    )
+
     # Advanced settings
     enable_audio_playback: bool = Field(
         default=False,

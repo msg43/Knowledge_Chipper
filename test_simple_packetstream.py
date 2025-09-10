@@ -38,8 +38,8 @@ def test_packetstream_basics():
     # Step 2: Test the exact proxy URL format used by yt-dlp
     print("\n2. Testing proxy URL format...")
 
-    proxy_url = f"http://{username}:{auth_key}@proxy.packetstream.io:31111"
-    print(f"   Proxy URL: http://{username}:***@proxy.packetstream.io:31111")
+    proxy_url = f"http://{username}:{auth_key}@proxy.packetstream.io:31112"
+    print(f"   Proxy URL: http://{username}:***@proxy.packetstream.io:31112")
 
     # Step 3: Test simple HTTP request through proxy
     print("\n3. Testing basic proxy connection...")

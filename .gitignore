@@ -205,6 +205,18 @@ config/settings.yaml
 whisper_models/
 downloaded_models/
 .cache/models/
+# Bundled models for internal distribution
+bundled_models/*/*/*.bin
+bundled_models/*/*/*.pth
+bundled_models/*/*/*.pt
+bundled_models/*/*/*.onnx
+bundled_models/*/*/*.safetensors
+# But keep model configs and metadata
+!bundled_models/**/config.yaml
+!bundled_models/**/preprocessor_config.json
+!bundled_models/**/*.json
+!bundled_models/**/README.md
+!bundled_models/**/.gitkeep
 
 # Cache directories
 cache/

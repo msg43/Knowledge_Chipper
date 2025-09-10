@@ -203,11 +203,12 @@ class BatchProcessor:
         start_time = time.time()
 
         try:
+            remaining_files = len(self.files) - self.files_processed
             self.ipc.send_progress(
                 current_file=self.files_processed + 1,
                 total_files=len(self.files),
                 stage="starting",
-                message=f"Processing {file_path_obj.name}",
+                message=f"Processing {file_path_obj.name} ({remaining_files} files remaining)",
                 progress=0,
             )
 
@@ -329,8 +330,10 @@ class BatchProcessor:
 
                 # Skip if already completed (checkpoint resume)
                 if self._should_resume_from_checkpoint(file_path):
+                    remaining_files = len(self.files) - self.files_processed - 1
                     self.ipc.send_message(
-                        "info", f"Skipping {Path(file_path).name} (already completed)"
+                        "info",
+                        f"Skipping {Path(file_path).name} (already completed, {remaining_files} files remaining)",
                     )
                     self.files_processed += 1
                     continue

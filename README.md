@@ -10,15 +10,44 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 
 ## 🎉 What's New (Latest Updates)
 
-### 🤖 **LLM-Only Speaker Suggestions (January 2025)**
-- **LLM-Only Approach**: Speaker suggestions now use ONLY LLM analysis - no pattern-based fallbacks
-- **Automatic Name Detection**: LLM analyzes metadata and first 5 statements to identify real speaker names
-- **Improved Accuracy**: Correctly identifies speakers like "John Smith" or "Sarah Johnson" from context
-- **Generic Fallback**: When LLM unavailable, uses simple generic names (Speaker 1, Speaker 2, etc.)
-- **User Confirmation**: All LLM suggestions require user review and confirmation
-- **Enhanced Debug Logging**: Comprehensive logging to track LLM suggestions and responses
+### 🚀 **Complete Offline DMG by Default (January 2025)**
+- **Full Bundle Default**: DMG builds now include ALL models by default (~4GB)
+- **100% Offline**: Includes FFMPEG, Pyannote, Whisper, Ollama, and Llama 3.2:3b
+- **Zero Downloads**: Everything works immediately after DMG install - no internet required
+- **Two Release Options**:
+  - Full DMG (~4GB): Default - Everything pre-bundled for offline use
+  - Minimal DMG (~1GB): Optional - Models download on first use
+- **Build Commands**:
+  - Full (Default): `./scripts/release_dmg_to_public.sh`
+  - Minimal: `./scripts/release_minimal_dmg.sh`
+  - Manual: `./scripts/build_macos_app.sh --make-dmg [--no-bundle for minimal]`
+
+### 🤖 **Smart Podcast-Focused Speaker Detection (September 2025)**
+- **Clean Segment Analysis**: LLM analyzes final clean, deduplicated segments - exactly what user sees in attribution dialog
+- **LLM-Only Approach**: Speaker suggestions use ONLY LLM analysis - no pattern-based fallbacks
+- **Guaranteed Segment Display**: Every speaker shows exactly 5 unique segments with zero duplicate content
+- **Full Metadata Analysis**: Uses complete video/podcast descriptions (not truncated) for name extraction
+- **Introduction Pattern Recognition**: Detects patterns like "I'm Tony", "my name is...", "welcome back, I'm..."
+- **Channel Learning System**: Remembers channel-to-host mappings (e.g., "Eurodollar University" → "Jeff Snider")
+- **Overlap Conflict Resolution**: Intelligent handling of overlapping diarization segments prevents duplicate text assignments
+- **User Correction Learning**: System gets smarter with each correction you make
+- **Persistent Memory**: Database stores channel mappings for future transcriptions
+- **Enhanced Accuracy**: Dramatically improved detection through clean data analysis
 - **API Key Support**: Works with both OpenAI and Anthropic API keys
 
+### 🎛️ **Speaker Mapping Management System (January 2025)**
+- **GUI Management Interface**: Edit channel-to-host mappings directly in the 🎙️ Speaker Attribution tab
+- **300+ Pre-Seeded Mappings**: Includes popular podcasts like Joe Rogan, Huberman Lab, Lex Fridman, Ben Shapiro, etc.
+- **Command Line Tools**: Scripts for bulk management and seeding of podcast mappings
+- **Persistent Channel Learning**: System remembers "Eurodollar University" → "Jeff Snider" type mappings permanently
+- **Manual Override Capability**: Easy editing when you change your mind about speaker assignments
+- **Database Integration**: All mappings stored in SQLite with usage statistics and confidence scores
+- **Bulk Import Scripts**: 
+  - `python scripts/seed_podcast_mappings.py` - Add 300+ popular podcast mappings
+  - `python scripts/manage_speaker_mappings.py` - View, add, edit, delete individual mappings
+- **Usage Analytics**: Track how often each mapping is used and when it was last updated
+- **Smart Conflict Resolution**: Handles duplicate entries and provides update/overwrite options
+- **Future-Proof Design**: New mappings automatically improve speaker detection for all future transcriptions
 ### 💾 **Automatic Database Persistence for All Transcriptions (January 2025)**
 - **Universal Database Storage**: Every cloud and local transcription now automatically saves to SQLite database
 - **Intelligent Re-run Handling**: Re-processing the same video/audio file overwrites existing database entries
@@ -29,15 +58,18 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 - **Audio File Support**: Local audio transcriptions save with consistent IDs based on file path
 - **Transparent Operation**: Database saves occur silently in background without affecting workflow
 
-### 🤖 **MVP AI System for Speaker Attribution (January 2025)**
+### 🤖 **MVP AI System with Complete Model Bundle (January 2025)**
 - **Zero-Setup AI**: Built-in offline AI system automatically identifies speakers without API keys or internet
-- **Pre-Installed Ready**: MVP AI installs during .dmg setup (default) - no delays during urgent transcription work
+- **Complete Model Bundle**: ALL models pre-bundled for internal company use:
+  - Whisper transcription model (~140MB) - included in setup
+  - Ollama LLM model (~2GB) - included for speaker suggestions
+  - Pyannote diarization model (~400MB) - bundled in DMG (internal use)
+- **No Internet Required**: All models work completely offline from first launch
+- **No Processing Delays**: Everything pre-installed and ready to use immediately
+- **Model Download Utility**: Run `python scripts/download_models.py` to update models if needed
 - **Intelligent Speaker Recognition**: Analyzes conversation context to suggest real names (e.g., "Joe Rogan", "Elon Musk") instead of generic labels
-- **Instant Results**: Works immediately on first use - no waiting for model downloads during workflows
-- **LLM-Only Mode**: MVP AI provides speaker suggestions only when cloud LLM unavailable - no pattern-based analysis
-- **Installation Choice**: Users can opt-out during setup, but most get professional speaker attribution by default
 - **Performance Metrics**: Real-time status display shows model info, service health, and performance indicators
-- **Error Recovery**: User-friendly error dialogs with specific troubleshooting steps and alternatives
+- **Internal Company Distribution**: Pre-accepted terms for all company users
 
 ### 🎬 **Silent FFMPEG Bundling in DMG Installer (January 2025)**
 - **Zero-Setup YouTube Transcription**: FFMPEG automatically included in .dmg distributions - works immediately after install
@@ -442,16 +474,23 @@ pip install -e ".[diarization]"
 - ✅ Creates virtual environment and installs all Python packages
 - ✅ Sets up configuration files from templates
 - ✅ Creates data directories in ~/Documents/KnowledgeSystem
-- ✅ Optionally downloads Whisper models and Ollama (interactive version)
+- ✅ Downloads Whisper transcription model (~140MB) for audio processing
+- ✅ Downloads Ollama and MVP LLM model (~2GB) for speaker suggestions
 - ✅ Tests the installation and provides next steps
 - ✅ Can launch the GUI immediately when complete
 
-**📦 Download Sizes:**
-- **Whisper "base" model**: ~150MB (for speech recognition and transcription)
-- **Fallback LLM model**: ~2GB (automatically installed for speaker diarization backup)
-  - Ensures speaker attribution works even without cloud AI setup
-  - Downloads silently in background on first use
-  - Provides offline capability for identifying speakers (e.g., "Joe Rogan", "Guest")
+**For Developers - Avoid Download Delays:**
+```bash
+# Pre-download all models for development
+./scripts/setup_dev_models.sh
+```
+
+**Complete Model Bundle (Internal Company Use):**
+- 🎙️ Speaker diarization works immediately - no setup required
+- 📦 Pyannote model pre-bundled in DMG (~400MB)
+- 🔒 Terms pre-accepted for all company users
+- ⚡ Works offline from first launch
+- ✅ No HuggingFace account needed
 
 **Setup time:** 2-5 minutes (vs 15+ minutes manual)
 

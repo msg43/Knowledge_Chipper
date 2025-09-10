@@ -625,18 +625,6 @@ def transcribe(
                     console.print(f"[dim]  - {url}[/dim]")
                 return
 
-            # Process each URL
-            from ..services.transcription_service import TranscriptionService
-
-            service = TranscriptionService(
-                whisper_model=model,
-                download_thumbnails=download_thumbnails,
-                use_whisper_cpp=use_whisper_cpp,
-            )
-
-            failed_urls = []
-            skipped_urls = []
-
             # Ensure output directory is set
             if output is None:
                 console.print(
@@ -644,101 +632,62 @@ def transcribe(
                 )
                 sys.exit(1)
 
-            for i, url in enumerate(urls, 1):
-                if not ctx.quiet:
-                    console.print(
-                        f"[bold blue]Processing {i}/{len(urls)}:[/bold blue] {url}"
-                    )
-
-                # Extract video ID
-                video_id = extract_video_id_from_url(url)
-                if not video_id:
-                    video_id = f"video_{i}"
-
-                # Check if transcript already exists
-                if not overwrite and check_transcript_exists(video_id, output, format):
-                    if not ctx.quiet:
-                        console.print(
-                            f"[yellow]⚠ Transcript already exists for {video_id}, skipping (use --overwrite to replace)[/yellow]"
-                        )
-                    skipped_urls.append(url)
-                    continue
-
-                result = service.transcribe_youtube_url(
-                    url,
-                    download_thumbnails=download_thumbnails,
-                    output_dir=output,
-                    include_timestamps=timestamps,
-                    enable_diarization=speaker_labels,
-                    require_diarization=False,  # Allow fallback when diarization fails
-                    overwrite=overwrite,
-                )
-
-                if result["success"]:
-                    # Check if transcript is too short
-                    if is_transcript_too_short(result["transcript"]):
-                        if not ctx.quiet:
-                            console.print(
-                                f"[yellow]⚠ Transcript too short (< 50 words) for {url}[/yellow]"
-                            )
-                        track_failed_transcript(
-                            url, "Transcript too short (< 50 words)", output
-                        )
-                        failed_urls.append((url, "Too short"))
-                        continue
-
-                    # Save transcript
-                    output_file = output / f"{video_id}_transcript.{format}"
-                    output_file.parent.mkdir(parents=True, exist_ok=True)
-
-                    # Format and save transcript
-                    content = format_transcript_content(
-                        result["transcript"],
-                        f"YouTube Video {video_id}",
-                        model,
-                        device,
-                        format,
-                        video_id=video_id,
-                        timestamps=timestamps,
-                        output_dir=output,
-                    )
-
-                    with open(output_file, "w", encoding="utf-8") as f:
-                        f.write(content)
-
-                    if not ctx.quiet:
-                        console.print(
-                            f"[green]✓ Transcript saved to: {output_file}[/green]"
-                        )
-                        if result.get("thumbnails"):
-                            for thumbnail in result["thumbnails"]:
-                                console.print(
-                                    f"[green]✓ Thumbnail saved to: {thumbnail}[/green]"
-                                )
-                else:
-                    console.print(
-                        f"[red]✗ Failed to transcribe {url}: {result['error']}[/red]"
-                    )
-                    track_failed_transcript(url, f"Error: {result['error']}", output)
-                    failed_urls.append((url, result["error"]))
-
-            # Summary
+            # Use unified batch processor for multiple URLs (always >3 from CSV files)
             if not ctx.quiet:
-                console.print("\n[bold]Summary:[/bold]")
                 console.print(
-                    f"[green]✓ Successfully processed: {len(urls) - len(failed_urls) - len(skipped_urls)} URLs[/green]"
+                    f"[bold green]Using optimized batch processing for {len(urls)} URLs[/bold green]"
                 )
-                if skipped_urls:
+
+            from ..processors.unified_batch_processor import UnifiedBatchProcessor
+
+            config = {
+                "output_dir": output,
+                "format": format,
+                "timestamps": timestamps,
+                "enable_diarization": speaker_labels,
+                "overwrite": overwrite,
+                "model": model,
+                "download_thumbnails": download_thumbnails,
+                "use_whisper_cpp": use_whisper_cpp,
+                "download_all_mode": len(urls)
+                <= 50,  # Use download-all for smaller batches
+            }
+
+            def progress_callback(current: int, total: int, message: str):
+                if not ctx.quiet:
+                    percent = (current / total * 100) if total > 0 else 0
                     console.print(
-                        f"[yellow]⚠ Skipped (already exists): {len(skipped_urls)} URLs[/yellow]"
-                    )
-                if failed_urls:
-                    console.print(f"[red]✗ Failed: {len(failed_urls)} URLs[/red]")
-                    console.print(
-                        f"[dim]Failed URLs saved to: {output / 'failed_transcripts.csv'}[/dim]"
+                        f"[dim][{percent:5.1f}%] {current}/{total} - {message}[/dim]"
                     )
 
-            return
+            def url_completed_callback(url: str, success: bool, message: str):
+                if not ctx.quiet:
+                    status = "[green]✓[/green]" if success else "[red]✗[/red]"
+                    url_short = url[:50] + "..." if len(url) > 50 else url
+                    console.print(f"{status} {url_short}: {message}")
+
+            processor = UnifiedBatchProcessor(
+                items=urls,
+                config=config,
+                progress_callback=progress_callback,
+                url_completed_callback=url_completed_callback,
+            )
+
+            results = processor.process_all()
+
+            if not ctx.quiet:
+                console.print(f"[bold green]Batch processing completed:[/bold green]")
+                console.print(
+                    f"  - Total processed: {results['successful'] + results['failed']}"
+                )
+                console.print(f"  - Successful: {results['successful']}")
+                console.print(f"  - Failed: {results['failed']}")
+
+                if results["failed"] > 0:
+                    console.print(f"[yellow]  - See logs for failure details[/yellow]")
+
+            # Exit with appropriate code
+            sys.exit(0 if results["failed"] == 0 else 1)
 
         except Exception as e:
             console.print(f"[red]✗ Error processing batch URLs:[/red] {e}")
@@ -780,8 +729,84 @@ def transcribe(
     )
 
     try:
-        # Check if input is a YouTube URL
+        # Check if input is a YouTube URL (playlist or single video)
         if "youtube.com" in input or "youtu.be" in input:
+            # First, check if this is a playlist and if it has >3 videos
+            from ..utils.youtube_utils import (
+                expand_playlist_urls_with_metadata,
+                is_playlist_url,
+            )
+
+            if is_playlist_url(input):
+                # Expand playlist to check size
+                expansion_result = expand_playlist_urls_with_metadata([input])
+                expanded_urls = expansion_result["expanded_urls"]
+
+                if len(expanded_urls) > 3:
+                    # Use unified batch processor for large playlists
+                    if not ctx.quiet:
+                        console.print(
+                            f"[bold green]Detected playlist with {len(expanded_urls)} videos - using optimized batch processing[/bold green]"
+                        )
+
+                    from ..processors.unified_batch_processor import (
+                        UnifiedBatchProcessor,
+                    )
+
+                    config = {
+                        "output_dir": output,
+                        "format": format,
+                        "timestamps": timestamps,
+                        "enable_diarization": speaker_labels,
+                        "overwrite": overwrite,
+                        "model": model,
+                        "download_thumbnails": download_thumbnails,
+                        "use_whisper_cpp": use_whisper_cpp,
+                        "download_all_mode": len(expanded_urls)
+                        <= 50,  # Use download-all for smaller playlists
+                    }
+
+                    def progress_callback(current: int, total: int, message: str):
+                        if not ctx.quiet:
+                            percent = (current / total * 100) if total > 0 else 0
+                            console.print(
+                                f"[dim][{percent:5.1f}%] {current}/{total} - {message}[/dim]"
+                            )
+
+                    def url_completed_callback(url: str, success: bool, message: str):
+                        if not ctx.quiet:
+                            status = "[green]✓[/green]" if success else "[red]✗[/red]"
+                            url_short = url[:50] + "..." if len(url) > 50 else url
+                            console.print(f"{status} {url_short}: {message}")
+
+                    processor = UnifiedBatchProcessor(
+                        items=[input],  # Will be expanded internally
+                        config=config,
+                        progress_callback=progress_callback,
+                        url_completed_callback=url_completed_callback,
+                    )
+
+                    results = processor.process_all()
+
+                    if not ctx.quiet:
+                        console.print(
+                            f"[bold green]Batch processing completed:[/bold green]"
+                        )
+                        console.print(
+                            f"  - Total processed: {results['successful'] + results['failed']}"
+                        )
+                        console.print(f"  - Successful: {results['successful']}")
+                        console.print(f"  - Failed: {results['failed']}")
+
+                        if results["failed"] > 0:
+                            console.print(
+                                f"[yellow]  - See logs for failure details[/yellow]"
+                            )
+
+                    # Exit with appropriate code
+                    sys.exit(0 if results["failed"] == 0 else 1)
+
+            # For single videos or small playlists, use existing logic
             # Extract video ID
             video_id = extract_video_id_from_url(input)
             if not video_id:

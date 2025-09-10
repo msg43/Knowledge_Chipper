@@ -197,6 +197,26 @@ class SpeakerSession(Base):
         return f"<SpeakerSession(id={self.id}, name='{self.session_name}')>"
 
 
+class ChannelHostMapping(Base):
+    """Database model for storing channel-to-host name mappings."""
+
+    __tablename__ = "channel_host_mappings"
+
+    id = Column(Integer, primary_key=True)
+    channel_name = Column(String(255), nullable=False, index=True, unique=True)
+    host_name = Column(String(255), nullable=False)
+    confidence = Column(Float, default=1.0)  # How confident we are in this mapping
+    created_by = Column(
+        String(50), default="user_correction"
+    )  # 'user_correction', 'llm_suggestion', 'manual'
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    use_count = Column(Integer, default=1)  # How many times this mapping has been used
+
+    def __repr__(self):
+        return f"<ChannelHostMapping(id={self.id}, channel='{self.channel_name}', host='{self.host_name}')>"
+
+
 class SpeakerProcessingSession(Base):
     """Database model for tracking speaker processing sessions and learning data."""
 
@@ -558,16 +578,148 @@ class SpeakerDatabaseService:
     def get_assignments_for_recording(
         self, recording_path: str
     ) -> list[SpeakerAssignment]:
-        """Get all speaker assignments for a recording."""
+        """Get all speaker assignments for a recording with robust path matching."""
         try:
             with self.get_session() as session:
-                return (
+                # Try exact match first
+                assignments = (
                     session.query(SpeakerAssignment)
                     .filter_by(recording_path=recording_path)
                     .all()
                 )
+
+                if assignments:
+                    logger.debug(
+                        f"Found {len(assignments)} assignments with exact path match"
+                    )
+                    return assignments
+
+                # Try normalized absolute path
+                try:
+                    from pathlib import Path
+
+                    normalized_path = str(Path(recording_path).resolve())
+                    if normalized_path != recording_path:
+                        assignments = (
+                            session.query(SpeakerAssignment)
+                            .filter_by(recording_path=normalized_path)
+                            .all()
+                        )
+                        if assignments:
+                            logger.info(
+                                f"Found {len(assignments)} assignments with normalized path"
+                            )
+                            return assignments
+                except Exception:
+                    pass
+
+                # Try filename-only matching as fallback for moved files
+                from pathlib import Path
+
+                filename = Path(recording_path).name
+                if filename:
+                    assignments = (
+                        session.query(SpeakerAssignment)
+                        .filter(SpeakerAssignment.recording_path.like(f"%{filename}"))
+                        .order_by(
+                            SpeakerAssignment.updated_at.desc()
+                        )  # Most recent first
+                        .all()
+                    )
+
+                    if assignments:
+                        logger.info(
+                            f"Found {len(assignments)} assignments using filename fallback: {filename}"
+                        )
+                        return assignments
+
+                logger.debug(f"No assignments found for recording: {recording_path}")
+                return []
+
         except Exception as e:
             logger.error(f"Error getting assignments for recording: {e}")
+            return []
+
+    def get_channel_host_mapping(self, channel_name: str) -> str | None:
+        """Get the host name for a given channel, if we have a mapping."""
+        try:
+            with self.get_session() as session:
+                mapping = (
+                    session.query(ChannelHostMapping)
+                    .filter_by(channel_name=channel_name)
+                    .first()
+                )
+                if mapping:
+                    # Increment use count
+                    mapping.use_count += 1
+                    session.commit()
+                    logger.debug(
+                        f"Found channel mapping: {channel_name} -> {mapping.host_name}"
+                    )
+                    return mapping.host_name
+                return None
+        except Exception as e:
+            logger.error(f"Error getting channel mapping: {e}")
+            return None
+
+    def create_or_update_channel_mapping(
+        self,
+        channel_name: str,
+        host_name: str,
+        created_by: str = "user_correction",
+        confidence: float = 1.0,
+    ) -> bool:
+        """Create or update a channel-to-host mapping."""
+        try:
+            with self.get_session() as session:
+                # Check if mapping already exists
+                existing = (
+                    session.query(ChannelHostMapping)
+                    .filter_by(channel_name=channel_name)
+                    .first()
+                )
+
+                if existing:
+                    # Update existing mapping
+                    existing.host_name = host_name
+                    existing.confidence = confidence
+                    existing.created_by = created_by
+                    existing.updated_at = datetime.utcnow()
+                    existing.use_count += 1
+                    logger.info(
+                        f"Updated channel mapping: {channel_name} -> {host_name}"
+                    )
+                else:
+                    # Create new mapping
+                    mapping = ChannelHostMapping(
+                        channel_name=channel_name,
+                        host_name=host_name,
+                        confidence=confidence,
+                        created_by=created_by,
+                    )
+                    session.add(mapping)
+                    logger.info(
+                        f"Created new channel mapping: {channel_name} -> {host_name}"
+                    )
+
+                session.commit()
+                return True
+
+        except Exception as e:
+            logger.error(f"Error creating/updating channel mapping: {e}")
+            return False
+
+    def get_all_channel_mappings(self) -> list[ChannelHostMapping]:
+        """Get all channel-to-host mappings."""
+        try:
+            with self.get_session() as session:
+                return (
+                    session.query(ChannelHostMapping)
+                    .order_by(ChannelHostMapping.use_count.desc())
+                    .all()
+                )
+        except Exception as e:
+            logger.error(f"Error getting all channel mappings: {e}")
             return []
 
     def create_learning_entry(
