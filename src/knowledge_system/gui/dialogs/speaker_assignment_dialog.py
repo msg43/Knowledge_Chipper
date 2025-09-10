@@ -44,6 +44,7 @@ class SpeakerCard(QFrame):
     name_changed = pyqtSignal(str, str)  # speaker_id, new_name
     switch_requested = pyqtSignal(str, str)  # speaker_id1, speaker_id2
     focus_requested = pyqtSignal(str)  # speaker_id
+    play_requested = pyqtSignal(str)  # speaker_id
 
     def __init__(self, speaker_data: SpeakerData, color: str, parent=None):
         """
@@ -232,11 +233,11 @@ class SpeakerCard(QFrame):
 
         buttons_layout.addStretch()
 
-        # Audio play button (future enhancement)
+        # Audio play button
         self.play_button = QPushButton("🔊 Play")
         self.play_button.setToolTip("Play audio sample (Ctrl+P)")
         self.play_button.setMaximumWidth(80)
-        self.play_button.setEnabled(False)  # Disabled for now
+        self.play_button.setEnabled(True)  # Enable the play button
         buttons_layout.addWidget(self.play_button)
 
         layout.addLayout(buttons_layout)
@@ -246,6 +247,7 @@ class SpeakerCard(QFrame):
         self.name_input.textChanged.connect(self._on_name_changed)
         self.name_input.returnPressed.connect(self._on_return_pressed)
         self.switch_button.clicked.connect(self._on_switch_clicked)
+        self.play_button.clicked.connect(self._on_play_clicked)
         self.name_input.focusInEvent = self._on_focus_in
 
     def _apply_styling(self):
@@ -279,6 +281,11 @@ class SpeakerCard(QFrame):
     def _on_switch_clicked(self):
         """Handle switch button click."""
         # This will be handled by the parent dialog
+
+    def _on_play_clicked(self):
+        """Handle play button click."""
+        # Emit signal for parent dialog to handle audio playback
+        self.play_requested.emit(self.speaker_data.speaker_id)
 
     def _on_focus_in(self, event):
         """Handle focus in event."""
@@ -401,6 +408,8 @@ class SpeakerAssignmentDialog(QDialog):
         self.setWindowTitle("Speaker Identification")
         self.setModal(True)
         self.setMinimumSize(900, 600)
+
+        # Inherit the standard dark theme from parent application - no custom styling
 
         # Set full height but keep current width
         from PyQt6.QtWidgets import QApplication
@@ -650,6 +659,7 @@ class SpeakerAssignmentDialog(QDialog):
         for card in self.speaker_cards.values():
             card.name_changed.connect(self._on_speaker_name_changed)
             card.focus_requested.connect(self._on_focus_requested)
+            card.play_requested.connect(self._on_play_requested)
 
     def _generate_speaker_colors(self) -> dict[str, str]:
         """Generate consistent colors for speakers."""
@@ -827,12 +837,205 @@ class SpeakerAssignmentDialog(QDialog):
         logger.debug(f"Switched assignments between {current_id} and {next_id}")
 
     def _play_current_speaker_audio(self):
-        """Play audio sample for current speaker (placeholder)."""
-        QMessageBox.information(
-            self,
-            "Audio Playback",
-            "Audio playback feature coming soon!\n\nThis will play a sample of the selected speaker's voice.",
+        """Play audio sample for current speaker."""
+        speaker_ids = list(self.speaker_cards.keys())
+        if self.current_focus_index < len(speaker_ids):
+            current_speaker_id = speaker_ids[self.current_focus_index]
+            self._play_speaker_audio(current_speaker_id)
+
+    def _on_play_requested(self, speaker_id: str):
+        """Handle play button click from speaker card."""
+        self._play_speaker_audio(speaker_id)
+
+    def _play_speaker_audio(self, speaker_id: str):
+        """Play audio sample for a specific speaker."""
+        try:
+            speaker_data = next(
+                (
+                    data
+                    for data in self.speaker_data_list
+                    if data.speaker_id == speaker_id
+                ),
+                None,
+            )
+
+            if not speaker_data:
+                QMessageBox.warning(
+                    self, "Audio Playback", f"Speaker {speaker_id} not found."
+                )
+                return
+
+            # Get first speaking segment with timestamp
+            first_segment = None
+            segments_to_check = getattr(
+                speaker_data, "first_five_segments", speaker_data.sample_texts[:5]
+            )
+
+            for segment in segments_to_check:
+                if (
+                    isinstance(segment, dict)
+                    and "start" in segment
+                    and "text" in segment
+                ):
+                    first_segment = segment
+                    break
+
+            if not first_segment:
+                QMessageBox.information(
+                    self,
+                    "Audio Playback",
+                    f"No timestamped segments available for {speaker_id}.\n\nAudio playback requires segments with timing information.",
+                )
+                return
+
+            # Extract audio segment from the original recording
+            if not self.recording_path or not Path(self.recording_path).exists():
+                QMessageBox.warning(
+                    self,
+                    "Audio Playback",
+                    "Original recording file not found.\n\nAudio playback requires access to the source file.",
+                )
+                return
+
+            self._extract_and_play_audio_segment(first_segment, speaker_id)
+
+        except Exception as e:
+            logger.error(f"Error playing speaker audio: {e}")
+            QMessageBox.critical(
+                self, "Audio Playback Error", f"Failed to play audio sample:\n{str(e)}"
+            )
+
+    def _extract_and_play_audio_segment(self, segment: dict, speaker_id: str):
+        """Extract and play a specific audio segment."""
+        import platform
+        import subprocess
+        import tempfile
+
+        from PyQt6.QtCore import QThread
+
+        # Calculate segment timing (play 3-5 seconds max)
+        start_time = segment.get("start", 0)
+        duration = min(segment.get("duration", 3.0), 5.0)  # Max 5 seconds
+        if duration < 1.0:
+            duration = 3.0  # Default to 3 seconds if duration is too short
+
+        # Create worker thread for audio extraction and playback
+        class AudioPlaybackWorker(QThread):
+            def __init__(self, recording_path, start_time, duration, speaker_id):
+                super().__init__()
+                self.recording_path = recording_path
+                self.start_time = start_time
+                self.duration = duration
+                self.speaker_id = speaker_id
+
+            def run(self):
+                try:
+                    with tempfile.NamedTemporaryFile(
+                        suffix=".wav", delete=False
+                    ) as temp_file:
+                        temp_path = temp_file.name
+
+                    # Extract audio segment using FFmpeg
+                    ffmpeg_cmd = [
+                        "ffmpeg",
+                        "-y",
+                        "-v",
+                        "quiet",
+                        "-i",
+                        str(self.recording_path),
+                        "-ss",
+                        str(self.start_time),
+                        "-t",
+                        str(self.duration),
+                        "-acodec",
+                        "pcm_s16le",
+                        "-ar",
+                        "44100",
+                        "-ac",
+                        "1",  # Mono
+                        temp_path,
+                    ]
+
+                    extract_result = subprocess.run(
+                        ffmpeg_cmd, capture_output=True, text=True, timeout=30
+                    )
+
+                    if extract_result.returncode != 0:
+                        logger.error(
+                            f"FFmpeg extraction failed: {extract_result.stderr}"
+                        )
+                        return
+
+                    # Play audio using system command
+                    if platform.system() == "Darwin":  # macOS
+                        play_cmd = ["afplay", temp_path]
+                    elif platform.system() == "Linux":
+                        # Try different players
+                        if (
+                            subprocess.run(
+                                ["which", "paplay"], capture_output=True
+                            ).returncode
+                            == 0
+                        ):
+                            play_cmd = ["paplay", temp_path]
+                        elif (
+                            subprocess.run(
+                                ["which", "aplay"], capture_output=True
+                            ).returncode
+                            == 0
+                        ):
+                            play_cmd = ["aplay", temp_path]
+                        else:
+                            logger.error("No audio player found on Linux")
+                            return
+                    elif platform.system() == "Windows":
+                        # Use PowerShell for Windows
+                        play_cmd = [
+                            "powershell",
+                            "-c",
+                            f"(New-Object Media.SoundPlayer '{temp_path}').PlaySync()",
+                        ]
+                    else:
+                        logger.error(f"Unsupported platform: {platform.system()}")
+                        return
+
+                    # Play the audio
+                    subprocess.run(play_cmd, timeout=10)
+
+                    # Clean up temporary file
+                    Path(temp_path).unlink(missing_ok=True)
+
+                except Exception as e:
+                    logger.error(f"Audio playback error: {e}")
+
+        # Start the worker thread
+        worker = AudioPlaybackWorker(
+            self.recording_path, start_time, duration, speaker_id
         )
+        worker.start()
+
+        # Show feedback to user
+        from PyQt6.QtWidgets import QMessageBox
+
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setWindowTitle("Playing Audio")
+        msg_box.setText(f"Playing audio sample for {speaker_id}...")
+        msg_box.setInformativeText(
+            f"Duration: {duration:.1f} seconds\nTimestamp: {start_time:.1f}s"
+        )
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg_box.setDefaultButton(QMessageBox.StandardButton.Ok)
+
+        # Auto-close the dialog after a short delay
+        from PyQt6.QtCore import QTimer
+
+        timer = QTimer()
+        timer.singleShot(
+            int(duration * 1000) + 500, msg_box.accept
+        )  # Close 500ms after audio ends
+
+        msg_box.exec()
 
     def _accept_all_and_finish(self):
         """Accept all current assignments and finish (fast batch processing)."""
@@ -1137,6 +1340,29 @@ class SpeakerAssignmentDialog(QDialog):
         """Handle dialog rejection."""
         self.assignment_cancelled.emit()
         self.reject()
+
+    def closeEvent(self, event):
+        """Handle window close event - treat as acceptance."""
+        # When user closes window, treat it as accepting current assignments
+        logger.info("🎯 Speaker assignment dialog closed - treating as acceptance")
+
+        # Collect all current assignments
+        final_assignments = {}
+        for speaker_id, card in self.speaker_cards.items():
+            name = card.get_assigned_name()
+            if name:
+                final_assignments[speaker_id] = name
+
+        # Save assignments to database if requested
+        if self.save_for_future_cb.isChecked():
+            self._save_assignments_to_database(final_assignments)
+
+        # Emit completion signal
+        self.speaker_assignments_completed.emit(final_assignments)
+
+        # Accept the dialog
+        event.accept()
+        self.accept()
 
     def _on_reset(self):
         """Reset all assignments to AI suggestions."""

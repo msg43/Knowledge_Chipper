@@ -629,7 +629,14 @@ class CloudTranscriptionSummary(QDialog):
             if hasattr(self, "_successful_videos_sample"):
                 summary_text += f"\n\n🎯 Successfully processed videos:\n"
                 for video in self._successful_videos_sample[:3]:
-                    title = video.get("title", "Unknown")
+                    # Handle both dictionary and string formats
+                    if isinstance(video, dict):
+                        title = video.get("title", "Unknown")
+                    elif isinstance(video, str):
+                        # If it's just a URL string, extract video ID or use URL
+                        title = f"Video {video[-11:]}" if len(video) >= 11 else video
+                    else:
+                        title = "Unknown"
                     display_title = title[:50] + "..." if len(title) > 50 else title
                     summary_text += f"  • {display_title}\n"
                 if len(self._successful_videos_sample) > 3:
@@ -648,7 +655,14 @@ class CloudTranscriptionSummary(QDialog):
                 for video in self._successful_videos_sample[
                     :2
                 ]:  # Show fewer for mixed case
-                    title = video.get("title", "Unknown")
+                    # Handle both dictionary and string formats
+                    if isinstance(video, dict):
+                        title = video.get("title", "Unknown")
+                    elif isinstance(video, str):
+                        # If it's just a URL string, extract video ID or use URL
+                        title = f"Video {video[-11:]}" if len(video) >= 11 else video
+                    else:
+                        title = "Unknown"
                     display_title = title[:45] + "..." if len(title) > 45 else title
                     summary_text += f"  • {display_title}\n"
                 if len(self._successful_videos_sample) > 2:
@@ -671,8 +685,21 @@ class CloudTranscriptionSummary(QDialog):
 
                     # Show up to 3 examples per category
                     for i, failure in enumerate(failures[:3]):
-                        title = failure.get("title", "Unknown")
-                        error = failure.get("error", "Unknown error")
+                        # Handle both dictionary and string formats
+                        if isinstance(failure, dict):
+                            title = failure.get("title", "Unknown")
+                            error = failure.get("error", "Unknown error")
+                        elif isinstance(failure, str):
+                            # If it's just a URL string, extract video ID or use URL
+                            title = (
+                                f"Video {failure[-11:]}"
+                                if len(failure) >= 11
+                                else failure
+                            )
+                            error = "Processing failed"
+                        else:
+                            title = "Unknown"
+                            error = "Unknown error"
 
                         # Truncate long titles for display
                         display_title = title[:40] + "..." if len(title) > 40 else title
@@ -1174,8 +1201,17 @@ class RetryFailedVideosDialog(QDialog):
         layout.addWidget(checkbox)
 
         # Video info
-        title = video.get("title", "Unknown Title")
-        error = video.get("error", "Unknown error")
+        # Handle both dictionary and string formats
+        if isinstance(video, dict):
+            title = video.get("title", "Unknown Title")
+            error = video.get("error", "Unknown error")
+        elif isinstance(video, str):
+            # If it's just a URL string, extract video ID or use URL
+            title = f"Video {video[-11:]}" if len(video) >= 11 else video
+            error = "Processing failed"
+        else:
+            title = "Unknown Title"
+            error = "Unknown error"
 
         # Truncate long titles and errors
         display_title = title[:60] + "..." if len(title) > 60 else title

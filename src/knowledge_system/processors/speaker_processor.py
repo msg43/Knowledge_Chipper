@@ -701,6 +701,17 @@ class SpeakerProcessor(BaseProcessor):
             # Call LLM suggester with ALL speakers at once (enables validation)
             from ..utils.llm_speaker_suggester import suggest_speaker_names_with_llm
 
+            # Import voice fingerprinting for advanced speaker verification
+            try:
+                from ..voice.voice_fingerprinting import VoiceFingerprintProcessor
+
+                voice_processor = VoiceFingerprintProcessor()
+                voice_fingerprinting_available = True
+            except ImportError as e:
+                logger.warning(f"Voice fingerprinting not available: {e}")
+                voice_processor = None
+                voice_fingerprinting_available = False
+
             llm_suggestions = suggest_speaker_names_with_llm(
                 speaker_segments_for_llm, metadata
             )

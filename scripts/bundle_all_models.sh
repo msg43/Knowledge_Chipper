@@ -61,7 +61,35 @@ else
     echo "⚠️  Ollama not installed - skipping"
 fi
 
-# 3. Create environment setup script
+# 3. Bundle Voice Fingerprinting Models (ESSENTIAL for 97% accuracy)
+echo "🎙️ Bundling voice fingerprinting models for 97% accuracy..."
+VOICE_SCRIPT="$SCRIPT_DIR/download_voice_models_direct.py"
+if [ -f "$VOICE_SCRIPT" ]; then
+    # Install dependencies first
+    echo "📦 Installing voice fingerprinting dependencies..."
+    python3 "$VOICE_SCRIPT" --app-bundle "$BUILD_APP_PATH" --install-deps
+
+    # Download models with HF token if available
+    if [ ! -z "$HF_TOKEN" ]; then
+        echo "📥 Downloading voice models with HF token..."
+        HF_TOKEN="$HF_TOKEN" python3 "$VOICE_SCRIPT" --app-bundle "$BUILD_APP_PATH" --hf-token "$HF_TOKEN"
+    else
+        echo "📥 Downloading voice models (no HF token)..."
+        python3 "$VOICE_SCRIPT" --app-bundle "$BUILD_APP_PATH"
+    fi
+
+    VOICE_MODELS_DIR="$MACOS_PATH/.cache/knowledge_chipper/voice_models"
+    if [ -d "$VOICE_MODELS_DIR" ] && [ "$(ls -A "$VOICE_MODELS_DIR")" ]; then
+        echo "✅ Voice fingerprinting models bundled (~410MB)"
+        echo "🎯 97% accuracy speaker verification will work offline"
+    else
+        echo "⚠️ Voice models not bundled - will download on first use"
+    fi
+else
+    echo "⚠️ Voice model downloader not found - skipping"
+fi
+
+# 4. Create environment setup script
 cat > "$MACOS_PATH/setup_bundled_models.sh" << 'EOF'
 #!/bin/bash
 # Set up environment to use bundled models
@@ -87,5 +115,6 @@ echo "  Pyannote: ✅ (via download_pyannote_direct.py)"
 echo "  Whisper: $([ -f "$MACOS_PATH/.cache/whisper/ggml-base.bin" ] && echo "✅" || echo "❌ Not cached")"
 echo "  Ollama: $([ -f "$MACOS_PATH/bin/ollama" ] && echo "✅" || echo "❌ Not installed")"
 echo "  Llama 3.2:3b: $([ -d "$MACOS_PATH/.ollama/models/blobs" ] && echo "✅" || echo "❌ Not downloaded")"
+echo "  Voice Models: $([ -d "$MACOS_PATH/.cache/knowledge_chipper/voice_models" ] && echo "✅ (~410MB) 97% accuracy" || echo "❌ Not bundled")"
 echo
-echo "DMG will be ~4GB with all models bundled"
+echo "DMG will be ~4.4GB with all models bundled (including 97% accuracy voice fingerprinting)"

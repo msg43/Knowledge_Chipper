@@ -23,6 +23,7 @@ def _format_segments_to_markdown_transcript(
     include_speakers: bool = True,
     include_timestamps: bool = True,
     diarization_enabled: bool = False,
+    video_id: str | None = None,
 ) -> str:
     """
     Format transcript segments into properly formatted markdown with speaker separation.
@@ -32,6 +33,7 @@ def _format_segments_to_markdown_transcript(
         include_speakers: Whether to include speaker information
         include_timestamps: Whether to include timestamps
         diarization_enabled: Whether diarization was performed
+        video_id: YouTube video ID for creating hyperlinked timestamps
 
     Returns:
         Formatted markdown transcript content
@@ -50,8 +52,19 @@ def _format_segments_to_markdown_transcript(
         speaker = segment.get("speaker", "")
         start_time = segment.get("start", 0)
 
-        # Format timestamp
-        timestamp_str = _format_timestamp_for_display(start_time)
+        # Format timestamp with hyperlink for YouTube videos
+        if include_timestamps and video_id:
+            # Create hyperlinked timestamp for YouTube videos
+            timestamp_str = _format_timestamp_for_display(start_time)
+            youtube_url = (
+                f"https://www.youtube.com/watch?v={video_id}&t={int(start_time)}s"
+            )
+            timestamp_display = f"[{timestamp_str}]({youtube_url})"
+        elif include_timestamps:
+            # Plain timestamp without hyperlink
+            timestamp_display = f"**{_format_timestamp_for_display(start_time)}**"
+        else:
+            timestamp_display = None
 
         # Handle speaker formatting if diarization enabled and speakers should be included
         if include_speakers and speaker and diarization_enabled:
@@ -71,14 +84,14 @@ def _format_segments_to_markdown_transcript(
 
             # Format: **Speaker Name**\n*timestamp*\n\ntext\n
             content_parts.append(f"**{speaker_display}**")
-            if include_timestamps:
-                content_parts.append(f"*{timestamp_str}*\n")
+            if timestamp_display:
+                content_parts.append(f"*{timestamp_display}*\n")
             content_parts.append(f"{text}\n")
 
             previous_speaker = speaker
-        elif include_timestamps:
+        elif timestamp_display:
             # Format: **timestamp**\n\ntext\n
-            content_parts.append(f"**{timestamp_str}**\n")
+            content_parts.append(f"{timestamp_display}\n")
             content_parts.append(f"{text}\n")
         else:
             # Plain text format
@@ -212,6 +225,7 @@ class FileGenerationService:
                     include_speakers=include_speakers,
                     include_timestamps=include_timestamps,
                     diarization_enabled=has_speaker_data,  # Use actual speaker data presence
+                    video_id=video.video_id,  # Pass video_id for YouTube timestamp hyperlinks
                 )
 
             # Fallback to stored speaker text if segments not available
@@ -227,9 +241,15 @@ class FileGenerationService:
             # Add Obsidian hashtags from database tags
             hashtags_section = ""
             if video.tags_json:
-                from ..utils.obsidian_tags import yaml_tags_to_obsidian_hashtags
+                from ..utils.obsidian_tags import sanitize_tag_for_obsidian
 
-                hashtags = yaml_tags_to_obsidian_hashtags(video.tags_json)
+                # Create hashtags with improved sanitization
+                hashtags = []
+                for tag in video.tags_json:
+                    sanitized = sanitize_tag_for_obsidian(tag)
+                    if sanitized:
+                        hashtags.append(f"#{sanitized}")
+
                 if hashtags:
                     hashtags_section = f"\n{' '.join(sorted(hashtags))}\n"
 
@@ -734,10 +754,13 @@ class FileGenerationService:
 
         # Add tags from database (converted to hashtag format)
         if video.tags_json:
-            from ..utils.obsidian_tags import yaml_tags_to_obsidian_hashtags
+            from ..utils.obsidian_tags import sanitize_tag_for_obsidian
 
-            db_hashtags = yaml_tags_to_obsidian_hashtags(video.tags_json)
-            obsidian_tags.update(db_hashtags)
+            # Create hashtags with improved sanitization
+            for tag in video.tags_json:
+                sanitized = sanitize_tag_for_obsidian(tag)
+                if sanitized:
+                    obsidian_tags.add(f"#{sanitized}")
 
         # Add video-related tags
         obsidian_tags.add(f"#video/{video.video_id}")

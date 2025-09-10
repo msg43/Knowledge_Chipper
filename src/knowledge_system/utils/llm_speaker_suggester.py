@@ -168,6 +168,18 @@ class LLMSpeakerSuggester:
             for speaker_id, (name, conf) in suggestions.items():
                 logger.info(f"  {speaker_id} -> '{name}' (confidence: {conf:.2f})")
 
+            # Additional validation: Check for any remaining duplicates
+            all_names = [name for name, _ in suggestions.values()]
+            unique_names = set(all_names)
+            if len(all_names) != len(unique_names):
+                logger.error(
+                    f"🚨 CRITICAL: Still have duplicate names after validation!"
+                )
+                logger.error(f"All names: {all_names}")
+                logger.error(f"Unique names: {list(unique_names)}")
+                # Force fix any remaining duplicates
+                suggestions = self._force_fix_duplicates(suggestions)
+
             return suggestions
 
         except Exception as e:
@@ -480,6 +492,44 @@ class LLMSpeakerSuggester:
 
         logger.info("No LLM available - using generic speaker names")
         return suggestions
+
+    def _force_fix_duplicates(
+        self, suggestions: dict[str, tuple[str, float]]
+    ) -> dict[str, tuple[str, float]]:
+        """Emergency fix for any remaining duplicate names."""
+        logger.warning("🚨 EMERGENCY: Force-fixing duplicate speaker names")
+
+        # Create mapping of names to speaker IDs
+        name_to_speakers = {}
+        for speaker_id, (name, conf) in suggestions.items():
+            name_lower = name.lower().strip()
+            if name_lower not in name_to_speakers:
+                name_to_speakers[name_lower] = []
+            name_to_speakers[name_lower].append((speaker_id, name, conf))
+
+        # Fix duplicates by using generic names
+        fixed_suggestions = {}
+        for name_lower, speaker_list in name_to_speakers.items():
+            if len(speaker_list) == 1:
+                # No duplicate, keep as is
+                speaker_id, name, conf = speaker_list[0]
+                fixed_suggestions[speaker_id] = (name, conf)
+            else:
+                # Multiple speakers with same name - assign generic names
+                logger.error(
+                    f"Force-fixing {len(speaker_list)} speakers with duplicate name '{speaker_list[0][1]}'"
+                )
+                for i, (speaker_id, _, conf) in enumerate(speaker_list):
+                    # Extract speaker number from ID for consistent naming
+                    speaker_num = speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
+                    generic_name = f"Speaker {int(speaker_num) + 1}"
+                    fixed_suggestions[speaker_id] = (
+                        generic_name,
+                        0.3,
+                    )  # Low confidence for forced fix
+                    logger.warning(f"Force-fixed {speaker_id} -> '{generic_name}'")
+
+        return fixed_suggestions
 
 
 def suggest_speaker_names_with_llm(

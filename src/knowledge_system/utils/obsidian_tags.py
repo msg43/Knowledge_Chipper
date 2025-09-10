@@ -12,6 +12,9 @@ def sanitize_tag_for_obsidian(tag: str) -> str:
     """
     Sanitize a tag string to be compatible with Obsidian hashtag format.
 
+    This function now preserves more characters to maintain readability
+    while still ensuring Obsidian compatibility.
+
     Args:
         tag: Raw tag string
 
@@ -24,17 +27,24 @@ def sanitize_tag_for_obsidian(tag: str) -> str:
     # Remove leading/trailing whitespace
     tag = tag.strip()
 
-    # Replace spaces and problematic characters with hyphens
-    tag = re.sub(r"[^\w\-_/]", "-", tag)
+    # If tag is empty after stripping, return empty
+    if not tag:
+        return ""
+
+    # Only replace truly problematic characters for Obsidian
+    # Keep alphanumeric, hyphens, underscores, forward slashes, periods, and apostrophes
+    # Replace spaces with hyphens, but preserve other punctuation that's readable
+    tag = re.sub(r"\s+", "-", tag)  # Replace spaces/whitespace with hyphens
+    tag = re.sub(r"[^\w\-_/.'']", "-", tag)  # Only replace truly problematic chars
 
     # Replace multiple consecutive hyphens with single hyphen
-    tag = re.sub(r"-+", "-", tag)
+    tag = re.sub(r"-{2,}", "-", tag)
 
-    # Remove leading/trailing hyphens
-    tag = tag.strip("-")
+    # Remove leading/trailing hyphens and periods
+    tag = tag.strip("-.")
 
-    # Convert to lowercase for consistency
-    tag = tag.lower()
+    # Don't force lowercase - preserve original casing for readability
+    # tag = tag.lower()  # Commented out to preserve readability
 
     # Return empty if nothing valid remains
     return tag if tag else ""

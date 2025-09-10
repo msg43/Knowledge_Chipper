@@ -288,13 +288,18 @@ class SpeakerDiarizationProcessor(BaseProcessor):
 
                                 # Configure clustering based on sensitivity level
                                 if self.sensitivity == "aggressive":
-                                    pipeline.clustering.min_cluster_size = 10
-                                    threshold = 0.6  # Lower threshold = more speakers
-                                    min_duration_on = 0.3
+                                    pipeline.clustering.min_cluster_size = 8
+                                    threshold = 0.55  # Even lower threshold for maximum speaker detection
+                                    min_duration_on = 0.25
                                 elif self.sensitivity == "balanced":
-                                    pipeline.clustering.min_cluster_size = 15
-                                    threshold = 0.7
-                                    min_duration_on = 0.5
+                                    # Optimized for interviews: better separation of questioner/answerer
+                                    pipeline.clustering.min_cluster_size = (
+                                        12  # Reduced from 15
+                                    )
+                                    threshold = 0.65  # Reduced from 0.7 for better speaker separation
+                                    min_duration_on = (
+                                        0.4  # Reduced from 0.5 for quicker exchanges
+                                    )
                                 else:  # conservative
                                     pipeline.clustering.min_cluster_size = (
                                         25  # Increased for single-speaker bias
@@ -312,9 +317,20 @@ class SpeakerDiarizationProcessor(BaseProcessor):
 
                             if hasattr(pipeline, "segmentation"):
                                 pipeline.segmentation.min_duration_on = min_duration_on
-                                pipeline.segmentation.min_duration_off = (
-                                    0.5  # Minimum silence between speakers
-                                )
+
+                                # Optimize silence detection based on sensitivity
+                                if self.sensitivity == "aggressive":
+                                    pipeline.segmentation.min_duration_off = (
+                                        0.2  # Very short silence detection
+                                    )
+                                elif self.sensitivity == "balanced":
+                                    pipeline.segmentation.min_duration_off = (
+                                        0.3  # Optimized for interview turn-taking
+                                    )
+                                else:  # conservative
+                                    pipeline.segmentation.min_duration_off = (
+                                        0.5  # Longer silence required
+                                    )
                         logger.info("PIPELINE.from_pretrained completed successfully")
                     else:
                         raise ImportError("PIPELINE not available")

@@ -1614,6 +1614,7 @@ class YouTubeTab(BaseTab):
             "timestamps": False,  # Do not include timestamps for YouTube transcripts
             "overwrite": self.overwrite_checkbox.isChecked(),
             "enable_diarization": enable_diarization,
+            "enable_speaker_assignment": enable_diarization,  # Enable speaker dialogs when diarization is on
             "transcription_model": self.transcription_model_combo.currentText(),  # Pass selected model
             "download_all_mode": self.download_all_checkbox.isChecked(),
             "parallel_downloads": self.parallel_downloads_checkbox.isChecked(),
@@ -1672,6 +1673,9 @@ class YouTubeTab(BaseTab):
         self.extraction_worker.batch_status.connect(self._handle_batch_status)
         self.extraction_worker.memory_pressure.connect(self._handle_memory_pressure)
         self.extraction_worker.resource_warning.connect(self._handle_resource_warning)
+        self.extraction_worker.speaker_assignment_requested.connect(
+            self._handle_batch_speaker_assignment_request
+        )
         self.extraction_worker.extraction_finished.connect(self._extraction_finished)
         self.extraction_worker.extraction_error.connect(self._extraction_error)
 
@@ -1767,6 +1771,65 @@ class YouTubeTab(BaseTab):
 
         except Exception as e:
             logger.error(f"Error showing speaker assignment dialog: {e}")
+            # Mark task as failed
+            if task_id:
+                from knowledge_system.utils.speaker_assignment_queue import (
+                    get_speaker_assignment_queue,
+                )
+
+                queue = get_speaker_assignment_queue()
+                queue.complete_task(task_id, None)
+
+    def _handle_batch_speaker_assignment_request(
+        self, speaker_data_list, recording_path, metadata, task_id
+    ):
+        """
+        Handle speaker assignment request from batch worker thread.
+        Similar to single video processing but for batch mode.
+        """
+        try:
+            logger.info(
+                f"Batch mode showing speaker assignment dialog for task {task_id}"
+            )
+
+            # Import dialog and queue lazily to avoid circular deps
+            from knowledge_system.utils.speaker_assignment_queue import (
+                get_speaker_assignment_queue,
+            )
+
+            from ..dialogs.speaker_assignment_dialog import SpeakerAssignmentDialog
+
+            queue = get_speaker_assignment_queue()
+
+            # Create and show dialog (non-modal so batch processing can continue)
+            dialog = SpeakerAssignmentDialog(
+                speaker_data_list, recording_path, metadata, self
+            )
+
+            # Connect completion signal to update the task in queue
+            def on_dialog_completed():
+                assignments = dialog.get_assignments()
+                queue.complete_task(task_id, assignments)
+                logger.info(f"Batch speaker assignment completed for task {task_id}")
+
+            def on_dialog_cancelled():
+                queue.complete_task(task_id, None)
+                logger.info(f"Batch speaker assignment cancelled for task {task_id}")
+
+            dialog.speaker_assignments_completed.connect(on_dialog_completed)
+            dialog.assignment_cancelled.connect(on_dialog_cancelled)
+
+            # Show dialog non-modally to allow batch processing to continue
+            dialog.show()  # Non-modal - allows multiple dialogs and parallel processing
+
+            # Append info to log
+            self.append_log(
+                f"🎭 Speaker assignment dialog opened for {Path(recording_path).name}. "
+                f"Batch processing continues in parallel..."
+            )
+
+        except Exception as e:
+            logger.error(f"Error showing batch speaker assignment dialog: {e}")
             # Mark task as failed
             if task_id:
                 from knowledge_system.utils.speaker_assignment_queue import (
