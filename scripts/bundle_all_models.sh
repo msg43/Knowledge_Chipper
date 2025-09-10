@@ -32,7 +32,8 @@ fi
 echo "🤖 Bundling Ollama and Llama model..."
 OLLAMA_BIN="/usr/local/bin/ollama"
 if [ -f "$OLLAMA_BIN" ]; then
-    # Copy Ollama binary
+    # Create bin directory and copy Ollama binary
+    mkdir -p "$MACOS_PATH/bin"
     cp "$OLLAMA_BIN" "$MACOS_PATH/bin/ollama"
     chmod +x "$MACOS_PATH/bin/ollama"
 

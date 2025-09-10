@@ -39,6 +39,36 @@ else
     CURRENT_VERSION="unknown"
 fi
 
+# Pre-cache Whisper model for future DMG builds
+echo "🎤 Pre-caching Whisper model for DMG builds..."
+WHISPER_CACHE_DIR="$HOME/.cache/whisper"
+WHISPER_MODEL_FILE="$WHISPER_CACHE_DIR/ggml-base.bin"
+
+if [ ! -f "$WHISPER_MODEL_FILE" ]; then
+    echo "📥 Downloading Whisper base model (~150MB)..."
+    mkdir -p "$WHISPER_CACHE_DIR"
+
+    # Download the Whisper base model directly
+    WHISPER_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
+    if command -v curl >/dev/null 2>&1; then
+        curl -L "$WHISPER_URL" -o "$WHISPER_MODEL_FILE" --progress-bar
+    elif command -v wget >/dev/null 2>&1; then
+        wget "$WHISPER_URL" -O "$WHISPER_MODEL_FILE" --progress=bar
+    else
+        echo "⚠️  Neither curl nor wget found - skipping Whisper model download"
+        echo "   Future DMG builds will download model on first use"
+    fi
+
+    if [ -f "$WHISPER_MODEL_FILE" ]; then
+        echo "✅ Whisper model cached successfully at $WHISPER_MODEL_FILE"
+        echo "   Future DMG builds will include this model (~150MB)"
+    else
+        echo "⚠️  Whisper model download failed - continuing without cache"
+    fi
+else
+    echo "✅ Whisper model already cached at $WHISPER_MODEL_FILE"
+fi
+
 # Stage all changes
 echo "📦 Staging all files..."
 git add .
