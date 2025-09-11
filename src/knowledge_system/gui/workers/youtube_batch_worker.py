@@ -328,11 +328,11 @@ class YouTubeBatchWorker(QThread):
                     f"Good memory availability ({memory.percent:.1f}%) - allowing {base_download_limit} concurrent downloads"
                 )
 
-            # PacketStream limit - with sticky sessions providing different IPs
-            # We can use the full 12 concurrent sessions
+            # Conservative limit for testing without cookies
+            # Reduced to 3 concurrent sessions to minimize bot detection
             final_concurrency = min(
-                download_concurrency, 12
-            )  # Max 12 concurrent sessions with different IPs
+                download_concurrency, 3
+            )  # Max 3 concurrent sessions (conservative for no-cookie mode)
 
             logger.info(f"Download concurrency: {final_concurrency} parallel sessions")
             return final_concurrency
@@ -987,7 +987,8 @@ class YouTubeBatchWorker(QThread):
             def progress_callback(step: str, progress: int = 0):
                 # Extract video ID for better reporting
                 video_id = self._extract_video_id(url)
-                self.url_completed.emit(url, None, f"🎯 {video_id}: {step}")
+                # Note: using True as temporary success indicator for progress updates
+                self.url_completed.emit(url, True, f"🎯 {video_id}: {step}")
 
             # Use existing YouTubeTranscriptProcessor
             processor = YouTubeTranscriptProcessor()
@@ -1027,7 +1028,7 @@ class YouTubeBatchWorker(QThread):
         except Exception as e:
             video_id = self._extract_video_id(url)
             error_msg = f"Processing exception: {str(e)}"
-            self.url_completed.emit(url, None, f"❌ {video_id}: {error_msg}")
+            self.url_completed.emit(url, False, f"❌ {video_id}: {error_msg}")
             return False, error_msg
 
     def _record_success(self, url: str, message: str, title: str | None = None):
@@ -1344,11 +1345,17 @@ class YouTubeBatchWorker(QThread):
 
             import yt_dlp
 
-            # Get YouTube authentication strategy (cookies, browser auth, etc.)
-            from ...utils.youtube_utils import get_auth_strategy
-
-            auth_options = get_auth_strategy()
-            logger.info(f"🍪 Using authentication strategy: {list(auth_options.keys())}")
+            # Use fallback authentication strategy (no cookies)
+            auth_options = {
+                "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "sleep_interval_requests": 1,
+                "sleep_interval": 3,
+                "max_sleep_interval": 10,
+                "http_headers": {
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+            }
+            logger.info("🚫 Using no-cookie authentication strategy")
 
             # Flag to track if download was cancelled
             download_cancelled = False

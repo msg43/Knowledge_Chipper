@@ -29,7 +29,9 @@ class HCEPipeline:
     def __init__(self, config: PipelineConfigFlex):
         self.config = config
 
-    def process(self, episode: EpisodeBundle) -> PipelineOutputs:
+    def process(
+        self, episode: EpisodeBundle, progress_callback: Callable | None = None
+    ) -> PipelineOutputs:
         """Run the full HCE pipeline on an episode."""
         from .hce import (
             concepts,
@@ -46,7 +48,23 @@ class HCEPipeline:
             skim,
         )
 
+        # Report progress
+        def report_progress(step: str, percent: float, details: str = ""):
+            if progress_callback:
+                from ..utils.progress import SummarizationProgress
+
+                progress_callback(
+                    SummarizationProgress(
+                        current_step=step,
+                        file_percent=percent,
+                        status=f"{step}: {details}" if details else step,
+                    )
+                )
+
         # Step 1: Skim for high-level topics
+        report_progress(
+            "Analyzing document structure", 5.0, "Identifying key topics and milestones"
+        )
         milestones = []
         if self.config.use_skim:
             try:
@@ -57,8 +75,13 @@ class HCEPipeline:
                     else None
                 )
                 milestones = skim.skim_episode(episode, skim_model_uri)
+                logger.info(f"Identified {len(milestones)} key milestones")
             except Exception as e:
                 logger.warning(f"Skim failed, continuing without milestones: {e}")
+
+        report_progress(
+            "Document analysis complete", 10.0, f"Found {len(milestones)} key topics"
+        )
 
         # Step 2: Mine candidate claims (without deduplication)
         # We need to mine candidates first, then do evidence linking, then dedupe
@@ -67,20 +90,48 @@ class HCEPipeline:
         from .hce.miner import Miner
         from .hce.models.llm_any import AnyLLM
 
+        report_progress(
+            "Mining claims", 15.0, "Extracting candidate claims from content"
+        )
+
         # Create miner directly to get candidates
         miner_llm = AnyLLM(self.config.models.miner)
         miner_prompt = Path(__file__).parent / "hce" / "prompts" / "miner.txt"
         miner_obj = Miner(miner_llm, miner_prompt)
 
-        # Mine candidates from each segment
+        # Mine candidates from each segment with progress reporting
         candidates = []
-        for seg in episode.segments:
+        total_segments = len(episode.segments)
+        for i, seg in enumerate(episode.segments):
+            # Report progress for mining individual segments
+            segment_progress = 15.0 + (i / total_segments) * 25.0  # 15% to 40%
+            report_progress(
+                "Mining claims",
+                segment_progress,
+                f"Processing segment {i+1}/{total_segments}",
+            )
             candidates.extend(miner_obj.mine_segment(seg))
 
+        logger.info(
+            f"Mined {len(candidates)} candidate claims from {total_segments} segments"
+        )
+        report_progress(
+            "Claim mining complete",
+            40.0,
+            f"Extracted {len(candidates)} candidate claims",
+        )
+
         # Step 3: Extract evidence
+        report_progress(
+            "Linking evidence", 45.0, "Connecting claims to supporting evidence"
+        )
         with_evidence = evidence.link_evidence(candidates, episode.segments)
+        logger.info(f"Linked evidence for {len(with_evidence)} claims")
 
         # Step 4: Deduplicate claims
+        report_progress(
+            "Deduplicating claims", 50.0, "Removing duplicate and similar claims"
+        )
         from .hce.dedupe import Deduper
         from .hce.models.embedder import Embedder
 
@@ -92,11 +143,19 @@ class HCEPipeline:
         embedder = Embedder(embedder_model)
         deduper = Deduper(embedder)
         consolidated = deduper.cluster(with_evidence)
+        logger.info(f"Consolidated into {len(consolidated)} unique claims")
 
         # Step 5: Rerank claims
+        report_progress(
+            "Ranking claims", 55.0, "Scoring claims by importance and relevance"
+        )
         reranked = rerank.rerank_claims(consolidated, None, self.config.models.reranker)
+        logger.info(f"Reranked {len(reranked)} claims by importance")
 
         # Step 6: Route claims to appropriate judge
+        report_progress(
+            "Routing claims", 60.0, "Determining which claims need expert review"
+        )
         to_flagship, keep_local = router.route_claims(
             reranked, self.config.router_uncertainty_threshold
         )
@@ -108,7 +167,14 @@ class HCEPipeline:
         ):
             to_flagship = to_flagship[: self.config.flagship_max_claims_per_file]
 
+        logger.info(
+            f"Routed {len(to_flagship)} claims to flagship judge, {len(keep_local)} to local judge"
+        )
+
         # Step 7: Judge claims for final scoring (dual-judge routing if configured)
+        report_progress(
+            "Evaluating claims", 65.0, f"Final evaluation of {len(reranked)} claims"
+        )
         flagship_model_uri = (
             self.config.models.flagship_judge
             if hasattr(self.config.models, "flagship_judge")
@@ -121,38 +187,55 @@ class HCEPipeline:
             flagship_claims=to_flagship if flagship_model_uri else None,
             flagship_model_uri=flagship_model_uri,
         )
+        logger.info(f"Completed evaluation of {len(scored)} claims")
 
         # Step 8: Extract entities
+        report_progress(
+            "Extracting people", 70.0, "Identifying people mentioned in the content"
+        )
         try:
             people_mentions = people.extract_people(
                 episode, self.config.models.people_disambiguator
             )
+            logger.info(f"Identified {len(people_mentions)} people mentions")
         except Exception as e:
             logger.warning(f"People extraction failed: {e}")
             people_mentions = []
 
+        report_progress(
+            "Extracting concepts", 75.0, "Identifying key concepts and mental models"
+        )
         try:
-            mental_models = concepts.extract_concepts(episode, scored, model_uri)
+            mental_models = concepts.extract_concepts(
+                episode, scored, self.config.models.judge
+            )
+            logger.info(f"Extracted {len(mental_models)} mental models/concepts")
         except Exception as e:
             logger.warning(f"Concepts extraction failed: {e}")
             mental_models = []
 
+        report_progress(
+            "Extracting jargon", 80.0, "Identifying technical terms and jargon"
+        )
         try:
-            jargon_terms = glossary.extract_jargon(episode, model_uri)
+            jargon_terms = glossary.extract_jargon(episode, self.config.models.judge)
+            logger.info(f"Identified {len(jargon_terms)} jargon terms")
         except Exception as e:
             logger.warning(f"Jargon extraction failed: {e}")
             jargon_terms = []
 
-        # Step 9: Analyze claim temporality
+        # Step 9: Analyze claim temporality (currently disabled due to computational complexity)
         from .hce.temporality import analyze_temporality
 
         scored_with_temporality = analyze_temporality(scored, self.config.models.judge)
+        # Note: temporality analysis is disabled, so this is just a pass-through
 
-        # Step 10: Extract relations
+        # Step 10: Extract relations (currently disabled due to O(n²) computational complexity)
         try:
             claim_relations = relations.extract_relations(
                 scored_with_temporality, self.config.models.judge
             )
+            # Note: relations extraction is disabled to avoid factorial complexity with many claims
         except Exception as e:
             logger.warning(f"Relations extraction failed: {e}")
             claim_relations = []
@@ -169,18 +252,28 @@ class HCEPipeline:
         )
 
         # Step 11: Analyze structured categories
+        report_progress(
+            "Categorizing content",
+            85.0,
+            "Organizing content into structured categories",
+        )
         try:
             from .hce.structured_categories import analyze_structured_categories
 
             episode_categories = analyze_structured_categories(
                 initial_outputs, self.config.models.judge
             )
+            logger.info(f"Organized content into {len(episode_categories)} categories")
         except Exception as e:
             logger.warning(f"Structured categories analysis failed: {e}")
             episode_categories = []
 
+        report_progress(
+            "Finalizing summary", 100.0, "Processing complete - generating final output"
+        )
+
         # Return final outputs with categories
-        return PipelineOutputs(
+        final_outputs = PipelineOutputs(
             episode_id=episode.episode_id,
             claims=scored_with_temporality,
             relations=claim_relations,
@@ -190,6 +283,11 @@ class HCEPipeline:
             jargon=jargon_terms,
             structured_categories=episode_categories,
         )
+
+        logger.info(
+            f"HCE pipeline complete: {len(final_outputs.claims)} claims, {len(final_outputs.people)} people, {len(final_outputs.concepts)} concepts"
+        )
+        return final_outputs
 
 
 class SummarizerProcessor(BaseProcessor):
@@ -553,7 +651,7 @@ class SummarizerProcessor(BaseProcessor):
                     dry_run=True,
                 )
 
-            # Report progress
+            # Report initial progress
             if progress_callback:
                 from ..utils.progress import SummarizationProgress
 
@@ -561,8 +659,12 @@ class SummarizerProcessor(BaseProcessor):
                     SummarizationProgress(
                         chunk_number=0,
                         total_chunks=1,
-                        status="Extracting claims...",
-                        current_step="HCE Pipeline",
+                        file_percent=0.0,
+                        status="Starting HCE analysis...",
+                        current_step="Initializing HCE Pipeline",
+                        current_file=str(source_file) if source_file else "text input",
+                        model_name=self.model,
+                        provider=self.provider,
                     )
                 )
 
@@ -585,7 +687,7 @@ class SummarizerProcessor(BaseProcessor):
 
             # Run HCE pipeline
             try:
-                outputs = self.hce_pipeline.process(episode)
+                outputs = self.hce_pipeline.process(episode, progress_callback)
             except Exception as e:
                 logger.error(f"HCE pipeline failed: {e}")
                 # Fallback to simple extraction

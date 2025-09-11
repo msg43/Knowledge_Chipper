@@ -1,4 +1,7 @@
+import logging
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
 
 
 class AnyLLM:
@@ -222,7 +225,9 @@ class AnyLLM:
                 "stream": False,
             }
 
-            response = requests.post(url, json=payload, timeout=60)
+            # Use timeout from settings instead of hardcoded value
+            timeout = settings.local_config.timeout
+            response = requests.post(url, json=payload, timeout=timeout)
             response.raise_for_status()
 
             result = response.json()
@@ -233,7 +238,12 @@ class AnyLLM:
             import re
 
             # Clean up the response - remove markdown code blocks if present
-            json_content = content
+            json_content = content.strip()
+
+            # Return empty list if content is empty or just whitespace
+            if not json_content:
+                logger.warning(f"Empty response from model {model_name}")
+                return []
 
             # Look for JSON in markdown code blocks
             json_match = re.search(
@@ -247,7 +257,22 @@ class AnyLLM:
                 if json_match:
                     json_content = json_match.group(1)
 
-            return json.loads(json_content)
+            try:
+                parsed_json = json.loads(json_content)
+                # Ensure we return a list for consistency with other methods
+                if isinstance(parsed_json, dict):
+                    return [parsed_json]
+                elif isinstance(parsed_json, list):
+                    return parsed_json
+                else:
+                    logger.warning(
+                        f"Unexpected JSON type from model {model_name}: {type(parsed_json)}"
+                    )
+                    return []
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse JSON from model {model_name}: {e}")
+                logger.debug(f"Raw content: {content[:500]}...")
+                return []
 
         except Exception as e:
             import logging

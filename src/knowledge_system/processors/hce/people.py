@@ -68,6 +68,17 @@ class PeopleExtractor:
             )
 
             for i, r in enumerate(js):
+                # Validate normalized field - ensure it's a string or None
+                normalized_value = r.get("normalized")
+                if normalized_value is not None and not isinstance(
+                    normalized_value, str
+                ):
+                    # Convert non-string values to None to avoid validation errors
+                    normalized_value = None
+                    logger.debug(
+                        f"Invalid normalized value type {type(normalized_value)} for {r.get('surface', 'unknown')}, setting to None"
+                    )
+
                 person_mention = PersonMention(
                     episode_id=episode_id,
                     mention_id=f"pm_{seg.segment_id}_{i}",
@@ -75,9 +86,9 @@ class PeopleExtractor:
                     t0=r.get("t0", seg.t0),
                     t1=r.get("t1", seg.t1),
                     surface=r["surface"],
-                    normalized=r.get("normalized"),
+                    normalized=normalized_value,
                     entity_type=r.get("entity_type", "person"),
-                    confidence=r.get("confidence", 0.5),
+                    confidence=float(r.get("confidence") or 0.5),
                 )
                 out.append(person_mention)
 

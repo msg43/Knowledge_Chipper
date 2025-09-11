@@ -2269,11 +2269,9 @@ class SummarizationTab(BaseTab):
             # THREAD SAFETY FIX: Use signal to show dialog on main thread
             # This method may be called from a worker thread, so we must not create GUI components directly
             self.show_ollama_service_dialog_signal.emit(model)
-        else:
-            # Clean up worker if service is running
-            if hasattr(self, "_model_check_worker"):
-                self._model_check_worker.deleteLater()
-                del self._model_check_worker
+        # NOTE: Do NOT clean up worker here when service is running!
+        # The worker needs to continue and check model availability.
+        # Worker cleanup happens in _handle_model_check_result instead.
 
     def _show_ollama_service_dialog_on_main_thread(self, model: str) -> None:
         """Show Ollama service dialog on main thread (thread-safe)."""
@@ -2410,6 +2408,13 @@ class SummarizationTab(BaseTab):
         self.active_workers.append(self.summarization_worker)
         self.set_processing_state(True)
         self.clear_log()
+
+        # Create and show HCE progress dialog
+        from ..components.hce_progress_dialog import HCEProgressDialog
+
+        self.hce_progress_dialog = HCEProgressDialog(self)
+        self.hce_progress_dialog.cancelled.connect(self._cancel_processing)
+        self.hce_progress_dialog.show()
 
         # Show informative startup message
         file_count = len(files)
@@ -2857,6 +2862,27 @@ class SummarizationTab(BaseTab):
         """Handle progress updates with clean, informative status."""
         import time
 
+        # Update HCE progress dialog if it exists and we have step information
+        if (
+            hasattr(self, "hce_progress_dialog")
+            and self.hce_progress_dialog
+            and hasattr(progress, "current_step")
+            and progress.current_step
+        ):
+            # Update the HCE progress dialog
+            self.hce_progress_dialog.update_progress_from_step(
+                progress.current_step,
+                getattr(progress, "file_percent", 0),
+                getattr(progress, "status", ""),
+            )
+
+            # Update file information
+            if hasattr(progress, "current_file") and progress.current_file:
+                from pathlib import Path
+
+                filename = Path(progress.current_file).name
+                self.hce_progress_dialog.update_file(filename)
+
         # Initialize timing tracking (batch time already set when worker starts)
         if not hasattr(self, "_last_progress_update"):
             self._last_progress_update = 0
@@ -3122,6 +3148,13 @@ class SummarizationTab(BaseTab):
 
         self.set_processing_state(False)
 
+        # Finalize HCE progress dialog
+        if hasattr(self, "hce_progress_dialog") and self.hce_progress_dialog:
+            self.hce_progress_dialog.set_finished()
+            # Update final statistics if available
+            if hasattr(self, "_final_hce_stats"):
+                self.hce_progress_dialog.update_statistics(self._final_hce_stats)
+
         # Calculate total batch time
         total_time_text = ""
         if hasattr(self, "_batch_start_time"):
@@ -3183,6 +3216,27 @@ class SummarizationTab(BaseTab):
     def _on_hce_analytics_updated(self, analytics: dict) -> None:
         """Handle HCE analytics updates to show relations and contradictions."""
         filename = analytics.get("filename", "Unknown file")
+
+        # Store analytics for final HCE progress dialog update
+        if not hasattr(self, "_final_hce_stats"):
+            self._final_hce_stats = {
+                "claims": 0,
+                "tier1_claims": 0,
+                "people": 0,
+                "concepts": 0,
+                "relations": 0,
+                "contradictions": 0,
+            }
+
+        # Aggregate statistics
+        self._final_hce_stats["claims"] += analytics.get("total_claims", 0)
+        self._final_hce_stats["tier1_claims"] += analytics.get("tier_a_count", 0)
+        self._final_hce_stats["people"] += analytics.get("people_count", 0)
+        self._final_hce_stats["concepts"] += analytics.get("concepts_count", 0)
+        self._final_hce_stats["relations"] += analytics.get("relations_count", 0)
+        self._final_hce_stats["contradictions"] += analytics.get(
+            "contradictions_count", 0
+        )
 
         # Display claim analytics
         total_claims = analytics.get("total_claims", 0)
@@ -3274,6 +3328,10 @@ class SummarizationTab(BaseTab):
             self.summarization_worker.stop()  # Use the worker's stop method which handles cancellation token
             self.append_log("⏹ Stopping summarization process...")
         super()._stop_processing()
+
+    def _cancel_processing(self):
+        """Cancel the summarization process (called by HCE progress dialog)."""
+        self._stop_processing()
 
     def cleanup_workers(self):
         """Clean up worker threads."""

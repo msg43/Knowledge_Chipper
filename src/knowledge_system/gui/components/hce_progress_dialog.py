@@ -53,17 +53,18 @@ class HCEProgressDialog(QDialog):
         self.stage_labels = {}
 
         stages = [
-            ("skim", "Skimming Document"),
-            ("miner", "Mining Claims"),
-            ("judge", "Judging Claim Quality"),
-            ("dedupe", "Deduplicating Claims"),
-            ("rerank", "Reranking Claims"),
-            ("nli", "Checking Contradictions"),
-            ("relations", "Extracting Relations"),
-            ("people", "Identifying People"),
+            ("analyzing", "Analyzing Document Structure"),
+            ("mining", "Mining Claims"),
+            ("evidence", "Linking Evidence"),
+            ("deduplicating", "Deduplicating Claims"),
+            ("ranking", "Ranking Claims"),
+            ("routing", "Routing Claims"),
+            ("evaluating", "Evaluating Claims"),
+            ("people", "Extracting People"),
             ("concepts", "Extracting Concepts"),
-            ("glossary", "Building Glossary"),
-            ("export", "Exporting Results"),
+            ("jargon", "Extracting Jargon"),
+            ("categorizing", "Categorizing Content"),
+            ("finalizing", "Finalizing Summary"),
         ]
 
         for stage_id, stage_name in stages:
@@ -128,6 +129,38 @@ class HCEProgressDialog(QDialog):
         """Update current file being processed."""
         self.file_label.setText(f"Processing: {filename}")
 
+    def _map_step_to_stage(self, step: str) -> str | None:
+        """Map progress step names to stage IDs."""
+        step_lower = step.lower()
+
+        if "analyzing" in step_lower or "document structure" in step_lower:
+            return "analyzing"
+        elif "mining" in step_lower:
+            return "mining"
+        elif "linking evidence" in step_lower or "evidence" in step_lower:
+            return "evidence"
+        elif "deduplicating" in step_lower or "dedupe" in step_lower:
+            return "deduplicating"
+        elif "ranking" in step_lower or "rerank" in step_lower:
+            return "ranking"
+        elif "routing" in step_lower:
+            return "routing"
+        elif "evaluating" in step_lower or "judging" in step_lower:
+            return "evaluating"
+        elif "extracting people" in step_lower or "people" in step_lower:
+            return "people"
+        elif "extracting concepts" in step_lower or "concepts" in step_lower:
+            return "concepts"
+        elif "extracting jargon" in step_lower or "jargon" in step_lower:
+            return "jargon"
+        elif "categorizing" in step_lower:
+            return "categorizing"
+        elif "finalizing" in step_lower:
+            return "finalizing"
+        # Note: temporality and relationships steps removed due to computational complexity
+
+        return None
+
     def update_stage_progress(
         self, stage: str, percentage: int, status: str = ""
     ) -> None:
@@ -144,9 +177,16 @@ class HCEProgressDialog(QDialog):
 
             # Update label with status if provided
             if status and stage in self.stage_labels:
-                self.stage_labels[stage].setText(
-                    f"{self.stage_labels[stage].text().split(':')[0]}: {status}"
-                )
+                original_text = self.stage_labels[stage].text().split(":")[0]
+                self.stage_labels[stage].setText(f"{original_text}: {status}")
+
+    def update_progress_from_step(
+        self, step_name: str, percentage: int, status: str = ""
+    ) -> None:
+        """Update progress using step name from HCE pipeline."""
+        stage_id = self._map_step_to_stage(step_name)
+        if stage_id:
+            self.update_stage_progress(stage_id, int(percentage), status)
 
     def update_statistics(self, stats: dict) -> None:
         """Update extraction statistics."""
