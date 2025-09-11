@@ -10,7 +10,6 @@ Uses residential proxies to avoid bot detection while providing reliable metadat
 """
 
 import json
-import re
 import time
 from datetime import datetime
 from pathlib import Path

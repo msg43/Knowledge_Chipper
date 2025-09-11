@@ -35,15 +35,12 @@ class HCEPipeline:
         """Run the full HCE pipeline on an episode."""
         from .hce import (
             concepts,
-            dedupe,
             evidence,
             glossary,
             judge,
-            miner,
             people,
             relations,
             rerank,
-            rerank_policy,
             router,
             skim,
         )
@@ -559,6 +556,39 @@ class SummarizerProcessor(BaseProcessor):
         )
 
         return "\n".join(summary_parts)
+
+    def _calculate_file_hash(self, file_path: Path) -> str:
+        """Calculate SHA-256 hash of file contents for change tracking."""
+        try:
+            with open(file_path, "rb") as f:
+                file_contents = f.read()
+            return hashlib.sha256(file_contents).hexdigest()
+        except Exception as e:
+            logger.warning(f"Failed to calculate hash for {file_path}: {e}")
+            return ""
+
+    def _update_index_file(
+        self, index_file: Path, file_path_str: str, summary_info: dict[str, Any]
+    ) -> None:
+        """Update the summary index file with information about processed files."""
+        try:
+            import json
+
+            # Read existing index
+            summary_index = {}
+            if index_file.exists():
+                with open(index_file, encoding="utf-8") as f:
+                    summary_index = json.load(f)
+
+            # Update with new summary info
+            summary_index[file_path_str] = summary_info
+
+            # Write back to file
+            with open(index_file, "w", encoding="utf-8") as f:
+                json.dump(summary_index, f, indent=2, ensure_ascii=False)
+
+        except Exception as e:
+            logger.warning(f"Failed to update index file {index_file}: {e}")
 
     def process(
         self,

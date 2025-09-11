@@ -6,7 +6,6 @@ Handles edge cases and validates results to ensure 100% reliable video_id captur
 """
 
 import re
-from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
 from ..logger import get_logger

@@ -2895,7 +2895,7 @@ class SummarizationTab(BaseTab):
 
         # Get file information for consistent ETA calculation
         total_files = getattr(progress, "total_files", 1)
-        completed_files = getattr(progress, "completed_files", 0)
+        completed_files = getattr(progress, "completed_files", 0) or 0
 
         # Calculate File ETA - use adaptive estimation that learns from actual performance
         if (
@@ -3070,11 +3070,9 @@ class SummarizationTab(BaseTab):
                 and hasattr(progress, "total_files")
                 and progress.total_files
                 and hasattr(progress, "completed_files")
-                and progress.completed_files is not None
             ):
-                file_info = (
-                    f"File {progress.completed_files + 1}/{progress.total_files}"
-                )
+                completed_files = progress.completed_files or 0
+                file_info = f"File {completed_files + 1}/{progress.total_files}"
                 progress_parts.append(file_info)
 
             # Add chunk info for chunked processing

@@ -1,19 +1,19 @@
 {
   "errors": [],
-  "generated_at": "2025-09-10T18:51:29Z",
+  "generated_at": "2025-09-11T01:18:53Z",
   "metrics": {
     "_totals": {
-      "CONFIDENCE.HIGH": 173,
+      "CONFIDENCE.HIGH": 171,
       "CONFIDENCE.LOW": 3,
       "CONFIDENCE.MEDIUM": 3,
       "CONFIDENCE.UNDEFINED": 0,
       "SEVERITY.HIGH": 1,
-      "SEVERITY.LOW": 160,
-      "SEVERITY.MEDIUM": 18,
+      "SEVERITY.LOW": 159,
+      "SEVERITY.MEDIUM": 17,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 75145,
+      "loc": 74798,
       "nosec": 0,
-      "skipped_tests": 15
+      "skipped_tests": 17
     },
     "src/knowledge_system/__init__.py": {
       "CONFIDENCE.HIGH": 0,
@@ -50,72 +50,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 652,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
-    "src/knowledge_system/cloud/oauth/__init__.py": {
-      "CONFIDENCE.HIGH": 0,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 17,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
-    "src/knowledge_system/cloud/oauth/getreceipts_auth.py": {
-      "CONFIDENCE.HIGH": 1,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 1,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 260,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
-    "src/knowledge_system/cloud/oauth/getreceipts_config.py": {
-      "CONFIDENCE.HIGH": 0,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 141,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
-    "src/knowledge_system/cloud/oauth/getreceipts_uploader.py": {
-      "CONFIDENCE.HIGH": 0,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 415,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
-    "src/knowledge_system/cloud/oauth/integration_example.py": {
-      "CONFIDENCE.HIGH": 0,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 269,
+      "loc": 654,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -193,7 +128,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 848,
+      "loc": 850,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -206,7 +141,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 779,
+      "loc": 783,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -232,7 +167,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 291,
+      "loc": 290,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -414,7 +349,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 1414,
+      "loc": 1418,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -557,7 +492,7 @@
       "SEVERITY.LOW": 18,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 630,
+      "loc": 632,
       "nosec": 0,
       "skipped_tests": 2
     },
@@ -570,7 +505,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 1024,
+      "loc": 1022,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -622,7 +557,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 135,
+      "loc": 170,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -778,7 +713,7 @@
       "SEVERITY.LOW": 2,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 254,
+      "loc": 256,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -817,7 +752,7 @@
       "SEVERITY.LOW": 2,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 230,
+      "loc": 232,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -856,7 +791,7 @@
       "SEVERITY.LOW": 7,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 1156,
+      "loc": 1154,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -934,7 +869,7 @@
       "SEVERITY.LOW": 5,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 1504,
+      "loc": 1506,
       "nosec": 0,
       "skipped_tests": 11
     },
@@ -960,7 +895,7 @@
       "SEVERITY.LOW": 1,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 820,
+      "loc": 849,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -986,7 +921,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 484,
+      "loc": 486,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -999,7 +934,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 419,
+      "loc": 421,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1012,7 +947,7 @@
       "SEVERITY.LOW": 1,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 978,
+      "loc": 980,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1025,7 +960,7 @@
       "SEVERITY.LOW": 6,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 3093,
+      "loc": 3250,
       "nosec": 0,
       "skipped_tests": 1
     },
@@ -1064,7 +999,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 1418,
+      "loc": 1420,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1090,7 +1025,7 @@
       "SEVERITY.LOW": 6,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 2296,
+      "loc": 2273,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1173,15 +1108,15 @@
       "skipped_tests": 0
     },
     "src/knowledge_system/gui/workers/youtube_batch_worker.py": {
-      "CONFIDENCE.HIGH": 1,
+      "CONFIDENCE.HIGH": 2,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
       "CONFIDENCE.UNDEFINED": 0,
       "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 1,
+      "SEVERITY.LOW": 2,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 1238,
+      "loc": 1232,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1246,7 +1181,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 1384,
+      "loc": 1386,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1272,7 +1207,7 @@
       "SEVERITY.LOW": 2,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 810,
+      "loc": 809,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1285,7 +1220,7 @@
       "SEVERITY.LOW": 1,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 295,
+      "loc": 298,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1324,7 +1259,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 30,
+      "loc": 43,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1350,7 +1285,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 200,
+      "loc": 207,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1428,7 +1363,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 29,
+      "loc": 42,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1480,7 +1415,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 53,
+      "loc": 93,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1519,7 +1454,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 74,
+      "loc": 73,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1532,7 +1467,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 108,
+      "loc": 199,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1558,7 +1493,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 94,
+      "loc": 111,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1584,7 +1519,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 52,
+      "loc": 54,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1623,7 +1558,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 54,
+      "loc": 50,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1792,7 +1727,7 @@
       "SEVERITY.LOW": 8,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 616,
+      "loc": 794,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1805,7 +1740,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 509,
+      "loc": 503,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1818,7 +1753,7 @@
       "SEVERITY.LOW": 9,
       "SEVERITY.MEDIUM": 1,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 799,
+      "loc": 802,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1831,7 +1766,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 784,
+      "loc": 783,
       "nosec": 0,
       "skipped_tests": 1
     },
@@ -1844,7 +1779,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 684,
+      "loc": 675,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1857,7 +1792,7 @@
       "SEVERITY.LOW": 1,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 362,
+      "loc": 352,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1870,7 +1805,7 @@
       "SEVERITY.LOW": 1,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 1922,
+      "loc": 1917,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1909,7 +1844,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 1059,
+      "loc": 1066,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1922,7 +1857,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 200,
+      "loc": 202,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -2390,7 +2325,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 530,
+      "loc": 532,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -2460,17 +2395,17 @@
       "skipped_tests": 0
     },
     "src/knowledge_system/utils/embedding_cache.py": {
-      "CONFIDENCE.HIGH": 2,
+      "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
       "CONFIDENCE.UNDEFINED": 0,
       "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 1,
-      "SEVERITY.MEDIUM": 1,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 179,
+      "loc": 181,
       "nosec": 0,
-      "skipped_tests": 0
+      "skipped_tests": 2
     },
     "src/knowledge_system/utils/entity_cache.py": {
       "CONFIDENCE.HIGH": 0,
@@ -2546,7 +2481,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 114,
+      "loc": 112,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -2624,7 +2559,7 @@
       "SEVERITY.LOW": 1,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 453,
+      "loc": 481,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -2754,7 +2689,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 218,
+      "loc": 228,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -2780,7 +2715,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 141,
+      "loc": 140,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -3057,6 +2992,19 @@
       "nosec": 0,
       "skipped_tests": 0
     },
+    "src/knowledge_system/utils/video_id_extractor.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 166,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
     "src/knowledge_system/utils/warning_suppressions.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
@@ -3105,7 +3053,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 394,
+      "loc": 392,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -3131,7 +3079,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 2,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 449,
+      "loc": 445,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -3176,27 +3124,6 @@
     }
   },
   "results": [
-    {
-      "code": "274                 server.server_close()\n275             except Exception:\n276                 pass  # Ignore cleanup errors\n277 \n",
-      "col_offset": 12,
-      "end_col_offset": 20,
-      "filename": "src/knowledge_system/cloud/oauth/getreceipts_auth.py",
-      "issue_confidence": "HIGH",
-      "issue_cwe": {
-        "id": 703,
-        "link": "https://cwe.mitre.org/data/definitions/703.html"
-      },
-      "issue_severity": "LOW",
-      "issue_text": "Try, Except, Pass detected.",
-      "line_number": 275,
-      "line_range": [
-        275,
-        276
-      ],
-      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
-      "test_id": "B110",
-      "test_name": "try_except_pass"
-    },
     {
       "code": "612                             return assignments\n613                 except Exception:\n614                     pass\n615 \n",
       "col_offset": 16,
@@ -3737,7 +3664,7 @@
       "test_name": "hardcoded_tmp_directory"
     },
     {
-      "code": "218                 return\n219         except Exception:\n220             pass\n221 \n",
+      "code": "220                 return\n221         except Exception:\n222             pass\n223 \n",
       "col_offset": 8,
       "end_col_offset": 16,
       "filename": "src/knowledge_system/gui/dialogs/diarization_ffmpeg_dialog.py",
@@ -3748,17 +3675,17 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 219,
+      "line_number": 221,
       "line_range": [
-        219,
-        220
+        221,
+        222
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
       "test_name": "try_except_pass"
     },
     {
-      "code": "269                     )\n270             except Exception:\n271                 pass\n272             QMessageBox.information(\n",
+      "code": "271                     )\n272             except Exception:\n273                 pass\n274             QMessageBox.information(\n",
       "col_offset": 12,
       "end_col_offset": 20,
       "filename": "src/knowledge_system/gui/dialogs/diarization_ffmpeg_dialog.py",
@@ -3769,10 +3696,10 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 270,
+      "line_number": 272,
       "line_range": [
-        270,
-        271
+        272,
+        273
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
@@ -3821,7 +3748,7 @@
       "test_name": "try_except_pass"
     },
     {
-      "code": "193                 return\n194         except Exception:\n195             pass\n196 \n",
+      "code": "195                 return\n196         except Exception:\n197             pass\n198 \n",
       "col_offset": 8,
       "end_col_offset": 16,
       "filename": "src/knowledge_system/gui/dialogs/ffmpeg_setup_dialog.py",
@@ -3832,17 +3759,17 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 194,
+      "line_number": 196,
       "line_range": [
-        194,
-        195
+        196,
+        197
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
       "test_name": "try_except_pass"
     },
     {
-      "code": "245                     )\n246             except Exception:\n247                 pass\n248             QMessageBox.information(\n",
+      "code": "247                     )\n248             except Exception:\n249                 pass\n250             QMessageBox.information(\n",
       "col_offset": 12,
       "end_col_offset": 20,
       "filename": "src/knowledge_system/gui/dialogs/ffmpeg_setup_dialog.py",
@@ -3853,10 +3780,10 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 246,
+      "line_number": 248,
       "line_range": [
-        246,
-        247
+        248,
+        249
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
@@ -4076,7 +4003,7 @@
       "test_name": "try_except_pass"
     },
     {
-      "code": "1627             if app_path.endswith(\".app\"):\n1628                 subprocess.Popen(  # nosec B603,B607 # Trusted system operation\n1629                     [\"open\", app_path]\n1630                 )\n1631             else:\n",
+      "code": "1629             if app_path.endswith(\".app\"):\n1630                 subprocess.Popen(  # nosec B603,B607 # Trusted system operation\n1631                     [\"open\", app_path]\n1632                 )\n1633             else:\n",
       "col_offset": 16,
       "end_col_offset": 17,
       "filename": "src/knowledge_system/gui/tabs/api_keys_tab.py",
@@ -4087,18 +4014,18 @@
       },
       "issue_severity": "LOW",
       "issue_text": "subprocess call - check for execution of untrusted input.",
-      "line_number": 1628,
+      "line_number": 1630,
       "line_range": [
-        1628,
-        1629,
-        1630
+        1630,
+        1631,
+        1632
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html",
       "test_id": "B603",
       "test_name": "subprocess_without_shell_equals_true"
     },
     {
-      "code": "1694 \n1695             subprocess.run(  # nosec B603,B607 # Trusted AppleScript execution\n1696                 [\"osascript\", \"-e\", apple_script], check=True\n1697             )\n1698             self.append_log(\"\ud83d\udd04 Opened Terminal for fallback update\")\n",
+      "code": "1696 \n1697             subprocess.run(  # nosec B603,B607 # Trusted AppleScript execution\n1698                 [\"osascript\", \"-e\", apple_script], check=True\n1699             )\n1700             self.append_log(\"\ud83d\udd04 Opened Terminal for fallback update\")\n",
       "col_offset": 12,
       "end_col_offset": 13,
       "filename": "src/knowledge_system/gui/tabs/api_keys_tab.py",
@@ -4109,18 +4036,18 @@
       },
       "issue_severity": "LOW",
       "issue_text": "subprocess call - check for execution of untrusted input.",
-      "line_number": 1695,
+      "line_number": 1697,
       "line_range": [
-        1695,
-        1696,
-        1697
+        1697,
+        1698,
+        1699
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html",
       "test_id": "B603",
       "test_name": "subprocess_without_shell_equals_true"
     },
     {
-      "code": "1762 \n1763             subprocess.run(  # nosec B603,B607 # Trusted AppleScript execution\n1764                 [\"osascript\", \"-e\", apple_script], check=True\n1765             )\n1766             self.append_log(\"\ud83d\udd04 Opened Terminal for admin install\")\n",
+      "code": "1764 \n1765             subprocess.run(  # nosec B603,B607 # Trusted AppleScript execution\n1766                 [\"osascript\", \"-e\", apple_script], check=True\n1767             )\n1768             self.append_log(\"\ud83d\udd04 Opened Terminal for admin install\")\n",
       "col_offset": 12,
       "end_col_offset": 13,
       "filename": "src/knowledge_system/gui/tabs/api_keys_tab.py",
@@ -4131,18 +4058,18 @@
       },
       "issue_severity": "LOW",
       "issue_text": "subprocess call - check for execution of untrusted input.",
-      "line_number": 1763,
+      "line_number": 1765,
       "line_range": [
-        1763,
-        1764,
-        1765
+        1765,
+        1766,
+        1767
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html",
       "test_id": "B603",
       "test_name": "subprocess_without_shell_equals_true"
     },
     {
-      "code": "956                         progress.close()\n957                     except:\n958                         pass\n959 \n",
+      "code": "978                         progress.close()\n979                     except:\n980                         pass\n981 \n",
       "col_offset": 20,
       "end_col_offset": 28,
       "filename": "src/knowledge_system/gui/tabs/cloud_uploads_tab.py",
@@ -4153,10 +4080,10 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 957,
+      "line_number": 979,
       "line_range": [
-        957,
-        958
+        979,
+        980
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
@@ -4184,7 +4111,7 @@
       "test_name": "try_except_pass"
     },
     {
-      "code": "3712             try:\n3713                 import subprocess\n3714                 import sys\n",
+      "code": "3908             try:\n3909                 import subprocess\n3910                 import sys\n",
       "col_offset": 16,
       "end_col_offset": 33,
       "filename": "src/knowledge_system/gui/tabs/summarization_tab.py",
@@ -4195,16 +4122,16 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Consider possible security implications associated with the subprocess module.",
-      "line_number": 3713,
+      "line_number": 3909,
       "line_range": [
-        3713
+        3909
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_imports.html#b404-import-subprocess",
       "test_id": "B404",
       "test_name": "blacklist"
     },
     {
-      "code": "3716                 if sys.platform.startswith(\"darwin\"):  # macOS\n3717                     subprocess.run([\"open\", str(self._last_session_report)])\n3718                 elif sys.platform.startswith(\"win\"):  # Windows\n",
+      "code": "3912                 if sys.platform.startswith(\"darwin\"):  # macOS\n3913                     subprocess.run([\"open\", str(self._last_session_report)])\n3914                 elif sys.platform.startswith(\"win\"):  # Windows\n",
       "col_offset": 20,
       "end_col_offset": 76,
       "filename": "src/knowledge_system/gui/tabs/summarization_tab.py",
@@ -4215,16 +4142,16 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Starting a process with a partial executable path",
-      "line_number": 3717,
+      "line_number": 3913,
       "line_range": [
-        3717
+        3913
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html",
       "test_id": "B607",
       "test_name": "start_process_with_partial_path"
     },
     {
-      "code": "3716                 if sys.platform.startswith(\"darwin\"):  # macOS\n3717                     subprocess.run([\"open\", str(self._last_session_report)])\n3718                 elif sys.platform.startswith(\"win\"):  # Windows\n",
+      "code": "3912                 if sys.platform.startswith(\"darwin\"):  # macOS\n3913                     subprocess.run([\"open\", str(self._last_session_report)])\n3914                 elif sys.platform.startswith(\"win\"):  # Windows\n",
       "col_offset": 20,
       "end_col_offset": 76,
       "filename": "src/knowledge_system/gui/tabs/summarization_tab.py",
@@ -4235,16 +4162,16 @@
       },
       "issue_severity": "LOW",
       "issue_text": "subprocess call - check for execution of untrusted input.",
-      "line_number": 3717,
+      "line_number": 3913,
       "line_range": [
-        3717
+        3913
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html",
       "test_id": "B603",
       "test_name": "subprocess_without_shell_equals_true"
     },
     {
-      "code": "3718                 elif sys.platform.startswith(\"win\"):  # Windows\n3719                     subprocess.run(\n3720                         [\"start\", str(self._last_session_report)],\n3721                         shell=True,  # nosec B602\n3722                     )\n3723                 else:  # Linux\n",
+      "code": "3914                 elif sys.platform.startswith(\"win\"):  # Windows\n3915                     subprocess.run(\n3916                         [\"start\", str(self._last_session_report)],\n3917                         shell=True,  # nosec B602\n3918                     )\n3919                 else:  # Linux\n",
       "col_offset": 20,
       "end_col_offset": 21,
       "filename": "src/knowledge_system/gui/tabs/summarization_tab.py",
@@ -4255,19 +4182,19 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Starting a process with a partial executable path",
-      "line_number": 3719,
+      "line_number": 3915,
       "line_range": [
-        3719,
-        3720,
-        3721,
-        3722
+        3915,
+        3916,
+        3917,
+        3918
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html",
       "test_id": "B607",
       "test_name": "start_process_with_partial_path"
     },
     {
-      "code": "3723                 else:  # Linux\n3724                     subprocess.run([\"xdg-open\", str(self._last_session_report)])\n3725 \n",
+      "code": "3919                 else:  # Linux\n3920                     subprocess.run([\"xdg-open\", str(self._last_session_report)])\n3921 \n",
       "col_offset": 20,
       "end_col_offset": 80,
       "filename": "src/knowledge_system/gui/tabs/summarization_tab.py",
@@ -4278,16 +4205,16 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Starting a process with a partial executable path",
-      "line_number": 3724,
+      "line_number": 3920,
       "line_range": [
-        3724
+        3920
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html",
       "test_id": "B607",
       "test_name": "start_process_with_partial_path"
     },
     {
-      "code": "3723                 else:  # Linux\n3724                     subprocess.run([\"xdg-open\", str(self._last_session_report)])\n3725 \n",
+      "code": "3919                 else:  # Linux\n3920                     subprocess.run([\"xdg-open\", str(self._last_session_report)])\n3921 \n",
       "col_offset": 20,
       "end_col_offset": 80,
       "filename": "src/knowledge_system/gui/tabs/summarization_tab.py",
@@ -4298,16 +4225,16 @@
       },
       "issue_severity": "LOW",
       "issue_text": "subprocess call - check for execution of untrusted input.",
-      "line_number": 3724,
+      "line_number": 3920,
       "line_range": [
-        3724
+        3920
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html",
       "test_id": "B603",
       "test_name": "subprocess_without_shell_equals_true"
     },
     {
-      "code": "2693                     # Verify it's runnable\n2694                     import subprocess\n2695 \n",
+      "code": "2665                     # Verify it's runnable\n2666                     import subprocess\n2667 \n",
       "col_offset": 20,
       "end_col_offset": 37,
       "filename": "src/knowledge_system/gui/tabs/youtube_tab.py",
@@ -4318,16 +4245,16 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Consider possible security implications associated with the subprocess module.",
-      "line_number": 2694,
+      "line_number": 2666,
       "line_range": [
-        2694
+        2666
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_imports.html#b404-import-subprocess",
       "test_id": "B404",
       "test_name": "blacklist"
     },
     {
-      "code": "2695 \n2696                     result = subprocess.run(\n2697                         [str(p), \"-version\"], capture_output=True, text=True\n2698                     )\n2699                     if result.returncode == 0:\n",
+      "code": "2667 \n2668                     result = subprocess.run(\n2669                         [str(p), \"-version\"], capture_output=True, text=True\n2670                     )\n2671                     if result.returncode == 0:\n",
       "col_offset": 29,
       "end_col_offset": 21,
       "filename": "src/knowledge_system/gui/tabs/youtube_tab.py",
@@ -4338,18 +4265,18 @@
       },
       "issue_severity": "LOW",
       "issue_text": "subprocess call - check for execution of untrusted input.",
-      "line_number": 2696,
+      "line_number": 2668,
       "line_range": [
-        2696,
-        2697,
-        2698
+        2668,
+        2669,
+        2670
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html",
       "test_id": "B603",
       "test_name": "subprocess_without_shell_equals_true"
     },
     {
-      "code": "2706                         return True\n2707             except Exception:\n2708                 continue\n2709 \n",
+      "code": "2678                         return True\n2679             except Exception:\n2680                 continue\n2681 \n",
       "col_offset": 12,
       "end_col_offset": 24,
       "filename": "src/knowledge_system/gui/tabs/youtube_tab.py",
@@ -4360,17 +4287,17 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Continue detected.",
-      "line_number": 2707,
+      "line_number": 2679,
       "line_range": [
-        2707,
-        2708
+        2679,
+        2680
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b112_try_except_continue.html",
       "test_id": "B112",
       "test_name": "try_except_continue"
     },
     {
-      "code": "2769                     # Verify it's runnable\n2770                     import subprocess\n2771 \n",
+      "code": "2741                     # Verify it's runnable\n2742                     import subprocess\n2743 \n",
       "col_offset": 20,
       "end_col_offset": 37,
       "filename": "src/knowledge_system/gui/tabs/youtube_tab.py",
@@ -4381,16 +4308,16 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Consider possible security implications associated with the subprocess module.",
-      "line_number": 2770,
+      "line_number": 2742,
       "line_range": [
-        2770
+        2742
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_imports.html#b404-import-subprocess",
       "test_id": "B404",
       "test_name": "blacklist"
     },
     {
-      "code": "2771 \n2772                     result = subprocess.run(\n2773                         [str(p), \"-version\"], capture_output=True, text=True\n2774                     )\n2775                     if result.returncode == 0:\n",
+      "code": "2743 \n2744                     result = subprocess.run(\n2745                         [str(p), \"-version\"], capture_output=True, text=True\n2746                     )\n2747                     if result.returncode == 0:\n",
       "col_offset": 29,
       "end_col_offset": 21,
       "filename": "src/knowledge_system/gui/tabs/youtube_tab.py",
@@ -4401,18 +4328,18 @@
       },
       "issue_severity": "LOW",
       "issue_text": "subprocess call - check for execution of untrusted input.",
-      "line_number": 2772,
+      "line_number": 2744,
       "line_range": [
-        2772,
-        2773,
-        2774
+        2744,
+        2745,
+        2746
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html",
       "test_id": "B603",
       "test_name": "subprocess_without_shell_equals_true"
     },
     {
-      "code": "2782                         return True\n2783             except Exception:\n2784                 continue\n2785 \n",
+      "code": "2754                         return True\n2755             except Exception:\n2756                 continue\n2757 \n",
       "col_offset": 12,
       "end_col_offset": 24,
       "filename": "src/knowledge_system/gui/tabs/youtube_tab.py",
@@ -4423,10 +4350,10 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Continue detected.",
-      "line_number": 2783,
+      "line_number": 2755,
       "line_range": [
-        2783,
-        2784
+        2755,
+        2756
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b112_try_except_continue.html",
       "test_id": "B112",
@@ -5058,7 +4985,27 @@
       "test_name": "set_bad_file_permissions"
     },
     {
-      "code": "1426                             logger.debug(f\"Cleaned up partial download: {partial_file}\")\n1427                         except Exception:\n1428                             pass\n1429                     return None\n",
+      "code": "1300 \n1301             delay = random.uniform(0, 5)\n1302             logger.info(\n",
+      "col_offset": 20,
+      "end_col_offset": 40,
+      "filename": "src/knowledge_system/gui/workers/youtube_batch_worker.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 330,
+        "link": "https://cwe.mitre.org/data/definitions/330.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Standard pseudo-random generators are not suitable for security/cryptographic purposes.",
+      "line_number": 1301,
+      "line_range": [
+        1301
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_calls.html#b311-random",
+      "test_id": "B311",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "1423                             logger.debug(f\"Cleaned up partial download: {partial_file}\")\n1424                         except Exception:\n1425                             pass\n1426                     return None\n",
       "col_offset": 24,
       "end_col_offset": 32,
       "filename": "src/knowledge_system/gui/workers/youtube_batch_worker.py",
@@ -5069,10 +5016,10 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 1427,
+      "line_number": 1424,
       "line_range": [
-        1427,
-        1428
+        1424,
+        1425
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
@@ -5101,7 +5048,7 @@
       "test_name": "try_except_continue"
     },
     {
-      "code": "1 import os\n2 import subprocess\n3 import warnings\n",
+      "code": "1 import subprocess\n2 import warnings\n3 from collections.abc import Callable\n",
       "col_offset": 0,
       "end_col_offset": 17,
       "filename": "src/knowledge_system/processors/diarization.py",
@@ -5112,16 +5059,16 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Consider possible security implications associated with the subprocess module.",
-      "line_number": 2,
+      "line_number": 1,
       "line_range": [
-        2
+        1
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_imports.html#b404-import-subprocess",
       "test_id": "B404",
       "test_name": "blacklist"
     },
     {
-      "code": "597                 ]\n598                 result = subprocess.run(\n599                     duration_cmd, capture_output=True, text=True, timeout=5\n600                 )\n601                 audio_duration = (\n",
+      "code": "596                 ]\n597                 result = subprocess.run(\n598                     duration_cmd, capture_output=True, text=True, timeout=5\n599                 )\n600                 audio_duration = (\n",
       "col_offset": 25,
       "end_col_offset": 17,
       "filename": "src/knowledge_system/processors/diarization.py",
@@ -5132,18 +5079,18 @@
       },
       "issue_severity": "LOW",
       "issue_text": "subprocess call - check for execution of untrusted input.",
-      "line_number": 598,
+      "line_number": 597,
       "line_range": [
+        597,
         598,
-        599,
-        600
+        599
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html",
       "test_id": "B603",
       "test_name": "subprocess_without_shell_equals_true"
     },
     {
-      "code": "192                             continue\n193                 except Exception:\n194                     pass\n195         return None\n",
+      "code": "196                             continue\n197                 except Exception:\n198                     pass\n199         return None\n",
       "col_offset": 16,
       "end_col_offset": 24,
       "filename": "src/knowledge_system/processors/document_processor.py",
@@ -5154,10 +5101,10 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 193,
+      "line_number": 197,
       "line_range": [
-        193,
-        194
+        197,
+        198
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
@@ -5185,7 +5132,7 @@
       "test_name": "try_except_continue"
     },
     {
-      "code": "231                 self.hce_config.models.miner = str(miner_override)\n232         except Exception:\n233             pass\n234         try:\n",
+      "code": "366                 self.hce_config.models.miner = str(miner_override)\n367         except Exception:\n368             pass\n369         try:\n",
       "col_offset": 8,
       "end_col_offset": 16,
       "filename": "src/knowledge_system/processors/summarizer.py",
@@ -5196,17 +5143,17 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 232,
+      "line_number": 367,
       "line_range": [
-        232,
-        233
+        367,
+        368
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
       "test_name": "try_except_pass"
     },
     {
-      "code": "237                 self.hce_config.models.heavy_miner = str(heavy_miner)\n238         except Exception:\n239             pass\n240         try:\n",
+      "code": "372                 self.hce_config.models.heavy_miner = str(heavy_miner)\n373         except Exception:\n374             pass\n375         try:\n",
       "col_offset": 8,
       "end_col_offset": 16,
       "filename": "src/knowledge_system/processors/summarizer.py",
@@ -5217,17 +5164,17 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 238,
+      "line_number": 373,
       "line_range": [
-        238,
-        239
+        373,
+        374
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
       "test_name": "try_except_pass"
     },
     {
-      "code": "243                 self.hce_config.models.embedder = str(embedder_override)\n244         except Exception:\n245             pass\n246         try:\n",
+      "code": "378                 self.hce_config.models.embedder = str(embedder_override)\n379         except Exception:\n380             pass\n381         try:\n",
       "col_offset": 8,
       "end_col_offset": 16,
       "filename": "src/knowledge_system/processors/summarizer.py",
@@ -5238,17 +5185,17 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 244,
+      "line_number": 379,
       "line_range": [
-        244,
-        245
+        379,
+        380
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
       "test_name": "try_except_pass"
     },
     {
-      "code": "249                 self.hce_config.models.reranker = str(reranker_override)\n250         except Exception:\n251             pass\n252         # Judge routing and model overrides\n",
+      "code": "384                 self.hce_config.models.reranker = str(reranker_override)\n385         except Exception:\n386             pass\n387         # Judge routing and model overrides\n",
       "col_offset": 8,
       "end_col_offset": 16,
       "filename": "src/knowledge_system/processors/summarizer.py",
@@ -5259,17 +5206,17 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 250,
+      "line_number": 385,
       "line_range": [
-        250,
-        251
+        385,
+        386
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
       "test_name": "try_except_pass"
     },
     {
-      "code": "256                 self.hce_config.router_uncertainty_threshold = float(thr)\n257         except Exception:\n258             pass\n259         try:\n",
+      "code": "391                 self.hce_config.router_uncertainty_threshold = float(thr)\n392         except Exception:\n393             pass\n394         try:\n",
       "col_offset": 8,
       "end_col_offset": 16,
       "filename": "src/knowledge_system/processors/summarizer.py",
@@ -5280,17 +5227,17 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 257,
+      "line_number": 392,
       "line_range": [
-        257,
-        258
+        392,
+        393
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
       "test_name": "try_except_pass"
     },
     {
-      "code": "262                 self.hce_config.models.judge = str(judge_override)\n263         except Exception:\n264             pass\n265         try:\n",
+      "code": "397                 self.hce_config.models.judge = str(judge_override)\n398         except Exception:\n399             pass\n400         try:\n",
       "col_offset": 8,
       "end_col_offset": 16,
       "filename": "src/knowledge_system/processors/summarizer.py",
@@ -5301,17 +5248,17 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 263,
+      "line_number": 398,
       "line_range": [
-        263,
-        264
+        398,
+        399
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
       "test_name": "try_except_pass"
     },
     {
-      "code": "268                 self.hce_config.models.flagship_judge = str(flagship_judge)\n269         except Exception:\n270             pass\n271         try:\n",
+      "code": "403                 self.hce_config.models.flagship_judge = str(flagship_judge)\n404         except Exception:\n405             pass\n406         try:\n",
       "col_offset": 8,
       "end_col_offset": 16,
       "filename": "src/knowledge_system/processors/summarizer.py",
@@ -5322,17 +5269,17 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 269,
+      "line_number": 404,
       "line_range": [
-        269,
-        270
+        404,
+        405
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
       "test_name": "try_except_pass"
     },
     {
-      "code": "274                 self.hce_config.flagship_max_claims_per_file = fcap\n275         except Exception:\n276             pass\n277         self.hce_pipeline = HCEPipeline(self.hce_config)\n",
+      "code": "409                 self.hce_config.flagship_max_claims_per_file = fcap\n410         except Exception:\n411             pass\n412         self.hce_pipeline = HCEPipeline(self.hce_config)\n",
       "col_offset": 8,
       "end_col_offset": 16,
       "filename": "src/knowledge_system/processors/summarizer.py",
@@ -5343,17 +5290,17 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 275,
+      "line_number": 410,
       "line_range": [
-        275,
-        276
+        410,
+        411
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
       "test_name": "try_except_pass"
     },
     {
-      "code": "375                 if \"v=\" in url\n376                 else hashlib.md5(url.encode()).hexdigest()[:8]\n377             )\n",
+      "code": "369                 if \"v=\" in url\n370                 else hashlib.md5(url.encode()).hexdigest()[:8]\n371             )\n",
       "col_offset": 21,
       "end_col_offset": 46,
       "filename": "src/knowledge_system/processors/unified_batch_processor.py",
@@ -5364,9 +5311,9 @@
       },
       "issue_severity": "HIGH",
       "issue_text": "Use of weak MD5 hash for security. Consider usedforsecurity=False",
-      "line_number": 376,
+      "line_number": 370,
       "line_range": [
-        376
+        370
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html",
       "test_id": "B324",
@@ -5517,7 +5464,7 @@
       "test_name": "subprocess_without_shell_equals_true"
     },
     {
-      "code": "508                 try:\n509                     subprocess.run(\n510                         [cmd_candidate, \"--help\"], capture_output=True, check=True\n511                     )\n512                     whisper_cmd = cmd_candidate\n",
+      "code": "509                 try:\n510                     subprocess.run(\n511                         [cmd_candidate, \"--help\"], capture_output=True, check=True\n512                     )\n513                     whisper_cmd = cmd_candidate\n",
       "col_offset": 20,
       "end_col_offset": 21,
       "filename": "src/knowledge_system/processors/whisper_cpp_transcribe.py",
@@ -5528,18 +5475,18 @@
       },
       "issue_severity": "LOW",
       "issue_text": "subprocess call - check for execution of untrusted input.",
-      "line_number": 509,
+      "line_number": 510,
       "line_range": [
-        509,
         510,
-        511
+        511,
+        512
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html",
       "test_id": "B603",
       "test_name": "subprocess_without_shell_equals_true"
     },
     {
-      "code": "865                 ]\n866                 probe_result = subprocess.run(\n867                     probe_cmd, capture_output=True, text=True, timeout=5\n868                 )\n869                 if probe_result.returncode == 0 and probe_result.stdout.strip():\n",
+      "code": "868                 ]\n869                 probe_result = subprocess.run(\n870                     probe_cmd, capture_output=True, text=True, timeout=5\n871                 )\n872                 if probe_result.returncode == 0 and probe_result.stdout.strip():\n",
       "col_offset": 31,
       "end_col_offset": 17,
       "filename": "src/knowledge_system/processors/whisper_cpp_transcribe.py",
@@ -5550,18 +5497,18 @@
       },
       "issue_severity": "LOW",
       "issue_text": "subprocess call - check for execution of untrusted input.",
-      "line_number": 866,
+      "line_number": 869,
       "line_range": [
-        866,
-        867,
-        868
+        869,
+        870,
+        871
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html",
       "test_id": "B603",
       "test_name": "subprocess_without_shell_equals_true"
     },
     {
-      "code": "876         # Use Popen for real-time monitoring\n877         process = subprocess.Popen(\n878             cmd,\n879             stdout=subprocess.PIPE,\n880             stderr=subprocess.PIPE,\n881             text=True,\n882             bufsize=1,  # Line buffered\n883             universal_newlines=True,\n884         )\n885 \n",
+      "code": "879         # Use Popen for real-time monitoring\n880         process = subprocess.Popen(\n881             cmd,\n882             stdout=subprocess.PIPE,\n883             stderr=subprocess.PIPE,\n884             text=True,\n885             bufsize=1,  # Line buffered\n886             universal_newlines=True,\n887         )\n888 \n",
       "col_offset": 18,
       "end_col_offset": 9,
       "filename": "src/knowledge_system/processors/whisper_cpp_transcribe.py",
@@ -5572,23 +5519,23 @@
       },
       "issue_severity": "LOW",
       "issue_text": "subprocess call - check for execution of untrusted input.",
-      "line_number": 877,
+      "line_number": 880,
       "line_range": [
-        877,
-        878,
-        879,
         880,
         881,
         882,
         883,
-        884
+        884,
+        885,
+        886,
+        887
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html",
       "test_id": "B603",
       "test_name": "subprocess_without_shell_equals_true"
     },
     {
-      "code": "404                     self.proxy_manager.cleanup()\n405                 except:\n406                     pass\n407 \n",
+      "code": "394                     self.proxy_manager.cleanup()\n395                 except:\n396                     pass\n397 \n",
       "col_offset": 16,
       "end_col_offset": 24,
       "filename": "src/knowledge_system/processors/youtube_metadata_proxy.py",
@@ -5599,17 +5546,17 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Try, Except, Pass detected.",
-      "line_number": 405,
+      "line_number": 395,
       "line_range": [
-        405,
-        406
+        395,
+        396
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
       "test_name": "try_except_pass"
     },
     {
-      "code": "765                     if attempt < max_retries - 1:\n766                         wait_time = random.uniform(\n767                             5, 10\n768                         )  # Longer delay to avoid YouTube rate limiting\n769                         logger.info(f\"Waiting {wait_time:.1f}s before retry...\")\n",
+      "code": "763                     if attempt < max_retries - 1:\n764                         wait_time = random.uniform(\n765                             5, 10\n766                         )  # Longer delay to avoid YouTube rate limiting\n767                         logger.info(f\"Waiting {wait_time:.1f}s before retry...\")\n",
       "col_offset": 36,
       "end_col_offset": 25,
       "filename": "src/knowledge_system/processors/youtube_transcript.py",
@@ -5620,11 +5567,11 @@
       },
       "issue_severity": "LOW",
       "issue_text": "Standard pseudo-random generators are not suitable for security/cryptographic purposes.",
-      "line_number": 766,
+      "line_number": 764,
       "line_range": [
-        766,
-        767,
-        768
+        764,
+        765,
+        766
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_calls.html#b311-random",
       "test_id": "B311",
@@ -6107,46 +6054,6 @@
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
       "test_id": "B110",
       "test_name": "try_except_pass"
-    },
-    {
-      "code": "4 import logging\n5 import pickle\n6 from pathlib import Path\n",
-      "col_offset": 0,
-      "end_col_offset": 13,
-      "filename": "src/knowledge_system/utils/embedding_cache.py",
-      "issue_confidence": "HIGH",
-      "issue_cwe": {
-        "id": 502,
-        "link": "https://cwe.mitre.org/data/definitions/502.html"
-      },
-      "issue_severity": "LOW",
-      "issue_text": "Consider possible security implications associated with pickle module.",
-      "line_number": 5,
-      "line_range": [
-        5
-      ],
-      "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_imports.html#b403-import-pickle",
-      "test_id": "B403",
-      "test_name": "blacklist"
-    },
-    {
-      "code": "89                 with open(disk_path, \"rb\") as f:\n90                     data = pickle.load(f)\n91 \n",
-      "col_offset": 27,
-      "end_col_offset": 41,
-      "filename": "src/knowledge_system/utils/embedding_cache.py",
-      "issue_confidence": "HIGH",
-      "issue_cwe": {
-        "id": 502,
-        "link": "https://cwe.mitre.org/data/definitions/502.html"
-      },
-      "issue_severity": "MEDIUM",
-      "issue_text": "Pickle and modules that wrap it can be unsafe when used to deserialize untrusted data, possible security issue.",
-      "line_number": 90,
-      "line_range": [
-        90
-      ],
-      "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_calls.html#b301-pickle",
-      "test_id": "B301",
-      "test_name": "blacklist"
     },
     {
       "code": "571                 temp_path.unlink()\n572             except Exception:\n573                 pass\n574 \n",
@@ -6982,7 +6889,7 @@
       "test_name": "subprocess_without_shell_equals_true"
     },
     {
-      "code": "235 \n236             self.wav2vec2_processor = Wav2Vec2FeatureExtractor.from_pretrained(\n237                 model_name\n238             )\n239             self.wav2vec2_model = Wav2Vec2Model.from_pretrained(model_name).to(\n",
+      "code": "231 \n232             self.wav2vec2_processor = Wav2Vec2FeatureExtractor.from_pretrained(\n233                 model_name\n234             )\n235             self.wav2vec2_model = Wav2Vec2Model.from_pretrained(model_name).to(\n",
       "col_offset": 38,
       "end_col_offset": 13,
       "filename": "src/knowledge_system/voice/voice_fingerprinting.py",
@@ -6993,18 +6900,18 @@
       },
       "issue_severity": "MEDIUM",
       "issue_text": "Unsafe Hugging Face Hub download without revision pinning in from_pretrained()",
-      "line_number": 236,
+      "line_number": 232,
       "line_range": [
-        236,
-        237,
-        238
+        232,
+        233,
+        234
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b615_huggingface_unsafe_download.html",
       "test_id": "B615",
       "test_name": "huggingface_unsafe_download"
     },
     {
-      "code": "238             )\n239             self.wav2vec2_model = Wav2Vec2Model.from_pretrained(model_name).to(\n240                 self.device\n",
+      "code": "234             )\n235             self.wav2vec2_model = Wav2Vec2Model.from_pretrained(model_name).to(\n236                 self.device\n",
       "col_offset": 34,
       "end_col_offset": 75,
       "filename": "src/knowledge_system/voice/voice_fingerprinting.py",
@@ -7015,9 +6922,9 @@
       },
       "issue_severity": "MEDIUM",
       "issue_text": "Unsafe Hugging Face Hub download without revision pinning in from_pretrained()",
-      "line_number": 239,
+      "line_number": 235,
       "line_range": [
-        239
+        235
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b615_huggingface_unsafe_download.html",
       "test_id": "B615",

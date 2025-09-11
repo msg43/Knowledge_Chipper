@@ -2207,7 +2207,6 @@ class YouTubeTab(BaseTab):
             elif hasattr(self.extraction_worker, "_save_failed_urls_for_retry"):
                 # YouTubeBatchWorker already saved URLs, just log the info
                 # The batch worker logs this internally, so we don't need to do anything here
-                pass
                 self.append_log(
                     "   💡 Tip: You can load the CSV file directly to retry failed extractions"
                 )
