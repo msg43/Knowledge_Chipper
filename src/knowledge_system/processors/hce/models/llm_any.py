@@ -275,8 +275,5 @@ class AnyLLM:
                 return []
 
         except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.warning(f"Local model call failed for {self.model_uri}: {e}")
             return []
