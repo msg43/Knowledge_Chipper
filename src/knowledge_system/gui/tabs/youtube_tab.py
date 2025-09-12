@@ -346,9 +346,8 @@ class YouTubeExtractionWorker(QThread):
                         overwrite=self.config.get("overwrite", False),
                         enable_diarization=enable_diarization,
                         gui_mode=not testing_mode,  # Enable GUI mode unless testing
-                        show_speaker_dialog=(
-                            enable_diarization and not testing_mode
-                        ),  # Show dialog if diarization enabled and not testing
+                        show_speaker_dialog=False,  # CLOUD TRANSCRIPTION: Never show speaker dialogs - use Speaker Attribution tab instead
+                        enable_speaker_assignment=False,  # CLOUD TRANSCRIPTION: Disable speaker assignment popups entirely
                         cancellation_token=self.cancellation_token,
                         progress_callback=progress_callback,
                         speaker_assignment_callback=self._speaker_assignment_callback,

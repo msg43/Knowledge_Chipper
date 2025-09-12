@@ -31,14 +31,32 @@ class Skimmer:
 
                 # Convert results to Milestone objects
                 for j, result in enumerate(results):
+                    # Ensure result is a dictionary before calling .get()
+                    if not isinstance(result, dict):
+                        import logging
+
+                        logger = logging.getLogger(__name__)
+                        logger.warning(
+                            f"Skipping invalid result type {type(result)} at chunk {i//chunk_size}, item {j}: {result}"
+                        )
+                        continue
+
+                    # Create summary from title and description as expected by Milestone model
+                    title = result.get("title", "Key Point")
+                    description = result.get("description", "")
+                    summary = f"{title}: {description}" if description else title
+
+                    # Ensure timestamp values are strings
+                    t0_val = result.get("t0", chunk[0].t0 if chunk else "0")
+                    t1_val = result.get("t1", chunk[-1].t1 if chunk else "0")
+                    t0_str = str(t0_val) if t0_val is not None else "0"
+                    t1_str = str(t1_val) if t1_val is not None else "0"
+
                     milestone = Milestone(
                         milestone_id=f"ms_{episode_id}_{i//chunk_size}_{j}",
-                        t0=result.get("t0", chunk[0].t0 if chunk else "0"),
-                        t1=result.get("t1", chunk[-1].t1 if chunk else "0"),
-                        title=result.get("title", "Key Point"),
-                        description=result.get("description", ""),
-                        importance=result.get("importance", 0.5),
-                        topic=result.get("topic", "general"),
+                        t0=t0_str,
+                        t1=t1_str,
+                        summary=summary,
                     )
                     milestones.append(milestone)
 

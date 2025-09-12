@@ -628,6 +628,10 @@ class APIKeysTab(BaseTab):
         tests_layout.addWidget(tests_container, 0, 1)
         main_layout.addLayout(tests_layout)
 
+        # Hardware Recommendations section - moved from Local Transcription tab
+        recommendations_section = self._create_recommendations_section()
+        main_layout.addWidget(recommendations_section)
+
         main_layout.addStretch()
 
     def _show_hf_token_help(self) -> None:
@@ -1970,3 +1974,306 @@ end tell
             self.status_label.setText(f"❌ FFmpeg install failed: {message}")
             self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
         self.append_log(message)
+
+    def _create_recommendations_section(self) -> QGroupBox:
+        """Create the hardware recommendations section."""
+        group = QGroupBox("Hardware Recommendations")
+
+        # Use horizontal layout
+        main_layout = QHBoxLayout()
+        main_layout.setSpacing(10)
+
+        # Left side: Use Recommended Settings button
+        self.use_recommended_btn = QPushButton("⚡ Apply Recommended Settings")
+        self.use_recommended_btn.setFixedHeight(45)  # Match text area height
+        self.use_recommended_btn.clicked.connect(self._apply_recommended_settings)
+        self.use_recommended_btn.setStyleSheet(
+            "background-color: #4caf50; color: white; font-weight: bold; padding: 8px;"
+        )
+        self.use_recommended_btn.setToolTip(
+            "Automatically detects your hardware capabilities and applies optimal transcription settings to the Local Transcription tab. "
+            "This will configure the best model, device, batch size, and thread count for your system. "
+            "Memory calculations include OS overhead and leave room for other applications."
+        )
+        main_layout.addWidget(self.use_recommended_btn)
+
+        # Right side: Info box with two-column layout
+        self.recommendations_widget = QGroupBox()
+        self.recommendations_widget.setStyleSheet(
+            """
+            QGroupBox {
+                background-color: #e8f5e8;
+                border: 1px solid #4caf50;
+                border-radius: 5px;
+                font-size: 11px;
+                padding-top: 5px;
+            }
+        """
+        )
+
+        # Set height to accommodate content while staying close to button height
+        self.recommendations_widget.setFixedHeight(45)
+
+        # Create a grid layout for recommendations
+        self.recommendations_layout = QGridLayout()
+        self.recommendations_layout.setSpacing(2)  # Tighter spacing for compact layout
+        self.recommendations_layout.setContentsMargins(6, 2, 6, 2)  # Smaller margins
+
+        # Initially show placeholder text
+        placeholder_label = QLabel(
+            "Click 'Apply Recommended Settings' to automatically detect and configure optimal settings for your hardware."
+        )
+        placeholder_label.setWordWrap(True)
+        placeholder_label.setStyleSheet("font-size: 10px; color: #666; padding: 2px;")
+        placeholder_label.setAlignment(
+            Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
+        )
+        self.recommendations_layout.addWidget(placeholder_label, 0, 0, 1, 2)
+
+        self.recommendations_widget.setLayout(self.recommendations_layout)
+
+        # Set size policy to prevent expansion
+        from PyQt6.QtWidgets import QSizePolicy
+
+        self.recommendations_widget.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        main_layout.addWidget(self.recommendations_widget, 1)  # Give it more space
+
+        group.setLayout(main_layout)
+        return group
+
+    def _get_hardware_recommendations(self):
+        """Get hardware recommendations and display them."""
+        try:
+            from ...utils.device_selection import get_device_recommendations
+            from ...utils.hardware_detection import get_hardware_detector
+
+            detector = get_hardware_detector()
+            specs = detector.detect_hardware()
+            recommendations = get_device_recommendations("transcription")
+
+            # Store recommendations for later use
+            self._current_recommendations = {
+                "specs": specs,
+                "recommendations": recommendations,
+            }
+
+            # Clear the layout first
+            for i in reversed(range(self.recommendations_layout.count())):
+                item = self.recommendations_layout.takeAt(i)
+                if item and item.widget():
+                    item.widget().deleteLater()
+
+            # Create a readable compact layout
+            # Left side - Device and Model
+            device_label = QLabel("🎯 Device:")
+            device_label.setStyleSheet(
+                "font-weight: bold; font-size: 9px; color: black;"
+            )
+            device_value = QLabel(str(specs.recommended_device))
+            device_value.setStyleSheet("font-size: 9px; color: black;")
+
+            model_label = QLabel("🧠 Model:")
+            model_label.setStyleSheet(
+                "font-weight: bold; font-size: 9px; color: black;"
+            )
+            model_value = QLabel(str(specs.recommended_whisper_model))
+            model_value.setStyleSheet("font-size: 9px; color: black;")
+
+            # Right side - Batch Size and Max Concurrent (including "Max" note)
+            batch_label = QLabel("📦 Batch:")
+            batch_label.setStyleSheet(
+                "font-weight: bold; font-size: 9px; color: black;"
+            )
+            batch_value = QLabel(str(specs.optimal_batch_size))
+            batch_value.setStyleSheet("font-size: 9px; color: black;")
+
+            max_label = QLabel("🔄 Max Files:")
+            max_label.setStyleSheet("font-weight: bold; font-size: 9px; color: black;")
+            max_value_text = f"{specs.max_concurrent_transcriptions} (Max)"
+            max_value = QLabel(max_value_text)
+            max_value.setStyleSheet("font-size: 9px; color: black;")
+
+            # Add widgets to grid layout with better spacing
+            self.recommendations_layout.addWidget(device_label, 0, 0)
+            self.recommendations_layout.addWidget(device_value, 0, 1)
+            self.recommendations_layout.addWidget(batch_label, 0, 2)
+            self.recommendations_layout.addWidget(batch_value, 0, 3)
+
+            self.recommendations_layout.addWidget(model_label, 1, 0)
+            self.recommendations_layout.addWidget(model_value, 1, 1)
+            self.recommendations_layout.addWidget(max_label, 1, 2)
+            self.recommendations_layout.addWidget(max_value, 1, 3)
+
+            # Enable the "Use Recommended Settings" button
+            self.use_recommended_btn.setEnabled(True)
+
+            self.append_log("Hardware recommendations loaded successfully")
+
+        except Exception as e:
+            error_msg = f"Failed to get hardware recommendations: {e}"
+
+            # Clear the layout first
+            for i in reversed(range(self.recommendations_layout.count())):
+                item = self.recommendations_layout.takeAt(i)
+                if item and item.widget():
+                    item.widget().deleteLater()
+
+            # Show error message
+            error_label = QLabel(f"❌ {error_msg}")
+            error_label.setStyleSheet("color: #f44336; font-size: 9px; padding: 2px;")
+            error_label.setWordWrap(True)
+            error_label.setAlignment(
+                Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
+            )
+            self.recommendations_layout.addWidget(error_label, 0, 0, 1, 4)
+
+            # Update widget style for error
+            self.recommendations_widget.setStyleSheet(
+                """
+                QGroupBox {
+                    background-color: #ffeaea;
+                    border: 1px solid #f44336;
+                    border-radius: 5px;
+                    font-size: 11px;
+                    padding-top: 5px;
+                }
+            """
+            )
+
+    def _apply_recommended_settings(self):
+        """Get hardware recommendations if needed, then apply them to the Local Transcription tab controls."""
+        # First, check if we have recommendations - if not, get them
+        if not hasattr(self, "_current_recommendations"):
+            self.append_log("🔍 Getting hardware recommendations...")
+            self._get_hardware_recommendations()
+
+            # Check if we successfully got recommendations
+            if not hasattr(self, "_current_recommendations"):
+                self.append_log(
+                    "❌ Failed to get recommendations. Please check hardware detection."
+                )
+                return
+
+        # Get reference to the Local Transcription tab
+        try:
+            # Find the transcription tab through the main window
+            main_window = self.parent()
+            while main_window and not hasattr(main_window, "tabs"):
+                main_window = main_window.parent()
+
+            if not main_window:
+                self.append_log(
+                    "❌ Could not find main window to access transcription tab"
+                )
+                return
+
+            # Find the Local Transcription tab
+            transcription_tab = None
+            for i in range(main_window.tabs.count()):
+                tab = main_window.tabs.widget(i)
+                if hasattr(tab, "tab_name") and tab.tab_name == "Local Transcription":
+                    transcription_tab = tab
+                    break
+
+            if not transcription_tab:
+                self.append_log("❌ Could not find Local Transcription tab")
+                return
+
+            specs = self._current_recommendations["specs"]
+
+            # Debug logging
+            self.append_log("🔧 Applying recommendations to Local Transcription tab:")
+            self.append_log(f"   Model: {specs.recommended_whisper_model}")
+            self.append_log(f"   Device: {specs.recommended_device}")
+            self.append_log(f"   Batch Size: {specs.optimal_batch_size}")
+            self.append_log(f"   Max Concurrent: {specs.max_concurrent_transcriptions}")
+            self.append_log(f"   CPU Cores: {specs.cpu_cores}")
+
+            # Apply recommended settings to transcription tab
+            from ...config import get_valid_whisper_models
+
+            # Model
+            if specs.recommended_whisper_model in get_valid_whisper_models():
+                old_model = transcription_tab.model_combo.currentText()
+                index = transcription_tab.model_combo.findText(
+                    specs.recommended_whisper_model
+                )
+                if index >= 0:
+                    transcription_tab.model_combo.setCurrentIndex(index)
+                    self.append_log(
+                        f"   ✓ Model changed: {old_model} → {specs.recommended_whisper_model}"
+                    )
+                else:
+                    self.append_log(
+                        f"   ⚠️ Model '{specs.recommended_whisper_model}' not found in combo box"
+                    )
+            else:
+                self.append_log(
+                    f"   ⚠️ Model '{specs.recommended_whisper_model}' not supported"
+                )
+
+            # Device
+            device_mapping = {"cpu": "cpu", "cuda": "cuda", "mps": "mps"}
+            recommended_device = device_mapping.get(
+                specs.recommended_device.lower(), "auto"
+            )
+            old_device = transcription_tab.device_combo.currentText()
+            index = transcription_tab.device_combo.findText(recommended_device)
+            if index >= 0:
+                transcription_tab.device_combo.setCurrentIndex(index)
+                self.append_log(
+                    f"   ✓ Device changed: {old_device} → {recommended_device}"
+                )
+            else:
+                self.append_log(
+                    f"   ⚠️ Device '{recommended_device}' not found in combo box"
+                )
+
+            # Batch size
+            if hasattr(specs, "optimal_batch_size") and specs.optimal_batch_size:
+                old_batch = transcription_tab.batch_size.value()
+                transcription_tab.batch_size.setValue(specs.optimal_batch_size)
+                self.append_log(
+                    f"   ✓ Batch size changed: {old_batch} → {specs.optimal_batch_size}"
+                )
+            else:
+                self.append_log("   ⚠️ No optimal batch size available")
+
+            # Max concurrent files
+            if (
+                hasattr(specs, "max_concurrent_transcriptions")
+                and specs.max_concurrent_transcriptions
+            ):
+                old_concurrent = transcription_tab.max_concurrent.value()
+                transcription_tab.max_concurrent.setValue(
+                    specs.max_concurrent_transcriptions
+                )
+                self.append_log(
+                    f"   ✓ Max concurrent changed: {old_concurrent} → {specs.max_concurrent_transcriptions}"
+                )
+            else:
+                self.append_log("   ⚠️ No max concurrent recommendation available")
+
+            # Calculate optimal thread count (usually leave some cores free)
+            if hasattr(specs, "cpu_cores") and specs.cpu_cores:
+                optimal_threads = max(1, min(8, specs.cpu_cores - 1))
+                old_threads = transcription_tab.omp_threads.value()
+                transcription_tab.omp_threads.setValue(optimal_threads)
+                self.append_log(
+                    f"   ✓ Thread count changed: {old_threads} → {optimal_threads}"
+                )
+            else:
+                self.append_log("   ⚠️ No CPU cores information available")
+
+            self.append_log(
+                "✅ Recommended settings applied successfully to Local Transcription tab!"
+            )
+
+        except Exception as e:
+            error_msg = f"Failed to apply recommended settings: {e}"
+            self.append_log(f"❌ {error_msg}")
+            import traceback
+
+            self.append_log(f"   Stack trace: {traceback.format_exc()}")

@@ -29,7 +29,8 @@ from ..components.completion_summary import TranscriptionCompletionSummary
 from ..components.enhanced_error_dialog import show_enhanced_error
 from ..components.enhanced_progress_display import TranscriptionProgressDisplay
 from ..components.file_operations import FileOperationsMixin
-from ..components.rich_log_display import ProcessorLogIntegrator, RichLogDisplay
+
+# Removed rich log display import - using main output_text area instead
 from ..core.settings_manager import get_gui_settings_manager
 
 logger = get_logger(__name__)
@@ -45,9 +46,7 @@ class EnhancedTranscriptionWorker(QThread):
     transcription_step_updated = pyqtSignal(
         str, int
     )  # step_description, progress_percent
-    speaker_assignment_requested = pyqtSignal(
-        object, str, object, object
-    )  # speaker_data_list, recording_path, metadata, result_callback
+    # Speaker assignment signal removed - handled in Speaker Attribution tab only
 
     def __init__(
         self, files: Any, settings: Any, gui_settings: Any, parent: Any = None
@@ -100,45 +99,7 @@ class EnhancedTranscriptionWorker(QThread):
                 step_description_or_dict, progress_percent
             )
 
-    def _speaker_assignment_callback(
-        self, speaker_data_list, recording_path, metadata=None
-    ):
-        """
-        Thread-safe callback for speaker assignment requests from worker thread.
-        This method emits a signal to request the dialog be shown on the main thread,
-        then waits for the result.
-        """
-        import threading
-
-        # Create event to wait for result
-        self._speaker_assignment_event = threading.Event()
-        self._speaker_assignment_result = None
-
-        # Emit signal to main thread
-        self.speaker_assignment_requested.emit(
-            speaker_data_list,
-            recording_path,
-            metadata,
-            self._on_speaker_assignment_result,
-        )
-
-        # Wait for main thread to handle the dialog and return result
-        logger.info("Worker waiting for speaker assignment result from main thread...")
-        self._speaker_assignment_event.wait(timeout=300)  # 5 minute timeout
-
-        # Return the result
-        result = self._speaker_assignment_result
-        self._speaker_assignment_result = None
-        self._speaker_assignment_event = None
-
-        logger.info(f"Worker received speaker assignment result: {result}")
-        return result
-
-    def _on_speaker_assignment_result(self, result):
-        """Called by main thread when speaker assignment is complete."""
-        self._speaker_assignment_result = result
-        if self._speaker_assignment_event:
-            self._speaker_assignment_event.set()
+    # Speaker assignment callback removed - handled in Speaker Attribution tab only
 
     def run(self) -> None:
         """Run the transcription process with real-time progress tracking."""
@@ -154,7 +115,13 @@ class EnhancedTranscriptionWorker(QThread):
             testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
             if testing_mode:
                 logger.info("🧪 Testing mode detected in worker - disabling diarization")
+            # For local transcription, default to False to prevent unwanted speaker dialogs
             enable_diarization = kwargs.get("diarization", False) and not testing_mode
+
+            # Log the diarization setting for debugging
+            logger.info(
+                f"🎭 Local transcription diarization setting: {enable_diarization}"
+            )
 
             # Valid AudioProcessor constructor parameters
             valid_audio_processor_params = {
@@ -170,7 +137,6 @@ class EnhancedTranscriptionWorker(QThread):
                 "enable_quality_retry",
                 "max_retry_attempts",
                 "require_diarization",
-                "speaker_assignment_callback",
             }
 
             # Filter kwargs to only include valid AudioProcessor constructor parameters
@@ -199,7 +165,6 @@ class EnhancedTranscriptionWorker(QThread):
                 ),
                 max_retry_attempts=self.gui_settings.get("max_retry_attempts", 1),
                 progress_callback=self._transcription_progress_callback,
-                speaker_assignment_callback=self._speaker_assignment_callback,
                 **audio_processor_kwargs,
             )
 
@@ -260,11 +225,8 @@ class EnhancedTranscriptionWorker(QThread):
 
                     # CRITICAL: Never enable gui_mode during testing to prevent dialog crashes
                     processing_kwargs_with_output["gui_mode"] = not testing_mode
-                    processing_kwargs_with_output["show_speaker_dialog"] = (
-                        enable_diarization
-                        and self.gui_settings.get("enable_speaker_assignment", True)
-                        and not testing_mode  # Disable speaker dialog during testing
-                    )
+                    # For local transcription, disable speaker dialog - handle in Speaker Attribution tab only
+                    processing_kwargs_with_output["show_speaker_dialog"] = False
 
                     # Override diarization setting if in testing mode
                     if testing_mode:
@@ -357,6 +319,9 @@ class EnhancedTranscriptionWorker(QThread):
 class TranscriptionTab(BaseTab, FileOperationsMixin):
     """Tab for audio and video transcription using Whisper."""
 
+    # Signal for tab navigation
+    navigate_to_tab = pyqtSignal(str)
+
     def __init__(self, parent=None) -> None:
         self.transcription_worker: EnhancedTranscriptionWorker | None = None
         self.gui_settings = get_gui_settings_manager()
@@ -369,9 +334,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         layout.setSpacing(10)  # Add consistent spacing
         layout.setContentsMargins(10, 10, 10, 10)  # Add margins
 
-        # Hardware recommendations section (buttons only, no instructions)
-        recommendations_section = self._create_recommendations_section()
-        layout.addWidget(recommendations_section)
+        # Hardware recommendations section moved to Settings tab
 
         # Input section with stretch factor
         input_section = self._create_input_section()
@@ -468,73 +431,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         group.setLayout(layout)
         return group
 
-    def _create_recommendations_section(self) -> QGroupBox:
-        """Create the hardware recommendations section."""
-        group = QGroupBox("Hardware Recommendations")
-
-        # Use horizontal layout
-        main_layout = QHBoxLayout()
-        main_layout.setSpacing(10)
-
-        # Left side: Use Recommended Settings button
-        self.use_recommended_btn = QPushButton("⚡ Apply Recommended Settings")
-        self.use_recommended_btn.setFixedHeight(45)  # Match text area height
-        self.use_recommended_btn.clicked.connect(self._apply_recommended_settings)
-        self.use_recommended_btn.setStyleSheet(
-            "background-color: #4caf50; color: white; font-weight: bold; padding: 8px;"
-        )
-        self.use_recommended_btn.setToolTip(
-            "Automatically detects your hardware capabilities and applies optimal transcription settings. "
-            "This will configure the best model, device, batch size, and thread count for your system. "
-            "Memory calculations include OS overhead and leave room for other applications."
-        )
-        main_layout.addWidget(self.use_recommended_btn)
-
-        # Right side: Info box with two-column layout
-        self.recommendations_widget = QGroupBox()
-        self.recommendations_widget.setStyleSheet(
-            """
-            QGroupBox {
-                background-color: #e8f5e8;
-                border: 1px solid #4caf50;
-                border-radius: 5px;
-                font-size: 11px;
-                padding-top: 5px;
-            }
-        """
-        )
-
-        # Set height to accommodate content while staying close to button height
-        self.recommendations_widget.setFixedHeight(45)
-
-        # Create a grid layout for recommendations
-        self.recommendations_layout = QGridLayout()
-        self.recommendations_layout.setSpacing(2)  # Tighter spacing for compact layout
-        self.recommendations_layout.setContentsMargins(6, 2, 6, 2)  # Smaller margins
-
-        # Initially show placeholder text
-        placeholder_label = QLabel(
-            "Click 'Apply Recommended Settings' to automatically detect and configure optimal settings for your hardware."
-        )
-        placeholder_label.setWordWrap(True)
-        placeholder_label.setStyleSheet("font-size: 10px; color: #666; padding: 2px;")
-        placeholder_label.setAlignment(
-            Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
-        )
-        self.recommendations_layout.addWidget(placeholder_label, 0, 0, 1, 2)
-
-        self.recommendations_widget.setLayout(self.recommendations_layout)
-
-        # Set size policy to prevent expansion
-        from PyQt6.QtWidgets import QSizePolicy
-
-        self.recommendations_widget.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        main_layout.addWidget(self.recommendations_widget, 1)  # Give it more space
-
-        group.setLayout(main_layout)
-        return group
+    # Hardware recommendations section moved to Settings tab
 
     def _create_settings_section(self) -> QGroupBox:
         """Create the transcription settings section."""
@@ -832,16 +729,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.progress_display.retry_requested.connect(self._retry_failed_files)
         layout.addWidget(self.progress_display)
 
-        # Rich log display for detailed processor information (like terminal)
-        self.rich_log_display = RichLogDisplay()
-        self.rich_log_display.setMinimumHeight(200)
-        self.rich_log_display.setMaximumHeight(400)
-        layout.addWidget(self.rich_log_display)
-
-        # Processor log integrator for enhanced progress tracking
-        self.log_integrator = ProcessorLogIntegrator()
-        self.log_integrator.progress_updated.connect(self._on_processor_progress)
-        self.log_integrator.status_updated.connect(self._on_processor_status)
+        # Remove redundant rich log display to fix double console issue
+        # The main output_text area in the base tab already provides console output
 
         # Keep old progress elements for backward compatibility (hidden)
         self.file_progress_bar = QProgressBar()
@@ -1000,6 +889,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
     def _start_processing(self) -> None:
         """Start transcription process."""
+        # Reset progress tracking for new operation
+        self._failed_files = set()
+
         # Get files to process
         files = []
         for i in range(self.transcription_files.count()):
@@ -1037,9 +929,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.transcription_worker.transcription_step_updated.connect(
             self._update_transcription_step
         )
-        self.transcription_worker.speaker_assignment_requested.connect(
-            self._handle_speaker_assignment_request
-        )
 
         self.active_workers.append(self.transcription_worker)
         self.transcription_worker.start()
@@ -1075,17 +964,41 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
             status_icon = "✅" if success else "❌"
 
-            # Calculate completed/failed counts
-            completed_count = current if success else current - 1
-            failed_count = 0 if success else 1
-            if current > 1:
-                # Estimate from current position and success status
-                if success:
-                    completed_count = current
-                    failed_count = 0  # Will be updated with actual failures
-                else:
-                    completed_count = current - 1
-                    failed_count = 1
+            # Calculate completed/failed counts properly
+            # current is 1-indexed, so current-1 files have been processed before this one
+            if success:
+                # This file just completed successfully
+                completed_count = current  # current files are now completed
+                failed_count = (
+                    current - 1 - completed_count + 1
+                    if hasattr(self, "_failed_files")
+                    else 0
+                )
+                # For simplicity, we'll track this more accurately below
+            else:
+                # This file just failed
+                completed_count = current - 1  # previous files that completed
+                failed_count = 1  # this file failed
+                # Add any previous failures if we're tracking them
+                if hasattr(self, "_failed_files"):
+                    failed_count = len(self._failed_files)
+
+            # Track failures more accurately by maintaining a set
+            if not hasattr(self, "_failed_files"):
+                self._failed_files = set()
+
+            if not success:
+                self._failed_files.add(progress_data["file"])
+
+            # Recalculate based on tracked data
+            total_processed = current
+            failed_count = len(self._failed_files)
+            completed_count = total_processed - failed_count
+
+            # Debug logging for progress tracking
+            logger.info(
+                f"🔍 Progress Update Debug: current={current}, total_processed={total_processed}, completed={completed_count}, failed={failed_count}, success={success}"
+            )
 
             # Update enhanced progress display
             self.progress_display.update_progress(
@@ -1196,33 +1109,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         self.status_updated.emit("Ready")
 
-    def _handle_speaker_assignment_request(
-        self, speaker_data_list, recording_path, metadata, result_callback
-    ):
-        """
-        Handle speaker assignment request from worker thread.
-        This runs on the main thread and can safely show the dialog.
-        """
-        try:
-            logger.info("Main thread handling speaker assignment request")
-
-            # Import dialog here to avoid circular imports
-            from ..dialogs.speaker_assignment_dialog import (
-                show_speaker_assignment_dialog,
-            )
-
-            # Show the dialog (safe on main thread)
-            assignments = show_speaker_assignment_dialog(
-                speaker_data_list, recording_path, metadata, self
-            )
-
-            # Call the result callback with the assignments
-            result_callback(assignments)
-
-        except Exception as e:
-            logger.error(f"Error in speaker assignment dialog: {e}")
-            # Call callback with None to unblock worker
-            result_callback(None)
+    # Speaker assignment request handler removed - handled in Speaker Attribution tab only
 
     def _retry_failed_files(self):
         """Retry transcription for files that failed."""
@@ -1238,6 +1125,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.transcription_worker.stop()
             self.append_log("⏹ Stopping transcription...")
             self.progress_display.reset()
+            # Reset progress tracking
+            self._failed_files = set()
 
     def _show_completion_summary(self, completed_files: int, failed_files: int):
         """Show detailed completion summary."""
@@ -1279,6 +1168,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         # Show summary dialog (safe on main thread)
         summary = TranscriptionCompletionSummary(self)
+
+        # Connect the signal to switch to summarization tab
+        summary.switch_to_summarization.connect(
+            lambda: self.navigate_to_tab.emit("Summarization")
+        )
+
         summary.show_summary(
             successful_files=successful_files,
             failed_files=failed_files_list,
@@ -1287,208 +1182,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             operation_type="transcription",
         )
 
-    def _get_hardware_recommendations(self):
-        """Get hardware recommendations and display them."""
-        try:
-            from ...utils.device_selection import get_device_recommendations
-            from ...utils.hardware_detection import get_hardware_detector
-
-            detector = get_hardware_detector()
-            specs = detector.detect_hardware()
-            recommendations = get_device_recommendations("transcription")
-
-            # Store recommendations for later use
-            self._current_recommendations = {
-                "specs": specs,
-                "recommendations": recommendations,
-            }
-
-            # Clear the layout first
-            for i in reversed(range(self.recommendations_layout.count())):
-                item = self.recommendations_layout.takeAt(i)
-                if item and item.widget():
-                    item.widget().deleteLater()
-
-            # Create a readable compact layout
-            # Left side - Device and Model
-            device_label = QLabel("🎯 Device:")
-            device_label.setStyleSheet(
-                "font-weight: bold; font-size: 9px; color: black;"
-            )
-            device_value = QLabel(str(specs.recommended_device))
-            device_value.setStyleSheet("font-size: 9px; color: black;")
-
-            model_label = QLabel("🧠 Model:")
-            model_label.setStyleSheet(
-                "font-weight: bold; font-size: 9px; color: black;"
-            )
-            model_value = QLabel(str(specs.recommended_whisper_model))
-            model_value.setStyleSheet("font-size: 9px; color: black;")
-
-            # Right side - Batch Size and Max Concurrent (including "Max" note)
-            batch_label = QLabel("📦 Batch:")
-            batch_label.setStyleSheet(
-                "font-weight: bold; font-size: 9px; color: black;"
-            )
-            batch_value = QLabel(str(specs.optimal_batch_size))
-            batch_value.setStyleSheet("font-size: 9px; color: black;")
-
-            max_label = QLabel("🔄 Max Files:")
-            max_label.setStyleSheet("font-weight: bold; font-size: 9px; color: black;")
-            max_value_text = f"{specs.max_concurrent_transcriptions} (Max)"
-            max_value = QLabel(max_value_text)
-            max_value.setStyleSheet("font-size: 9px; color: black;")
-
-            # Add widgets to grid layout with better spacing
-            self.recommendations_layout.addWidget(device_label, 0, 0)
-            self.recommendations_layout.addWidget(device_value, 0, 1)
-            self.recommendations_layout.addWidget(batch_label, 0, 2)
-            self.recommendations_layout.addWidget(batch_value, 0, 3)
-
-            self.recommendations_layout.addWidget(model_label, 1, 0)
-            self.recommendations_layout.addWidget(model_value, 1, 1)
-            self.recommendations_layout.addWidget(max_label, 1, 2)
-            self.recommendations_layout.addWidget(max_value, 1, 3)
-
-            # Enable the "Use Recommended Settings" button
-            self.use_recommended_btn.setEnabled(True)
-
-            self.append_log("Hardware recommendations loaded successfully")
-
-        except Exception as e:
-            error_msg = f"Failed to get hardware recommendations: {e}"
-
-            # Clear the layout first
-            for i in reversed(range(self.recommendations_layout.count())):
-                item = self.recommendations_layout.takeAt(i)
-                if item and item.widget():
-                    item.widget().deleteLater()
-
-            # Show error message
-            error_label = QLabel(f"❌ {error_msg}")
-            error_label.setStyleSheet("color: #f44336; font-size: 9px; padding: 2px;")
-            error_label.setWordWrap(True)
-            error_label.setAlignment(
-                Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
-            )
-            self.recommendations_layout.addWidget(error_label, 0, 0, 1, 4)
-
-            # Update widget style for error
-            self.recommendations_widget.setStyleSheet(
-                """
-                QGroupBox {
-                    background-color: #ffeaea;
-                    border: 1px solid #f44336;
-                    border-radius: 5px;
-                    font-size: 11px;
-                    padding-top: 5px;
-                }
-            """
-            )
-
-    def _apply_recommended_settings(self):
-        """Get hardware recommendations if needed, then apply them to the UI controls."""
-        # First, check if we have recommendations - if not, get them
-        if not hasattr(self, "_current_recommendations"):
-            self.append_log("🔍 Getting hardware recommendations...")
-            self._get_hardware_recommendations()
-
-            # Check if we successfully got recommendations
-            if not hasattr(self, "_current_recommendations"):
-                self.append_log(
-                    "❌ Failed to get recommendations. Please check hardware detection."
-                )
-                return
-
-        try:
-            specs = self._current_recommendations["specs"]
-
-            # Debug logging
-            self.append_log("🔧 Applying recommendations:")
-            self.append_log(f"   Model: {specs.recommended_whisper_model}")
-            self.append_log(f"   Device: {specs.recommended_device}")
-            self.append_log(f"   Batch Size: {specs.optimal_batch_size}")
-            self.append_log(f"   Max Concurrent: {specs.max_concurrent_transcriptions}")
-            self.append_log(f"   CPU Cores: {specs.cpu_cores}")
-
-            # Apply recommended settings
-            # Model
-            if specs.recommended_whisper_model in get_valid_whisper_models():
-                old_model = self.model_combo.currentText()
-                index = self.model_combo.findText(specs.recommended_whisper_model)
-                if index >= 0:
-                    self.model_combo.setCurrentIndex(index)
-                    self.append_log(
-                        f"   ✓ Model changed: {old_model} → {specs.recommended_whisper_model}"
-                    )
-                else:
-                    self.append_log(
-                        f"   ⚠️ Model '{specs.recommended_whisper_model}' not found in combo box"
-                    )
-            else:
-                self.append_log(
-                    f"   ⚠️ Model '{specs.recommended_whisper_model}' not supported"
-                )
-
-            # Device
-            device_mapping = {"cpu": "cpu", "cuda": "cuda", "mps": "mps"}
-            recommended_device = device_mapping.get(
-                specs.recommended_device.lower(), "auto"
-            )
-            old_device = self.device_combo.currentText()
-            index = self.device_combo.findText(recommended_device)
-            if index >= 0:
-                self.device_combo.setCurrentIndex(index)
-                self.append_log(
-                    f"   ✓ Device changed: {old_device} → {recommended_device}"
-                )
-            else:
-                self.append_log(
-                    f"   ⚠️ Device '{recommended_device}' not found in combo box"
-                )
-
-            # Batch size
-            if hasattr(specs, "optimal_batch_size") and specs.optimal_batch_size:
-                old_batch = self.batch_size.value()
-                self.batch_size.setValue(specs.optimal_batch_size)
-                self.append_log(
-                    f"   ✓ Batch size changed: {old_batch} → {specs.optimal_batch_size}"
-                )
-            else:
-                self.append_log("   ⚠️ No optimal batch size available")
-
-            # Max concurrent files
-            if (
-                hasattr(specs, "max_concurrent_transcriptions")
-                and specs.max_concurrent_transcriptions
-            ):
-                old_concurrent = self.max_concurrent.value()
-                self.max_concurrent.setValue(specs.max_concurrent_transcriptions)
-                self.append_log(
-                    f"   ✓ Max concurrent changed: {old_concurrent} → {specs.max_concurrent_transcriptions}"
-                )
-            else:
-                self.append_log("   ⚠️ No max concurrent recommendation available")
-
-            # Calculate optimal thread count (usually leave some cores free)
-            if hasattr(specs, "cpu_cores") and specs.cpu_cores:
-                optimal_threads = max(1, min(8, specs.cpu_cores - 1))
-                old_threads = self.omp_threads.value()
-                self.omp_threads.setValue(optimal_threads)
-                self.append_log(
-                    f"   ✓ Thread count changed: {old_threads} → {optimal_threads}"
-                )
-            else:
-                self.append_log("   ⚠️ No CPU cores information available")
-
-            self.append_log("✅ Recommended settings applied successfully!")
-
-        except Exception as e:
-            error_msg = f"Failed to apply recommended settings: {e}"
-            self.append_log(f"❌ {error_msg}")
-            import traceback
-
-            self.append_log(f"   Stack trace: {traceback.format_exc()}")
+    # Hardware recommendations methods moved to Settings tab
 
     def _get_transcription_settings(self) -> dict[str, Any]:
         """Get current transcription settings."""
@@ -1669,7 +1363,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 )
                 self.diarization_checkbox.setChecked(
                     self.gui_settings.get_checkbox_state(
-                        self.tab_name, "enable_diarization", True
+                        self.tab_name,
+                        "enable_diarization",
+                        True,  # Default to True for local transcription
                     )
                 )
 

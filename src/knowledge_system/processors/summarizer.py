@@ -101,7 +101,9 @@ class HCEPipeline:
         total_segments = len(episode.segments)
         for i, seg in enumerate(episode.segments):
             # Report progress for mining individual segments
-            segment_progress = 15.0 + (i / total_segments) * 25.0  # 15% to 40%
+            segment_progress = round(
+                15.0 + (i / total_segments) * 25.0, 1
+            )  # 15% to 40%
             report_progress(
                 "Mining claims",
                 segment_progress,

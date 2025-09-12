@@ -18,6 +18,26 @@ class GlossaryExtractor:
                 + seg.text
             )
             for i, r in enumerate(js):
+                # Ensure r is a dictionary before calling .get()
+                if not isinstance(r, dict):
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        f"Skipping invalid jargon result type {type(r)} at index {i}: {r}"
+                    )
+                    continue
+
+                # Check for required 'term' field
+                if "term" not in r:
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        f"Skipping jargon term without required 'term' field: {r}"
+                    )
+                    continue
+
                 out.append(
                     JargonTerm(
                         episode_id=episode_id,

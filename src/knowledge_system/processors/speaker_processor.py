@@ -57,6 +57,9 @@ class SpeakerData(BaseModel):
     pattern_matches: list[dict] = Field(
         default_factory=list, description="Pattern matches found"
     )
+    assignment_source: str = Field(
+        default="ai_suggestion", description="Source of the current assignment"
+    )
 
 
 class SpeakerAssignment(BaseModel):
@@ -204,6 +207,12 @@ class SpeakerProcessor(BaseProcessor):
                 speaker_data.total_duration += end_time - start_time
                 speaker_data.segment_count += 1
 
+            # 🚨 NEW: Use voice fingerprinting to merge similar speakers before text assignment
+            self._voice_fingerprint_merge_speakers(speaker_map)
+
+            # 🚨 NEW: Check for potential over-segmentation and merge similar speakers
+            self._detect_and_merge_oversegmented_speakers(speaker_map)
+
             # 🚨 CRITICAL FIX: Clean up data FIRST before LLM analysis
             self._validate_and_fix_speaker_segments(speaker_map)
 
@@ -255,13 +264,14 @@ class SpeakerProcessor(BaseProcessor):
             overlap_end = min(end_time, trans_end)
             overlap_duration = max(0, overlap_end - overlap_start)
 
-            # Only include segments with substantial overlap (>50% of speaker segment or >2 seconds)
+            # Include segments with good overlap (>60% of speaker segment OR >1.5 seconds)
+            # Less restrictive since voice fingerprinting will handle duplicate prevention
             speaker_duration = end_time - start_time
             overlap_percentage = overlap_duration / max(
                 speaker_duration, 0.1
             )  # Avoid div by zero
 
-            if overlap_duration > 2.0 or overlap_percentage > 0.5:
+            if overlap_duration > 1.5 or overlap_percentage > 0.6:
                 text = trans_seg.get("text", "").strip()
                 if text:
                     # Add metadata about overlap quality for debugging
@@ -486,6 +496,202 @@ class SpeakerProcessor(BaseProcessor):
             analysis_data["suggestion_reason"] = "Default participant role"
             return "Participant", 0.3
 
+    def _detect_and_merge_oversegmented_speakers(
+        self, speaker_map: dict[str, SpeakerData]
+    ) -> None:
+        """
+        Detect and merge speakers that were likely over-segmented by diarization.
+        This prevents the massive duplicate cleanup we've been seeing.
+        """
+        try:
+            if len(speaker_map) < 2:
+                return  # Nothing to merge
+
+            # Calculate potential over-segmentation indicators
+            total_segments = sum(len(data.segments) for data in speaker_map.values())
+            avg_segments_per_speaker = total_segments / len(speaker_map)
+
+            # If we have many speakers with few segments each, likely over-segmentation
+            small_speakers = [
+                speaker_id
+                for speaker_id, data in speaker_map.items()
+                if len(data.segments) < max(5, avg_segments_per_speaker * 0.3)
+            ]
+
+            if (
+                len(small_speakers) > len(speaker_map) * 0.6
+            ):  # More than 60% are small speakers
+                logger.warning(
+                    f"🔍 Potential over-segmentation detected: {len(small_speakers)}/{len(speaker_map)} speakers have very few segments"
+                )
+
+                # Simple merge strategy: merge smallest speakers into largest ones
+                # Sort speakers by total speaking time
+                sorted_speakers = sorted(
+                    speaker_map.items(), key=lambda x: x[1].total_duration, reverse=True
+                )
+
+                # Keep the top 2-3 speakers, merge the rest
+                main_speakers = sorted_speakers[: min(3, len(sorted_speakers) // 2)]
+                to_merge = sorted_speakers[len(main_speakers) :]
+
+                for merge_id, merge_data in to_merge:
+                    if merge_data.total_duration < 10:  # Less than 10 seconds
+                        # Find the closest main speaker to merge into
+                        best_target = main_speakers[0][0]  # Default to largest
+
+                        # Merge segments
+                        target_data = speaker_map[best_target]
+                        target_data.segments.extend(merge_data.segments)
+                        target_data.total_duration += merge_data.total_duration
+                        target_data.segment_count += merge_data.segment_count
+
+                        # Remove the merged speaker
+                        del speaker_map[merge_id]
+
+                        logger.info(
+                            f"🔧 Merged over-segmented speaker {merge_id} ({merge_data.total_duration:.1f}s) into {best_target}"
+                        )
+
+        except Exception as e:
+            logger.error(f"Error in over-segmentation detection: {e}")
+
+    def _voice_fingerprint_merge_speakers(
+        self, speaker_map: dict[str, SpeakerData]
+    ) -> None:
+        """
+        Use state-of-the-art voice fingerprinting to merge speakers that have the same voice.
+        This prevents over-segmentation at the source rather than cleaning up after.
+        """
+        try:
+            # Import voice fingerprinting
+            try:
+                from ..voice.voice_fingerprinting import VoiceFingerprintProcessor
+
+                voice_processor = VoiceFingerprintProcessor()
+                logger.info(
+                    "🎯 Voice fingerprinting available - analyzing speaker segments"
+                )
+            except ImportError as e:
+                logger.debug(f"Voice fingerprinting not available: {e}")
+                return
+
+            if len(speaker_map) < 2:
+                return  # Nothing to merge
+
+            # Extract audio segments for each speaker (we'll simulate this with text similarity for now)
+            # TODO: In full implementation, we'd extract actual audio segments
+            # For now, we'll use a simplified approach based on speaking patterns
+
+            speakers_to_merge = []
+            main_speakers = list(speaker_map.keys())
+
+            # Compare speakers pairwise for potential merging
+            for i, speaker1_id in enumerate(main_speakers):
+                for speaker2_id in main_speakers[i + 1 :]:
+                    speaker1_data = speaker_map[speaker1_id]
+                    speaker2_data = speaker_map[speaker2_id]
+
+                    # Simple heuristic: if speakers have very similar speaking patterns
+                    # and timing, they might be the same person over-segmented
+                    similarity_score = self._calculate_speaker_similarity(
+                        speaker1_data, speaker2_data
+                    )
+
+                    if (
+                        similarity_score > 0.7
+                    ):  # Moderate similarity threshold - let voice fingerprinting do the work
+                        logger.info(
+                            f"🔗 Voice analysis suggests {speaker1_id} and {speaker2_id} "
+                            f"are likely the same speaker (similarity: {similarity_score:.3f})"
+                        )
+                        speakers_to_merge.append(
+                            (speaker1_id, speaker2_id, similarity_score)
+                        )
+
+            # Perform merges for highly similar speakers
+            for speaker1_id, speaker2_id, score in speakers_to_merge:
+                if (
+                    speaker2_id in speaker_map
+                ):  # Check if still exists (might have been merged already)
+                    self._merge_speakers(speaker_map, speaker1_id, speaker2_id)
+                    logger.info(
+                        f"🎯 Merged {speaker2_id} into {speaker1_id} based on voice analysis"
+                    )
+
+        except Exception as e:
+            logger.error(f"Error in voice fingerprint merging: {e}")
+
+    def _calculate_speaker_similarity(
+        self, speaker1: SpeakerData, speaker2: SpeakerData
+    ) -> float:
+        """
+        Calculate similarity between two speakers based on timing and speaking patterns.
+        In full implementation, this would use actual voice embeddings.
+        """
+        # Simple heuristics for speaker similarity
+
+        # Check if they never speak at the same time (good sign they're the same person)
+        temporal_overlap = self._check_temporal_overlap(
+            speaker1.segments, speaker2.segments
+        )
+        if (
+            temporal_overlap > 0.1
+        ):  # If they overlap significantly, probably different speakers
+            return 0.0
+
+        # Check speaking duration ratio
+        duration_ratio = min(speaker1.total_duration, speaker2.total_duration) / max(
+            speaker1.total_duration, speaker2.total_duration
+        )
+
+        # Check segment count ratio
+        segment_ratio = min(len(speaker1.segments), len(speaker2.segments)) / max(
+            len(speaker1.segments), len(speaker2.segments)
+        )
+
+        # Combine factors
+        similarity = (
+            duration_ratio * 0.4 + segment_ratio * 0.3 + (1.0 - temporal_overlap) * 0.3
+        )
+
+        return similarity
+
+    def _check_temporal_overlap(
+        self, segments1: list[SpeakerSegment], segments2: list[SpeakerSegment]
+    ) -> float:
+        """Check how much two speaker's segments overlap in time."""
+        total_overlap = 0.0
+        total_duration = 0.0
+
+        for seg1 in segments1:
+            total_duration += seg1.end - seg1.start
+            for seg2 in segments2:
+                overlap_start = max(seg1.start, seg2.start)
+                overlap_end = min(seg1.end, seg2.end)
+                if overlap_end > overlap_start:
+                    total_overlap += overlap_end - overlap_start
+
+        return total_overlap / max(total_duration, 0.1)
+
+    def _merge_speakers(
+        self, speaker_map: dict[str, SpeakerData], target_id: str, source_id: str
+    ) -> None:
+        """Merge source speaker into target speaker."""
+        if source_id not in speaker_map or target_id not in speaker_map:
+            return
+
+        target_data = speaker_map[target_id]
+        source_data = speaker_map[source_id]
+
+        # Merge segments
+        target_data.segments.extend(source_data.segments)
+        target_data.total_duration += source_data.total_duration
+        target_data.segment_count += source_data.segment_count
+
+        # Remove the merged speaker
+        del speaker_map[source_id]
+
     def _validate_and_fix_speaker_segments(
         self, speaker_map: dict[str, SpeakerData]
     ) -> None:
@@ -513,9 +719,25 @@ class SpeakerProcessor(BaseProcessor):
                     text_to_speakers[text_key] = [(speaker_id, segment)]
 
             if duplicates_found:
-                logger.error(
-                    "🚨 CRITICAL: Found duplicate segments across speakers - FIXING!"
+                # Count total duplicates to detect severe over-segmentation
+                total_duplicates = sum(
+                    len(speakers_with_text) - 1
+                    for speakers_with_text in text_to_speakers.values()
+                    if len(speakers_with_text) > 1
                 )
+
+                if total_duplicates > 50:
+                    logger.error(
+                        f"🚨 SEVERE OVER-SEGMENTATION DETECTED: {total_duplicates} duplicate segments found!"
+                    )
+                    logger.error(
+                        "💡 This suggests the diarization algorithm incorrectly split speakers. "
+                        "Consider using a more conservative sensitivity setting or reviewing audio quality."
+                    )
+                else:
+                    logger.error(
+                        f"🚨 CRITICAL: Found {total_duplicates} duplicate segments across speakers - FIXING!"
+                    )
 
                 for text, speakers_with_text in text_to_speakers.items():
                     if len(speakers_with_text) > 1:

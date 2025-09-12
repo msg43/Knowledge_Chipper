@@ -18,6 +18,26 @@ class ConceptExtractor:
                 + seg.text
             )
             for i, r in enumerate(js):
+                # Ensure r is a dictionary before calling .get()
+                if not isinstance(r, dict):
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        f"Skipping invalid concept result type {type(r)} at index {i}: {r}"
+                    )
+                    continue
+
+                # Check for required 'name' field
+                if "name" not in r:
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        f"Skipping concept without required 'name' field: {r}"
+                    )
+                    continue
+
                 out.append(
                     MentalModel(
                         episode_id=episode_id,

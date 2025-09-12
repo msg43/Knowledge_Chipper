@@ -19,7 +19,18 @@ class Judge:
                 "evidence": [e.model_dump() for e in c.evidence],
                 "context_excerpt": episode_context[:1200],
             }
-            raw = self.llm.judge_json(self.template + "\n" + str(pack))
+            raw_result = self.llm.generate_json(self.template + "\n" + str(pack))
+
+            # Handle the fact that generate_json returns a list
+            if not raw_result or not isinstance(raw_result, list):
+                continue  # Skip this claim if no valid result
+
+            raw = raw_result[0] if raw_result else {}
+
+            # Ensure raw is a dictionary before calling .get()
+            if not isinstance(raw, dict):
+                continue  # Skip this claim if result is not a dictionary
+
             s = c.scores.copy()
             for k in [
                 "importance",

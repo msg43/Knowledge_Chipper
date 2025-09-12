@@ -111,6 +111,13 @@ class StructuredCategoryAnalyzer:
             categories = []
             for i, category_data in enumerate(result):
                 try:
+                    # Ensure category_data is a dictionary before calling .get()
+                    if not isinstance(category_data, dict):
+                        logger.warning(
+                            f"Skipping invalid category result type {type(category_data)} at index {i}: {category_data}"
+                        )
+                        continue
+
                     category = StructuredCategory(
                         category_id=f"cat_{outputs.episode_id}_{i}",
                         category_name=category_data.get(

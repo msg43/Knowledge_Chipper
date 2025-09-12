@@ -1009,6 +1009,7 @@ class YouTubeBatchWorker(QThread):
                 enable_diarization=enable_diarization,
                 gui_mode=not testing_mode,  # Enable GUI mode unless testing
                 show_speaker_dialog=False,  # NEVER show dialogs in batch mode - use Speaker Attribution tab instead
+                enable_speaker_assignment=False,  # CLOUD TRANSCRIPTION: Disable speaker assignment popups entirely
                 cancellation_token=self.cancellation_token,
                 progress_callback=progress_callback,  # Pass our progress callback
             )

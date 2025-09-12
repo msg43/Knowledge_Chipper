@@ -2249,14 +2249,23 @@ class SummarizationTab(BaseTab):
             self.start_btn.setText("🔍 Checking model availability...")
 
         # Create and start worker
-        self._model_check_worker = ModelCheckWorker(model)
-        self._model_check_worker.check_completed.connect(
-            self._handle_model_check_result
-        )
-        self._model_check_worker.service_check_completed.connect(
-            self._handle_service_check_result
-        )
-        self._model_check_worker.start()
+        try:
+            self._model_check_worker = ModelCheckWorker(model)
+            self._model_check_worker.check_completed.connect(
+                self._handle_model_check_result
+            )
+            self._model_check_worker.service_check_completed.connect(
+                self._handle_service_check_result
+            )
+            self._model_check_worker.start()
+        except Exception as e:
+            logger.error(f"Failed to start model check worker: {e}")
+            # Re-enable start button on worker creation failure
+            if hasattr(self, "start_btn"):
+                self.start_btn.setEnabled(True)
+                self.start_btn.setText(self._get_start_button_text())
+            self.append_log(f"❌ Failed to check model: {e}")
+            return
 
     def _handle_service_check_result(self, service_running: bool, model: str) -> None:
         """Handle Ollama service check result."""
@@ -2313,6 +2322,10 @@ class SummarizationTab(BaseTab):
                     logger.error(
                         f"🔧 DEBUG: Model availability check failed for '{model}': {error_message}"
                     )
+                    # Re-enable start button on error
+                    if hasattr(self, "start_btn"):
+                        self.start_btn.setEnabled(True)
+                        self.start_btn.setText(self._get_start_button_text())
                 else:
                     self.append_log(f"📥 Model '{model}' not installed")
                     logger.info(
@@ -2409,12 +2422,7 @@ class SummarizationTab(BaseTab):
         self.set_processing_state(True)
         self.clear_log()
 
-        # Create and show HCE progress dialog
-        from ..components.hce_progress_dialog import HCEProgressDialog
-
-        self.hce_progress_dialog = HCEProgressDialog(self)
-        self.hce_progress_dialog.cancelled.connect(self._cancel_processing)
-        self.hce_progress_dialog.show()
+        # HCE progress will be tracked via console logging
 
         # Show informative startup message
         file_count = len(files)
@@ -2863,25 +2871,29 @@ class SummarizationTab(BaseTab):
         import time
 
         # Update HCE progress dialog if it exists and we have step information
-        if (
-            hasattr(self, "hce_progress_dialog")
-            and self.hce_progress_dialog
-            and hasattr(progress, "current_step")
-            and progress.current_step
-        ):
-            # Update the HCE progress dialog
-            self.hce_progress_dialog.update_progress_from_step(
-                progress.current_step,
-                getattr(progress, "file_percent", 0),
-                getattr(progress, "status", ""),
-            )
+        # Log HCE progress to console instead of popup dialog
+        if hasattr(progress, "current_step") and progress.current_step:
+            # Format progress information for console output
+            file_percent = getattr(progress, "file_percent", 0)
+            if file_percent is None:
+                file_percent = 0
+            status = getattr(progress, "status", "")
 
-            # Update file information
+            # Create a detailed progress message
+            progress_msg = f"🔄 {progress.current_step}"
+            if file_percent > 0:
+                progress_msg += f" ({file_percent}%)"
+            if status:
+                progress_msg += f" - {status}"
+
+            # Add file information if available
             if hasattr(progress, "current_file") and progress.current_file:
                 from pathlib import Path
 
                 filename = Path(progress.current_file).name
-                self.hce_progress_dialog.update_file(filename)
+                progress_msg += f" | File: {filename}"
+
+            self.append_log(progress_msg)
 
         # Initialize timing tracking (batch time already set when worker starts)
         if not hasattr(self, "_last_progress_update"):
@@ -3146,12 +3158,25 @@ class SummarizationTab(BaseTab):
 
         self.set_processing_state(False)
 
-        # Finalize HCE progress dialog
-        if hasattr(self, "hce_progress_dialog") and self.hce_progress_dialog:
-            self.hce_progress_dialog.set_finished()
-            # Update final statistics if available
-            if hasattr(self, "_final_hce_stats"):
-                self.hce_progress_dialog.update_statistics(self._final_hce_stats)
+        # Log final HCE statistics to console
+        if hasattr(self, "_final_hce_stats") and self._final_hce_stats:
+            self.append_log("\n📊 CLAIM EXTRACTION STATISTICS:")
+            stats = self._final_hce_stats
+
+            if "claims" in stats:
+                self.append_log(f"   • Claims extracted: {stats['claims']}")
+            if "tier1_claims" in stats:
+                self.append_log(f"   • High-quality claims: {stats['tier1_claims']}")
+            if "people" in stats:
+                self.append_log(f"   • People identified: {stats['people']}")
+            if "concepts" in stats:
+                self.append_log(f"   • Concepts found: {stats['concepts']}")
+            if "relations" in stats:
+                self.append_log(f"   • Relations mapped: {stats['relations']}")
+            if "contradictions" in stats:
+                self.append_log(
+                    f"   • Contradictions detected: {stats['contradictions']}"
+                )
 
         # Calculate total batch time
         total_time_text = ""

@@ -69,6 +69,24 @@ class Miner:
         raw = self.llm.generate_json(prompt)
         out = []
         for i, r in enumerate(raw):
+            # Ensure r is a dictionary before calling .get()
+            if not isinstance(r, dict):
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Skipping invalid claim result type {type(r)} at index {i}: {r}"
+                )
+                continue
+
+            # Check for required fields
+            if "claim_text" not in r or "claim_type" not in r:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Skipping claim without required fields: {r}")
+                continue
+
             out.append(
                 CandidateClaim(
                     episode_id=seg.episode_id,

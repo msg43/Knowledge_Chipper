@@ -239,6 +239,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(youtube_tab, "Cloud Transcription")
 
         transcription_tab = TranscriptionTab(self)
+        transcription_tab.navigate_to_tab.connect(self._navigate_to_tab)
         self.tabs.addTab(transcription_tab, "Local Transcription")
 
         # Speaker attribution tab for managing speaker identification

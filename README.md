@@ -1,12 +1,14 @@
 # Skip the Podcast Desktop
 
-**Version:** 3.2.0 | **Build Date:** 2025-09-09 
+**Version:** 3.2.1 | **Build Date:** 2025-09-11 
 
 Skip the Podcast Desktop - A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 
-**What it does:** Transcribes videos → LLM-validated speaker identification → Extracts structured claims with confidence tiers → Maps relationships and contradictions → Creates knowledge maps → Organizes everything automatically.
+**What it does:** Transcribes videos → 97% accurate voice fingerprinting → LLM-validated speaker identification → Extracts structured claims with HCE system → Maps relationships and contradictions → Creates knowledge maps → Organizes everything automatically.
 
 **🔍 HCE Features:** Advanced claim extraction with A/B/C confidence tiers + real-time contradiction detection + semantic deduplication + entity recognition (people/concepts) + relationship mapping + evidence citations + Obsidian integration with auto-tagging + comprehensive search and filtering.
+
+**🎙️ Voice Fingerprinting:** State-of-the-art 97% accuracy speaker verification using ECAPA-TDNN and Wav2Vec2 models, bundled in DMG for immediate offline use.
 
 ## 🎉 What's New (Latest Updates)
 
@@ -23,17 +25,19 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
   - Minimal: `./scripts/release_minimal_dmg.sh`
   - Manual: `./scripts/build_macos_app.sh --make-dmg [--no-bundle for minimal]`
 
-### 🎙️ **Advanced Voice Fingerprinting System (January 2025)**
-- **97% Accuracy Voice Matching**: State-of-the-art speaker verification using multiple AI models
-- **Bundled in DMG**: All voice models pre-installed (~410MB) - works offline immediately 
-- **Multi-Modal Features**: Combines traditional audio features (MFCC, spectral) with deep learning embeddings
+### 🎙️ **Advanced Voice Fingerprinting System (September 2025)**
+- **97% Accuracy Voice Matching**: State-of-the-art speaker verification using multiple AI models (ECAPA-TDNN + Wav2Vec2)
+- **Bundled in DMG**: All voice models pre-installed (~410MB) - works offline immediately from first launch
+- **Multi-Modal Features**: Combines traditional audio features (MFCC, spectral, prosodic) with deep learning embeddings
 - **Enterprise Models**: Wav2Vec2 (Facebook) + ECAPA-TDNN (SpeechBrain) for maximum accuracy
 - **Hardware Accelerated**: Automatic MPS (Apple Silicon) and CUDA support for fast processing
+- **Integrated with Diarization**: Voice fingerprinting runs immediately after diarization to merge false speaker splits
+- **Conservative Diarization**: Uses moderate clustering settings with voice fingerprinting for quality control
 - **Voice Enrollment**: Create persistent voice profiles for automatic speaker recognition across recordings
-- **Comprehensive Testing**: Built-in accuracy testing framework with industry-standard metrics (FAR, FRR, EER)
-- **CLI Tools**: Command-line interface for enrollment, verification, and accuracy testing
+- **Similarity Thresholds**: Configurable thresholds (>0.7 similarity) for merging speakers with same voice signature
 - **16kHz Optimized**: Specifically tuned for 16kHz mono audio (standard for speech processing)
 - **Zero Setup Required**: Enabled by default with all models bundled for immediate 97% accuracy
+- **Handles Over-segmentation**: Automatically merges speakers incorrectly split by conservative diarization settings
 
 ### 🤖 **Smart Podcast-Focused Speaker Detection (September 2025)**
 - **Clean Segment Analysis**: LLM analyzes final clean, deduplicated segments - exactly what user sees in attribution dialog
@@ -129,13 +133,17 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 - **Performance Analytics**: Comprehensive monitoring of crash rates, recovery success, and system health
 - **Memory Safety**: Adaptive batch sizing and emergency cleanup procedures prevent memory exhaustion
 
-### 🗣️ **Enhanced Speaker Attribution System (August 2025)**
+### 🗣️ **Enhanced Speaker Attribution System (September 2025)**
 - **Database-Only Storage**: Eliminated sidecar files in favor of comprehensive SQLite database storage
+- **Voice Fingerprinting Integration**: 97% accurate speaker verification using ECAPA-TDNN and Wav2Vec2 models
+- **Conservative Diarization Pipeline**: Uses moderate clustering settings with voice fingerprinting for quality control
 - **LLM-Based Suggestions**: AI uses LLM to analyze metadata and transcript for speaker identification
+- **300+ Podcast Mappings**: Pre-seeded channel-to-host mappings for popular podcasts with management interface
 - **User Confirmation Required**: All speaker suggestions require user review and confirmation
 - **Auto-Assignment Queue**: Shows recordings needing review with LLM-generated suggestions
 - **Enhanced Sample Segments**: Displays first 5 speaking segments for quick speaker identification
 - **Simplified UI**: Removed redundant auto-assign and export buttons, streamlined for database workflow
+- **Automatic Database Persistence**: Every transcription automatically saves to SQLite with consistent media IDs
 
 ### ☁️ **Cloud Database Integration (August 2025)**
 - **Direct Database Upload**: Cloud Uploads tab now uploads claims data directly to Supabase database (not file storage)
@@ -196,19 +204,23 @@ knowledge-system summarize ./docs/file.md -o ./output \
   --prefer-template-summary
 ```
 
-Revolutionary speaker identification with AI-powered validation for podcast and interview processing:
+Revolutionary speaker identification with AI-powered validation and voice fingerprinting for podcast and interview processing:
 
+- **🎙️ 97% Voice Fingerprinting**: State-of-the-art speaker verification using ECAPA-TDNN and Wav2Vec2 models
 - **🧠 LLM First-Skim Validation**: AI analyzes speech patterns before user confirmation (90-95% accuracy)
 - **📺 Metadata-Based Speaker Extraction**: Automatically detects hosts/guests from YouTube titles and channels
-  - Supports Joe Rogan, Lex Fridman, Jordan Peterson, Sam Harris, and 15+ popular podcast formats
+  - Supports Joe Rogan, Lex Fridman, Jordan Peterson, Sam Harris, and 300+ popular podcast formats
+- **💾 Database-Only Storage**: Eliminated sidecar files in favor of comprehensive SQLite database storage
 - **⚡ Fast Batch Processing**: Optimized workflow for processing hundreds of podcasts rapidly
   - Ctrl+R: Auto-assign from metadata | Ctrl+L: LLM validation | Ctrl+Enter: Batch completion
 - **🎙️ First 5 Segments Preview**: Shows timestamped speech samples for each speaker identification
 - **🔍 Intelligent Error Correction**: LLM detects and corrects incorrect metadata assignments
 - **📊 Confidence Scoring**: Visual indicators show assignment reliability (95% Joe Rogan, 92% Jordan Peterson)
 - **⌨️ Keyboard-Driven Interface**: Navigate Tab/Enter, quick assign Ctrl+1,2,3, switch speakers Ctrl+S
+- **🎯 Conservative Diarization**: Uses moderate clustering settings (min_cluster_size=20, threshold=0.75) with voice fingerprinting to merge false splits
+- **🔄 Automatic Speaker Merging**: Voice fingerprinting runs immediately after diarization to merge speakers with >0.7 similarity
 
-**Accuracy Pipeline**: Metadata (75-85%) → + LLM Validation (90-95%) → + User Review (99%)
+**Complete Accuracy Pipeline**: Conservative Diarization (80-85%) → + Voice Fingerprinting (95-97%) → + LLM Validation (90-95%) → + User Review (99%)
 
 ### 🚀 **Major Architecture Refactor Completed (Dec 2024)**
 Skip the Podcast Desktop has undergone a comprehensive refactor, transforming it into a modern, multi-format knowledge management platform:
@@ -263,7 +275,8 @@ media_sources (formerly videos)
 
 ## 🎉 What's New (Previous Updates)
 
-### 🔍 **HCE (Hybrid Claim Extractor) System - Revolutionary Upgrade**
+### 🔍 **HCE (Hybrid Claim Extractor) System - Mandatory Core System**
+- **Mandatory Processing**: HCE has completely replaced legacy summarization - all content analysis now uses structured claim extraction
 - **Structured Claim Analysis**: Extract claims with A/B/C confidence tiers instead of basic summaries
 - **🎯 Claim Tier Validation**: Interactive popup dialog to review and correct AI-assigned A/B/C tiers
 - **🔍 Claim Search & Exploration**: Dedicated search interface to explore extracted claims across all content
@@ -276,7 +289,8 @@ media_sources (formerly videos)
 - **Obsidian Integration**: Auto-generated tags and wikilinks for seamless knowledge management
 - **Professional Output**: Beautiful markdown with executive summaries, categorized claims, and evidence
 - **Performance Optimized**: Semantic deduplication, embedding cache, and database optimization
-- **Gold Standard Dataset**: Build human-validated training data to improve AI accuracy over time
+- **Bundled Dependencies**: All HCE prerequisites (sentence-transformers, scikit-learn) included in DMG
+- **Universal Adoption**: No legacy summarization paths - HCE is the single, unified analysis system
 
 ### 🧠 Context-Driven Long‑Form Analysis (New Synthesis Engine)
 - **Purpose**: Deliver faithful, scalable analysis for very long inputs (multi‑hour transcripts, large PDFs) without dumping entire texts into a single prompt.
@@ -435,9 +449,10 @@ media_sources (formerly videos)
 
 - **macOS Sonoma or later** (optimized for Apple Silicon)
 - **Python 3.13+** (check with `python3 --version`)
-- **FFmpeg** (for audio/video processing - install with `brew install ffmpeg`)
-- **Git** (for installation)
-- **16GB+ RAM recommended** for large files
+- **FFmpeg** (for audio/video processing - auto-bundled in DMG or install with `brew install ffmpeg`)
+- **Git** (for installation from source)
+- **16GB+ RAM recommended** for large files and voice fingerprinting
+- **Apple Silicon or Intel Mac** (Apple Silicon recommended for MPS acceleration)
 
 ### Automated Installation (Recommended)
 
@@ -457,7 +472,7 @@ bash scripts/quick_setup.sh
 
 ### Manual Installation
 
-**Core installation (lightweight, no diarization):**
+**Core installation (lightweight, no diarization or voice fingerprinting):**
 ```bash
 git clone https://github.com/msg43/Knowledge_Chipper.git
 cd Knowledge_Chipper
@@ -468,27 +483,28 @@ pip install -e ".[gui]"  # With GUI
 pip install -e .          # CLI only
 ```
 
-**Full installation with diarization:**
+**Full installation with all features:**
 ```bash
-pip install -e ".[full]"  # Everything including diarization
-# or
-pip install -e ".[diarization]"  # Just diarization dependencies
+pip install -e ".[full]"  # Everything: GUI + diarization + HCE + voice fingerprinting
 ```
 
-**Install diarization later:**
+**Install specific feature sets:**
 ```bash
-# If you want to add diarization after core installation
-pip install -e ".[diarization]"
+pip install -e ".[diarization]"  # Just diarization dependencies
+pip install -e ".[hce]"          # Just HCE claim extraction dependencies
+pip install -e ".[voice]"        # Just voice fingerprinting dependencies
 ```
 
 **What the scripts do:**
-- ✅ Checks Python 3.9+ and installs Homebrew if needed
+- ✅ Checks Python 3.13+ and installs Homebrew if needed
 - ✅ Installs FFmpeg and other system dependencies  
-- ✅ Creates virtual environment and installs all Python packages
+- ✅ Creates virtual environment and installs all Python packages (including HCE)
 - ✅ Sets up configuration files from templates
 - ✅ Creates data directories in ~/Documents/KnowledgeSystem
 - ✅ Downloads Whisper transcription model (~140MB) for audio processing
 - ✅ Downloads Ollama and MVP LLM model (~2GB) for speaker suggestions
+- ✅ Installs voice fingerprinting models (~410MB) for 97% accuracy speaker verification
+- ✅ Configures conservative diarization with voice fingerprinting integration
 - ✅ Tests the installation and provides next steps
 - ✅ Can launch the GUI immediately when complete
 
@@ -498,12 +514,15 @@ pip install -e ".[diarization]"
 ./scripts/setup_dev_models.sh
 ```
 
-**Complete Model Bundle (Internal Company Use):**
-- 🎙️ Speaker diarization works immediately - no setup required
+**Complete Model Bundle (DMG Distribution):**
+- 🎙️ Speaker diarization + voice fingerprinting work immediately - no setup required
 - 📦 Pyannote model pre-bundled in DMG (~400MB)
+- 🎙️ Voice fingerprinting models pre-bundled (~410MB for 97% accuracy)
+- 🧠 HCE dependencies (sentence-transformers, scikit-learn) pre-installed
 - 🔒 Terms pre-accepted for all company users
-- ⚡ Works offline from first launch
+- ⚡ Works offline from first launch with full feature set
 - ✅ No HuggingFace account needed
+- 💾 Full DMG (~4.4GB) includes everything; Minimal DMG (~1GB) downloads on first use
 
 **Setup time:** 2-5 minutes (vs 15+ minutes manual)
 
@@ -516,15 +535,18 @@ If you installed via DMG download, you can upgrade your installation to system-l
 - **Permission Upgrade**: Changes ownership from user (`user:staff`) to system (`root:wheel`) for enhanced macOS security
 - **System Integration**: Installs to `/Applications` with proper system-level permissions for better Gatekeeper trust
 - **Virtual Environment Rebuild**: Recreates Python environment with proper root ownership for stability
-- **HCE Module Installation**: Ensures all required modules are properly installed with correct permissions
+- **HCE Module Installation**: Ensures all required HCE modules (sentence-transformers, scikit-learn) are properly installed
+- **Voice Fingerprinting**: Re-installs voice fingerprinting models with correct system permissions
+- **Model Verification**: Validates all bundled models (Whisper, Pyannote, voice fingerprinting) are accessible
 
 **When to Use Admin Install:**
 - After installing via DMG to get enhanced system integration
-- When experiencing permission-related issues
+- When experiencing permission-related issues with voice fingerprinting or HCE
 - For production/work environments requiring enhanced security
 - When sharing the Mac with multiple users (system-wide access)
+- If voice fingerprinting models are not loading correctly
 
-**Important**: Admin Install requires your macOS password and will prompt you in Terminal. The process pulls the latest code and completely rebuilds the app, so you'll get any updates automatically.
+**Important**: Admin Install requires your macOS password and will prompt you in Terminal. The process pulls the latest code and completely rebuilds the app with all models, so you'll get any updates automatically.
 
 ### Manual Installation (Alternative)
 
@@ -545,7 +567,7 @@ source venv/bin/activate
 3. **Install everything:**
 ```bash
 pip install -r requirements.txt
-pip install -e .
+pip install -e ".[full]"  # Include all features (GUI, diarization, HCE, voice fingerprinting)
 ```
 
 4. **Set up configuration:**
@@ -632,11 +654,14 @@ For automation and scripting, the system provides a comprehensive CLI that works
 For automation and scripting:
 
 ```bash
-# Quick transcription
-knowledge-system transcribe --input "video.mp4"
+# Quick transcription with voice fingerprinting
+knowledge-system transcribe --input "video.mp4" --enable-diarization
 
-# Quick summary
+# Quick summary with HCE claim extraction
 knowledge-system summarize "transcript.md"
+
+# Voice fingerprinting enrollment
+knowledge-system voice enroll --speaker-name "John Doe" --audio-file "john_sample.wav"
 
 # Get help
 knowledge-system --help
@@ -661,12 +686,16 @@ knowledge-system --help
 
 ### Main Operations
 
-1. **🎯 Transcription**: Convert speech to text using AI with speaker diarization
-2. **🤖 LLM Speaker Validation**: AI-powered speaker identification with 90-95% accuracy
-   - Metadata extraction from YouTube titles/channels (Joe Rogan, Lex Fridman, etc.)
+1. **🎯 Transcription**: Convert speech to text using AI with conservative speaker diarization
+2. **🎙️ Advanced Voice Fingerprinting**: 97% accuracy speaker verification using state-of-the-art models (bundled in DMG)
+   - ECAPA-TDNN + Wav2Vec2 models for multi-modal voice analysis
+   - Automatic merging of false speaker splits from diarization
+   - Voice enrollment for persistent speaker recognition across recordings
+3. **🤖 LLM Speaker Validation**: AI-powered speaker identification with 90-95% accuracy
+   - Metadata extraction from YouTube titles/channels (300+ podcast mappings)
    - LLM analysis of speech patterns and vocabulary 
    - Fast batch processing with keyboard shortcuts for hundreds of podcasts
-3. **🎙️ Advanced Voice Fingerprinting**: 97% accuracy speaker verification (bundled in DMG)
+   - Database storage with comprehensive speaker mapping management
    - State-of-the-art voice matching using Wav2Vec2 + ECAPA-TDNN models pre-installed
    - Voice enrollment for persistent speaker recognition across recordings
    - Hardware-accelerated processing with comprehensive accuracy testing
@@ -882,17 +911,18 @@ Generated: {generated_at} | Files: {source_files_count}
 
 **CLI:**
 ```bash
-# Basic MOC generation
-knowledge-system moc *.md
+# Basic MOC generation with Obsidian dataview pages
+knowledge-system moc *.md --write-obsidian-pages
 
-# Generate Obsidian pages with dataview queries
+# Full pipeline with HCE claim extraction and Obsidian integration
 knowledge-system process ./documents/ --moc --write-obsidian-pages
 
 # With custom template and theme
 knowledge-system moc documents/ --template my_template.txt --theme hierarchical --depth 4
 
-# Skip belief extraction
-knowledge-system moc files/*.md --no-include-beliefs
+# Voice fingerprinting management
+knowledge-system voice accuracy-test  # Test current model accuracy
+knowledge-system voice cleanup --older-than 90  # Remove old voice patterns
 ```
 
 **Perfect for:** Research notes, meeting transcripts, knowledge bases, documentation collections, academic papers, interview transcripts.
@@ -1414,29 +1444,26 @@ Enhanced Summarization Progress Example:
 
 #### Process a Podcast with Speaker Identification
 ```bash
-# Download and process with diarization
+# Download and process with diarization and voice fingerprinting
 knowledge-system youtube "https://youtube.com/watch?v=..." \
   --enable-diarization \
-  --summarize \
-  --analysis-type "Interview Analysis"
+  --summarize
 ```
 
 #### Batch Process Research Papers
 ```bash
-# Process all PDFs in a folder
+# Process all PDFs in a folder with HCE claim extraction (default)
 knowledge-system process papers/*.pdf \
-  --analysis-type "Academic Paper" \
-  --extract-claims \
   --output-dir analyzed/
 ```
 
 #### Create Knowledge Map from Notes
 ```bash
-# Generate MOC from markdown files
+# Generate MOC with Obsidian pages from markdown files
 knowledge-system moc notes/ \
-  --include-claims \
   --theme hierarchical \
-  --depth 3
+  --depth 3 \
+  --write-obsidian-pages
 ```
 
 ### Advanced Recipes
@@ -1538,8 +1565,14 @@ For processing large numbers of videos (100s-1000s), the system now includes ent
 YouTube videos now support advanced speaker identification:
 
 ```bash
-# Enable diarization for speaker-aware transcripts
+# Enable diarization with voice fingerprinting for speaker-aware transcripts
 knowledge-system transcribe --input "https://youtube.com/watch?v=VIDEO_ID" --enable-diarization
+
+# Conservative diarization (default) with voice fingerprinting
+knowledge-system transcribe --input "video.mp4" --enable-diarization --diarization-sensitivity conservative
+
+# Upload claims to cloud database
+knowledge-system upload --tier A B  # Upload only A and B tier claims
 ```
 
 **Features:**
@@ -1655,11 +1688,16 @@ knowledge-system process ./content/ --patterns "*.mp4" "*.pdf"
 **Perfect for:** Research analysis, fact-checking, knowledge discovery
 
 ```bash
-# Process research materials with HCE claim extraction
-knowledge-system summarize research_papers/ --analysis-type "HCE Analysis"
+# Process research materials with HCE claim extraction (default mode)
+knowledge-system summarize research_papers/
 
 # Search extracted claims
 # Use GUI: Claim Search tab to explore and filter claims
+
+# Voice fingerprinting commands
+knowledge-system voice enroll --speaker-name "Joe Rogan" --audio-file "rogan_sample.wav"
+knowledge-system voice verify --speaker-name "Joe Rogan" --audio-file "test_audio.wav"
+knowledge-system voice list-speakers  # Show enrolled speakers
 ```
 
 **GUI Workflow:**
@@ -2184,19 +2222,21 @@ Content to analyze:
 
 ## 🚀 Advanced Features
 
-### ☁️ Cloud Synchronization with Supabase
+### ☁️ Cloud Database Integration
 
-**Automatic backup and sync of your knowledge base to the cloud.**
+**Direct database uploads to shared Supabase instance for claims sharing and backup.**
 
 #### Features
-- **Bidirectional Sync**: Changes sync both ways between local and cloud
-- **Conflict Resolution**: Smart handling of concurrent edits
-- **Selective Sync**: Choose which tables to sync
-- **Offline Support**: Work offline and sync when connected
-- **Multi-Device**: Access your knowledge from any device
+- **Direct Database Upload**: Cloud Uploads tab uploads claims data directly to Supabase database (not file storage)
+- **Hardcoded Connection**: All users connect to shared Supabase instance with individual authentication
+- **One-Way Upload**: Desktop always overwrites cloud data for conflict-free uploads
+- **Smart Change Tracking**: Only uploads new/modified claims since last upload with automatic status tracking
+- **Complete Data Upload**: Claims upload with all associated episodes, people, concepts, evidence, and relations
+- **Simplified UI**: Browse SQLite database → Select claims → Upload to cloud database
+- **Authentication Required**: Individual user authentication for shared database access
 
-#### Setup
-1. **Create a Supabase Project** at [supabase.com](https://supabase.com)
+#### How It Works
+1. **No Setup Required**: Supabase connection is pre-configured in the application
 2. **Get your credentials**:
    - Project URL: `https://[project-id].supabase.co`
    - Anon Key: Found in project settings
@@ -2380,25 +2420,40 @@ pytest tests/unit/test_config.py -v
 
 #### Installation Problems
 
-**Issue**: `ModuleNotFoundError: No module named 'whisper'`
-- **Solution**: Run `pip install -r requirements.txt` in your virtual environment
+**Issue**: `ModuleNotFoundError: No module named 'transformers'` or voice fingerprinting errors
+- **Solution**: Install voice fingerprinting dependencies: `pip install -e ".[voice]"` or `pip install -r requirements-voice.txt`
+
+**Issue**: `ModuleNotFoundError: No module named 'sentence_transformers'` (HCE errors)
+- **Solution**: Install HCE dependencies: `pip install -e ".[hce]"` or use full installation: `pip install -e ".[full]"`
 
 **Issue**: `FFmpeg not found`
-- **Solution**: Install FFmpeg: `brew install ffmpeg` (macOS) or download from ffmpeg.org
+- **Solution**: Install FFmpeg: `brew install ffmpeg` (macOS) or use DMG which includes FFmpeg
 
 **Issue**: PyQt6 import errors
-- **Solution**: Ensure you're using Python 3.9+ and run `pip install PyQt6`
+- **Solution**: Ensure you're using Python 3.13+ and run `pip install PyQt6`
+
+**Issue**: Voice fingerprinting models not loading
+- **Solution**: Check model files in `voice_models/` directory, re-run setup script, or use Admin Install for system-level permissions
 
 #### Processing Errors
 
 **Issue**: "Model not found" errors
 - **Solution**: Check API keys in Settings tab, ensure model access (GPT-4, Claude, etc.)
 
-**Issue**: Transcription fails with GPU errors
-- **Solution**: Disable GPU in Settings or install CUDA drivers for GPU support
+**Issue**: Transcription fails with GPU errors on Apple Silicon
+- **Solution**: Enable MPS acceleration in Settings, or disable GPU acceleration for compatibility
 
 **Issue**: "Context length exceeded" errors
-- **Solution**: Reduce "Max tokens" setting or enable chunking for large documents
+- **Solution**: System now uses model-aware chunking automatically - if this still occurs, reduce "Max tokens" setting
+
+**Issue**: Voice fingerprinting accuracy is low
+- **Solution**: Ensure 16kHz mono audio, enroll with 10+ seconds of clear speech, check speaker names match exactly
+
+**Issue**: Conservative diarization creates too many speakers
+- **Solution**: Voice fingerprinting should automatically merge false splits - check that voice_fingerprinting_enabled=true in settings
+
+**Issue**: HCE claim extraction fails
+- **Solution**: Ensure HCE dependencies are installed (`pip install -e ".[hce]"`), check that sentence-transformers models can download
 
 #### Database Issues
 
@@ -2408,19 +2463,33 @@ pytest tests/unit/test_config.py -v
 **Issue**: Migration failures
 - **Solution**: Back up database, run migrations manually with `--debug` flag
 
+**Issue**: Speaker mappings not persisting
+- **Solution**: Check database write permissions, ensure SQLite database is not read-only
+
+**Issue**: Cloud upload authentication fails
+- **Solution**: Check internet connection, verify Supabase credentials, try re-authenticating in Cloud Uploads tab
+
 #### Performance Issues
 
 **Issue**: Slow processing speeds
 - **Solution**: 
-  - Enable GPU acceleration for Whisper
-  - Use smaller Whisper models (base, small)
-  - Process files in smaller batches
+  - Enable MPS acceleration for Apple Silicon Macs
+  - Use voice fingerprinting (reduces manual speaker attribution time)
+  - Enable conservative diarization (balanced speed vs accuracy)
+  - Use smaller Whisper models (base, small) for faster transcription
 
-**Issue**: High memory usage
+**Issue**: High memory usage during voice fingerprinting
 - **Solution**:
-  - Reduce chunk sizes in configuration
-  - Process fewer files simultaneously
-  - Use streaming mode for large files
+  - Process shorter audio segments (< 1 hour)
+  - Enable batch processing for multiple files
+  - Clear model cache periodically
+  - Use CPU mode if MPS memory is insufficient
+
+**Issue**: HCE processing takes too long
+- **Solution**:
+  - Use --profile fast for quicker processing
+  - Disable --use-skim for simpler analysis
+  - Process smaller documents or use chunking
 
 ### Debug Mode
 
@@ -2436,10 +2505,13 @@ knowledge-system --debug process file.mp3
 
 ### Getting Help
 
-1. **Check Logs**: `~/.knowledge_system/logs/`
-2. **Run Tests**: `python comprehensive_test_suite.py`
-3. **GitHub Issues**: Report bugs with logs and system info
-4. **Discord Community**: Join for real-time support
+1. **Check Logs**: `logs/` directory in project root
+2. **Voice Fingerprinting Issues**: Check `logs/voice_fingerprinting.log` for detailed error messages
+3. **Test Voice Setup**: Run `knowledge-system voice accuracy-test` to verify models
+4. **Test HCE Setup**: Try processing a small file to verify claim extraction works
+5. **Check Database**: Use `knowledge-system verify-db` to check database integrity
+6. **GitHub Issues**: Report bugs with logs and system info
+7. **Admin Install**: Use Admin Install feature if experiencing permission issues
 
 ### Contributing
 

@@ -74,6 +74,10 @@ echo "🚀 Starting release process..."
 if [ ! -f "$DMG_FILE" ]; then
     echo "🏗️ Building FULL DMG with all models..."
 
+    # Clean staging directory to ensure fresh build
+    echo "🧹 Cleaning staging directory for fresh build..."
+    rm -rf "$SCRIPT_DIR/.app_build"
+
     # Default to full build with all models bundled
     export BUNDLE_ALL_MODELS=1
 

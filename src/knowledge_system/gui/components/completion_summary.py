@@ -22,6 +22,9 @@ from PyQt6.QtWidgets import (
 class TranscriptionCompletionSummary(QDialog):
     """Dialog showing detailed completion summary for transcription operations."""
 
+    # Signal to switch to summarization tab
+    switch_to_summarization = pyqtSignal()
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Transcription Complete - Summary")
@@ -208,6 +211,7 @@ class TranscriptionCompletionSummary(QDialog):
 
         # Go to summarization
         summarize_btn = QPushButton("📝 Summarize Transcripts")
+        summarize_btn.clicked.connect(self._go_to_summarization)
         summarize_btn.setStyleSheet(
             """
             QPushButton {
@@ -280,6 +284,12 @@ class TranscriptionCompletionSummary(QDialog):
         widget.value_label = value_label
 
         return widget
+
+    def _go_to_summarization(self):
+        """Handle click on Summarize Transcripts button."""
+        # Close this dialog and emit signal to switch to summarization tab
+        self.accept()
+        self.switch_to_summarization.emit()
 
     def show_summary(
         self,
@@ -607,7 +617,7 @@ class CloudTranscriptionSummary(QDialog):
         if failed_urls == 0:
             self.title_label.setText("🎉 Cloud Transcription Complete!")
             self.title_label.setStyleSheet(
-                "color: white; margin-left: 10px; font-weight: bold;"
+                "color: #2e7d32; margin-left: 10px; font-weight: bold;"
             )
         else:
             self.title_label.setText("❌ Cloud Transcription Failed")

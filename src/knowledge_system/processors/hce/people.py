@@ -68,6 +68,13 @@ class PeopleExtractor:
             )
 
             for i, r in enumerate(js):
+                # Ensure r is a dictionary before calling .get()
+                if not isinstance(r, dict):
+                    logger.warning(
+                        f"Skipping invalid person result type {type(r)} at index {i}: {r}"
+                    )
+                    continue
+
                 # Validate normalized field - ensure it's a string or None
                 normalized_value = r.get("normalized")
                 if normalized_value is not None and not isinstance(
@@ -79,12 +86,25 @@ class PeopleExtractor:
                         f"Invalid normalized value type {type(normalized_value)} for {r.get('surface', 'unknown')}, setting to None"
                     )
 
+                # Check if required 'surface' field exists
+                if "surface" not in r:
+                    logger.warning(
+                        f"Skipping person mention without required 'surface' field: {r}"
+                    )
+                    continue
+
+                # Ensure timestamp values are strings
+                t0_val = r.get("t0", seg.t0)
+                t1_val = r.get("t1", seg.t1)
+                t0_str = str(t0_val) if t0_val is not None else seg.t0
+                t1_str = str(t1_val) if t1_val is not None else seg.t1
+
                 person_mention = PersonMention(
                     episode_id=episode_id,
                     mention_id=f"pm_{seg.segment_id}_{i}",
                     span_segment_id=seg.segment_id,
-                    t0=r.get("t0", seg.t0),
-                    t1=r.get("t1", seg.t1),
+                    t0=t0_str,
+                    t1=t1_str,
                     surface=r["surface"],
                     normalized=normalized_value,
                     entity_type=r.get("entity_type", "person"),
@@ -121,9 +141,15 @@ class PeopleExtractor:
             if m.normalized:
                 out.append(m)
                 continue
-            js = self.flagship.judge_json(self.disambig_t + "\n" + m.surface)
-            m.normalized = js.get("normalized")
-            m.external_ids = js.get("external_ids", {})
+            js_result = self.flagship.generate_json(self.disambig_t + "\n" + m.surface)
+
+            # Handle the fact that generate_json returns a list
+            if js_result and isinstance(js_result, list) and len(js_result) > 0:
+                js = js_result[0]
+                # Ensure js is a dictionary before calling .get()
+                if isinstance(js, dict):
+                    m.normalized = js.get("normalized")
+                    m.external_ids = js.get("external_ids", {})
             out.append(m)
         return out
 

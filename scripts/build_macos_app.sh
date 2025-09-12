@@ -47,6 +47,34 @@ for arg in "$@"; do
     --no-bundle)
       BUNDLE_ALL_MODELS=0
       ;;
+    --clean)
+      echo "🧹 Cleaning staging directory..."
+      rm -rf "$SCRIPT_DIR/.app_build"
+      echo "✅ Staging directory cleaned"
+      exit 0
+      ;;
+    --help|-h)
+      echo "Usage: $0 [OPTIONS]"
+      echo ""
+      echo "Options:"
+      echo "  --skip-install    Build to staging only (don't install to /Applications)"
+      echo "  --make-dmg        Create DMG after building"
+      echo "  --incremental     Reuse existing staging directory if available"
+      echo "  --clean           Clean staging directory and exit"
+      echo "  --bundle-all      Bundle all models for offline use (default)"
+      echo "  --no-bundle       Skip model bundling"
+      echo "  --with-diarization Include speaker diarization (default)"
+      echo "  --with-hce        Include HCE modules (default)"
+      echo "  --with-cuda       Include CUDA support"
+      echo "  --full            Include all optional features"
+      echo "  --help, -h        Show this help message"
+      echo ""
+      echo "Examples:"
+      echo "  $0 --skip-install --make-dmg    # Build DMG without installing"
+      echo "  $0 --clean                      # Clean staging directory"
+      echo "  $0 --incremental                # Fast incremental build"
+      exit 0
+      ;;
   esac
 done
 
@@ -149,7 +177,9 @@ echo "##PERCENT## 18 Preparing staging"
 if [ "$INCREMENTAL" -eq 1 ] && [ -d "$BUILD_APP_PATH" ]; then
   echo "🔄 Incremental mode: reusing existing staged app at $BUILD_APP_PATH"
 else
+  echo "🧹 Cleaning staging directory for fresh build..."
   rm -rf "$BUILD_ROOT"
+  echo "📁 Creating fresh staging structure..."
   mkdir -p "$BUILD_MACOS_PATH" "$BUILD_RESOURCES_PATH" "$BUILD_FRAMEWORKS_PATH"
 fi
 

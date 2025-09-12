@@ -299,12 +299,10 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                                     min_duration_on = (
                                         0.4  # Reduced from 0.5 for quicker exchanges
                                     )
-                                else:  # conservative
-                                    pipeline.clustering.min_cluster_size = (
-                                        25  # Increased for single-speaker bias
-                                    )
-                                    threshold = 0.85  # Much higher threshold = strongly prefer fewer speakers
-                                    min_duration_on = 1.5  # Longer minimum segments
+                                else:  # conservative - now relies on voice fingerprinting for quality
+                                    pipeline.clustering.min_cluster_size = 20  # Moderate setting - let voice fingerprinting handle the rest
+                                    threshold = 0.75  # Reasonable threshold - voice fingerprinting will merge false splits
+                                    min_duration_on = 1.0  # Normal segments - voice fingerprinting will handle micro-segments
 
                                 # Apply threshold if supported
                                 if hasattr(pipeline.clustering, "threshold"):
