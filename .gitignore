@@ -248,9 +248,16 @@ settings.yaml
 # Editor backup/recovery files
 *.rslsd
 
-# Temporary debug files
+# Temporary debug files and backup files (.rsls files)
+# These files can corrupt Git repository and should never be committed
 *.rsls
 *.rslsc
+**/*.rsls
+**/*.rslsc
+# Specifically ignore .rsls files in Git metadata (these caused repository corruption)
+.git/**/*.rsls
+.git/objects/**/*.rsls
+.git/refs/**/*.rsls
 .app_build/
 scripts/.app_build/
 
