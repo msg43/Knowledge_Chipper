@@ -41,9 +41,6 @@ class AnyLLM:
                 raise ValueError(f"Unsupported LLM scheme: {self.scheme}")
 
         except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.error(f"LLM generation failed for {self.model_uri}: {e}")
             return []
 
@@ -111,9 +108,6 @@ class AnyLLM:
                 return []
 
         except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.warning(f"OpenAI call failed: {e}")
             return []
 
@@ -167,9 +161,6 @@ class AnyLLM:
                 return []
 
         except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.warning(f"Anthropic call failed: {e}")
             return []
 
@@ -222,9 +213,6 @@ class AnyLLM:
                 return []
 
         except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.warning(f"Ollama call failed: {e}")
             return []
 
@@ -399,21 +387,19 @@ class AnyLLM:
 
     def _repair_unescaped_quotes(self, json_str: str) -> str:
         """Escape unescaped quotes within string values."""
-        # Simple and effective approach: find quoted phrases within strings and escape them
+        # More targeted approach: only fix quotes that are clearly within string values,
+        # not array elements or other JSON structures
 
-        # Look for patterns like: "text with "quoted phrase" more text"
-        # We want to escape the inner quotes to become: "text with \"quoted phrase\" more text"
-
-        # Pattern to find quoted phrases within larger strings
-        # This looks for a quote, followed by text, then another quote inside what should be a single string
-        pattern = r'"([^"]*)\s+"([^"]+)"\s+([^"]*)"'
+        # Look for the specific pattern: ": "text with "quoted phrase" more text"
+        # This ensures we're only fixing string values, not array elements
+        pattern = r':\s*"([^"]*)\s+"([^"]+)"\s+([^"]*)"'
 
         def escape_inner_quotes(match):
             # Reconstruct the string with escaped inner quotes
             before = match.group(1)
             quoted_part = match.group(2)
             after = match.group(3)
-            return f'"{before} \\"{quoted_part}\\" {after}"'
+            return f': "{before} \\"{quoted_part}\\" {after}"'
 
         # Apply the fix
         repaired = re.sub(pattern, escape_inner_quotes, json_str)
@@ -448,11 +434,24 @@ class AnyLLM:
 
     def _repair_newlines_in_strings(self, json_str: str) -> str:
         """Fix unescaped newlines within JSON string values."""
-        # Replace unescaped newlines, carriage returns, and tabs in JSON strings
-        # We need to be more careful about only replacing these within string values
+        # This repair should only target newlines that are actually within string values,
+        # not structural newlines that are part of JSON formatting
 
-        # First, let's try a simple approach - replace literal newlines with \\n
-        json_str = json_str.replace("\n", "\\n")
-        json_str = json_str.replace("\r", "\\r")
-        json_str = json_str.replace("\t", "\\t")
+        # For now, let's be very conservative and only handle cases where there are
+        # literal newlines inside quoted strings
+
+        # Pattern to find strings that contain actual newline characters
+        def fix_string_newlines(match):
+            string_content = match.group(1)
+            # Only escape newlines if they're not already escaped
+            fixed_content = string_content.replace("\n", "\\n")
+            fixed_content = fixed_content.replace("\r", "\\r")
+            fixed_content = fixed_content.replace("\t", "\\t")
+            return f'"{fixed_content}"'
+
+        # Only apply to quoted strings that contain unescaped newlines
+        # This pattern matches strings that have actual newline characters inside them
+        pattern = r'"([^"]*\n[^"]*)"'
+        json_str = re.sub(pattern, fix_string_newlines, json_str, flags=re.DOTALL)
+
         return json_str
