@@ -334,10 +334,10 @@ class AnyLLM:
         # Common repair strategies ordered by likelihood of success
         repair_strategies = [
             self._repair_trailing_commas,
+            self._repair_unescaped_quotes,
+            self._repair_control_characters,
             self._repair_incomplete_json,
             self._repair_newlines_in_strings,
-            self._repair_control_characters,
-            self._repair_unescaped_quotes,
         ]
 
         # Apply repairs iteratively until JSON parses or no more changes are made
@@ -387,22 +387,28 @@ class AnyLLM:
 
     def _repair_unescaped_quotes(self, json_str: str) -> str:
         """Escape unescaped quotes within string values."""
-        # More targeted approach: only fix quotes that are clearly within string values,
-        # not array elements or other JSON structures
+        # Simple and effective approach: find strings with unescaped quotes inside them
 
-        # Look for the specific pattern: ": "text with "quoted phrase" more text"
-        # This ensures we're only fixing string values, not array elements
-        pattern = r':\s*"([^"]*)\s+"([^"]+)"\s+([^"]*)"'
+        # Pattern 1: ": "text with "quoted phrase" more text" (for object values)
+        pattern1 = r':\s*"([^"]*)\s+"([^"]+)"\s+([^"]*)"'
 
-        def escape_inner_quotes(match):
-            # Reconstruct the string with escaped inner quotes
+        def escape_inner_quotes1(match):
             before = match.group(1)
             quoted_part = match.group(2)
             after = match.group(3)
             return f': "{before} \\"{quoted_part}\\" {after}"'
 
-        # Apply the fix
-        repaired = re.sub(pattern, escape_inner_quotes, json_str)
+        # Pattern 2: specific pattern that matches quotes followed by space and more text
+        pattern2 = r'"([^"]*) " ([^"]*)"'
+
+        def escape_inner_quotes2(match):
+            before = match.group(1)
+            after = match.group(2)
+            return f'"{before} \\" {after}"'
+
+        # Apply patterns
+        repaired = re.sub(pattern1, escape_inner_quotes1, json_str)
+        repaired = re.sub(pattern2, escape_inner_quotes2, repaired)
 
         return repaired
 

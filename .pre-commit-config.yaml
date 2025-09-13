@@ -7,9 +7,18 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
+      # Auto-fixing hooks that run on commit (will auto-fix and require re-commit)
       - id: trailing-whitespace
         exclude: '\.md$'  # Allow trailing spaces in markdown (for line breaks)
+        always_run: false
       - id: end-of-file-fixer
+        always_run: false
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+        always_run: false
+      # Non-disruptive checks that run on commit
+      - id: check-merge-conflict
+      # More thorough checks moved to pre-push to avoid commit disruption
       - id: check-yaml
         args: ['--unsafe']  # Allow custom YAML tags used in config files
         stages: [pre-push]
@@ -24,30 +33,29 @@ repos:
       # - id: check-added-large-files
       #   args: ['--maxkb=10000']  # 10MB limit for large files
       #   stages: [pre-push]
-      - id: check-merge-conflict
       - id: debug-statements
         stages: [pre-push]
       - id: check-docstring-first
         stages: [pre-push]
       - id: check-case-conflict
         stages: [pre-push]
-      - id: mixed-line-ending
-        args: ['--fix=lf']
 
-  # Python code formatting with Black (line length 88 to match pyproject.toml)
+  # Python code formatting with Black (auto-fixes code style, may require re-commit)
   - repo: https://github.com/psf/black
     rev: 23.12.1
     hooks:
       - id: black
         language_version: python3.13
         args: ['--line-length=88', '--target-version=py312']  # py313 not yet supported
+        always_run: false
 
-  # Import sorting with isort (configured to work with Black)
+  # Import sorting with isort (auto-fixes import order, may require re-commit)
   - repo: https://github.com/pycqa/isort
     rev: 5.13.2
     hooks:
       - id: isort
         args: ['--profile=black', '--line-length=88']
+        always_run: false
 
   # Python linting with flake8 (matching CI configuration)
   - repo: https://github.com/pycqa/flake8
