@@ -399,35 +399,26 @@ class AnyLLM:
 
     def _repair_unescaped_quotes(self, json_str: str) -> str:
         """Escape unescaped quotes within string values."""
-        # This is a much more conservative approach to avoid breaking valid JSON
-        # We'll only try to fix obvious cases where there are unescaped quotes in string values
+        # Simple and effective approach: find quoted phrases within strings and escape them
 
-        # Look for pattern: "text with " and more text"
-        # But be very careful not to break valid JSON structure
+        # Look for patterns like: "text with "quoted phrase" more text"
+        # We want to escape the inner quotes to become: "text with \"quoted phrase\" more text"
 
-        # For now, let's implement a simple heuristic:
-        # If we find a quote followed by non-JSON-structure characters followed by another quote,
-        # we'll try to escape the middle quote
+        # Pattern to find quoted phrases within larger strings
+        # This looks for a quote, followed by text, then another quote inside what should be a single string
+        pattern = r'"([^"]*)\s+"([^"]+)"\s+([^"]*)"'
 
-        # Pattern: finds "text" followed by space and non-structural chars, then another "
-        pattern = r'("(?:[^"\\]|\\.)*")\s+([^",}\]:]+)\s*(")'
+        def escape_inner_quotes(match):
+            # Reconstruct the string with escaped inner quotes
+            before = match.group(1)
+            quoted_part = match.group(2)
+            after = match.group(3)
+            return f'"{before} \\"{quoted_part}\\" {after}"'
 
-        def quote_replacer(match):
-            # Only replace if the middle part doesn't look like a JSON value
-            middle = match.group(2).strip()
-            if not (
-                middle.startswith("{")
-                or middle.startswith("[")
-                or middle.startswith('"')
-                or middle.isdigit()
-                or middle in ["true", "false", "null"]
-            ):
-                # This looks like text that should be part of the first string
-                return f"{match.group(1)[:-1]} {middle}{match.group(3)}"
-            return match.group(0)  # Leave unchanged
+        # Apply the fix
+        repaired = re.sub(pattern, escape_inner_quotes, json_str)
 
-        json_str = re.sub(pattern, quote_replacer, json_str)
-        return json_str
+        return repaired
 
     def _repair_incomplete_json(self, json_str: str) -> str:
         """Try to complete incomplete JSON objects/arrays."""
