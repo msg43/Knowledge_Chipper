@@ -292,41 +292,74 @@ else
   "$VENV_DIR/bin/python" -m pip check || true
 fi
 
+# Track installation status for user feedback
+EXTRAS_STATUS=""
+FAILED_EXTRAS=""
+
 # Conditionally install optional extras into the staging venv
 if [ "$WITH_HCE" -eq 1 ]; then
   next_step "Install HCE optional dependencies (staging)"
   # Install from project root (ensures pyproject.toml/extras resolution)
-  "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[hce] || {
-    echo "⚠️ Failed to install HCE extras in staging; continuing"
-  }
+  if "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[hce]; then
+    echo "✅ HCE extras installed successfully"
+    EXTRAS_STATUS="${EXTRAS_STATUS}✅ HCE (Human-Centric Extraction): Advanced summarization, concept mining\n"
+  else
+    echo "❌ Failed to install HCE extras - advanced features will be unavailable"
+    FAILED_EXTRAS="${FAILED_EXTRAS}❌ HCE (Human-Centric Extraction): Advanced summarization disabled\n"
+    echo "$(date): HCE extras installation failed" >> "$BUILD_MACOS_PATH/installation_errors.log"
+    "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[hce] >> "$BUILD_MACOS_PATH/installation_errors.log" 2>&1 || true
+  fi
 else
-  echo "🎯 Skipping HCE heavy dependencies in staging (default)"
+  echo "🎯 Skipping HCE heavy dependencies in staging"
+  EXTRAS_STATUS="${EXTRAS_STATUS}⏭️  HCE: Skipped (will download on first use)\n"
 fi
 
 if [ "$WITH_DIARIZATION" -eq 1 ]; then
   next_step "Install diarization dependencies (staging)"
   # Install from project root (ensures pyproject.toml/extras resolution)
-  "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[diarization] || {
-    echo "⚠️ Failed to install diarization extras in staging; continuing"
-  }
+  if "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[diarization]; then
+    echo "✅ Diarization extras installed successfully"
+    EXTRAS_STATUS="${EXTRAS_STATUS}✅ Speaker Diarization: Multi-speaker audio processing\n"
+  else
+    echo "❌ Failed to install diarization extras - speaker separation will be unavailable"
+    FAILED_EXTRAS="${FAILED_EXTRAS}❌ Speaker Diarization: Multi-speaker processing disabled\n"
+    echo "$(date): Diarization extras installation failed" >> "$BUILD_MACOS_PATH/installation_errors.log"
+    "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[diarization] >> "$BUILD_MACOS_PATH/installation_errors.log" 2>&1 || true
+  fi
 else
-  echo "🎯 Skipping diarization dependencies in staging (default)"
+  echo "🎯 Skipping diarization dependencies in staging"
+  EXTRAS_STATUS="${EXTRAS_STATUS}⏭️  Diarization: Skipped (will download on first use)\n"
 fi
 
 if [ "$WITH_CUDA" -eq 1 ]; then
   next_step "Install CUDA-related dependencies (staging)"
   # Install from project root (ensures pyproject.toml/extras resolution)
-  "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[cuda] || {
-    echo "⚠️ Failed to install CUDA extras in staging; continuing"
-  }
+  if "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[cuda]; then
+    echo "✅ CUDA extras installed successfully"
+    EXTRAS_STATUS="${EXTRAS_STATUS}✅ CUDA Support: GPU-accelerated processing\n"
+  else
+    echo "❌ Failed to install CUDA extras - GPU acceleration will be unavailable"
+    FAILED_EXTRAS="${FAILED_EXTRAS}❌ CUDA Support: GPU acceleration disabled\n"
+    echo "$(date): CUDA extras installation failed" >> "$BUILD_MACOS_PATH/installation_errors.log"
+    "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[cuda] >> "$BUILD_MACOS_PATH/installation_errors.log" 2>&1 || true
+  fi
 else
-  echo "🎯 Skipping CUDA extras in staging (default)"
+  echo "🎯 Skipping CUDA extras in staging"
+  EXTRAS_STATUS="${EXTRAS_STATUS}⏭️  CUDA: Skipped (CPU-only mode)\n"
 fi
 
 if [ "$WITH_HCE" -eq 0 ] && [ "$WITH_DIARIZATION" -eq 0 ] && [ "$WITH_CUDA" -eq 0 ]; then
   echo "🎯 Excluding heavy ML dependencies (torch, transformers, etc.) from app bundle"
   echo "ℹ️  Heavy dependencies will be installed automatically when needed"
 fi
+
+# Install the main package in staging venv (CRITICAL for --skip-install mode)
+echo "📦 Installing main knowledge_system package in staging venv..."
+next_step "Install main package (staging)"
+"$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT" || {
+  echo "❌ Failed to install main package in staging venv"
+  exit 1
+}
 
 # Verify critical dependencies are installed
 echo "🔍 Verifying critical dependencies..."
@@ -335,6 +368,14 @@ echo "##PERCENT## 55 Verify critical dependencies"
 "$VENV_DIR/bin/python" -c "import sqlalchemy; print('✅ SQLAlchemy:', sqlalchemy.__version__)" || { echo "❌ SQLAlchemy missing, installing..."; "$VENV_DIR/bin/python" -m pip install sqlalchemy alembic; }
 "$VENV_DIR/bin/python" -c "import psutil; print('✅ psutil:', psutil.__version__)" || { echo "❌ psutil missing, installing..."; "$VENV_DIR/bin/python" -m pip install psutil; }
 "$VENV_DIR/bin/python" -c "import openai; print('✅ OpenAI:', openai.__version__)" || { echo "❌ OpenAI missing, installing..."; "$VENV_DIR/bin/python" -m pip install openai; }
+
+# CRITICAL: Verify the main package is importable in staging venv
+echo "🧪 Testing main package import in staging venv..."
+"$VENV_DIR/bin/python" -c "import knowledge_system; print('✅ knowledge_system package:', knowledge_system.__version__)" || {
+  echo "❌ CRITICAL: knowledge_system package not importable in staging venv"
+  echo "   This will cause DMG launch failures!"
+  exit 1
+}
 
 # Copy full project pyproject.toml (includes optional dependency extras like [diarization])
 if [ -f "$PROJECT_ROOT/pyproject.toml" ]; then
@@ -568,6 +609,163 @@ fi
 
 echo "✨ App bundle created successfully! Version: $CURRENT_VERSION"
 
+# Show user what features are included/missing
+echo ""
+echo "📋 Feature Installation Summary:"
+echo "================================="
+if [ -n "$EXTRAS_STATUS" ]; then
+  echo -e "$EXTRAS_STATUS"
+fi
+if [ -n "$FAILED_EXTRAS" ]; then
+  echo ""
+  echo "⚠️  Failed Installations:"
+  echo -e "$FAILED_EXTRAS"
+  echo ""
+
+  # Create easy installation script for users
+  INSTALL_SCRIPT="$BUILD_MACOS_PATH/install_missing_features.sh"
+  cat > "$INSTALL_SCRIPT" << 'EOF'
+#!/bin/bash
+# Install Missing Skip the Podcast Desktop Features
+# Run this script to install features that failed during the initial build
+
+APP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PYTHON_BIN="$APP_DIR/venv/bin/python"
+
+echo "🔧 Installing Missing Skip the Podcast Desktop Features"
+echo "======================================================"
+
+if [ ! -f "$PYTHON_BIN" ]; then
+    echo "❌ Python environment not found at: $PYTHON_BIN"
+    echo "Please reinstall Skip the Podcast Desktop"
+    exit 1
+fi
+
+echo "🐍 Using Python: $PYTHON_BIN"
+echo ""
+
+# Check which features need installation
+NEED_HCE=0
+NEED_DIARIZATION=0
+NEED_CUDA=0
+
+# Test imports to see what's missing
+echo "🔍 Checking which features need installation..."
+
+if ! "$PYTHON_BIN" -c "import torch; import transformers" 2>/dev/null; then
+    echo "   📦 HCE (Advanced Summarization) needs installation"
+    NEED_HCE=1
+fi
+
+if ! "$PYTHON_BIN" -c "import pyannote.audio" 2>/dev/null; then
+    echo "   📦 Speaker Diarization needs installation"
+    NEED_DIARIZATION=1
+fi
+
+if ! "$PYTHON_BIN" -c "import torch; print('CUDA Available:', torch.cuda.is_available())" 2>/dev/null | grep -q "True"; then
+    echo "   📦 CUDA Support needs installation"
+    NEED_CUDA=1
+fi
+
+if [ $NEED_HCE -eq 0 ] && [ $NEED_DIARIZATION -eq 0 ] && [ $NEED_CUDA -eq 0 ]; then
+    echo "✅ All features are already installed!"
+    exit 0
+fi
+
+echo ""
+read -p "Install missing features? (y/N): " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "❌ Installation cancelled"
+    exit 0
+fi
+
+# Install missing features
+if [ $NEED_HCE -eq 1 ]; then
+    echo "📦 Installing HCE (Advanced Summarization)..."
+    "$PYTHON_BIN" -m pip install -e "$APP_DIR"[hce] || echo "❌ HCE installation failed"
+fi
+
+if [ $NEED_DIARIZATION -eq 1 ]; then
+    echo "📦 Installing Speaker Diarization..."
+    "$PYTHON_BIN" -m pip install -e "$APP_DIR"[diarization] || echo "❌ Diarization installation failed"
+fi
+
+if [ $NEED_CUDA -eq 1 ]; then
+    echo "📦 Installing CUDA Support..."
+    "$PYTHON_BIN" -m pip install -e "$APP_DIR"[cuda] || echo "❌ CUDA installation failed"
+fi
+
+echo ""
+echo "✅ Feature installation complete!"
+echo "🔄 Please restart Skip the Podcast Desktop to use new features"
+EOF
+
+  chmod +x "$INSTALL_SCRIPT"
+
+  # Create comprehensive troubleshooting log for developer
+  TROUBLESHOOT_LOG="$BUILD_MACOS_PATH/build_troubleshooting.log"
+  cat > "$TROUBLESHOOT_LOG" << EOF
+Skip the Podcast Desktop - Build Troubleshooting Log
+===================================================
+Build Date: $(date)
+Version: $CURRENT_VERSION
+Build Flags: $@
+Python Version: $("$VENV_DIR/bin/python" --version 2>/dev/null || echo "Unknown")
+Platform: $(uname -a)
+
+FAILED INSTALLATIONS:
+$(echo -e "$FAILED_EXTRAS")
+
+DETAILED ERROR LOGS:
+===================
+$(cat "$BUILD_MACOS_PATH/installation_errors.log" 2>/dev/null || echo "No detailed error logs available")
+
+ENVIRONMENT INFO:
+================
+HOMEBREW_PREFIX: ${HOMEBREW_PREFIX:-"Not set"}
+PATH: $PATH
+PYTHONPATH: ${PYTHONPATH:-"Not set"}
+
+PIP LIST (staging venv):
+=======================
+$("$VENV_DIR/bin/python" -m pip list 2>/dev/null || echo "Failed to get pip list")
+
+SYSTEM DEPENDENCIES:
+===================
+Git version: $(git --version 2>/dev/null || echo "Git not found")
+Homebrew version: $(brew --version 2>/dev/null || echo "Homebrew not found")
+
+TROUBLESHOOTING STEPS:
+=====================
+1. Check if Homebrew is properly installed and updated
+2. Verify Python 3.13 is available: brew install python@3.13
+3. Check internet connectivity for package downloads
+4. Review detailed error logs above for specific package conflicts
+5. Try clean rebuild: bash scripts/build_macos_app.sh --clean && bash scripts/build_macos_app.sh --make-dmg --skip-install
+
+QUICK FIXES:
+===========
+- HCE issues: Usually torch/transformers conflicts or insufficient disk space
+- Diarization issues: Often pyannote.audio dependency conflicts
+- CUDA issues: Requires compatible GPU and CUDA toolkit installation
+
+For support, share this log file: $TROUBLESHOOT_LOG
+EOF
+
+  echo "🔗 Easy Fix Available:"
+  echo "   Double-click: install_missing_features.sh (in the app folder)"
+  echo "   Or run: bash '$INSTALL_SCRIPT'"
+  echo ""
+  echo "📋 Developer Troubleshooting:"
+  echo "   Full build log: $TROUBLESHOOT_LOG"
+  echo "   Installation errors: $BUILD_MACOS_PATH/installation_errors.log"
+  echo ""
+  echo "💡 Note: Failed features can also be installed automatically when first used."
+  echo "   The app will download missing dependencies as needed."
+fi
+echo "================================="
+
 # Install FFMPEG into the app bundle for DMG distribution [[memory:7770522]]
 if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-0}" != "1" ]; }; then
   echo "🎬 Installing FFMPEG into app bundle for DMG distribution..."
@@ -647,8 +845,63 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
   /usr/bin/xattr -rc "$BUILD_APP_PATH" || true
   cp -R "$BUILD_APP_PATH" "$DMG_STAGING/root/"
   ln -sf /Applications "$DMG_STAGING/root/Applications"
+
+  # Create helpful README for DMG users
+  cat > "$DMG_STAGING/root/README - Install Missing Features.txt" << EOF
+Skip the Podcast Desktop - Missing Features Help
+===============================================
+
+If some features are missing after installation, you can easily install them:
+
+🔗 EASY FIX - Double-click this file:
+   Skip the Podcast Desktop.app/Contents/MacOS/install_missing_features.sh
+
+📍 LOCATION:
+   1. Right-click "Skip the Podcast Desktop.app"
+   2. Select "Show Package Contents"
+   3. Navigate to Contents/MacOS/
+   4. Double-click "install_missing_features.sh"
+
+🎯 WHAT IT FIXES:
+   • Advanced Summarization (HCE)
+   • Speaker Diarization (Multi-speaker audio)
+   • GPU Acceleration (CUDA)
+
+⚡ AUTOMATIC OPTION:
+   Missing features will also auto-install when you first try to use them.
+
+💬 NEED HELP?
+   Visit: https://github.com/skipthepodcast/desktop/issues
+
+Built: $(date)
+Version: $CURRENT_VERSION
+EOF
   hdiutil create -volname "Skip the Podcast Desktop" -srcfolder "$DMG_STAGING/root" -ov -format UDZO "$DIST_DIR/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
   echo "✅ DMG created at: $DIST_DIR/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
+
+  # Show DMG contents summary
+  DMG_SIZE=$(du -h "$DIST_DIR/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg" | cut -f1)
+  echo ""
+  echo "📦 DMG Summary:"
+  echo "==============="
+  echo "📁 File: Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
+  echo "📏 Size: $DMG_SIZE"
+  echo ""
+  echo "🎯 Included Features:"
+  if [ -n "$EXTRAS_STATUS" ]; then
+    echo -e "$EXTRAS_STATUS"
+  fi
+  if [ -n "$FAILED_EXTRAS" ]; then
+    echo ""
+    echo "⚠️  Missing Features (will auto-install on first use):"
+    echo -e "$FAILED_EXTRAS"
+    echo ""
+    echo "🔗 User Fix Options:"
+    echo "   1. Double-click: install_missing_features.sh (in app Contents/MacOS/)"
+    echo "   2. Features auto-install when first used"
+    echo "   3. Manual install: pip install knowledge-system[hce,diarization]"
+  fi
+  echo "==============="
 
   # Optional: Offer to publish release to public repository
   if [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-0}" != "1" ]; then
