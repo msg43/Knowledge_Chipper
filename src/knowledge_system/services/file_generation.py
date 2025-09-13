@@ -248,15 +248,9 @@ class FileGenerationService:
             # Add Obsidian hashtags from database tags
             hashtags_section = ""
             if video.tags_json:
-                from ..utils.obsidian_tags import sanitize_tag_for_obsidian
+                from ..utils.obsidian_tags import yaml_tags_to_obsidian_hashtags
 
-                # Create hashtags with improved sanitization
-                hashtags = []
-                for tag in video.tags_json:
-                    sanitized = sanitize_tag_for_obsidian(tag)
-                    if sanitized:
-                        hashtags.append(f"#{sanitized}")
-
+                hashtags = yaml_tags_to_obsidian_hashtags(video.tags_json)
                 if hashtags:
                     hashtags_section = f"\n{' '.join(sorted(hashtags))}\n"
 
@@ -761,13 +755,10 @@ class FileGenerationService:
 
         # Add tags from database (converted to hashtag format)
         if video.tags_json:
-            from ..utils.obsidian_tags import sanitize_tag_for_obsidian
+            from ..utils.obsidian_tags import yaml_tags_to_obsidian_hashtags
 
-            # Create hashtags with improved sanitization
-            for tag in video.tags_json:
-                sanitized = sanitize_tag_for_obsidian(tag)
-                if sanitized:
-                    obsidian_tags.add(f"#{sanitized}")
+            db_hashtags = yaml_tags_to_obsidian_hashtags(video.tags_json)
+            obsidian_tags.update(db_hashtags)
 
         # Add video-related tags
         obsidian_tags.add(f"#video/{video.video_id}")
