@@ -81,12 +81,14 @@ class CUDASpecs:
 
 
 class PerformanceProfile(Enum):
-    """Performance profiles for different use cases."""
+    """Performance profiles numbered 1-6 for scalability as hardware advances."""
 
-    BATTERY_SAVER = "battery_saver"
-    BALANCED = "balanced"
-    HIGH_PERFORMANCE = "high_performance"
-    MAXIMUM_PERFORMANCE = "maximum_performance"
+    LEVEL_1 = "level_1"  # Minimal performance for very constrained systems
+    LEVEL_2 = "level_2"  # Conservative performance for low-end laptops
+    LEVEL_3 = "level_3"  # Balanced performance for mainstream systems
+    LEVEL_4 = "level_4"  # High performance for enthusiast systems
+    LEVEL_5 = "level_5"  # Ultra performance for workstation-class systems
+    LEVEL_6 = "level_6"  # Extreme performance for server-class systems
 
 
 @dataclass
@@ -479,10 +481,12 @@ class HardwareDetector:
         # Cap model recommendations at 'base' since it provides sufficient quality
         # while being much faster and using less resources
         if chip_type in [ChipType.M3_ULTRA, ChipType.M2_ULTRA, ChipType.M1_ULTRA]:
-            # Ultra chips: Maximum performance with base model
-            max_concurrent = min(16, cpu_cores // 2)
-            optimal_batch = 8  # Capped for whisper.cpp compatibility
-            recommended_model = "base"
+            # Ultra chips: Push the limits for maximum performance
+            max_concurrent = min(24, int(cpu_cores * 0.8))  # Use 80% of cores
+            optimal_batch = 32  # Larger batches for Ultra chips
+            recommended_model = (
+                "small" if memory_gb >= 64 else "base"
+            )  # Upgrade model for high memory
 
         elif chip_type in [ChipType.M3_MAX, ChipType.M2_MAX, ChipType.M1_MAX]:
             # Max chips: High performance with base model
@@ -584,7 +588,7 @@ class HardwareDetector:
         """Get performance configuration for a specific profile."""
         specs = self.detect_hardware()
 
-        if profile == PerformanceProfile.BATTERY_SAVER:
+        if profile == PerformanceProfile.LEVEL_1:
             return {
                 "omp_num_threads": max(1, specs.cpu_cores // 4),
                 "max_concurrent_files": 1,
@@ -599,7 +603,7 @@ class HardwareDetector:
                 "tokenizers_parallelism": False,
             }
 
-        elif profile == PerformanceProfile.BALANCED:
+        elif profile == PerformanceProfile.LEVEL_2:
             return {
                 "omp_num_threads": max(1, specs.cpu_cores // 2),
                 "max_concurrent_files": max(
@@ -620,7 +624,7 @@ class HardwareDetector:
                 "tokenizers_parallelism": False,
             }
 
-        elif profile == PerformanceProfile.HIGH_PERFORMANCE:
+        elif profile == PerformanceProfile.LEVEL_3:
             return {
                 "omp_num_threads": max(1, specs.cpu_cores),
                 "max_concurrent_files": specs.max_concurrent_transcriptions,
@@ -635,7 +639,7 @@ class HardwareDetector:
                 "tokenizers_parallelism": True,
             }
 
-        elif profile == PerformanceProfile.MAXIMUM_PERFORMANCE:
+        elif profile == PerformanceProfile.LEVEL_4:
             return {
                 "omp_num_threads": specs.cpu_cores,
                 "max_concurrent_files": specs.max_concurrent_transcriptions,
@@ -646,6 +650,50 @@ class HardwareDetector:
                 "batch_size": specs.optimal_batch_size,
                 "device": specs.recommended_device,
                 "use_coreml": False,  # Prefer GPU acceleration for large batch processing
+                "pytorch_enable_mps_fallback": True,
+                "tokenizers_parallelism": True,
+            }
+
+        elif profile == PerformanceProfile.LEVEL_5:
+            # For workstation-class machines (64GB+, 16+ cores)
+            # Push harder but still maintain stability
+            return {
+                "omp_num_threads": specs.cpu_cores,
+                "max_concurrent_files": min(
+                    20, specs.max_concurrent_transcriptions * 2
+                ),  # Allow higher concurrency
+                "per_process_thread_limit": specs.cpu_cores,
+                "enable_parallel_processing": True,
+                "sequential_processing": False,
+                "whisper_model": "small"
+                if specs.memory_gb >= 64
+                else specs.recommended_whisper_model,  # Upgrade model
+                "batch_size": min(64, specs.optimal_batch_size * 4),  # Larger batches
+                "device": specs.recommended_device,
+                "use_coreml": False,  # Prefer raw GPU power
+                "pytorch_enable_mps_fallback": True,
+                "tokenizers_parallelism": True,
+            }
+
+        elif profile == PerformanceProfile.LEVEL_6:
+            # For server-class machines (128GB+, 20+ cores)
+            # Maximum utilization - user wants speed over caution
+            return {
+                "omp_num_threads": specs.cpu_cores,
+                "max_concurrent_files": min(
+                    32, specs.cpu_cores
+                ),  # Up to 32 concurrent or 1 per core
+                "per_process_thread_limit": specs.cpu_cores,
+                "enable_parallel_processing": True,
+                "sequential_processing": False,
+                "whisper_model": "medium"
+                if specs.memory_gb >= 128
+                else "small",  # Even larger model
+                "batch_size": min(
+                    128, specs.optimal_batch_size * 8
+                ),  # Very large batches
+                "device": specs.recommended_device,
+                "use_coreml": False,  # Raw performance over efficiency
                 "pytorch_enable_mps_fallback": True,
                 "tokenizers_parallelism": True,
             }
@@ -707,27 +755,27 @@ class HardwareDetector:
                 ChipType.M2_ULTRA,
                 ChipType.M1_ULTRA,
             ]:
-                return PerformanceProfile.MAXIMUM_PERFORMANCE
+                return PerformanceProfile.LEVEL_4
             elif specs.chip_type in [ChipType.M3_MAX, ChipType.M2_MAX, ChipType.M1_MAX]:
-                return PerformanceProfile.HIGH_PERFORMANCE
+                return PerformanceProfile.LEVEL_3
             else:
-                return PerformanceProfile.BALANCED
+                return PerformanceProfile.LEVEL_2
 
         # For battery-powered devices, recommend balanced mode
         elif use_case == "mobile":
             if specs.thermal_design == "mobile":
-                return PerformanceProfile.BALANCED
+                return PerformanceProfile.LEVEL_2
             else:
-                return PerformanceProfile.HIGH_PERFORMANCE
+                return PerformanceProfile.LEVEL_3
 
         # General use case - balance performance and resource usage
         else:
             if specs.memory_gb >= 64 and specs.gpu_cores >= 30:
-                return PerformanceProfile.HIGH_PERFORMANCE
+                return PerformanceProfile.LEVEL_3
             elif specs.memory_gb >= 32 and specs.gpu_cores >= 16:
-                return PerformanceProfile.BALANCED
+                return PerformanceProfile.LEVEL_2
             else:
-                return PerformanceProfile.BALANCED
+                return PerformanceProfile.LEVEL_2
 
 
 # Global hardware detector instance

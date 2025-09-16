@@ -129,18 +129,34 @@ pip install -e ".[gui]"
 
 echo -e "${GREEN}✅ Python dependencies installed${NC}"
 
-# Set up configuration files
-echo -e "${BLUE}⚙️  Setting up configuration...${NC}"
+# Set up configuration files with machine optimization
+echo -e "${BLUE}⚙️  Setting up machine-optimized configuration...${NC}"
 
 if [ ! -f "config/settings.yaml" ]; then
-    if [ -f "config/settings.example.yaml" ]; then
-        cp config/settings.example.yaml config/settings.yaml
-        echo -e "${GREEN}✅ Created config/settings.yaml${NC}"
+    # Try to generate machine-specific configuration
+    if [ -f "scripts/generate_machine_config.py" ]; then
+        echo -e "${BLUE}🔍 Generating configuration optimized for your hardware...${NC}"
+        if python scripts/generate_machine_config.py --output config/settings.yaml; then
+            echo -e "${GREEN}✅ Created machine-optimized config/settings.yaml${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Machine optimization failed, using default config${NC}"
+            if [ -f "config/settings.example.yaml" ]; then
+                cp config/settings.example.yaml config/settings.yaml
+                echo -e "${GREEN}✅ Created config/settings.yaml (default)${NC}"
+            fi
+        fi
     else
-        echo -e "${YELLOW}⚠️  config/settings.example.yaml not found, skipping${NC}"
+        # Fallback to example config
+        if [ -f "config/settings.example.yaml" ]; then
+            cp config/settings.example.yaml config/settings.yaml
+            echo -e "${GREEN}✅ Created config/settings.yaml (default)${NC}"
+        else
+            echo -e "${YELLOW}⚠️  config/settings.example.yaml not found, skipping${NC}"
+        fi
     fi
 else
-    echo -e "${YELLOW}⚠️  config/settings.yaml already exists, skipping${NC}"
+    echo -e "${YELLOW}⚠️  config/settings.yaml already exists, skipping optimization${NC}"
+    echo -e "${BLUE}💡 To re-optimize for your hardware, delete config/settings.yaml and re-run setup${NC}"
 fi
 
 if [ ! -f "config/credentials.yaml" ]; then

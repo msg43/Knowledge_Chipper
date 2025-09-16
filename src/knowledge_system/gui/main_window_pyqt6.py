@@ -784,6 +784,26 @@ def launch_gui() -> None:
         else:
             logger.warning("No custom icon found for application")
 
+        # Check and request macOS permissions if needed
+        if sys.platform == "darwin":
+            try:
+                # First check if we need Full Disk Access for better functionality
+                from knowledge_system.utils.macos_fda_helper import (
+                    ensure_fda_on_startup,
+                )
+
+                # This provides the Disk Drill-like FDA request experience
+                ensure_fda_on_startup()
+
+                # Also do basic permission checks
+                from knowledge_system.utils.macos_permissions import (
+                    ensure_permissions_on_startup,
+                )
+
+                ensure_permissions_on_startup()
+            except Exception as e:
+                logger.debug(f"Permission check failed (non-critical): {e}")
+
         # Check if we're in testing mode and set environment variable for subprocess
         testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
         if testing_mode:

@@ -443,11 +443,24 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.model_combo.addItems(get_valid_whisper_models())
         self.model_combo.setCurrentText("base")
         self.model_combo.setMinimumWidth(200)  # Increase width to show full model names
-        self.model_combo.currentTextChanged.connect(self._on_setting_changed)
+        self.model_combo.currentTextChanged.connect(self._on_model_changed)
+
+        # Model status label
+        self.model_status_label = QLabel("✅ Ready")
+        self.model_status_label.setStyleSheet("color: green; font-weight: bold;")
+        self.model_status_label.setToolTip("Model availability status")
+        # Create a widget container for model selection + status
+        model_container = QWidget()
+        model_layout = QHBoxLayout(model_container)
+        model_layout.setContentsMargins(0, 0, 0, 0)
+        model_layout.addWidget(self.model_combo)
+        model_layout.addWidget(self.model_status_label)
+        model_layout.addStretch()  # Push status to the right
+
         self._add_field_with_info(
             layout,
             "Transcription Model:",
-            self.model_combo,
+            model_container,
             "Choose the Whisper model size. Larger models are more accurate but slower and use more memory. "
             "'base' is recommended for most users.",
             0,
@@ -1089,12 +1102,24 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.progress_display.set_error(error_msg)
 
         self.append_log(f"❌ Error: {error_msg}")
-        show_enhanced_error(
-            self,
-            "Transcription Error",
-            error_msg,
-            context="Local transcription using Whisper",
-        )
+
+        # Check if this is a whisper.cpp binary missing error
+        if "whisper.cpp binary not found" in error_msg:
+            # Show helpful error dialog with cloud transcription suggestion
+            show_enhanced_error(
+                self,
+                "Local Transcription Unavailable",
+                f"{error_msg}\n\n💡 Suggestion: Use the 'Cloud Transcription' tab instead, which doesn't require local installation.",
+                context="Missing whisper.cpp binary for local transcription",
+            )
+        else:
+            # Standard error handling
+            show_enhanced_error(
+                self,
+                "Transcription Error",
+                error_msg,
+                context="Local transcription using Whisper",
+            )
 
         # Hide progress bar and status (legacy)
         if hasattr(self, "file_progress_bar") and hasattr(
@@ -1506,6 +1531,134 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
     def _on_setting_changed(self):
         """Called when any setting changes to automatically save."""
         self._save_settings()
+
+    def _on_model_changed(self):
+        """Called when the model selection changes - validate and potentially download model."""
+        self._save_settings()
+
+        # Get the selected model
+        selected_model = self.model_combo.currentText()
+
+        # Update status to "checking"
+        self.model_status_label.setText("🔄 Checking...")
+        self.model_status_label.setStyleSheet("color: orange; font-weight: bold;")
+        self.model_status_label.setToolTip("Checking model availability...")
+
+        # Start model validation in background thread
+        self._start_model_validation(selected_model)
+
+    def _start_model_validation(self, model_name: str):
+        """Start background model validation/download."""
+        from PyQt6.QtCore import QThread, pyqtSignal
+
+        class ModelValidationWorker(QThread):
+            """Worker thread for model validation/download."""
+
+            validation_completed = pyqtSignal(
+                bool, str, str
+            )  # success, model_name, message
+            download_progress = pyqtSignal(
+                str, int, str
+            )  # model_name, percent, message
+
+            def __init__(self, model_name: str):
+                super().__init__()
+                self.model_name = model_name
+
+            def run(self):
+                """Validate model availability and download if needed."""
+                try:
+                    from ...processors.whisper_cpp_transcribe import (
+                        WhisperCppTranscribeProcessor,
+                    )
+
+                    # Create a progress callback for downloads
+                    def progress_callback(progress_data):
+                        if isinstance(progress_data, dict):
+                            status = progress_data.get("status", "")
+                            percent = int(progress_data.get("percent", 0))
+                            message = progress_data.get("message", "")
+
+                            if status in ["downloading", "starting_download"]:
+                                self.download_progress.emit(
+                                    self.model_name, percent, message
+                                )
+
+                    # Create processor to trigger model validation/download
+                    processor = WhisperCppTranscribeProcessor(
+                        model=self.model_name, progress_callback=progress_callback
+                    )
+
+                    # This will download the model if not present
+                    model_path = processor._download_model(
+                        self.model_name, progress_callback
+                    )
+
+                    if model_path and model_path.exists():
+                        size_mb = model_path.stat().st_size / (1024 * 1024)
+                        self.validation_completed.emit(
+                            True, self.model_name, f"Model ready ({size_mb:.0f}MB)"
+                        )
+                    else:
+                        self.validation_completed.emit(
+                            False, self.model_name, "Model not available"
+                        )
+
+                except Exception as e:
+                    self.validation_completed.emit(
+                        False, self.model_name, f"Error: {str(e)}"
+                    )
+
+        # Create and start worker
+        self._model_validation_worker = ModelValidationWorker(model_name)
+        self._model_validation_worker.validation_completed.connect(
+            self._on_model_validation_completed
+        )
+        self._model_validation_worker.download_progress.connect(
+            self._on_model_download_progress
+        )
+        self._model_validation_worker.start()
+
+    def _on_model_download_progress(self, model_name: str, percent: int, message: str):
+        """Handle model download progress updates."""
+        if (
+            model_name == self.model_combo.currentText()
+        ):  # Only update if still selected
+            self.model_status_label.setText(f"📥 {percent}%")
+            self.model_status_label.setStyleSheet("color: blue; font-weight: bold;")
+            self.model_status_label.setToolTip(f"Downloading {model_name}: {message}")
+
+            # Log progress to main output
+            self.append_log(f"📥 {message}")
+
+    def _on_model_validation_completed(
+        self, success: bool, model_name: str, message: str
+    ):
+        """Handle model validation completion."""
+        if (
+            model_name == self.model_combo.currentText()
+        ):  # Only update if still selected
+            if success:
+                self.model_status_label.setText("✅ Ready")
+                self.model_status_label.setStyleSheet(
+                    "color: green; font-weight: bold;"
+                )
+                self.model_status_label.setToolTip(
+                    f"Model {model_name} is ready: {message}"
+                )
+                self.append_log(f"✅ Model {model_name} ready: {message}")
+            else:
+                self.model_status_label.setText("❌ Error")
+                self.model_status_label.setStyleSheet("color: red; font-weight: bold;")
+                self.model_status_label.setToolTip(
+                    f"Model {model_name} error: {message}"
+                )
+                self.append_log(f"❌ Model {model_name} error: {message}")
+
+        # Clean up worker
+        if hasattr(self, "_model_validation_worker"):
+            self._model_validation_worker.deleteLater()
+            del self._model_validation_worker
 
     def _on_quality_retry_toggled(self, checked: bool):
         """Handle toggling of quality retry checkbox."""

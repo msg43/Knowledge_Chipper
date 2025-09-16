@@ -629,8 +629,7 @@ class APIKeysTab(BaseTab):
         main_layout.addLayout(tests_layout)
 
         # Hardware Recommendations section - moved from Local Transcription tab
-        recommendations_section = self._create_recommendations_section()
-        main_layout.addWidget(recommendations_section)
+        # Hardware recommendations removed - now handled automatically during installation
 
         main_layout.addStretch()
 
@@ -1328,8 +1327,10 @@ class APIKeysTab(BaseTab):
             import subprocess  # nosec B404 # Required for test execution
             from pathlib import Path
 
-            # Find the test runner script
-            project_root = Path.home() / "Projects" / "Knowledge_Chipper"
+            # Find the test runner script using dynamic project root detection
+            from ...utils.file_io import find_project_root
+
+            project_root = find_project_root()
             test_script = (
                 project_root / "tests" / "gui_comprehensive" / "main_test_runner.py"
             )
@@ -1338,22 +1339,63 @@ class APIKeysTab(BaseTab):
             if not test_script.exists():
                 self.status_label.setText("❌ Test script not found")
                 self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+
+                # Provide detailed troubleshooting information
+                error_msg = (
+                    f"Test script not found at:\n{test_script}\n\n"
+                    f"Project root detected as: {project_root}\n\n"
+                    "Troubleshooting steps:\n"
+                    "1. If running from app bundle, ensure the source code is in a standard location\n"
+                    "2. Check that the project was cloned/installed completely\n"
+                    "3. Verify tests/gui_comprehensive/ directory exists\n"
+                    "4. Try setting KNOWLEDGE_CHIPPER_ROOT environment variable to the source directory\n\n"
+                    "Expected project structure:\n"
+                    "- pyproject.toml (project root marker)\n"
+                    "- tests/gui_comprehensive/main_test_runner.py\n"
+                    "- venv/ (virtual environment)"
+                )
+
                 QMessageBox.critical(
                     self,
-                    "Test Error",
-                    f"Test script not found at: {test_script}\n\n"
-                    "Please ensure the comprehensive test suite is available.",
+                    "Test Script Not Found",
+                    error_msg,
                 )
                 return
 
             if not venv_python.exists():
                 self.status_label.setText("❌ Virtual environment not found")
                 self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+
+                # Check for alternative Python locations
+                alternative_pythons = [
+                    project_root / "venv" / "bin" / "python",
+                    project_root / ".venv" / "bin" / "python3",
+                    project_root / ".venv" / "bin" / "python",
+                ]
+
+                found_alternatives = [p for p in alternative_pythons if p.exists()]
+
+                error_msg = (
+                    f"Virtual environment Python not found at:\n{venv_python}\n\n"
+                    f"Project root: {project_root}\n\n"
+                    "Troubleshooting steps:\n"
+                    "1. Run setup script: 'bash scripts/setup.sh'\n"
+                    "2. Create virtual environment: 'python3 -m venv venv'\n"
+                    "3. Install dependencies: 'venv/bin/pip install -r requirements.txt'\n"
+                    "4. Check that virtual environment is in project root\n\n"
+                )
+
+                if found_alternatives:
+                    error_msg += f"Found alternative Python installations:\n"
+                    for alt in found_alternatives:
+                        error_msg += f"- {alt}\n"
+                else:
+                    error_msg += "No alternative Python installations found in project directory."
+
                 QMessageBox.critical(
                     self,
-                    "Test Error",
-                    f"Virtual environment not found at: {venv_python}\n\n"
-                    "Please ensure the virtual environment is set up correctly.",
+                    "Virtual Environment Not Found",
+                    error_msg,
                 )
                 return
 
@@ -1673,14 +1715,11 @@ class APIKeysTab(BaseTab):
             import subprocess  # nosec B404 # Required for Terminal automation
             from pathlib import Path
 
-            # Find the script
-            script_path = (
-                Path.home()
-                / "Projects"
-                / "Knowledge_Chipper"
-                / "scripts"
-                / "build_macos_app.sh"
-            )
+            # Find the script using dynamic project root detection
+            from ...utils.file_io import find_project_root
+
+            project_root = find_project_root()
+            script_path = project_root / "scripts" / "build_macos_app.sh"
             if not script_path.exists():
                 self.append_log("❌ Could not find build script for fallback update")
                 return
@@ -1720,8 +1759,10 @@ end tell
             import subprocess  # nosec B404 # Required for Terminal automation
             from pathlib import Path
 
-            # Use the actual workspace path instead of hardcoded path
-            workspace_path = Path(__file__).parent.parent.parent.parent.parent
+            # Use dynamic project root detection instead of hardcoded path
+            from ...utils.file_io import find_project_root
+
+            workspace_path = find_project_root()
             script_path = workspace_path / "scripts" / "build_macos_app.sh"
             if not script_path.exists():
                 self.append_log(
@@ -1975,172 +2016,11 @@ end tell
             self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
         self.append_log(message)
 
-    def _create_recommendations_section(self) -> QGroupBox:
-        """Create the hardware recommendations section."""
-        group = QGroupBox("Hardware Recommendations")
+    # Hardware recommendations section removed - now handled automatically during installation
 
-        # Use horizontal layout
-        main_layout = QHBoxLayout()
-        main_layout.setSpacing(10)
-
-        # Left side: Use Recommended Settings button
-        self.use_recommended_btn = QPushButton("⚡ Apply Recommended Settings")
-        self.use_recommended_btn.setFixedHeight(45)  # Match text area height
-        self.use_recommended_btn.clicked.connect(self._apply_recommended_settings)
-        self.use_recommended_btn.setStyleSheet(
-            "background-color: #4caf50; color: white; font-weight: bold; padding: 8px;"
-        )
-        self.use_recommended_btn.setToolTip(
-            "Automatically detects your hardware capabilities and applies optimal transcription settings to the Local Transcription tab. "
-            "This will configure the best model, device, batch size, and thread count for your system. "
-            "Memory calculations include OS overhead and leave room for other applications."
-        )
-        main_layout.addWidget(self.use_recommended_btn)
-
-        # Right side: Info box with two-column layout
-        self.recommendations_widget = QGroupBox()
-        self.recommendations_widget.setStyleSheet(
-            """
-            QGroupBox {
-                background-color: #e8f5e8;
-                border: 1px solid #4caf50;
-                border-radius: 5px;
-                font-size: 11px;
-                padding-top: 5px;
-            }
-        """
-        )
-
-        # Set height to accommodate content while staying close to button height
-        self.recommendations_widget.setFixedHeight(45)
-
-        # Create a grid layout for recommendations
-        self.recommendations_layout = QGridLayout()
-        self.recommendations_layout.setSpacing(2)  # Tighter spacing for compact layout
-        self.recommendations_layout.setContentsMargins(6, 2, 6, 2)  # Smaller margins
-
-        # Initially show placeholder text
-        placeholder_label = QLabel(
-            "Click 'Apply Recommended Settings' to automatically detect and configure optimal settings for your hardware."
-        )
-        placeholder_label.setWordWrap(True)
-        placeholder_label.setStyleSheet("font-size: 10px; color: #666; padding: 2px;")
-        placeholder_label.setAlignment(
-            Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
-        )
-        self.recommendations_layout.addWidget(placeholder_label, 0, 0, 1, 2)
-
-        self.recommendations_widget.setLayout(self.recommendations_layout)
-
-        # Set size policy to prevent expansion
-        from PyQt6.QtWidgets import QSizePolicy
-
-        self.recommendations_widget.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        main_layout.addWidget(self.recommendations_widget, 1)  # Give it more space
-
-        group.setLayout(main_layout)
-        return group
-
-    def _get_hardware_recommendations(self):
-        """Get hardware recommendations and display them."""
-        try:
-            from ...utils.device_selection import get_device_recommendations
-            from ...utils.hardware_detection import get_hardware_detector
-
-            detector = get_hardware_detector()
-            specs = detector.detect_hardware()
-            recommendations = get_device_recommendations("transcription")
-
-            # Store recommendations for later use
-            self._current_recommendations = {
-                "specs": specs,
-                "recommendations": recommendations,
-            }
-
-            # Clear the layout first
-            for i in reversed(range(self.recommendations_layout.count())):
-                item = self.recommendations_layout.takeAt(i)
-                if item and item.widget():
-                    item.widget().deleteLater()
-
-            # Create a readable compact layout
-            # Left side - Device and Model
-            device_label = QLabel("🎯 Device:")
-            device_label.setStyleSheet(
-                "font-weight: bold; font-size: 9px; color: black;"
-            )
-            device_value = QLabel(str(specs.recommended_device))
-            device_value.setStyleSheet("font-size: 9px; color: black;")
-
-            model_label = QLabel("🧠 Model:")
-            model_label.setStyleSheet(
-                "font-weight: bold; font-size: 9px; color: black;"
-            )
-            model_value = QLabel(str(specs.recommended_whisper_model))
-            model_value.setStyleSheet("font-size: 9px; color: black;")
-
-            # Right side - Batch Size and Max Concurrent (including "Max" note)
-            batch_label = QLabel("📦 Batch:")
-            batch_label.setStyleSheet(
-                "font-weight: bold; font-size: 9px; color: black;"
-            )
-            batch_value = QLabel(str(specs.optimal_batch_size))
-            batch_value.setStyleSheet("font-size: 9px; color: black;")
-
-            max_label = QLabel("🔄 Max Files:")
-            max_label.setStyleSheet("font-weight: bold; font-size: 9px; color: black;")
-            max_value_text = f"{specs.max_concurrent_transcriptions} (Max)"
-            max_value = QLabel(max_value_text)
-            max_value.setStyleSheet("font-size: 9px; color: black;")
-
-            # Add widgets to grid layout with better spacing
-            self.recommendations_layout.addWidget(device_label, 0, 0)
-            self.recommendations_layout.addWidget(device_value, 0, 1)
-            self.recommendations_layout.addWidget(batch_label, 0, 2)
-            self.recommendations_layout.addWidget(batch_value, 0, 3)
-
-            self.recommendations_layout.addWidget(model_label, 1, 0)
-            self.recommendations_layout.addWidget(model_value, 1, 1)
-            self.recommendations_layout.addWidget(max_label, 1, 2)
-            self.recommendations_layout.addWidget(max_value, 1, 3)
-
-            # Enable the "Use Recommended Settings" button
-            self.use_recommended_btn.setEnabled(True)
-
-            self.append_log("Hardware recommendations loaded successfully")
-
-        except Exception as e:
-            error_msg = f"Failed to get hardware recommendations: {e}"
-
-            # Clear the layout first
-            for i in reversed(range(self.recommendations_layout.count())):
-                item = self.recommendations_layout.takeAt(i)
-                if item and item.widget():
-                    item.widget().deleteLater()
-
-            # Show error message
-            error_label = QLabel(f"❌ {error_msg}")
-            error_label.setStyleSheet("color: #f44336; font-size: 9px; padding: 2px;")
-            error_label.setWordWrap(True)
-            error_label.setAlignment(
-                Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
-            )
-            self.recommendations_layout.addWidget(error_label, 0, 0, 1, 4)
-
-            # Update widget style for error
-            self.recommendations_widget.setStyleSheet(
-                """
-                QGroupBox {
-                    background-color: #ffeaea;
-                    border: 1px solid #f44336;
-                    border-radius: 5px;
-                    font-size: 11px;
-                    padding-top: 5px;
-                }
-            """
-            )
+    # Hardware recommendations methods removed - now handled automatically during installation
+    # TODO: Remove _apply_recommended_settings method starting at line 1982 - it's obsolete
+    # Hardware optimization is now done during installation via scripts/generate_machine_config.py
 
     def _apply_recommended_settings(self):
         """Get hardware recommendations if needed, then apply them to the Local Transcription tab controls."""

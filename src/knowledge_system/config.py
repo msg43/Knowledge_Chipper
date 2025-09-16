@@ -16,16 +16,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def get_valid_whisper_models() -> list[str]:
-    """Extract valid Whisper model names from the configuration pattern."""
-    # Extract from the pattern in TranscriptionConfig
-    pattern = r"^(tiny|base|small|medium|large|large-v2|large-v3)$"
-    # Parse the pattern to extract model names
-    match = re.search(r"\((.*?)\)", pattern)
-    if match:
-        models_str = match.group(1)
-        return [model.strip() for model in models_str.split("|")]
-    # Fallback if pattern parsing fails
-    return ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"]
+    """Get simplified, user-friendly Whisper model names."""
+    # Simplified model list - removed confusing version suffixes
+    # medium maps to medium.en (English-only, faster)
+    # large maps to large-v3 (latest and best general purpose)
+    return ["tiny", "base", "small", "medium", "large"]
 
 
 class AppConfig(BaseModel):
@@ -221,7 +216,7 @@ class TranscriptionConfig(BaseModel):
     """Transcription settings."""
 
     whisper_model: str = Field(
-        default="base", pattern="^(tiny|base|small|medium|large|large-v2|large-v3)$"
+        default="base", pattern="^(tiny|base|small|medium|large)$"
     )
     use_gpu: bool = True
     diarization: bool = True

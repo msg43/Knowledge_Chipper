@@ -977,3 +977,97 @@ def overwrite_or_insert_summary_section(
 
     with open(md_path, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
+
+
+def find_project_root() -> Path:
+    """
+    Find the project root directory by looking for marker files.
+
+    Searches upward from the current file location for typical project markers
+    like pyproject.toml, setup.py, or .git directory.
+
+    Returns:
+        Path to the project root directory
+
+    Raises:
+        RuntimeError: If project root cannot be found
+    """
+    import os
+    import sys
+
+    # Strategy 1: Check if we're in a known development location
+    # Look for the typical development path pattern
+    known_dev_paths = [
+        Path.home() / "Projects" / "Knowledge_Chipper",
+        Path.home() / "Development" / "Knowledge_Chipper",
+        Path.home() / "Code" / "Knowledge_Chipper",
+        Path.home() / "knowledge_chipper",
+        Path.home() / "Knowledge_Chipper",
+    ]
+
+    for dev_path in known_dev_paths:
+        if dev_path.exists() and (dev_path / "pyproject.toml").exists():
+            logger.debug(f"Found project root via known dev path: {dev_path}")
+            return dev_path
+
+    # Strategy 2: Search upward from current file location
+    current = Path(__file__).parent
+    while current.parent != current:
+        # Look for common project root markers
+        if (
+            (current / "pyproject.toml").exists()
+            or (current / "setup.py").exists()
+            or (current / ".git").exists()
+            or (current / "src" / "knowledge_system").exists()  # Our specific structure
+        ):
+            logger.debug(f"Found project root via file traversal: {current}")
+            return current
+        current = current.parent
+
+    # Strategy 3: Try to detect if we're running from app bundle and find actual source
+    if getattr(sys, "frozen", False) or ".app" in str(Path(__file__)):
+        # We're likely in an app bundle - try to find the actual source code
+        # Check for a symbolic link or known paths
+        logger.debug("Detected app bundle execution, searching for source location")
+
+        # Try environment variable if set
+        if "KNOWLEDGE_CHIPPER_ROOT" in os.environ:
+            env_path = Path(os.environ["KNOWLEDGE_CHIPPER_ROOT"])
+            if env_path.exists() and (env_path / "pyproject.toml").exists():
+                logger.debug(f"Found project root via environment variable: {env_path}")
+                return env_path
+
+        # Fall back to the known development paths again (most likely scenario)
+        for dev_path in known_dev_paths:
+            if dev_path.exists() and (dev_path / "pyproject.toml").exists():
+                logger.debug(
+                    f"Found project root via known dev path (app bundle): {dev_path}"
+                )
+                return dev_path
+
+    # Strategy 4: Module-based detection
+    # Look for the knowledge_system module in the current path
+    try:
+        import knowledge_system
+
+        module_path = Path(knowledge_system.__file__).parent.parent.parent
+        if (module_path / "pyproject.toml").exists():
+            logger.debug(f"Found project root via module path: {module_path}")
+            return module_path
+    except ImportError:
+        pass
+
+    # Strategy 5: Check current working directory and its parents
+    current = Path.cwd()
+    while current.parent != current:
+        if (current / "pyproject.toml").exists():
+            logger.debug(f"Found project root via cwd traversal: {current}")
+            return current
+        current = current.parent
+
+    raise RuntimeError(
+        "Could not find project root directory. "
+        "Tried searching from file location, known development paths, "
+        "module location, and current working directory. "
+        "Consider setting KNOWLEDGE_CHIPPER_ROOT environment variable."
+    )

@@ -4,6 +4,47 @@
 
 set -e
 
+# Parse command line arguments
+BUMP_VERSION=0
+BUMP_PART="patch"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --bump-version)
+            BUMP_VERSION=1
+            shift
+            ;;
+        --bump-part)
+            BUMP_PART="$2"
+            if [[ ! "$BUMP_PART" =~ ^(patch|minor|major)$ ]]; then
+                echo "❌ Invalid bump part: $BUMP_PART. Must be patch, minor, or major."
+                exit 1
+            fi
+            shift 2
+            ;;
+        --help|-h)
+            echo "Usage: $0 [options]"
+            echo ""
+            echo "Options:"
+            echo "  --bump-version        Automatically increment version before release"
+            echo "  --bump-part PART      Which version part to bump (patch|minor|major, default: patch)"
+            echo "                        Only used with --bump-version"
+            echo "  --help, -h           Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  $0                           # Release current version"
+            echo "  $0 --bump-version            # Bump patch version and release"
+            echo "  $0 --bump-version --bump-part minor  # Bump minor version and release"
+            exit 0
+            ;;
+        *)
+            echo "❌ Unknown option: $1"
+            echo "Use --help for usage information."
+            exit 1
+            ;;
+    esac
+done
+
 # Colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -21,6 +62,17 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # Ensure we're in the right place
 cd "$PROJECT_ROOT"
 
+# Bump version if requested
+if [ "$BUMP_VERSION" -eq 1 ]; then
+    echo -e "${BLUE}📈 Bumping version (${BUMP_PART})...${NC}"
+    python3 "$SCRIPT_DIR/bump_version.py" --part "$BUMP_PART"
+    if [ $? -ne 0 ]; then
+        echo "❌ Failed to bump version"
+        exit 1
+    fi
+    echo
+fi
+
 # Get current version
 CURRENT_VERSION=$(python3 -c "
 import tomllib
@@ -30,6 +82,9 @@ print(data['project']['version'])
 ")
 
 echo -e "${BLUE}📋 Current version:${NC} $CURRENT_VERSION"
+if [ "$BUMP_VERSION" -eq 1 ]; then
+    echo -e "${BLUE}📈 Version was bumped using:${NC} --bump-part $BUMP_PART"
+fi
 echo -e "${BLUE}📦 This will:${NC}"
 echo "   1. Build a FULL DMG with essential models (~2.0GB)"
 echo "   2. Create a tagged release on GitHub"

@@ -31,15 +31,13 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 platform.system() == "Darwin" and platform.machine() == "arm64"
             )
 
-        # Model size mapping
+        # Model size mapping - simplified and optimized
         self.model_sizes = {
             "tiny": "ggml-tiny",
             "base": "ggml-base",
             "small": "ggml-small",
-            "medium": "ggml-medium",
-            "large": "ggml-large-v3",
-            "large-v2": "ggml-large-v2",
-            "large-v3": "ggml-large-v3",
+            "medium": "ggml-medium.en",  # English-only model (faster, smaller)
+            "large": "ggml-large-v3",  # Latest large model (best quality)
         }
 
     @property
@@ -79,13 +77,13 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             logger.info(f"Downloading whisper.cpp model: {model_name}")
             url = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{model_filename}"
 
-            # Model sizes for progress estimation
+            # Model sizes for progress estimation (approximate)
             model_sizes_mb = {
                 "ggml-tiny.bin": 75,
                 "ggml-base.bin": 142,
                 "ggml-small.bin": 466,
-                "ggml-medium.bin": 1533,
-                "ggml-large-v3.bin": 3094,
+                "ggml-medium.en.bin": 769,  # English-only medium model (smaller than multilingual)
+                "ggml-large-v3.bin": 3094,  # Latest large model
             }
 
             # Note: Expected size available in model_sizes_mb if needed for
@@ -410,6 +408,83 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             output_path.unlink(missing_ok=True)
             raise
 
+    def _find_whisper_binary(self) -> str | None:
+        """Find whisper.cpp binary, checking bundled location first, then system PATH."""
+        import os
+
+        # Check for bundled whisper.cpp first (for DMG distribution)
+        if os.environ.get("WHISPER_CPP_BUNDLED") == "true":
+            bundled_path = os.environ.get("WHISPER_CPP_PATH")
+            if bundled_path and Path(bundled_path).is_file():
+                try:
+                    subprocess.run(
+                        [bundled_path, "--help"],
+                        capture_output=True,
+                        check=True,
+                        timeout=5,
+                    )
+                    logger.info(f"Found bundled whisper binary: {bundled_path}")
+                    return bundled_path
+                except (
+                    subprocess.CalledProcessError,
+                    FileNotFoundError,
+                    subprocess.TimeoutExpired,
+                ):
+                    logger.warning(
+                        f"Bundled whisper binary not working: {bundled_path}"
+                    )
+
+        # Check for whisper.cpp in app bundle (alternative bundled location)
+        try:
+            # Get the current script's directory to find app bundle
+            current_dir = Path(__file__).parent
+            # Navigate up to find potential app bundle structure
+            for parent in [current_dir] + list(current_dir.parents):
+                potential_whisper = parent / "bin" / "whisper"
+                if potential_whisper.is_file():
+                    try:
+                        subprocess.run(
+                            [str(potential_whisper), "--help"],
+                            capture_output=True,
+                            check=True,
+                            timeout=5,
+                        )
+                        logger.info(
+                            f"Found app bundle whisper binary: {potential_whisper}"
+                        )
+                        return str(potential_whisper)
+                    except (
+                        subprocess.CalledProcessError,
+                        FileNotFoundError,
+                        subprocess.TimeoutExpired,
+                    ):
+                        continue
+        except Exception:
+            pass  # Continue to system PATH check
+
+        # Fall back to system PATH
+        for cmd_candidate in ["whisper-cli", "whisper-cpp", "whisper"]:
+            try:
+                subprocess.run(
+                    [cmd_candidate, "--help"],
+                    capture_output=True,
+                    check=True,
+                    timeout=5,
+                )
+                logger.info(f"Found system whisper binary: {cmd_candidate}")
+                return cmd_candidate
+            except (
+                subprocess.CalledProcessError,
+                FileNotFoundError,
+                subprocess.TimeoutExpired,
+            ):
+                continue
+
+        logger.warning(
+            "No whisper.cpp binary found in bundled locations or system PATH"
+        )
+        return None
+
     def _get_audio_duration(self, input_path: Path) -> float | None:
         """Get audio duration in seconds using ffprobe."""
         try:
@@ -503,23 +578,20 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
         temp_wav = None
         try:
-            # Try multiple common whisper.cpp binary names
-            whisper_cmd = None
-            for cmd_candidate in ["whisper-cli", "whisper-cpp", "whisper"]:
-                try:
-                    subprocess.run(
-                        [cmd_candidate, "--help"], capture_output=True, check=True
-                    )
-                    whisper_cmd = cmd_candidate
-                    logger.info(f"Found whisper binary: {whisper_cmd}")
-                    break
-                except (subprocess.CalledProcessError, FileNotFoundError):
-                    continue
+            # Try to find whisper.cpp binary (bundled first, then system)
+            whisper_cmd = self._find_whisper_binary()
 
             if not whisper_cmd:
-                raise Exception(
-                    "No whisper.cpp binary found. Please install whisper.cpp and ensure one of these binaries is in your PATH: "
-                    "whisper-cli, whisper-cpp, or whisper"
+                # Graceful fallback - don't crash the entire app
+                error_msg = (
+                    "Local transcription unavailable: whisper.cpp binary not found. "
+                    "Please install whisper.cpp or use cloud transcription instead."
+                )
+                logger.error(error_msg)
+                return ProcessorResult(
+                    success=False,
+                    errors=[error_msg],
+                    metadata={"fallback_suggestion": "Use cloud transcription"},
                 )
 
             if self.progress_callback:

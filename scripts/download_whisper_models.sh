@@ -11,9 +11,8 @@ declare -A MODEL_URLS=(
     ["tiny"]="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin"
     ["base"]="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
     ["small"]="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
-    ["medium"]="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin"
+    ["medium"]="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en.bin"
     ["large"]="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin"
-    ["large-v3"]="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin"
 )
 
 # Create models directory if it doesn't exist
@@ -25,8 +24,8 @@ if [ -z "$MODEL" ]; then
     echo "  tiny    - Fastest, least accurate (39M parameters, ~75 MB)"
     echo "  base    - Good balance (74M parameters, ~142 MB)"
     echo "  small   - Better accuracy (244M parameters, ~466 MB)"
-    echo "  medium  - Even better (769M parameters, ~1.5 GB)"
-    echo "  large   - Best accuracy (1550M parameters, ~3.1 GB)"
+    echo "  medium  - English-only, faster (769M parameters, ~769 MB)"
+    echo "  large   - Best accuracy, latest v3 (1550M parameters, ~3.1 GB)"
     echo ""
     echo "Usage: $0 <model_name>"
     echo "Example: $0 small"
@@ -49,12 +48,18 @@ if [ -z "${MODEL_URLS[$MODEL]}" ]; then
     exit 1
 fi
 
-# Construct filename
-if [ "$MODEL" == "large" ] || [ "$MODEL" == "large-v3" ]; then
-    FILENAME="ggml-large-v3.bin"
-else
-    FILENAME="ggml-${MODEL}.bin"
-fi
+# Construct filename based on model mappings
+case "$MODEL" in
+    "medium")
+        FILENAME="ggml-medium.en.bin"
+        ;;
+    "large")
+        FILENAME="ggml-large-v3.bin"
+        ;;
+    *)
+        FILENAME="ggml-${MODEL}.bin"
+        ;;
+esac
 
 # Check if already downloaded
 if [ -f "models/$FILENAME" ]; then

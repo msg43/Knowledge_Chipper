@@ -389,9 +389,19 @@ def install_ffmpeg_for_dmg(app_bundle_path: Path, quiet: bool = False) -> bool:
                 with open(setup_script, "w") as f:
                     f.write("#!/bin/bash\n")
                     f.write("# Setup script to add bundled FFMPEG to PATH\n")
-                    f.write(f'export FFMPEG_PATH="{bin_dir}/ffmpeg"\n')
-                    f.write(f'export FFPROBE_PATH="{bin_dir}/ffprobe"\n')
-                    f.write(f'export PATH="{bin_dir}:$PATH"\n')
+                    f.write("# Get the directory where this script is located\n")
+                    f.write(
+                        'APP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"\n'
+                    )
+                    f.write(
+                        'export FFMPEG_PATH="$APP_DIR/Library/Application Support/Knowledge_Chipper/bin/ffmpeg"\n'
+                    )
+                    f.write(
+                        'export FFPROBE_PATH="$APP_DIR/Library/Application Support/Knowledge_Chipper/bin/ffprobe"\n'
+                    )
+                    f.write(
+                        'export PATH="$APP_DIR/Library/Application Support/Knowledge_Chipper/bin:$PATH"\n'
+                    )
                 setup_script.chmod(0o755)
 
                 if not quiet:

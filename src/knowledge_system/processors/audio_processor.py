@@ -92,7 +92,7 @@ class AudioProcessor(BaseProcessor):
             "base": "small",
             "small": "medium",
             "medium": "large",
-            "large": "large",  # No upgrade from large
+            "large": "large",  # No upgrade from large (already the best)
         }
 
     @property

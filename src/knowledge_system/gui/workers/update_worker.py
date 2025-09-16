@@ -32,7 +32,9 @@ class UpdateWorker(QThread):
         try:
             # Always use the main repository path for updates
             # This avoids permission issues and path confusion with the app bundle
-            main_repo_path = Path.home() / "Projects" / "Knowledge_Chipper"
+            from ...utils.file_io import find_project_root
+
+            main_repo_path = find_project_root()
 
             # Look for the script in the main repository (preferred)
             script_path = main_repo_path / "scripts" / "build_macos_app.sh"

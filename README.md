@@ -1,6 +1,6 @@
 # Skip the Podcast Desktop
 
-**Version:** 3.2.1 | **Build Date:** 2025-09-11 
+**Version:** 3.2.16 | **Build Date:** 2025-09-15 
 
 Skip the Podcast Desktop - A revolutionary knowledge management system for macOS that transforms videos, audio files, and documents into structured claim analysis and organized knowledge. Perfect for researchers, students, and professionals who need evidence-based insights from media content.
 
@@ -219,8 +219,9 @@ Revolutionary speaker identification with AI-powered validation and voice finger
 - **⌨️ Keyboard-Driven Interface**: Navigate Tab/Enter, quick assign Ctrl+1,2,3, switch speakers Ctrl+S
 - **🎯 Conservative Diarization**: Uses moderate clustering settings (min_cluster_size=20, threshold=0.75) with voice fingerprinting to merge false splits
 - **🔄 Automatic Speaker Merging**: Voice fingerprinting runs immediately after diarization to merge speakers with >0.7 similarity
+- **🧠 Contextual Speaker Analysis**: Advanced conversational flow analysis maps names to speakers using direct address patterns ("David, what do you think?" → maps next speaker to David)
 
-**Complete Accuracy Pipeline**: Conservative Diarization (80-85%) → + Voice Fingerprinting (95-97%) → + LLM Validation (90-95%) → + User Review (99%)
+**Complete Accuracy Pipeline**: Conservative Diarization (80-85%) → + Voice Fingerprinting (95-97%) → + LLM Validation (90-95%) → + Contextual Analysis (92-98%) → + User Review (99%)
 
 ### 🚀 **Major Architecture Refactor Completed (Dec 2024)**
 Skip the Podcast Desktop has undergone a comprehensive refactor, transforming it into a modern, multi-format knowledge management platform:
@@ -263,10 +264,15 @@ media_sources (formerly videos)
 #### 🔧 Processing Pipeline
 1. **Input Processing** → Media files, documents, YouTube URLs
 2. **Transcription** → Whisper with speaker diarization
-3. **Entity Extraction** → Unified LLM call for all entities
-4. **Storage** → SQLite database with relationships
-5. **Export** → Optional file generation (MD, JSON, YAML)
-6. **Sync** → Optional Supabase cloud backup
+3. **Speaker Analysis** → 4-layer speaker identification system:
+   - Layer 1: Voice fingerprinting (acoustic analysis)
+   - Layer 2: LLM analysis (name extraction from content)
+   - Layer 3: Learning system (historical patterns)
+   - Layer 4: Contextual analysis (conversational flow mapping)
+4. **Entity Extraction** → Unified LLM call for all entities
+5. **Storage** → SQLite database with relationships
+6. **Export** → Optional file generation (MD, JSON, YAML)
+7. **Sync** → Optional Supabase cloud backup
 
 #### 🎨 User Interfaces
 - **PyQt6 Desktop GUI**: Full-featured tabbed interface

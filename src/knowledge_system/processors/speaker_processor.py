@@ -938,16 +938,35 @@ class SpeakerProcessor(BaseProcessor):
                 speaker_segments_for_llm, metadata
             )
 
+            # NEW: Apply contextual analysis to refine LLM suggestions
+            # This connects Layer 4 (Context Analysis) to the pipeline
+            contextual_suggestions = self._apply_conversational_context_analysis(
+                llm_suggestions, speaker_segments_for_llm, transcript_segments, metadata
+            )
+
+            # Use contextual suggestions if available, otherwise fall back to LLM suggestions
+            final_suggestions = (
+                contextual_suggestions if contextual_suggestions else llm_suggestions
+            )
+
             # Apply suggestions to speaker data objects
             for speaker_id, speaker_data in speaker_map.items():
-                if speaker_id in llm_suggestions:
-                    suggested_name, confidence = llm_suggestions[speaker_id]
+                if speaker_id in final_suggestions:
+                    suggested_name, confidence = final_suggestions[speaker_id]
                     speaker_data.suggested_name = suggested_name
                     speaker_data.confidence_score = confidence
-                    speaker_data.suggestion_method = "llm_analysis_batch"
+
+                    # Set suggestion method based on whether contextual analysis was applied
+                    if final_suggestions != llm_suggestions:
+                        speaker_data.suggestion_method = "contextual_analysis_enhanced"
+                    else:
+                        speaker_data.suggestion_method = "llm_analysis_batch"
+
                     speaker_data.suggestion_metadata = {
                         "llm_used": True,
                         "batch_processed": True,
+                        "contextual_analysis_applied": final_suggestions
+                        != llm_suggestions,
                         "total_speakers": len(speaker_map),
                         "metadata_fields": list(metadata.keys()) if metadata else [],
                     }
@@ -972,6 +991,177 @@ class SpeakerProcessor(BaseProcessor):
                 speaker_data.suggested_name = f"Speaker {i + 1}"
                 speaker_data.confidence_score = 0.1
                 speaker_data.suggestion_method = "emergency_fallback"
+
+    def _apply_conversational_context_analysis(
+        self,
+        llm_suggestions: dict[str, tuple[str, float]],
+        speaker_segments: dict[str, list[dict]],
+        transcript_segments: list[dict[str, Any]] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, tuple[str, float]] | None:
+        """
+        Apply Layer 4 contextual analysis to map extracted names to speakers
+        based on conversational flow and direct address patterns.
+
+        This is the missing link that handles scenarios like:
+        "I'm Robert Siegel. Today's guests are David Brooks and E.J. Dionne."
+        "David, what do you think?" -> Next speaker should be David
+
+        Args:
+            llm_suggestions: Initial name suggestions from LLM
+            speaker_segments: Speaker segments for analysis
+            transcript_segments: Full transcript segments with timing
+            metadata: Video/podcast metadata
+
+        Returns:
+            Refined suggestions with contextual mapping, or None if no improvements
+        """
+        try:
+            # Import the context analyzer (Layer 4)
+            from ..utils.speaker_intelligence import SpeakerContextAnalyzer
+
+            context_analyzer = SpeakerContextAnalyzer()
+
+            # Extract all suggested names from LLM
+            extracted_names = list({name for name, _ in llm_suggestions.values()})
+
+            logger.info(
+                f"🧠 Contextual analysis: {len(extracted_names)} names extracted: {extracted_names}"
+            )
+
+            # Build full transcript for analysis
+            if not transcript_segments:
+                # Reconstruct from speaker segments if needed
+                transcript_segments = []
+                for speaker_id, segments in speaker_segments.items():
+                    for seg in segments:
+                        transcript_segments.append(
+                            {
+                                "speaker": speaker_id,
+                                "text": seg["text"],
+                                "start": seg["start"],
+                                "end": seg["end"],
+                            }
+                        )
+                # Sort by start time
+                transcript_segments.sort(key=lambda x: x.get("start", 0))
+
+            # Analyze conversational flow
+            interaction_analysis = context_analyzer.analyze_speaker_interactions(
+                transcript_segments
+            )
+
+            # Look for direct address patterns that can map names to speakers
+            contextual_mapping = self._find_direct_address_mappings(
+                transcript_segments, extracted_names, interaction_analysis
+            )
+
+            if not contextual_mapping:
+                logger.info("🧠 No contextual improvements found, using LLM suggestions")
+                return None
+
+            # Apply contextual improvements to LLM suggestions
+            improved_suggestions = llm_suggestions.copy()
+            improvements_made = False
+
+            for speaker_id, mapped_name in contextual_mapping.items():
+                if speaker_id in improved_suggestions:
+                    original_name, original_confidence = improved_suggestions[
+                        speaker_id
+                    ]
+                    if mapped_name != original_name:
+                        # Contextual analysis suggests a different mapping
+                        improved_suggestions[speaker_id] = (
+                            mapped_name,
+                            min(original_confidence + 0.2, 0.95),
+                        )
+                        improvements_made = True
+                        logger.info(
+                            f"🧠 Contextual improvement: {speaker_id} '{original_name}' -> '{mapped_name}'"
+                        )
+
+            return improved_suggestions if improvements_made else None
+
+        except ImportError:
+            logger.debug(
+                "SpeakerContextAnalyzer not available, skipping contextual analysis"
+            )
+            return None
+        except Exception as e:
+            logger.warning(f"Error in contextual analysis: {e}")
+            return None
+
+    def _find_direct_address_mappings(
+        self,
+        transcript_segments: list[dict[str, Any]],
+        extracted_names: list[str],
+        interaction_analysis: dict[str, Any],
+    ) -> dict[str, str]:
+        """
+        Find direct address patterns like "David, what do you think?" followed by response.
+
+        This implements the core logic for your scenario:
+        1. Host introduces "David Brooks" and "E.J. Dionne"
+        2. Host says "David, what do you think?"
+        3. Next speaker should be mapped to "David Brooks"
+        """
+        try:
+            mappings = {}
+
+            # Look for direct address patterns in transcript
+            for i, segment in enumerate(transcript_segments):
+                text = segment.get("text", "").strip()
+                speaker = segment.get("speaker", "")
+
+                # Skip if this segment is too short
+                if len(text) < 10:
+                    continue
+
+                # Look for addressing patterns with names from extracted_names
+                for name in extracted_names:
+                    # Extract first name for addressing (David Brooks -> David)
+                    first_name = name.split()[0] if name else ""
+                    if len(first_name) < 2:
+                        continue
+
+                    # Pattern: "David, what do you think?" or "David, can you tell us"
+                    address_patterns = [
+                        rf"\b{re.escape(first_name)},?\s+(?:what's your answer|what do you think|your thoughts|can you|tell us|how do you)",
+                        rf"\b{re.escape(first_name)},?\s+(?:do you|would you|could you)",
+                        rf"(?:thanks|thank you),?\s+{re.escape(first_name)}\b",
+                    ]
+
+                    for pattern in address_patterns:
+                        if re.search(pattern, text, re.IGNORECASE):
+                            # Found direct address! Look for the next speaker
+                            next_speaker = self._find_next_different_speaker(
+                                transcript_segments, i, speaker
+                            )
+                            if next_speaker and next_speaker != speaker:
+                                mappings[next_speaker] = name
+                                logger.info(
+                                    f"🎯 Direct address mapping: '{first_name}' addressed -> {next_speaker} = '{name}'"
+                                )
+                                break
+
+            return mappings
+
+        except Exception as e:
+            logger.warning(f"Error finding direct address mappings: {e}")
+            return {}
+
+    def _find_next_different_speaker(
+        self,
+        transcript_segments: list[dict[str, Any]],
+        current_index: int,
+        current_speaker: str,
+    ) -> str | None:
+        """Find the next speaker who is different from the current speaker."""
+        for i in range(current_index + 1, len(transcript_segments)):
+            next_speaker = transcript_segments[i].get("speaker", "")
+            if next_speaker and next_speaker != current_speaker:
+                return next_speaker
+        return None
 
     def _suggest_speaker_name_enhanced(
         self,

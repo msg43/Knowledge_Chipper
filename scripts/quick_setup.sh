@@ -42,10 +42,18 @@ pip install -r requirements.txt
 pip install -e .
 pip install -e ".[gui]"
 
-# Copy config files
-echo "⚙️ Setting up configuration..."
-[ ! -f "config/settings.yaml" ] && cp config/settings.example.yaml config/settings.yaml
-[ ! -f "config/credentials.yaml" ] && cp config/credentials.example.yaml config/credentials.yaml
+# Set up machine-optimized configuration
+echo "⚙️ Setting up machine-optimized configuration..."
+if [ ! -f "config/settings.yaml" ]; then
+    # Try machine optimization first
+    if [ -f "scripts/generate_machine_config.py" ] && python scripts/generate_machine_config.py --output config/settings.yaml 2>/dev/null; then
+        echo "✅ Created machine-optimized configuration"
+    else
+        # Fallback to default
+        cp config/settings.example.yaml config/settings.yaml 2>/dev/null || echo "⚠️  Using minimal config"
+    fi
+fi
+[ ! -f "config/credentials.yaml" ] && cp config/credentials.example.yaml config/credentials.yaml 2>/dev/null
 
 # Create directories
 mkdir -p ~/Documents/KnowledgeSystem/{cache,transcripts,output,Reports/Logs}

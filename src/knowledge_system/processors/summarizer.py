@@ -96,20 +96,62 @@ class HCEPipeline:
         miner_prompt = Path(__file__).parent / "hce" / "prompts" / "miner.txt"
         miner_obj = Miner(miner_llm, miner_prompt)
 
-        # Mine candidates from each segment with progress reporting
+        # Mine candidates from segments with parallel processing
         candidates = []
         total_segments = len(episode.segments)
-        for i, seg in enumerate(episode.segments):
-            # Report progress for mining individual segments
-            segment_progress = round(
-                15.0 + (i / total_segments) * 25.0, 1
-            )  # 15% to 40%
-            report_progress(
-                "Mining claims",
-                segment_progress,
-                f"Processing segment {i+1}/{total_segments}",
+
+        # Try parallel processing if enabled and beneficial
+        try:
+            from .hce.parallel_processor import create_parallel_processor
+
+            if (
+                total_segments > 4
+            ):  # Only use parallel processing for substantial workloads
+                logger.info(f"Using parallel processing for {total_segments} segments")
+
+                parallel_processor = create_parallel_processor()
+
+                def mine_with_progress(seg):
+                    return miner_obj.mine_segment(seg)
+
+                def progress_callback(message):
+                    report_progress("Mining claims (parallel)", 30.0, message)
+
+                all_candidates = parallel_processor.process_parallel(
+                    episode.segments, mine_with_progress, progress_callback
+                )
+
+                # Flatten results
+                for candidate_list in all_candidates:
+                    if candidate_list:
+                        candidates.extend(candidate_list)
+            else:
+                # Fall back to sequential for small workloads
+                logger.info(
+                    f"Using sequential processing for {total_segments} segments (small workload)"
+                )
+                for i, seg in enumerate(episode.segments):
+                    segment_progress = round(15.0 + (i / total_segments) * 25.0, 1)
+                    report_progress(
+                        "Mining claims",
+                        segment_progress,
+                        f"Processing segment {i+1}/{total_segments}",
+                    )
+                    candidates.extend(miner_obj.mine_segment(seg))
+
+        except ImportError:
+            logger.info(
+                "Parallel processing not available, using sequential processing"
             )
-            candidates.extend(miner_obj.mine_segment(seg))
+            # Fall back to original sequential processing
+            for i, seg in enumerate(episode.segments):
+                segment_progress = round(15.0 + (i / total_segments) * 25.0, 1)
+                report_progress(
+                    "Mining claims",
+                    segment_progress,
+                    f"Processing segment {i+1}/{total_segments}",
+                )
+                candidates.extend(miner_obj.mine_segment(seg))
 
         logger.info(
             f"Mined {len(candidates)} candidate claims from {total_segments} segments"

@@ -49,6 +49,7 @@ for arg in "$@"; do
       ;;
     --clean)
       echo "🧹 Cleaning staging directory..."
+      SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
       rm -rf "$SCRIPT_DIR/.app_build"
       echo "✅ Staging directory cleaned"
       exit 0
@@ -369,6 +370,67 @@ echo "##PERCENT## 55 Verify critical dependencies"
 "$VENV_DIR/bin/python" -c "import psutil; print('✅ psutil:', psutil.__version__)" || { echo "❌ psutil missing, installing..."; "$VENV_DIR/bin/python" -m pip install psutil; }
 "$VENV_DIR/bin/python" -c "import openai; print('✅ OpenAI:', openai.__version__)" || { echo "❌ OpenAI missing, installing..."; "$VENV_DIR/bin/python" -m pip install openai; }
 
+# Fix Python symlinks for cross-machine compatibility
+echo "🔗 Making venv relocatable (fixing Python symlinks)..."
+# Find the system Python that was used to create the venv
+SYSTEM_PYTHON="$(command -v /opt/homebrew/bin/python3.13 || command -v python3.13 || true)"
+if [ ! -f "$SYSTEM_PYTHON" ]; then
+  # Last resort: look in common locations
+  for path in "/opt/homebrew/bin/python3.13" "/usr/local/bin/python3.13" "/usr/bin/python3"; do
+    if [ -f "$path" ]; then
+      SYSTEM_PYTHON="$path"
+      break
+    fi
+  done
+fi
+
+if [ -f "$SYSTEM_PYTHON" ]; then
+  echo "   📍 Using system Python binary: $SYSTEM_PYTHON"
+  # Verify the Python binary is the correct architecture
+  PYTHON_ARCH=$(file "$SYSTEM_PYTHON" | grep -o 'arm64\|x86_64' | head -1)
+  echo "   🏗️  Python architecture: $PYTHON_ARCH"
+  if [[ "$PYTHON_ARCH" != "arm64" ]] && [[ "$(uname -m)" == "arm64" ]]; then
+    echo "   ⚠️  WARNING: Python is $PYTHON_ARCH but system is arm64"
+  fi
+  # Create universal Python launchers instead of copying binaries
+  echo "   🚀 Creating universal Python launchers..."
+  for py_link in "$VENV_DIR/bin/python" "$VENV_DIR/bin/python3" "$VENV_DIR/bin/python3.13"; do
+    echo "   🔧 Processing: $(basename "$py_link")"
+    # Remove existing file/symlink if present
+    if [ -e "$py_link" ] || [ -L "$py_link" ]; then
+      echo "      ↳ Removing existing file/symlink"
+      rm -f "$py_link"
+    fi
+    # Create launcher script
+    echo "      ↳ Creating Python launcher"
+    bash "$SCRIPT_DIR/create_python_launcher.sh" "$py_link"
+    echo "      ✅ Created $(basename "$py_link") launcher"
+  done
+
+  # Verify the fix worked
+  if [ -f "$VENV_DIR/bin/python" ]; then
+    echo "   ✅ Python launchers successfully created"
+    echo "   ℹ️  App will auto-detect Python 3.13+ on user's system"
+  else
+    echo "   ❌ FAILED: Python launchers still missing"
+    exit 1
+  fi
+
+  # Add Python auto-installer and first launch helper
+  echo "   📦 Adding helper scripts..."
+  mkdir -p "$BUILD_MACOS_PATH/bin"
+  cp "$SCRIPT_DIR/python_auto_installer.sh" "$BUILD_MACOS_PATH/bin/"
+  cp "$SCRIPT_DIR/install_python.sh" "$BUILD_MACOS_PATH/bin/"
+  cp "$SCRIPT_DIR/first_launch_helper.sh" "$BUILD_MACOS_PATH/bin/"
+  chmod +x "$BUILD_MACOS_PATH/bin/python_auto_installer.sh"
+  chmod +x "$BUILD_MACOS_PATH/bin/install_python.sh"
+  chmod +x "$BUILD_MACOS_PATH/bin/first_launch_helper.sh"
+else
+  echo "❌ CRITICAL: Could not find any system Python binary to copy!"
+  echo "   This will cause the app to fail on other machines."
+  exit 1
+fi
+
 # CRITICAL: Verify the main package is importable in staging venv
 echo "🧪 Testing main package import in staging venv..."
 "$VENV_DIR/bin/python" -c "import knowledge_system; print('✅ knowledge_system package:', knowledge_system.__version__)" || {
@@ -425,6 +487,16 @@ cat > "/tmp/Info.plist" << EOF
     <true/>
     <key>LSRequiresNativeExecution</key>
     <true/>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Skip the Podcast Desktop needs access to your Documents folder to process and save transcribed files.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Skip the Podcast Desktop needs access to your Downloads folder to process media files you've downloaded.</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Skip the Podcast Desktop needs access to your Desktop to process and save transcribed files.</string>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>Skip the Podcast Desktop needs access to external drives to process media files stored on them.</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
 </dict>
 </plist>
 EOF
@@ -451,12 +523,25 @@ if [ -f "\$APP_DIR/version.txt" ]; then
     cat "\$APP_DIR/version.txt" >> "\$LOG_FILE"
 fi
 
+# Skip Gatekeeper check if installed via our installer
+if [ -f "\$HOME/.skip_podcast_clean_install" ]; then
+    echo "Clean install detected - skipping Gatekeeper checks" >> "\$LOG_FILE"
+fi
+
 # Check for bundled FFMPEG and set up environment
 if [ -f "\$APP_DIR/setup_bundled_ffmpeg.sh" ]; then
     echo "Setting up bundled FFMPEG..." >> "\$LOG_FILE"
     source "\$APP_DIR/setup_bundled_ffmpeg.sh"
     echo "FFMPEG_PATH: \$FFMPEG_PATH" >> "\$LOG_FILE"
     echo "FFPROBE_PATH: \$FFPROBE_PATH" >> "\$LOG_FILE"
+fi
+
+# Check for bundled whisper.cpp and set up environment
+if [ -f "\$APP_DIR/setup_bundled_whisper.sh" ]; then
+    echo "Setting up bundled whisper.cpp..." >> "\$LOG_FILE"
+    source "\$APP_DIR/setup_bundled_whisper.sh"
+    echo "WHISPER_CPP_PATH: \$WHISPER_CPP_PATH" >> "\$LOG_FILE"
+    echo "WHISPER_CPP_BUNDLED: \$WHISPER_CPP_BUNDLED" >> "\$LOG_FILE"
 fi
 
 # Check for bundled Pyannote model and set up environment
@@ -476,9 +561,12 @@ if [ -f "\$APP_DIR/setup_bundled_models.sh" ]; then
     echo "OLLAMA_HOME: \$OLLAMA_HOME" >> "\$LOG_FILE"
 fi
 
-# Set up Python environment
-source "\$APP_DIR/venv/bin/activate"
+# Set up Python environment - use manual setup to avoid hardcoded paths
+export VIRTUAL_ENV="\$APP_DIR/venv"
+export PATH="\$VIRTUAL_ENV/bin:\$PATH"
 export PYTHONPATH="\$APP_DIR/src:\$PYTHONPATH"
+unset PYTHONHOME
+hash -r 2>/dev/null
 cd "\$APP_DIR"
 
 # Log environment info
@@ -487,6 +575,13 @@ echo "PYTHONPATH: \$PYTHONPATH" >> "\$LOG_FILE"
 echo "Python version: \$("\$APP_DIR/venv/bin/python" --version)" >> "\$LOG_FILE"
 echo "Virtual env: \$VIRTUAL_ENV" >> "\$LOG_FILE"
 echo "Architecture: \$(arch)" >> "\$LOG_FILE"
+
+# Check if Python launcher exists and is executable
+if [ ! -x "\$APP_DIR/venv/bin/python" ]; then
+    echo "Python launcher not found or not executable" >> "\$LOG_FILE"
+    osascript -e 'display dialog "Application files are missing or corrupted. Please reinstall Skip the Podcast Desktop." buttons {"OK"} default button 1 with title "Installation Error" with icon stop'
+    exit 1
+fi
 
 # Initialize macOS paths on first run
 echo "Initializing macOS standard paths..." >> "\$LOG_FILE"
@@ -498,6 +593,86 @@ try:
 except Exception as e:
     print(f'Path initialization warning: {e}')
 " >> "\$LOG_FILE" 2>&1
+
+# Check if initialization worked (Python is available)
+if [ \$? -ne 0 ]; then
+    echo "Python initialization failed" >> "\$LOG_FILE"
+    # The Python launcher will show the installation dialog
+    exit 1
+fi
+
+# Check for Gatekeeper block (Disk Drill-style)
+if [ -f "\$APP_DIR/../../Info.plist" ]; then
+    # We're in an app bundle - check for quarantine
+    if xattr -p com.apple.quarantine "\$APP_DIR/../.." &>/dev/null; then
+        echo "Detected Gatekeeper quarantine" >> "\$LOG_FILE"
+
+        # Check if already authorized
+        if [ ! -f "\$HOME/.skip_the_podcast_desktop_authorized" ]; then
+            echo "Showing authorization dialog..." >> "\$LOG_FILE"
+
+            # Disk Drill-style authorization dialog
+            osascript << 'EOAUTH' 2>&1 | tee -a "\$LOG_FILE"
+-- Skip the Podcast Desktop - Gatekeeper Authorization
+
+set appBundle to (path to current application) as text
+set appPath to POSIX path of appBundle
+
+-- Professional authorization dialog
+display dialog "Skip the Podcast Desktop needs administrator permission to complete installation.
+
+This one-time authorization removes macOS security warnings, just like professional apps such as Disk Drill.
+
+You'll be prompted for your password." buttons {"Cancel", "Authorize"} default button "Authorize" with title "Administrator Permission Required" with icon caution
+
+if button returned of result is "Cancel" then
+    return "cancelled"
+end if
+
+-- Request admin privileges
+try
+    do shell script "
+        # Remove quarantine attribute
+        /usr/bin/xattr -cr '" & appPath & "' 2>&1
+        /usr/bin/xattr -dr com.apple.quarantine '" & appPath & "' 2>&1
+
+        # Add to Gatekeeper whitelist
+        /usr/sbin/spctl --add '" & appPath & "' 2>&1 || true
+
+        # Force Launch Services update
+        /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f '" & appPath & "' 2>&1
+
+        # Mark as authorized
+        /usr/bin/touch ~/.skip_the_podcast_desktop_authorized
+
+        echo 'Authorization successful'
+    " with administrator privileges
+
+    display notification "Skip the Podcast Desktop has been authorized!" with title "Success" sound name "Glass"
+
+    return "success"
+on error errMsg
+    if errMsg does not contain "-128" then
+        display alert "Authorization Failed" message errMsg as critical
+    end if
+    return "failed"
+end try
+EOAUTH
+
+            AUTH_RESULT=\$?
+            if [ \$AUTH_RESULT -ne 0 ] || grep -q "cancelled\\|failed" "\$LOG_FILE"; then
+                echo "Authorization cancelled or failed" >> "\$LOG_FILE"
+                osascript -e 'display dialog "To run Skip the Podcast Desktop manually:\n\n1. Right-click the app\n2. Select Open\n3. Click Open in the security dialog" buttons {"OK"} with icon caution'
+                exit 1
+            fi
+
+            echo "Authorization successful!" >> "\$LOG_FILE"
+            # The app needs to restart for changes to take effect
+            osascript -e 'display dialog "Authorization complete!\n\nPlease reopen Skip the Podcast Desktop." buttons {"OK"} default button "OK" with icon note'
+            exit 0
+        fi
+    fi
+fi
 
 echo "Launching GUI..." >> "\$LOG_FILE"
 if [[ "\$(uname -m)" == "arm64" ]]; then
@@ -616,14 +791,16 @@ echo "================================="
 if [ -n "$EXTRAS_STATUS" ]; then
   echo -e "$EXTRAS_STATUS"
 fi
+# Always create troubleshooting files for users (even if no failures)
+INSTALL_SCRIPT="$BUILD_MACOS_PATH/install_missing_features.sh"
+
 if [ -n "$FAILED_EXTRAS" ]; then
   echo ""
   echo "⚠️  Failed Installations:"
   echo -e "$FAILED_EXTRAS"
   echo ""
 
-  # Create easy installation script for users
-  INSTALL_SCRIPT="$BUILD_MACOS_PATH/install_missing_features.sh"
+  # Create installation script for failed features
   cat > "$INSTALL_SCRIPT" << 'EOF'
 #!/bin/bash
 # Install Missing Skip the Podcast Desktop Features
@@ -763,13 +940,138 @@ EOF
   echo ""
   echo "💡 Note: Failed features can also be installed automatically when first used."
   echo "   The app will download missing dependencies as needed."
+else
+  # Create installation script even when no failures (for future use)
+  cat > "$INSTALL_SCRIPT" << 'EOF'
+#!/bin/bash
+# Skip the Podcast Desktop - Feature Management
+# Run this script to check and install additional features
+
+APP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PYTHON_BIN="$APP_DIR/venv/bin/python"
+
+echo "🔧 Skip the Podcast Desktop - Feature Management"
+echo "==============================================="
+
+if [ ! -f "$PYTHON_BIN" ]; then
+    echo "❌ Python environment not found at: $PYTHON_BIN"
+    echo "Please reinstall Skip the Podcast Desktop"
+    exit 1
+fi
+
+echo "🐍 Using Python: $PYTHON_BIN"
+echo ""
+
+# Check current feature status
+echo "🔍 Checking installed features..."
+
+HCE_STATUS="❓"
+DIARIZATION_STATUS="❓"
+CUDA_STATUS="❓"
+
+if "$PYTHON_BIN" -c "import torch; import transformers" 2>/dev/null; then
+    HCE_STATUS="✅"
+else
+    HCE_STATUS="❌"
+fi
+
+if "$PYTHON_BIN" -c "import pyannote.audio" 2>/dev/null; then
+    DIARIZATION_STATUS="✅"
+else
+    DIARIZATION_STATUS="❌"
+fi
+
+if "$PYTHON_BIN" -c "import torch; print('CUDA Available:', torch.cuda.is_available())" 2>/dev/null | grep -q "True"; then
+    CUDA_STATUS="✅"
+else
+    CUDA_STATUS="❌"
+fi
+
+echo ""
+echo "📋 Feature Status:"
+echo "=================="
+echo "$HCE_STATUS HCE (Advanced Summarization)"
+echo "$DIARIZATION_STATUS Speaker Diarization"
+echo "$CUDA_STATUS CUDA Support"
+echo ""
+
+# Count missing features
+MISSING_COUNT=0
+if [ "$HCE_STATUS" = "❌" ]; then ((MISSING_COUNT++)); fi
+if [ "$DIARIZATION_STATUS" = "❌" ]; then ((MISSING_COUNT++)); fi
+if [ "$CUDA_STATUS" = "❌" ]; then ((MISSING_COUNT++)); fi
+
+if [ $MISSING_COUNT -eq 0 ]; then
+    echo "🎉 All features are installed and working!"
+    echo "💡 If you're having issues, try restarting the app"
+    exit 0
+fi
+
+echo "⚠️  $MISSING_COUNT feature(s) need installation"
+echo ""
+read -p "Install missing features? (y/N): " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "❌ Installation cancelled"
+    exit 0
+fi
+
+# Install missing features
+if [ "$HCE_STATUS" = "❌" ]; then
+    echo "📦 Installing HCE (Advanced Summarization)..."
+    "$PYTHON_BIN" -m pip install -e "$APP_DIR"[hce] || echo "❌ HCE installation failed"
+fi
+
+if [ "$DIARIZATION_STATUS" = "❌" ]; then
+    echo "📦 Installing Speaker Diarization..."
+    "$PYTHON_BIN" -m pip install -e "$APP_DIR"[diarization] || echo "❌ Diarization installation failed"
+fi
+
+if [ "$CUDA_STATUS" = "❌" ]; then
+    echo "📦 Installing CUDA Support..."
+    "$PYTHON_BIN" -m pip install -e "$APP_DIR"[cuda] || echo "❌ CUDA installation failed"
+fi
+
+echo ""
+echo "✅ Feature installation complete!"
+echo "🔄 Please restart Skip the Podcast Desktop to use new features"
+EOF
+
+  chmod +x "$INSTALL_SCRIPT"
+
+  # Create basic troubleshooting log
+  TROUBLESHOOT_LOG="$BUILD_MACOS_PATH/build_troubleshooting.log"
+  cat > "$TROUBLESHOOT_LOG" << EOF
+Skip the Podcast Desktop - Build Information
+===========================================
+Build Date: $(date)
+Version: $CURRENT_VERSION
+Build Flags: $@
+Python Version: $("$VENV_DIR/bin/python" --version 2>/dev/null || echo "Unknown")
+Platform: $(uname -a)
+
+BUILD STATUS: ✅ SUCCESS
+All features installed successfully during build.
+
+INSTALLED FEATURES:
+$(echo -e "$EXTRAS_STATUS")
+
+TROUBLESHOOTING TOOLS:
+=====================
+- Feature manager: install_missing_features.sh
+- App logs: ~/Library/Logs/Skip the Podcast Desktop/
+- Console.app: Search for "Skip the Podcast"
+
+For support: https://github.com/skipthepodcast/desktop/issues
+EOF
+
 fi
 echo "================================="
 
-# Install FFMPEG into the app bundle for DMG distribution [[memory:7770522]]
+# Install core dependencies into the app bundle for DMG distribution [[memory:7770522]]
 if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-0}" != "1" ]; }; then
   echo "🎬 Installing FFMPEG into app bundle for DMG distribution..."
-  echo "##PERCENT## 94 Installing FFMPEG"
+  echo "##PERCENT## 92 Installing FFMPEG"
 
   if [ -f "$SCRIPT_DIR/silent_ffmpeg_installer.py" ]; then
     # Use our silent installer to embed FFMPEG in the app bundle
@@ -780,6 +1082,21 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
     fi
   else
     echo "⚠️ Silent FFMPEG installer not found - DMG will not include FFMPEG"
+  fi
+
+  # Install whisper.cpp binary for local transcription
+  echo "🎤 Installing whisper.cpp binary for local transcription..."
+  echo "##PERCENT## 94 Installing whisper.cpp"
+
+  if [ -f "$SCRIPT_DIR/install_whisper_cpp_binary.py" ]; then
+    # Install whisper.cpp binary in the app bundle
+    if "$PYTHON_BIN" "$SCRIPT_DIR/install_whisper_cpp_binary.py" --app-bundle "$BUILD_APP_PATH" --quiet; then
+      echo "✅ whisper.cpp successfully installed in app bundle"
+    else
+      echo "⚠️ whisper.cpp installation failed - local transcription will require manual installation"
+    fi
+  else
+    echo "⚠️ whisper.cpp installer not found - local transcription will require manual installation"
   fi
 
   # Download and install Pyannote diarization model for internal company use
@@ -846,29 +1163,64 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
   cp -R "$BUILD_APP_PATH" "$DMG_STAGING/root/"
   ln -sf /Applications "$DMG_STAGING/root/Applications"
 
+  # Add the click-to-install script that bypasses Gatekeeper
+  if [ -f "$SCRIPT_DIR/INSTALL_AND_OPEN.command" ]; then
+    cp "$SCRIPT_DIR/INSTALL_AND_OPEN.command" "$DMG_STAGING/root/⚠️ CLICK ME TO INSTALL.command"
+    chmod +x "$DMG_STAGING/root/⚠️ CLICK ME TO INSTALL.command"
+  fi
+
+  # Also add the alternative installer
+  if [ -f "$SCRIPT_DIR/first_run_setup.sh" ]; then
+    cp "$SCRIPT_DIR/first_run_setup.sh" "$DMG_STAGING/root/Alternative Installer.command"
+    chmod +x "$DMG_STAGING/root/Alternative Installer.command"
+  fi
+
   # Create helpful README for DMG users
-  cat > "$DMG_STAGING/root/README - Install Missing Features.txt" << EOF
-Skip the Podcast Desktop - Missing Features Help
+  cat > "$DMG_STAGING/root/README - Installation.txt" << EOF
+Skip the Podcast Desktop - Quick Start Guide
 ===============================================
 
-If some features are missing after installation, you can easily install them:
+⚠️  IMPORTANT - USE THE INSTALLER TO AVOID SECURITY WARNINGS:
 
-🔗 EASY FIX - Double-click this file:
-   Skip the Podcast Desktop.app/Contents/MacOS/install_missing_features.sh
+📦 RECOMMENDED INSTALLATION:
+   Double-click "⚠️ CLICK ME TO INSTALL.command"
 
-📍 LOCATION:
-   1. Right-click "Skip the Podcast Desktop.app"
-   2. Select "Show Package Contents"
-   3. Navigate to Contents/MacOS/
-   4. Double-click "install_missing_features.sh"
+   This smart installer will:
+   ✓ Copy the app to Applications
+   ✓ Bypass ALL macOS security warnings
+   ✓ Configure permissions automatically
+   ✓ Launch the app when done
 
-🎯 WHAT IT FIXES:
+   You'll be asked for your password once during installation.
+
+🚫 IF YOU DRAG THE APP MANUALLY:
+   macOS will show security warnings ("app is damaged" etc.)
+   You'll need to right-click → Open → Open to bypass them
+
+💡 WHY USE THE INSTALLER?
+   • No security warnings or "damaged app" messages
+   • Automatic configuration (like professional apps)
+   • One-time password prompt during install
+   • App launches normally every time after
+
+⚙️ SYSTEM REQUIREMENTS:
+   • macOS 11.0 or later
+   • 4GB RAM recommended
+   • 2GB free disk space
+
+🔧 ADVANCED FEATURES:
+   Some features auto-install on first use:
    • Advanced Summarization (HCE)
    • Speaker Diarization (Multi-speaker audio)
-   • GPU Acceleration (CUDA)
+   • GPU Acceleration (CUDA - if compatible)
 
-⚡ AUTOMATIC OPTION:
-   Missing features will also auto-install when you first try to use them.
+📋 TROUBLESHOOTING:
+   If the app doesn't launch:
+   • Ensure you have macOS 11.0 or later
+   • Try the right-click → Open method
+   • Check ~/Library/Logs/Skip the Podcast Desktop/
+
+💡 The app includes an embedded Python runtime for maximum compatibility.
 
 💬 NEED HELP?
    Visit: https://github.com/skipthepodcast/desktop/issues

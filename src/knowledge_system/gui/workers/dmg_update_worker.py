@@ -226,14 +226,13 @@ class DMGUpdateWorker(QThread):
         try:
             logger.info(f"Installing DMG: {dmg_path}")
 
-            # Mount the DMG
+            # Mount the DMG and capture mount point from output
             mount_result = subprocess.run(
                 [
                     "hdiutil",
                     "attach",
                     str(dmg_path),
                     "-nobrowse",
-                    "-quiet",
                     "-readonly",
                 ],
                 capture_output=True,
@@ -242,12 +241,57 @@ class DMGUpdateWorker(QThread):
             )
 
             if mount_result.returncode != 0:
+                logger.error(
+                    f"hdiutil attach failed with return code {mount_result.returncode}"
+                )
+                logger.error(f"stdout: {mount_result.stdout}")
+                logger.error(f"stderr: {mount_result.stderr}")
                 raise Exception(f"Failed to mount DMG: {mount_result.stderr}")
 
-            # Find the mount point
-            mount_point = self._find_mount_point(dmg_path)
+            # Parse mount point directly from hdiutil attach output
+            mount_point = None
+            logger.info(f"hdiutil attach output: {mount_result.stdout}")
+
+            for line in mount_result.stdout.split("\n"):
+                if "/Volumes/" in line:
+                    # Extract mount point from output line
+                    # Format: /dev/diskXsY          	Apple_HFS                 	/Volumes/Volume Name
+                    parts = line.split("\t")
+                    if len(parts) >= 3:
+                        mount_path = parts[-1].strip()
+                        if mount_path and Path(mount_path).exists():
+                            mount_point = Path(mount_path)
+                            logger.info(
+                                f"Found mount point from hdiutil output: {mount_point}"
+                            )
+                            break
+
+            # If we couldn't parse mount point from output, use fallback detection
             if not mount_point:
-                raise Exception("Could not determine DMG mount point")
+                logger.warning(
+                    "Could not parse mount point from hdiutil output, using fallback detection"
+                )
+                mount_point = self._find_mount_point(dmg_path)
+
+            if not mount_point:
+                # Log additional debugging info
+                logger.error("Mount point detection failed completely")
+                logger.error(f"DMG path: {dmg_path}")
+                logger.error(f"hdiutil attach stdout: {mount_result.stdout}")
+                logger.error(f"hdiutil attach stderr: {mount_result.stderr}")
+
+                # List all currently mounted volumes for debugging
+                try:
+                    volumes_result = subprocess.run(
+                        ["ls", "-la", "/Volumes"], capture_output=True, text=True
+                    )
+                    logger.error(f"Current /Volumes contents: {volumes_result.stdout}")
+                except Exception:
+                    pass
+
+                raise Exception(
+                    "Could not determine DMG mount point - see logs for details"
+                )
 
             logger.info(f"DMG mounted at: {mount_point}")
 
@@ -298,31 +342,86 @@ class DMGUpdateWorker(QThread):
     def _find_mount_point(self, dmg_path: Path) -> Path | None:
         """Find where the DMG was mounted."""
         try:
-            # Get mount information
-            result = subprocess.run(
-                ["hdiutil", "info"], capture_output=True, text=True, timeout=10
+            logger.info(f"Looking for mount point for DMG: {dmg_path}")
+
+            # Method 1: Parse hdiutil attach output directly (most reliable)
+            # Re-run hdiutil attach to get the mount point info
+            attach_result = subprocess.run(
+                ["hdiutil", "info", "-plist"],
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
 
-            if result.returncode != 0:
-                return None
+            if attach_result.returncode == 0:
+                try:
+                    import plistlib
 
-            # Parse hdiutil info output to find our DMG's mount point
-            lines = result.stdout.split("\n")
-            dmg_name = dmg_path.stem  # Remove .dmg extension
+                    plist_data = plistlib.loads(attach_result.stdout.encode())
 
-            for i, line in enumerate(lines):
-                if str(dmg_path) in line:
-                    # Look for mount point in subsequent lines
-                    for j in range(i + 1, min(i + 10, len(lines))):
-                        if "/Volumes/" in lines[j]:
-                            mount_path = lines[j].strip().split()[-1]
-                            return Path(mount_path)
+                    # Look through mounted images
+                    for image in plist_data.get("images", []):
+                        image_path = image.get("image-path", "")
+                        if str(dmg_path) in image_path:
+                            # Find mount point from system entities
+                            for entity in image.get("system-entities", []):
+                                mount_point = entity.get("mount-point")
+                                if mount_point and Path(mount_point).exists():
+                                    logger.info(
+                                        f"Found mount point via plist: {mount_point}"
+                                    )
+                                    return Path(mount_point)
+                except Exception as e:
+                    logger.warning(f"Failed to parse hdiutil plist output: {e}")
 
-            # Fallback: check common mount point
-            common_mount = Path("/Volumes/Knowledge Chipper")
-            if common_mount.exists():
-                return common_mount
+            # Method 2: Use mount command to find all mounted volumes
+            mount_result = subprocess.run(
+                ["mount"], capture_output=True, text=True, timeout=10
+            )
 
+            if mount_result.returncode == 0:
+                for line in mount_result.stdout.split("\n"):
+                    if "/Volumes/" in line and (
+                        "Skip" in line or "Podcast" in line or "Knowledge" in line
+                    ):
+                        # Extract mount point from mount output
+                        # Format: /dev/diskXsY on /Volumes/VolumeName (hfs, local, nodev, nosuid, read-only, noowners, quarantine, mounted by uid=501)
+                        parts = line.split(" on ")
+                        if len(parts) >= 2:
+                            mount_info = parts[1].split(" (")[0]
+                            mount_path = Path(mount_info)
+                            if mount_path.exists():
+                                logger.info(
+                                    f"Found mount point via mount command: {mount_path}"
+                                )
+                                return mount_path
+
+            # Method 3: Check common mount point patterns
+            common_mount_points = [
+                "/Volumes/Skip the Podcast Desktop",
+                "/Volumes/Knowledge Chipper",
+                "/Volumes/Skip_the_Podcast_Desktop",
+                "/Volumes/Knowledge_Chipper",
+            ]
+
+            for mount_point in common_mount_points:
+                mount_path = Path(mount_point)
+                if mount_path.exists():
+                    logger.info(f"Found mount point via common patterns: {mount_path}")
+                    return mount_path
+
+            # Method 4: List all /Volumes and find the most recent one that looks relevant
+            volumes_dir = Path("/Volumes")
+            if volumes_dir.exists():
+                for volume in volumes_dir.iterdir():
+                    if volume.is_dir() and any(
+                        keyword in volume.name.lower()
+                        for keyword in ["skip", "podcast", "knowledge", "chipper"]
+                    ):
+                        logger.info(f"Found mount point via volume scan: {volume}")
+                        return volume
+
+            logger.error("Could not find mount point using any method")
             return None
 
         except Exception as e:
