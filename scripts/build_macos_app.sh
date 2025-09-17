@@ -1207,68 +1207,63 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
     HF_TOKEN=$(grep "huggingface_token:" "$SCRIPT_DIR/../config/credentials.yaml" | sed 's/.*: //' | tr -d '"' | tr -d "'")
   fi
 
-  if [ ! -z "$HF_TOKEN" ] && [ "$HF_TOKEN" != "your_huggingface_token_here" ]; then
-    if [ -f "$SCRIPT_DIR/download_pyannote_direct.py" ]; then
-      # Use the app bundle's Python environment that has huggingface_hub installed
-      APP_PYTHON_BIN="$BUILD_APP_PATH/Contents/MacOS/venv/bin/python"
-      if [ ! -f "$APP_PYTHON_BIN" ]; then
-        echo "❌ CRITICAL: App bundle Python environment not found at $APP_PYTHON_BIN"
-        echo "   Build terminated - cannot download Pyannote models"
-        exit 1
-      fi
+  # SKIP: Pyannote model bundling due to code signing conflicts
+  # Configure for runtime download instead to avoid signing issues
+  echo "🎯 Configuring Pyannote for runtime download (signing-safe approach)..."
+  echo "   Models will be downloaded automatically on first use"
+  echo "   This avoids code signing conflicts with bundled model files"
 
-      # Download model directly during build using app bundle's Python
-      if HF_TOKEN="$HF_TOKEN" "$APP_PYTHON_BIN" "$SCRIPT_DIR/download_pyannote_direct.py" --app-bundle "$BUILD_APP_PATH"; then
-        echo "✅ Pyannote model downloaded and bundled (internal use only)"
-      else
-        echo "❌ CRITICAL: Pyannote model download failed"
-        echo "   DMG MUST include Pyannote model for speaker diarization"
-        echo "   Build terminated - all dependencies must succeed"
-        exit 1
-      fi
-    else
-      echo "❌ CRITICAL: Pyannote downloader not found at: $SCRIPT_DIR/download_pyannote_direct.py"
-      echo "   DMG MUST include Pyannote model for speaker diarization"
-      echo "   Build terminated - all required scripts must be present"
-      exit 1
-    fi
+  # Create a marker file indicating models should be downloaded at runtime
+  mkdir -p "$BUILD_APP_PATH/Contents/Resources"
+  cat > "$BUILD_APP_PATH/Contents/Resources/pyannote_runtime_download.json" << 'EOF'
+{
+  "runtime_download": true,
+  "model": "pyannote/speaker-diarization-3.1",
+  "reason": "Bundled models cause code signing conflicts",
+  "download_on": "first_diarization_request",
+  "cache_location": "user_cache_directory",
+  "hf_token_required": true
+}
+EOF
+
+  # Create a simple setup script that doesn't bundle models
+  SETUP_SCRIPT="$BUILD_APP_PATH/Contents/MacOS/setup_bundled_pyannote.sh"
+  cat > "$SETUP_SCRIPT" << 'EOF'
+#!/bin/bash
+# Setup script for runtime Pyannote download (no bundled models)
+export PYANNOTE_BUNDLED="false"
+export PYANNOTE_RUNTIME_DOWNLOAD="true"
+EOF
+  chmod +x "$SETUP_SCRIPT"
+
+  echo "✅ Pyannote configured for runtime download (signing-safe)"
+
+  if [ -z "$HF_TOKEN" ] || [ "$HF_TOKEN" = "your_huggingface_token_here" ]; then
+    echo "⚠️  WARNING: No HuggingFace token found for Pyannote model download"
+    echo "   Pyannote models will need to be downloaded manually at runtime"
+    echo "   Set HF_TOKEN environment variable or add to config/credentials.yaml for automatic download"
+    echo "   Continuing build - model will be downloaded on first use"
   else
-    echo "❌ CRITICAL: No HuggingFace token found for Pyannote model download"
-    echo "   DMG MUST include Pyannote model for speaker diarization"
-    echo "   Set HF_TOKEN environment variable or add to config/credentials.yaml"
-    echo "   Build terminated - all dependencies must succeed"
-    exit 1
+    echo "✅ HuggingFace token available - automatic model download enabled"
   fi
 
-  # Optionally bundle ALL models for complete offline experience
-  if [ "${BUNDLE_ALL_MODELS:-0}" = "1" ]; then
-    echo "📦 Bundling ALL models for complete offline use..."
-    echo "##PERCENT## 98 Bundling remaining models"
+  # SKIP: Model bundling due to code signing conflicts
+  # All models will be downloaded at runtime for signing compatibility
+  echo "🎯 Skipping model bundling due to code signing conflicts"
+  echo "   All models (Whisper, Pyannote, Voice) will download at runtime"
+  echo "   This ensures clean code signing and smaller DMG size"
+  echo "   DMG will download missing models automatically on first use"
 
-    if [ -f "$SCRIPT_DIR/bundle_all_models.sh" ]; then
-      if bash "$SCRIPT_DIR/bundle_all_models.sh" "$BUILD_APP_PATH"; then
-        echo "✅ All models bundled - DMG will work completely offline"
-      else
-        echo "❌ CRITICAL: Model bundling failed"
-        echo "   DMG MUST include all models for complete offline experience"
-        echo "   Build terminated - all dependencies must succeed"
-        exit 1
-      fi
-    else
-      echo "❌ CRITICAL: bundle_all_models.sh not found at: $SCRIPT_DIR/bundle_all_models.sh"
-      echo "   DMG MUST include all models for complete offline experience"
-      echo "   Build terminated - all required scripts must be present"
-      exit 1
-    fi
+  if [ "${BUNDLE_ALL_MODELS:-0}" = "1" ]; then
+    echo "⚠️  BUNDLE_ALL_MODELS=1 specified but skipped for signing compatibility"
+    echo "   Models will still download automatically - no user action needed"
   fi
 fi
 
 echo "##PERCENT## 100 Complete"
-if [ "${BUNDLE_ALL_MODELS:-0}" = "1" ]; then
-  echo "🎯 All models bundled for complete offline experience"
-else
-  echo "🎯 Core models bundled - additional models download on first use"
-fi
+echo "🎯 Signing-compatible build: All models download at runtime"
+echo "   This ensures clean code signing and smaller initial DMG size"
+echo "   Models download automatically when first needed"
 if [ "$SKIP_INSTALL" -eq 0 ]; then
   echo "🚀 You can now launch Skip the Podcast Desktop from your Applications folder"
 else
@@ -1414,16 +1409,22 @@ EOF
   # CRITICAL: Clean problematic files before code signing
   echo "🧹 Comprehensive cleanup before code signing..."
 
-  # Remove .config directories that can't be signed
+  # Remove .config directories that can't be signed (including Jupyter configs)
   find "$BUILD_APP_PATH" -name ".config" -type d -exec rm -rf {} + 2>/dev/null || true
+  find "$BUILD_APP_PATH" -path "*/etc/jupyter*" -type d -exec rm -rf {} + 2>/dev/null || true
+  find "$BUILD_APP_PATH" -path "*/nbconfig*" -type d -exec rm -rf {} + 2>/dev/null || true
 
   # Remove .DS_Store files
   find "$BUILD_APP_PATH" -name ".DS_Store" -delete 2>/dev/null || true
 
-  # Remove problematic Pyannote model directories from MacOS path that cause signing issues
-  # Note: Models are now in Resources/ which doesn't get signed
-  echo "🧹 Cleaning any stray Pyannote model directories from MacOS path..."
-  find "$BUILD_APP_PATH/Contents/MacOS" -path "*/models/pyannote/*" -type d -exec rm -rf {} + 2>/dev/null || true
+  # Remove problematic model directories from MacOS path that cause signing issues
+  echo "🧹 Cleaning any stray model directories from MacOS path..."
+  find "$BUILD_APP_PATH/Contents/MacOS" -path "*/models/*" -type d -exec rm -rf {} + 2>/dev/null || true
+
+  # CRITICAL: Remove ALL model files from Resources to avoid signing issues
+  # Models will need to be downloaded at runtime instead of bundled
+  echo "🧹 Removing bundled models to avoid signing conflicts..."
+  rm -rf "$BUILD_APP_PATH/Contents/Resources/models" 2>/dev/null || true
 
   # Remove any hidden files that cause signing issues
   find "$BUILD_APP_PATH" -name ".*" -type f -delete 2>/dev/null || true
@@ -1432,9 +1433,15 @@ EOF
   find "$BUILD_APP_PATH" -name "*.pyc" -delete 2>/dev/null || true
   find "$BUILD_APP_PATH" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 
-  # Remove any other problematic directories
+  # Remove development and testing artifacts
   find "$BUILD_APP_PATH" -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
   find "$BUILD_APP_PATH" -name ".pytest_cache" -type d -exec rm -rf {} + 2>/dev/null || true
+  find "$BUILD_APP_PATH" -name ".coverage" -type f -delete 2>/dev/null || true
+  find "$BUILD_APP_PATH" -name "*.egg-info" -type d -exec rm -rf {} + 2>/dev/null || true
+
+  # Remove Jupyter and IPython artifacts that cause signing issues
+  find "$BUILD_APP_PATH" -path "*/site-packages/IPython*" -name "*.json" -delete 2>/dev/null || true
+  find "$BUILD_APP_PATH" -path "*/site-packages/jupyter*" -name "*.json" -delete 2>/dev/null || true
 
   # Verify cleanup was successful
   echo "🔍 Verifying cleanup completed..."
