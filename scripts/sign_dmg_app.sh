@@ -86,6 +86,8 @@ if ! codesign --force --deep --sign - "$APP_PATH"; then
     find "$APP_PATH" -name ".config" -type d 2>/dev/null && echo "   Found .config directories (should be excluded)"
     find "$APP_PATH" -name ".DS_Store" 2>/dev/null && echo "   Found .DS_Store files (should be cleaned)"
     find "$APP_PATH" -name "*.pyc" 2>/dev/null | head -5 && echo "   Found .pyc files (normal)"
+    find "$APP_PATH" -path "*/models/pyannote/*" -type f 2>/dev/null | head -3 && echo "   Found Pyannote model files (known signing issue)"
+    find "$APP_PATH" -name ".*" -type f 2>/dev/null | head -5 && echo "   Found hidden files (may cause issues)"
 
     echo "   Build terminated - main app bundle signing must succeed"
     exit 1

@@ -235,13 +235,17 @@ CONFIG_EOF
 cp requirements.txt "$BUILD_MACOS_PATH/"
 cp scripts/build_macos_app.sh "$BUILD_MACOS_PATH/"
 # Safety: remove any stray packaging metadata if present
-echo "🧹 Removing stray packaging metadata..."
-if ! find "$BUILD_MACOS_PATH/src" -type d \( -name '*.egg-info' -o -name '*.dist-info' \) -prune -exec rm -rf {} + 2>/dev/null; then
-  echo "❌ CRITICAL: Failed to remove packaging metadata from app bundle"
-  echo "   This could cause version conflicts or import errors"
-  echo "   Build terminated - all cleanup operations must succeed"
-  exit 1
-fi
+  echo "🧹 Removing stale packaging metadata from source..."
+  # Clean up source directory first to prevent stale metadata issues
+  find "$PROJECT_ROOT/src" -type d \( -name '*.egg-info' -o -name '*.dist-info' \) -exec rm -rf {} + 2>/dev/null || true
+
+  echo "🧹 Removing packaging metadata from app bundle..."
+  if ! find "$BUILD_MACOS_PATH/src" -type d \( -name '*.egg-info' -o -name '*.dist-info' \) -prune -exec rm -rf {} + 2>/dev/null; then
+    echo "❌ CRITICAL: Failed to remove packaging metadata from app bundle"
+    echo "   This could cause version conflicts or import errors"
+    echo "   Build terminated - all cleanup operations must succeed"
+    exit 1
+  fi
 
 # Explicitly exclude large model files from the app bundle
 echo "🚫 Excluding large model files from app bundle..."
@@ -1408,7 +1412,7 @@ EOF
   echo "✅ DMG created and verified at: $DMG_PATH"
 
   # CRITICAL: Clean problematic files before code signing
-  echo "🧹 Cleaning problematic files before code signing..."
+  echo "🧹 Comprehensive cleanup before code signing..."
 
   # Remove .config directories that can't be signed
   find "$BUILD_APP_PATH" -name ".config" -type d -exec rm -rf {} + 2>/dev/null || true
@@ -1416,9 +1420,41 @@ EOF
   # Remove .DS_Store files
   find "$BUILD_APP_PATH" -name ".DS_Store" -delete 2>/dev/null || true
 
-  # Remove other problematic files
+  # Remove problematic Pyannote model directories from MacOS path that cause signing issues
+  # Note: Models are now in Resources/ which doesn't get signed
+  echo "🧹 Cleaning any stray Pyannote model directories from MacOS path..."
+  find "$BUILD_APP_PATH/Contents/MacOS" -path "*/models/pyannote/*" -type d -exec rm -rf {} + 2>/dev/null || true
+
+  # Remove any hidden files that cause signing issues
+  find "$BUILD_APP_PATH" -name ".*" -type f -delete 2>/dev/null || true
+
+  # Remove Python cache files
   find "$BUILD_APP_PATH" -name "*.pyc" -delete 2>/dev/null || true
   find "$BUILD_APP_PATH" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+
+  # Remove any other problematic directories
+  find "$BUILD_APP_PATH" -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
+  find "$BUILD_APP_PATH" -name ".pytest_cache" -type d -exec rm -rf {} + 2>/dev/null || true
+
+  # Verify cleanup was successful
+  echo "🔍 Verifying cleanup completed..."
+  REMAINING_ISSUES=0
+
+  if find "$BUILD_APP_PATH" -name ".config" -type d 2>/dev/null | grep -q .; then
+    echo "⚠️  WARNING: .config directories still present after cleanup"
+    REMAINING_ISSUES=$((REMAINING_ISSUES + 1))
+  fi
+
+  if find "$BUILD_APP_PATH" -name ".DS_Store" 2>/dev/null | grep -q .; then
+    echo "⚠️  WARNING: .DS_Store files still present after cleanup"
+    REMAINING_ISSUES=$((REMAINING_ISSUES + 1))
+  fi
+
+  if [ $REMAINING_ISSUES -gt 0 ]; then
+    echo "⚠️  $REMAINING_ISSUES cleanup issues remain - signing may still fail"
+  else
+    echo "✅ Cleanup verification passed - app bundle ready for signing"
+  fi
 
   echo "✅ Cleanup completed"
 

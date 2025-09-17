@@ -40,17 +40,11 @@ def download_pyannote_for_dmg(app_bundle_path: Path, hf_token: str = None) -> bo
             print("   Set HF_TOKEN env var or add to config/credentials.yaml")
             return False
 
-        # Calculate destination in app bundle
+        # Calculate destination outside main app bundle to avoid signing issues
+        # Place models in Resources folder which doesn't need signing
         contents_path = app_bundle_path / "Contents"
-        macos_path = contents_path / "MacOS"
-        models_dir = (
-            macos_path
-            / "Library"
-            / "Application Support"
-            / "Knowledge_Chipper"
-            / "models"
-            / "pyannote"
-        )
+        resources_path = contents_path / "Resources"
+        models_dir = resources_path / "models" / "pyannote"
         models_dir.mkdir(parents=True, exist_ok=True)
 
         # Download directly to app bundle
@@ -70,11 +64,11 @@ def download_pyannote_for_dmg(app_bundle_path: Path, hf_token: str = None) -> bo
 
         print("✅ Pyannote model downloaded successfully!")
 
-        # Create setup script
+        # Create setup script in MacOS directory
         setup_script = macos_path / "setup_bundled_pyannote.sh"
         with open(setup_script, "w") as f:
             f.write("#!/bin/bash\n")
-            f.write("# Setup script for bundled pyannote model\n")
+            f.write("# Setup script for bundled pyannote model (Resources location)\n")
             f.write(f'export PYANNOTE_MODEL_PATH="{models_dir}"\n')
             f.write('export PYANNOTE_BUNDLED="true"\n')
             f.write('export PYANNOTE_INTERNAL_USE="true"\n')
