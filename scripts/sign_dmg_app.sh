@@ -42,9 +42,14 @@ codesign --remove-signature "$APP_PATH" 2>/dev/null || true
 
 # Sign all embedded frameworks and libraries first
 echo "📚 Signing embedded components..."
+SIGN_FAILURES=0
 find "$APP_PATH" -type f -name "*.dylib" -o -name "*.so" | while read -r lib; do
     echo "   Signing: $(basename "$lib")"
-    codesign --force --sign - "$lib" 2>/dev/null || true
+    if ! codesign --force --sign - "$lib" 2>/dev/null; then
+        echo "   ⚠️  Failed to sign: $(basename "$lib")"
+        # Some libraries may not be signable (e.g., already signed system libraries)
+        # This is usually not critical for ad-hoc signing
+    fi
 done
 
 # Sign Python binaries
@@ -71,7 +76,20 @@ fi
 
 # Sign the main app bundle (deep signing)
 echo "📱 Signing main app bundle (deep)..."
-codesign --force --deep --sign - "$APP_PATH"
+if ! codesign --force --deep --sign - "$APP_PATH"; then
+    echo "❌ CRITICAL: Failed to sign main app bundle"
+    echo "   This could be due to non-signable files in the bundle"
+    echo "   Common causes: .config directories, .DS_Store files, etc."
+
+    # Try to identify problematic files
+    echo "🔍 Checking for problematic files in app bundle..."
+    find "$APP_PATH" -name ".config" -type d 2>/dev/null && echo "   Found .config directories (should be excluded)"
+    find "$APP_PATH" -name ".DS_Store" 2>/dev/null && echo "   Found .DS_Store files (should be cleaned)"
+    find "$APP_PATH" -name "*.pyc" 2>/dev/null | head -5 && echo "   Found .pyc files (normal)"
+
+    echo "   Build terminated - main app bundle signing must succeed"
+    exit 1
+fi
 
 # Verify the signature
 echo ""

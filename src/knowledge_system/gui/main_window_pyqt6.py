@@ -137,6 +137,10 @@ class MainWindow(QMainWindow):
         # Load session state after UI is set up
         self._load_session()
 
+        # Check for first-time Ollama setup (skip during testing)
+        if not os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
+            QTimer.singleShot(2000, self._check_first_time_ollama_setup)
+
         # Check for updates if enabled (skip during testing)
         # Note: Update check disabled to prevent 404 errors during testing
         # Defer update check to prevent thread safety issues during initialization
@@ -593,6 +597,116 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.warning(f"Failed to show first-run FFmpeg dialog: {e}")
 
+    def _check_first_time_ollama_setup(self) -> None:
+        """Check if this is a first-time install and force Ollama setup."""
+        try:
+            from pathlib import Path
+
+            from ..utils.ollama_manager import get_ollama_manager
+            from .core.settings_manager import get_gui_settings_manager
+
+            gui = get_gui_settings_manager()
+            ollama_manager = get_ollama_manager()
+
+            # Check if we've already set up Ollama
+            ollama_setup_done = gui.get_value("⚙️ Settings", "ollama_setup_done", False)
+
+            # Check for fresh install markers that indicate this is a new installation
+            fresh_install_markers = [
+                Path.home() / ".skip_the_podcast_desktop_installed",
+                Path.home() / ".skip_the_podcast_desktop_authorized",
+            ]
+
+            is_fresh_install = any(marker.exists() for marker in fresh_install_markers)
+
+            if ollama_setup_done and not is_fresh_install:
+                return  # Already set up and not a fresh install
+
+            # Check if Ollama is already installed and running
+            is_installed, _ = ollama_manager.is_installed()
+            is_running = ollama_manager.is_service_running()
+
+            if is_installed and is_running:
+                # Ollama is working, just mark as set up
+                gui.set_value("⚙️ Settings", "ollama_setup_done", True)
+                gui.save()
+                logger.info("✅ Ollama already working - setup marked complete")
+                return
+
+            # Force Ollama installation/setup for new installations
+            if is_fresh_install or not is_installed:
+                logger.info("🦙 Fresh install detected - forcing Ollama setup")
+                self._force_ollama_installation()
+            elif is_installed and not is_running:
+                logger.info("🦙 Ollama installed but not running - starting service")
+                self._start_ollama_service()
+
+        except Exception as e:
+            logger.warning(f"Failed to check first-time Ollama setup: {e}")
+
+    def _force_ollama_installation(self) -> None:
+        """Force Ollama installation on fresh installs."""
+        try:
+            from ..utils.ollama_manager import get_ollama_manager
+            from .legacy_dialogs import OllamaInstallDialog
+
+            ollama_manager = get_ollama_manager()
+
+            # Check if already installed
+            is_installed, _ = ollama_manager.is_installed()
+            if is_installed:
+                self._start_ollama_service()
+                return
+
+            # Show installation dialog
+            dialog = OllamaInstallDialog(self)
+            dialog.setWindowTitle("Welcome - Setting up AI Engine")
+
+            # Make it clear this is required for the app to work
+            if hasattr(dialog, "description_label"):
+                dialog.description_label.setText(
+                    "Skip the Podcast Desktop requires Ollama for AI-powered features.\n"
+                    "This will download and install Ollama (~200MB) for local AI processing."
+                )
+
+            result = dialog.exec()
+
+            if result == dialog.DialogCode.Accepted:
+                logger.info("✅ Ollama installation completed")
+                # Mark setup as done
+                from .core.settings_manager import get_gui_settings_manager
+
+                gui = get_gui_settings_manager()
+                gui.set_value("⚙️ Settings", "ollama_setup_done", True)
+                gui.save()
+            else:
+                logger.warning("⚠️ User declined Ollama installation")
+
+        except Exception as e:
+            logger.error(f"Failed to force Ollama installation: {e}")
+
+    def _start_ollama_service(self) -> None:
+        """Start Ollama service if installed but not running."""
+        try:
+            from ..utils.ollama_manager import get_ollama_manager
+
+            ollama_manager = get_ollama_manager()
+            success, message = ollama_manager.start_service()
+
+            if success:
+                logger.info("✅ Ollama service started successfully")
+                # Mark setup as done
+                from .core.settings_manager import get_gui_settings_manager
+
+                gui = get_gui_settings_manager()
+                gui.set_value("⚙️ Settings", "ollama_setup_done", True)
+                gui.save()
+            else:
+                logger.warning(f"Failed to start Ollama service: {message}")
+
+        except Exception as e:
+            logger.error(f"Failed to start Ollama service: {e}")
+
     def _check_first_run_model_setup(self) -> None:
         """Check if this is first run and offer model download setup."""
         try:
@@ -787,6 +901,13 @@ def launch_gui() -> None:
         # Check and request macOS permissions if needed
         if sys.platform == "darwin":
             try:
+                # Log comprehensive security status for debugging
+                from knowledge_system.utils.security_verification import (
+                    log_security_status,
+                )
+
+                log_security_status()
+
                 # First check if we need Full Disk Access for better functionality
                 from knowledge_system.utils.macos_fda_helper import (
                     ensure_fda_on_startup,

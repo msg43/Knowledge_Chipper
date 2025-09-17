@@ -976,6 +976,27 @@ class AudioProcessor(BaseProcessor):
         self, input_data: Any, dry_run: bool = False, **kwargs: Any
     ) -> ProcessorResult:
         """Process audio with automatic retry and failure logging."""
+        # SECURITY CHECK: Verify app authorization before transcription
+        try:
+            from knowledge_system.utils.security_verification import (
+                ensure_secure_before_transcription,
+            )
+
+            ensure_secure_before_transcription()
+        except ImportError:
+            logger.warning(
+                "Security verification module not available - proceeding with transcription"
+            )
+        except Exception as e:
+            logger.error(f"Security verification failed: {e}")
+            return ProcessorResult(
+                success=False,
+                errors=[
+                    f"App not properly authorized for transcription: {e}. Please restart the app and complete the authorization process."
+                ],
+                dry_run=dry_run,
+            )
+
         # Extract parameters from kwargs for backwards compatibility
         device = kwargs.get("device", self.device)
 

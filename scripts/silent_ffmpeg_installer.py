@@ -244,20 +244,41 @@ class SilentFFmpegInstaller:
                         # Optional: ensure architecture compatibility before install (macOS only)
                         if system == "darwin":
                             try:
-                                archs = subprocess.run(
-                                    ["lipo", "-archs", str(ffmpeg_src)],
+                                # Use 'file' command which is more reliable than lipo
+                                file_result = subprocess.run(
+                                    ["file", str(ffmpeg_src)],
                                     capture_output=True,
                                     text=True,
                                 )
-                                archs_out = (
-                                    (archs.stdout or archs.stderr or "").strip().lower()
-                                )
-                                if machine == "arm64" and "arm64" not in archs_out:
-                                    raise RuntimeError(
-                                        "Incompatible architecture: x86_64-only candidate on arm64"
-                                    )
+                                file_output = (file_result.stdout or "").strip().lower()
+
+                                if machine == "arm64":
+                                    if (
+                                        "arm64" not in file_output
+                                        and "aarch64" not in file_output
+                                    ):
+                                        if (
+                                            "x86_64" in file_output
+                                            or "i386" in file_output
+                                        ):
+                                            raise RuntimeError(
+                                                "Incompatible architecture: x86_64-only candidate on arm64"
+                                            )
+                                        # If we can't determine arch, proceed with runtime validation
+                                elif machine == "x86_64":
+                                    if (
+                                        "x86_64" not in file_output
+                                        and "i386" not in file_output
+                                    ):
+                                        if (
+                                            "arm64" in file_output
+                                            or "aarch64" in file_output
+                                        ):
+                                            raise RuntimeError(
+                                                "Incompatible architecture: arm64-only candidate on x86_64"
+                                            )
                             except FileNotFoundError:
-                                # lipo not available; rely on run-time validation below
+                                # 'file' command not available; rely on run-time validation below
                                 pass
 
                         # Step 5: Install (80%)
@@ -329,6 +350,7 @@ class SilentFFmpegInstaller:
 
                 except Exception as e:  # Try next release
                     last_error = e
+                    self.progress_callback(f"❌ Release {idx+1} failed: {str(e)}", 50)
                     if idx < len(releases) - 1:
                         self.progress_callback(
                             "↩️ Candidate failed, trying next source…", 60
@@ -336,7 +358,7 @@ class SilentFFmpegInstaller:
                         continue
                     # All candidates failed
                     raise RuntimeError(
-                        "All FFMPEG sources failed. Installation cannot continue."
+                        f"All FFMPEG sources failed. Last error: {str(e)}"
                     ) from last_error
 
         except Exception as e:

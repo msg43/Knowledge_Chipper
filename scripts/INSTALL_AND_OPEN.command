@@ -84,8 +84,8 @@ if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ Installation Complete!${NC}"
     echo ""
 
-    # Create marker that we've done a clean install
-    touch ~/.skip_podcast_clean_install
+    # Create authorization marker to indicate proper installation
+    touch ~/.skip_the_podcast_desktop_authorized
 
     echo -e "${BLUE}Launching Skip the Podcast Desktop...${NC}"
 

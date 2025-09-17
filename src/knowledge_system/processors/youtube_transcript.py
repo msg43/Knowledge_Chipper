@@ -1164,10 +1164,45 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                     result = processor.process(audio_file, **process_kwargs)
 
                     if not result.success:
-                        logger.error(f"AudioProcessor failed: {result.errors}")
-                        report_progress(
-                            f"❌ Diarization failed: {'; '.join(result.errors)}"
+                        error_details = (
+                            "; ".join(result.errors)
+                            if result.errors
+                            else "Unknown error"
                         )
+                        logger.error(f"AudioProcessor failed: {error_details}")
+
+                        # Provide detailed error message with specific guidance
+                        detailed_error = f"❌ Diarization failed: {error_details}"
+
+                        # Add specific guidance based on error type
+                        if "No module named 'pyannote'" in error_details:
+                            detailed_error += "\n💡 Missing pyannote.audio dependency - install with: pip install pyannote.audio"
+                        elif (
+                            "Authentication" in error_details
+                            or "401" in error_details
+                            or "403" in error_details
+                        ):
+                            detailed_error += "\n💡 HuggingFace authentication failed - check your token in Settings → API Keys"
+                        elif (
+                            "pyannote/speaker-diarization" in error_details
+                            and "not found" in error_details
+                        ):
+                            detailed_error += "\n💡 Model access denied - accept the license at https://huggingface.co/pyannote/speaker-diarization-3.1"
+                        elif (
+                            "Connection" in error_details
+                            or "timeout" in error_details
+                            or "network" in error_details.lower()
+                        ):
+                            detailed_error += "\n💡 Network issue - check internet connection and try again"
+                        elif "CUDA" in error_details or "GPU" in error_details:
+                            detailed_error += "\n💡 GPU error - try switching to CPU processing in settings"
+                        elif (
+                            "ffmpeg" in error_details.lower()
+                            or "ffprobe" in error_details.lower()
+                        ):
+                            detailed_error += "\n💡 FFmpeg missing or not in PATH - ensure FFmpeg is properly installed"
+
+                        report_progress(detailed_error)
                         return None
 
                     if not result.data:
@@ -1286,7 +1321,48 @@ class YouTubeTranscriptProcessor(BaseProcessor):
 
         except Exception as e:
             logger.error(f"Diarization processing failed: {e}")
-            report_progress(f"❌ Diarization failed: {e}")
+
+            # Provide detailed error message with specific guidance
+            error_str = str(e)
+            detailed_error = f"❌ Diarization failed: {error_str}"
+
+            # Add specific guidance based on error type
+            if "No module named 'pyannote'" in error_str:
+                detailed_error += "\n💡 Missing pyannote.audio dependency - install with: pip install pyannote.audio"
+            elif (
+                "Authentication" in error_str
+                or "401" in error_str
+                or "403" in error_str
+            ):
+                detailed_error += "\n💡 HuggingFace authentication failed - check your token in Settings → API Keys"
+            elif "pyannote/speaker-diarization" in error_str and (
+                "not found" in error_str or "access" in error_str.lower()
+            ):
+                detailed_error += "\n💡 Model access denied - accept the license at https://huggingface.co/pyannote/speaker-diarization-3.1"
+            elif (
+                "Connection" in error_str
+                or "timeout" in error_str
+                or "network" in error_str.lower()
+            ):
+                detailed_error += (
+                    "\n💡 Network issue - check internet connection and try again"
+                )
+            elif "CUDA" in error_str or "GPU" in error_str:
+                detailed_error += (
+                    "\n💡 GPU error - try switching to CPU processing in settings"
+                )
+            elif "ffmpeg" in error_str.lower() or "ffprobe" in error_str.lower():
+                detailed_error += "\n💡 FFmpeg missing or not in PATH - ensure FFmpeg is properly installed"
+            elif (
+                "Permission denied" in error_str or "access denied" in error_str.lower()
+            ):
+                detailed_error += (
+                    "\n💡 Permission issue - check file/directory permissions"
+                )
+            elif "disk" in error_str.lower() or "space" in error_str.lower():
+                detailed_error += "\n💡 Disk space issue - check available storage"
+
+            report_progress(detailed_error)
             return None
 
     def _format_simple_timestamp(self, seconds: float) -> str:
@@ -1334,6 +1410,30 @@ class YouTubeTranscriptProcessor(BaseProcessor):
     ) -> ProcessorResult:
         """Process YouTube URLs to extract transcripts."""
         try:
+            # SECURITY CHECK: Verify app authorization if diarization is enabled
+            if enable_diarization:
+                try:
+                    from knowledge_system.utils.security_verification import (
+                        ensure_secure_before_transcription,
+                    )
+
+                    ensure_secure_before_transcription()
+                except ImportError:
+                    logger.warning(
+                        "Security verification module not available - proceeding with YouTube processing"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Security verification failed for YouTube processing with diarization: {e}"
+                    )
+                    return ProcessorResult(
+                        success=False,
+                        errors=[
+                            f"App not properly authorized for diarization: {e}. Please restart the app and complete the authorization process."
+                        ],
+                        dry_run=dry_run,
+                    )
+
             # Check for cancellation at the start
             if cancellation_token and cancellation_token.is_cancelled():
                 return ProcessorResult(

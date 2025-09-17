@@ -45,92 +45,175 @@ class WhisperCppInstaller:
             )
             return "x86_64"
 
-    def get_whisper_cpp_release_url(self) -> tuple[str, str]:
-        """Get the appropriate whisper.cpp release URL for macOS."""
-        arch = self.detect_architecture()
+    def get_whisper_cpp_source_url(self) -> tuple[str, str]:
+        """Get whisper.cpp source code URL for compilation."""
+        # Use stable release source code
+        version = "v1.7.6"
+        base_url = f"https://github.com/ggerganov/whisper.cpp/archive/refs/tags/{version}.tar.gz"
+        filename = f"whisper.cpp-{version}.tar.gz"
+        return base_url, filename
 
-        # Use stable release from whisper.cpp GitHub releases
-        base_url = "https://github.com/ggerganov/whisper.cpp/releases/download/v1.5.4"
-
-        if arch == "arm64":
-            # Apple Silicon (M1/M2/M3)
-            filename = "whisper-v1.5.4-bin-macos-arm64.zip"
-        else:
-            # Intel Mac
-            filename = "whisper-v1.5.4-bin-macos-x64.zip"
-
-        return f"{base_url}/{filename}", filename
-
-    def download_and_extract(self, url: str, filename: str) -> bool:
-        """Download and extract whisper.cpp binary."""
+    def download_and_compile(self, url: str, filename: str) -> bool:
+        """Download whisper.cpp source and compile for macOS."""
         try:
-            self.log(f"Downloading whisper.cpp from {url}")
+            self.log(f"Downloading whisper.cpp source from {url}")
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
-                zip_path = temp_path / filename
+                tarball_path = temp_path / filename
 
-                # Download
-                urllib.request.urlretrieve(url, zip_path)
-                self.log(f"Downloaded {filename} ({zip_path.stat().st_size // 1024}KB)")
+                # Download source
+                urllib.request.urlretrieve(url, tarball_path)
+                self.log(
+                    f"Downloaded {filename} ({tarball_path.stat().st_size // 1024}KB)"
+                )
 
-                # Extract
+                # Extract source
                 extract_path = temp_path / "extracted"
                 extract_path.mkdir()
 
-                # Use system unzip command
-                subprocess.run(
-                    ["unzip", "-q", str(zip_path), "-d", str(extract_path)], check=True
-                )
+                # Extract tarball
+                import tarfile
 
-                # Find the whisper binary (could be in subdirectory)
-                whisper_binary = None
-                for binary_path in extract_path.rglob("whisper"):
-                    if binary_path.is_file() and os.access(binary_path, os.X_OK):
-                        whisper_binary = binary_path
-                        break
+                with tarfile.open(tarball_path, "r:gz") as tar:
+                    tar.extractall(extract_path)
 
-                if not whisper_binary:
+                # Find the source directory
+                source_dirs = list(extract_path.glob("whisper.cpp-*"))
+                if not source_dirs:
                     self.log(
-                        "Error: whisper binary not found in downloaded package",
+                        "❌ CRITICAL: Could not find whisper.cpp source directory",
                         force=True,
                     )
                     return False
 
-                # Copy to app bundle
-                target_path = self.bin_path / "whisper"
-                shutil.copy2(whisper_binary, target_path)
-                target_path.chmod(0o755)
+                source_dir = source_dirs[0]
+                self.log(f"Found source directory: {source_dir}")
 
-                self.log(f"✅ Installed whisper binary to {target_path}")
+                # Check for required build tools
+                if not shutil.which("make"):
+                    self.log("❌ CRITICAL: 'make' command not found", force=True)
+                    self.log(
+                        "   Install Xcode Command Line Tools: xcode-select --install",
+                        force=True,
+                    )
+                    return False
+
+                if not shutil.which("g++") and not shutil.which("clang++"):
+                    self.log("❌ CRITICAL: No C++ compiler found", force=True)
+                    self.log(
+                        "   Install Xcode Command Line Tools: xcode-select --install",
+                        force=True,
+                    )
+                    return False
+
+                # Build whisper.cpp
+                self.log("Compiling whisper.cpp for macOS...")
+                build_result = subprocess.run(
+                    ["make", "-j", str(os.cpu_count() or 4)],
+                    cwd=source_dir,
+                    capture_output=True,
+                    text=True,
+                )
+
+                if build_result.returncode != 0:
+                    self.log("❌ CRITICAL: whisper.cpp compilation failed", force=True)
+                    self.log(f"   Build stdout: {build_result.stdout}", force=True)
+                    self.log(f"   Build stderr: {build_result.stderr}", force=True)
+                    return False
+
+                # Find the compiled binary - check in build directory
+                build_dir = source_dir / "build" / "bin"
+                possible_binaries = ["whisper-cli", "main", "whisper"]
+                whisper_binary = None
+
+                # First check in build/bin directory (modern CMake build)
+                if build_dir.exists():
+                    for binary_name in possible_binaries:
+                        candidate = build_dir / binary_name
+                        if candidate.exists() and candidate.is_file():
+                            whisper_binary = candidate
+                            self.log(f"Found compiled binary: build/bin/{binary_name}")
+                            break
+
+                # Fallback to root directory (old make builds)
+                if not whisper_binary:
+                    for binary_name in possible_binaries:
+                        candidate = source_dir / binary_name
+                        if candidate.exists() and candidate.is_file():
+                            whisper_binary = candidate
+                            self.log(f"Found compiled binary: {binary_name}")
+                            break
+
+                if not whisper_binary:
+                    self.log(
+                        "❌ CRITICAL: Compiled whisper binary not found", force=True
+                    )
+                    self.log(
+                        f"   Checked for: {', '.join(possible_binaries)}", force=True
+                    )
+                    self.log(
+                        f"   In directories: {source_dir}, {build_dir}", force=True
+                    )
+                    # List what binaries were actually created
+                    if build_dir.exists():
+                        binaries_found = [
+                            f.name
+                            for f in build_dir.iterdir()
+                            if f.is_file() and f.stat().st_mode & 0o111
+                        ]
+                        self.log(
+                            f"   Found build/bin executables: {binaries_found}",
+                            force=True,
+                        )
+                    root_binaries = [
+                        f.name
+                        for f in source_dir.iterdir()
+                        if f.is_file() and f.stat().st_mode & 0o111
+                    ]
+                    self.log(f"   Found root executables: {root_binaries}", force=True)
+                    return False
 
                 # Verify the binary works
                 try:
-                    result = subprocess.run(
-                        [str(target_path), "--help"],
+                    test_result = subprocess.run(
+                        [str(whisper_binary), "--help"],
                         capture_output=True,
                         text=True,
                         timeout=10,
                     )
-                    if result.returncode == 0:
-                        self.log("✅ Binary verification successful")
-                        return True
-                    else:
+                    if test_result.returncode != 0:
                         self.log(
-                            f"⚠️ Binary verification failed (exit code {result.returncode})",
+                            "❌ CRITICAL: Compiled whisper binary doesn't work",
                             force=True,
                         )
                         return False
                 except subprocess.TimeoutExpired:
-                    self.log("⚠️ Binary verification timeout", force=True)
+                    self.log("❌ CRITICAL: Compiled whisper binary hangs", force=True)
                     return False
 
+                # Create bin directory and copy binary
+                self.bin_path.mkdir(parents=True, exist_ok=True)
+                dest_path = self.bin_path / "whisper"
+
+                shutil.copy2(whisper_binary, dest_path)
+                dest_path.chmod(0o755)
+
+                # Get binary info
+                arch = self.detect_architecture()
+                file_size = dest_path.stat().st_size // 1024
+
+                self.log(f"✅ whisper.cpp compiled and installed successfully")
+                self.log(f"   Binary: {dest_path} ({file_size}KB)")
+                self.log(f"   Architecture: {arch}")
+                return True
+
         except Exception as e:
-            self.log(f"Error downloading whisper.cpp: {e}", force=True)
+            self.log(f"❌ CRITICAL: Error compiling whisper.cpp: {e}", force=True)
             return False
 
     def create_bundled_whisper_script(self) -> None:
-        """Create setup script for bundled whisper.cpp."""
+        """Create setup script for bundled whisper.cpp binary."""
         setup_script = self.macos_path / "setup_bundled_whisper.sh"
 
         script_content = """#!/bin/bash
@@ -153,21 +236,53 @@ export WHISPER_CPP_BUNDLED="true"
     def install(self) -> bool:
         """Install whisper.cpp binary for DMG distribution."""
         if platform.system() != "Darwin":
-            self.log("Error: This installer is for macOS only", force=True)
+            self.log("❌ CRITICAL: This installer is for macOS only", force=True)
             return False
 
         self.log("Installing whisper.cpp binary for DMG distribution...")
 
-        url, filename = self.get_whisper_cpp_release_url()
+        url, filename = self.get_whisper_cpp_source_url()
 
-        if self.download_and_extract(url, filename):
+        if self.download_and_compile(url, filename):
             self.create_bundled_whisper_script()
             self.log("✅ whisper.cpp installation complete!")
             self.log(f"   Binary location: {self.bin_path / 'whisper'}")
             return True
         else:
-            self.log("❌ whisper.cpp installation failed", force=True)
-            return False
+            # Check if whisper.cpp is available via system installation
+            import shutil
+
+            system_whisper = shutil.which("whisper")
+            if system_whisper:
+                self.log(
+                    "⚠️ Pre-built whisper.cpp not available, but found system installation"
+                )
+                self.log(f"   System whisper.cpp: {system_whisper}")
+                # Create symlink or copy to app bundle
+                import os
+
+                try:
+                    target_path = self.bin_path / "whisper"
+                    os.makedirs(self.bin_path, exist_ok=True)
+                    if os.path.exists(target_path):
+                        os.remove(target_path)
+                    shutil.copy2(system_whisper, target_path)
+                    os.chmod(target_path, 0o755)
+                    self.create_bundled_whisper_script()
+                    self.log("✅ whisper.cpp copied from system installation")
+                    return True
+                except Exception as e:
+                    self.log(f"❌ Failed to copy system whisper.cpp: {e}", force=True)
+
+            self.log("❌ CRITICAL: whisper.cpp installation failed", force=True)
+            self.log(
+                "   Neither pre-built binaries nor system installation available",
+                force=True,
+            )
+            self.log(
+                "   Build terminated - whisper.cpp is a core requirement", force=True
+            )
+            return False  # Fail the build - no fallbacks allowed
 
 
 def install_whisper_cpp_for_dmg(app_bundle_path: Path, quiet: bool = False) -> bool:

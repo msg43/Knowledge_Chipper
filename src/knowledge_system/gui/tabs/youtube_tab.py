@@ -535,8 +535,16 @@ class YouTubeExtractionWorker(QThread):
                             self.url_completed.emit(url, False, failure_msg)
 
                 except Exception as e:
+                    import traceback
+
                     error_msg = str(e)
+                    full_traceback = traceback.format_exc()
                     logger.error(f"Error processing {url}: {error_msg}")
+                    logger.error(f"Full traceback:\n{full_traceback}")
+                    # Also emit detailed error to GUI log
+                    self.log_message.emit(f"🐛 DETAILED ERROR for {url}:")
+                    self.log_message.emit(f"Error: {error_msg}")
+                    self.log_message.emit(f"Traceback:\n{full_traceback}")
                     results["failed"] += 1
                     results["failed_urls"].append(url)
 
@@ -568,9 +576,15 @@ class YouTubeExtractionWorker(QThread):
             self.extraction_finished.emit(results)
 
         except Exception as e:
+            import traceback
+
             error_msg = f"YouTube extraction failed: {str(e)}"
+            full_traceback = traceback.format_exc()
             logger.error(error_msg)
-            self.extraction_error.emit(error_msg)
+            logger.error(f"Fatal exception traceback:\n{full_traceback}")
+            # Emit detailed error
+            detailed_error = f"{error_msg}\n\nFull traceback:\n{full_traceback}"
+            self.extraction_error.emit(detailed_error)
             self.progress_updated.emit(
                 0, len(self.urls), f"💥 Fatal error: {error_msg}", 0
             )

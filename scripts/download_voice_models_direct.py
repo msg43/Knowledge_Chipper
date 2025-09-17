@@ -43,11 +43,17 @@ def download_huggingface_model(
         return False
 
 
-def download_speechbrain_model(model_name: str, target_dir: Path) -> bool:
-    """Download a SpeechBrain model."""
+def download_speechbrain_model(
+    model_name: str, target_dir: Path, python_executable: str = None
+) -> bool:
+    """Download a SpeechBrain model using the specified Python environment."""
     try:
         # Ensure the target directory exists
         target_dir.mkdir(parents=True, exist_ok=True)
+
+        # Use the provided Python executable or fall back to system Python
+        if python_executable is None:
+            python_executable = sys.executable
 
         # Create a temporary Python script to download the model
         temp_script = target_dir / "download_speechbrain.py"
@@ -58,31 +64,87 @@ import sys
 from pathlib import Path
 
 # Set cache directory
-os.environ["SPEECHBRAIN_CACHE"] = str(Path("{target_dir}") / "speechbrain")
+cache_dir = Path("{target_dir}") / "speechbrain"
+model_dir = cache_dir / "{model_name.split('/')[-1]}"
+os.environ["SPEECHBRAIN_CACHE"] = str(cache_dir)
 
 try:
-    from speechbrain.pretrained import EncoderClassifier
+    from huggingface_hub import hf_hub_download
 
-    print("📥 Downloading {model_name}...")
-    model = EncoderClassifier.from_hparams(
-        source="{model_name}",
-        savedir=str(Path("{target_dir}") / "speechbrain" / "{model_name.split('/')[-1]}")
-    )
+    print("📥 Downloading {model_name} files manually...")
+
+    # List of required model files
+    required_files = [
+        'embedding_model.ckpt',
+        'classifier.ckpt',
+        'label_encoder.txt',
+        'mean_var_norm_emb.ckpt',
+        'hyperparams.yaml',
+        'config.json'
+    ]
+
+    # Create model directory
+    model_dir.mkdir(parents=True, exist_ok=True)
+
+    # Download each required file
+    for filename in required_files:
+        print(f"  Downloading {{filename}}...")
+        try:
+            downloaded_path = hf_hub_download(
+                repo_id="{model_name}",
+                filename=filename,
+                cache_dir=str(cache_dir.parent),
+                local_dir=str(model_dir),
+                local_dir_use_symlinks=False
+            )
+            print(f"  ✓ {{filename}} downloaded to {{downloaded_path}}")
+        except Exception as e:
+            print(f"  ❌ Failed to download {{filename}}: {{e}}")
+            sys.exit(1)
+
     print("✅ {model_name} downloaded successfully")
+
+    # Verify all files exist with correct sizes
+    missing_files = []
+    empty_files = []
+    for filename in required_files:
+        file_path = model_dir / filename
+        if not file_path.exists():
+            missing_files.append(filename)
+        elif file_path.stat().st_size == 0:
+            empty_files.append(filename)
+        else:
+            print(f"  ✓ {{filename}} verified ({{file_path.stat().st_size}} bytes)")
+
+    critical_errors = missing_files + empty_files
+    if critical_errors:
+        print(f"❌ CRITICAL ERROR: Invalid model files:")
+        if missing_files:
+            print(f"  Missing files: {{missing_files}}")
+        if empty_files:
+            print(f"  Empty files: {{empty_files}}")
+        print(f"❌ SpeechBrain model download FAILED - core files missing or corrupt")
+        print(f"   Build must terminate - ALL files are required for voice fingerprinting")
+        sys.exit(1)
+    else:
+        print(f"✓ All model files verified in: {{model_dir}}")
+        print(f"✓ Model ready for use")
 
 except Exception as e:
     print(f"❌ Error downloading {model_name}: {{e}}")
+    import traceback
+    traceback.print_exc()
     sys.exit(1)
 """
 
         with open(temp_script, "w") as f:
             f.write(script_content)
 
-        # Run the script
+        # Run the script with the specified Python environment
         import subprocess
 
         result = subprocess.run(
-            [sys.executable, str(temp_script)], capture_output=True, text=True
+            [python_executable, str(temp_script)], capture_output=True, text=True
         )
 
         # Clean up
@@ -93,6 +155,10 @@ except Exception as e:
             return True
         else:
             print(f"❌ Error downloading {model_name}: {result.stderr}")
+            if result.stderr:
+                print(f"   stderr: {result.stderr}")
+            if result.stdout:
+                print(f"   stdout: {result.stdout}")
             return False
 
     except Exception as e:
@@ -120,6 +186,15 @@ def download_voice_models_for_dmg(
     voice_models_dir = macos_path / ".cache" / "knowledge_chipper" / "voice_models"
     voice_models_dir.mkdir(parents=True, exist_ok=True)
 
+    # Get the app bundle's Python executable (required for SpeechBrain)
+    app_python_bin = macos_path / "venv" / "bin" / "python"
+    if not app_python_bin.exists():
+        print(
+            f"❌ CRITICAL: App bundle Python environment not found at {app_python_bin}"
+        )
+        print("   Cannot download SpeechBrain models without app bundle environment")
+        return False
+
     success_count = 0
     total_models = 2
 
@@ -130,9 +205,11 @@ def download_voice_models_for_dmg(
     ):
         success_count += 1
 
-    # 2. Download ECAPA-TDNN model (SpeechBrain)
+    # 2. Download ECAPA-TDNN model (SpeechBrain) - REQUIRES app bundle Python
     ecapa_dir = voice_models_dir / "speechbrain"
-    if download_speechbrain_model("speechbrain/spkrec-ecapa-voxceleb", ecapa_dir):
+    if download_speechbrain_model(
+        "speechbrain/spkrec-ecapa-voxceleb", ecapa_dir, str(app_python_bin)
+    ):
         success_count += 1
 
     # Create voice models setup script
@@ -179,15 +256,12 @@ export VOICE_FINGERPRINTING_ENABLED="true"
         )
         print("🎯 97% accuracy voice fingerprinting will be available offline")
         return True
-    elif success_count > 0:
-        print(
-            f"⚠️ {success_count}/{total_models} voice models downloaded (~{total_size_mb}MB)"
-        )
-        print("🎯 Partial voice fingerprinting capabilities will be available")
-        return True
     else:
-        print("❌ No voice fingerprinting models downloaded")
-        print("🎯 Voice fingerprinting will use basic features only (~85% accuracy)")
+        print(
+            f"❌ CRITICAL: Voice model download failed ({success_count}/{total_models} models)"
+        )
+        print("   All voice models are required for core functionality")
+        print("   Build terminated - all dependencies must succeed")
         return False
 
 
@@ -198,43 +272,89 @@ def install_voice_dependencies_in_bundle(app_bundle_path: Path) -> bool:
         python_bin = macos_path / "venv" / "bin" / "python"
 
         if not python_bin.exists():
-            print(
-                "⚠️ Python environment not found in app bundle - skipping dependency installation"
-            )
-            print("    Dependencies will be installed on first use")
-            return True  # Don't fail the build, just skip deps
+            print("❌ CRITICAL: Python environment not found in app bundle")
+            print(f"   Expected: {python_bin}")
+            print("   Cannot install voice fingerprinting dependencies")
+            return False
 
         print("📦 Installing voice fingerprinting dependencies...")
 
-        # Install voice fingerprinting requirements
+        # Voice fingerprinting requirements (most already installed via diarization)
+        # Format: (import_name, package_name, version)
         voice_requirements = [
-            "librosa>=0.10.0",
-            "torch>=2.0.0",
-            "torchaudio>=2.0.0",
-            "transformers>=4.35.0",
-            "speechbrain>=0.5.0",
-            "scikit-learn>=1.3.0",
-            "soundfile>=0.12.0",
-            "huggingface_hub>=0.16.0",
+            ("librosa", "librosa", ">=0.10.0"),
+            ("torch", "torch", ">=2.0.0"),
+            ("torchaudio", "torchaudio", ">=2.0.0"),
+            ("transformers", "transformers", ">=4.35.0"),
+            ("speechbrain", "speechbrain", ">=0.5.0"),
+            ("sklearn", "scikit-learn", ">=1.3.0"),
+            ("soundfile", "soundfile", ">=0.12.0"),
+            ("huggingface_hub", "huggingface_hub", ">=0.16.0"),
         ]
 
         import subprocess
 
-        for requirement in voice_requirements:
+        failed_deps = []
+
+        for import_name, package_name, version in voice_requirements:
+            # First check if package is already installed
+            check_result = subprocess.run(
+                [
+                    str(python_bin),
+                    "-c",
+                    f"import {import_name}; print(f'{package_name} already available')",
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            if check_result.returncode == 0:
+                print(f"  ✅ {package_name} already available")
+                continue
+
+            # Install if not available
+            requirement = f"{package_name}{version}"
             print(f"  Installing {requirement}...")
             result = subprocess.run(
-                [str(python_bin), "-m", "pip", "install", requirement, "--quiet"],
+                [
+                    str(python_bin),
+                    "-m",
+                    "pip",
+                    "install",
+                    requirement,
+                    "--quiet",
+                    "--no-warn-script-location",
+                ],
                 capture_output=True,
+                text=True,
             )
 
             if result.returncode != 0:
-                print(f"⚠️ Failed to install {requirement}: {result.stderr.decode()}")
+                print(f"❌ Failed to install {requirement}")
+                stderr_output = result.stderr.strip()
+                if "externally-managed-environment" in stderr_output:
+                    print(
+                        f"   Error: Using wrong Python environment (system instead of app bundle)"
+                    )
+                    print(f"   This indicates the venv is misconfigured")
+                else:
+                    print(f"   Error: {stderr_output}")
+                failed_deps.append(requirement)
 
-        print("✅ Voice fingerprinting dependencies installed")
+        if failed_deps:
+            print(
+                f"❌ CRITICAL: Failed to install {len(failed_deps)}/{len(voice_requirements)} voice dependencies:"
+            )
+            for dep in failed_deps:
+                print(f"   - {dep}")
+            print("   Voice fingerprinting will not work offline")
+            return False
+
+        print("✅ Voice fingerprinting dependencies installed successfully")
         return True
 
     except Exception as e:
-        print(f"❌ Error installing dependencies: {e}")
+        print(f"❌ CRITICAL: Error installing voice dependencies: {e}")
         return False
 
 
@@ -271,20 +391,19 @@ def main():
     # Install dependencies if requested
     if args.install_deps:
         if not install_voice_dependencies_in_bundle(args.app_bundle):
-            success = False
+            print("❌ CRITICAL: Voice dependency installation failed")
+            print("   Build must terminate - all dependencies must succeed")
+            sys.exit(1)
 
     # Download models
     if not download_voice_models_for_dmg(args.app_bundle, hf_token):
-        success = False
+        print("❌ CRITICAL: Voice model download failed")
+        print("   Build must terminate - all models must be bundled")
+        sys.exit(1)
 
-    if success:
-        print("🎉 Voice fingerprinting models ready for DMG bundle!")
-        print("   Users will have 97% accuracy voice matching out of the box")
-    else:
-        print("⚠️ Voice fingerprinting setup incomplete")
-        print("   Some features may require internet on first use")
-
-    sys.exit(0 if success else 1)
+    print("🎉 Voice fingerprinting models ready for DMG bundle!")
+    print("   Users will have 97% accuracy voice matching out of the box")
+    sys.exit(0)
 
 
 if __name__ == "__main__":

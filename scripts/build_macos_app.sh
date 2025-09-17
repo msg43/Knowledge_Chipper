@@ -10,10 +10,10 @@ echo "##PERCENT## 0 Starting updater"
 SKIP_INSTALL=0
 MAKE_DMG=0
 INCREMENTAL=0
-# Optional extras to include in the bundled app (defaults: diarization and hce ON)
-WITH_DIARIZATION=1
-WITH_HCE=1
-WITH_CUDA=0
+# Core functionality - these are REQUIRED, not optional
+WITH_DIARIZATION=1  # REQUIRED: Speaker diarization is core functionality
+WITH_HCE=1          # REQUIRED: Hybrid Claim Extraction is core functionality
+# CUDA removed - pointless on Mac-only app
 # Default to bundling all models for complete offline experience
 BUNDLE_ALL_MODELS=${BUNDLE_ALL_MODELS:-1}
 for arg in "$@"; do
@@ -27,19 +27,15 @@ for arg in "$@"; do
     --incremental)
       INCREMENTAL=1
       ;;
+    # Legacy flags kept for compatibility, but these are now always required
     --with-diarization)
-      WITH_DIARIZATION=1
+      echo "ℹ️ Diarization is now always included (core functionality)"
       ;;
     --with-hce)
-      WITH_HCE=1
-      ;;
-    --with-cuda)
-      WITH_CUDA=1
+      echo "ℹ️ HCE is now always included (core functionality)"
       ;;
     --full)
-      WITH_DIARIZATION=1
-      WITH_HCE=1
-      WITH_CUDA=1
+      echo "ℹ️ All core features are now always included"
       ;;
     --bundle-all)
       BUNDLE_ALL_MODELS=1
@@ -64,10 +60,9 @@ for arg in "$@"; do
       echo "  --clean           Clean staging directory and exit"
       echo "  --bundle-all      Bundle all models for offline use (default)"
       echo "  --no-bundle       Skip model bundling"
-      echo "  --with-diarization Include speaker diarization (default)"
-      echo "  --with-hce        Include HCE modules (default)"
-      echo "  --with-cuda       Include CUDA support"
-      echo "  --full            Include all optional features"
+      echo "  --with-diarization Legacy flag (diarization always included)"
+      echo "  --with-hce        Legacy flag (HCE always included)"
+      echo "  --full            Legacy flag (all core features always included)"
       echo "  --help, -h        Show this help message"
       echo ""
       echo "Examples:"
@@ -94,7 +89,12 @@ CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
 # Pull latest code safely without corrupting local state (avoids stash/autostash)
 echo "⬇️ Checking for updates (Git)..."
 echo "##PERCENT## 5 Fetching updates"
-git fetch origin || true
+if ! git fetch origin; then
+  echo "❌ CRITICAL: Git fetch failed - cannot ensure build uses latest code"
+  echo "   This could mean network issues, authentication problems, or repository corruption"
+  echo "   Build terminated - must have reliable access to source repository"
+  exit 1
+fi
 
 # If the working tree is clean, try a rebase pull without autostash
 if git diff-index --quiet HEAD --; then
@@ -235,7 +235,13 @@ CONFIG_EOF
 cp requirements.txt "$BUILD_MACOS_PATH/"
 cp scripts/build_macos_app.sh "$BUILD_MACOS_PATH/"
 # Safety: remove any stray packaging metadata if present
-find "$BUILD_MACOS_PATH/src" -type d \( -name '*.egg-info' -o -name '*.dist-info' \) -prune -exec rm -rf {} + 2>/dev/null || true
+echo "🧹 Removing stray packaging metadata..."
+if ! find "$BUILD_MACOS_PATH/src" -type d \( -name '*.egg-info' -o -name '*.dist-info' \) -prune -exec rm -rf {} + 2>/dev/null; then
+  echo "❌ CRITICAL: Failed to remove packaging metadata from app bundle"
+  echo "   This could cause version conflicts or import errors"
+  echo "   Build terminated - all cleanup operations must succeed"
+  exit 1
+fi
 
 # Explicitly exclude large model files from the app bundle
 echo "🚫 Excluding large model files from app bundle..."
@@ -244,7 +250,13 @@ echo "##PERCENT## 28 Exclude large files"
 if [ -d "models" ]; then
     echo "ℹ️  Found local models/ directory - excluding from app bundle ($(du -sh models | cut -f1) would be saved)"
 fi
-find "$BUILD_MACOS_PATH" -name "*.bin" -delete 2>/dev/null || true
+echo "🧹 Removing large model files from app bundle..."
+if ! find "$BUILD_MACOS_PATH" -name "*.bin" -delete 2>/dev/null; then
+  echo "❌ CRITICAL: Failed to remove large model files from app bundle"
+  echo "   This could cause app bundle bloat or packaging issues"
+  echo "   Build terminated - all cleanup operations must succeed"
+  exit 1
+fi
 
 # Set up virtual environment
 echo "🐍 Setting up Python virtual environment..."
@@ -290,69 +302,47 @@ if [ "$RECREATE_VENV" -eq 1 ]; then
   echo "$NEW_REQS_HASH" > "$REQS_HASH_FILE"
 else
   "$VENV_DIR/bin/python" -m pip install -r "$BUILD_MACOS_PATH/requirements.txt" --upgrade --no-deps
-  "$VENV_DIR/bin/python" -m pip check || true
+  echo "🔍 Checking for dependency conflicts..."
+  if ! "$VENV_DIR/bin/python" -m pip check; then
+    echo "❌ CRITICAL: Dependency conflicts detected in Python environment"
+    echo "   This will cause runtime failures and import errors"
+    echo "   Build terminated - all dependencies must be compatible"
+    exit 1
+  fi
+  echo "✅ No dependency conflicts detected"
 fi
 
 # Track installation status for user feedback
 EXTRAS_STATUS=""
 FAILED_EXTRAS=""
 
-# Conditionally install optional extras into the staging venv
-if [ "$WITH_HCE" -eq 1 ]; then
-  next_step "Install HCE optional dependencies (staging)"
-  # Install from project root (ensures pyproject.toml/extras resolution)
-  if "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[hce]; then
-    echo "✅ HCE extras installed successfully"
-    EXTRAS_STATUS="${EXTRAS_STATUS}✅ HCE (Human-Centric Extraction): Advanced summarization, concept mining\n"
-  else
-    echo "❌ Failed to install HCE extras - advanced features will be unavailable"
-    FAILED_EXTRAS="${FAILED_EXTRAS}❌ HCE (Human-Centric Extraction): Advanced summarization disabled\n"
-    echo "$(date): HCE extras installation failed" >> "$BUILD_MACOS_PATH/installation_errors.log"
-    "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[hce] >> "$BUILD_MACOS_PATH/installation_errors.log" 2>&1 || true
-  fi
+# Install REQUIRED core functionality
+next_step "Install HCE (Hybrid Claim Extraction) - REQUIRED"
+# Install from project root (ensures pyproject.toml/extras resolution)
+if "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[hce]; then
+  echo "✅ HCE (Hybrid Claim Extraction) installed successfully"
+  EXTRAS_STATUS="${EXTRAS_STATUS}✅ HCE (Hybrid Claim Extraction): Core functionality\n"
 else
-  echo "🎯 Skipping HCE heavy dependencies in staging"
-  EXTRAS_STATUS="${EXTRAS_STATUS}⏭️  HCE: Skipped (will download on first use)\n"
+  echo "❌ CRITICAL: Failed to install HCE (Hybrid Claim Extraction)"
+  echo "   HCE is REQUIRED core functionality - build cannot continue"
+  echo "   Build terminated - all core dependencies must succeed"
+  exit 1
 fi
 
-if [ "$WITH_DIARIZATION" -eq 1 ]; then
-  next_step "Install diarization dependencies (staging)"
-  # Install from project root (ensures pyproject.toml/extras resolution)
-  if "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[diarization]; then
-    echo "✅ Diarization extras installed successfully"
-    EXTRAS_STATUS="${EXTRAS_STATUS}✅ Speaker Diarization: Multi-speaker audio processing\n"
-  else
-    echo "❌ Failed to install diarization extras - speaker separation will be unavailable"
-    FAILED_EXTRAS="${FAILED_EXTRAS}❌ Speaker Diarization: Multi-speaker processing disabled\n"
-    echo "$(date): Diarization extras installation failed" >> "$BUILD_MACOS_PATH/installation_errors.log"
-    "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[diarization] >> "$BUILD_MACOS_PATH/installation_errors.log" 2>&1 || true
-  fi
+next_step "Install Speaker Diarization - REQUIRED"
+# Install from project root (ensures pyproject.toml/extras resolution)
+if "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[diarization]; then
+  echo "✅ Speaker Diarization installed successfully"
+  EXTRAS_STATUS="${EXTRAS_STATUS}✅ Speaker Diarization: Core multi-speaker processing\n"
 else
-  echo "🎯 Skipping diarization dependencies in staging"
-  EXTRAS_STATUS="${EXTRAS_STATUS}⏭️  Diarization: Skipped (will download on first use)\n"
+  echo "❌ CRITICAL: Failed to install Speaker Diarization"
+  echo "   Diarization is REQUIRED core functionality - build cannot continue"
+  echo "   Build terminated - all core dependencies must succeed"
+  exit 1
 fi
 
-if [ "$WITH_CUDA" -eq 1 ]; then
-  next_step "Install CUDA-related dependencies (staging)"
-  # Install from project root (ensures pyproject.toml/extras resolution)
-  if "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[cuda]; then
-    echo "✅ CUDA extras installed successfully"
-    EXTRAS_STATUS="${EXTRAS_STATUS}✅ CUDA Support: GPU-accelerated processing\n"
-  else
-    echo "❌ Failed to install CUDA extras - GPU acceleration will be unavailable"
-    FAILED_EXTRAS="${FAILED_EXTRAS}❌ CUDA Support: GPU acceleration disabled\n"
-    echo "$(date): CUDA extras installation failed" >> "$BUILD_MACOS_PATH/installation_errors.log"
-    "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[cuda] >> "$BUILD_MACOS_PATH/installation_errors.log" 2>&1 || true
-  fi
-else
-  echo "🎯 Skipping CUDA extras in staging"
-  EXTRAS_STATUS="${EXTRAS_STATUS}⏭️  CUDA: Skipped (CPU-only mode)\n"
-fi
-
-if [ "$WITH_HCE" -eq 0 ] && [ "$WITH_DIARIZATION" -eq 0 ] && [ "$WITH_CUDA" -eq 0 ]; then
-  echo "🎯 Excluding heavy ML dependencies (torch, transformers, etc.) from app bundle"
-  echo "ℹ️  Heavy dependencies will be installed automatically when needed"
-fi
+# CUDA removed - pointless on Mac-only app
+# All core dependencies (HCE, Diarization) are now REQUIRED and installed above
 
 # Install the main package in staging venv (CRITICAL for --skip-install mode)
 echo "📦 Installing main knowledge_system package in staging venv..."
@@ -439,18 +429,46 @@ echo "🧪 Testing main package import in staging venv..."
   exit 1
 }
 
-# Copy full project pyproject.toml (includes optional dependency extras like [diarization])
+# Copy full project pyproject.toml (includes required dependency extras like [hce] and [diarization])
 if [ -f "$PROJECT_ROOT/pyproject.toml" ]; then
   cp "$PROJECT_ROOT/pyproject.toml" "$BUILD_MACOS_PATH/pyproject.toml"
-  # Ensure version inside the copied pyproject matches CURRENT_VERSION (best-effort in-place replace)
+
+  # CRITICAL: Ensure version inside the copied pyproject matches CURRENT_VERSION
+  echo "🔍 Updating and verifying pyproject.toml version..."
+  BUNDLED_VERSION=""
   if command -v gsed >/dev/null 2>&1; then
-    gsed -i "s/^version = \".*\"/version = \"$CURRENT_VERSION\"/" "$BUILD_MACOS_PATH/pyproject.toml" || true
+    if ! gsed -i "s/^version = \".*\"/version = \"$CURRENT_VERSION\"/" "$BUILD_MACOS_PATH/pyproject.toml"; then
+      echo "❌ CRITICAL: Failed to update version in bundled pyproject.toml using gsed"
+      echo "   Version synchronization is required for proper app functionality"
+      echo "   Build terminated - version update must succeed"
+      exit 1
+    fi
+    BUNDLED_VERSION=$(gsed -n 's/^version = "\(.*\)"/\1/p' "$BUILD_MACOS_PATH/pyproject.toml")
   else
-    sed -i '' "s/^version = \".*\"/version = \"$CURRENT_VERSION\"/" "$BUILD_MACOS_PATH/pyproject.toml" || true
+    if ! sed -i '' "s/^version = \".*\"/version = \"$CURRENT_VERSION\"/" "$BUILD_MACOS_PATH/pyproject.toml"; then
+      echo "❌ CRITICAL: Failed to update version in bundled pyproject.toml using sed"
+      echo "   Version synchronization is required for proper app functionality"
+      echo "   Build terminated - version update must succeed"
+      exit 1
+    fi
+    BUNDLED_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' "$BUILD_MACOS_PATH/pyproject.toml")
   fi
+
+  # Verify the version was updated correctly
+  if [ "$BUNDLED_VERSION" = "$CURRENT_VERSION" ]; then
+    echo "✅ Bundled pyproject.toml version: $BUNDLED_VERSION (matches build version)"
+  else
+    echo "❌ Version mismatch! Build: $CURRENT_VERSION, Bundled: $BUNDLED_VERSION"
+    echo "   This will cause version detection issues in the DMG!"
+    exit 1
+  fi
+
   chown "$CURRENT_USER:staff" "$BUILD_MACOS_PATH/pyproject.toml" 2>/dev/null || true
 else
-  echo "⚠️  pyproject.toml not found at project root; extras installation inside app may fail."
+  echo "❌ CRITICAL: pyproject.toml not found at project root"
+  echo "   Required for core dependency installation (HCE, diarization)"
+  echo "   Build terminated - all required files must be present"
+  exit 1
 fi
 
 # Ensure venv ownership (should already be current user in staging)
@@ -497,6 +515,32 @@ cat > "/tmp/Info.plist" << EOF
     <string>Skip the Podcast Desktop needs access to external drives to process media files stored on them.</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.productivity</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>localhost</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSExceptionMinimumTLSVersion</key>
+                <string>TLSv1.0</string>
+            </dict>
+            <key>127.0.0.1</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSExceptionMinimumTLSVersion</key>
+                <string>TLSv1.0</string>
+            </dict>
+        </dict>
+    </dict>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>This app needs to connect to local AI services (Ollama) for transcription and summarization features.</string>
 </dict>
 </plist>
 EOF
@@ -523,10 +567,9 @@ if [ -f "\$APP_DIR/version.txt" ]; then
     cat "\$APP_DIR/version.txt" >> "\$LOG_FILE"
 fi
 
-# Skip Gatekeeper check if installed via our installer
-if [ -f "\$HOME/.skip_podcast_clean_install" ]; then
-    echo "Clean install detected - skipping Gatekeeper checks" >> "\$LOG_FILE"
-fi
+# MANDATORY: Always perform Gatekeeper authorization check
+# This ensures proper security setup for transcription functionality
+echo "Performing mandatory Gatekeeper authorization check..." >> "\$LOG_FILE"
 
 # Check for bundled FFMPEG and set up environment
 if [ -f "\$APP_DIR/setup_bundled_ffmpeg.sh" ]; then
@@ -601,31 +644,55 @@ if [ \$? -ne 0 ]; then
     exit 1
 fi
 
-# Check for Gatekeeper block (Disk Drill-style)
+# MANDATORY AUTHORIZATION CHECK - Always required for proper functionality
 if [ -f "\$APP_DIR/../../Info.plist" ]; then
-    # We're in an app bundle - check for quarantine
+    # We're in an app bundle - check authorization status
+    echo "Checking app bundle authorization status..." >> "\$LOG_FILE"
+
+    # Check for quarantine attribute
     if xattr -p com.apple.quarantine "\$APP_DIR/../.." &>/dev/null; then
-        echo "Detected Gatekeeper quarantine" >> "\$LOG_FILE"
+        echo "Detected Gatekeeper quarantine attribute" >> "\$LOG_FILE"
+        HAS_QUARANTINE=1
+    else
+        echo "No quarantine attribute detected" >> "\$LOG_FILE"
+        HAS_QUARANTINE=0
+    fi
 
-        # Check if already authorized
-        if [ ! -f "\$HOME/.skip_the_podcast_desktop_authorized" ]; then
-            echo "Showing authorization dialog..." >> "\$LOG_FILE"
+    # Check for authorization marker
+    if [ -f "\$HOME/.skip_the_podcast_desktop_authorized" ]; then
+        echo "Authorization marker exists" >> "\$LOG_FILE"
+        HAS_AUTH_MARKER=1
+    else
+        echo "No authorization marker found" >> "\$LOG_FILE"
+        HAS_AUTH_MARKER=0
+    fi
 
-            # Disk Drill-style authorization dialog
-            osascript << 'EOAUTH' 2>&1 | tee -a "\$LOG_FILE"
+    # FORCE AUTHORIZATION if not properly authorized (regardless of quarantine status)
+    # This ensures all users get proper setup for transcription functionality
+    if [ \$HAS_AUTH_MARKER -eq 0 ]; then
+        echo "MANDATORY: Authorization required for transcription functionality..." >> "\$LOG_FILE"
+
+        # Always show authorization dialog if not previously authorized
+        # This ensures proper setup even if quarantine was removed by installer
+
+        # Disk Drill-style authorization dialog
+        osascript << 'EOAUTH' 2>&1 | tee -a "\$LOG_FILE"
 -- Skip the Podcast Desktop - Gatekeeper Authorization
 
 set appBundle to (path to current application) as text
 set appPath to POSIX path of appBundle
 
 -- Professional authorization dialog
-display dialog "Skip the Podcast Desktop needs administrator permission to complete installation.
+display dialog "Skip the Podcast Desktop requires administrator permission to function properly.
 
-This one-time authorization removes macOS security warnings, just like professional apps such as Disk Drill.
+This one-time authorization is MANDATORY for:
+• Transcription functionality to work correctly
+• Bundled dependencies to operate properly
+• Audio processing capabilities
 
-You'll be prompted for your password." buttons {"Cancel", "Authorize"} default button "Authorize" with title "Administrator Permission Required" with icon caution
+You'll be prompted for your password." buttons {"Quit App", "Authorize"} default button "Authorize" with title "Administrator Permission Required" with icon caution
 
-if button returned of result is "Cancel" then
+if button returned of result is "Quit App" then
     return "cancelled"
 end if
 
@@ -661,17 +728,20 @@ EOAUTH
 
             AUTH_RESULT=\$?
             if [ \$AUTH_RESULT -ne 0 ] || grep -q "cancelled\\|failed" "\$LOG_FILE"; then
-                echo "Authorization cancelled or failed" >> "\$LOG_FILE"
-                osascript -e 'display dialog "To run Skip the Podcast Desktop manually:\n\n1. Right-click the app\n2. Select Open\n3. Click Open in the security dialog" buttons {"OK"} with icon caution'
+                echo "CRITICAL: Authorization cancelled or failed - app cannot function" >> "\$LOG_FILE"
+                osascript -e 'display dialog "Skip the Podcast Desktop cannot run without proper authorization.\n\nThis is required for transcription and audio processing to work correctly.\n\nPlease restart the app and complete the authorization process." buttons {"OK"} with icon stop'
                 exit 1
             fi
 
-            echo "Authorization successful!" >> "\$LOG_FILE"
-            # The app needs to restart for changes to take effect
-            osascript -e 'display dialog "Authorization complete!\n\nPlease reopen Skip the Podcast Desktop." buttons {"OK"} default button "OK" with icon note'
-            exit 0
-        fi
+        echo "Authorization successful!" >> "\$LOG_FILE"
+        # The app needs to restart for changes to take effect
+        osascript -e 'display dialog "Authorization complete!\n\nPlease reopen Skip the Podcast Desktop." buttons {"OK"} default button "OK" with icon note'
+        exit 0
+    else
+        echo "App already authorized - proceeding to launch" >> "\$LOG_FILE"
     fi
+else
+    echo "Not running from app bundle - skipping authorization check" >> "\$LOG_FILE"
 fi
 
 echo "Launching GUI..." >> "\$LOG_FILE"
@@ -751,26 +821,19 @@ if [ "$SKIP_INSTALL" -eq 0 ]; then
     sudo cp "$PROJECT_ROOT/pyproject.toml" "$MACOS_PATH/pyproject.toml"
   fi
 
-  # Conditionally install extras in the final venv as well
-  if [ "$WITH_HCE" -eq 1 ]; then
-    next_step "Install HCE extras (final)"
-    sudo -H "$MACOS_PATH/venv/bin/python" -m pip install -e "$MACOS_PATH"[hce] || {
-      echo "⚠️ Failed to install HCE extras in final venv; continuing"
-    }
+  # Install REQUIRED core functionality in the final venv
+  next_step "Install HCE (final) - REQUIRED"
+  if ! sudo -H "$MACOS_PATH/venv/bin/python" -m pip install -e "$MACOS_PATH"[hce]; then
+    echo "❌ CRITICAL: Failed to install HCE in final venv"
+    echo "   Build terminated - all core dependencies must succeed"
+    exit 1
   fi
 
-  if [ "$WITH_DIARIZATION" -eq 1 ]; then
-    next_step "Install diarization extras (final)"
-    sudo -H "$MACOS_PATH/venv/bin/python" -m pip install -e "$MACOS_PATH"[diarization] || {
-      echo "⚠️ Failed to install diarization extras in final venv; continuing"
-    }
-  fi
-
-  if [ "$WITH_CUDA" -eq 1 ]; then
-    next_step "Install CUDA extras (final)"
-    sudo -H "$MACOS_PATH/venv/bin/python" -m pip install -e "$MACOS_PATH"[cuda] || {
-      echo "⚠️ Failed to install CUDA extras in final venv; continuing"
-    }
+  next_step "Install Diarization (final) - REQUIRED"
+  if ! sudo -H "$MACOS_PATH/venv/bin/python" -m pip install -e "$MACOS_PATH"[diarization]; then
+    echo "❌ CRITICAL: Failed to install Diarization in final venv"
+    echo "   Build terminated - all core dependencies must succeed"
+    exit 1
   fi
   # Post-install preflight
   next_step "Final verification"
@@ -1075,13 +1138,30 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
 
   if [ -f "$SCRIPT_DIR/silent_ffmpeg_installer.py" ]; then
     # Use our silent installer to embed FFMPEG in the app bundle
+    echo "   Using: $SCRIPT_DIR/silent_ffmpeg_installer.py"
+    echo "   Target: $BUILD_APP_PATH"
     if "$PYTHON_BIN" "$SCRIPT_DIR/silent_ffmpeg_installer.py" --app-bundle "$BUILD_APP_PATH" --quiet; then
       echo "✅ FFMPEG successfully installed in app bundle"
+      # Verify the installation worked
+      FFMPEG_BIN="$BUILD_APP_PATH/Contents/MacOS/Library/Application Support/Knowledge_Chipper/bin/ffmpeg"
+      if [ -f "$FFMPEG_BIN" ]; then
+        echo "   ✓ FFMPEG binary verified at: $FFMPEG_BIN"
+      else
+        echo "❌ CRITICAL: FFMPEG binary not found after installation"
+        echo "   DMG MUST include FFMPEG for third-party machine compatibility"
+        exit 1
+      fi
     else
-      echo "⚠️ FFMPEG installation failed - DMG will not include FFMPEG"
+      echo "❌ CRITICAL: FFMPEG installation failed"
+      echo "   DMG MUST include FFMPEG for third-party machine compatibility"
+      echo "   Build terminated - all dependencies must succeed"
+      exit 1
     fi
   else
-    echo "⚠️ Silent FFMPEG installer not found - DMG will not include FFMPEG"
+    echo "❌ CRITICAL: Silent FFMPEG installer not found at: $SCRIPT_DIR/silent_ffmpeg_installer.py"
+    echo "   DMG MUST include FFMPEG for third-party machine compatibility"
+    echo "   Build terminated - all required scripts must be present"
+    exit 1
   fi
 
   # Install whisper.cpp binary for local transcription
@@ -1092,11 +1172,26 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
     # Install whisper.cpp binary in the app bundle
     if "$PYTHON_BIN" "$SCRIPT_DIR/install_whisper_cpp_binary.py" --app-bundle "$BUILD_APP_PATH" --quiet; then
       echo "✅ whisper.cpp successfully installed in app bundle"
+      # Verify the installation worked
+      WHISPER_BIN="$BUILD_APP_PATH/Contents/MacOS/bin/whisper"
+      if [ -f "$WHISPER_BIN" ]; then
+        echo "   ✓ whisper.cpp binary verified at: $WHISPER_BIN"
+      else
+        echo "❌ CRITICAL: whisper.cpp binary not found after installation"
+        echo "   DMG MUST include whisper.cpp for local transcription capability"
+        exit 1
+      fi
     else
-      echo "⚠️ whisper.cpp installation failed - local transcription will require manual installation"
+      echo "❌ CRITICAL: whisper.cpp installation failed"
+      echo "   DMG MUST include whisper.cpp for local transcription capability"
+      echo "   Build terminated - all dependencies must succeed"
+      exit 1
     fi
   else
-    echo "⚠️ whisper.cpp installer not found - local transcription will require manual installation"
+    echo "❌ CRITICAL: whisper.cpp installer not found at: $SCRIPT_DIR/install_whisper_cpp_binary.py"
+    echo "   DMG MUST include whisper.cpp for local transcription capability"
+    echo "   Build terminated - all required scripts must be present"
+    exit 1
   fi
 
   # Download and install Pyannote diarization model for internal company use
@@ -1110,18 +1205,35 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
 
   if [ ! -z "$HF_TOKEN" ] && [ "$HF_TOKEN" != "your_huggingface_token_here" ]; then
     if [ -f "$SCRIPT_DIR/download_pyannote_direct.py" ]; then
-      # Download model directly during build
-      if HF_TOKEN="$HF_TOKEN" "$PYTHON_BIN" "$SCRIPT_DIR/download_pyannote_direct.py" --app-bundle "$BUILD_APP_PATH"; then
+      # Use the app bundle's Python environment that has huggingface_hub installed
+      APP_PYTHON_BIN="$BUILD_APP_PATH/Contents/MacOS/venv/bin/python"
+      if [ ! -f "$APP_PYTHON_BIN" ]; then
+        echo "❌ CRITICAL: App bundle Python environment not found at $APP_PYTHON_BIN"
+        echo "   Build terminated - cannot download Pyannote models"
+        exit 1
+      fi
+
+      # Download model directly during build using app bundle's Python
+      if HF_TOKEN="$HF_TOKEN" "$APP_PYTHON_BIN" "$SCRIPT_DIR/download_pyannote_direct.py" --app-bundle "$BUILD_APP_PATH"; then
         echo "✅ Pyannote model downloaded and bundled (internal use only)"
       else
-        echo "⚠️ Pyannote model download failed - DMG will require HF token at runtime"
+        echo "❌ CRITICAL: Pyannote model download failed"
+        echo "   DMG MUST include Pyannote model for speaker diarization"
+        echo "   Build terminated - all dependencies must succeed"
+        exit 1
       fi
     else
-      echo "⚠️ Pyannote downloader not found"
+      echo "❌ CRITICAL: Pyannote downloader not found at: $SCRIPT_DIR/download_pyannote_direct.py"
+      echo "   DMG MUST include Pyannote model for speaker diarization"
+      echo "   Build terminated - all required scripts must be present"
+      exit 1
     fi
   else
-    echo "⚠️ No HuggingFace token found - skipping pyannote bundling"
-    echo "   Users will need to provide token on first use"
+    echo "❌ CRITICAL: No HuggingFace token found for Pyannote model download"
+    echo "   DMG MUST include Pyannote model for speaker diarization"
+    echo "   Set HF_TOKEN environment variable or add to config/credentials.yaml"
+    echo "   Build terminated - all dependencies must succeed"
+    exit 1
   fi
 
   # Optionally bundle ALL models for complete offline experience
@@ -1131,10 +1243,18 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
 
     if [ -f "$SCRIPT_DIR/bundle_all_models.sh" ]; then
       if bash "$SCRIPT_DIR/bundle_all_models.sh" "$BUILD_APP_PATH"; then
-        echo "✅ All models bundled - DMG will work completely offline (~4GB)"
+        echo "✅ All models bundled - DMG will work completely offline"
       else
-        echo "⚠️ Some models not bundled - they'll download on first use"
+        echo "❌ CRITICAL: Model bundling failed"
+        echo "   DMG MUST include all models for complete offline experience"
+        echo "   Build terminated - all dependencies must succeed"
+        exit 1
       fi
+    else
+      echo "❌ CRITICAL: bundle_all_models.sh not found at: $SCRIPT_DIR/bundle_all_models.sh"
+      echo "   DMG MUST include all models for complete offline experience"
+      echo "   Build terminated - all required scripts must be present"
+      exit 1
     fi
   fi
 fi
@@ -1159,7 +1279,14 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
   mkdir -p "$DMG_STAGING/root" "$DIST_DIR"
   rm -rf "$DMG_STAGING/root"/*
   # Strip extended attributes to avoid Finder copy errors
-  /usr/bin/xattr -rc "$BUILD_APP_PATH" || true
+  echo "🧹 Removing extended attributes from app bundle..."
+  if ! /usr/bin/xattr -rc "$BUILD_APP_PATH"; then
+    echo "❌ CRITICAL: Failed to remove extended attributes from app bundle"
+    echo "   This could cause installation issues or security warnings on other machines"
+    echo "   Build terminated - all DMG preparation steps must succeed"
+    exit 1
+  fi
+  echo "✅ Extended attributes removed successfully"
   cp -R "$BUILD_APP_PATH" "$DMG_STAGING/root/"
   ln -sf /Applications "$DMG_STAGING/root/Applications"
 
@@ -1180,39 +1307,42 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
 Skip the Podcast Desktop - Quick Start Guide
 ===============================================
 
-⚠️  IMPORTANT - USE THE INSTALLER TO AVOID SECURITY WARNINGS:
+⚠️  IMPORTANT - AVOID "APP MAY BE DAMAGED" WARNINGS:
 
 📦 RECOMMENDED INSTALLATION:
    Double-click "⚠️ CLICK ME TO INSTALL.command"
 
    This smart installer will:
    ✓ Copy the app to Applications
-   ✓ Bypass ALL macOS security warnings
-   ✓ Configure permissions automatically
+   ✓ Remove quarantine attributes automatically
+   ✓ Bypass ALL macOS Gatekeeper warnings
+   ✓ Configure permissions and signing
    ✓ Launch the app when done
 
    You'll be asked for your password once during installation.
 
 🚫 IF YOU DRAG THE APP MANUALLY:
-   macOS will show security warnings ("app is damaged" etc.)
+   macOS may show "app is damaged or incomplete" warnings
    You'll need to right-click → Open → Open to bypass them
+   OR run: sudo xattr -dr com.apple.quarantine "/Applications/Skip the Podcast Desktop.app"
 
 💡 WHY USE THE INSTALLER?
-   • No security warnings or "damaged app" messages
-   • Automatic configuration (like professional apps)
+   • No "damaged app" or security warnings
+   • Automatic Gatekeeper bypass (like professional apps)
    • One-time password prompt during install
    • App launches normally every time after
+   • Professional installation experience
 
 ⚙️ SYSTEM REQUIREMENTS:
    • macOS 11.0 or later
    • 4GB RAM recommended
    • 2GB free disk space
 
-🔧 ADVANCED FEATURES:
-   Some features auto-install on first use:
-   • Advanced Summarization (HCE)
+🔧 CORE FEATURES:
+   All core features are bundled in the DMG:
+   • Hybrid Claim Extraction (HCE)
    • Speaker Diarization (Multi-speaker audio)
-   • GPU Acceleration (CUDA - if compatible)
+   • Voice Fingerprinting (97% accuracy)
 
 📋 TROUBLESHOOTING:
    If the app doesn't launch:
@@ -1228,8 +1358,99 @@ Skip the Podcast Desktop - Quick Start Guide
 Built: $(date)
 Version: $CURRENT_VERSION
 EOF
-  hdiutil create -volname "Skip the Podcast Desktop" -srcfolder "$DMG_STAGING/root" -ov -format UDZO "$DIST_DIR/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
-  echo "✅ DMG created at: $DIST_DIR/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
+
+  echo "🔨 Creating DMG with hdiutil..."
+  DMG_PATH="$DIST_DIR/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
+  if ! hdiutil create -volname "Skip the Podcast Desktop" -srcfolder "$DMG_STAGING/root" -ov -format UDZO "$DMG_PATH"; then
+    echo "❌ CRITICAL: hdiutil create failed - DMG creation unsuccessful"
+    echo "   This could be due to insufficient disk space, permissions, or corrupted source files"
+    echo "   Build terminated - DMG creation must succeed"
+    exit 1
+  fi
+
+  # Verify DMG was actually created and is valid
+  echo "🔍 Verifying DMG integrity..."
+  if [ ! -f "$DMG_PATH" ]; then
+    echo "❌ CRITICAL: DMG file not found after hdiutil create reported success"
+    echo "   File: $DMG_PATH"
+    echo "   Build terminated - DMG file must exist"
+    exit 1
+  fi
+
+  # Check DMG file size (should be > 100MB for a real app bundle)
+  DMG_SIZE_BYTES=$(stat -f%z "$DMG_PATH" 2>/dev/null || echo "0")
+  if [ "$DMG_SIZE_BYTES" -lt 104857600 ]; then  # Less than 100MB
+    echo "❌ CRITICAL: DMG file suspiciously small ($DMG_SIZE_BYTES bytes)"
+    echo "   This suggests the DMG creation failed or is corrupted"
+    echo "   Build terminated - DMG must be properly sized"
+    exit 1
+  fi
+
+  # Verify DMG can be mounted (basic integrity check)
+  echo "🔍 Testing DMG mountability..."
+  if ! hdiutil attach "$DMG_PATH" -readonly -nobrowse -mountpoint "/tmp/dmg_test_$$" 2>/dev/null; then
+    echo "❌ CRITICAL: DMG file cannot be mounted - file is corrupted"
+    echo "   Build terminated - DMG must be mountable"
+    exit 1
+  fi
+
+  # Verify app bundle exists inside mounted DMG
+  if [ ! -d "/tmp/dmg_test_$$/Skip the Podcast Desktop.app" ]; then
+    hdiutil detach "/tmp/dmg_test_$$" 2>/dev/null || true
+    echo "❌ CRITICAL: App bundle missing from DMG contents"
+    echo "   Build terminated - DMG must contain complete app bundle"
+    exit 1
+  fi
+
+  # Clean up test mount
+  hdiutil detach "/tmp/dmg_test_$$" 2>/dev/null || true
+
+  echo "✅ DMG created and verified at: $DMG_PATH"
+
+  # CRITICAL: Clean problematic files before code signing
+  echo "🧹 Cleaning problematic files before code signing..."
+
+  # Remove .config directories that can't be signed
+  find "$BUILD_APP_PATH" -name ".config" -type d -exec rm -rf {} + 2>/dev/null || true
+
+  # Remove .DS_Store files
+  find "$BUILD_APP_PATH" -name ".DS_Store" -delete 2>/dev/null || true
+
+  # Remove other problematic files
+  find "$BUILD_APP_PATH" -name "*.pyc" -delete 2>/dev/null || true
+  find "$BUILD_APP_PATH" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+
+  echo "✅ Cleanup completed"
+
+  # CRITICAL: Code sign the app bundle before finalizing DMG
+  echo "🔐 Code signing app bundle to prevent Gatekeeper issues..."
+  SIGN_SCRIPT="$SCRIPT_DIR/sign_dmg_app.sh"
+  if [ -f "$SIGN_SCRIPT" ]; then
+    echo "   Using ad-hoc signing to prevent 'app may be damaged' errors..."
+    if ! bash "$SIGN_SCRIPT" "$BUILD_APP_PATH"; then
+      echo "❌ CRITICAL: Code signing failed"
+      echo "   Without signing, users will see 'app may be damaged or incomplete' errors"
+      echo "   Build terminated - code signing is required for user-friendly DMG"
+      exit 1
+    fi
+    echo "✅ App bundle successfully signed"
+
+    # Recreate DMG with signed app bundle
+    echo "🔄 Recreating DMG with signed app bundle..."
+    rm -f "$DMG_PATH"
+    cp -R "$BUILD_APP_PATH" "$DMG_STAGING/root/"
+
+    if ! hdiutil create -volname "Skip the Podcast Desktop" -srcfolder "$DMG_STAGING/root" -ov -format UDZO "$DMG_PATH"; then
+      echo "❌ CRITICAL: Failed to recreate DMG with signed app"
+      echo "   Build terminated - signed DMG creation must succeed"
+      exit 1
+    fi
+    echo "✅ DMG recreated with signed app bundle"
+  else
+    echo "⚠️  WARNING: Code signing script not found at: $SIGN_SCRIPT"
+    echo "   Users may see 'app may be damaged or incomplete' Gatekeeper warnings"
+    echo "   To fix: Ensure scripts/sign_dmg_app.sh exists"
+  fi
 
   # Show DMG contents summary
   DMG_SIZE=$(du -h "$DIST_DIR/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg" | cut -f1)

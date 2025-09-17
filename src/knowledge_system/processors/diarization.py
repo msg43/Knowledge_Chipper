@@ -268,10 +268,29 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                         logger.info(
                             f"Calling PIPELINE.from_pretrained for {self.model}..."
                         )
-                        # Note: pyannote Pipeline doesn't support local_files_only parameter
-                        pipeline = PIPELINE.from_pretrained(
-                            self.model, use_auth_token=self.hf_token
+                        logger.debug(
+                            f"HuggingFace token present: {bool(self.hf_token)}"
                         )
+                        logger.debug(
+                            f"HF_HUB_OFFLINE: {os.environ.get('HF_HUB_OFFLINE', 'not set')}"
+                        )
+
+                        # Note: pyannote Pipeline doesn't support local_files_only parameter
+                        try:
+                            pipeline = PIPELINE.from_pretrained(
+                                self.model, use_auth_token=self.hf_token
+                            )
+                            logger.info(
+                                f"Successfully loaded pipeline for {self.model}"
+                            )
+                        except Exception as model_error:
+                            logger.error(
+                                f"Failed to load model {self.model}: {model_error}"
+                            )
+                            # Re-raise with more context
+                            raise Exception(
+                                f"Model loading failed for {self.model}: {model_error}"
+                            ) from model_error
 
                         # Optimize clustering for CPU/MPS performance
                         if self.device in ["cpu", "mps"]:
@@ -520,6 +539,27 @@ class SpeakerDiarizationProcessor(BaseProcessor):
     def process(
         self, input_data: Any, dry_run: bool = False, **kwargs: Any
     ) -> ProcessorResult:
+        # SECURITY CHECK: Verify app authorization before diarization
+        try:
+            from knowledge_system.utils.security_verification import (
+                ensure_secure_before_transcription,
+            )
+
+            ensure_secure_before_transcription()
+        except ImportError:
+            logger.warning(
+                "Security verification module not available - proceeding with diarization"
+            )
+        except Exception as e:
+            logger.error(f"Security verification failed: {e}")
+            return ProcessorResult(
+                success=False,
+                errors=[
+                    f"App not properly authorized for diarization: {e}. Please restart the app and complete the authorization process."
+                ],
+                dry_run=dry_run,
+            )
+
         # Extract parameters from kwargs for backwards compatibility
         kwargs.get("device", None)
 
@@ -1000,11 +1040,29 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                 metadata={"model": self.model, "segments_count": len(segments)},
             )
         except Exception as e:
+            import traceback
+
+            # Log full traceback for debugging
+            error_traceback = traceback.format_exc()
             logger.error(f"Diarization error: {e}")
+            logger.debug(f"Full diarization error traceback:\n{error_traceback}")
+
+            # Create detailed error message
+            error_details = str(e)
+
+            # Add context about what operation failed
+            if "from_pretrained" in error_traceback:
+                error_details += " (Failed during model loading)"
+            elif "apply" in error_traceback or "forward" in error_traceback:
+                error_details += " (Failed during audio processing)"
+            elif "Authentication" in error_details or "401" in error_details:
+                error_details += " (HuggingFace authentication failed)"
+
             # Report error through progress callback
             if self.progress_callback:
-                self.progress_callback(f"❌ Diarization failed: {str(e)}", 0)
-            return ProcessorResult(success=False, errors=[str(e)])
+                self.progress_callback(f"❌ Diarization failed: {error_details}", 0)
+
+            return ProcessorResult(success=False, errors=[error_details])
 
 
 def is_diarization_available() -> bool:

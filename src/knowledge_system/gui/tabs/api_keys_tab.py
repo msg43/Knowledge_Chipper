@@ -1032,7 +1032,24 @@ class APIKeysTab(BaseTab):
 
     def check_for_updates_on_launch(self) -> None:
         """Check for updates if auto-update is enabled."""
+        import time
+        from pathlib import Path
+
         from ...config import get_settings
+
+        # Check for fresh install markers that should disable auto-update
+        fresh_install_markers = [
+            Path.home() / ".skip_the_podcast_desktop_installed",
+            Path.home() / ".skip_the_podcast_desktop_authorized",
+        ]
+
+        # Skip auto-update if this is a fresh install
+        for marker in fresh_install_markers:
+            if marker.exists():
+                logger.info(
+                    f"Skipping auto-update for fresh install (marker: {marker})"
+                )
+                return
 
         settings = get_settings()
 
@@ -1043,7 +1060,13 @@ class APIKeysTab(BaseTab):
         )
 
         if auto_update_enabled:
+            # Additional check: don't auto-update to the same version
+            from ... import __version__
+
+            logger.info(f"Auto-update check for current version: {__version__}")
             self._check_for_updates(is_auto=True)
+        else:
+            logger.debug("Auto-update disabled in settings")
 
     def _check_for_updates(self, is_auto: bool = False) -> None:
         """Check for and install updates."""
@@ -1192,7 +1215,7 @@ class APIKeysTab(BaseTab):
             f"{message} ({percent}%)" if message else f"{percent}%"
         )
         self.status_label.setStyleSheet("color: #2196F3; font-weight: bold;")
-        self.append_log(f"{percent}% - {message}" if message else f"{percent}%")
+        self.append_log(f"{message}" if message else f"{percent}%")
 
     def _handle_update_finished(
         self, success: bool, message: str, silent: bool = False
@@ -1218,10 +1241,10 @@ class APIKeysTab(BaseTab):
         if success:
             # Check if this is "already on latest version" vs actual update completion
             if "Already on latest version" in message:
-                # Show positive status for being up to date
-                self.status_label.setText(f"✅ {message}")
+                # Show positive status for being up to date (message already has checkmark)
+                self.status_label.setText(message)
                 self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
-                self.append_log(f"✅ {message}")
+                self.append_log(message)
 
                 # Clear status after 10 seconds
                 from PyQt6.QtCore import QTimer

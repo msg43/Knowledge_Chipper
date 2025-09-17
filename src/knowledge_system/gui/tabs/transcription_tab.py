@@ -1103,14 +1103,33 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         self.append_log(f"❌ Error: {error_msg}")
 
-        # Check if this is a whisper.cpp binary missing error
-        if "whisper.cpp binary not found" in error_msg:
+        # Check for authorization-related errors first
+        if (
+            "not properly authorized" in error_msg
+            or "authorization" in error_msg.lower()
+        ):
+            # Show authorization error with restart instruction
+            show_enhanced_error(
+                self,
+                "App Authorization Required",
+                f"{error_msg}\n\n🔐 This is required for transcription to work properly.\n\n💡 Solution: Restart Skip the Podcast Desktop and complete the authorization process when prompted.",
+                context="App requires proper authorization for transcription functionality",
+            )
+        elif "whisper.cpp binary not found" in error_msg:
             # Show helpful error dialog with cloud transcription suggestion
             show_enhanced_error(
                 self,
                 "Local Transcription Unavailable",
                 f"{error_msg}\n\n💡 Suggestion: Use the 'Cloud Transcription' tab instead, which doesn't require local installation.",
                 context="Missing whisper.cpp binary for local transcription",
+            )
+        elif "bundled dependencies not accessible" in error_msg:
+            # Show bundled dependency error
+            show_enhanced_error(
+                self,
+                "Bundled Dependencies Issue",
+                f"{error_msg}\n\n🔧 This typically means the app wasn't properly authorized during installation.\n\n💡 Solution: Restart Skip the Podcast Desktop and complete the authorization process.",
+                context="Bundled transcription dependencies not accessible",
             )
         else:
             # Standard error handling

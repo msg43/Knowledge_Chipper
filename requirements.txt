@@ -19,10 +19,9 @@ pypdf2>=3.0.0
 pdfplumber>=0.9.0
 
 # Audio/Video processing
-# pydub>=0.25.1  # Removed - replaced with FFmpeg
+pydub>=0.25.1  # Audio processing and manipulation (required by pyproject.toml)
 
 # ML and transcription (core)
-# openai-whisper>=20231117  # REMOVED: Replaced with whisper.cpp binary
 
 # YouTube processing
 yt-dlp>=2023.10.13
@@ -72,6 +71,7 @@ pytest-asyncio>=0.21.0
 # Heavy ML dependencies moved to optional install: pip install -e ".[hce]"
 hdbscan>=0.8.33
 scipy>=1.10.0
+
 
 # Optional: Diarization dependencies (install with: pip install -e ".[diarization]")
 # pyannote.audio>=3.1.0

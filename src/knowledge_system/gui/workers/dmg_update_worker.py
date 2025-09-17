@@ -36,12 +36,53 @@ class DMGUpdateWorker(QThread):
         self.current_version = __version__
         self.is_auto = is_auto
 
+    def _is_fresh_install(self) -> bool:
+        """Check if this is a fresh installation that shouldn't auto-update."""
+        import time
+        from pathlib import Path
+
+        # Check for markers that indicate this is a fresh install
+        install_markers = [
+            Path.home() / ".skip_the_podcast_desktop_installed",
+            Path.home() / ".skip_the_podcast_desktop_authorized",
+        ]
+
+        # If any fresh install markers exist, this is a clean install
+        for marker in install_markers:
+            if marker.exists():
+                logger.info(f"Fresh install detected: {marker}")
+                return True
+
+        # Additional check: if this is the EXACT same version, skip update
+        # This prevents unnecessary "update" when someone just installed the current version
+        try:
+            latest_release = self._check_for_updates()
+            if latest_release:
+                new_version = latest_release["tag_name"].lstrip("v")
+                if new_version == self.current_version:
+                    logger.info(
+                        f"Already on latest version {self.current_version} - skipping auto-update"
+                    )
+                    return True
+        except Exception as e:
+            logger.debug(f"Failed to check latest version: {e}")
+
+        return False
+
     def run(self) -> None:
         """Run the DMG update process."""
         try:
             logger.info(
                 f"Starting DMG update check from version {self.current_version}"
             )
+
+            # Check if this is a fresh install - skip auto-updates for new installations
+            if self.is_auto and self._is_fresh_install():
+                logger.info("Skipping auto-update check for fresh installation")
+                self.update_finished.emit(
+                    True, "✅ Fresh installation - auto-update skipped", self.is_auto
+                )
+                return
 
             # Step 1: Check for updates
             self.update_progress.emit("🔍 Checking for updates...")
@@ -314,9 +355,9 @@ class DMGUpdateWorker(QThread):
                     logger.info("Removing old app version")
                     shutil.rmtree(target_app)
 
-                # Copy new app
+                # Copy new app with selective copying for optional voice models
                 logger.info(f"Installing new app: {app_in_dmg} → {target_app}")
-                shutil.copytree(app_in_dmg, target_app)
+                self._copy_app_with_fallbacks(app_in_dmg, target_app)
 
                 # Set proper permissions
                 os.chmod(target_app, 0o755)
@@ -444,6 +485,72 @@ class DMGUpdateWorker(QThread):
         except Exception as e:
             logger.error(f"Update finalization failed: {e}")
             raise Exception(f"Failed to finalize update: {e}")
+
+    def _copy_app_with_fallbacks(self, source_app: Path, target_app: Path) -> None:
+        """Copy app bundle with fallbacks for missing voice model files."""
+        try:
+            # First, try standard copytree
+            shutil.copytree(source_app, target_app)
+            logger.info("App copied successfully with all bundled files")
+        except Exception as e:
+            logger.warning(f"Standard copy failed, attempting selective copy: {e}")
+
+            # Fallback: copy with error handling for individual files
+            try:
+                # Create target structure
+                target_app.mkdir(parents=True, exist_ok=True)
+
+                # Copy recursively with error handling
+                self._copy_directory_selective(source_app, target_app)
+                logger.info("App copied successfully with selective file copying")
+
+            except Exception as e2:
+                logger.error(f"Selective copy also failed: {e2}")
+                raise Exception(f"Failed to copy app bundle: {e2}")
+
+    def _copy_directory_selective(self, source: Path, target: Path) -> None:
+        """Copy directory contents selectively, skipping problematic files."""
+        for item in source.iterdir():
+            source_item = source / item.name
+            target_item = target / item.name
+
+            try:
+                if item.is_dir():
+                    # Create directory and recurse
+                    target_item.mkdir(exist_ok=True)
+                    self._copy_directory_selective(source_item, target_item)
+                else:
+                    # Copy file
+                    shutil.copy2(source_item, target_item)
+
+            except Exception as e:
+                # Handle specific error types and decide whether to skip or fail
+                error_msg = str(e).lower()
+                file_path_str = str(source_item).lower()
+
+                # Skip these types of files/errors safely
+                skip_patterns = [
+                    "voice_models",
+                    "speechbrain",
+                    "ollama_auto_install.json",
+                    ".config",
+                    "operation not permitted",
+                    "permission denied",
+                    "access denied",
+                ]
+
+                should_skip = any(
+                    pattern in file_path_str or pattern in error_msg
+                    for pattern in skip_patterns
+                )
+
+                if should_skip:
+                    logger.warning(
+                        f"Skipping file due to permissions/optional content: {source_item} ({e})"
+                    )
+                else:
+                    logger.error(f"Failed to copy essential file: {source_item} ({e})")
+                    raise
 
     def _schedule_restart(self) -> None:
         """Schedule the app to restart after update."""
