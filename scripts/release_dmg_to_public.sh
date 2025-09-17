@@ -84,6 +84,7 @@ fi
 # Get current version with error handling
 echo "🔍 Reading current version from pyproject.toml..."
 if ! CURRENT_VERSION=$(python3 -c "
+import sys
 import tomllib
 try:
     with open('pyproject.toml', 'rb') as f:
@@ -126,25 +127,37 @@ if [ -f "$DMG_FILE" ]; then
     DMG_SIZE=$(du -h "$DMG_FILE" | cut -f1)
     echo -e "${GREEN}✅ DMG already exists:${NC} Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg ($DMG_SIZE)"
     echo
-    read -p "Use existing DMG or rebuild? (u/rebuild): " -n 1 -r
-    echo
-
-    if [[ $REPLY =~ ^[Rr]$ ]]; then
-        echo "🏗️ Will rebuild DMG..."
-        rm -f "$DMG_FILE"
+    if [ -t 0 ]; then
+        # Interactive mode - prompt user
+        read -p "Use existing DMG or rebuild? (u/rebuild): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Rr]$ ]]; then
+            echo "🏗️ Will rebuild DMG..."
+            rm -f "$DMG_FILE"
+        else
+            echo "📦 Will use existing DMG"
+        fi
     else
+        # Non-interactive mode - use existing DMG
+        echo "⚠️  Non-interactive mode: Using existing DMG"
         echo "📦 Will use existing DMG"
     fi
 fi
 
-# Ask for confirmation
+# Ask for confirmation (handle non-interactive mode)
 echo
-read -p "Continue with release? (y/N): " -n 1 -r
-echo
-
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "❌ Release cancelled"
-    exit 0
+if [ -t 0 ]; then
+    # Interactive mode - prompt user
+    read -p "Continue with release? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "❌ Release cancelled"
+        exit 0
+    fi
+else
+    # Non-interactive mode - auto-proceed with warning
+    echo "⚠️  Non-interactive mode detected - auto-proceeding with release"
+    echo "   (Use interactive terminal to get confirmation prompts)"
 fi
 
 echo
@@ -192,11 +205,18 @@ if ! git diff-index --quiet HEAD -- 2>/dev/null; then
     echo "   This may cause inconsistencies between built DMG and published version"
     echo "   Consider committing all changes before release"
     echo
-    read -p "Continue anyway? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "❌ Release cancelled - commit changes first"
-        exit 1
+    if [ -t 0 ]; then
+        # Interactive mode - prompt user
+        read -p "Continue anyway? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "❌ Release cancelled - commit changes first"
+            exit 1
+        fi
+    else
+        # Non-interactive mode - warn but continue
+        echo "⚠️  Non-interactive mode: Continuing with uncommitted changes"
+        echo "   (This could cause build inconsistencies)"
     fi
 fi
 
@@ -224,11 +244,11 @@ if [ ! -f "$DMG_FILE" ]; then
     # Default to full build with all models bundled
     export BUNDLE_ALL_MODELS=1
 
-    # Check for HF token
-    if [ -z "$HF_TOKEN" ] && [ -f "$PROJECT_ROOT/config/credentials.yaml" ]; then
-        HF_TOKEN=$(grep "huggingface_token:" "$PROJECT_ROOT/config/credentials.yaml" | sed 's/.*: //' | tr -d '"' | tr -d "'")
+    # Check for HF token (handle unbound variable safely)
+    if [ -z "${HF_TOKEN:-}" ] && [ -f "$PROJECT_ROOT/config/credentials.yaml" ]; then
+        HF_TOKEN=$(grep "huggingface_token:" "$PROJECT_ROOT/config/credentials.yaml" | sed 's/.*: //' | tr -d '"' | tr -d "'") || HF_TOKEN=""
     fi
-    export HF_TOKEN
+    export HF_TOKEN="${HF_TOKEN:-}"
 
     echo "🔨 Running build with fail-fast enabled..."
     if ! bash "$SCRIPT_DIR/build_macos_app.sh" --make-dmg --skip-install --bundle-all; then
