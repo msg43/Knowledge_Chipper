@@ -4,9 +4,7 @@ Downloads directly during build - no pre-caching needed.
 """
 
 import os
-import shutil
 import sys
-import tempfile
 from pathlib import Path
 
 
@@ -32,7 +30,7 @@ def download_pyannote_for_dmg(app_bundle_path: Path, hf_token: str = None) -> bo
                     with open(cred_path) as f:
                         creds = yaml.safe_load(f) or {}
                     token = creds.get("api_keys", {}).get("huggingface_token")
-                except:
+                except Exception:
                     pass
 
         if not token or token == "your_huggingface_token_here":
@@ -65,10 +63,13 @@ def download_pyannote_for_dmg(app_bundle_path: Path, hf_token: str = None) -> bo
         print("✅ Pyannote model downloaded successfully!")
 
         # Create setup script in MacOS directory
+        macos_path = contents_path / "MacOS"
         setup_script = macos_path / "setup_bundled_pyannote.sh"
         with open(setup_script, "w") as f:
             f.write("#!/bin/bash\n")
-            f.write("# Setup script for bundled pyannote model (Resources location)\n")
+            f.write(
+                "# Setup script for bundled pyannote model " "(Resources location)\n"
+            )
             f.write(f'export PYANNOTE_MODEL_PATH="{models_dir}"\n')
             f.write('export PYANNOTE_BUNDLED="true"\n')
             f.write('export PYANNOTE_INTERNAL_USE="true"\n')
