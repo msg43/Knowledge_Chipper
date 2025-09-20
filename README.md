@@ -12,16 +12,14 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 
 ## 🎉 What's New (Latest Updates)
 
-### 🚀 **Complete Offline DMG by Default (January 2025)**
-- **Full Bundle Default**: DMG builds now include ALL models by default (~4.4GB)
-- **100% Offline**: Includes FFMPEG, Pyannote, Whisper, Ollama, Llama 3.2:3b, and Voice Fingerprinting models
-- **97% Accuracy Built-In**: Voice fingerprinting models (~410MB) bundled for immediate high-accuracy speaker identification
-- **Zero Downloads**: Everything works immediately after DMG install - no internet required
-- **Two Release Options**:
-  - Full DMG (~4.4GB): Default - Everything pre-bundled including voice models for offline use
-  - Minimal DMG (~1GB): Optional - Models download on first use
-- **Build Commands**:
-  - Full (Default): `./scripts/release_dmg_to_public.sh`
+### 📦 **Complete Bundle Approach: Everything Included (January 2025)**
+- **Full-Featured DMG**: ~600MB with all models and dependencies included
+- **Offline Ready**: Works completely without internet connection
+- **No Setup Required**: All AI models, tools, and dependencies pre-installed
+- **Simple Installation**: Just right-click → Open to bypass Gatekeeper warnings
+- **Self-Contained**: Everything bundled for immediate use
+- **No Runtime Downloads**: All features available immediately after installation
+- **Build Command**: `./scripts/release_dmg_to_public.sh`
   - Minimal: `./scripts/release_minimal_dmg.sh`
   - Manual: `./scripts/build_macos_app.sh --make-dmg [--no-bundle for minimal]`
 
@@ -75,18 +73,17 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 - **Audio File Support**: Local audio transcriptions save with consistent IDs based on file path
 - **Transparent Operation**: Database saves occur silently in background without affecting workflow
 
-### 🤖 **MVP AI System with Complete Model Bundle (January 2025)**
-- **Zero-Setup AI**: Built-in offline AI system automatically identifies speakers without API keys or internet
-- **Complete Model Bundle**: ALL models pre-bundled for internal company use:
-  - Whisper transcription model (~140MB) - included in setup
-  - Ollama LLM model (~2GB) - included for speaker suggestions
-  - Pyannote diarization model (~400MB) - bundled in DMG (internal use)
-- **No Internet Required**: All models work completely offline from first launch
-- **No Processing Delays**: Everything pre-installed and ready to use immediately
-- **Model Download Utility**: Run `python scripts/download_models.py` to update models if needed
-- **Intelligent Speaker Recognition**: Analyzes conversation context to suggest real names (e.g., "Joe Rogan", "Elon Musk") instead of generic labels
-- **Performance Metrics**: Real-time status display shows model info, service health, and performance indicators
-- **Internal Company Distribution**: Pre-accepted terms for all company users
+### 🤖 **Smart AI System with Runtime Downloads (January 2025)**
+- **First-Run Setup**: Guided wizard downloads only the models you need
+- **Smart Model Management**: Models download automatically when first needed:
+  - Whisper transcription model (~300MB) - downloads on first audio transcription
+  - Ollama LLM model (~2GB) - downloads on first AI assistant use
+  - Pyannote diarization model (~400MB) - downloads on first speaker separation
+  - Voice fingerprinting models (~410MB) - downloads on first voice analysis
+- **User Cache Storage**: All models stored in `~/Library/Caches/Skip the Podcast Desktop/`
+- **Intelligent Speaker Recognition**: Analyzes conversation context to suggest real names
+- **Performance Metrics**: Real-time status display shows model info and download progress
+- **Optional Components**: Skip optional models for faster setup, download later as needed
 
 ### 🎬 **Silent FFMPEG Bundling in DMG Installer (January 2025)**
 - **Zero-Setup YouTube Transcription**: FFMPEG automatically included in .dmg distributions - works immediately after install
@@ -520,15 +517,15 @@ pip install -e ".[voice]"        # Just voice fingerprinting dependencies
 ./scripts/setup_dev_models.sh
 ```
 
-**Complete Model Bundle (DMG Distribution):**
-- 🎙️ Speaker diarization + voice fingerprinting work immediately - no setup required
-- 📦 Pyannote model pre-bundled in DMG (~400MB)
-- 🎙️ Voice fingerprinting models pre-bundled (~410MB for 97% accuracy)
-- 🧠 HCE dependencies (sentence-transformers, scikit-learn) pre-installed
-- 🔒 Terms pre-accepted for all company users
-- ⚡ Works offline from first launch with full feature set
-- ✅ No HuggingFace account needed
-- 💾 Full DMG (~4.4GB) includes everything; Minimal DMG (~1GB) downloads on first use
+**Architecture B Model Management:**
+- 🚀 Small app bundle (~500MB) with core dependencies only
+- 📦 First-run setup wizard guides through model downloads
+- 🎙️ Models download to user cache directory when first needed
+- 🧠 Smart dependency detection - only downloads what you'll use
+- 🔒 HuggingFace token setup for authenticated model downloads
+- ⚡ Fast app launch, models download in background
+- ✅ Optional components can be skipped for minimal setup
+- 💾 Clean separation: app code vs. user data/models
 
 **Setup time:** 2-5 minutes (vs 15+ minutes manual)
 

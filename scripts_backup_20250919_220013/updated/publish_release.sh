@@ -1,6 +1,6 @@
 #!/bin/bash
 # publish_release.sh - Create and push a tagged release to public GitHub repository
-# This script creates a release on the public repository with the built PKG
+# This script creates a release on the public repository with the built DMG
 
 set -e
 
@@ -55,8 +55,8 @@ while [[ $# -gt 0 ]]; do
         --help)
             echo "Usage: $0 [options]"
             echo "Options:"
-            echo "  --force-rebuild  Force rebuild of PKG even if current version exists"
-            echo "  --skip-build     Skip building PKG, just publish existing one"
+            echo "  --force-rebuild  Force rebuild of DMG even if current version exists"
+            echo "  --skip-build     Skip building DMG, just publish existing one"
             echo "  --dry-run        Show what would be done without actually doing it"
             echo "  --help           Show this help message"
             exit 0
@@ -104,23 +104,23 @@ fi
 
 log "📋 Current version: $CURRENT_VERSION"
 
-# Check if PKG exists for current version
-PKG_FILE="$PRIVATE_REPO_PATH/dist/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.pkg"
+# Check if DMG exists for current version
+DMG_FILE="$PRIVATE_REPO_PATH/dist/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
 
 if [ "$SKIP_BUILD" -eq 0 ]; then
-    if [ -f "$PKG_FILE" ] && [ "$FORCE_REBUILD" -eq 0 ]; then
-        log "📦 PKG already exists for version $CURRENT_VERSION"
-        read -p "Use existing PKG? (y/N): " -n 1 -r
+    if [ -f "$DMG_FILE" ] && [ "$FORCE_REBUILD" -eq 0 ]; then
+        log "📦 DMG already exists for version $CURRENT_VERSION"
+        read -p "Use existing DMG? (y/N): " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            log "🏗️ Rebuilding PKG..."
-            rm -f "$PKG_FILE"
+            log "🏗️ Rebuilding DMG..."
+            rm -f "$DMG_FILE"
         fi
     fi
 
-    # Build PKG if it doesn't exist
-    if [ ! -f "$PKG_FILE" ]; then
-        log "🏗️ Building PKG with build_macos_app.sh..."
+    # Build DMG if it doesn't exist
+    if [ ! -f "$DMG_FILE" ]; then
+        log "🏗️ Building DMG with build_macos_app.sh..."
         if [ "$DRY_RUN" -eq 1 ]; then
             log "[DRY RUN] Would run: bash scripts/build_macos_app.sh --make-dmg --skip-install"
         else
@@ -129,18 +129,18 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
     fi
 fi
 
-# Verify PKG exists (skip in dry-run mode)
-if [ "$DRY_RUN" -eq 0 ] && [ ! -f "$PKG_FILE" ]; then
-    error "PKG file not found: $PKG_FILE"
+# Verify DMG exists (skip in dry-run mode)
+if [ "$DRY_RUN" -eq 0 ] && [ ! -f "$DMG_FILE" ]; then
+    error "DMG file not found: $DMG_FILE"
     exit 1
 fi
 
-if [ -f "$PKG_FILE" ]; then
-    PKG_SIZE=$(du -h "$PKG_FILE" | cut -f1)
-    log "📦 PKG ready: $PKG_FILE ($PKG_SIZE)"
+if [ -f "$DMG_FILE" ]; then
+    DMG_SIZE=$(du -h "$DMG_FILE" | cut -f1)
+    log "📦 DMG ready: $DMG_FILE ($DMG_SIZE)"
 else
-    PKG_SIZE="(estimated ~200MB)"
-    log "📦 PKG would be created: $PKG_FILE"
+    DMG_SIZE="(estimated ~200MB)"
+    log "📦 DMG would be created: $DMG_FILE"
 fi
 
 # Setup temporary directory for public repo
@@ -179,8 +179,8 @@ Download the latest release from the [Releases](https://github.com/msg43/skipthe
 
 ## Installation
 
-1. Download the latest \`.pkg\` file from releases
-2. Open the \`.pkg\` file
+1. Download the latest \`.dmg\` file from releases
+2. Open the \`.dmg\` file
 3. Drag Skip the Podcast.app to your Applications folder
 4. Launch from Applications
 
@@ -210,7 +210,7 @@ log "🏷️ Creating tag: $TAG_NAME"
 if [ "$DRY_RUN" -eq 1 ]; then
     log "[DRY RUN] Would create tag: $TAG_NAME"
     log "[DRY RUN] Would update README.md with version info"
-    log "[DRY RUN] Would create GitHub release with PKG asset"
+    log "[DRY RUN] Would create GitHub release with DMG asset"
 else
     cd "$TEMP_DIR/$PUBLIC_REPO_NAME"
 
@@ -228,7 +228,7 @@ else
         fi
     fi
 
-    # Commit only the README update (no PKG files)
+    # Commit only the README update (no DMG files)
     git add README.md
     if ! git diff --staged --quiet; then
         git commit -m "Update README for v${CURRENT_VERSION}
@@ -249,7 +249,7 @@ else
 Release notes:
 - Version: ${CURRENT_VERSION}
 - Build date: $(date +"%Y-%m-%d")
-- PKG size: $PKG_SIZE
+- DMG size: $DMG_SIZE
 
 This is an automated release from the build system."
 
@@ -266,7 +266,7 @@ if command -v gh >/dev/null 2>&1; then
         log "[DRY RUN] Would create GitHub release with:"
         log "  Title: Skip the Podcast v${CURRENT_VERSION}"
         log "  Tag: $TAG_NAME"
-        log "  Assets: $PKG_FILE"
+        log "  Assets: $DMG_FILE"
         log "         README.md (from $PRIVATE_REPO_PATH/README.md)"
     else
         cd "$TEMP_DIR/$PUBLIC_REPO_NAME"
@@ -280,7 +280,7 @@ if command -v gh >/dev/null 2>&1; then
         # Copy README.md from private repo to temp location for upload
         cp "$PRIVATE_REPO_PATH/README.md" "./README.md"
 
-        # Create the release with PKG asset and README.md
+        # Create the release with DMG asset and README.md
         gh release create "$TAG_NAME" \
             --repo "msg43/skipthepodcast.com" \
             --title "Skip the Podcast v${CURRENT_VERSION}" \
@@ -289,7 +289,7 @@ if command -v gh >/dev/null 2>&1; then
 🍎 **macOS Application Release**
 
 ## Installation
-1. Download the \`.pkg\` file below
+1. Download the \`.dmg\` file below
 2. Open the downloaded file
 3. Drag Skip the Podcast.app to your Applications folder
 4. Launch from Applications
@@ -297,7 +297,7 @@ if command -v gh >/dev/null 2>&1; then
 ## Release Info
 - **Version:** ${CURRENT_VERSION}
 - **Build Date:** $(date +"%Y-%m-%d")
-- **File Size:** $PKG_SIZE
+- **File Size:** $DMG_SIZE
 - **Platform:** macOS (Universal Binary)
 
 ## What's New
@@ -307,14 +307,14 @@ This release includes the latest features and improvements from the Skip the Pod
 
 ---
 *This release was automatically generated from the build system.*" \
-            "$PKG_FILE" \
+            "$DMG_FILE" \
             "./README.md"
     fi
 else
     warning "GitHub CLI (gh) not found. Release created but you'll need to manually:"
     warning "1. Go to https://github.com/msg43/skipthepodcast.com/releases"
     warning "2. Create a new release for tag $TAG_NAME"
-    warning "3. Upload the PKG file: $PKG_FILE"
+    warning "3. Upload the DMG file: $DMG_FILE"
     warning "4. Upload the README.md file: $PRIVATE_REPO_PATH/README.md"
 fi
 
@@ -322,7 +322,7 @@ success "🎉 Release publication complete!"
 log "📍 Public repository: https://github.com/msg43/skipthepodcast.com"
 log "📍 Releases page: https://github.com/msg43/skipthepodcast.com/releases"
 log "📦 Release tag: $TAG_NAME"
-log "💾 PKG size: $PKG_SIZE"
+log "💾 DMG size: $DMG_SIZE"
 
 if [ "$DRY_RUN" -eq 1 ]; then
     warning "This was a dry run. No actual changes were made."

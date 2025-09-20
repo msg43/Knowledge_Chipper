@@ -285,3 +285,12 @@ tests/fixtures/test_configs/
 
 # All test data files (can be recreated with scripts)
 data/test_files/
+
+# PKG build artifacts
+build_pkg/
+build_app_template/
+build_framework/
+build_ai_models/
+build_ffmpeg/
+*.pkg
+dist/*.tar.gz

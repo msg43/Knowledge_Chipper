@@ -182,7 +182,7 @@ def download_voice_models_for_dmg(
 
     # Create voice models directory in app bundle
     macos_path = app_bundle_path / "Contents" / "MacOS"
-    voice_models_dir = macos_path / ".cache" / "knowledge_chipper" / "voice_models"
+    voice_models_dir = macos_path / ".." / "Resources" / "models" / "voice_models"
     voice_models_dir.mkdir(parents=True, exist_ok=True)
 
     # Get the app bundle's Python executable (required for SpeechBrain)
@@ -220,7 +220,7 @@ def download_voice_models_for_dmg(
 APP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Voice models cache
-VOICE_CACHE="$APP_DIR/.cache/knowledge_chipper/voice_models"
+VOICE_CACHE="$APP_DIR/../Resources/models/voice_models"
 export VOICE_MODELS_CACHE="$VOICE_CACHE"
 export HF_HOME="$VOICE_CACHE/wav2vec2"
 export SPEECHBRAIN_CACHE="$VOICE_CACHE/speechbrain"

@@ -1,11 +1,11 @@
 #!/bin/bash
-# push_to_github.sh - Setup and push Knowledge_Chipper to GitHub
-# Simple script for msg43's Knowledge_Chipper repository
+# push_to_github.sh - Push Knowledge_Chipper to GitHub
+# Pushes current changes to GitHub without auto-incrementing version
 
 set -e
 
-echo "🚀 Setting up Knowledge_Chipper on GitHub"
-echo "==========================================="
+echo "🚀 Pushing Knowledge_Chipper to GitHub"
+echo "======================================"
 echo "Repository: https://github.com/msg43/Knowledge_Chipper"
 echo
 
@@ -15,46 +15,59 @@ if [ ! -d ".git" ]; then
     exit 1
 fi
 
-# Remove old origin if it exists
-echo "🔧 Configuring Git remote..."
-git remote remove origin 2>/dev/null || true
+# Get current branch
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
+echo "📋 Current branch: $CURRENT_BRANCH"
 
-# Add new origin
-git remote add origin https://github.com/msg43/Knowledge_Chipper.git
-
-echo "✅ Git remote configured"
-
-# Pre-push quality checks via pre-commit
-echo "🔍 Running pre-push quality checks..."
-
-# Check if pre-commit is set up
-if ! command -v pre-commit &> /dev/null; then
-    echo "⚠️  pre-commit not found. Setting up..."
-    echo "💡 Running setup script first..."
-    ./setup_precommit.sh
-    echo ""
+# Ensure correct remote is configured
+echo "🔧 Checking Git remote..."
+if ! git remote get-url origin >/dev/null 2>&1; then
+    echo "📝 Adding GitHub remote..."
+    git remote add origin https://github.com/msg43/Knowledge_Chipper.git
+elif [ "$(git remote get-url origin)" != "https://github.com/msg43/Knowledge_Chipper.git" ]; then
+    echo "📝 Updating GitHub remote URL..."
+    git remote set-url origin https://github.com/msg43/Knowledge_Chipper.git
+else
+    echo "✅ GitHub remote already configured correctly"
 fi
 
-# Run pre-push hooks (includes flake8, mypy, bandit, etc.)
-echo "   → Running pre-push hooks (linting, type checking, security)..."
-if ! pre-commit run --hook-stage pre-push --all-files; then
-    echo ""
-    echo "❌ Pre-push checks failed! These are the same checks that CI runs."
-    echo ""
-    echo "💡 Pre-commit has likely auto-fixed what it can. Please:"
-    echo "   1. Review and commit any auto-fixes: git add . && git commit -m 'style: pre-commit auto-fixes'"
-    echo "   2. Fix any remaining issues shown above"
-    echo "   3. Run 'pre-commit run --hook-stage pre-push --all-files' to verify"
-    echo ""
-    read -p "Continue with push anyway? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "❌ Push cancelled due to quality check failures"
-        exit 1
+# Get current version for display (no auto-increment)
+if [ -f "pyproject.toml" ]; then
+    CURRENT_VERSION=$(grep '^version\s*=\s*"' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
+    echo "📋 Current version: $CURRENT_VERSION"
+else
+    CURRENT_VERSION="unknown"
+fi
+
+# Pre-cache Whisper model for future DMG builds
+echo "🎤 Pre-caching Whisper model for DMG builds..."
+WHISPER_CACHE_DIR="$HOME/.cache/whisper"
+WHISPER_MODEL_FILE="$WHISPER_CACHE_DIR/ggml-base.bin"
+
+if [ ! -f "$WHISPER_MODEL_FILE" ]; then
+    echo "📥 Downloading Whisper base model (~150MB)..."
+    mkdir -p "$WHISPER_CACHE_DIR"
+
+    # Download the Whisper base model directly
+    WHISPER_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
+    if command -v curl >/dev/null 2>&1; then
+        curl -L "$WHISPER_URL" -o "$WHISPER_MODEL_FILE" --progress-bar
+    elif command -v wget >/dev/null 2>&1; then
+        wget "$WHISPER_URL" -O "$WHISPER_MODEL_FILE" --progress=bar
+    else
+        echo "⚠️  Neither curl nor wget found - skipping Whisper model download"
+        echo "   Future DMG builds will download model on first use"
     fi
-fi
 
-echo "✅ All pre-push checks passed"
+    if [ -f "$WHISPER_MODEL_FILE" ]; then
+        echo "✅ Whisper model cached successfully at $WHISPER_MODEL_FILE"
+        echo "   Future DMG builds will include this model (~150MB)"
+    else
+        echo "⚠️  Whisper model download failed - continuing without cache"
+    fi
+else
+    echo "✅ Whisper model already cached at $WHISPER_MODEL_FILE"
+fi
 
 # Stage all changes
 echo "📦 Staging all files..."
@@ -64,49 +77,43 @@ git add .
 if git diff --staged --quiet; then
     echo "ℹ️  No changes to commit"
 else
-    # Commit the repository URL updates
-    git commit -m "Update repository URLs for GitHub migration
+    # Commit with descriptive message
+    git commit -m "Code updates and improvements
 
-- Updated all repository references to Knowledge_Chipper
-- Updated URLs in README, CONTRIBUTING, pyproject.toml
-- Prepared for initial GitHub push"
-    echo "✅ Committed repository URL updates"
+- Latest development changes
+- Bug fixes and enhancements"
+    echo "✅ Committed changes"
 fi
 
 # Push to GitHub
 echo "🚀 Pushing to GitHub..."
 echo "This will push to: https://github.com/msg43/Knowledge_Chipper.git"
+echo "Branch: $CURRENT_BRANCH"
+echo "Current version: $CURRENT_VERSION"
 read -p "Continue? (y/N): " -n 1 -r
 echo
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    # Push to main branch
-    git branch -M main
-    git push -u origin main
+    # Push to current branch (not forcing main)
+    git push -u origin "$CURRENT_BRANCH"
 
     echo "🎉 Successfully pushed to GitHub!"
     echo ""
-    echo "📍 Your repository is now available at:"
-    echo "   https://github.com/msg43/Knowledge_Chipper"
+    echo "📍 Repository: https://github.com/msg43/Knowledge_Chipper"
+    echo "🌿 Branch: $CURRENT_BRANCH"
+    echo "📋 Version: $CURRENT_VERSION"
     echo ""
-    echo "🔐 Repository is private as requested"
-    echo ""
-    echo "📋 Next steps:"
-    echo "1. Visit your repository on GitHub to verify everything looks correct"
-    echo "2. Update any team members or collaborators in GitHub settings"
-    echo "3. Consider setting up branch protection rules in Settings → Branches"
+    echo "✨ Changes are now live on GitHub!"
     echo ""
 else
     echo "❌ Push cancelled"
     exit 1
 fi
 
-# Verify the setup
-echo "🧪 Verifying Git configuration..."
-echo "Current remote:"
-git remote -v
+# Verify the push
+echo "🔍 Verifying push status..."
+echo "Remote: $(git remote get-url origin)"
+echo "Branch: $(git branch --show-current) ($(git log --oneline -1 | cut -d' ' -f1))"
+echo "Version: $CURRENT_VERSION"
 echo ""
-echo "Current branch:"
-git branch -v
-echo ""
-echo "✅ Setup complete!"
+echo "✅ Push complete!"

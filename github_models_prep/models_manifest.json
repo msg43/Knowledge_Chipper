@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "created": "2024-09-18",
+  "description": "Skip the Podcast Desktop - Pre-bundled AI Models",
+  "models": {
+    "whisper-base": {
+      "file": "ggml-base.bin",
+      "size": 147951465,
+      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+      "description": "Whisper Base Model for speech transcription"
+    },
+    "wav2vec2-base": {
+      "file": "wav2vec2-base-960h.tar.gz",
+      "size": 661780099,
+      "sha256": "6f7d4b203b5ecea59829f7c0135050a11bc74a2c617af2021a0f817e43a1fa03",
+      "description": "Facebook Wav2Vec2 base model for voice features"
+    },
+    "ecapa-tdnn": {
+      "file": "spkrec-ecapa-voxceleb.tar.gz",
+      "size": 83108478,
+      "sha256": "c1f562b068fb391457231988abd96988dbbff5d3931234093b161a739a2d3d50",
+      "description": "SpeechBrain ECAPA-TDNN speaker recognition model"
+    }
+  },
+  "total_size": 892840042,
+  "installation_notes": [
+    "Extract archives to your app's models directory",
+    "Verify checksums before use",
+    "Models are ready for offline use"
+  ]
+}
