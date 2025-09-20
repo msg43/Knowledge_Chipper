@@ -131,25 +131,33 @@ print_section "🏗️ Starting Build Process"
 # Create dist directory
 mkdir -p "$PROJECT_ROOT/dist"
 
-# Build Python Framework (rarely changes)
+# Build Python Framework (check if source changed)
 if [ $SKIP_FRAMEWORK -eq 0 ]; then
     print_section "🐍 Building Python Framework"
 
-    if [ -f "$PROJECT_ROOT/dist/python-framework-3.13-macos.tar.gz" ]; then
-        # Check if framework is recent (less than 7 days old)
-        if [ $(find "$PROJECT_ROOT/dist" -name "python-framework-3.13-macos.tar.gz" -mtime -7 | wc -l) -gt 0 ]; then
-            print_status "Using existing Python framework (built within 7 days)"
+    # Check if we need to rebuild based on source changes
+    FRAMEWORK_CACHE_FILE="$PROJECT_ROOT/dist/.python_framework_hash"
+    NEEDS_REBUILD=1
+
+    if [ -f "$PROJECT_ROOT/dist/python-framework-3.13-macos.tar.gz" ] && [ -f "$FRAMEWORK_CACHE_FILE" ]; then
+        # Calculate hash of framework build script
+        CURRENT_HASH=$(shasum -a 256 "$SCRIPT_DIR/build_python_framework.sh" | cut -d' ' -f1)
+        CACHED_HASH=$(cat "$FRAMEWORK_CACHE_FILE" 2>/dev/null || echo "")
+
+        if [ "$CURRENT_HASH" = "$CACHED_HASH" ]; then
+            print_status "Python framework up-to-date (build script unchanged)"
+            NEEDS_REBUILD=0
         else
-            print_warning "Python framework exists but is older than 7 days"
-            read -p "Rebuild? (y/N): " -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                rm -f "$PROJECT_ROOT/dist/python-framework-3.13-macos.tar.gz"*
-                "$SCRIPT_DIR/build_python_framework.sh"
-            fi
+            print_warning "Python framework build script changed - rebuilding"
         fi
     else
+        print_warning "No existing framework or cache found"
+    fi
+
+    if [ $NEEDS_REBUILD -eq 1 ]; then
         "$SCRIPT_DIR/build_python_framework.sh"
+        # Cache the hash after successful build
+        shasum -a 256 "$SCRIPT_DIR/build_python_framework.sh" | cut -d' ' -f1 > "$FRAMEWORK_CACHE_FILE"
     fi
 
     print_status "Python framework ready"
@@ -161,25 +169,60 @@ else
     fi
 fi
 
-# Build AI Models Bundle (static - changes very rarely)
+# Build AI Models Bundle (check if model sources changed)
 if [ $SKIP_MODELS -eq 0 ]; then
     print_section "🧠 Building AI Models Bundle"
 
-    if [ -f "$PROJECT_ROOT/dist/ai-models-bundle.tar.gz" ]; then
-        # Check if models bundle is recent (less than 30 days old)
-        if [ $(find "$PROJECT_ROOT/dist" -name "ai-models-bundle.tar.gz" -mtime -30 | wc -l) -gt 0 ]; then
-            print_status "Using existing AI models bundle (built within 30 days)"
+    # Check if we need to rebuild based on source changes
+    MODELS_CACHE_FILE="$PROJECT_ROOT/dist/.ai_models_hash"
+    NEEDS_REBUILD=1
+
+    if [ -f "$PROJECT_ROOT/dist/ai-models-bundle.tar.gz" ] && [ -f "$MODELS_CACHE_FILE" ]; then
+        # Calculate hash of model sources and build script
+        MODEL_SOURCES=""
+
+        # Check github_models_prep directory for manually added models
+        if [ -d "$PROJECT_ROOT/github_models_prep" ]; then
+            MODEL_SOURCES=$(find "$PROJECT_ROOT/github_models_prep" -type f \( -name "*.bin" -o -name "*.tar.gz" -o -name "*.json" \) 2>/dev/null | sort)
+        fi
+
+        # Include the bundle script itself
+        MODEL_SOURCES="$MODEL_SOURCES $SCRIPT_DIR/bundle_ai_models.sh"
+
+        # Calculate combined hash
+        CURRENT_HASH=""
+        if [ -n "$MODEL_SOURCES" ]; then
+            CURRENT_HASH=$(echo "$MODEL_SOURCES" | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
         else
-            print_warning "AI models bundle exists but is older than 30 days"
-            read -p "Rebuild? (y/N): " -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                rm -f "$PROJECT_ROOT/dist/ai-models-bundle.tar.gz"*
-                "$SCRIPT_DIR/bundle_ai_models.sh"
-            fi
+            CURRENT_HASH=$(shasum -a 256 "$SCRIPT_DIR/bundle_ai_models.sh" | cut -d' ' -f1)
+        fi
+
+        CACHED_HASH=$(cat "$MODELS_CACHE_FILE" 2>/dev/null || echo "")
+
+        if [ "$CURRENT_HASH" = "$CACHED_HASH" ]; then
+            print_status "AI models bundle up-to-date (no source changes detected)"
+            NEEDS_REBUILD=0
+        else
+            print_warning "AI model sources or build script changed - rebuilding"
         fi
     else
+        print_warning "No existing models bundle or cache found"
+    fi
+
+    if [ $NEEDS_REBUILD -eq 1 ]; then
         "$SCRIPT_DIR/bundle_ai_models.sh"
+        # Cache the hash after successful build
+        MODEL_SOURCES=""
+        if [ -d "$PROJECT_ROOT/github_models_prep" ]; then
+            MODEL_SOURCES=$(find "$PROJECT_ROOT/github_models_prep" -type f \( -name "*.bin" -o -name "*.tar.gz" -o -name "*.json" \) 2>/dev/null | sort)
+        fi
+        MODEL_SOURCES="$MODEL_SOURCES $SCRIPT_DIR/bundle_ai_models.sh"
+
+        if [ -n "$MODEL_SOURCES" ]; then
+            echo "$MODEL_SOURCES" | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1 > "$MODELS_CACHE_FILE"
+        else
+            shasum -a 256 "$SCRIPT_DIR/bundle_ai_models.sh" | cut -d' ' -f1 > "$MODELS_CACHE_FILE"
+        fi
     fi
 
     print_status "AI models bundle ready"

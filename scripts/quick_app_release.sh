@@ -85,8 +85,8 @@ print_error() {
     echo -e "${RED}❌${NC} $1"
 }
 
-# Check if static components exist
-echo -e "${BLUE}📋 Checking existing components...${NC}"
+# Check if static components exist and if app code changed
+echo -e "${BLUE}📋 Checking existing components and app code changes...${NC}"
 
 MISSING_COMPONENTS=()
 
@@ -100,6 +100,15 @@ fi
 
 if [ ! -f "$PROJECT_ROOT/dist/ffmpeg-macos-universal.tar.gz" ]; then
     MISSING_COMPONENTS+=("FFmpeg bundle")
+fi
+
+# Check if app code has changed using intelligent cache
+APP_CODE_STATUS=$("$SCRIPT_DIR/intelligent_build_cache.sh" check app_code 2>/dev/null | head -1)
+if [[ "$APP_CODE_STATUS" == "REBUILD_NEEDED:"* ]]; then
+    print_status "App code changes detected - PKG will be rebuilt"
+elif [[ "$APP_CODE_STATUS" == "UP_TO_DATE:"* ]]; then
+    print_warning "No app code changes detected since last build"
+    echo "Proceeding anyway (you may have other changes)..."
 fi
 
 if [ ${#MISSING_COMPONENTS[@]} -gt 0 ]; then
