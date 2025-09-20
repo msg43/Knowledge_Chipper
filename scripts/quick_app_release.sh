@@ -85,6 +85,26 @@ print_error() {
     echo -e "${RED}❌${NC} $1"
 }
 
+# Check prerequisites for upload
+if [ $UPLOAD_RELEASE -eq 1 ]; then
+    echo -e "${BLUE}📋 Checking GitHub CLI prerequisites...${NC}"
+
+    if ! command -v gh &> /dev/null; then
+        print_error "GitHub CLI (gh) is required for release upload but not installed"
+        echo "Install with: brew install gh"
+        exit 1
+    fi
+
+    if ! gh auth status &> /dev/null; then
+        print_error "GitHub CLI not authenticated"
+        echo "Authenticate with: gh auth login"
+        exit 1
+    fi
+
+    print_status "GitHub CLI ready for release upload"
+    echo ""
+fi
+
 # Check if static components exist and if app code changed
 echo -e "${BLUE}📋 Checking existing components and app code changes...${NC}"
 
@@ -157,22 +177,70 @@ fi
 # Quick PKG build (skipping static components)
 echo -e "${BLUE}📦 Building PKG with app code changes...${NC}"
 
-BUILD_CMD="$SCRIPT_DIR/build_complete_pkg.sh --skip-framework --skip-models --skip-ffmpeg"
-
-if [ $UPLOAD_RELEASE -eq 1 ]; then
-    BUILD_CMD="$BUILD_CMD --upload-release"
-else
-    BUILD_CMD="$BUILD_CMD --build-only"
-fi
+BUILD_CMD="$SCRIPT_DIR/build_complete_pkg.sh --skip-framework --skip-models --skip-ffmpeg --build-only --force"
 
 echo "Running: $BUILD_CMD"
 echo ""
 
 if $BUILD_CMD; then
-    print_status "Quick build completed successfully"
+    print_status "PKG built successfully"
 else
-    print_error "Quick build failed"
+    print_error "PKG build failed"
     exit 1
+fi
+
+# Handle quick release upload separately (PKG only)
+if [ $UPLOAD_RELEASE -eq 1 ]; then
+    echo ""
+    echo -e "${BLUE}🚀 Creating quick GitHub release (PKG only)...${NC}"
+
+    VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('$PROJECT_ROOT/pyproject.toml', 'rb'))['project']['version'])")
+    PKG_FILE="$PROJECT_ROOT/dist/Skip_the_Podcast_Desktop-$VERSION.pkg"
+    README_FILE="$PROJECT_ROOT/README.md"
+
+    if [ ! -f "$PKG_FILE" ]; then
+        print_error "PKG file not found: $PKG_FILE"
+        exit 1
+    fi
+
+    # Check if release already exists
+    if gh release view "v$VERSION" --repo msg43/skipthepodcast.com &>/dev/null; then
+        echo -e "${YELLOW}Release v$VERSION already exists. Updating with new PKG...${NC}"
+
+        # Delete existing assets if they exist
+        gh release delete-asset "v$VERSION" "Skip_the_Podcast_Desktop-$VERSION.pkg" --repo msg43/skipthepodcast.com --yes 2>/dev/null || true
+        gh release delete-asset "v$VERSION" "README.md" --repo msg43/skipthepodcast.com --yes 2>/dev/null || true
+
+        # Upload new PKG and README
+        gh release upload "v$VERSION" "$PKG_FILE" "$README_FILE" --repo msg43/skipthepodcast.com
+        print_status "PKG updated in existing release v$VERSION"
+    else
+        # Create new release with PKG only
+        RELEASE_NOTES="# Skip the Podcast Desktop v$VERSION
+
+## Quick App Update
+This is a quick release containing app code changes only. Static components (Python framework, AI models, FFmpeg) are downloaded automatically during installation.
+
+### Installation
+Download and run the PKG installer. All required components will be downloaded automatically:
+- Python Framework (~40MB)
+- AI Models (~1.2GB)
+- FFmpeg (~48MB)
+- Ollama (~50MB)
+- Hardware-optimized Ollama model (1.3-4.7GB)
+
+### Changes
+App code improvements and bug fixes. See [CHANGELOG.md](https://github.com/msg43/Knowledge_Chipper/blob/main/CHANGELOG.md) for details."
+
+        gh release create "v$VERSION" "$PKG_FILE" "$README_FILE" \
+            --repo msg43/skipthepodcast.com \
+            --title "Skip the Podcast Desktop v$VERSION" \
+            --notes "$RELEASE_NOTES" \
+            --generate-notes=false \
+            --latest
+
+        print_status "New release v$VERSION created"
+    fi
 fi
 
 # Summary
@@ -195,7 +263,7 @@ echo "• ⏭️ FFmpeg (reused existing)"
 if [ $UPLOAD_RELEASE -eq 1 ]; then
     echo ""
     echo "🚀 Release uploaded to GitHub!"
-    echo "Download URL: https://github.com/msg43/Knowledge_Chipper/releases/tag/v$VERSION"
+    echo "Download URL: https://github.com/msg43/skipthepodcast.com/releases/tag/v$VERSION"
 else
     echo ""
     echo "📦 PKG ready for testing: dist/Skip_the_Podcast_Desktop-$VERSION.pkg"

@@ -134,6 +134,29 @@ fi
 
 print_status "App bundle skeleton created"
 
+# Copy app source code to bundle
+echo -e "\n${BLUE}📁 Copying app source code...${NC}"
+
+# Copy the main Python source code
+cp -r "$PROJECT_ROOT/src" "$APP_BUNDLE/Contents/Resources/"
+
+# Copy essential configuration files
+mkdir -p "$APP_BUNDLE/Contents/Resources/config"
+cp "$PROJECT_ROOT/pyproject.toml" "$APP_BUNDLE/Contents/Resources/"
+cp "$PROJECT_ROOT/requirements.txt" "$APP_BUNDLE/Contents/Resources/"
+
+# Copy essential data files (excluding test files)
+if [ -d "$PROJECT_ROOT/data" ]; then
+    mkdir -p "$APP_BUNDLE/Contents/Resources/data"
+    # Copy data files but exclude test_files directory
+    find "$PROJECT_ROOT/data" -maxdepth 1 -type f -exec cp {} "$APP_BUNDLE/Contents/Resources/data/" \;
+    # Copy any non-test subdirectories
+    find "$PROJECT_ROOT/data" -maxdepth 1 -type d ! -name "test_files" ! -name "data" -exec cp -r {} "$APP_BUNDLE/Contents/Resources/data/" \;
+fi
+
+APP_CODE_SIZE=$(du -sh "$APP_BUNDLE/Contents/Resources/src" | cut -f1)
+print_status "App source code copied ($APP_CODE_SIZE)"
+
 # Create component download infrastructure
 echo -e "\n${BLUE}🔧 Creating component download infrastructure...${NC}"
 
@@ -641,9 +664,49 @@ fi
 
 report_progress 10 "Internet connectivity verified"
 
-# Hardware detection
+# Hardware detection using system tools (simpler approach)
 echo "Detecting hardware specifications..."
-python3 /tmp/skip_the_podcast_installer_scripts/hardware_detector.py > /tmp/hardware_specs.json
+python3 -c "
+import subprocess
+import json
+import sys
+
+try:
+    # Get system info using system_profiler
+    result = subprocess.run(['system_profiler', 'SPHardwareDataType', '-json'],
+                          capture_output=True, text=True, timeout=10)
+    if result.returncode == 0:
+        data = json.loads(result.stdout)
+        hardware_info = data['SPHardwareDataType'][0]
+        chip_name = hardware_info.get('chip_type', '').lower()
+        memory_str = hardware_info.get('physical_memory', '16 GB')
+        memory_gb = int(memory_str.split()[0])
+
+        # Determine recommendation based on memory
+        if memory_gb >= 64:
+            recommendation = {'primary': 'llama3.2:8b', 'size': '4.7GB', 'description': 'High-quality model for Ultra systems'}
+        elif memory_gb >= 32:
+            recommendation = {'primary': 'llama3.2:8b', 'size': '4.7GB', 'description': 'Optimal for Max systems'}
+        elif memory_gb >= 16:
+            recommendation = {'primary': 'llama3.2:3b', 'size': '2GB', 'description': 'Balanced for Pro systems'}
+        else:
+            recommendation = {'primary': 'llama3.2:1b', 'size': '1.3GB', 'description': 'Efficient for base systems'}
+
+        result = {
+            'hardware': {'chip_type': chip_name, 'memory_gb': memory_gb, 'cpu_cores': 8},
+            'recommendation': recommendation
+        }
+        print(json.dumps(result))
+    else:
+        raise Exception('system_profiler failed')
+except:
+    # Fallback
+    result = {
+        'hardware': {'chip_type': 'M3', 'memory_gb': 16, 'cpu_cores': 8},
+        'recommendation': {'primary': 'llama3.2:3b', 'size': '2GB', 'description': 'Balanced for Pro systems'}
+    }
+    print(json.dumps(result))
+" > /tmp/hardware_specs.json
 
 report_progress 15 "Hardware detection complete"
 
@@ -688,7 +751,7 @@ report_progress 80 "Finalizing installation"
 
 # Download and install components
 echo "Downloading and installing components..."
-python3 /tmp/skip_the_podcast_installer_scripts/download_manager.py "$APP_BUNDLE"
+python3 "$APP_BUNDLE/Contents/Resources/installer_scripts/download_manager.py" "$APP_BUNDLE"
 
 report_progress 90 "Components installed"
 
@@ -738,13 +801,112 @@ chmod +x "$SCRIPTS_DIR/postinstall"
 
 print_status "Post-install script created"
 
-# Copy installer scripts to resources
-echo -e "\n${BLUE}📦 Copying installer scripts to resources...${NC}"
+# Copy installer scripts to both locations - resources for distribution and app bundle for runtime
+echo -e "\n${BLUE}📦 Copying installer scripts...${NC}"
 mkdir -p "$RESOURCES_DIR/installer_scripts"
+mkdir -p "$APP_BUNDLE/Contents/Resources/installer_scripts"
+
+# Copy to distribution resources
 cp "$SCRIPTS_DIR/download_manager.py" "$RESOURCES_DIR/installer_scripts/"
 cp "$SCRIPTS_DIR/hardware_detector.py" "$RESOURCES_DIR/installer_scripts/"
 
+# Copy to app bundle for runtime access
+cp "$SCRIPTS_DIR/download_manager.py" "$APP_BUNDLE/Contents/Resources/installer_scripts/"
+cp "$SCRIPTS_DIR/hardware_detector.py" "$APP_BUNDLE/Contents/Resources/installer_scripts/"
+
+# Create system-level files that definitely require root access
+echo -e "\n${BLUE}📝 Creating system-level installation components...${NC}"
+
+# Create LaunchDaemon directory (requires root)
+mkdir -p "$PKG_ROOT/Library/LaunchDaemons"
+cat > "$PKG_ROOT/Library/LaunchDaemons/com.knowledgechipper.skipthepodcast.setup.plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.knowledgechipper.skipthepodcast.setup</string>
+    <key>Disabled</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/echo</string>
+        <string>Skip the Podcast Desktop installation marker</string>
+    </array>
+</dict>
+</plist>
+EOF
+
+# Create system receipt that requires root
+mkdir -p "$PKG_ROOT/private/var/db/receipts"
+cat > "$PKG_ROOT/private/var/db/receipts/com.knowledgechipper.skipthepodcast.plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PackageIdentifier</key>
+    <string>com.knowledgechipper.skipthepodcast</string>
+    <key>PackageVersion</key>
+    <string>$VERSION</string>
+    <key>InstallDate</key>
+    <date>$(date -u +"%Y-%m-%dT%H:%M:%SZ")</date>
+    <key>InstallLocation</key>
+    <string>/Applications</string>
+</dict>
+</plist>
+EOF
+
+# Create system-wide command line tool (requires root)
+mkdir -p "$PKG_ROOT/usr/local/bin"
+cat > "$PKG_ROOT/usr/local/bin/skip-the-podcast" << 'EOF'
+#!/bin/bash
+# Skip the Podcast Desktop command line launcher
+open -a "Skip the Podcast Desktop" "$@"
+EOF
+chmod +x "$PKG_ROOT/usr/local/bin/skip-the-podcast"
+
+# Set proper ownership for system files to ensure root requirement
+echo -e "\n${BLUE}🔒 Setting system file permissions...${NC}"
+# Note: These will be set to root:wheel during installation
+chmod 644 "$PKG_ROOT/Library/LaunchDaemons/com.knowledgechipper.skipthepodcast.setup.plist"
+chmod 644 "$PKG_ROOT/private/var/db/receipts/com.knowledgechipper.skipthepodcast.plist"
+chmod 755 "$PKG_ROOT/usr/local/bin/skip-the-podcast"
+
 print_status "Installer scripts copied"
+
+# Create custom PackageInfo with authorization requirement
+echo -e "\n${BLUE}🔐 Creating PackageInfo with AdminAuthorization requirement...${NC}"
+mkdir -p "$SCRIPTS_DIR"
+cat > "$SCRIPTS_DIR/PackageInfo" << EOF
+<?xml version="1.0" encoding="utf-8"?>
+<pkg-info overwrite-permissions="true" relocatable="false" identifier="${PKG_IDENTIFIER}.components" postinstall-action="none" version="$VERSION" format-version="2" generator-version="InstallCmds-860" install-location="/" auth="root">
+    <payload numberOfFiles="$(find "$PKG_ROOT" -type f | wc -l | tr -d ' ')" installKBytes="$(du -sk "$PKG_ROOT" | cut -f1)"/>
+    <bundle path="./Applications/Skip the Podcast Desktop.app" id="${PKG_IDENTIFIER}" CFBundleShortVersionString="$VERSION" CFBundleVersion="$VERSION"/>
+    <bundle-version>
+        <bundle id="${PKG_IDENTIFIER}"/>
+    </bundle-version>
+    <upgrade-bundle>
+        <bundle id="${PKG_IDENTIFIER}"/>
+    </upgrade-bundle>
+    <update-bundle/>
+    <atomic-update-bundle/>
+    <strict-identifier>
+        <bundle id="${PKG_IDENTIFIER}"/>
+    </strict-identifier>
+    <relocate>
+        <bundle id="${PKG_IDENTIFIER}"/>
+    </relocate>
+    <scripts>
+        <preinstall file="./preinstall" timeout="600"/>
+        <postinstall file="./postinstall" timeout="600"/>
+    </scripts>
+    <authorization>
+        <required>AdminAuthorization</required>
+    </authorization>
+</pkg-info>
+EOF
 
 # Build component package
 echo -e "\n${BLUE}🔨 Building component package...${NC}"
@@ -755,7 +917,10 @@ pkgbuild \
     --root "$PKG_ROOT" \
     --identifier "${PKG_IDENTIFIER}.components" \
     --version "$VERSION" \
+    --install-location "/" \
     --scripts "$SCRIPTS_DIR" \
+    --ownership preserve \
+    --info "$SCRIPTS_DIR/PackageInfo" \
     "$COMPONENT_PKG"
 
 print_status "Component package built"
@@ -770,8 +935,18 @@ cat > "$DISTRIBUTION_XML" << EOF
 <installer-gui-script minSpecVersion="1">
     <title>$APP_NAME</title>
     <organization>$PKG_IDENTIFIER</organization>
-    <domains enable_localSystem="true"/>
-    <options customize="never" require-scripts="true" hostArchitectures="x86_64,arm64"/>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    <options customize="never" require-scripts="true" rootVolumeOnly="true" hostArchitectures="x86_64,arm64"/>
+
+    <!-- Explicitly require administrator authentication -->
+    <volume-check>
+        <allowed-os-versions>
+            <os-version before="99.0"/>
+        </allowed-os-versions>
+    </volume-check>
+
+    <!-- Set authentication level -->
+    <pkg-ref id="$PKG_IDENTIFIER.components" auth="root"/>
 
     <!-- Define documents displayed at various steps -->
     <welcome    file="welcome.html"    mime-type="text/html" />
@@ -786,7 +961,7 @@ cat > "$DISTRIBUTION_XML" << EOF
     </choices-outline>
 
     <choice id="default"/>
-    <choice id="$PKG_IDENTIFIER.components" visible="false">
+    <choice id="$PKG_IDENTIFIER.components" visible="false" start_enabled="true" start_selected="true">
         <pkg-ref id="$PKG_IDENTIFIER.components"/>
     </choice>
 
@@ -809,7 +984,7 @@ cat > "$RESOURCES_DIR/welcome.html" << 'EOF'
     <meta charset="utf-8">
     <title>Welcome</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; background-color: #2d2d2d; color: #ffffff; }
         h1 { color: #1d4ed8; }
         .feature { margin: 10px 0; }
         .icon { color: #10b981; font-weight: bold; }
@@ -841,8 +1016,8 @@ cat > "$RESOURCES_DIR/license.html" << 'EOF'
     <meta charset="utf-8">
     <title>License Agreement</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
-        .license { background: #f5f5f5; padding: 15px; border-radius: 5px; height: 300px; overflow-y: scroll; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; background-color: #2d2d2d; color: #ffffff; }
+        .license { background: #1a1a1a; border: 1px solid #444; padding: 15px; border-radius: 5px; height: 300px; overflow-y: scroll; color: #ffffff; }
     </style>
 </head>
 <body>
@@ -882,10 +1057,10 @@ cat > "$RESOURCES_DIR/conclusion.html" << 'EOF'
     <meta charset="utf-8">
     <title>Installation Complete</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; background-color: #2d2d2d; color: #ffffff; }
         h1 { color: #10b981; }
-        .success { background: #ecfdf5; border: 1px solid #10b981; padding: 15px; border-radius: 5px; }
-        .next-steps { background: #f0f9ff; border: 1px solid #0284c7; padding: 15px; border-radius: 5px; margin-top: 20px; }
+        .success { background: #0d4a2d; border: 1px solid #10b981; padding: 15px; border-radius: 5px; color: #ffffff; }
+        .next-steps { background: #1e293b; border: 1px solid #0284c7; padding: 15px; border-radius: 5px; margin-top: 20px; color: #ffffff; }
     </style>
 </head>
 <body>
@@ -917,6 +1092,37 @@ cat > "$RESOURCES_DIR/conclusion.html" << 'EOF'
 EOF
 
 print_status "Installer UI files created"
+
+# Create Info.plist for the distribution package to force authentication
+echo -e "\n${BLUE}🔐 Creating Info.plist with authentication requirement...${NC}"
+cat > "$RESOURCES_DIR/Info.plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>$PKG_IDENTIFIER</string>
+    <key>CFBundleVersion</key>
+    <string>$VERSION</string>
+    <key>IFPkgFlagAuthorizationAction</key>
+    <string>AdminAuthorization</string>
+    <key>IFPkgFlagDefaultLocation</key>
+    <string>/</string>
+    <key>IFPkgFlagInstallFat</key>
+    <false/>
+    <key>IFPkgFlagIsRequired</key>
+    <true/>
+    <key>IFPkgFlagRelocatable</key>
+    <false/>
+    <key>IFPkgFlagRestartAction</key>
+    <string>NoRestart</string>
+    <key>IFPkgFormatVersion</key>
+    <real>0.10000000149011612</real>
+</dict>
+</plist>
+EOF
+
+print_status "Info.plist with AdminAuthorization created"
 
 # Build final PKG
 echo -e "\n${BLUE}🏗️ Building final PKG installer...${NC}"

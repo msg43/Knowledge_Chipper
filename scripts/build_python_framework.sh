@@ -132,9 +132,9 @@ make -j$(sysctl -n hw.ncpu) || {
 
 print_status "Python framework built successfully"
 
-# Install framework
+# Install framework to our build directory (not system)
 echo -e "\n${BLUE}📦 Installing Python framework...${NC}"
-make frameworkinstall || {
+MAKEFLAGS="-j$(sysctl -n hw.ncpu)" make frameworkinstall DESTDIR="$BUILD_DIR/install" || {
     print_error "Framework installation failed"
     exit 1
 }
@@ -143,7 +143,14 @@ print_status "Python framework installed"
 
 # Verify framework structure
 echo -e "\n${BLUE}🔍 Verifying framework structure...${NC}"
-FRAMEWORK_PATH="$BUILD_DIR/framework/${FRAMEWORK_NAME}"
+FRAMEWORK_PATH="$BUILD_DIR/install$BUILD_DIR/framework/${FRAMEWORK_NAME}"
+
+# Also check the original build location
+if [ ! -d "$FRAMEWORK_PATH" ] && [ -d "$BUILD_DIR/framework/${FRAMEWORK_NAME}" ]; then
+    print_warning "Framework found in build directory, copying to install location"
+    mkdir -p "$(dirname "$FRAMEWORK_PATH")"
+    cp -R "$BUILD_DIR/framework/${FRAMEWORK_NAME}" "$FRAMEWORK_PATH"
+fi
 
 if [ ! -d "$FRAMEWORK_PATH" ]; then
     print_error "Framework directory not found: $FRAMEWORK_PATH"

@@ -284,6 +284,7 @@ if command -v gh >/dev/null 2>&1; then
         gh release create "$TAG_NAME" \
             --repo "msg43/skipthepodcast.com" \
             --title "Skip the Podcast v${CURRENT_VERSION}" \
+            --generate-notes=false \
             --notes "**Skip the Podcast v${CURRENT_VERSION}**
 
 🍎 **macOS Application Release**

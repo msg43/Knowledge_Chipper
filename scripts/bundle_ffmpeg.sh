@@ -60,7 +60,7 @@ if curl -L -o "ffmpeg.zip" "$FFMPEG_URL"; then
     unzip ffmpeg.zip
 
     # Find the FFmpeg binary
-    FFMPEG_BIN=$(find . -name "ffmpeg" -type f -executable | head -1)
+    FFMPEG_BIN=$(find . -name "ffmpeg" -type f -perm +111 | head -1)
 
     if [ -z "$FFMPEG_BIN" ]; then
         print_error "FFmpeg binary not found in download"

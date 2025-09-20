@@ -16,6 +16,7 @@ SKIP_MODELS=0
 SKIP_FFMPEG=0
 UPLOAD_RELEASE=0
 BUILD_ONLY=0
+FORCE_REBUILD=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -34,6 +35,9 @@ for arg in "$@"; do
         --build-only)
             BUILD_ONLY=1
             ;;
+        --force)
+            FORCE_REBUILD=1
+            ;;
         --help|-h)
             echo "Usage: $0 [options]"
             echo ""
@@ -43,6 +47,7 @@ for arg in "$@"; do
             echo "  --skip-ffmpeg      Skip FFmpeg bundle (use existing)"
             echo "  --upload-release   Create and upload GitHub release"
             echo "  --build-only       Build PKG but don't upload"
+            echo "  --force            Force rebuild existing files without prompting"
             echo "  --help, -h         Show this help message"
             echo ""
             echo "Examples:"
@@ -141,7 +146,7 @@ if [ $SKIP_FRAMEWORK -eq 0 ]; then
 
     if [ -f "$PROJECT_ROOT/dist/python-framework-3.13-macos.tar.gz" ] && [ -f "$FRAMEWORK_CACHE_FILE" ]; then
         # Calculate hash of framework build script
-        CURRENT_HASH=$(shasum -a 256 "$SCRIPT_DIR/build_python_framework.sh" | cut -d' ' -f1)
+        CURRENT_HASH=$(shasum -a 256 "$SCRIPT_DIR/build_simple_python_framework.sh" | cut -d' ' -f1)
         CACHED_HASH=$(cat "$FRAMEWORK_CACHE_FILE" 2>/dev/null || echo "")
 
         if [ "$CURRENT_HASH" = "$CACHED_HASH" ]; then
@@ -155,9 +160,9 @@ if [ $SKIP_FRAMEWORK -eq 0 ]; then
     fi
 
     if [ $NEEDS_REBUILD -eq 1 ]; then
-        "$SCRIPT_DIR/build_python_framework.sh"
+        "$SCRIPT_DIR/build_simple_python_framework.sh"
         # Cache the hash after successful build
-        shasum -a 256 "$SCRIPT_DIR/build_python_framework.sh" | cut -d' ' -f1 > "$FRAMEWORK_CACHE_FILE"
+        shasum -a 256 "$SCRIPT_DIR/build_simple_python_framework.sh" | cut -d' ' -f1 > "$FRAMEWORK_CACHE_FILE"
     fi
 
     print_status "Python framework ready"
@@ -187,14 +192,14 @@ if [ $SKIP_MODELS -eq 0 ]; then
         fi
 
         # Include the bundle script itself
-        MODEL_SOURCES="$MODEL_SOURCES $SCRIPT_DIR/bundle_ai_models.sh"
+        MODEL_SOURCES="$MODEL_SOURCES $SCRIPT_DIR/bundle_simple_ai_models.sh"
 
         # Calculate combined hash
         CURRENT_HASH=""
         if [ -n "$MODEL_SOURCES" ]; then
             CURRENT_HASH=$(echo "$MODEL_SOURCES" | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
         else
-            CURRENT_HASH=$(shasum -a 256 "$SCRIPT_DIR/bundle_ai_models.sh" | cut -d' ' -f1)
+            CURRENT_HASH=$(shasum -a 256 "$SCRIPT_DIR/bundle_simple_ai_models.sh" | cut -d' ' -f1)
         fi
 
         CACHED_HASH=$(cat "$MODELS_CACHE_FILE" 2>/dev/null || echo "")
@@ -210,18 +215,18 @@ if [ $SKIP_MODELS -eq 0 ]; then
     fi
 
     if [ $NEEDS_REBUILD -eq 1 ]; then
-        "$SCRIPT_DIR/bundle_ai_models.sh"
+        "$SCRIPT_DIR/bundle_simple_ai_models.sh"
         # Cache the hash after successful build
         MODEL_SOURCES=""
         if [ -d "$PROJECT_ROOT/github_models_prep" ]; then
             MODEL_SOURCES=$(find "$PROJECT_ROOT/github_models_prep" -type f \( -name "*.bin" -o -name "*.tar.gz" -o -name "*.json" \) 2>/dev/null | sort)
         fi
-        MODEL_SOURCES="$MODEL_SOURCES $SCRIPT_DIR/bundle_ai_models.sh"
+        MODEL_SOURCES="$MODEL_SOURCES $SCRIPT_DIR/bundle_simple_ai_models.sh"
 
         if [ -n "$MODEL_SOURCES" ]; then
             echo "$MODEL_SOURCES" | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1 > "$MODELS_CACHE_FILE"
         else
-            shasum -a 256 "$SCRIPT_DIR/bundle_ai_models.sh" | cut -d' ' -f1 > "$MODELS_CACHE_FILE"
+            shasum -a 256 "$SCRIPT_DIR/bundle_simple_ai_models.sh" | cut -d' ' -f1 > "$MODELS_CACHE_FILE"
         fi
     fi
 
@@ -263,12 +268,18 @@ fi
 print_section "📦 Building PKG Installer"
 
 if [ -f "$PROJECT_ROOT/dist/Skip_the_Podcast_Desktop-${VERSION}.pkg" ]; then
-    print_warning "PKG installer already exists"
-    read -p "Rebuild? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [ $FORCE_REBUILD -eq 1 ]; then
+        print_warning "PKG installer already exists - force rebuilding"
         rm -f "$PROJECT_ROOT/dist/Skip_the_Podcast_Desktop-${VERSION}.pkg"*
         "$SCRIPT_DIR/build_pkg_installer.sh"
+    else
+        print_warning "PKG installer already exists"
+        read -p "Rebuild? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            rm -f "$PROJECT_ROOT/dist/Skip_the_Podcast_Desktop-${VERSION}.pkg"*
+            "$SCRIPT_DIR/build_pkg_installer.sh"
+        fi
     fi
 else
     "$SCRIPT_DIR/build_pkg_installer.sh"
@@ -303,16 +314,43 @@ for component in "${COMPONENTS[@]}"; do
     fi
 done
 
-TOTAL_SIZE_HUMAN=$(numfmt --to=iec-i --suffix=B $TOTAL_SIZE)
+# Convert bytes to human readable format (macOS compatible)
+if [ $TOTAL_SIZE -gt 1073741824 ]; then
+    TOTAL_SIZE_HUMAN=$(echo "scale=1; $TOTAL_SIZE / 1073741824" | bc -l 2>/dev/null || echo "$((TOTAL_SIZE / 1073741824))")GB
+elif [ $TOTAL_SIZE -gt 1048576 ]; then
+    TOTAL_SIZE_HUMAN=$(echo "scale=1; $TOTAL_SIZE / 1048576" | bc -l 2>/dev/null || echo "$((TOTAL_SIZE / 1048576))")MB
+elif [ $TOTAL_SIZE -gt 1024 ]; then
+    TOTAL_SIZE_HUMAN=$(echo "scale=1; $TOTAL_SIZE / 1024" | bc -l 2>/dev/null || echo "$((TOTAL_SIZE / 1024))")KB
+else
+    TOTAL_SIZE_HUMAN="${TOTAL_SIZE}B"
+fi
 echo -e "\n${BOLD}Total Size: $TOTAL_SIZE_HUMAN${NC}"
 
 # PKG vs DMG comparison
 PKG_SIZE_BYTES=$(stat -f%z "Skip_the_Podcast_Desktop-${VERSION}.pkg" 2>/dev/null || echo "0")
-PKG_SIZE_HUMAN=$(numfmt --to=iec-i --suffix=B $PKG_SIZE_BYTES)
+# Convert PKG size to human readable format
+if [ $PKG_SIZE_BYTES -gt 1073741824 ]; then
+    PKG_SIZE_HUMAN=$(echo "scale=1; $PKG_SIZE_BYTES / 1073741824" | bc -l 2>/dev/null || echo "$((PKG_SIZE_BYTES / 1073741824))")GB
+elif [ $PKG_SIZE_BYTES -gt 1048576 ]; then
+    PKG_SIZE_HUMAN=$(echo "scale=1; $PKG_SIZE_BYTES / 1048576" | bc -l 2>/dev/null || echo "$((PKG_SIZE_BYTES / 1048576))")MB
+elif [ $PKG_SIZE_BYTES -gt 1024 ]; then
+    PKG_SIZE_HUMAN=$(echo "scale=1; $PKG_SIZE_BYTES / 1024" | bc -l 2>/dev/null || echo "$((PKG_SIZE_BYTES / 1024))")KB
+else
+    PKG_SIZE_HUMAN="${PKG_SIZE_BYTES}B"
+fi
 
 # Estimated DMG size (603MB)
 DMG_SIZE_BYTES=632107622  # 603MB
-DMG_SIZE_HUMAN=$(numfmt --to=iec-i --suffix=B $DMG_SIZE_BYTES)
+# Convert DMG size to human readable format
+if [ $DMG_SIZE_BYTES -gt 1073741824 ]; then
+    DMG_SIZE_HUMAN=$(echo "scale=1; $DMG_SIZE_BYTES / 1073741824" | bc -l 2>/dev/null || echo "$((DMG_SIZE_BYTES / 1073741824))")GB
+elif [ $DMG_SIZE_BYTES -gt 1048576 ]; then
+    DMG_SIZE_HUMAN=$(echo "scale=1; $DMG_SIZE_BYTES / 1048576" | bc -l 2>/dev/null || echo "$((DMG_SIZE_BYTES / 1048576))")MB
+elif [ $DMG_SIZE_BYTES -gt 1024 ]; then
+    DMG_SIZE_HUMAN=$(echo "scale=1; $DMG_SIZE_BYTES / 1024" | bc -l 2>/dev/null || echo "$((DMG_SIZE_BYTES / 1024))")KB
+else
+    DMG_SIZE_HUMAN="${DMG_SIZE_BYTES}B"
+fi
 
 REDUCTION_PERCENT=$(( (DMG_SIZE_BYTES - PKG_SIZE_BYTES) * 100 / DMG_SIZE_BYTES ))
 

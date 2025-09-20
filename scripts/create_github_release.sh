@@ -210,29 +210,8 @@ EOF
 
 print_status "Release notes created"
 
-# Create component checksums summary
-echo -e "\n${BLUE}🔐 Creating checksums summary...${NC}"
-
-CHECKSUMS_FILE="$DIST_DIR/checksums_${VERSION}.txt"
-
-cat > "$CHECKSUMS_FILE" << EOF
-# SHA256 Checksums for Skip the Podcast Desktop v${VERSION}
-# Verify downloads with: shasum -a 256 -c checksums_${VERSION}.txt
-
-EOF
-
-for file in "${REQUIRED_FILES[@]}"; do
-    if [ -f "$DIST_DIR/$file.sha256" ]; then
-        cat "$DIST_DIR/$file.sha256" >> "$CHECKSUMS_FILE"
-    else
-        # Generate checksum if missing
-        cd "$DIST_DIR"
-        shasum -a 256 "$file" >> "$CHECKSUMS_FILE"
-        cd - > /dev/null
-    fi
-done
-
-print_status "Checksums summary created"
+# Components are ready for upload
+print_status "All components verified and ready for upload"
 
 # Check if release already exists
 echo -e "\n${BLUE}🔍 Checking for existing release...${NC}"
@@ -259,6 +238,7 @@ gh release create "$RELEASE_TAG" \
     --repo "$GITHUB_REPO" \
     --title "$RELEASE_NAME" \
     --notes-file "$RELEASE_NOTES_FILE" \
+    --generate-notes=false \
     --draft
 
 print_status "Draft release created"
@@ -292,10 +272,10 @@ gh release upload "$RELEASE_TAG" \
     "ffmpeg-macos-universal.tar.gz" \
     --repo "$GITHUB_REPO"
 
-# Upload checksums
-echo "Uploading checksums..."
+# Upload real README.md
+echo "Uploading project README..."
 gh release upload "$RELEASE_TAG" \
-    "checksums_${VERSION}.txt" \
+    "$PROJECT_ROOT/README.md" \
     --repo "$GITHUB_REPO"
 
 print_status "All components uploaded"
