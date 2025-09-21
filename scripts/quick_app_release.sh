@@ -178,6 +178,8 @@ fi
 echo -e "${BLUE}📦 Building PKG with app code changes...${NC}"
 
 BUILD_CMD="$SCRIPT_DIR/build_complete_pkg.sh --skip-framework --skip-models --skip-ffmpeg --build-only --force"
+# Set environment variable to avoid sudo prompts during build
+export NO_SUDO_BUILD=1
 
 echo "Running: $BUILD_CMD"
 echo ""
@@ -192,11 +194,24 @@ fi
 # Handle quick release upload separately (PKG only)
 if [ $UPLOAD_RELEASE -eq 1 ]; then
     echo ""
-    echo -e "${BLUE}🚀 Creating quick GitHub release (PKG only)...${NC}"
+    echo -e "${BLUE}🚀 Creating quick GitHub release (DMG installer)...${NC}"
 
     VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('$PROJECT_ROOT/pyproject.toml', 'rb'))['project']['version'])")
     PKG_FILE="$PROJECT_ROOT/dist/Skip_the_Podcast_Desktop-$VERSION.pkg"
     README_FILE="$PROJECT_ROOT/README.md"
+
+    # Also create the installer app if PKG exists
+    if [ -f "$PKG_FILE" ]; then
+        echo -e "${BLUE}🔐 Creating installer app...${NC}"
+        if "$SCRIPT_DIR/create_installer_app.sh" >/dev/null 2>&1; then
+            AUTH_DMG="$PROJECT_ROOT/dist/Skip_the_Podcast_Desktop-$VERSION-Installer.dmg"
+            if [ -f "$AUTH_DMG" ]; then
+                echo -e "${GREEN}✅ Installer app created${NC}"
+            fi
+        else
+            echo -e "${YELLOW}Note: Could not create installer app${NC}"
+        fi
+    fi
 
     if [ ! -f "$PKG_FILE" ]; then
         print_error "PKG file not found: $PKG_FILE"
@@ -205,15 +220,23 @@ if [ $UPLOAD_RELEASE -eq 1 ]; then
 
     # Check if release already exists
     if gh release view "v$VERSION" --repo msg43/skipthepodcast.com &>/dev/null; then
-        echo -e "${YELLOW}Release v$VERSION already exists. Updating with new PKG...${NC}"
+        echo -e "${YELLOW}Release v$VERSION already exists. Updating with new installer...${NC}"
 
         # Delete existing assets if they exist
         gh release delete-asset "v$VERSION" "Skip_the_Podcast_Desktop-$VERSION.pkg" --repo msg43/skipthepodcast.com --yes 2>/dev/null || true
         gh release delete-asset "v$VERSION" "README.md" --repo msg43/skipthepodcast.com --yes 2>/dev/null || true
+        gh release delete-asset "v$VERSION" "Skip_the_Podcast_Desktop-$VERSION-Installer.dmg" --repo msg43/skipthepodcast.com --yes 2>/dev/null || true
+        gh release delete-asset "v$VERSION" "Skip_the_Podcast_Desktop-$VERSION-Installer.dmg.sha256" --repo msg43/skipthepodcast.com --yes 2>/dev/null || true
 
-        # Upload new PKG and README
-        gh release upload "v$VERSION" "$PKG_FILE" "$README_FILE" --repo msg43/skipthepodcast.com
-        print_status "PKG updated in existing release v$VERSION"
+        # Only upload DMG installer (not raw PKG)
+        AUTH_DMG="$PROJECT_ROOT/dist/Skip_the_Podcast_Desktop-$VERSION-Installer.dmg"
+        if [ -f "$AUTH_DMG" ] && [ -f "$AUTH_DMG.sha256" ]; then
+            gh release upload "v$VERSION" "$AUTH_DMG" "$AUTH_DMG.sha256" "$README_FILE" --repo msg43/skipthepodcast.com
+        else
+            print_error "Authentication installer DMG not found"
+            exit 1
+        fi
+        print_status "Installer updated in existing release v$VERSION"
     else
         # Create new release with PKG only
         RELEASE_NOTES="# Skip the Podcast Desktop v$VERSION
@@ -232,12 +255,19 @@ Download and run the PKG installer. All required components will be downloaded a
 ### Changes
 App code improvements and bug fixes. See [CHANGELOG.md](https://github.com/msg43/Knowledge_Chipper/blob/main/CHANGELOG.md) for details."
 
-        gh release create "v$VERSION" "$PKG_FILE" "$README_FILE" \
-            --repo msg43/skipthepodcast.com \
-            --title "Skip the Podcast Desktop v$VERSION" \
-            --notes "$RELEASE_NOTES" \
-            --generate-notes=false \
-            --latest
+        # Only upload DMG installer (not raw PKG)
+        AUTH_DMG="$PROJECT_ROOT/dist/Skip_the_Podcast_Desktop-$VERSION-Installer.dmg"
+        if [ -f "$AUTH_DMG" ] && [ -f "$AUTH_DMG.sha256" ]; then
+            gh release create "v$VERSION" "$AUTH_DMG" "$AUTH_DMG.sha256" "$README_FILE" \
+                --repo msg43/skipthepodcast.com \
+                --title "Skip the Podcast Desktop v$VERSION" \
+                --notes "$RELEASE_NOTES" \
+                --generate-notes=false \
+                --latest
+        else
+            print_error "Authentication installer DMG not found"
+            exit 1
+        fi
 
         print_status "New release v$VERSION created"
     fi

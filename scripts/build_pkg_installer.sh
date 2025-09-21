@@ -1,9 +1,23 @@
 #!/bin/bash
 # build_pkg_installer.sh - Create PKG installer for Skip the Podcast Desktop
 # This replaces the DMG build process with a lightweight PKG that downloads components
+#
+# Usage: ./build_pkg_installer.sh [--prepare-only]
+#   --prepare-only: Only prepare the app bundle and scripts, don't build PKG
 
 set -e
 set -o pipefail
+
+# Parse arguments
+PREPARE_ONLY=0
+for arg in "$@"; do
+    case $arg in
+        --prepare-only)
+            PREPARE_ONLY=1
+            shift
+            ;;
+    esac
+done
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -61,7 +75,19 @@ print_status "All prerequisites satisfied"
 
 # Clean and create build directories
 echo -e "\n${BLUE}📁 Setting up build environment...${NC}"
-rm -rf "$BUILD_DIR"
+# Clean up any existing build directory (might be root-owned from previous runs)
+if [ -d "$BUILD_DIR" ]; then
+    rm -rf "$BUILD_DIR" 2>/dev/null || {
+        echo -e "${YELLOW}Existing build directory needs sudo to remove${NC}"
+        if [ -t 0 ]; then
+            echo -e "${YELLOW}Please enter password to clean previous build:${NC}"
+            sudo rm -rf "$BUILD_DIR"
+        else
+            echo -e "${RED}Cannot clean build directory in non-interactive mode${NC}"
+            exit 1
+        fi
+    }
+fi
 mkdir -p "$BUILD_DIR"
 mkdir -p "$DIST_DIR"
 
@@ -122,8 +148,17 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 EOF
 
 # Copy app icon if it exists
-if [ -f "$PROJECT_ROOT/Assets/chipper.icns" ]; then
+# Try different icon sources in priority order
+if [ -f "$PROJECT_ROOT/Assets/STP_Icon_1.icns" ]; then
+    cp "$PROJECT_ROOT/Assets/STP_Icon_1.icns" "$APP_BUNDLE/Contents/Resources/app_icon.icns"
+elif [ -f "$PROJECT_ROOT/Assets/chipper.icns" ]; then
     cp "$PROJECT_ROOT/Assets/chipper.icns" "$APP_BUNDLE/Contents/Resources/app_icon.icns"
+elif [ -f "$PROJECT_ROOT/Assets/STP_Icon_1.png" ]; then
+    # Convert PNG to ICNS if needed
+    sips -s format icns "$PROJECT_ROOT/Assets/STP_Icon_1.png" --out "$APP_BUNDLE/Contents/Resources/app_icon.icns" 2>/dev/null || {
+        print_warning "Could not convert PNG to ICNS, copying PNG"
+        cp "$PROJECT_ROOT/Assets/STP_Icon_1.png" "$APP_BUNDLE/Contents/Resources/app_icon.icns"
+    }
 elif [ -f "$PROJECT_ROOT/Assets/chipper.png" ]; then
     # Convert PNG to ICNS if needed
     sips -s format icns "$PROJECT_ROOT/Assets/chipper.png" --out "$APP_BUNDLE/Contents/Resources/app_icon.icns" 2>/dev/null || {
@@ -133,6 +168,32 @@ elif [ -f "$PROJECT_ROOT/Assets/chipper.png" ]; then
 fi
 
 print_status "App bundle skeleton created"
+
+# Create a LaunchDaemon that absolutely requires root
+echo -e "\n${BLUE}🔐 Creating LaunchDaemon (forces root requirement)...${NC}"
+mkdir -p "$PKG_ROOT/Library/LaunchDaemons"
+cat > "$PKG_ROOT/Library/LaunchDaemons/com.knowledgechipper.skipthepodcast.plist" << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.knowledgechipper.skipthepodcast</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/Skip the Podcast Desktop.app/Contents/MacOS/Skip the Podcast Desktop</string>
+        <string>--check-updates</string>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>Disabled</key>
+    <true/>
+</dict>
+</plist>
+EOF
+# LaunchDaemons MUST be owned by root:wheel with specific permissions
+chmod 644 "$PKG_ROOT/Library/LaunchDaemons/com.knowledgechipper.skipthepodcast.plist"
+print_status "LaunchDaemon created (requires root to install)"
 
 # Copy app source code to bundle
 echo -e "\n${BLUE}📁 Copying app source code...${NC}"
@@ -749,11 +810,9 @@ report_progress() {
 
 report_progress 80 "Finalizing installation"
 
-# Download and install components
-echo "Downloading and installing components..."
-python3 "$APP_BUNDLE/Contents/Resources/installer_scripts/download_manager.py" "$APP_BUNDLE"
-
-report_progress 90 "Components installed"
+# Skip component download during installation - will happen on first launch
+echo "Skipping component download (will happen on first app launch)..."
+report_progress 90 "Installation configured"
 
 # Create launch script
 echo "Creating launch script..."
@@ -768,13 +827,15 @@ FRAMEWORK_PYTHON="$APP_DIR/Frameworks/Python.framework/Versions/3.13/bin/python3
 export PYTHONPATH="$APP_DIR/Resources:${PYTHONPATH}"
 export MODELS_BUNDLED="true"
 
-# Launch the application
-if [ -x "$FRAMEWORK_PYTHON" ]; then
-    exec "$FRAMEWORK_PYTHON" -m knowledge_system.gui
-else
-    echo "Error: Python framework not found"
-    exit 1
+# Check if components are installed
+if [ ! -x "$FRAMEWORK_PYTHON" ]; then
+    # Components not yet installed - show message and exit
+    osascript -e 'display dialog "Skip the Podcast Desktop needs to download required components.\n\nPlease run the app from your Applications folder to complete setup." buttons {"OK"} default button "OK" with title "First Launch Setup Required" with icon caution'
+    exit 0
 fi
+
+# Launch the application
+exec "$FRAMEWORK_PYTHON" -m knowledge_system.gui
 LAUNCH_EOF
 
 chmod +x "$APP_BUNDLE/Contents/MacOS/launch"
@@ -814,98 +875,50 @@ cp "$SCRIPTS_DIR/hardware_detector.py" "$RESOURCES_DIR/installer_scripts/"
 cp "$SCRIPTS_DIR/download_manager.py" "$APP_BUNDLE/Contents/Resources/installer_scripts/"
 cp "$SCRIPTS_DIR/hardware_detector.py" "$APP_BUNDLE/Contents/Resources/installer_scripts/"
 
-# Create system-level files that definitely require root access
-echo -e "\n${BLUE}📝 Creating system-level installation components...${NC}"
-
-# Create LaunchDaemon directory (requires root)
-mkdir -p "$PKG_ROOT/Library/LaunchDaemons"
-cat > "$PKG_ROOT/Library/LaunchDaemons/com.knowledgechipper.skipthepodcast.setup.plist" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.knowledgechipper.skipthepodcast.setup</string>
-    <key>Disabled</key>
-    <true/>
-    <key>RunAtLoad</key>
-    <false/>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/bin/echo</string>
-        <string>Skip the Podcast Desktop installation marker</string>
-    </array>
-</dict>
-</plist>
-EOF
-
-# Create system receipt that requires root
-mkdir -p "$PKG_ROOT/private/var/db/receipts"
-cat > "$PKG_ROOT/private/var/db/receipts/com.knowledgechipper.skipthepodcast.plist" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>PackageIdentifier</key>
-    <string>com.knowledgechipper.skipthepodcast</string>
-    <key>PackageVersion</key>
-    <string>$VERSION</string>
-    <key>InstallDate</key>
-    <date>$(date -u +"%Y-%m-%dT%H:%M:%SZ")</date>
-    <key>InstallLocation</key>
-    <string>/Applications</string>
-</dict>
-</plist>
-EOF
-
-# Create system-wide command line tool (requires root)
-mkdir -p "$PKG_ROOT/usr/local/bin"
-cat > "$PKG_ROOT/usr/local/bin/skip-the-podcast" << 'EOF'
-#!/bin/bash
-# Skip the Podcast Desktop command line launcher
-open -a "Skip the Podcast Desktop" "$@"
-EOF
-chmod +x "$PKG_ROOT/usr/local/bin/skip-the-podcast"
-
-# Set proper ownership for system files to ensure root requirement
-echo -e "\n${BLUE}🔒 Setting system file permissions...${NC}"
-# Note: These will be set to root:wheel during installation
-chmod 644 "$PKG_ROOT/Library/LaunchDaemons/com.knowledgechipper.skipthepodcast.setup.plist"
-chmod 644 "$PKG_ROOT/private/var/db/receipts/com.knowledgechipper.skipthepodcast.plist"
-chmod 755 "$PKG_ROOT/usr/local/bin/skip-the-podcast"
+# For now, let's skip creating system-level files to see if that's interfering
+# echo -e "\n${BLUE}📝 Creating system-level installation components...${NC}"
 
 print_status "Installer scripts copied"
 
-# Create custom PackageInfo with authorization requirement
-echo -e "\n${BLUE}🔐 Creating PackageInfo with AdminAuthorization requirement...${NC}"
-mkdir -p "$SCRIPTS_DIR"
-cat > "$SCRIPTS_DIR/PackageInfo" << EOF
-<?xml version="1.0" encoding="utf-8"?>
-<pkg-info overwrite-permissions="true" relocatable="false" identifier="${PKG_IDENTIFIER}.components" postinstall-action="none" version="$VERSION" format-version="2" generator-version="InstallCmds-860" install-location="/" auth="root">
-    <payload numberOfFiles="$(find "$PKG_ROOT" -type f | wc -l | tr -d ' ')" installKBytes="$(du -sk "$PKG_ROOT" | cut -f1)"/>
-    <bundle path="./Applications/Skip the Podcast Desktop.app" id="${PKG_IDENTIFIER}" CFBundleShortVersionString="$VERSION" CFBundleVersion="$VERSION"/>
-    <bundle-version>
-        <bundle id="${PKG_IDENTIFIER}"/>
-    </bundle-version>
-    <upgrade-bundle>
-        <bundle id="${PKG_IDENTIFIER}"/>
-    </upgrade-bundle>
-    <update-bundle/>
-    <atomic-update-bundle/>
-    <strict-identifier>
-        <bundle id="${PKG_IDENTIFIER}"/>
-    </strict-identifier>
-    <relocate>
-        <bundle id="${PKG_IDENTIFIER}"/>
-    </relocate>
-    <scripts>
-        <preinstall file="./preinstall" timeout="600"/>
-        <postinstall file="./postinstall" timeout="600"/>
-    </scripts>
-    <authorization>
-        <required>AdminAuthorization</required>
-    </authorization>
-</pkg-info>
+# If prepare-only mode, stop here
+if [ $PREPARE_ONLY -eq 1 ]; then
+    echo ""
+    echo -e "${GREEN}${BOLD}✅ App bundle and scripts prepared${NC}"
+    echo "============================================="
+    echo "Package root: $PKG_ROOT"
+    echo "Scripts: $SCRIPTS_DIR"
+    echo "Resources: $RESOURCES_DIR"
+    exit 0
+fi
+
+# Let pkgbuild generate its own PackageInfo with proper auth requirements
+
+# Note: We'll let pkgbuild handle ownership instead of setting it manually
+echo -e "\n${BLUE}🔒 Package ownership will be set during build...${NC}"
+# Don't manually set root ownership - let pkgbuild handle it with --ownership preserve
+
+# Create component-specific Info.plist to force relocation check
+echo -e "\n${BLUE}📄 Creating component Info.plist...${NC}"
+COMPONENT_INFO="$BUILD_DIR/component-info.plist"
+cat > "$COMPONENT_INFO" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+    <dict>
+        <key>BundleHasStrictIdentifier</key>
+        <true/>
+        <key>BundleIsRelocatable</key>
+        <false/>
+        <key>BundleIsVersionChecked</key>
+        <true/>
+        <key>BundleOverwriteAction</key>
+        <string>upgrade</string>
+        <key>RootRelativeBundlePath</key>
+        <string>Applications/Skip the Podcast Desktop.app</string>
+    </dict>
+</array>
+</plist>
 EOF
 
 # Build component package
@@ -920,7 +933,8 @@ pkgbuild \
     --install-location "/" \
     --scripts "$SCRIPTS_DIR" \
     --ownership preserve \
-    --info "$SCRIPTS_DIR/PackageInfo" \
+    --min-os-version 12.0 \
+    --component-plist "$COMPONENT_INFO" \
     "$COMPONENT_PKG"
 
 print_status "Component package built"
@@ -932,21 +946,29 @@ DISTRIBUTION_XML="$BUILD_DIR/distribution.xml"
 
 cat > "$DISTRIBUTION_XML" << EOF
 <?xml version="1.0" encoding="utf-8"?>
-<installer-gui-script minSpecVersion="1">
+<installer-gui-script minSpecVersion="2">
     <title>$APP_NAME</title>
     <organization>$PKG_IDENTIFIER</organization>
     <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
-    <options customize="never" require-scripts="true" rootVolumeOnly="true" hostArchitectures="x86_64,arm64"/>
+    <options customize="never" require-scripts="true" rootVolumeOnly="true" hostArchitectures="x86_64,arm64" allow-external-scripts="false"/>
 
-    <!-- Explicitly require administrator authentication -->
-    <volume-check>
-        <allowed-os-versions>
-            <os-version before="99.0"/>
-        </allowed-os-versions>
-    </volume-check>
+    <!-- Force authorization requirement -->
+    <authorization>
+        <privilege>system.install.root.admin</privilege>
+    </authorization>
 
-    <!-- Set authentication level -->
-    <pkg-ref id="$PKG_IDENTIFIER.components" auth="root"/>
+    <!-- Installation check script -->
+    <installation-check script="installationCheck()"/>
+    <script><![CDATA[
+function installationCheck() {
+    // Check if we have root access
+    if (system.run('/usr/bin/id', '-u') != '0') {
+        // We're not root, require elevation
+        return false;
+    }
+    return true;
+}
+    ]]></script>
 
     <!-- Define documents displayed at various steps -->
     <welcome    file="welcome.html"    mime-type="text/html" />
@@ -965,8 +987,8 @@ cat > "$DISTRIBUTION_XML" << EOF
         <pkg-ref id="$PKG_IDENTIFIER.components"/>
     </choice>
 
-    <pkg-ref id="$PKG_IDENTIFIER.components" version="$VERSION" onConclusion="none">
-        ${PKG_NAME}-components-${VERSION}.pkg
+    <pkg-ref id="$PKG_IDENTIFIER.components" version="$VERSION" onConclusion="none" auth="root">
+        #${PKG_NAME}-components-${VERSION}.pkg
     </pkg-ref>
 
 </installer-gui-script>
@@ -1148,9 +1170,23 @@ print_status "Checksum created"
 
 # Cleanup build directory
 echo -e "\n${BLUE}🧹 Cleaning up build directory...${NC}"
-rm -rf "$BUILD_DIR"
-
-print_status "Build directory cleaned"
+if [ -d "$BUILD_DIR" ]; then
+    # Try normal removal first
+    rm -rf "$BUILD_DIR" 2>/dev/null || {
+        # If that fails, it might need sudo
+        echo -e "${YELLOW}Build directory may contain root-owned files${NC}"
+        echo -e "${YELLOW}Attempting cleanup with sudo...${NC}"
+        # Only use sudo if we're in an interactive terminal
+        if [ -t 0 ]; then
+            sudo rm -rf "$BUILD_DIR" 2>/dev/null || {
+                echo -e "${YELLOW}Manual cleanup needed: sudo rm -rf $BUILD_DIR${NC}"
+            }
+        else
+            echo -e "${YELLOW}Non-interactive mode: Manual cleanup needed: sudo rm -rf $BUILD_DIR${NC}"
+        fi
+    }
+fi
+print_status "Cleanup complete"
 
 # Final summary
 echo -e "\n${GREEN}${BOLD}🎉 PKG Installer Build Complete!${NC}"
