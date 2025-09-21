@@ -37,12 +37,7 @@ jobs:
     - name: Get version
       id: version
       run: |
-        if [ -n "${{ github.event.inputs.version }}" ]; then
-          VERSION="${{ github.event.inputs.version }}"
-        else
-          # Extract version from pyproject.toml using grep (simple and reliable)
-          VERSION=$(grep -o 'version = "[^"]*"' pyproject.toml | cut -d'"' -f2)
-        fi
+        VERSION="3.2.39"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
         
