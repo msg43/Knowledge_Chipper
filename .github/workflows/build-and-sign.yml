@@ -40,23 +40,8 @@ jobs:
         if [ -n "${{ github.event.inputs.version }}" ]; then
           VERSION="${{ github.event.inputs.version }}"
         else
-          # Try tomllib first (Python 3.11+), fall back to parsing with grep
-          VERSION=$(python3 -c "
-          try:
-              import tomllib
-              with open('pyproject.toml', 'rb') as f:
-                  data = tomllib.load(f)
-              print(data['project']['version'])
-          except ImportError:
-              import re
-              with open('pyproject.toml', 'r') as f:
-                  content = f.read()
-              match = re.search(r'version\s*=\s*[\"'\'']([^\"'\'']+)[\"'\'']', content)
-              if match:
-                  print(match.group(1))
-              else:
-                  raise ValueError('Could not extract version')
-          " 2>/dev/null || grep -o 'version = "[^"]*"' pyproject.toml | cut -d'"' -f2)
+          # Extract version from pyproject.toml using grep (simple and reliable)
+          VERSION=$(grep -o 'version = "[^"]*"' pyproject.toml | cut -d'"' -f2)
         fi
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
