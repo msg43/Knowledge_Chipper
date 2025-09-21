@@ -1,0 +1,164 @@
+name: Build, Sign, and Release macOS Application
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allow manual triggering
+    inputs:
+      version:
+        description: 'Version to build (optional, will auto-detect if empty)'
+        required: false
+        type: string
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  build-and-sign:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        pip install -e ".[hce]"
+        
+    - name: Get version
+      id: version
+      run: |
+        if [ -n "${{ github.event.inputs.version }}" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+        
+    - name: Import Apple certificates
+      env:
+        APPLE_CERTIFICATE_APPLICATION: ${{ secrets.APPLE_CERTIFICATE_APPLICATION }}
+        APPLE_CERTIFICATE_INSTALLER: ${{ secrets.APPLE_CERTIFICATE_INSTALLER }}
+        APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      run: |
+        # Create temporary keychain
+        KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+        KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+        
+        # Create keychain
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        
+        # Import certificates
+        echo "$APPLE_CERTIFICATE_APPLICATION" | base64 --decode > "$RUNNER_TEMP/app_cert.p12"
+        echo "$APPLE_CERTIFICATE_INSTALLER" | base64 --decode > "$RUNNER_TEMP/installer_cert.p12"
+        
+        security import "$RUNNER_TEMP/app_cert.p12" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+        security import "$RUNNER_TEMP/installer_cert.p12" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/productbuild
+        
+        # Set partition list
+        security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        
+        # Add to search list
+        security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
+        
+        # Verify certificates
+        security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+        
+    - name: Build application bundle
+      run: |
+        ./scripts/build_pkg_installer.sh --prepare-only
+        
+    - name: Sign and notarize
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      run: |
+        # Set certificate identities
+        export DEVELOPER_ID_APPLICATION=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+        export DEVELOPER_ID_INSTALLER=$(security find-identity -v -p codesigning | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
+        
+        echo "Using Application Certificate: $DEVELOPER_ID_APPLICATION"
+        echo "Using Installer Certificate: $DEVELOPER_ID_INSTALLER"
+        
+        # Export for build script
+        export APP_PASSWORD="$APPLE_APP_PASSWORD"
+        
+        # Run the signing and notarization script
+        ./scripts/build_signed_notarized_pkg.sh
+        
+    - name: Upload signed PKG as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: signed-pkg-${{ steps.version.outputs.VERSION }}
+        path: |
+          dist/*.pkg
+          dist/*.pkg.sha256
+        retention-days: 30
+        
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        PKG_FILE="dist/Skip_the_Podcast_Desktop-${VERSION}.pkg"
+        
+        # Create release notes
+        cat > release_notes.md << EOF
+        # Skip the Podcast Desktop v${VERSION}
+        
+        🍎 **macOS Application Release**
+        
+        ## Installation
+        1. Download the \`.pkg\` file below
+        2. Double-click to run the installer
+        3. Follow the installation prompts
+        4. Launch from Applications folder
+        
+        ## Features
+        - ✅ **Code Signed & Notarized** - No security warnings
+        - ✅ **Universal Binary** - Runs on Intel and Apple Silicon Macs
+        - ✅ **Professional Installation** - Clean PKG installer
+        - ✅ **Automatic Updates** - Built-in update checking
+        
+        ## Release Info
+        - **Version:** ${VERSION}
+        - **Build Date:** $(date +"%Y-%m-%d")
+        - **File Size:** $(du -h "$PKG_FILE" | cut -f1)
+        - **Platform:** macOS 11.0+ (Universal)
+        
+        ## What's New
+        This release includes the latest features and improvements from the Skip the Podcast development cycle.
+        
+        ---
+        *This release was automatically built and signed using GitHub Actions.*
+        EOF
+        
+        # Create release
+        gh release create "v${VERSION}" \
+          --title "Skip the Podcast Desktop v${VERSION}" \
+          --notes-file release_notes.md \
+          "$PKG_FILE" \
+          "dist/Skip_the_Podcast_Desktop-${VERSION}.pkg.sha256"
+          
+    - name: Cleanup keychain
+      if: always()
+      run: |
+        KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+        if [ -f "$KEYCHAIN_PATH" ]; then
+          security delete-keychain "$KEYCHAIN_PATH" || true
+        fi
+        rm -f "$RUNNER_TEMP"/*.p12 || true

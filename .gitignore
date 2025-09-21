@@ -201,6 +201,10 @@ config/settings.yaml
 .env.local
 .env.production
 
+# Apple signing credentials (DO NOT COMMIT)
+config/apple_signing_credentials.env
+.env.signing
+
 # Whisper model files
 *.bin
 *.pt
