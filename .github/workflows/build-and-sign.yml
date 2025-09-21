@@ -72,6 +72,9 @@ jobs:
         # Verify certificates
         security find-identity -v -p codesigning "$KEYCHAIN_PATH"
         
+        # Make sure the keychain is set as default for searches
+        security default-keychain -s "$KEYCHAIN_PATH"
+        
     - name: Build application bundle
       run: |
         ./scripts/build_pkg_installer.sh --prepare-only
@@ -82,9 +85,10 @@ jobs:
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
       run: |
-        # Set certificate identities
-        export DEVELOPER_ID_APPLICATION=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
-        export DEVELOPER_ID_INSTALLER=$(security find-identity -v -p codesigning | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
+        # Set certificate identities from the build keychain
+        KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+        export DEVELOPER_ID_APPLICATION=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+        export DEVELOPER_ID_INSTALLER=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
         
         echo "Using Application Certificate: $DEVELOPER_ID_APPLICATION"
         echo "Using Installer Certificate: $DEVELOPER_ID_INSTALLER"
