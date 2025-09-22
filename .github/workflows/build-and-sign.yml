@@ -37,15 +37,16 @@ jobs:
     - name: Get version
       id: version
       run: |
-        VERSION="3.2.39"
+        VERSION="3.2.41"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
         
     - name: Import Apple certificates
       env:
         APPLE_CERTIFICATE_APPLICATION: ${{ secrets.APPLE_CERTIFICATE_APPLICATION }}
-        APPLE_CERTIFICATE_INSTALLER: ${{ secrets.APPLE_CERTIFICATE_INSTALLER }}
         APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        DEVELOPER_ID_INSTALLER_P12: ${{ secrets.DEVELOPER_ID_INSTALLER_P12 }}
+        INSTALLER_P12_PASSWORD: ${{ secrets.INSTALLER_P12_PASSWORD }}
       run: |
         # Create temporary keychain
         KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
@@ -56,12 +57,13 @@ jobs:
         security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
         
-        # Import certificates
+        # Import Application certificate
         echo "$APPLE_CERTIFICATE_APPLICATION" | base64 --decode > "$RUNNER_TEMP/app_cert.p12"
-        echo "$APPLE_CERTIFICATE_INSTALLER" | base64 --decode > "$RUNNER_TEMP/installer_cert.p12"
-        
         security import "$RUNNER_TEMP/app_cert.p12" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-        security import "$RUNNER_TEMP/installer_cert.p12" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/productbuild
+        
+        # Import Installer certificate  
+        echo "$DEVELOPER_ID_INSTALLER_P12" | base64 --decode > "$RUNNER_TEMP/installer_cert.p12"
+        security import "$RUNNER_TEMP/installer_cert.p12" -k "$KEYCHAIN_PATH" -P "$INSTALLER_P12_PASSWORD" -T /usr/bin/productbuild
         
         # Set partition list
         security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
