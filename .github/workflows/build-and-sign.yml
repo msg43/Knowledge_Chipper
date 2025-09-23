@@ -37,7 +37,7 @@ jobs:
     - name: Get version
       id: version
       run: |
-        VERSION="3.2.46"
+        VERSION="3.2.47"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
         
@@ -90,14 +90,23 @@ jobs:
         # Set certificate identities from the build keychain
         KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
         
-        # Debug: Show all identities in the keychain (including non-valid ones)
+        # Debug: Show all identities in the keychain (all types)
         echo "=== All identities in keychain ==="
         security find-identity -v "$KEYCHAIN_PATH" || echo "No identities found"
+        echo "=== All certificates (any type) ==="
+        security find-certificate -a -p "$KEYCHAIN_PATH" | openssl x509 -noout -subject 2>/dev/null || echo "No certificates found"
         echo "=================================="
         
-        # Extract certificate hashes instead of names (more reliable)
+        # Extract certificate hashes from any identity search (more reliable)
         export DEVELOPER_ID_APPLICATION=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | awk '{print $2}')
         export DEVELOPER_ID_INSTALLER=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Installer" | head -1 | awk '{print $2}')
+        
+        # If app cert not found as identity, try finding by certificate search
+        if [ -z "$DEVELOPER_ID_APPLICATION" ]; then
+          echo "Searching for Application certificate by subject..."
+          DEVELOPER_ID_APPLICATION=$(security find-certificate -c "Developer ID Application" -a "$KEYCHAIN_PATH" 2>/dev/null | openssl x509 -noout -fingerprint -sha1 2>/dev/null | cut -d= -f2 | tr -d ':' || echo "")
+          export DEVELOPER_ID_APPLICATION
+        fi
         
         echo "Using Application Certificate Hash: $DEVELOPER_ID_APPLICATION"
         echo "Using Installer Certificate Hash: $DEVELOPER_ID_INSTALLER"
