@@ -37,7 +37,7 @@ jobs:
     - name: Get version
       id: version
       run: |
-        VERSION="3.2.44"
+        VERSION="3.2.45"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
         
@@ -59,14 +59,14 @@ jobs:
         
         # Import Application certificate
         echo "$APPLE_CERTIFICATE_APPLICATION" | base64 --decode > "$RUNNER_TEMP/app_cert.p12"
-        security import "$RUNNER_TEMP/app_cert.p12" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+        security import "$RUNNER_TEMP/app_cert.p12" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/codesign_allocate
         
         # Import Installer certificate  
         echo "$DEVELOPER_ID_INSTALLER_P12" | base64 --decode > "$RUNNER_TEMP/installer_cert.p12"
-        security import "$RUNNER_TEMP/installer_cert.p12" -k "$KEYCHAIN_PATH" -P "$INSTALLER_P12_PASSWORD" -T /usr/bin/productbuild
+        security import "$RUNNER_TEMP/installer_cert.p12" -k "$KEYCHAIN_PATH" -P "$INSTALLER_P12_PASSWORD" -T /usr/bin/productbuild -T /usr/bin/codesign
         
-        # Set partition list
-        security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        # Set partition list to allow access without prompting
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
         
         # Add to search list
         security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
