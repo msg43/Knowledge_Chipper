@@ -36,10 +36,15 @@ print_warning() {
     echo -e "${YELLOW}⚠️${NC} $1"
 }
 
-# Check for required environment variables or prompt
+# Check for required environment variables or find certificates
 if [ -z "$DEVELOPER_ID_INSTALLER" ]; then
     echo "Finding Developer ID Installer certificate..."
-    DEVELOPER_ID_INSTALLER=$(security find-identity -v -p codesigning | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
+    # Check if we have a specific keychain path (from GitHub Actions)
+    if [ -n "$RUNNER_TEMP" ] && [ -f "$RUNNER_TEMP/build.keychain" ]; then
+        DEVELOPER_ID_INSTALLER=$(security find-identity -v -p codesigning "$RUNNER_TEMP/build.keychain" | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
+    else
+        DEVELOPER_ID_INSTALLER=$(security find-identity -v -p codesigning | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
+    fi
     if [ -z "$DEVELOPER_ID_INSTALLER" ]; then
         print_error "No Developer ID Installer certificate found"
         echo "Please install your Developer ID Installer certificate in Keychain"
@@ -50,7 +55,12 @@ fi
 
 if [ -z "$DEVELOPER_ID_APPLICATION" ]; then
     echo "Finding Developer ID Application certificate..."
-    DEVELOPER_ID_APPLICATION=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+    # Check if we have a specific keychain path (from GitHub Actions)
+    if [ -n "$RUNNER_TEMP" ] && [ -f "$RUNNER_TEMP/build.keychain" ]; then
+        DEVELOPER_ID_APPLICATION=$(security find-identity -v -p codesigning "$RUNNER_TEMP/build.keychain" | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+    else
+        DEVELOPER_ID_APPLICATION=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+    fi
     if [ -z "$DEVELOPER_ID_APPLICATION" ]; then
         print_error "No Developer ID Application certificate found"
         echo "Please install your Developer ID Application certificate in Keychain"
