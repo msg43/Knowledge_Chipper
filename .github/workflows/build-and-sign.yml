@@ -37,7 +37,7 @@ jobs:
     - name: Get version
       id: version
       run: |
-        VERSION="3.2.45"
+        VERSION="3.2.46"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
         
@@ -90,16 +90,17 @@ jobs:
         # Set certificate identities from the build keychain
         KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
         
-        # Debug: Show all identities in the keychain
+        # Debug: Show all identities in the keychain (including non-valid ones)
         echo "=== All identities in keychain ==="
-        security find-identity -v -p codesigning "$KEYCHAIN_PATH" || echo "No identities found"
+        security find-identity -v "$KEYCHAIN_PATH" || echo "No identities found"
         echo "=================================="
         
-        export DEVELOPER_ID_APPLICATION=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
-        export DEVELOPER_ID_INSTALLER=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
+        # Extract certificate hashes instead of names (more reliable)
+        export DEVELOPER_ID_APPLICATION=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | awk '{print $2}')
+        export DEVELOPER_ID_INSTALLER=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Installer" | head -1 | awk '{print $2}')
         
-        echo "Using Application Certificate: $DEVELOPER_ID_APPLICATION"
-        echo "Using Installer Certificate: $DEVELOPER_ID_INSTALLER"
+        echo "Using Application Certificate Hash: $DEVELOPER_ID_APPLICATION"
+        echo "Using Installer Certificate Hash: $DEVELOPER_ID_INSTALLER"
         
         # Export for build script
         export APP_PASSWORD="$APPLE_APP_PASSWORD"
