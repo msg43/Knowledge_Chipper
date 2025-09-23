@@ -37,7 +37,7 @@ jobs:
     - name: Get version
       id: version
       run: |
-        VERSION="3.2.43"
+        VERSION="3.2.44"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
         
@@ -89,6 +89,12 @@ jobs:
       run: |
         # Set certificate identities from the build keychain
         KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+        
+        # Debug: Show all identities in the keychain
+        echo "=== All identities in keychain ==="
+        security find-identity -v -p codesigning "$KEYCHAIN_PATH" || echo "No identities found"
+        echo "=================================="
+        
         export DEVELOPER_ID_APPLICATION=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
         export DEVELOPER_ID_INSTALLER=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
         
