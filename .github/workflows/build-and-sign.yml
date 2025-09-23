@@ -37,7 +37,7 @@ jobs:
     - name: Get version
       id: version
       run: |
-        VERSION="3.2.49"
+        VERSION="3.2.50"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
         
@@ -96,8 +96,8 @@ jobs:
         security find-certificate -a -p "$KEYCHAIN_PATH" | openssl x509 -noout -subject 2>/dev/null || echo "No certificates found"
         echo "=================================="
         
-        # TEMPORARILY: Use known working installer cert hash and skip app cert
-        export DEVELOPER_ID_APPLICATION=""  # Skip for now 
+        # TEMPORARILY: Use installer cert for both purposes (testing approach)
+        export DEVELOPER_ID_APPLICATION="40BD7C59C03F68AC4B37EC4E431DC57A219109A8"  # Use installer cert
         export DEVELOPER_ID_INSTALLER="40BD7C59C03F68AC4B37EC4E431DC57A219109A8"  # Known working hash
         
         echo "Using Application Certificate Hash: $DEVELOPER_ID_APPLICATION"
