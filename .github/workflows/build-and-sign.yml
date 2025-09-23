@@ -37,7 +37,7 @@ jobs:
     - name: Get version
       id: version
       run: |
-        VERSION="3.2.50"
+        VERSION="3.2.51"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
         
@@ -57,8 +57,9 @@ jobs:
         security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
         
-        # TEMPORARILY: Only import Installer certificate (we know this works)
-        # TODO: Fix Application certificate import issue
+        # Import Application certificate
+        echo "$APPLE_CERTIFICATE_APPLICATION" | base64 --decode > "$RUNNER_TEMP/app_cert.p12"
+        security import "$RUNNER_TEMP/app_cert.p12" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/codesign_allocate
         
         # Import Installer certificate  
         echo "$DEVELOPER_ID_INSTALLER_P12" | base64 --decode > "$RUNNER_TEMP/installer_cert.p12"
@@ -96,9 +97,9 @@ jobs:
         security find-certificate -a -p "$KEYCHAIN_PATH" | openssl x509 -noout -subject 2>/dev/null || echo "No certificates found"
         echo "=================================="
         
-        # TEMPORARILY: Use installer cert for both purposes (testing approach)
-        export DEVELOPER_ID_APPLICATION="40BD7C59C03F68AC4B37EC4E431DC57A219109A8"  # Use installer cert
-        export DEVELOPER_ID_INSTALLER="40BD7C59C03F68AC4B37EC4E431DC57A219109A8"  # Known working hash
+        # Extract certificate hashes from identity search
+        export DEVELOPER_ID_APPLICATION=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | awk '{print $2}')
+        export DEVELOPER_ID_INSTALLER=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Installer" | head -1 | awk '{print $2}')
         
         echo "Using Application Certificate Hash: $DEVELOPER_ID_APPLICATION"
         echo "Using Installer Certificate Hash: $DEVELOPER_ID_INSTALLER"
