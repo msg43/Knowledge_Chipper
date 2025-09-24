@@ -37,7 +37,7 @@ jobs:
     - name: Get version
       id: version
       run: |
-        VERSION="3.2.52"
+        VERSION="3.2.53"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
         
@@ -106,6 +106,7 @@ jobs:
         
         # Export for build script
         export APP_PASSWORD="$APPLE_APP_PASSWORD"
+        export VERSION="${{ steps.version.outputs.VERSION }}"
         
         # Run the signing and notarization script
         ./scripts/build_signed_notarized_pkg.sh

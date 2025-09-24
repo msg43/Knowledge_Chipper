@@ -8,7 +8,12 @@ set -o pipefail
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('$PROJECT_ROOT/pyproject.toml', 'rb'))['project']['version'])")
+# Use environment variable VERSION if available, otherwise extract from pyproject.toml
+if [ -n "$VERSION" ]; then
+    echo "Using version from environment: $VERSION"
+else
+    VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('$PROJECT_ROOT/pyproject.toml', 'rb'))['project']['version'])")
+fi
 
 # Colors
 RED='\033[0;31m'
