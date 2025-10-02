@@ -17,17 +17,31 @@ def validate_hce_or_raise() -> None:
     """
     missing: list[str] = []
 
-    # Required modules and attributes expected by HCEPipeline
+    # Required modules and attributes for unified HCE pipeline
     required = {
-        # Functions used directly by pipeline
-        "knowledge_system.processors.hce.skim": ["skim_episode"],
-        "knowledge_system.processors.hce.miner": ["mine_claims"],
-        "knowledge_system.processors.hce.evidence": ["link_evidence"],
-        "knowledge_system.processors.hce.rerank": ["rerank_claims"],
-        "knowledge_system.processors.hce.router": ["route_claims"],
-        "knowledge_system.processors.hce.judge": ["judge_claims"],
-        # Optional helpers/classes (if present)
-        "knowledge_system.processors.hce.rerank_policy": ["adaptive_keep"],
+        # Core unified pipeline modules
+        "knowledge_system.processors.hce.unified_miner": [
+            "mine_episode_unified",
+            "UnifiedMiner",
+        ],
+        "knowledge_system.processors.hce.flagship_evaluator": [
+            "evaluate_claims_flagship",
+            "FlagshipEvaluator",
+        ],
+        "knowledge_system.processors.hce.unified_pipeline": ["UnifiedHCEPipeline"],
+        # Core data types
+        "knowledge_system.processors.hce.types": [
+            "EpisodeBundle",
+            "PipelineOutputs",
+            "ScoredClaim",
+        ],
+        "knowledge_system.processors.hce.config_flex": [
+            "PipelineConfigFlex",
+            "StageModelConfig",
+        ],
+        # LLM interface
+        "knowledge_system.processors.hce.models.llm_any": ["AnyLLM"],
+        # Optional modules (if present)
         "knowledge_system.processors.hce.relations": ["RelationMiner"],
     }
 
@@ -43,5 +57,6 @@ def validate_hce_or_raise() -> None:
 
     if missing:
         raise HCEValidationError(
-            "HCE is not fully available. Missing symbols: " + ", ".join(missing)
+            "Unified HCE pipeline is not fully available. Missing symbols: "
+            + ", ".join(missing)
         )

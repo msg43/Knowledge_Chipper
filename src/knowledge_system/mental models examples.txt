@@ -1,0 +1,109 @@
+First Principles & Core Thinking
+
+First Principles Thinking
+
+Second-Order Thinking
+
+Inversion (“What if we tried to fail?”)
+
+Occam’s Razor (simplest explanation is usually right)
+
+Hanlon’s Razor (“Never attribute to malice what can be explained by stupidity”)
+
+Map vs. Territory (models aren’t reality)
+
+Circle of Competence (stay where you know)
+
+Probabilistic Thinking
+
+Bayesian Updating
+
+Expected Value
+
+Decision Making & Strategy
+
+Opportunity Cost
+
+Marginal Utility
+
+Comparative Advantage
+
+Prisoner’s Dilemma
+
+Tragedy of the Commons
+
+Zero-Sum vs. Positive-Sum Games
+
+Law of Diminishing Returns
+
+Barbell Strategy (conservative + aggressive split)
+
+Leverage (financial, technological, social)
+
+Feedback Loops (positive & negative)
+
+Psychology & Human Behavior
+
+Cognitive Biases (umbrella model)
+
+Incentives Drive Behavior
+
+Pavlovian Association
+
+Social Proof
+
+Reciprocity
+
+Loss Aversion
+
+Scarcity Heuristic
+
+Anchoring Bias
+
+Commitment & Consistency Bias
+
+Authority Bias
+
+Systems & Complexity
+
+Emergence
+
+Critical Mass & Tipping Points
+
+Chaos Theory / Butterfly Effect
+
+Network Effects
+
+Bottlenecks & Constraints (Theory of Constraints)
+
+Red Queen Effect (running hard just to stay in place)
+
+Lindy Effect (the longer it’s lasted, the longer it’ll likely last)
+
+Power Laws (80/20, Pareto Principle)
+
+Compounding (exponential growth)
+
+Path Dependence (history matters)
+
+Science & Engineering Lenses
+
+Entropy (systems trend toward disorder)
+
+Energy Return on Energy Invested (EROEI)
+
+Trade-offs (no free lunch)
+
+Scale Effects (economies/diseconomies of scale)
+
+Reliability Engineering (weakest link)
+
+Redundancy (backup systems)
+
+Anti-Fragility (systems that gain from stress)
+
+Black Swan Events (rare, high-impact surprises)
+
+Margin of Safety
+
+Chesterton’s Fence (don’t remove a rule until you know why it’s there)

@@ -77,7 +77,9 @@ class GlossaryExtractor:
                             category=r.get("category"),
                             definition=r.get("definition"),
                             evidence_spans=[
-                                EvidenceSpan(**e) for e in r.get("evidence", [])
+                                EvidenceSpan(**e)
+                                for e in r.get("evidence", [])
+                                if isinstance(e, dict)
                             ],
                         )
                     )
@@ -93,9 +95,7 @@ class GlossaryExtractor:
         return out
 
 
-def extract_jargon(
-    episode, model_uri: str = "local://llama3.2:latest"
-) -> list[JargonTerm]:
+def extract_jargon(episode, model_uri: str = "local://qwen2.5:7b") -> list[JargonTerm]:
     """Compatibility wrapper used by HCEPipeline to extract jargon terms."""
     from pathlib import Path
 

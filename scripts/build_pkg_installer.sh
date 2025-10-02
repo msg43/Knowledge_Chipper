@@ -880,6 +880,33 @@ cp "$SCRIPTS_DIR/hardware_detector.py" "$APP_BUNDLE/Contents/Resources/installer
 
 print_status "Installer scripts copied"
 
+# Create the launch script (needed for code signing)
+echo -e "\n${BLUE}🚀 Creating launch script...${NC}"
+cat > "$APP_BUNDLE/Contents/MacOS/launch" << 'LAUNCH_EOF'
+#!/bin/bash
+# Launch script for Skip the Podcast Desktop
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FRAMEWORK_PYTHON="$APP_DIR/Frameworks/Python.framework/Versions/3.13/bin/python3.13"
+
+# Set up environment
+export PYTHONPATH="$APP_DIR/Resources:${PYTHONPATH}"
+export MODELS_BUNDLED="true"
+
+# Check if components are installed
+if [ ! -x "$FRAMEWORK_PYTHON" ]; then
+    # Components not yet installed - show message and exit
+    osascript -e 'display dialog "Skip the Podcast Desktop needs to download required components.\n\nPlease run the app from your Applications folder to complete setup." buttons {"OK"} default button "OK" with title "First Launch Setup Required" with icon caution'
+    exit 0
+fi
+
+# Launch the application
+exec "$FRAMEWORK_PYTHON" -m knowledge_system.gui
+LAUNCH_EOF
+
+chmod +x "$APP_BUNDLE/Contents/MacOS/launch"
+print_status "Launch script created"
+
 # If prepare-only mode, stop here
 if [ $PREPARE_ONLY -eq 1 ]; then
     echo ""

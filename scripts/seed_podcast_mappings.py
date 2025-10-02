@@ -153,7 +153,7 @@ PODCAST_MAPPINGS = [
     ("The Investors Podcast", "Preston Pysh"),
     ("Motley Fool Money", "Chris Hill"),
     ("Planet Money", "Kenny Malone"),
-    ("Eurodollar University", "Jeff Snider"),  # Your specific example!
+    ("Eurodollar University", "Jeff Snyder"),  # Your specific example!
     ("MacroVoices", "Erik Townsend"),
     ("Real Vision", "Raoul Pal"),
     ("The Meb Faber Research Podcast", "Meb Faber"),

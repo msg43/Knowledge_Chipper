@@ -1,0 +1,68 @@
+You are evaluating whether a concept is a mental model/thinking framework versus a domain-specific concept.
+
+Mental models are cognitive tools and thinking frameworks that can be applied across domains to structure thinking and decision-making.
+
+<examples>
+<!-- First Principles & Core Thinking -->
+<example type="accept">First Principles Thinking: Break down complex problems to fundamental truths</example>
+<example type="accept">Second-Order Thinking: Consider consequences of consequences</example>
+<example type="accept">Inversion: Think backwards from desired outcome</example>
+<example type="accept">Occam's Razor: Simplest explanation is usually right</example>
+<example type="accept">Map vs. Territory: Models aren't reality</example>
+<example type="accept">Circle of Competence: Stay where you know</example>
+<example type="accept">Probabilistic Thinking: Think in terms of likelihoods</example>
+<example type="accept">Bayesian Updating: Update beliefs with new evidence</example>
+
+<!-- Decision Making & Strategy -->
+<example type="accept">Opportunity Cost: Value of the best alternative you give up</example>
+<example type="accept">Marginal Utility: Additional benefit from one more unit</example>
+<example type="accept">Comparative Advantage: Focus on what you do relatively best</example>
+<example type="accept">Zero-Sum vs. Positive-Sum Games: Win-lose vs. win-win scenarios</example>
+<example type="accept">Barbell Strategy: Conservative + aggressive split</example>
+<example type="accept">Leverage: Amplify results through tools, people, or capital</example>
+<example type="accept">Feedback Loops: Self-reinforcing cycles (positive & negative)</example>
+
+<!-- Psychology & Human Behavior -->
+<example type="accept">Incentives Drive Behavior: People respond to rewards/punishments</example>
+<example type="accept">Social Proof: Follow what others do</example>
+<example type="accept">Loss Aversion: Losses feel worse than equivalent gains</example>
+<example type="accept">Anchoring Bias: Over-rely on first piece of information</example>
+<example type="accept">Authority Bias: Defer to perceived experts</example>
+
+<!-- Systems & Complexity -->
+<example type="accept">Network Effects: Value increases as more people use it</example>
+<example type="accept">Critical Mass & Tipping Points: Threshold for change</example>
+<example type="accept">Power Laws (80/20 Pareto Principle): 80% of effects from 20% of causes</example>
+<example type="accept">Compounding: Growth builds upon previous growth</example>
+<example type="accept">Path Dependence: History matters for current outcomes</example>
+<example type="accept">Lindy Effect: Longer it's lasted, longer it'll likely last</example>
+<example type="accept">Margin of Safety: Buffer against uncertainty and error</example>
+
+<!-- Domain Concepts (NOT mental models) -->
+<example type="reject">Gold as a Hedge (finance-specific)</example>
+<example type="reject">Copper to Gold Ratio (finance-specific)</example>
+<example type="reject">Construction Spending (economics-specific)</example>
+<example type="reject">Interest Rate Policy (monetary policy-specific)</example>
+<example type="reject">Quantitative Easing (central banking-specific)</example>
+</examples>
+
+Evaluate this concept against these reference mental models:
+
+ACCEPT if:
+- It's a thinking framework applicable across domains
+- A cognitive tool or decision-making principle
+- A universal pattern or heuristic
+- Something that helps structure thinking
+- Similar to the curated mental models above
+
+REJECT if:
+- It's domain-specific knowledge
+- A technical relationship or indicator
+- Industry jargon or specialized terminology
+- A specific economic/financial concept
+
+Evaluate this concept: {concept_name}
+Definition: {concept_definition}
+
+Return JSON only:
+{"name": "exact concept name", "decision": "accept|reject", "reasoning": "brief explanation"}

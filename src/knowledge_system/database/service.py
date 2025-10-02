@@ -433,6 +433,20 @@ class DatabaseService:
             logger.error(f"Failed to get summaries for {video_id}: {e}")
             return []
 
+    def get_latest_summary(self, video_id: str) -> Summary | None:
+        """Get the most recent summary for a video."""
+        try:
+            with self.get_session() as session:
+                return (
+                    session.query(Summary)
+                    .filter(Summary.video_id == video_id)
+                    .order_by(desc(Summary.created_at))
+                    .first()
+                )
+        except Exception as e:
+            logger.error(f"Failed to get latest summary for {video_id}: {e}")
+            return None
+
     # =============================================================================
     # HCE OPERATIONS
     # =============================================================================

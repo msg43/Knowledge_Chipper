@@ -1,0 +1,57 @@
+You are evaluating whether a name refers to an actual person who would potentially have a biography on Wikipedia.
+
+<examples>
+<example type="accept">Warren Buffett (investor, CEO)</example>
+<example type="accept">Jerome Powell (Fed Chair)</example>
+<example type="accept">Elon Musk (entrepreneur)</example>
+<example type="accept">Janet Yellen (Treasury Secretary)</example>
+<example type="accept">Ray Dalio (hedge fund founder)</example>
+<example type="accept">Christine Lagarde (ECB President)</example>
+<example type="accept">Jamie Dimon (bank CEO)</example>
+<example type="accept">Cathie Wood (fund manager)</example>
+<example type="accept">Michael Burry (investor)</example>
+<example type="accept">Peter Thiel (entrepreneur, investor)</example>
+<example type="accept">Marc Andreessen (venture capitalist)</example>
+<example type="accept">Satya Nadella (Microsoft CEO)</example>
+<example type="accept">Tim Cook (Apple CEO)</example>
+<example type="accept">Jeff Bezos (Amazon founder)</example>
+<example type="accept">Bill Gates (Microsoft founder)</example>
+
+<example type="reject">Federal Reserve (institution)</example>
+<example type="reject">Bloomberg (company/service)</example>
+<example type="reject">Treasury Department (government agency)</example>
+<example type="reject">Goldman Sachs (investment bank)</example>
+<example type="reject">JPMorgan Chase (bank)</example>
+<example type="reject">BlackRock (asset manager)</example>
+<example type="reject">Subscribers (generic group)</example>
+<example type="reject">Economists (profession/group)</example>
+<example type="reject">Investors (generic group)</example>
+<example type="reject">The Fed (institution nickname)</example>
+<example type="reject">Wall Street (location/concept)</example>
+<example type="reject">Main Street (concept)</example>
+<example type="reject">University researchers (generic group)</example>
+<example type="reject">Market participants (generic group)</example>
+<example type="reject">Policy makers (generic group)</example>
+</examples>
+
+Evaluate this name:
+
+ACCEPT if:
+- Real person's name (typically first + last name)
+- Someone who would have a Wikipedia biography
+- Public figure, expert, or notable individual
+- CEO, politician, academic, author, etc.
+
+REJECT if:
+- Organizations or institutions
+- Companies or brands
+- Government agencies
+- Generic roles or groups
+- Plural references (economists, investors)
+- Abstract concepts
+- Locations or systems
+
+Evaluate this name: {name}
+
+Return JSON only:
+{"name": "exact name", "decision": "accept|reject", "reasoning": "brief explanation"}

@@ -174,18 +174,11 @@ class EnhancedSummarizationWorker(QThread):
                 max_tokens=self.gui_settings.get("max_tokens", 10000),
                 hce_options={
                     "use_skim": self.gui_settings.get("use_skim", True),
-                    "enable_routing": self.gui_settings.get("enable_routing", True),
-                    "routing_threshold": self.gui_settings.get(
-                        "routing_threshold", 0.35
+                    "miner_model_override": self.gui_settings.get(
+                        "miner_model_override"
                     ),
-                    "prompt_driven_mode": self.gui_settings.get(
-                        "prompt_driven_mode", False
-                    ),
-                    "flagship_file_tokens": self.gui_settings.get(
-                        "flagship_file_tokens", 0
-                    ),
-                    "flagship_session_tokens": self.gui_settings.get(
-                        "flagship_session_tokens", 0
+                    "flagship_judge_model": self.gui_settings.get(
+                        "flagship_judge_model"
                     ),
                 },
             )
@@ -1675,7 +1668,7 @@ class SummarizationTab(BaseTab):
         self.tier_b_threshold_spin.setSuffix("%")
         self.tier_b_threshold_spin.valueChanged.connect(self._on_setting_changed)
 
-        # Column 3 toggles
+        # Column 3 toggles - Updated for Unified Pipeline
         self.use_skim_checkbox = QCheckBox("High-level skim (pre-pass)")
         self.use_skim_checkbox.setChecked(True)
         self.use_skim_checkbox.setToolTip(
@@ -1687,36 +1680,21 @@ class SummarizationTab(BaseTab):
         self.use_skim_checkbox.toggled.connect(self._on_setting_changed)
         col3_layout.addWidget(self.use_skim_checkbox, 0, 0, 1, 2)
 
-        self.enable_routing_checkbox = QCheckBox("Enable routed judging")
-        self.enable_routing_checkbox.setChecked(True)
-        self.enable_routing_checkbox.setToolTip(
-            "Routes uncertain or important claims to a flagship judge model.\n"
-            "• Improves accuracy for complex claims\n"
-            "• Increases processing cost\n"
-            "• Requires flagship judge model configuration"
+        # Unified Pipeline Info
+        unified_info = QLabel("📋 Unified Pipeline Active")
+        unified_info.setToolTip(
+            "Using simplified 2-pass pipeline:\n"
+            "1. Unified Miner extracts all entities\n"
+            "2. Flagship Evaluator ranks claims\n\n"
+            "Configure models in Advanced section below."
         )
-        self.enable_routing_checkbox.toggled.connect(self._on_setting_changed)
-        self.enable_routing_checkbox.toggled.connect(self._on_routing_toggle_changed)
-        col3_layout.addWidget(self.enable_routing_checkbox, 1, 0, 1, 2)
+        unified_info.setStyleSheet(
+            "QLabel { color: #28a745; font-weight: bold; font-size: 11px; }"
+        )
+        col3_layout.addWidget(unified_info, 1, 0, 1, 2)
 
-        routing_threshold_label = QLabel("Routing Threshold:")
-        routing_threshold_label.setToolTip(
-            "Uncertainty threshold for routing claims to flagship judge.\n"
-            "Lower values route more claims to flagship (higher cost, better accuracy)."
-        )
-        self.routing_threshold_spin = QSpinBox()
-        self.routing_threshold_spin.setRange(0, 100)
-        self.routing_threshold_spin.setValue(35)
-        self.routing_threshold_spin.setSuffix("%")
-        # Make this input about 90% shorter than default
-        self.routing_threshold_spin.setMaximumWidth(50)
-        self.routing_threshold_spin.setToolTip(
-            "Uncertainty threshold for routing claims to flagship judge.\n"
-            "Lower values route more claims to flagship (higher cost, better accuracy)."
-        )
-        self.routing_threshold_spin.valueChanged.connect(self._on_setting_changed)
-        col3_layout.addWidget(routing_threshold_label, 2, 0)
-        col3_layout.addWidget(self.routing_threshold_spin, 2, 1)
+        # Placeholder for future options
+        col3_layout.addWidget(QLabel(""), 2, 0, 1, 2)  # Empty space
 
         # Add columns with very thin vertical separators
         from PyQt6.QtWidgets import QFrame
@@ -1842,23 +1820,11 @@ class SummarizationTab(BaseTab):
 
             return provider_combo, model_combo, uri_label
 
-        # Create model selectors
+        # Create model selectors for Unified Pipeline
         self.miner_provider, self.miner_model, self.miner_uri = create_model_selector(
-            "Miner Model", "Model for initial claim extraction", 0
-        )
-
-        (
-            self.heavy_miner_provider,
-            self.heavy_miner_model,
-            self.heavy_miner_uri,
-        ) = create_model_selector(
-            "Heavy Miner Model",
-            "Model for complex/detailed claim extraction (optional)",
-            1,
-        )
-
-        self.judge_provider, self.judge_model, self.judge_uri = create_model_selector(
-            "Judge Model", "Lightweight model for claim scoring", 2
+            "Unified Miner Model",
+            "Model for extracting claims, jargon, people, and mental models from text segments",
+            0,
         )
 
         (
@@ -1866,35 +1832,9 @@ class SummarizationTab(BaseTab):
             self.flagship_judge_model,
             self.flagship_judge_uri,
         ) = create_model_selector(
-            "Flagship Judge Model", "High-quality model for important claims", 3
-        )
-
-        (
-            self.embedder_provider,
-            self.embedder_model,
-            self.embedder_uri,
-        ) = create_model_selector(
-            "Embedder Model", "Model for claim embeddings and similarity", 4
-        )
-
-        (
-            self.reranker_provider,
-            self.reranker_model,
-            self.reranker_uri,
-        ) = create_model_selector(
-            "Reranker Model", "Model for claim reranking and prioritization", 5
-        )
-
-        (
-            self.people_provider,
-            self.people_model,
-            self.people_uri,
-        ) = create_model_selector(
-            "People Disambiguator", "Model for person name resolution (optional)", 6
-        )
-
-        self.nli_provider, self.nli_model, self.nli_uri = create_model_selector(
-            "NLI Model", "Natural Language Inference model (optional)", 7
+            "Flagship Evaluator Model",
+            "High-quality model for evaluating, ranking, and filtering claims",
+            1,
         )
 
         self.advanced_models_group.setLayout(advanced_layout)
@@ -2074,15 +2014,15 @@ class SummarizationTab(BaseTab):
             "force_regenerate": self.force_regenerate_checkbox.isChecked(),
             "analysis_type": "Document Summary",  # Fixed to Document Summary
             "export_getreceipts": self.export_getreceipts_checkbox.isChecked(),
-            # New HCE settings
+            # Unified Pipeline HCE settings
             "profile": self.profile_combo.currentText(),
             "use_skim": self.use_skim_checkbox.isChecked(),
-            "enable_routing": self.enable_routing_checkbox.isChecked(),
-            "routing_threshold": self.routing_threshold_spin.value()
-            / 100.0,  # Convert to 0-1
-            "prompt_driven_mode": self.prompt_driven_mode_checkbox.isChecked(),
-            "flagship_file_tokens": self.flagship_file_tokens_spin.value(),
-            "flagship_session_tokens": self.flagship_session_tokens_spin.value(),
+            "miner_model_override": self._get_model_override(
+                self.miner_provider, self.miner_model
+            ),
+            "flagship_judge_model": self._get_model_override(
+                self.flagship_judge_provider, self.flagship_judge_model
+            ),
         }
 
         # Start worker
@@ -3386,32 +3326,15 @@ class SummarizationTab(BaseTab):
                 self.include_relations_checkbox,
                 self.tier_a_threshold_spin,
                 self.tier_b_threshold_spin,
-                # New HCE fields
+                # Unified Pipeline HCE fields
                 self.profile_combo,
                 self.use_skim_checkbox,
-                self.enable_routing_checkbox,
-                self.routing_threshold_spin,
-                self.prompt_driven_mode_checkbox,
-                self.flagship_file_tokens_spin,
-                self.flagship_session_tokens_spin,
-                # Advanced per-stage provider and model dropdowns
+                # Advanced per-stage provider and model dropdowns (unified pipeline)
                 self.advanced_models_group,
                 self.miner_provider,
                 self.miner_model,
-                self.heavy_miner_provider,
-                self.heavy_miner_model,
-                self.judge_provider,
-                self.judge_model,
                 self.flagship_judge_provider,
                 self.flagship_judge_model,
-                self.embedder_provider,
-                self.embedder_model,
-                self.reranker_provider,
-                self.reranker_model,
-                self.people_provider,
-                self.people_model,
-                self.nli_provider,
-                self.nli_model,
             ]
 
             # Block all signals
@@ -3536,35 +3459,6 @@ class SummarizationTab(BaseTab):
                         self.tab_name, "use_skim", True
                     )
                 )
-                self.enable_routing_checkbox.setChecked(
-                    self.gui_settings.get_checkbox_state(
-                        self.tab_name, "enable_routing", True
-                    )
-                )
-                saved_routing_threshold = self.gui_settings.get_spinbox_value(
-                    self.tab_name, "routing_threshold", 35
-                )
-                self.routing_threshold_spin.setValue(saved_routing_threshold)
-
-                # Template mode
-                self.prompt_driven_mode_checkbox.setChecked(
-                    self.gui_settings.get_checkbox_state(
-                        self.tab_name, "prompt_driven_mode", False
-                    )
-                )
-
-                # Budget settings
-                saved_flagship_file_tokens = self.gui_settings.get_spinbox_value(
-                    self.tab_name, "flagship_file_tokens", 0
-                )
-                self.flagship_file_tokens_spin.setValue(saved_flagship_file_tokens)
-
-                saved_flagship_session_tokens = self.gui_settings.get_spinbox_value(
-                    self.tab_name, "flagship_session_tokens", 0
-                )
-                self.flagship_session_tokens_spin.setValue(
-                    saved_flagship_session_tokens
-                )
 
                 # Load advanced models section state
                 saved_advanced_expanded = self.gui_settings.get_checkbox_state(
@@ -3572,20 +3466,14 @@ class SummarizationTab(BaseTab):
                 )
                 self.advanced_models_group.setChecked(saved_advanced_expanded)
 
-                # Load advanced per-stage provider and model selections
+                # Load advanced per-stage provider and model selections (unified pipeline)
                 advanced_dropdowns = [
                     ("miner", self.miner_provider, self.miner_model),
-                    ("heavy_miner", self.heavy_miner_provider, self.heavy_miner_model),
-                    ("judge", self.judge_provider, self.judge_model),
                     (
                         "flagship_judge",
                         self.flagship_judge_provider,
                         self.flagship_judge_model,
                     ),
-                    ("embedder", self.embedder_provider, self.embedder_model),
-                    ("reranker", self.reranker_provider, self.reranker_model),
-                    ("people", self.people_provider, self.people_model),
-                    ("nli", self.nli_provider, self.nli_model),
                 ]
 
                 for stage_name, provider_combo, model_combo in advanced_dropdowns:
@@ -3692,35 +3580,12 @@ class SummarizationTab(BaseTab):
                 self.tab_name, "tier_b_threshold", self.tier_b_threshold_spin.value()
             )
 
-            # Save new HCE settings
+            # Save unified pipeline HCE settings
             self.gui_settings.set_combo_selection(
                 self.tab_name, "profile", self.profile_combo.currentText()
             )
             self.gui_settings.set_checkbox_state(
                 self.tab_name, "use_skim", self.use_skim_checkbox.isChecked()
-            )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name,
-                "enable_routing",
-                self.enable_routing_checkbox.isChecked(),
-            )
-            self.gui_settings.set_spinbox_value(
-                self.tab_name, "routing_threshold", self.routing_threshold_spin.value()
-            )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name,
-                "prompt_driven_mode",
-                self.prompt_driven_mode_checkbox.isChecked(),
-            )
-            self.gui_settings.set_spinbox_value(
-                self.tab_name,
-                "flagship_file_tokens",
-                self.flagship_file_tokens_spin.value(),
-            )
-            self.gui_settings.set_spinbox_value(
-                self.tab_name,
-                "flagship_session_tokens",
-                self.flagship_session_tokens_spin.value(),
             )
 
             # Save advanced models section state
@@ -3730,20 +3595,14 @@ class SummarizationTab(BaseTab):
                 self.advanced_models_group.isChecked(),
             )
 
-            # Save advanced per-stage provider and model selections
+            # Save advanced per-stage provider and model selections (unified pipeline)
             advanced_dropdowns = [
                 ("miner", self.miner_provider, self.miner_model),
-                ("heavy_miner", self.heavy_miner_provider, self.heavy_miner_model),
-                ("judge", self.judge_provider, self.judge_model),
                 (
                     "flagship_judge",
                     self.flagship_judge_provider,
                     self.flagship_judge_model,
                 ),
-                ("embedder", self.embedder_provider, self.embedder_model),
-                ("reranker", self.reranker_provider, self.reranker_model),
-                ("people", self.people_provider, self.people_model),
-                ("nli", self.nli_provider, self.nli_model),
             ]
 
             for stage_name, provider_combo, model_combo in advanced_dropdowns:
@@ -3766,6 +3625,18 @@ class SummarizationTab(BaseTab):
         """Called when any setting changes to automatically save."""
         logger.debug(f"🔄 Setting changed in {self.tab_name} tab, triggering save...")
         self._save_settings()
+
+    def _get_model_override(
+        self, provider_combo: QComboBox, model_combo: QComboBox
+    ) -> str | None:
+        """Get model override string from provider and model combos."""
+        provider = provider_combo.currentText().strip()
+        model = model_combo.currentText().strip()
+
+        if not provider or not model:
+            return None
+
+        return f"{provider}/{model}"
 
     def _on_analysis_type_changed(self, analysis_type: str) -> None:
         """Called when analysis type changes to auto-populate template path."""
@@ -3832,25 +3703,6 @@ class SummarizationTab(BaseTab):
 
         # Trigger settings save
         self._save_settings()
-
-    def _on_routing_toggle_changed(self, enabled: bool) -> None:
-        """Handle routing toggle changes."""
-        # Enable/disable routing threshold based on toggle
-        self.routing_threshold_spin.setEnabled(enabled)
-
-        # Show dependency warning if routing enabled without flagship judge
-        if enabled:
-            flagship_provider = getattr(self, "flagship_judge_provider", None)
-            flagship_model = getattr(self, "flagship_judge_model", None)
-
-            if flagship_provider and flagship_model:
-                if (
-                    not flagship_provider.currentText()
-                    or not flagship_model.currentText()
-                ):
-                    self.append_log(
-                        "⚠️ Routing enabled but no flagship judge model configured"
-                    )
 
     def _on_template_mode_changed(self, enabled: bool) -> None:
         """Handle template mode toggle changes."""

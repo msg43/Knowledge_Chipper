@@ -28,20 +28,34 @@ class AnyLLM:
         Returns:
             JSON response from the LLM
         """
+        logger.debug(
+            f"🔍 LLM DEBUG: generate_json called with model_uri: {self.model_uri}"
+        )
+        logger.debug(f"🔍 LLM DEBUG: Prompt length: {len(prompt)} chars")
+        logger.debug(f"🔍 LLM DEBUG: Prompt preview: {prompt[:200]}...")
+
         try:
             if self.scheme == "openai":
-                return self._call_openai(prompt)
+                result = self._call_openai(prompt)
             elif self.scheme == "anthropic":
-                return self._call_anthropic(prompt)
+                result = self._call_anthropic(prompt)
             elif self.scheme == "ollama":
-                return self._call_ollama(prompt)
+                result = self._call_ollama(prompt)
             elif self.scheme == "local":
-                return self._call_local(prompt)
+                result = self._call_local(prompt)
             else:
                 raise ValueError(f"Unsupported LLM scheme: {self.scheme}")
 
+            logger.debug(f"🔍 LLM DEBUG: Result type: {type(result)}")
+            logger.debug(f"🔍 LLM DEBUG: Result preview: {str(result)[:200]}...")
+            return result
+
         except Exception as e:
-            logger.error(f"LLM generation failed for {self.model_uri}: {e}")
+            logger.error(f"🔍 LLM DEBUG: 💥 ERROR in generate_json: {e}")
+            logger.error(f"🔍 LLM DEBUG: Exception type: {type(e).__name__}")
+            import traceback
+
+            logger.error(f"🔍 LLM DEBUG: Traceback: {traceback.format_exc()}")
             return []
 
     def judge_json(self, prompt: str):
@@ -64,7 +78,9 @@ class AnyLLM:
             from ....utils.llm_providers import get_openai_client
 
             client = get_openai_client()
-            model_name = urlparse(self.model_uri).netloc
+            parsed = urlparse(self.model_uri)
+            # Handle both openai://model and openai:model formats
+            model_name = parsed.netloc or parsed.path.lstrip("/")
 
             response = client.chat.completions.create(
                 model=model_name,
@@ -82,15 +98,13 @@ class AnyLLM:
 
             # Look for JSON in markdown code blocks
             json_match = re.search(
-                r"```(?:json)?\s*(\[.*?\]|\{.*?\})\s*```", content, re.DOTALL
+                r"```(?:json)?\s*(\[.*\]|\{.*\})\s*```", content, re.DOTALL
             )
             if json_match:
                 json_content = json_match.group(1)
             else:
-                # Look for JSON without code blocks
-                json_match = re.search(r"(\[.*?\]|\{.*?\})", content, re.DOTALL)
-                if json_match:
-                    json_content = json_match.group(1)
+                # Use balanced bracket extraction for better JSON parsing
+                json_content = self._extract_balanced_json(content)
 
             try:
                 return json.loads(json_content)
@@ -99,6 +113,7 @@ class AnyLLM:
                     f"Failed to parse JSON from OpenAI model {model_name}: {e}"
                 )
                 logger.debug(f"Raw content: {content[:500]}...")
+                logger.debug(f"JSON content being parsed: {json_content[:500]}...")
 
                 # Try to repair the JSON and parse again
                 repaired_json = self._attempt_json_repair(json_content, model_name)
@@ -117,7 +132,9 @@ class AnyLLM:
             from ....utils.llm_providers import get_anthropic_client
 
             client = get_anthropic_client()
-            model_name = urlparse(self.model_uri).netloc
+            parsed = urlparse(self.model_uri)
+            # Handle both anthropic://model and anthropic:model formats
+            model_name = parsed.netloc or parsed.path.lstrip("/")
 
             response = client.messages.create(
                 model=model_name,
@@ -170,7 +187,9 @@ class AnyLLM:
             from ....utils.ollama_manager import get_ollama_manager
 
             ollama = get_ollama_manager()
-            model_name = urlparse(self.model_uri).netloc
+            parsed = urlparse(self.model_uri)
+            # Handle both ollama://model and ollama:model formats
+            model_name = parsed.netloc or parsed.path.lstrip("/")
 
             response = ollama.generate(
                 model=model_name,
@@ -192,10 +211,11 @@ class AnyLLM:
             if json_match:
                 json_content = json_match.group(1)
             else:
-                # Look for JSON without code blocks
-                json_match = re.search(r"(\[.*?\]|\{.*?\})", content, re.DOTALL)
-                if json_match:
-                    json_content = json_match.group(1)
+                # Look for JSON without code blocks using balanced bracket extraction
+                json_content = self._extract_balanced_json(content)
+                logger.debug(
+                    f"Ollama balanced extraction: {len(json_content)} chars, ends with: {repr(json_content[-50:])}"
+                )
 
             try:
                 return json.loads(json_content)
@@ -203,6 +223,8 @@ class AnyLLM:
                 logger.warning(
                     f"Failed to parse JSON from Ollama model {model_name}: {e}"
                 )
+                logger.warning(f"Raw Ollama response: {repr(content)}")
+                logger.warning(f"Extracted JSON content: {repr(json_content)}")
                 logger.debug(f"Raw content: {content[:500]}...")
 
                 # Try to repair the JSON and parse again
@@ -227,7 +249,9 @@ class AnyLLM:
             base_url = settings.local_config.base_url.rstrip("/")
 
             # Extract model name from URI (e.g., "local://llama3.2:latest" -> "llama3.2:latest")
-            model_name = urlparse(self.model_uri).netloc
+            parsed = urlparse(self.model_uri)
+            # Handle both local://model and local:model formats
+            model_name = parsed.netloc or parsed.path.lstrip("/")
             if not model_name:
                 # Fallback: try to get the model name after the ://
                 model_name = (
@@ -334,6 +358,7 @@ class AnyLLM:
         # Common repair strategies ordered by likelihood of success
         repair_strategies = [
             self._repair_trailing_commas,
+            self._repair_missing_commas,  # New strategy for Ollama comma issues
             self._repair_unescaped_quotes,
             self._repair_control_characters,
             self._repair_incomplete_json,
@@ -385,6 +410,69 @@ class AnyLLM:
         )
         return json_str
 
+    def _repair_missing_commas(self, json_str: str) -> str:
+        """Add missing commas between JSON object properties and array elements."""
+        # Only add commas between complete property-value pairs, not within incomplete JSON
+
+        # Pattern 1: Missing comma between complete object properties
+        # Look for: "key": "value" "nextkey": (but not if we're in incomplete JSON)
+        # Only match if the first part ends with a quote, number, or closing bracket/brace
+        json_str = re.sub(
+            r'("[\w_]+"\s*:\s*(?:"[^"]*"|[0-9]+|true|false|null))\s+("[\w_]+"\s*:)',
+            r"\1,\n    \2",
+            json_str,
+            flags=re.MULTILINE,
+        )
+
+        # Pattern 2: Missing comma between array elements (complete objects)
+        # Look for: } { (complete objects in array)
+        json_str = re.sub(r"}\s*\n\s*{", r"},\n  {", json_str, flags=re.MULTILINE)
+
+        return json_str
+
+    def _extract_balanced_json(self, content: str) -> str:
+        """Extract JSON using balanced bracket counting to handle incomplete JSON better."""
+        # Find the first opening bracket or brace
+        array_start = content.find("[")
+        object_start = content.find("{")
+
+        # Determine which comes first
+        if array_start == -1 and object_start == -1:
+            return content  # No JSON found
+
+        if array_start == -1:
+            start_pos = object_start
+            start_char = "{"
+            end_char = "}"
+        elif object_start == -1:
+            start_pos = array_start
+            start_char = "["
+            end_char = "]"
+        else:
+            if array_start < object_start:
+                start_pos = array_start
+                start_char = "["
+                end_char = "]"
+            else:
+                start_pos = object_start
+                start_char = "{"
+                end_char = "}"
+
+        # Count balanced brackets/braces
+        bracket_count = 0
+        end_pos = len(content)
+
+        for i, char in enumerate(content[start_pos:], start_pos):
+            if char == start_char:
+                bracket_count += 1
+            elif char == end_char:
+                bracket_count -= 1
+                if bracket_count == 0:
+                    end_pos = i + 1
+                    break
+
+        return content[start_pos:end_pos]
+
     def _repair_unescaped_quotes(self, json_str: str) -> str:
         """Escape unescaped quotes within string values."""
         # Simple and effective approach: find strings with unescaped quotes inside them
@@ -422,13 +510,39 @@ class AnyLLM:
         open_brackets = json_str.count("[")
         close_brackets = json_str.count("]")
 
+        # If JSON ends abruptly in the middle of a string, try to close it
+        if (
+            json_str.endswith('"')
+            and not json_str.endswith('",')
+            and not json_str.endswith('"}')
+        ):
+            # Check if we're in an object property value
+            if (
+                json_str.count('"') % 2 == 0
+            ):  # Even number of quotes means we're outside a string
+                # Look for the last property to see if we need a comma or closing brace
+                lines = json_str.split("\n")
+                last_line = lines[-1].strip() if lines else ""
+                if ":" in last_line and not last_line.endswith(","):
+                    # We're at the end of a property value, add proper closing
+                    if open_braces > close_braces:
+                        json_str += "\n    }"
+                    if open_brackets > close_brackets:
+                        json_str += "\n  ]"
+
         # Add missing closing braces
         if open_braces > close_braces:
-            json_str += "}" * (open_braces - close_braces)
+            missing_braces = open_braces - close_braces
+            # Add proper indentation for nested structures
+            for i in range(missing_braces):
+                indent = "  " * (missing_braces - i - 1)
+                json_str += f"\n{indent}}}"
 
         # Add missing closing brackets
         if open_brackets > close_brackets:
-            json_str += "]" * (open_brackets - close_brackets)
+            missing_brackets = open_brackets - close_brackets
+            for i in range(missing_brackets):
+                json_str += "\n]"
 
         return json_str
 

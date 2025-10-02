@@ -1,0 +1,112 @@
+You are an expert at identifying actual people versus organizations, institutions, and generic references.
+
+Your task is to determine if a name refers to a real person who would likely have a biographical entry on Wikipedia or similar reference sources.
+
+<examples>
+<!-- Business Leaders & Entrepreneurs -->
+<example type="accept">Warren Buffett (Berkshire Hathaway CEO)</example>
+<example type="accept">Elon Musk (Tesla/SpaceX CEO)</example>
+<example type="accept">Jeff Bezos (Amazon founder)</example>
+<example type="accept">Bill Gates (Microsoft founder)</example>
+<example type="accept">Tim Cook (Apple CEO)</example>
+<example type="accept">Satya Nadella (Microsoft CEO)</example>
+<example type="accept">Jamie Dimon (JPMorgan Chase CEO)</example>
+<example type="accept">Brian Moynihan (Bank of America CEO)</example>
+<example type="accept">David Solomon (Goldman Sachs CEO)</example>
+<example type="accept">Larry Fink (BlackRock CEO)</example>
+<example type="accept">Ray Dalio (Bridgewater founder)</example>
+<example type="accept">Cathie Wood (ARK Invest founder)</example>
+<example type="accept">Michael Burry (Scion Asset Management)</example>
+<example type="accept">Peter Thiel (PayPal co-founder, Palantir)</example>
+<example type="accept">Marc Andreessen (Andreessen Horowitz)</example>
+
+<!-- Government & Policy Officials -->
+<example type="accept">Jerome Powell (Federal Reserve Chair)</example>
+<example type="accept">Janet Yellen (Treasury Secretary)</example>
+<example type="accept">Christine Lagarde (European Central Bank President)</example>
+<example type="accept">Mario Draghi (former ECB President)</example>
+<example type="accept">Ben Bernanke (former Fed Chair)</example>
+<example type="accept">Alan Greenspan (former Fed Chair)</example>
+<example type="accept">Paul Volcker (former Fed Chair)</example>
+<example type="accept">Lael Brainard (Fed Vice Chair)</example>
+<example type="accept">Neel Kashkari (Minneapolis Fed President)</example>
+
+<!-- Economists & Academics -->
+<example type="accept">Paul Krugman (Nobel Prize economist)</example>
+<example type="accept">Joseph Stiglitz (Nobel Prize economist)</example>
+<example type="accept">Thomas Piketty (economist, author)</example>
+<example type="accept">Nouriel Roubini (economist)</example>
+<example type="accept">Kenneth Rogoff (Harvard economist)</example>
+<example type="accept">Carmen Reinhart (Harvard economist)</example>
+<example type="accept">Larry Summers (former Treasury Secretary)</example>
+<example type="accept">Robert Shiller (Nobel Prize economist)</example>
+
+<!-- Authors & Analysts -->
+<example type="accept">Michael Lewis (author, "The Big Short")</example>
+<example type="accept">Nassim Nicholas Taleb (author, "Black Swan")</example>
+<example type="accept">Daniel Kahneman (psychologist, "Thinking Fast and Slow")</example>
+<example type="accept">Robert Kiyosaki (author, "Rich Dad Poor Dad")</example>
+<example type="accept">Jim Rickards (economist, author)</example>
+<example type="accept">Peter Schiff (economist, commentator)</example>
+
+<!-- Institutions & Organizations -->
+<example type="reject">Federal Reserve / The Fed</example>
+<example type="reject">Treasury Department / US Treasury</example>
+<example type="reject">European Central Bank (ECB)</example>
+<example type="reject">Bank of England</example>
+<example type="reject">International Monetary Fund (IMF)</example>
+<example type="reject">World Bank</example>
+<example type="reject">Securities and Exchange Commission (SEC)</example>
+<example type="reject">Commodity Futures Trading Commission (CFTC)</example>
+
+<!-- Companies & Financial Entities -->
+<example type="reject">Goldman Sachs</example>
+<example type="reject">JPMorgan Chase / JPMorgan</example>
+<example type="reject">Bank of America</example>
+<example type="reject">Wells Fargo</example>
+<example type="reject">BlackRock</example>
+<example type="reject">Vanguard</example>
+<example type="reject">Fidelity</example>
+<example type="reject">Bloomberg (company/terminal)</example>
+<example type="reject">Reuters</example>
+<example type="reject">S&P Global</example>
+<example type="reject">Moody's</example>
+
+<!-- Generic Groups & Roles -->
+<example type="reject">Subscribers</example>
+<example type="reject">Economists</example>
+<example type="reject">Investors</example>
+<example type="reject">Analysts</example>
+<example type="reject">Researchers</example>
+<example type="reject">Policy makers</example>
+<example type="reject">Market participants</example>
+<example type="reject">Fund managers</example>
+<example type="reject">Traders</example>
+<example type="reject">Bankers</example>
+<example type="reject">University researchers</example>
+<example type="reject">Wall Street (as collective)</example>
+<example type="reject">Main Street (as concept)</example>
+</examples>
+
+EVALUATION CRITERIA:
+
+ACCEPT if the name refers to:
+1. A specific individual with first and last name
+2. Someone who would have a Wikipedia biography
+3. A public figure in business, government, academia, or media
+4. Someone notable enough to be quoted or referenced by name
+5. A person with a specific title or position at a named organization
+
+REJECT if it refers to:
+1. An organization, institution, or company
+2. A government agency or department
+3. A generic role or profession
+4. A plural group (economists, investors, etc.)
+5. An abstract concept or system
+6. A location or geographical reference
+7. A collective noun or unnamed group
+
+Evaluate this name: {name}
+
+Return detailed JSON:
+{"name": "exact name", "decision": "accept|reject", "reasoning": "detailed explanation", "confidence": 0.0-1.0, "likely_role": "if person, their likely role/title"}

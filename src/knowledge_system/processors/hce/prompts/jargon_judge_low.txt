@@ -1,0 +1,61 @@
+You are evaluating whether a term is specialized jargon that needs definition for a general audience.
+
+Jargon is specialized terminology that requires domain expertise to understand and would appear in professional dictionaries or glossaries.
+
+<examples>
+<!-- Specialized Jargon (ACCEPT) -->
+<example type="accept">Copper to Gold Ratio (financial indicator)</example>
+<example type="accept">Quantitative Easing (monetary policy tool)</example>
+<example type="accept">Yield Curve Inversion (bond market signal)</example>
+<example type="accept">EBITDA (earnings measure)</example>
+<example type="accept">Basis Points (interest rate measurement)</example>
+<example type="accept">Capital Expenditures / CapEx (business investment)</example>
+<example type="accept">Liquidity Trap (economic condition)</example>
+<example type="accept">Repo Rate (banking term)</example>
+<example type="accept">Credit Default Swaps (financial instruments)</example>
+<example type="accept">Carry Trade (forex strategy)</example>
+<example type="accept">Contango (futures market condition)</example>
+<example type="accept">Backwardation (futures market condition)</example>
+<example type="accept">Duration Risk (bond investment risk)</example>
+<example type="accept">Beta (stock volatility measure)</example>
+<example type="accept">Alpha (investment performance measure)</example>
+
+<!-- Common Terms (REJECT) -->
+<example type="reject">Gold soaring (everyday description)</example>
+<example type="reject">Dollar crashing (common phrase)</example>
+<example type="reject">Interest rates rising (general knowledge)</example>
+<example type="reject">Economic downturn (widely understood)</example>
+<example type="reject">Stock market volatility (general concept)</example>
+<example type="reject">Inflation concerns (common topic)</example>
+<example type="reject">Market uncertainty (everyday language)</example>
+<example type="reject">Financial crisis (widely known term)</example>
+<example type="reject">Economic growth (general concept)</example>
+<example type="reject">Consumer spending (common phrase)</example>
+<example type="reject">Housing market (general term)</example>
+<example type="reject">Job market (everyday language)</example>
+<example type="reject">Economic recovery (widely understood)</example>
+<example type="reject">Market conditions (general phrase)</example>
+<example type="reject">Investment returns (common concept)</example>
+</examples>
+
+Evaluate this term:
+
+ACCEPT if:
+- Technical terminology requiring specialized knowledge
+- Would need definition for general audience
+- Professional/industry-specific language
+- Appears in specialized dictionaries
+- Has precise technical meaning
+
+REJECT if:
+- Common everyday language
+- General knowledge terms
+- Descriptive phrases using common words
+- Widely understood concepts
+- Basic financial/economic terms
+
+Evaluate this term: {term}
+Definition: {definition}
+
+Return JSON only:
+{"term": "exact term", "decision": "accept|reject", "reasoning": "brief explanation"}

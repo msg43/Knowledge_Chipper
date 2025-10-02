@@ -8,9 +8,9 @@ ModelURI = (
 
 
 class StageModelConfig(BaseModel):
-    miner: ModelURI = "local://llama3.2:latest"
+    miner: ModelURI = "local://qwen2.5:7b"
     heavy_miner: ModelURI | None = None
-    judge: ModelURI = "local://llama3.2:latest"
+    judge: ModelURI = "local://qwen2.5:7b"
     flagship_judge: ModelURI | None = None
     embedder: ModelURI = "all-MiniLM-L6-v2"
     reranker: ModelURI = "cross-encoder/ms-marco-MiniLM-L-6-v2"

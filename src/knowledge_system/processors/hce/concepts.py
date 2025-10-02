@@ -79,7 +79,9 @@ class ConceptExtractor:
                             if first_mention_ts
                             else source_segment.t0,
                             evidence_spans=[
-                                EvidenceSpan(**e) for e in r.get("evidence", [])
+                                EvidenceSpan(**e)
+                                for e in r.get("evidence", [])
+                                if isinstance(e, dict)
                             ],
                             aliases=r.get("aliases", []),
                         )
@@ -97,7 +99,7 @@ class ConceptExtractor:
 
 
 def extract_concepts(
-    episode, scored_claims, model_uri: str = "local://llama3.2:latest"
+    episode, scored_claims, model_uri: str = "local://qwen2.5:7b"
 ) -> list[MentalModel]:
     """Compatibility wrapper used by HCEPipeline to extract concepts."""
     from pathlib import Path

@@ -2,18 +2,97 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Launch Knowledge Chipper",
+            "label": "Safe Python Run",
             "type": "shell",
-            "command": "./launch_app.sh",
+            "command": "${workspaceFolder}/scripts/cursor_safe_run.sh",
+            "args": ["--python", "python", "${file}"],
             "group": "build",
             "presentation": {
                 "echo": true,
                 "reveal": "always",
                 "focus": false,
-                "panel": "new"
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
             },
             "options": {
-                "cwd": "${workspaceFolder}"
+                "env": {
+                    "PYTHONUNBUFFERED": "1"
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Safe Test Run",
+            "type": "shell",
+            "command": "${workspaceFolder}/scripts/cursor_safe_run.sh",
+            "args": ["--python", "pytest", "${workspaceFolder}/tests/"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "options": {
+                "env": {
+                    "PYTHONUNBUFFERED": "1"
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Safe Build",
+            "type": "shell",
+            "command": "${workspaceFolder}/scripts/cursor_safe_run.sh",
+            "args": ["make", "build"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Background Job Manager",
+            "type": "shell",
+            "command": "${workspaceFolder}/scripts/cursor_job_manager.sh",
+            "args": ["list"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "HCE Process (Safe)",
+            "type": "shell",
+            "command": "${workspaceFolder}/scripts/cursor_safe_run.sh",
+            "args": ["--background", "python", "-m", "knowledge_system.processors.hce.parallel_processor"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "options": {
+                "env": {
+                    "PYTHONUNBUFFERED": "1"
+                }
             },
             "problemMatcher": []
         }
