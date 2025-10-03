@@ -147,24 +147,65 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 </plist>
 EOF
 
-# Copy app icon if it exists
+# Create proper app icon
+echo -e "\n${BLUE}🎨 Creating app icon...${NC}"
+
 # Try different icon sources in priority order
+ICON_SOURCE=""
 if [ -f "$PROJECT_ROOT/Assets/STP_Icon_1.icns" ]; then
-    cp "$PROJECT_ROOT/Assets/STP_Icon_1.icns" "$APP_BUNDLE/Contents/Resources/app_icon.icns"
+    ICON_SOURCE="$PROJECT_ROOT/Assets/STP_Icon_1.icns"
 elif [ -f "$PROJECT_ROOT/Assets/chipper.icns" ]; then
-    cp "$PROJECT_ROOT/Assets/chipper.icns" "$APP_BUNDLE/Contents/Resources/app_icon.icns"
+    ICON_SOURCE="$PROJECT_ROOT/Assets/chipper.icns"
 elif [ -f "$PROJECT_ROOT/Assets/STP_Icon_1.png" ]; then
-    # Convert PNG to ICNS if needed
-    sips -s format icns "$PROJECT_ROOT/Assets/STP_Icon_1.png" --out "$APP_BUNDLE/Contents/Resources/app_icon.icns" 2>/dev/null || {
-        print_warning "Could not convert PNG to ICNS, copying PNG"
-        cp "$PROJECT_ROOT/Assets/STP_Icon_1.png" "$APP_BUNDLE/Contents/Resources/app_icon.icns"
-    }
+    ICON_SOURCE="$PROJECT_ROOT/Assets/STP_Icon_1.png"
 elif [ -f "$PROJECT_ROOT/Assets/chipper.png" ]; then
-    # Convert PNG to ICNS if needed
-    sips -s format icns "$PROJECT_ROOT/Assets/chipper.png" --out "$APP_BUNDLE/Contents/Resources/app_icon.icns" 2>/dev/null || {
-        print_warning "Could not convert PNG to ICNS, copying PNG"
-        cp "$PROJECT_ROOT/Assets/chipper.png" "$APP_BUNDLE/Contents/Resources/app_icon.icns"
-    }
+    ICON_SOURCE="$PROJECT_ROOT/Assets/chipper.png"
+fi
+
+if [ -n "$ICON_SOURCE" ]; then
+    if [[ "$ICON_SOURCE" == *.icns ]]; then
+        # Direct copy of ICNS file
+        cp "$ICON_SOURCE" "$APP_BUNDLE/Contents/Resources/app_icon.icns"
+        print_status "App icon copied from $(basename "$ICON_SOURCE")"
+    else
+        # Convert PNG to ICNS using proper method
+        echo "Converting PNG to ICNS..."
+
+        # Create iconset directory
+        ICONSET_DIR="/tmp/app_icon.iconset"
+        rm -rf "$ICONSET_DIR"
+        mkdir -p "$ICONSET_DIR"
+
+        # Generate all required icon sizes
+        sips -z 16 16     "$ICON_SOURCE" --out "$ICONSET_DIR/icon_16x16.png"      >/dev/null 2>&1
+        sips -z 32 32     "$ICON_SOURCE" --out "$ICONSET_DIR/icon_16x16@2x.png"   >/dev/null 2>&1
+        sips -z 32 32     "$ICON_SOURCE" --out "$ICONSET_DIR/icon_32x32.png"      >/dev/null 2>&1
+        sips -z 64 64     "$ICON_SOURCE" --out "$ICONSET_DIR/icon_32x32@2x.png"   >/dev/null 2>&1
+        sips -z 128 128   "$ICON_SOURCE" --out "$ICONSET_DIR/icon_128x128.png"    >/dev/null 2>&1
+        sips -z 256 256   "$ICON_SOURCE" --out "$ICONSET_DIR/icon_128x128@2x.png" >/dev/null 2>&1
+        sips -z 256 256   "$ICON_SOURCE" --out "$ICONSET_DIR/icon_256x256.png"    >/dev/null 2>&1
+        sips -z 512 512   "$ICON_SOURCE" --out "$ICONSET_DIR/icon_256x256@2x.png" >/dev/null 2>&1
+        sips -z 512 512   "$ICON_SOURCE" --out "$ICONSET_DIR/icon_512x512.png"    >/dev/null 2>&1
+        sips -z 1024 1024 "$ICON_SOURCE" --out "$ICONSET_DIR/icon_512x512@2x.png" >/dev/null 2>&1
+
+        # Convert iconset to ICNS
+        if iconutil -c icns "$ICONSET_DIR" -o "$APP_BUNDLE/Contents/Resources/app_icon.icns" 2>/dev/null; then
+            print_status "App icon created from $(basename "$ICON_SOURCE")"
+        else
+            print_warning "iconutil failed, using sips conversion"
+            sips -s format icns "$ICON_SOURCE" --out "$APP_BUNDLE/Contents/Resources/app_icon.icns" 2>/dev/null || {
+                print_warning "Could not convert PNG to ICNS, copying PNG as fallback"
+                cp "$ICON_SOURCE" "$APP_BUNDLE/Contents/Resources/app_icon.png"
+                # Update Info.plist to use PNG instead
+                sed -i '' 's/app_icon/app_icon.png/g' "$APP_BUNDLE/Contents/Info.plist"
+            }
+        fi
+
+        # Cleanup
+        rm -rf "$ICONSET_DIR"
+    fi
+else
+    print_warning "No icon file found in Assets directory"
 fi
 
 print_status "App bundle skeleton created"
@@ -1487,9 +1528,24 @@ report_progress() {
 
 report_progress 80 "Finalizing installation"
 
-# Skip component download during installation - will happen on first launch
-echo "Skipping component download (will happen on first app launch)..."
-report_progress 90 "Installation configured"
+# Download components during installation
+echo "Downloading required components..."
+report_progress 90 "Downloading components"
+
+# Download components using the download manager
+DOWNLOAD_SCRIPT="$APP_BUNDLE/Contents/Resources/installer_scripts/download_manager.py"
+if [ -f "$DOWNLOAD_SCRIPT" ]; then
+    echo "Starting component download..."
+    python3 "$DOWNLOAD_SCRIPT" --install-to "$APP_BUNDLE" || {
+        echo "Component download failed during installation"
+        report_progress 95 "Component download failed"
+        exit 1
+    }
+    report_progress 95 "Components downloaded successfully"
+else
+    echo "Download manager not found, skipping component download"
+    report_progress 95 "Components will download on first launch"
+fi
 
 # Create launch script
 echo "Creating launch script..."
@@ -1506,9 +1562,10 @@ export MODELS_BUNDLED="true"
 
 # Check if components are installed
 if [ ! -x "$FRAMEWORK_PYTHON" ]; then
-    # Components not yet installed - show message and exit
-    osascript -e 'display dialog "Skip the Podcast Desktop needs to download required components.\n\nPlease run the app from your Applications folder to complete setup." buttons {"OK"} default button "OK" with title "First Launch Setup Required" with icon caution'
-    exit 0
+    # Components not found - this shouldn't happen if installation completed successfully
+    echo "Components not found - installation may have failed"
+    osascript -e 'display dialog "Skip the Podcast Desktop components are missing.\n\nPlease reinstall the application." buttons {"OK"} default button "OK" with title "Installation Error" with icon stop'
+    exit 1
 fi
 
 # Launch the application
@@ -1522,6 +1579,13 @@ report_progress 95 "Launch script created"
 # Set proper permissions
 echo "Setting permissions..."
 chmod -R 755 "$APP_BUNDLE"
+
+# Clean up any existing shortcuts/aliases to prevent duplicates
+echo "Cleaning up existing shortcuts..."
+# Remove any existing aliases or shortcuts
+find /Applications -name "*Skip the Podcast Desktop*" -type l -delete 2>/dev/null || true
+# Remove any duplicate entries in Launch Services database
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -kill -r -domain local -domain system -domain user 2>/dev/null || true
 
 # Hardware-specific optimization
 if [ -f "/tmp/hardware_specs.json" ]; then
@@ -1572,9 +1636,10 @@ export MODELS_BUNDLED="true"
 
 # Check if components are installed
 if [ ! -x "$FRAMEWORK_PYTHON" ]; then
-    # Components not yet installed - show message and exit
-    osascript -e 'display dialog "Skip the Podcast Desktop needs to download required components.\n\nPlease run the app from your Applications folder to complete setup." buttons {"OK"} default button "OK" with title "First Launch Setup Required" with icon caution'
-    exit 0
+    # Components not found - this shouldn't happen if installation completed successfully
+    echo "Components not found - installation may have failed"
+    osascript -e 'display dialog "Skip the Podcast Desktop components are missing.\n\nPlease reinstall the application." buttons {"OK"} default button "OK" with title "Installation Error" with icon stop'
+    exit 1
 fi
 
 # Launch the application
@@ -1656,23 +1721,10 @@ cat > "$DISTRIBUTION_XML" << EOF
     <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
     <options customize="never" require-scripts="true" rootVolumeOnly="true" hostArchitectures="x86_64,arm64" allow-external-scripts="false"/>
 
-    <!-- Force authorization requirement -->
+    <!-- Single authorization requirement -->
     <authorization>
         <privilege>system.install.root.admin</privilege>
     </authorization>
-
-    <!-- Installation check script -->
-    <installation-check script="installationCheck()"/>
-    <script><![CDATA[
-function installationCheck() {
-    // Check if we have root access
-    if (system.run('/usr/bin/id', '-u') != '0') {
-        // We're not root, require elevation
-        return false;
-    }
-    return true;
-}
-    ]]></script>
 
     <!-- Define documents displayed at various steps -->
     <welcome    file="welcome.html"    mime-type="text/html" />
@@ -1721,6 +1773,7 @@ cat > "$RESOURCES_DIR/welcome.html" << 'EOF'
     <p>This installer will set up Skip the Podcast Desktop, a comprehensive knowledge management system that transforms videos, audio files, and documents into organized, searchable knowledge.</p>
 
     <h2>What will be installed:</h2>
+    <div class="feature"><span class="icon">✓</span> Skip the Podcast Desktop Application</div>
     <div class="feature"><span class="icon">✓</span> Python 3.13 Framework (40MB)</div>
     <div class="feature"><span class="icon">✓</span> AI Models Package (1.2GB)</div>
     <div class="feature"><span class="icon">✓</span> FFmpeg Media Processing (48MB)</div>
@@ -1729,6 +1782,7 @@ cat > "$RESOURCES_DIR/welcome.html" << 'EOF'
 
     <p><strong>Total download size:</strong> Approximately 1.3-4.7GB depending on your hardware.</p>
     <p><strong>Installation time:</strong> 5-15 minutes depending on internet speed.</p>
+    <p><strong>Note:</strong> All components will be downloaded automatically during installation.</p>
 
     <p>Click Continue to begin the installation process.</p>
 </body>
