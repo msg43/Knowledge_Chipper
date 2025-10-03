@@ -3,6 +3,7 @@ Unified Miner for extracting claims, jargon, people, and mental models in a sing
 """
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Dict, List
 
