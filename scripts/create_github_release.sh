@@ -149,10 +149,10 @@ The PKG installer will automatically download and install:
 
 The installer automatically detects your Mac and recommends the optimal Ollama model:
 
-- **M2/M3 Ultra (64GB+ RAM)**: llama3.2:8b (4.7GB)
-- **M2/M3 Max (32GB+ RAM)**: llama3.2:8b (4.7GB)
-- **M2/M3 Pro (16GB+ RAM)**: llama3.2:3b (2GB)
-- **Base Systems**: llama3.2:1b (1.3GB)
+- **M2/M3 Ultra (64GB+ RAM)**: qwen2.5:14b (8.2GB)
+- **M2/M3 Max (32GB+ RAM)**: qwen2.5:14b (8.2GB)
+- **M2/M3 Pro (16GB+ RAM)**: qwen2.5:7b (4GB)
+- **Base Systems**: qwen2.5:3b (2GB)
 
 ### 🔧 Technical Improvements
 

@@ -631,27 +631,27 @@ def get_ollama_model_recommendation(specs):
 
     if specs.memory_gb >= 64 and specs.chip_type in [ChipType.M3_ULTRA, ChipType.M2_ULTRA]:
         return {
-            "primary": "llama3.2:8b",
-            "size": "4.7GB",
+            "primary": "qwen2.5:14b",
+            "size": "8.2GB",
             "description": "High-quality model for Ultra systems",
             "optional_upgrade": "llama3.1:70b (40GB) - Expert mode"
         }
     elif specs.memory_gb >= 32 and specs.chip_type in [ChipType.M3_MAX, ChipType.M2_MAX]:
         return {
-            "primary": "llama3.2:8b",
-            "size": "4.7GB",
+            "primary": "qwen2.5:14b",
+            "size": "8.2GB",
             "description": "Optimal for Max systems"
         }
     elif specs.memory_gb >= 16:
         return {
-            "primary": "llama3.2:3b",
+            "primary": "qwen2.5:7b",
             "size": "2GB",
             "description": "Balanced for Pro systems"
         }
     else:
         return {
-            "primary": "llama3.2:1b",
-            "size": "1.3GB",
+            "primary": "qwen2.5:3b",
+            "size": "2GB",
             "description": "Efficient for base systems"
         }
 
@@ -745,13 +745,13 @@ try:
 
         # Determine recommendation based on memory
         if memory_gb >= 64:
-            recommendation = {'primary': 'llama3.2:8b', 'size': '4.7GB', 'description': 'High-quality model for Ultra systems'}
+            recommendation = {'primary': 'qwen2.5:14b', 'size': '8.2GB', 'description': 'High-quality model for Ultra systems'}
         elif memory_gb >= 32:
-            recommendation = {'primary': 'llama3.2:8b', 'size': '4.7GB', 'description': 'Optimal for Max systems'}
+            recommendation = {'primary': 'qwen2.5:14b', 'size': '8.2GB', 'description': 'Optimal for Max systems'}
         elif memory_gb >= 16:
-            recommendation = {'primary': 'llama3.2:3b', 'size': '2GB', 'description': 'Balanced for Pro systems'}
+            recommendation = {'primary': 'qwen2.5:7b', 'size': '4GB', 'description': 'Balanced for Pro systems'}
         else:
-            recommendation = {'primary': 'llama3.2:1b', 'size': '1.3GB', 'description': 'Efficient for base systems'}
+            recommendation = {'primary': 'qwen2.5:3b', 'size': '2GB', 'description': 'Efficient for base systems'}
 
         result = {
             'hardware': {'chip_type': chip_name, 'memory_gb': memory_gb, 'cpu_cores': 8},
@@ -764,7 +764,7 @@ except:
     # Fallback
     result = {
         'hardware': {'chip_type': 'M3', 'memory_gb': 16, 'cpu_cores': 8},
-        'recommendation': {'primary': 'llama3.2:3b', 'size': '2GB', 'description': 'Balanced for Pro systems'}
+        'recommendation': {'primary': 'qwen2.5:7b', 'size': '4GB', 'description': 'Balanced for Pro systems'}
     }
     print(json.dumps(result))
 " > /tmp/hardware_specs.json

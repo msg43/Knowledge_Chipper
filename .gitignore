@@ -294,8 +294,3 @@ build_ai_models/
 build_ffmpeg/
 *.pkg
 dist/*.tar.gz
-
-# Cursor Auto-Wrap temporary files
-tmp/cursor_jobs/
-tmp/cursor_command_stats.json
-.cursor_shell_config

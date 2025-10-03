@@ -118,10 +118,10 @@ The complete PKG migration has been **successfully executed from start to finish
 ## 🔧 Technical Implementation
 
 ### **Hardware Optimization**
-- **M2 Ultra (128GB RAM)**: `llama3.2:8b` (4.7GB) + expert mode options
-- **M2/M3 Max (32GB RAM)**: `llama3.2:8b` (4.7GB) optimized
-- **M2/M3 Pro (16GB RAM)**: `llama3.2:3b` (2GB) balanced
-- **Base Systems**: `llama3.2:1b` (1.3GB) efficient
+- **M2 Ultra (128GB RAM)**: `qwen2.5:14b` (8.2GB) + expert mode options
+- **M2/M3 Max (32GB RAM)**: `qwen2.5:14b` (8.2GB) optimized
+- **M2/M3 Pro (16GB RAM)**: `qwen2.5:7b` (4GB) balanced
+- **Base Systems**: `qwen2.5:3b` (2GB) efficient
 
 ### **Component Distribution Strategy**
 - **Python Framework**: 40MB self-built universal binary

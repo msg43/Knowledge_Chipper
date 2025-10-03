@@ -49,6 +49,9 @@ MODEL_CONTEXT_WINDOWS = {
     "llama2:13b-chat": 4096,
     "llama3.1:8b-instruct": 128000,
     "llama3.2:1b": 128000,
+    "qwen2.5:14b": 128000,
+    "qwen2.5:7b": 128000,
+    "qwen2.5:3b": 128000,
     "llama3.2:3b": 128000,
     "llama3.2:3b-instruct": 128000,
     "llama3.2:latest": 128000,  # Latest llama3.2 variant

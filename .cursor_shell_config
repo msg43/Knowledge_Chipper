@@ -1,0 +1,11 @@
+# Cursor Auto-Wrap Configuration
+# Add this to your shell configuration (.zshrc, .bashrc, etc.)
+
+# Enable Cursor auto-wrapping
+export CURSOR_AUTO_WRAP=1
+export CURSOR_PROJECT_ROOT="$(pwd)"
+
+# Source the terminal initialization
+if [[ -f "$CURSOR_PROJECT_ROOT/scripts/cursor_terminal_init.sh" ]]; then
+    source "$CURSOR_PROJECT_ROOT/scripts/cursor_terminal_init.sh"
+fi

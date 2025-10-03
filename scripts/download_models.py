@@ -96,7 +96,7 @@ def download_diarization_model() -> bool:
         return False
 
 
-def download_ollama_model(model_name: str = "llama3.2:3b") -> bool:
+def download_ollama_model(model_name: str = "qwen2.5:7b") -> bool:
     """Download Ollama model."""
     try:
         print(f"\n🤖 Downloading Ollama {model_name} model...")
@@ -169,8 +169,8 @@ def main():
     )
     parser.add_argument(
         "--ollama-model",
-        default="llama3.2:3b",
-        help="Ollama model to download (default: llama3.2:3b)",
+        default="qwen2.5:7b",
+        help="Ollama model to download (default: qwen2.5:7b)",
     )
 
     args = parser.parse_args()

@@ -58,7 +58,27 @@ class UnifiedHCEPipeline:
         )
 
         try:
-            miner_outputs = mine_episode_unified(episode, self.config.models.miner)
+            # Determine max_workers based on configuration
+            max_workers = None
+            if (
+                hasattr(self.config, "max_workers")
+                and self.config.max_workers is not None
+            ):
+                max_workers = self.config.max_workers
+            elif (
+                hasattr(self.config, "enable_parallel_processing")
+                and not self.config.enable_parallel_processing
+            ):
+                max_workers = 1  # Force sequential processing
+
+            miner_outputs = mine_episode_unified(
+                episode,
+                self.config.models.miner,
+                max_workers=max_workers,
+                progress_callback=lambda msg: report_progress(
+                    "Mining segments", 30.0, msg
+                ),
+            )
 
             # Count total extractions
             total_claims = sum(len(output.claims) for output in miner_outputs)

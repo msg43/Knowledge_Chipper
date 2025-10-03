@@ -11,7 +11,7 @@ class StageModelConfig(BaseModel):
     miner: ModelURI = "local://qwen2.5:7b"
     heavy_miner: ModelURI | None = None
     judge: ModelURI = "local://qwen2.5:7b"
-    flagship_judge: ModelURI | None = None
+    flagship_judge: ModelURI = "local://qwen2.5:7b"
     embedder: ModelURI = "all-MiniLM-L6-v2"
     reranker: ModelURI = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     people_disambiguator: ModelURI | None = None
@@ -33,3 +33,5 @@ class PipelineConfigFlex(BaseModel):
     use_skim: bool = True
     router_uncertainty_threshold: float = 0.35
     flagship_max_claims_per_file: int | None = None
+    max_workers: int | None = None  # None = auto-calculate, 1 = single worker, etc.
+    enable_parallel_processing: bool = True  # Enable/disable parallel processing

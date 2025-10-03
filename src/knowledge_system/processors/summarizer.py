@@ -156,43 +156,42 @@ class SummarizerProcessor(BaseProcessor):
         if outputs.claims:
             summary_parts.append("## Key Claims")
             for i, claim in enumerate(outputs.claims[:10], 1):  # Limit to top 10
-                importance = claim.scores.get("importance", 0)
+                importance = claim.scores.get("importance", 0.0)
+                claim_type = str(claim.claim_type)
                 summary_parts.append(
-                    f"{i}. {claim.canonical} (importance: {importance:.2f})"
+                    f"{i}. **{claim.canonical}** ({claim_type}, importance: {importance:.2f})"
                 )
 
         # People section
         if outputs.people:
             summary_parts.append("\n## People Mentioned")
-            for person in outputs.people[:10]:  # Limit to top 10
-                if isinstance(person, dict):
-                    name = person.get("name", "Unknown")
-                    role = person.get("role_or_description", "No description")
-                    summary_parts.append(f"- {name}: {role}")
-                else:
-                    summary_parts.append(f"- {person}")
+            # Group people by normalized name to avoid duplicates
+            people_dict = {}
+            for person in outputs.people[:20]:  # Get more to deduplicate
+                name = person.normalized or person.surface
+                if name not in people_dict:
+                    people_dict[name] = person
+
+            for person in list(people_dict.values())[:10]:  # Limit to top 10 unique
+                name = person.normalized or person.surface
+                entity_type = person.entity_type
+                summary_parts.append(f"- **{name}** ({entity_type})")
 
         # Concepts section
         if outputs.concepts:
             summary_parts.append("\n## Key Concepts")
             for concept in outputs.concepts[:10]:  # Limit to top 10
-                if isinstance(concept, dict):
-                    name = concept.get("name", "Unknown concept")
-                    description = concept.get("description", "No description")
-                    summary_parts.append(f"- {name}: {description}")
-                else:
-                    summary_parts.append(f"- {concept}")
+                name = concept.name
+                definition = concept.definition or "No definition available"
+                summary_parts.append(f"- **{name}**: {definition}")
 
         # Jargon section
         if outputs.jargon:
             summary_parts.append("\n## Technical Terms")
             for term in outputs.jargon[:10]:  # Limit to top 10
-                if isinstance(term, dict):
-                    term_name = term.get("term", "Unknown term")
-                    definition = term.get("definition", "No definition")
-                    summary_parts.append(f"- {term_name}: {definition}")
-                else:
-                    summary_parts.append(f"- {term}")
+                term_name = term.term
+                definition = term.definition or "No definition available"
+                summary_parts.append(f"- **{term_name}**: {definition}")
 
         return "\n".join(summary_parts)
 
@@ -210,14 +209,23 @@ class SummarizerProcessor(BaseProcessor):
                 success=False,
                 data="",
                 errors=["Invalid input data"],
-                metadata={"processor": "SummarizerProcessor"},
+                metadata={
+                    "processor": "SummarizerProcessor",
+                    "provider": self.provider,
+                    "model": self.model,
+                },
             )
 
         if dry_run:
             return ProcessorResult(
                 success=True,
                 data="[DRY RUN] Would process with HCE pipeline",
-                metadata={"processor": "SummarizerProcessor", "dry_run": True},
+                metadata={
+                    "processor": "SummarizerProcessor",
+                    "provider": self.provider,
+                    "model": self.model,
+                    "dry_run": True,
+                },
             )
 
         try:
@@ -259,6 +267,8 @@ class SummarizerProcessor(BaseProcessor):
                 data=summary,
                 metadata={
                     "processor": "SummarizerProcessor",
+                    "provider": self.provider,
+                    "model": self.model,
                     "claims_count": len(outputs.claims),
                     "people_count": len(outputs.people),
                     "concepts_count": len(outputs.concepts),
@@ -273,5 +283,9 @@ class SummarizerProcessor(BaseProcessor):
                 success=False,
                 data="",
                 errors=[str(e)],
-                metadata={"processor": "SummarizerProcessor"},
+                metadata={
+                    "processor": "SummarizerProcessor",
+                    "provider": self.provider,
+                    "model": self.model,
+                },
             )

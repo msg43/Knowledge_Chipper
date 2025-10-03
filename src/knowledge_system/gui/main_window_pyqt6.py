@@ -875,7 +875,7 @@ def launch_gui() -> None:
                     from ctypes import c_char_p
 
                     libc = ctypes.CDLL("libc.dylib")
-                    libc.setproctitle(c_char_p(b"Knowledge Chipper"))
+                    libc.setproctitle(c_char_p(b"Skipthepodcast.com"))
                 except (OSError, AttributeError, ImportError):
                     pass  # Process title setting failed
 

@@ -478,10 +478,10 @@ class DependencyManager:
 
             config_file = models_dir / "runtime_download_config.json"
             config = {
-                "model": "llama3.2:3b",
+                "model": "qwen2.5:7b",
                 "download_on_first_use": True,
-                "estimated_size_gb": 2.0,
-                "fallback_models": ["llama3.2:1b", "phi3:3.8b-mini"],
+                "estimated_size_gb": 4.0,
+                "fallback_models": ["qwen2.5:3b", "llama3.2:3b", "phi3:3.8b-mini"],
                 "setup_complete": True,
             }
 

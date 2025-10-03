@@ -99,33 +99,33 @@ if [ "$QUIET_MODE" != "1" ]; then
 fi
 
 # Check if model already exists
-if ollama list | grep -q "llama3.2:3b"; then
+if ollama list | grep -q "qwen2.5:7b"; then
     if [ "$QUIET_MODE" != "1" ]; then
-        echo -e "${GREEN}✅ AI model (Llama 3.2:3b) already available${NC}"
+        echo -e "${GREEN}✅ AI model (Qwen 2.5:7b) already available${NC}"
     fi
 else
     if [ "$QUIET_MODE" != "1" ]; then
-        echo -e "${BLUE}📥 Downloading AI model (Llama 3.2:3b)...${NC}"
-        echo "Model: ~2GB download for automatic speaker identification"
+        echo -e "${BLUE}📥 Downloading AI model (Qwen 2.5:7b)...${NC}"
+        echo "Model: ~4GB download for automatic speaker identification"
         echo ""
     fi
 
     # Download with progress (silent in quiet mode)
     if [ "$QUIET_MODE" = "1" ]; then
-        ollama pull llama3.2:3b > /dev/null 2>&1
+        ollama pull qwen2.5:7b > /dev/null 2>&1
     else
-        ollama pull llama3.2:3b
+        ollama pull qwen2.5:7b
     fi
 
     # Verify download
-    if ollama list | grep -q "llama3.2:3b"; then
+    if ollama list | grep -q "qwen2.5:7b"; then
         if [ "$QUIET_MODE" != "1" ]; then
             echo -e "${GREEN}✅ MVP AI model downloaded successfully${NC}"
         fi
     else
         if [ "$QUIET_MODE" != "1" ]; then
             echo -e "${RED}❌ Model download failed${NC}"
-            echo "You can download it later with: ollama pull llama3.2:3b"
+            echo "You can download it later with: ollama pull qwen2.5:7b"
         fi
         kill $OLLAMA_PID 2>/dev/null || true
         exit 1
@@ -134,7 +134,7 @@ fi
 
 # Test the model
 echo -e "${BLUE}🧪 Testing AI model...${NC}"
-TEST_RESPONSE=$(ollama run llama3.2:3b "Say 'MVP AI ready' and nothing else." --timeout 30s 2>/dev/null || echo "")
+TEST_RESPONSE=$(ollama run qwen2.5:7b "Say 'MVP AI ready' and nothing else." --timeout 30s 2>/dev/null || echo "")
 
 if [[ "$TEST_RESPONSE" == *"MVP AI ready"* ]]; then
     echo -e "${GREEN}✅ AI model test successful${NC}"

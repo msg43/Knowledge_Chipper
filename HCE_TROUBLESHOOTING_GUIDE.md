@@ -83,7 +83,7 @@ ollama list
 # Test Ollama API directly
 curl -X POST http://localhost:11434/api/generate \
   -H "Content-Type: application/json" \
-  -d '{"model": "llama3.2:3b", "prompt": "Test prompt", "stream": false}'
+  -d '{"model": "qwen2.5:7b", "prompt": "Test prompt", "stream": false}'
 ```
 
 ### Check Database State
@@ -183,7 +183,7 @@ Add breakpoints or logging at each step:
 ### 4. **Verify Model Availability**
 Ensure the required Ollama model is installed and functional:
 ```bash
-ollama pull llama3.2:3b  # or whatever model is configured
+ollama pull qwen2.5:7b  # or whatever model is configured
 ```
 
 ## Expected Behavior

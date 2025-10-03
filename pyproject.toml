@@ -118,9 +118,9 @@ knowledge-system-gui = "knowledge_system.gui:main"
 ks-gui = "knowledge_system.gui:main"
 
 [project.urls]
-"Homepage" = "https://github.com/msg43/Knowledge_Chipper"
-"Bug Reports" = "https://github.com/msg43/Knowledge_Chipper/issues"
-"Source" = "https://github.com/msg43/Knowledge_Chipper"
+"Homepage" = "https://github.com/msg43/skipthepodcast.com"
+"Bug Reports" = "https://github.com/msg43/skipthepodcast.com/issues"
+"Source" = "https://github.com/msg43/skipthepodcast.com"
 
 [tool.setuptools.packages.find]
 where = ["src"]

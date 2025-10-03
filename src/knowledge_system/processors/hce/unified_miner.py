@@ -70,8 +70,30 @@ class UnifiedMiner:
         full_prompt = f"{self.template}\n\nSEGMENT TO ANALYZE:\n{json.dumps(segment_data, indent=2)}"
 
         try:
-            # Get structured JSON response from LLM
-            raw_result = self.llm.generate_json(full_prompt)
+            # Try structured JSON generation first (for Ollama models)
+            raw_result = None
+            if hasattr(self.llm, "generate_structured_json"):
+                try:
+                    raw_result = self.llm.generate_structured_json(
+                        full_prompt, "miner_output"
+                    )
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.info(
+                        "🔒 Using structured outputs with schema enforcement for miner"
+                    )
+                except Exception as e:
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        f"Structured JSON generation failed, falling back: {e}"
+                    )
+
+            # Fall back to regular JSON generation if structured failed or not available
+            if raw_result is None:
+                raw_result = self.llm.generate_json(full_prompt)
 
             # Debug logging
             import logging
@@ -100,7 +122,7 @@ class UnifiedMiner:
             if not isinstance(result, dict):
                 result = {}
 
-            # Validate against schema
+            # Validate against schema (still useful for non-Ollama providers)
             is_valid, errors = validate_miner_output(result)
             if not is_valid:
                 import logging
@@ -132,19 +154,44 @@ class UnifiedMiner:
                 {"claims": [], "jargon": [], "people": [], "mental_models": []}
             )
 
-    def mine_episode(self, episode: EpisodeBundle) -> list[UnifiedMinerOutput]:
+    def mine_episode(
+        self,
+        episode: EpisodeBundle,
+        max_workers: int | None = None,
+        progress_callback: Callable | None = None,
+    ) -> list[UnifiedMinerOutput]:
         """Extract all entity types from all segments in an episode."""
-        outputs = []
 
-        for segment in episode.segments:
-            output = self.mine_segment(segment)
-            outputs.append(output)
+        # If max_workers is 1 or None, use sequential processing
+        if max_workers == 1 or max_workers is None:
+            outputs = []
+            for segment in episode.segments:
+                output = self.mine_segment(segment)
+                outputs.append(output)
+                if progress_callback:
+                    progress_callback(f"Processed segment {segment.segment_id}")
+            return outputs
 
-        return outputs
+        # Use parallel processing for max_workers > 1
+        from .parallel_processor import create_parallel_processor
+
+        processor = create_parallel_processor(max_workers=max_workers)
+
+        def process_segment(segment):
+            return self.mine_segment(segment)
+
+        return processor.process_parallel(
+            items=episode.segments,
+            processor_func=process_segment,
+            progress_callback=progress_callback,
+        )
 
 
 def mine_episode_unified(
-    episode: EpisodeBundle, miner_model_uri: str
+    episode: EpisodeBundle,
+    miner_model_uri: str,
+    max_workers: int | None = None,
+    progress_callback: Callable | None = None,
 ) -> list[UnifiedMinerOutput]:
     """
     Convenience function for mining an entire episode with the unified miner.
@@ -152,6 +199,8 @@ def mine_episode_unified(
     Args:
         episode: The episode to mine
         miner_model_uri: URI for the miner LLM model
+        max_workers: Number of parallel workers (None = auto, 1 = sequential)
+        progress_callback: Optional progress reporting function
 
     Returns:
         List of UnifiedMinerOutput objects, one per segment
@@ -168,4 +217,6 @@ def mine_episode_unified(
         prompt_path = Path(__file__).parent / "prompts" / "unified_miner.txt"
 
     miner = UnifiedMiner(llm, prompt_path)
-    return miner.mine_episode(episode)
+    return miner.mine_episode(
+        episode, max_workers=max_workers, progress_callback=progress_callback
+    )

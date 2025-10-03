@@ -150,8 +150,30 @@ class FlagshipEvaluator:
         full_prompt = f"{self.template}\n\nEVALUATION INPUT:\n{json.dumps(evaluation_input, indent=2)}"
 
         try:
-            # Get structured JSON response from LLM
-            raw_result = self.llm.generate_json(full_prompt)
+            # Try structured JSON generation first (for Ollama models)
+            raw_result = None
+            if hasattr(self.llm, "generate_structured_json"):
+                try:
+                    raw_result = self.llm.generate_structured_json(
+                        full_prompt, "flagship_output"
+                    )
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.info(
+                        "🔒 Using structured outputs with schema enforcement for flagship evaluator"
+                    )
+                except Exception as e:
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        f"Structured JSON generation failed, falling back: {e}"
+                    )
+
+            # Fall back to regular JSON generation if structured failed or not available
+            if raw_result is None:
+                raw_result = self.llm.generate_json(full_prompt)
 
             if not raw_result:
                 return self._create_fallback_output(all_claims)
@@ -168,7 +190,7 @@ class FlagshipEvaluator:
             if not isinstance(result, dict):
                 result = {}
 
-            # Validate against schema
+            # Validate against schema (still useful for non-Ollama providers)
             is_valid, errors = validate_flagship_output(result)
             if not is_valid:
                 import logging

@@ -52,9 +52,12 @@ class BaseLLMProvider(ABC):
 
     @abstractmethod
     def call(
-        self, prompt: str, progress_callback: Callable | None = None
+        self,
+        prompt: str,
+        progress_callback: Callable | None = None,
+        schema: dict | None = None,
     ) -> LLMResponse:
-        """Make API call to the LLM provider."""
+        """Make API call to the LLM provider with optional schema enforcement."""
 
     def _estimate_tokens(self, text: str) -> int:
         """Estimate token count for text (rough approximation)."""
@@ -74,7 +77,10 @@ class OpenAIProvider(BaseLLMProvider):
         self.model = model or self.settings.llm.model or "gpt-3.5-turbo"
 
     def call(
-        self, prompt: str, progress_callback: Callable | None = None
+        self,
+        prompt: str,
+        progress_callback: Callable | None = None,
+        schema: dict | None = None,
     ) -> LLMResponse:
         """Call OpenAI API."""
         try:
@@ -204,7 +210,10 @@ class AnthropicProvider(BaseLLMProvider):
         self.model = model or self.settings.llm.model or "claude-3-haiku-20240307"
 
     def call(
-        self, prompt: str, progress_callback: Callable | None = None
+        self,
+        prompt: str,
+        progress_callback: Callable | None = None,
+        schema: dict | None = None,
     ) -> LLMResponse:
         """Call Anthropic API."""
         try:
@@ -291,20 +300,26 @@ class LocalLLMProvider(BaseLLMProvider):
         self.local_config = self.settings.local_config
 
     def call(
-        self, prompt: str, progress_callback: Callable | None = None
+        self,
+        prompt: str,
+        progress_callback: Callable | None = None,
+        schema: dict | None = None,
     ) -> LLMResponse:
-        """Call local LLM provider."""
+        """Call local LLM provider with optional schema enforcement."""
         if self.local_config.backend == "ollama":
-            return self._call_ollama(prompt, progress_callback)
+            return self._call_ollama(prompt, progress_callback, schema)
         elif self.local_config.backend == "lmstudio":
             return self._call_lmstudio(prompt, progress_callback)
         else:
             raise ValueError(f"Unsupported local backend: {self.local_config.backend}")
 
     def _call_ollama(
-        self, prompt: str, progress_callback: Callable | None = None
+        self,
+        prompt: str,
+        progress_callback: Callable | None = None,
+        schema: dict | None = None,
     ) -> LLMResponse:
-        """Call Ollama API."""
+        """Call Ollama API with optional schema enforcement."""
         try:
             # Check if Ollama service is running before making the request
             try:
@@ -339,14 +354,16 @@ class LocalLLMProvider(BaseLLMProvider):
                     ]
                 )
 
-            wants_json = _wants_json_output(prompt)
+            wants_json = _wants_json_output(prompt) or schema is not None
 
             payload = {
                 "model": self.model,
                 "prompt": prompt,
                 "stream": False,
                 "options": {
-                    "temperature": self.temperature,
+                    "temperature": 0
+                    if schema
+                    else self.temperature,  # Use temp=0 for schema enforcement
                     "top_k": 40,
                     "top_p": 0.9,
                     "repeat_penalty": 1.1,
@@ -355,7 +372,15 @@ class LocalLLMProvider(BaseLLMProvider):
                     "num_ctx": settings.local_config.num_ctx,
                 },
             }
-            if wants_json:
+
+            # Use structured outputs with schema if provided, otherwise fall back to JSON mode
+            if schema is not None:
+                # Use structured outputs with JSON schema enforcement
+                payload["format"] = schema
+                logger.info(
+                    f"🔒 Using structured outputs with schema enforcement for model: {self.model}"
+                )
+            elif wants_json:
                 # Instruct Ollama to enforce JSON output where supported
                 payload["format"] = "json"
 
@@ -505,10 +530,13 @@ class UnifiedLLMClient:
         self.provider = LLMProviderFactory.create_provider(provider, model, temperature)
 
     def generate(
-        self, prompt: str, progress_callback: Callable | None = None
+        self,
+        prompt: str,
+        progress_callback: Callable | None = None,
+        schema: dict | None = None,
     ) -> LLMResponse:
-        """Generate text using the configured provider."""
-        response = self.provider.call(prompt, progress_callback)
+        """Generate text using the configured provider with optional schema enforcement."""
+        response = self.provider.call(prompt, progress_callback, schema)
         # Persist last selection
         try:
             sm = get_state_manager()
@@ -524,7 +552,7 @@ class UnifiedLLMClient:
     ) -> dict[str, Any]:
         """Generate text and return as dictionary (for backward compatibility)."""
         response = self.generate(prompt, progress_callback)
-        return {
+        result = {
             "summary": response.content,  # For backward compatibility with summarizer
             "content": response.content,
             "prompt_tokens": response.prompt_tokens,
@@ -532,8 +560,42 @@ class UnifiedLLMClient:
             "total_tokens": response.total_tokens,
             "model": response.model,
             "provider": response.provider,
-            **response.metadata,
         }
+        # Add metadata if it exists and is a dict
+        if hasattr(response, "metadata") and isinstance(response.metadata, dict):
+            result.update(response.metadata)
+        return result
+
+    def generate_structured_json(
+        self, prompt: str, schema_name: str, progress_callback: Callable | None = None
+    ) -> dict[str, Any]:
+        """Generate structured JSON using schema enforcement (Ollama only)."""
+        import json
+
+        from .pydantic_models import get_schema_json
+
+        try:
+            # Get the JSON schema for the requested schema
+            schema = get_schema_json(schema_name)
+
+            # Generate with schema enforcement
+            response = self.generate(prompt, progress_callback, schema)
+
+            # Parse the JSON response
+            result = json.loads(response.content)
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"Structured JSON generation failed: {e}")
+            # Fall back to regular JSON generation
+            response = self.generate(prompt, progress_callback)
+            try:
+                return json.loads(response.content)
+            except json.JSONDecodeError:
+                # If that fails too, return empty structure
+                logger.error("Failed to parse JSON response, returning empty structure")
+                return {}
 
     @property
     def model(self) -> str:

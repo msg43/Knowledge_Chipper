@@ -52,12 +52,12 @@ if command -v ollama &> /dev/null; then
         sleep 3
     fi
 
-    # Check/download Llama model
-    if ollama list | grep -q "llama3.2:3b"; then
-        echo "✅ Llama 3.2:3b already downloaded"
+    # Check/download Qwen model
+    if ollama list | grep -q "qwen2.5:7b"; then
+        echo "✅ Qwen 2.5:7b already downloaded"
     else
-        echo "📥 Downloading Llama 3.2:3b (~2GB)..."
-        ollama pull llama3.2:3b
+        echo "📥 Downloading Qwen 2.5:7b (~4GB)..."
+        ollama pull qwen2.5:7b
     fi
 else
     echo "❌ Ollama not installed"

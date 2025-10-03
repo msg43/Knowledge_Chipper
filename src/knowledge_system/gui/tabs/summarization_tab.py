@@ -2650,9 +2650,10 @@ class SummarizationTab(BaseTab):
                 logger.error(f"Failed to fetch dynamic model list: {e}")
                 # Fallback to static list with modern models
                 models = [
+                    "qwen2.5:7b (4 GB)",
+                    "qwen2.5:3b (2 GB)",
                     "llama3.2:3b (2 GB)",
                     "llama3.1:8b (5 GB)",
-                    "qwen2.5:7b (4 GB)",
                     "mistral:7b (4 GB)",
                     "codellama:7b (4 GB)",
                     "phi3:mini (2 GB)",
@@ -2750,9 +2751,10 @@ class SummarizationTab(BaseTab):
                             f"Failed to fetch Ollama models for advanced dropdown: {e}"
                         )
                         models = [
+                            "qwen2.5:7b (4 GB)",
+                            "qwen2.5:3b (2 GB)",
                             "llama3.2:3b (2 GB)",
                             "llama3.1:8b (5 GB)",
-                            "qwen2.5:7b (4 GB)",
                             "mistral:7b (4 GB)",
                         ]
                         logger.debug(f"Using fallback models: {models}")
