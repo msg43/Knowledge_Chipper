@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 
 from knowledge_system.processors.summarizer import SummarizerProcessor
