@@ -250,3 +250,43 @@ def get_optimization_recommendations(hardware_specs: dict[str, Any]) -> dict[str
             else "70%+",
         },
     }
+
+
+class HardwareDetector:
+    """
+    Hardware detection class that provides a convenient interface
+    for detecting system hardware specifications and optimization recommendations.
+    """
+
+    def __init__(self):
+        """Initialize the hardware detector."""
+        self._cached_specs: dict[str, Any] | None = None
+
+    def detect_hardware(self) -> dict[str, Any]:
+        """
+        Detect current hardware specifications.
+
+        Returns:
+            Dictionary containing hardware information:
+            - chip_type: CPU/chip type (e.g., "M3 Ultra", "Intel")
+            - memory_gb: Total RAM in GB
+            - cpu_cores: Number of CPU cores
+            - platform: Operating system platform
+        """
+        if self._cached_specs is None:
+            self._cached_specs = detect_hardware_specs()
+        return self._cached_specs
+
+    def get_optimization_recommendations(self) -> dict[str, Any]:
+        """
+        Get optimization recommendations based on detected hardware specs.
+
+        Returns:
+            Dictionary with optimization recommendations
+        """
+        specs = self.detect_hardware()
+        return get_optimization_recommendations(specs)
+
+    def refresh_cache(self) -> None:
+        """Refresh the cached hardware specifications."""
+        self._cached_specs = None
