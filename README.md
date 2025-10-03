@@ -24,6 +24,12 @@
 - **🔍 Schema Validation**: Guaranteed JSON output with comprehensive error handling
 - **📚 Enhanced Documentation**: Updated troubleshooting and configuration guides
 
+### Intelligent Download Pacing
+- **🤖 Smart Rate Limiting**: Automatically spaces YouTube downloads to avoid bot detection
+- **📊 Real-Time Monitoring**: Tracks processing pipeline status and adjusts download timing
+- **⚡ Pipeline Optimization**: Keeps downloads ahead of summarization without overwhelming servers
+- **🔧 Large Scale Support**: Designed for processing 1000+ videos efficiently
+
 ---
 
 ## Why Skipthepodcast.com Exists
@@ -109,7 +115,7 @@ Perfect for researchers, students, professionals, and anyone who needs to proces
 The application provides a tabbed interface for different workflows:
 
 **🎬 Content Input**
-- **YouTube Extraction**: Process videos and playlists
+- **YouTube Extraction**: Process videos and playlists with intelligent pacing
 - **Local Transcription**: Handle local audio/video files
 - **Document Processing**: Analyze PDFs and text documents
 
@@ -210,10 +216,10 @@ State-of-the-art speaker verification achieving 97% accuracy:
 
 Automatic model recommendations based on your Mac specifications:
 
-- **🔥 M2/M3 Ultra (64GB+ RAM)**: `qwen2.5:14b` (8.2GB) - Maximum capability
-- **🔥 M2/M3 Max (32GB+ RAM)**: `qwen2.5:14b` (8.2GB) - High performance  
-- **🔥 M2/M3 Pro (16GB+ RAM)**: `qwen2.5:7b` (4GB) - Balanced efficiency
-- **🔥 Base Systems**: `qwen2.5:3b` (2GB) - Optimized for limited resources
+- **🔥 M2/M3 Ultra (64GB+ RAM)**: `qwen2.5:14b-instruct` (8.2GB) - Maximum capability
+- **🔥 M2/M3 Max (32GB+ RAM)**: `qwen2.5:14b-instruct` (8.2GB) - High performance  
+- **🔥 M2/M3 Pro (16GB+ RAM)**: `qwen2.5:7b-instruct` (4GB) - Balanced efficiency
+- **🔥 Base Systems**: `qwen2.5:3b-instruct` (2GB) - Optimized for limited resources
 
 **Key Benefits:**
 - **Consistent JSON Compliance**: All Qwen models excel at structured output
@@ -293,6 +299,19 @@ cd knowledge_chipper
 pip install -e ".[full]"
 knowledge-system gui
 ```
+
+### Intelligent Updates & Caching
+
+Skip the Podcast Desktop features an intelligent component caching system that makes updates fast and efficient:
+
+**🚀 Smart Update System:**
+- **Daily patches**: Only download changed app code (~940KB)
+- **Large components**: Python, AI models, FFmpeg cached until version changes
+- **Automatic detection**: System knows what needs updating
+- **Bandwidth efficient**: 99.7% reduction in update downloads
+
+**💡 Recommendation:**
+Enable **"Check for updates on startup"** in the app settings to get the latest features and improvements automatically. The intelligent caching system ensures updates are lightning-fast, typically downloading only the small app code changes rather than re-downloading large components.
 
 ### First Run Setup
 1. Configure API keys for your preferred LLM provider

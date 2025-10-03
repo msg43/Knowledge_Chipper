@@ -16,25 +16,23 @@ from .ollama_manager import InstallationProgress, get_ollama_manager
 logger = get_logger(__name__)
 
 # Recommended model for speaker attribution (excellent JSON compliance, good at text analysis)
-FALLBACK_MODEL = (
-    "qwen2.5:7b"  # 7B model, ~4GB download, excellent JSON schema compliance
-)
+FALLBACK_MODEL = "qwen2.5:7b-instruct"  # 7B instruct model, ~4GB download, excellent JSON schema compliance
 
 # Alternative models in order of preference
 FALLBACK_MODEL_ALTERNATIVES = [
-    "qwen2.5:7b",  # 7B, 4GB - excellent JSON compliance, best for structured output
-    "qwen2.5:3b",  # 3B, 2GB - smaller Qwen option
-    "llama3.2:3b",  # 3B, 2GB - fallback option
-    "phi3:3.8b-mini",  # 3.8B, 2.3GB - very good at text
+    "qwen2.5:7b-instruct",  # 7B, 4GB - excellent JSON compliance, best for structured output
+    "qwen2.5:3b-instruct",  # 3B, 2GB - smaller Qwen instruct option
+    "llama3.2:3b-instruct",  # 3B, 2GB - fallback instruct option
+    "phi3:3.8b-mini-instruct",  # 3.8B, 2.3GB - very good at text
 ]
-MVP_MODEL = "qwen2.5:7b"  # 7B model, ~4GB download, excellent JSON schema compliance
+MVP_MODEL = "qwen2.5:7b-instruct"  # 7B instruct model, ~4GB download, excellent JSON schema compliance
 
 # Alternative models in order of preference
 MVP_MODEL_ALTERNATIVES = [
-    "qwen2.5:7b",  # 7B, 4GB - excellent JSON compliance, best for structured output
-    "qwen2.5:3b",  # 3B, 2GB - smaller Qwen option
-    "llama3.2:3b",  # 3B, 2GB - fallback option
-    "phi3:3.8b-mini",  # 3.8B, 2.3GB - very good at text
+    "qwen2.5:7b-instruct",  # 7B, 4GB - excellent JSON compliance, best for structured output
+    "qwen2.5:3b-instruct",  # 3B, 2GB - smaller Qwen instruct option
+    "llama3.2:3b-instruct",  # 3B, 2GB - fallback instruct option
+    "phi3:3.8b-mini-instruct",  # 3.8B, 2.3GB - very good at text
 ]
 
 

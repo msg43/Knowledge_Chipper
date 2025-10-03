@@ -41,57 +41,96 @@ print_error() {
     echo -e "${RED}❌${NC} $1"
 }
 
-# Clean and create build directories
+# Setup build directories
 echo -e "${BLUE}📁 Setting up build environment...${NC}"
-rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 mkdir -p "$OUTPUT_DIR"
 
+# Check for cached FFmpeg download
+FFMPEG_CACHE_FILE="$BUILD_DIR/ffmpeg.zip"
+FFMPEG_CACHE_CHECKSUM="$BUILD_DIR/ffmpeg.zip.sha256"
+
 print_status "Build directories created"
 
-# Download FFmpeg
-echo -e "\n${BLUE}⬇️ Downloading FFmpeg...${NC}"
+# Download FFmpeg (with caching)
+echo -e "\n${BLUE}⬇️ Checking FFmpeg cache...${NC}"
 
 cd "$BUILD_DIR"
 
-# Try to download from evermeet.cx (reliable Mac builds)
-if curl -L -o "ffmpeg.zip" "$FFMPEG_URL"; then
-    print_status "FFmpeg downloaded from evermeet.cx"
-    unzip ffmpeg.zip
+# Check if we have a cached download
+if [ -f "$FFMPEG_CACHE_FILE" ] && [ -f "$FFMPEG_CACHE_CHECKSUM" ]; then
+    print_status "Found cached FFmpeg download"
+
+    # Verify cached file integrity
+    CACHED_CHECKSUM=$(cat "$FFMPEG_CACHE_CHECKSUM")
+    CURRENT_CHECKSUM=$(shasum -a 256 "$FFMPEG_CACHE_FILE" | cut -d' ' -f1)
+
+    if [ "$CACHED_CHECKSUM" = "$CURRENT_CHECKSUM" ]; then
+        print_status "Cached FFmpeg verified - using existing download"
+        USE_CACHED=1
+    else
+        print_warning "Cached FFmpeg checksum mismatch - re-downloading"
+        rm -f "$FFMPEG_CACHE_FILE" "$FFMPEG_CACHE_CHECKSUM"
+        USE_CACHED=0
+    fi
+else
+    print_warning "No cached FFmpeg found - downloading fresh copy"
+    USE_CACHED=0
+fi
+
+# Download FFmpeg if needed
+if [ $USE_CACHED -eq 0 ]; then
+    echo -e "\n${BLUE}⬇️ Downloading FFmpeg from evermeet.cx...${NC}"
+
+    # Try to download from evermeet.cx (reliable Mac builds)
+    if curl -L -o "ffmpeg.zip" "$FFMPEG_URL"; then
+        print_status "FFmpeg downloaded from evermeet.cx"
+
+        # Cache the download with checksum
+        shasum -a 256 "ffmpeg.zip" | cut -d' ' -f1 > "ffmpeg.zip.sha256"
+        print_status "FFmpeg cached for future builds"
+    else
+        print_error "Failed to download FFmpeg from evermeet.cx"
+        print_warning "Trying alternative download method..."
+
+        # Fallback: try to build from Homebrew
+        if command -v brew &> /dev/null; then
+            echo "Using Homebrew FFmpeg as fallback..."
+
+            # Create temporary brew environment
+            export HOMEBREW_NO_AUTO_UPDATE=1
+            brew install ffmpeg --quiet
+
+            # Copy FFmpeg binary
+            FFMPEG_BIN="$(brew --prefix)/bin/ffmpeg"
+
+            if [ ! -f "$FFMPEG_BIN" ]; then
+                print_error "Homebrew FFmpeg not found"
+                exit 1
+            fi
+
+            cp "$FFMPEG_BIN" "./ffmpeg"
+            FFMPEG_BIN="./ffmpeg"
+
+            # Skip the zip extraction process for Homebrew fallback
+            print_status "Using Homebrew FFmpeg binary"
+        else
+            print_error "No fallback method available for FFmpeg download"
+            exit 1
+        fi
+    fi
+fi
+
+# Extract FFmpeg if we downloaded it (not Homebrew fallback)
+if [ -z "$FFMPEG_BIN" ]; then
+    echo -e "\n${BLUE}📦 Extracting FFmpeg...${NC}"
+    unzip -o ffmpeg.zip
 
     # Find the FFmpeg binary
     FFMPEG_BIN=$(find . -name "ffmpeg" -type f -perm +111 | head -1)
 
     if [ -z "$FFMPEG_BIN" ]; then
         print_error "FFmpeg binary not found in download"
-        exit 1
-    fi
-
-else
-    print_error "Failed to download FFmpeg from evermeet.cx"
-    print_warning "Trying alternative download method..."
-
-    # Fallback: try to build from Homebrew
-    if command -v brew &> /dev/null; then
-        echo "Using Homebrew FFmpeg as fallback..."
-
-        # Create temporary brew environment
-        export HOMEBREW_NO_AUTO_UPDATE=1
-        brew install ffmpeg --quiet
-
-        # Copy FFmpeg binary
-        FFMPEG_BIN="$(brew --prefix)/bin/ffmpeg"
-
-        if [ ! -f "$FFMPEG_BIN" ]; then
-            print_error "Homebrew FFmpeg not found"
-            exit 1
-        fi
-
-        cp "$FFMPEG_BIN" "./ffmpeg"
-        FFMPEG_BIN="./ffmpeg"
-
-    else
-        print_error "No fallback method available for FFmpeg download"
         exit 1
     fi
 fi
@@ -220,11 +259,20 @@ shasum -a 256 "ffmpeg-macos-universal.tar.gz" > "ffmpeg-macos-universal.tar.gz.s
 
 print_status "Checksum created"
 
-# Cleanup build directory
+# Cleanup build directory (preserve cache)
 echo -e "\n${BLUE}🧹 Cleaning up build directory...${NC}"
-rm -rf "$BUILD_DIR"
 
-print_status "Build directory cleaned"
+# Remove extracted files but keep cached downloads
+if [ -f "$BUILD_DIR/ffmpeg.zip" ]; then
+    # Keep the cached zip file and checksum
+    find "$BUILD_DIR" -maxdepth 1 -type f ! -name "ffmpeg.zip*" -delete
+    find "$BUILD_DIR" -maxdepth 1 -type d ! -name "." -exec rm -rf {} + 2>/dev/null || true
+    print_status "Build directory cleaned (cache preserved)"
+else
+    # No cache to preserve, clean everything
+    rm -rf "$BUILD_DIR"
+    print_status "Build directory cleaned"
+fi
 
 # Final summary
 echo -e "\n${GREEN}${BOLD}🎉 FFmpeg Bundle Complete!${NC}"
@@ -233,6 +281,12 @@ echo "Archive: $OUTPUT_DIR/ffmpeg-macos-universal.tar.gz"
 echo "Size: $ARCHIVE_SIZE"
 echo "Version: $FFMPEG_INFO"
 echo "Checksum: $OUTPUT_DIR/ffmpeg-macos-universal.tar.gz.sha256"
+echo ""
+if [ $USE_CACHED -eq 1 ]; then
+    echo -e "${GREEN}💾 Used cached FFmpeg download (faster rebuilds)${NC}"
+else
+    echo -e "${BLUE}💾 FFmpeg cached for future builds${NC}"
+fi
 echo ""
 echo "Next steps:"
 echo "1. Upload to GitHub releases"

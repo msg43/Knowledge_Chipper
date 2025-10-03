@@ -14,6 +14,7 @@ VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('$PROJECT_ROOT/pyp
 SKIP_FRAMEWORK=0
 SKIP_MODELS=0
 SKIP_FFMPEG=0
+SKIP_OLLAMA_MODELS=0
 UPLOAD_RELEASE=0
 BUILD_ONLY=0
 FORCE_REBUILD=0
@@ -28,6 +29,9 @@ for arg in "$@"; do
             ;;
         --skip-ffmpeg)
             SKIP_FFMPEG=1
+            ;;
+        --skip-ollama-models)
+            SKIP_OLLAMA_MODELS=1
             ;;
         --upload-release)
             UPLOAD_RELEASE=1
@@ -45,10 +49,13 @@ for arg in "$@"; do
             echo "  --skip-framework    Skip Python framework build (use existing)"
             echo "  --skip-models      Skip AI models bundle (use existing)"
             echo "  --skip-ffmpeg      Skip FFmpeg bundle (use existing)"
+            echo "  --skip-ollama-models Skip Ollama models bundle (use existing)"
             echo "  --upload-release   Create and upload GitHub release"
             echo "  --build-only       Build PKG but don't upload"
             echo "  --force            Force rebuild existing files without prompting"
             echo "  --help, -h         Show this help message"
+            echo ""
+            echo "Note: FFmpeg downloads are cached locally for faster rebuilds."
             echo ""
             echo "Examples:"
             echo "  $0                              # Build everything"
@@ -146,7 +153,7 @@ if [ $SKIP_FRAMEWORK -eq 0 ]; then
 
     if [ -f "$PROJECT_ROOT/dist/python-framework-3.13-macos.tar.gz" ] && [ -f "$FRAMEWORK_CACHE_FILE" ]; then
         # Calculate hash of framework build script
-        CURRENT_HASH=$(shasum -a 256 "$SCRIPT_DIR/build_simple_python_framework.sh" | cut -d' ' -f1)
+        CURRENT_HASH=$(shasum -a 256 "$PROJECT_ROOT/scripts/build_simple_python_framework.sh" | cut -d' ' -f1)
         CACHED_HASH=$(cat "$FRAMEWORK_CACHE_FILE" 2>/dev/null || echo "")
 
         if [ "$CURRENT_HASH" = "$CACHED_HASH" ]; then
@@ -160,9 +167,9 @@ if [ $SKIP_FRAMEWORK -eq 0 ]; then
     fi
 
     if [ $NEEDS_REBUILD -eq 1 ]; then
-        "$SCRIPT_DIR/build_simple_python_framework.sh"
+        "$PROJECT_ROOT/scripts/build_simple_python_framework.sh"
         # Cache the hash after successful build
-        shasum -a 256 "$SCRIPT_DIR/build_simple_python_framework.sh" | cut -d' ' -f1 > "$FRAMEWORK_CACHE_FILE"
+        shasum -a 256 "$PROJECT_ROOT/scripts/build_simple_python_framework.sh" | cut -d' ' -f1 > "$FRAMEWORK_CACHE_FILE"
     fi
 
     print_status "Python framework ready"
@@ -192,14 +199,14 @@ if [ $SKIP_MODELS -eq 0 ]; then
         fi
 
         # Include the bundle script itself
-        MODEL_SOURCES="$MODEL_SOURCES $SCRIPT_DIR/bundle_simple_ai_models.sh"
+        MODEL_SOURCES="$MODEL_SOURCES $PROJECT_ROOT/scripts/bundle_simple_ai_models.sh"
 
         # Calculate combined hash
         CURRENT_HASH=""
         if [ -n "$MODEL_SOURCES" ]; then
             CURRENT_HASH=$(echo "$MODEL_SOURCES" | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
         else
-            CURRENT_HASH=$(shasum -a 256 "$SCRIPT_DIR/bundle_simple_ai_models.sh" | cut -d' ' -f1)
+            CURRENT_HASH=$(shasum -a 256 "$PROJECT_ROOT/scripts/bundle_simple_ai_models.sh" | cut -d' ' -f1)
         fi
 
         CACHED_HASH=$(cat "$MODELS_CACHE_FILE" 2>/dev/null || echo "")
@@ -215,18 +222,18 @@ if [ $SKIP_MODELS -eq 0 ]; then
     fi
 
     if [ $NEEDS_REBUILD -eq 1 ]; then
-        "$SCRIPT_DIR/bundle_simple_ai_models.sh"
+        "$PROJECT_ROOT/scripts/bundle_simple_ai_models.sh"
         # Cache the hash after successful build
         MODEL_SOURCES=""
         if [ -d "$PROJECT_ROOT/github_models_prep" ]; then
             MODEL_SOURCES=$(find "$PROJECT_ROOT/github_models_prep" -type f \( -name "*.bin" -o -name "*.tar.gz" -o -name "*.json" \) 2>/dev/null | sort)
         fi
-        MODEL_SOURCES="$MODEL_SOURCES $SCRIPT_DIR/bundle_simple_ai_models.sh"
+        MODEL_SOURCES="$MODEL_SOURCES $PROJECT_ROOT/scripts/bundle_simple_ai_models.sh"
 
         if [ -n "$MODEL_SOURCES" ]; then
             echo "$MODEL_SOURCES" | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1 > "$MODELS_CACHE_FILE"
         else
-            shasum -a 256 "$SCRIPT_DIR/bundle_simple_ai_models.sh" | cut -d' ' -f1 > "$MODELS_CACHE_FILE"
+            shasum -a 256 "$PROJECT_ROOT/scripts/bundle_simple_ai_models.sh" | cut -d' ' -f1 > "$MODELS_CACHE_FILE"
         fi
     fi
 
@@ -239,20 +246,46 @@ else
     fi
 fi
 
-# Build FFmpeg Bundle
+# Build FFmpeg Bundle (with intelligent caching)
 if [ $SKIP_FFMPEG -eq 0 ]; then
     print_section "🎬 Building FFmpeg Bundle"
 
-    if [ -f "$PROJECT_ROOT/dist/ffmpeg-macos-universal.tar.gz" ]; then
-        print_warning "FFmpeg bundle already exists"
-        read -p "Rebuild? (y/N): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            rm -f "$PROJECT_ROOT/dist/ffmpeg-macos-universal.tar.gz"*
-            "$SCRIPT_DIR/bundle_ffmpeg.sh"
+    # Check if we need to rebuild based on source changes
+    FFMPEG_CACHE_FILE="$PROJECT_ROOT/dist/.ffmpeg_bundle_hash"
+    NEEDS_REBUILD=1
+
+    if [ -f "$PROJECT_ROOT/dist/ffmpeg-macos-universal.tar.gz" ] && [ -f "$FFMPEG_CACHE_FILE" ]; then
+        # Calculate hash of ffmpeg bundle script
+        CURRENT_HASH=$(shasum -a 256 "$PROJECT_ROOT/scripts/bundle_ffmpeg.sh" | cut -d' ' -f1)
+        CACHED_HASH=$(cat "$FFMPEG_CACHE_FILE" 2>/dev/null || echo "")
+
+        if [ "$CURRENT_HASH" = "$CACHED_HASH" ]; then
+            print_status "FFmpeg bundle up-to-date (build script unchanged)"
+            NEEDS_REBUILD=0
+        else
+            print_warning "FFmpeg bundle build script changed - rebuilding"
         fi
     else
-        "$SCRIPT_DIR/bundle_ffmpeg.sh"
+        print_warning "No existing FFmpeg bundle or cache found"
+    fi
+
+    if [ $NEEDS_REBUILD -eq 1 ]; then
+        if [ -f "$PROJECT_ROOT/dist/ffmpeg-macos-universal.tar.gz" ] && [ $FORCE_REBUILD -eq 0 ]; then
+            print_warning "FFmpeg bundle already exists"
+            read -p "Rebuild? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                rm -f "$PROJECT_ROOT/dist/ffmpeg-macos-universal.tar.gz"*
+                "$PROJECT_ROOT/scripts/bundle_ffmpeg.sh"
+                # Cache the hash after successful build
+                shasum -a 256 "$PROJECT_ROOT/scripts/bundle_ffmpeg.sh" | cut -d' ' -f1 > "$FFMPEG_CACHE_FILE"
+            fi
+        else
+            rm -f "$PROJECT_ROOT/dist/ffmpeg-macos-universal.tar.gz"*
+            "$PROJECT_ROOT/scripts/bundle_ffmpeg.sh"
+            # Cache the hash after successful build
+            shasum -a 256 "$PROJECT_ROOT/scripts/bundle_ffmpeg.sh" | cut -d' ' -f1 > "$FFMPEG_CACHE_FILE"
+        fi
     fi
 
     print_status "FFmpeg bundle ready"
@@ -264,6 +297,57 @@ else
     fi
 fi
 
+# Build Ollama Models Bundle (with intelligent caching)
+if [ $SKIP_OLLAMA_MODELS -eq 0 ]; then
+    print_section "🤖 Building Ollama Models Bundle"
+
+    # Check if we need to rebuild based on source changes
+    OLLAMA_MODELS_CACHE_FILE="$PROJECT_ROOT/dist/.ollama_models_bundle_hash"
+    NEEDS_REBUILD=1
+
+    if [ -f "$PROJECT_ROOT/dist/ollama-models-bundle.tar.gz" ] && [ -f "$OLLAMA_MODELS_CACHE_FILE" ]; then
+        # Calculate hash of ollama models bundle script
+        CURRENT_HASH=$(shasum -a 256 "$PROJECT_ROOT/scripts/bundle_ollama_models.sh" | cut -d' ' -f1)
+        CACHED_HASH=$(cat "$OLLAMA_MODELS_CACHE_FILE" 2>/dev/null || echo "")
+
+        if [ "$CURRENT_HASH" = "$CACHED_HASH" ]; then
+            print_status "Ollama models bundle up-to-date (build script unchanged)"
+            NEEDS_REBUILD=0
+        else
+            print_warning "Ollama models bundle build script changed - rebuilding"
+        fi
+    else
+        print_warning "No existing Ollama models bundle or cache found"
+    fi
+
+    if [ $NEEDS_REBUILD -eq 1 ]; then
+        if [ -f "$PROJECT_ROOT/dist/ollama-models-bundle.tar.gz" ] && [ $FORCE_REBUILD -eq 0 ]; then
+            print_warning "Ollama models bundle already exists"
+            read -p "Rebuild? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                rm -f "$PROJECT_ROOT/dist/ollama-models-bundle.tar.gz"*
+                "$PROJECT_ROOT/scripts/bundle_ollama_models.sh"
+                # Cache the hash after successful build
+                shasum -a 256 "$PROJECT_ROOT/scripts/bundle_ollama_models.sh" | cut -d' ' -f1 > "$OLLAMA_MODELS_CACHE_FILE"
+            fi
+        else
+            rm -f "$PROJECT_ROOT/dist/ollama-models-bundle.tar.gz"*
+            "$PROJECT_ROOT/scripts/bundle_ollama_models.sh"
+            # Cache the hash after successful build
+            shasum -a 256 "$PROJECT_ROOT/scripts/bundle_ollama_models.sh" | cut -d' ' -f1 > "$OLLAMA_MODELS_CACHE_FILE"
+        fi
+    fi
+
+    print_status "Ollama models bundle ready"
+else
+    print_warning "Skipping Ollama models bundle build"
+    if [ ! -f "$PROJECT_ROOT/dist/ollama-models-bundle.tar.gz" ]; then
+        print_error "Ollama models bundle not found and build skipped"
+        exit 1
+    fi
+fi
+
 # Build PKG Installer
 print_section "📦 Building PKG Installer"
 
@@ -271,18 +355,18 @@ if [ -f "$PROJECT_ROOT/dist/Skip_the_Podcast_Desktop-${VERSION}.pkg" ]; then
     if [ $FORCE_REBUILD -eq 1 ]; then
         print_warning "PKG installer already exists - force rebuilding"
         rm -f "$PROJECT_ROOT/dist/Skip_the_Podcast_Desktop-${VERSION}.pkg"*
-        "$SCRIPT_DIR/build_pkg_installer.sh"
+        "$PROJECT_ROOT/scripts/build_pkg_installer.sh"
     else
         print_warning "PKG installer already exists"
         read -p "Rebuild? (y/N): " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             rm -f "$PROJECT_ROOT/dist/Skip_the_Podcast_Desktop-${VERSION}.pkg"*
-            "$SCRIPT_DIR/build_pkg_installer.sh"
+            "$PROJECT_ROOT/scripts/build_pkg_installer.sh"
         fi
     fi
 else
-    "$SCRIPT_DIR/build_pkg_installer.sh"
+    "$PROJECT_ROOT/scripts/build_pkg_installer.sh"
 fi
 
 print_status "PKG installer ready"
@@ -374,7 +458,7 @@ if [ $UPLOAD_RELEASE -eq 1 ] && [ $BUILD_ONLY -eq 0 ]; then
     echo
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        "$SCRIPT_DIR/create_github_release.sh"
+        "$PROJECT_ROOT/scripts/create_github_release.sh"
         print_status "GitHub release created"
     else
         print_warning "Release creation cancelled"
@@ -426,7 +510,7 @@ echo "3. Test application functionality after PKG installation"
 echo "4. Update documentation with new installation process"
 
 if [ $BUILD_ONLY -eq 1 ]; then
-    echo "5. Upload release with: $SCRIPT_DIR/create_github_release.sh"
+    echo "5. Upload release with: $PROJECT_ROOT/scripts/create_github_release.sh"
 fi
 
 echo ""

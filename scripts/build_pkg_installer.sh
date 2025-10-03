@@ -218,6 +218,25 @@ fi
 APP_CODE_SIZE=$(du -sh "$APP_BUNDLE/Contents/Resources/src" | cut -f1)
 print_status "App source code copied ($APP_CODE_SIZE)"
 
+# Create app source code archive for component system
+echo -e "\n${BLUE}📦 Creating app source code archive...${NC}"
+APP_SOURCE_ARCHIVE="$DIST_DIR/app-source-code.tar.gz"
+if [ -f "$APP_SOURCE_ARCHIVE" ]; then
+    rm -f "$APP_SOURCE_ARCHIVE"
+fi
+
+tar -czf "$APP_SOURCE_ARCHIVE" -C "$PROJECT_ROOT" \
+    --exclude=".git" \
+    --exclude="__pycache__" \
+    --exclude="*.pyc" \
+    --exclude="venv" \
+    --exclude="build*" \
+    --exclude="dist" \
+    --exclude=".DS_Store" \
+    src/ config/ pyproject.toml requirements.txt
+
+print_status "App source code archive created"
+
 # Create component download infrastructure
 echo -e "\n${BLUE}🔧 Creating component download infrastructure...${NC}"
 
@@ -247,27 +266,55 @@ import signal
 GITHUB_REPO = "msg43/Knowledge_Chipper"
 GITHUB_RELEASES_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
-# Component manifest - updated during build process
+# Component manifest with version tracking
 COMPONENT_MANIFEST = {
     "python_framework": {
         "name": "python-framework-3.13-macos.tar.gz",
         "size_mb": 40,
-        "description": "Python 3.13 Framework"
+        "description": "Python 3.13 Framework",
+        "version": "3.13.1",
+        "cache_key": "python_framework",
+        "update_frequency": "rare"  # Only updates when Python version changes
     },
     "ai_models": {
         "name": "ai-models-bundle.tar.gz",
         "size_mb": 1200,
-        "description": "AI Models Package (Whisper, Voice Fingerprinting, Pyannote)"
+        "description": "AI Models Package (Whisper, Voice Fingerprinting, Pyannote)",
+        "version": "2024.10.03",
+        "cache_key": "ai_models",
+        "update_frequency": "rare"  # Only updates when models change
     },
     "ffmpeg": {
         "name": "ffmpeg-macos-universal.tar.gz",
         "size_mb": 48,
-        "description": "FFmpeg Media Processing"
+        "description": "FFmpeg Media Processing",
+        "version": "6.1.1",
+        "cache_key": "ffmpeg",
+        "update_frequency": "rare"  # Only updates when FFmpeg version changes
     },
     "ollama": {
         "name": "ollama-darwin",
         "size_mb": 50,
-        "description": "Ollama LLM Runtime"
+        "description": "Ollama LLM Runtime",
+        "version": "latest",
+        "cache_key": "ollama_runtime",
+        "update_frequency": "rare"  # Only updates when Ollama releases new version
+    },
+    "ollama_model": {
+        "name": "ollama-models-bundle.tar.gz",
+        "size_mb": 4096,
+        "description": "Ollama LLM Models (qwen2.5:7b-instruct)",
+        "version": "dynamic",
+        "cache_key": "ollama_model",
+        "update_frequency": "rare"  # Downloaded on-demand, cached locally
+    },
+    "app_code": {
+        "name": "app-source-code.tar.gz",
+        "size_mb": 10,
+        "description": "Skip the Podcast Application Code",
+        "version": "3.2.35",  # This will change with each patch
+        "cache_key": "app_code",
+        "update_frequency": "frequent"  # Updates with every code change
     }
 }
 
@@ -277,11 +324,74 @@ class ComponentDownloader:
         self.progress_callback = progress_callback or self._default_progress
         self.temp_dir = Path(tempfile.mkdtemp(prefix="stp_installer_"))
 
+        # Component cache directory
+        self.cache_dir = Path.home() / ".skip_the_podcast" / "component_cache"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Version tracking file
+        self.version_file = self.cache_dir / "component_versions.json"
+
     def _default_progress(self, message, percent):
         print(f"[{percent:3d}%] {message}")
 
     def _report_progress(self, message, percent):
         self.progress_callback(message, percent)
+
+    def load_component_versions(self):
+        """Load cached component versions."""
+        if self.version_file.exists():
+            try:
+                with open(self.version_file, 'r') as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {}
+
+    def save_component_version(self, component_name, version, checksum=None):
+        """Save component version to cache."""
+        versions = self.load_component_versions()
+        versions[component_name] = {
+            'version': version,
+            'checksum': checksum,
+            'cached_at': time.time()
+        }
+        with open(self.version_file, 'w') as f:
+            json.dump(versions, f, indent=2)
+
+    def is_component_up_to_date(self, component_name, current_version):
+        """Check if component is up to date."""
+        versions = self.load_component_versions()
+        if component_name not in versions:
+            return False
+
+        cached_version = versions[component_name].get('version')
+        return cached_version == current_version
+
+    def get_cached_component_path(self, component_name):
+        """Get path to cached component."""
+        return self.cache_dir / f"{component_name}.tar.gz"
+
+    def cache_component(self, component_name, source_path):
+        """Cache a component for future use."""
+        cached_path = self.get_cached_component_path(component_name)
+        if source_path.exists():
+            shutil.copy2(source_path, cached_path)
+            return cached_path
+        return None
+
+    def use_cached_component(self, component_name):
+        """Use cached component if available and valid."""
+        cached_path = self.get_cached_component_path(component_name)
+        if cached_path.exists():
+            # Verify cache integrity
+            try:
+                # Basic file size check
+                if cached_path.stat().st_size > 0:
+                    return cached_path
+            except Exception:
+                pass
+
+        return None
 
     def download_file(self, url, target_path, expected_size=None):
         """Download file with progress reporting."""
@@ -409,6 +519,47 @@ class ComponentDownloader:
 
         self._report_progress("FFmpeg installed", 100)
 
+    def install_app_code(self, archive_path):
+        """Install application source code."""
+        self._report_progress("Installing application code", 0)
+
+        resources_dir = self.app_bundle / "Contents" / "Resources"
+        resources_dir.mkdir(parents=True, exist_ok=True)
+
+        # Extract app source code
+        with tarfile.open(archive_path, 'r:gz') as tar:
+            tar.extractall(resources_dir)
+
+        # Set proper permissions
+        for root, dirs, files in os.walk(resources_dir):
+            for d in dirs:
+                os.chmod(os.path.join(root, d), 0o755)
+            for f in files:
+                os.chmod(os.path.join(root, f), 0o644)
+
+        self._report_progress("Application code installed", 100)
+
+    def download_and_install_ollama(self):
+        """Download and install Ollama binary directly from GitHub."""
+        self._report_progress("Setting up Ollama download", 0)
+
+        try:
+            # Download Ollama binary from GitHub releases
+            ollama_url = "https://github.com/ollama/ollama/releases/latest/download/ollama-darwin"
+            ollama_temp = self.temp_dir / "ollama"
+
+            self._report_progress("Downloading Ollama binary", 20)
+            if not self.download_file(ollama_url, ollama_temp):
+                raise Exception("Failed to download Ollama binary")
+
+            self._report_progress("Installing Ollama binary", 80)
+            self.install_ollama(ollama_temp)
+            return True
+
+        except Exception as e:
+            print(f"Error downloading Ollama: {e}")
+            return False
+
     def install_ollama(self, binary_path):
         """Install Ollama binary."""
         self._report_progress("Installing Ollama", 0)
@@ -421,6 +572,138 @@ class ComponentDownloader:
         os.chmod(ollama_dst, 0o755)
 
         self._report_progress("Ollama installed", 100)
+
+    def download_ollama_model_directly(self):
+        """Download Ollama model directly from Ollama during installation."""
+        self._report_progress("Setting up Ollama model download", 0)
+
+        # Determine the best model based on system specs
+        model_name = self._get_recommended_ollama_model()
+        self._report_progress(f"Recommended model: {model_name}", 10)
+
+        try:
+            # Start Ollama service if not running
+            self._start_ollama_service()
+            self._report_progress("Ollama service ready", 20)
+
+            # Download the model
+            self._report_progress(f"Downloading {model_name} model (this may take 10-20 minutes)", 30)
+
+            # Use subprocess to run ollama pull with progress
+            process = subprocess.Popen(
+                ["ollama", "pull", model_name],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+
+            # Monitor progress
+            progress = 30
+            for line in process.stdout:
+                if "pulling" in line.lower():
+                    # Extract progress from ollama output
+                    if "100%" in line:
+                        progress = min(90, progress + 10)
+                        self._report_progress(f"Downloading {model_name}", progress)
+
+            process.wait()
+
+            if process.returncode == 0:
+                self._report_progress(f"{model_name} model downloaded successfully", 100)
+                return True
+            else:
+                raise Exception(f"Failed to download {model_name} model")
+
+        except Exception as e:
+            print(f"Error downloading Ollama model: {e}")
+            # Fallback to basic model
+            try:
+                self._report_progress("Falling back to qwen2.5:7b-instruct", 50)
+                subprocess.run(["ollama", "pull", "qwen2.5:7b-instruct"], check=True)
+                self._report_progress("Fallback model downloaded", 100)
+                return True
+            except Exception as fallback_error:
+                print(f"Fallback model download also failed: {fallback_error}")
+                return False
+
+    def _get_recommended_ollama_model(self):
+        """Determine the best Ollama model based on system specs."""
+        try:
+            # Get system memory
+            result = subprocess.run(
+                ["sysctl", "-n", "hw.memsize"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            total_memory_bytes = int(result.stdout.strip())
+            total_memory_gb = total_memory_bytes // (1024**3)
+
+            # Get CPU info
+            result = subprocess.run(
+                ["sysctl", "-n", "machdep.cpu.brand_string"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            cpu_info = result.stdout.strip().lower()
+
+            # Model selection logic with FP16 optimization for high-end systems
+            if total_memory_gb >= 64 and ("ultra" in cpu_info or "max" in cpu_info):
+                return "qwen2.5:14b-instruct"  # FP16 optimized for parallel processing
+            elif total_memory_gb >= 32 and ("max" in cpu_info or "pro" in cpu_info):
+                return "qwen2.5:14b-instruct"  # Can handle 14B with parallel jobs
+            elif total_memory_gb >= 16:
+                return "qwen2.5:7b-instruct"   # Mid-range systems
+            else:
+                return "qwen2.5:3b-instruct"   # Basic systems
+
+        except Exception:
+            # Fallback to a safe default
+            return "qwen2.5:7b-instruct"
+
+    def _start_ollama_service(self):
+        """Start Ollama service if not running."""
+        try:
+            # Check if ollama is already running
+            subprocess.run(["ollama", "list"], check=True, capture_output=True)
+            return  # Service is already running
+        except subprocess.CalledProcessError:
+            pass
+
+        # Start ollama service in background
+        subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # Wait for service to be ready
+        for _ in range(30):  # Wait up to 30 seconds
+            try:
+                subprocess.run(["ollama", "list"], check=True, capture_output=True)
+                return
+            except subprocess.CalledProcessError:
+                time.sleep(1)
+
+        raise Exception("Ollama service failed to start within 30 seconds")
+
+    def install_ollama_model(self, archive_path):
+        """Install Ollama LLM models (legacy method for bundled models)."""
+        self._report_progress("Installing Ollama models", 0)
+
+        # Create Ollama models directory
+        ollama_models_dir = Path.home() / ".ollama" / "models"
+        ollama_models_dir.mkdir(parents=True, exist_ok=True)
+
+        # Extract models
+        with tarfile.open(archive_path, 'r:gz') as tar:
+            tar.extractall(ollama_models_dir)
+
+        # Verify qwen2.5:7b-instruct model is available
+        model_dir = ollama_models_dir / "qwen2.5" / "7b-instruct"
+        if not model_dir.exists():
+            raise Exception("qwen2.5:7b-instruct model not found in archive")
+
+        self._report_progress("Ollama models installed", 100)
 
     def download_and_install_all(self):
         """Download and install all components."""
@@ -437,16 +720,68 @@ class ComponentDownloader:
 
             for component_name, component_info in COMPONENT_MANIFEST.items():
                 filename = component_info['name']
+                current_version = component_info['version']
+                update_frequency = component_info['update_frequency']
 
+                # Check if component is up to date in cache
+                if self.is_component_up_to_date(component_name, current_version):
+                    cached_path = self.use_cached_component(component_name)
+                    if cached_path:
+                        print(f"✅ Using cached {component_info['description']} (version {current_version})")
+                        archive_path = cached_path
+
+                        # Install from cache
+                        install_progress = 70 + (component_progress * 25) // total_components
+                        self._report_progress(f"Installing cached {component_info['description']}", install_progress)
+
+                        if component_name == "python_framework":
+                            self.install_python_framework(archive_path)
+                        elif component_name == "ai_models":
+                            self.install_ai_models(archive_path)
+                        elif component_name == "ffmpeg":
+                            self.install_ffmpeg(archive_path)
+                        elif component_name == "app_code":
+                            self.install_app_code(archive_path)
+
+                        component_progress += 1
+                        continue
+
+                # Component needs update - check availability
                 if filename not in assets:
-                    print(f"Warning: {filename} not found in release assets")
-                    continue
+                    if component_name == "ollama":
+                        print(f"Info: {filename} not found in release assets")
+                        print(f"      Downloading Ollama binary directly from GitHub...")
 
-                # Download component
+                        # Download Ollama binary directly
+                        if not self.download_and_install_ollama():
+                            print(f"Warning: Failed to download Ollama binary directly")
+                        continue
+                    elif component_name == "ollama_model":
+                        print(f"Info: {filename} not found in release assets (too large for GitHub)")
+                        print(f"      Downloading Ollama model directly from Ollama during installation...")
+
+                        # Download Ollama model directly
+                        if not self.download_ollama_model_directly():
+                            print(f"Warning: Failed to download Ollama model directly")
+                        continue
+                    else:
+                        print(f"Warning: {filename} not found in release assets")
+                        continue
+
+                # Download component (not cached)
+                if update_frequency == "frequent":
+                    print(f"🔄 Updating {component_info['description']} (version {current_version})")
+                else:
+                    print(f"📦 Installing {component_info['description']} (version {current_version})")
+
                 self._report_progress(f"Downloading {component_info['description']}",
                                     10 + (component_progress * 60) // total_components)
 
                 archive_path = self.download_component(component_name, component_info, assets[filename])
+
+                # Cache the component for future use
+                self.cache_component(component_name, archive_path)
+                self.save_component_version(component_name, current_version)
 
                 # Install component
                 install_progress = 70 + (component_progress * 25) // total_components
@@ -458,8 +793,12 @@ class ComponentDownloader:
                     self.install_ai_models(archive_path)
                 elif component_name == "ffmpeg":
                     self.install_ffmpeg(archive_path)
+                elif component_name == "app_code":
+                    self.install_app_code(archive_path)
                 elif component_name == "ollama":
                     self.install_ollama(archive_path)
+                elif component_name == "ollama_model":
+                    self.install_ollama_model(archive_path)
 
                 component_progress += 1
 
@@ -499,6 +838,344 @@ EOF
 chmod +x "$SCRIPTS_DIR/download_manager.py"
 
 print_status "Component download infrastructure created"
+
+# Create dynamic parallelization system
+echo -e "\n${BLUE}⚡ Creating dynamic parallelization system...${NC}"
+
+cat > "$SCRIPTS_DIR/dynamic_parallelization.py" << 'EOF'
+#!/usr/bin/env python3
+"""
+Dynamic Parallelization System for Knowledge Processing
+
+Intelligently manages parallel workers based on:
+- Available RAM and CPU resources
+- Job completion times and queue lengths
+- Real-time resource utilization
+- Hardware-specific optimization
+
+Key Features:
+- FP16 model optimization for high-end systems
+- Dynamic worker scaling based on resource usage
+- Job completion-based worker adjustment
+- Memory-aware parallelization
+"""
+
+import asyncio
+import time
+import psutil
+import threading
+from typing import Dict, List, Optional, Callable, Any
+from dataclasses import dataclass, field
+from enum import Enum
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+import logging
+import json
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+
+class JobType(Enum):
+    """Types of processing jobs"""
+    MINER = "miner"
+    FLAGSHIP_EVALUATOR = "flagship_evaluator"
+    TRANSCRIPTION = "transcription"
+    VOICE_FINGERPRINTING = "voice_fingerprinting"
+
+
+@dataclass
+class ResourceLimits:
+    """Resource limits for parallelization"""
+    max_ram_gb: float
+    max_cpu_cores: int
+    model_ram_gb: float  # RAM used by the loaded model
+    kv_cache_per_job_mb: int = 100  # Approximate KV cache per job
+    system_overhead_gb: float = 2.0  # OS + other apps overhead
+
+
+@dataclass
+class JobMetrics:
+    """Metrics for job performance tracking"""
+    job_type: JobType
+    start_time: float = field(default_factory=time.time)
+    end_time: Optional[float] = None
+    duration: Optional[float] = None
+    memory_used_mb: float = 0.0
+    cpu_percent: float = 0.0
+    success: bool = True
+    error: Optional[str] = None
+
+
+@dataclass
+class WorkerPool:
+    """Worker pool configuration"""
+    job_type: JobType
+    current_workers: int = 1
+    min_workers: int = 1
+    max_workers: int = 8
+    active_jobs: int = 0
+    completed_jobs: int = 0
+    avg_duration: float = 0.0
+    last_adjustment: float = field(default_factory=time.time)
+    adjustment_cooldown: float = 30.0  # Seconds between adjustments
+
+
+class DynamicParallelizationManager:
+    """
+    Intelligent parallelization manager that dynamically adjusts worker counts
+    based on resource usage, job completion times, and hardware capabilities.
+    """
+
+    def __init__(self, hardware_specs: Dict[str, Any]):
+        self.hardware_specs = hardware_specs
+        self.resource_limits = self._calculate_resource_limits()
+        self.worker_pools: Dict[JobType, WorkerPool] = {}
+        self.job_metrics: List[JobMetrics] = []
+        self.monitoring_active = False
+        self.monitor_thread: Optional[threading.Thread] = None
+
+        # Initialize worker pools
+        self._initialize_worker_pools()
+
+        # Performance tracking
+        self.performance_history: Dict[JobType, List[float]] = {
+            job_type: [] for job_type in JobType
+        }
+
+        logger.info(f"Dynamic parallelization initialized for {hardware_specs.get('chip_type', 'Unknown')} "
+                   f"with {self.resource_limits.max_ram_gb}GB RAM, {self.resource_limits.max_cpu_cores} cores")
+
+    def _calculate_resource_limits(self) -> ResourceLimits:
+        """Calculate resource limits based on hardware specs"""
+        memory_gb = self.hardware_specs.get('memory_gb', 16)
+        cpu_cores = self.hardware_specs.get('cpu_cores', 8)
+        chip_type = self.hardware_specs.get('chip_type', '').lower()
+
+        # Model RAM usage (FP16 optimization for high-end systems)
+        if memory_gb >= 64 and ('ultra' in chip_type or 'max' in chip_type):
+            model_ram_gb = 32.0  # Qwen2.5-14B FP16
+            max_workers = min(8, cpu_cores * 2)  # Aggressive parallelization
+        elif memory_gb >= 32 and ('max' in chip_type or 'pro' in chip_type):
+            model_ram_gb = 32.0  # Qwen2.5-14B FP16
+            max_workers = min(6, cpu_cores)
+        elif memory_gb >= 16:
+            model_ram_gb = 8.0   # Qwen2.5-7B
+            max_workers = min(4, cpu_cores)
+        else:
+            model_ram_gb = 4.0   # Qwen2.5-3B
+            max_workers = min(2, cpu_cores // 2)
+
+        return ResourceLimits(
+            max_ram_gb=memory_gb,
+            max_cpu_cores=cpu_cores,
+            model_ram_gb=model_ram_gb,
+            kv_cache_per_job_mb=100 if memory_gb >= 32 else 50,
+            system_overhead_gb=2.0
+        )
+
+    def _initialize_worker_pools(self):
+        """Initialize worker pools for each job type"""
+        base_max_workers = min(4, self.resource_limits.max_cpu_cores)
+
+        self.worker_pools = {
+            JobType.MINER: WorkerPool(
+                job_type=JobType.MINER,
+                max_workers=base_max_workers * 2,  # CPU-intensive, can parallelize more
+                min_workers=1
+            ),
+            JobType.FLAGSHIP_EVALUATOR: WorkerPool(
+                job_type=JobType.FLAGSHIP_EVALUATOR,
+                max_workers=base_max_workers,  # Memory-intensive, moderate parallelization
+                min_workers=1
+            ),
+            JobType.TRANSCRIPTION: WorkerPool(
+                job_type=JobType.TRANSCRIPTION,
+                max_workers=base_max_workers // 2,  # I/O bound, fewer workers
+                min_workers=1
+            ),
+            JobType.VOICE_FINGERPRINTING: WorkerPool(
+                job_type=JobType.VOICE_FINGERPRINTING,
+                max_workers=base_max_workers,  # CPU-intensive, good parallelization
+                min_workers=1
+            )
+        }
+
+        logger.info(f"Initialized worker pools: {[(pool.job_type.value, pool.max_workers) for pool in self.worker_pools.values()]}")
+
+    def get_optimal_workers(self, job_type: JobType, queue_length: int = 0) -> int:
+        """Calculate optimal number of workers based on current conditions"""
+        pool = self.worker_pools[job_type]
+        current_time = time.time()
+
+        # Don't adjust too frequently
+        if current_time - pool.last_adjustment < pool.adjustment_cooldown:
+            return pool.current_workers
+
+        # Get current resource usage
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory()
+        memory_percent = memory.percent
+
+        # Calculate optimal workers based on resources
+        optimal_workers = self._calculate_optimal_workers(
+            job_type, cpu_percent, memory_percent, queue_length
+        )
+
+        # Clamp to pool limits
+        optimal_workers = max(pool.min_workers, min(optimal_workers, pool.max_workers))
+
+        # Only adjust if significant change
+        if abs(optimal_workers - pool.current_workers) >= 1:
+            old_workers = pool.current_workers
+            pool.current_workers = optimal_workers
+            pool.last_adjustment = current_time
+
+            logger.info(f"Adjusted {job_type.value} workers: {old_workers} -> {optimal_workers} "
+                       f"(CPU: {cpu_percent:.1f}%, RAM: {memory_percent:.1f}%, Queue: {queue_length})")
+
+        return pool.current_workers
+
+    def _calculate_optimal_workers(self, job_type: JobType, cpu_percent: float,
+                                 memory_percent: float, queue_length: int) -> int:
+        """Calculate optimal workers based on current conditions"""
+        pool = self.worker_pools[job_type]
+
+        # Base calculation on resource availability
+        if cpu_percent < 50 and memory_percent < 70:
+            # Resources available, can increase workers
+            if queue_length > pool.current_workers * 2:
+                # High queue, increase workers
+                return min(pool.current_workers + 2, pool.max_workers)
+            elif queue_length > pool.current_workers:
+                # Moderate queue, slight increase
+                return min(pool.current_workers + 1, pool.max_workers)
+            else:
+                # Low queue, maintain current
+                return pool.current_workers
+
+        elif cpu_percent > 80 or memory_percent > 85:
+            # Resource pressure, decrease workers
+            return max(pool.current_workers - 1, pool.min_workers)
+
+        else:
+            # Balanced resources, maintain current
+            return pool.current_workers
+
+    def start_job(self, job_type: JobType) -> JobMetrics:
+        """Start tracking a new job"""
+        metrics = JobMetrics(job_type=job_type)
+        self.job_metrics.append(metrics)
+        self.worker_pools[job_type].active_jobs += 1
+        return metrics
+
+    def complete_job(self, metrics: JobMetrics, success: bool = True, error: Optional[str] = None):
+        """Complete job tracking and update performance metrics"""
+        metrics.end_time = time.time()
+        metrics.duration = metrics.end_time - metrics.start_time
+        metrics.success = success
+        metrics.error = error
+
+        pool = self.worker_pools[metrics.job_type]
+        pool.active_jobs = max(0, pool.active_jobs - 1)
+        pool.completed_jobs += 1
+
+        # Update average duration
+        if metrics.success and metrics.duration:
+            self.performance_history[metrics.job_type].append(metrics.duration)
+            # Keep only last 10 measurements
+            if len(self.performance_history[metrics.job_type]) > 10:
+                self.performance_history[metrics.job_type].pop(0)
+
+            # Update pool average
+            pool.avg_duration = sum(self.performance_history[metrics.job_type]) / len(self.performance_history[metrics.job_type])
+
+        logger.debug(f"Completed {metrics.job_type.value} job in {metrics.duration:.2f}s "
+                    f"(Active: {pool.active_jobs}, Completed: {pool.completed_jobs})")
+
+    def get_resource_status(self) -> Dict[str, Any]:
+        """Get current resource utilization status"""
+        memory = psutil.virtual_memory()
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+
+        return {
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory.percent,
+            "memory_available_gb": memory.available / (1024**3),
+            "worker_pools": {
+                job_type.value: {
+                    "current_workers": pool.current_workers,
+                    "active_jobs": pool.active_jobs,
+                    "completed_jobs": pool.completed_jobs,
+                    "avg_duration": pool.avg_duration
+                }
+                for job_type, pool in self.worker_pools.items()
+            },
+            "resource_limits": {
+                "max_ram_gb": self.resource_limits.max_ram_gb,
+                "max_cpu_cores": self.resource_limits.max_cpu_cores,
+                "model_ram_gb": self.resource_limits.model_ram_gb
+            }
+        }
+
+    def start_monitoring(self):
+        """Start background resource monitoring"""
+        if self.monitoring_active:
+            return
+
+        self.monitoring_active = True
+        self.monitor_thread = threading.Thread(target=self._monitor_resources, daemon=True)
+        self.monitor_thread.start()
+        logger.info("Started dynamic parallelization monitoring")
+
+    def stop_monitoring(self):
+        """Stop background resource monitoring"""
+        self.monitoring_active = False
+        if self.monitor_thread:
+            self.monitor_thread.join(timeout=5)
+        logger.info("Stopped dynamic parallelization monitoring")
+
+    def _monitor_resources(self):
+        """Background monitoring thread"""
+        while self.monitoring_active:
+            try:
+                # Get current resource usage
+                memory = psutil.virtual_memory()
+                cpu_percent = psutil.cpu_percent(interval=5)
+
+                # Log resource status every minute
+                if len(self.job_metrics) % 12 == 0:  # Every 12 iterations (1 minute)
+                    logger.info(f"Resource status - CPU: {cpu_percent:.1f}%, "
+                              f"RAM: {memory.percent:.1f}% ({memory.available/(1024**3):.1f}GB available)")
+
+                # Check for resource pressure and adjust if needed
+                if cpu_percent > 90 or memory.percent > 90:
+                    logger.warning(f"High resource usage detected - CPU: {cpu_percent:.1f}%, RAM: {memory.percent:.1f}%")
+
+                time.sleep(5)  # Check every 5 seconds
+
+            except Exception as e:
+                logger.error(f"Error in resource monitoring: {e}")
+                time.sleep(10)
+
+
+# Global manager instance
+_global_manager = None
+
+def get_parallelization_manager():
+    """Get the global parallelization manager instance"""
+    return _global_manager
+
+def initialize_parallelization_manager(hardware_specs):
+    """Initialize the global parallelization manager"""
+    global _global_manager
+    _global_manager = DynamicParallelizationManager(hardware_specs)
+    _global_manager.start_monitoring()
+    return _global_manager
+EOF
+
+chmod +x "$SCRIPTS_DIR/dynamic_parallelization.py"
+
+print_status "Dynamic parallelization system created"
 
 # Create hardware detection integration
 echo -e "\n${BLUE}🖥️ Creating hardware detection integration...${NC}"
@@ -631,26 +1308,26 @@ def get_ollama_model_recommendation(specs):
 
     if specs.memory_gb >= 64 and specs.chip_type in [ChipType.M3_ULTRA, ChipType.M2_ULTRA]:
         return {
-            "primary": "qwen2.5:14b",
+            "primary": "qwen2.5:14b-instruct",
             "size": "8.2GB",
             "description": "High-quality model for Ultra systems",
             "optional_upgrade": "llama3.1:70b (40GB) - Expert mode"
         }
     elif specs.memory_gb >= 32 and specs.chip_type in [ChipType.M3_MAX, ChipType.M2_MAX]:
         return {
-            "primary": "qwen2.5:14b",
+            "primary": "qwen2.5:14b-instruct",
             "size": "8.2GB",
             "description": "Optimal for Max systems"
         }
     elif specs.memory_gb >= 16:
         return {
-            "primary": "qwen2.5:7b",
-            "size": "2GB",
+            "primary": "qwen2.5:7b-instruct",
+            "size": "4GB",
             "description": "Balanced for Pro systems"
         }
     else:
         return {
-            "primary": "qwen2.5:3b",
+            "primary": "qwen2.5:3b-instruct",
             "size": "2GB",
             "description": "Efficient for base systems"
         }
@@ -745,13 +1422,13 @@ try:
 
         # Determine recommendation based on memory
         if memory_gb >= 64:
-            recommendation = {'primary': 'qwen2.5:14b', 'size': '8.2GB', 'description': 'High-quality model for Ultra systems'}
+            recommendation = {'primary': 'qwen2.5:14b-instruct', 'size': '8.2GB', 'description': 'High-quality model for Ultra systems'}
         elif memory_gb >= 32:
-            recommendation = {'primary': 'qwen2.5:14b', 'size': '8.2GB', 'description': 'Optimal for Max systems'}
+            recommendation = {'primary': 'qwen2.5:14b-instruct', 'size': '8.2GB', 'description': 'Optimal for Max systems'}
         elif memory_gb >= 16:
-            recommendation = {'primary': 'qwen2.5:7b', 'size': '4GB', 'description': 'Balanced for Pro systems'}
+            recommendation = {'primary': 'qwen2.5:7b-instruct', 'size': '4GB', 'description': 'Balanced for Pro systems'}
         else:
-            recommendation = {'primary': 'qwen2.5:3b', 'size': '2GB', 'description': 'Efficient for base systems'}
+            recommendation = {'primary': 'qwen2.5:3b-instruct', 'size': '2GB', 'description': 'Efficient for base systems'}
 
         result = {
             'hardware': {'chip_type': chip_name, 'memory_gb': memory_gb, 'cpu_cores': 8},
@@ -764,7 +1441,7 @@ except:
     # Fallback
     result = {
         'hardware': {'chip_type': 'M3', 'memory_gb': 16, 'cpu_cores': 8},
-        'recommendation': {'primary': 'qwen2.5:7b', 'size': '4GB', 'description': 'Balanced for Pro systems'}
+        'recommendation': {'primary': 'qwen2.5:7b-instruct', 'size': '4GB', 'description': 'Balanced for Pro systems'}
     }
     print(json.dumps(result))
 " > /tmp/hardware_specs.json

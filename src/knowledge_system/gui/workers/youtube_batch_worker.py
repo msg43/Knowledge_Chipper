@@ -997,6 +997,53 @@ class YouTubeBatchWorker(QThread):
             video_id = self._extract_video_id(url)
             progress_callback("Starting transcription processing")
 
+            # Record processing start for intelligent pacing
+            processing_start_time = time.time()
+            try:
+                from ...utils.intelligent_pacing import (
+                    create_pacing_config_from_settings,
+                    get_pacing_manager,
+                )
+
+                pacing_config = create_pacing_config_from_settings()
+                pacing_manager = get_pacing_manager(pacing_config)
+
+                # Get audio duration for pacing
+                audio_duration_minutes = 15.0  # Default
+                try:
+                    import subprocess
+
+                    cmd = [
+                        "ffprobe",
+                        "-v",
+                        "quiet",
+                        "-show_entries",
+                        "format=duration",
+                        "-of",
+                        "csv=p=0",
+                        str(audio_file),
+                    ]
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        audio_duration_minutes = float(result.stdout.strip()) / 60.0
+                except Exception:
+                    pass
+
+                # Estimate processing time
+                estimated_processing_time = pacing_manager.estimate_processing_time(
+                    audio_duration_minutes
+                )
+
+                # Record processing start
+                pacing_manager.record_processing_start(
+                    video_id, audio_duration_minutes, estimated_processing_time
+                )
+
+            except Exception as pacing_error:
+                logger.debug(f"Could not record processing start: {pacing_error}")
+
             enable_diarization = self.config.get("enable_diarization", False)
             testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
 
@@ -1016,6 +1063,69 @@ class YouTubeBatchWorker(QThread):
 
             if result and result.success:
                 progress_callback("Processing completed successfully")
+
+                # Record processing completion for intelligent pacing
+                try:
+                    from ...utils.intelligent_pacing import get_pacing_manager
+
+                    pacing_manager = get_pacing_manager()
+
+                    # Try to get processing timing from metadata
+                    transcription_time = 30.0  # Default estimate
+                    summarization_time = 15.0  # Default estimate
+                    transcript_length = 5000  # Default estimate
+
+                    if hasattr(result, "metadata") and result.metadata:
+                        # Extract timing information if available
+                        transcription_time = result.metadata.get(
+                            "transcription_time", transcription_time
+                        )
+                        summarization_time = result.metadata.get(
+                            "summarization_time", summarization_time
+                        )
+                        transcript_length = result.metadata.get(
+                            "transcript_length", transcript_length
+                        )
+
+                    # Get audio duration from file
+                    audio_duration_minutes = 15.0  # Default
+                    try:
+                        import subprocess
+
+                        cmd = [
+                            "ffprobe",
+                            "-v",
+                            "quiet",
+                            "-show_entries",
+                            "format=duration",
+                            "-of",
+                            "csv=p=0",
+                            str(audio_file),
+                        ]
+                        result_cmd = subprocess.run(
+                            cmd, capture_output=True, text=True, timeout=5
+                        )
+                        if result_cmd.returncode == 0 and result_cmd.stdout.strip():
+                            audio_duration_minutes = (
+                                float(result_cmd.stdout.strip()) / 60.0
+                            )
+                    except Exception:
+                        pass
+
+                    # Record processing completion
+                    pacing_manager.record_processing_completion(
+                        video_id,
+                        audio_duration_minutes,
+                        transcription_time,
+                        summarization_time,
+                        transcript_length,
+                    )
+
+                except Exception as pacing_error:
+                    logger.debug(
+                        f"Could not record processing completion: {pacing_error}"
+                    )
+
                 return True, "Successfully processed with diarization"
             else:
                 error_msg = (
@@ -1296,22 +1406,43 @@ class YouTubeBatchWorker(QThread):
     ) -> Path | None:
         """Download a single URL using a specific PacketStream session."""
         try:
-            # Add random delay (0-5 seconds) to make downloads look more natural
-            import random
-
-            delay = random.uniform(0, 5)
-            logger.info(
-                f"🎲 Waiting {delay:.1f}s before starting download for session {session_id}"
+            # Use intelligent pacing instead of random delays
+            from ...utils.intelligent_pacing import (
+                create_pacing_config_from_settings,
+                get_pacing_manager,
             )
 
-            # Sleep in small increments to allow cancellation checks
-            elapsed = 0
-            while elapsed < delay:
-                if self.should_stop or self.cancellation_token.is_cancelled():
-                    logger.debug(f"Download cancelled during delay for {session_id}")
-                    return None
-                time.sleep(0.1)  # Sleep 100ms at a time
-                elapsed += 0.1
+            pacing_config = create_pacing_config_from_settings()
+            pacing_manager = get_pacing_manager(pacing_config)
+
+            # Estimate audio duration (we'll update this after download)
+            estimated_duration = 15.0  # Default 15 minutes
+
+            # Check if we should pause downloads
+            if pacing_manager.should_pause_downloads():
+                logger.info(
+                    f"⏸️ Intelligent pacing: pausing downloads for session {session_id}"
+                )
+                return None
+
+            # Record download start
+            pacing_manager.record_download_start(estimated_duration)
+
+            # Wait for optimal timing
+            should_proceed = pacing_manager.wait_for_next_download(
+                estimated_duration,
+                cancellation_check=lambda: self.should_stop
+                or self.cancellation_token.is_cancelled(),
+            )
+
+            if not should_proceed:
+                logger.debug(
+                    f"Download cancelled during intelligent pacing for {session_id}"
+                )
+                return None
+
+            # Record download start time for duration calculation
+            download_start_time = time.time()
 
             # Create unique filename for this audio
             video_id = self._extract_video_id(url)
@@ -1442,15 +1573,73 @@ class YouTubeBatchWorker(QThread):
                     if possible_file != audio_file:
                         # Rename to expected .wav extension
                         possible_file.rename(audio_file)
+
+                    # Record successful download with pacing metrics
+                    download_end_time = time.time()
+                    download_duration = download_end_time - download_start_time
+
+                    # Try to get actual audio duration for better pacing
+                    try:
+                        import subprocess
+
+                        cmd = [
+                            "ffprobe",
+                            "-v",
+                            "quiet",
+                            "-show_entries",
+                            "format=duration",
+                            "-of",
+                            "csv=p=0",
+                            str(audio_file),
+                        ]
+                        result = subprocess.run(
+                            cmd, capture_output=True, text=True, timeout=5
+                        )
+                        if result.returncode == 0 and result.stdout.strip():
+                            audio_duration_minutes = float(result.stdout.strip()) / 60.0
+                        else:
+                            audio_duration_minutes = estimated_duration
+                    except Exception:
+                        audio_duration_minutes = estimated_duration
+
+                    # Record download completion in pacing manager
+                    pacing_manager.record_download_completion(
+                        audio_duration_minutes, download_duration
+                    )
+
                     logger.debug(
-                        f"✅ Successfully downloaded: {video_id} using {session_id}"
+                        f"✅ Successfully downloaded: {video_id} using {session_id} ({audio_duration_minutes:.1f}min audio)"
                     )
                     return audio_file
 
             return None
 
         except Exception as e:
-            logger.error(f"Error downloading {url} with session {session_id}: {e}")
+            error_msg = str(e)
+            logger.error(
+                f"Error downloading {url} with session {session_id}: {error_msg}"
+            )
+
+            # Check for rate limiting and record it
+            if any(
+                keyword in error_msg.lower()
+                for keyword in ["rate limit", "429", "too many", "quota"]
+            ):
+                try:
+                    from ...utils.intelligent_pacing import (
+                        create_pacing_config_from_settings,
+                        get_pacing_manager,
+                    )
+
+                    pacing_config = create_pacing_config_from_settings()
+                    pacing_manager = get_pacing_manager(pacing_config)
+                    pacing_manager.record_rate_limit_event()
+                    logger.warning(
+                        f"Rate limit detected for {url} - pacing will be adjusted"
+                    )
+                except Exception as pacing_error:
+                    logger.debug(f"Could not record rate limit event: {pacing_error}")
+
             return None
 
     def _download_batch_direct(

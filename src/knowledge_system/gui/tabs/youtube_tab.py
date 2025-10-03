@@ -1028,6 +1028,23 @@ class YouTubeTab(BaseTab):
         )
         layout.addWidget(self.parallel_downloads_checkbox, 4, 0, 1, 3)
 
+        # Intelligent pacing checkbox - new feature
+        self.intelligent_pacing_checkbox = QCheckBox(
+            "Enable intelligent pacing (recommended)"
+        )
+        self.intelligent_pacing_checkbox.setChecked(True)  # Enabled by default
+        self.intelligent_pacing_checkbox.toggled.connect(self._on_setting_changed)
+        self.intelligent_pacing_checkbox.setToolTip(
+            "Intelligent Pacing - Optimize download timing based on processing pipeline\n"
+            "• Automatically spaces downloads to stay ahead of summarization\n"
+            "• Prevents overwhelming YouTube's bot detection systems\n"
+            "• Adapts to processing speed - longer delays when processing is slow\n"
+            "• Increases delays when rate limiting is detected\n"
+            "• Essential for processing 1000+ videos without getting blocked\n"
+            "• Recommended for large batch operations"
+        )
+        layout.addWidget(self.intelligent_pacing_checkbox, 5, 0, 1, 3)
+
         group.setLayout(layout)
         return group
 
@@ -1647,6 +1664,7 @@ class YouTubeTab(BaseTab):
             "transcription_model": self.transcription_model_combo.currentText(),  # Pass selected model
             "download_all_mode": self.download_all_checkbox.isChecked(),
             "parallel_downloads": self.parallel_downloads_checkbox.isChecked(),
+            "enable_intelligent_pacing": self.intelligent_pacing_checkbox.isChecked(),
         }
 
         # Choose worker based on processing requirements
@@ -2484,6 +2502,11 @@ class YouTubeTab(BaseTab):
                     self.tab_name, "parallel_downloads", True
                 )
             )
+            self.intelligent_pacing_checkbox.setChecked(
+                self.gui_settings.get_checkbox_state(
+                    self.tab_name, "enable_intelligent_pacing", True
+                )
+            )
 
             # Load radio button state (use checkbox method for boolean values)
             url_radio_selected = self.gui_settings.get_checkbox_state(
@@ -2530,6 +2553,11 @@ class YouTubeTab(BaseTab):
                 self.tab_name,
                 "parallel_downloads",
                 self.parallel_downloads_checkbox.isChecked(),
+            )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name,
+                "enable_intelligent_pacing",
+                self.intelligent_pacing_checkbox.isChecked(),
             )
 
             # Save radio button state (use checkbox method for boolean values)

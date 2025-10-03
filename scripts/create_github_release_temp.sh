@@ -70,13 +70,6 @@ REQUIRED_FILES=(
     "Skip_the_Podcast_Desktop-${VERSION}.pkg"
     "python-framework-3.13-macos.tar.gz"
     "ai-models-bundle.tar.gz"
-    "ffmpeg-macos-universal.tar.gz"
-    "app-source-code.tar.gz"
-)
-
-# Optional files (too large for GitHub)
-OPTIONAL_FILES=(
-    "ollama-models-bundle.tar.gz"
 )
 
 MISSING_FILES=()
@@ -145,8 +138,8 @@ The PKG installer will automatically download and install:
 | Python Framework | ~40MB | Isolated Python 3.13 runtime |
 | AI Models | ~1.2GB | Whisper, Voice Fingerprinting, Pyannote |
 | FFmpeg | ~48MB | Media processing engine |
-| Ollama Runtime | ~50MB | Downloaded automatically during setup |
-| Ollama Model | 1.3-4.7GB | Downloaded automatically during setup |
+| Ollama Runtime | ~50MB | LLM processing engine |
+| Ollama Model | 1.3-4.7GB | Hardware-optimized model selection |
 
 **Total download**: 3-6GB (varies by hardware)
 **Installation time**: 5-15 minutes
@@ -155,10 +148,10 @@ The PKG installer will automatically download and install:
 
 The installer automatically detects your Mac and recommends the optimal Ollama model:
 
-- **M2/M3 Ultra (64GB+ RAM)**: qwen2.5:14b-instruct FP16 (32GB RAM usage, aggressive parallelization)
-- **M2/M3 Max (32GB+ RAM)**: qwen2.5:14b-instruct FP16 (32GB RAM usage, moderate parallelization)
-- **M2/M3 Pro (16GB+ RAM)**: qwen2.5:7b-instruct (4GB RAM usage, conservative parallelization)
-- **Base Systems**: qwen2.5:3b-instruct (2GB RAM usage, minimal parallelization)
+- **M2/M3 Ultra (64GB+ RAM)**: qwen2.5:14b (8.2GB)
+- **M2/M3 Max (32GB+ RAM)**: qwen2.5:14b (8.2GB)
+- **M2/M3 Pro (16GB+ RAM)**: qwen2.5:7b (4GB)
+- **Base Systems**: qwen2.5:3b (2GB)
 
 ### 🔧 Technical Improvements
 
@@ -166,10 +159,6 @@ The installer automatically detects your Mac and recommends the optimal Ollama m
 - **Reliable downloads**: All components hosted on GitHub releases
 - **Verification system**: Components verified before installation completes
 - **Graceful fallbacks**: Multiple download sources and retry mechanisms
-- **Intelligent caching**: Only downloads changed components on updates
-- **Smart versioning**: Large files cached until version changes
-- **Dynamic parallelization**: Intelligent worker scaling based on hardware and resource usage
-- **FP16 optimization**: High-end systems use Qwen2.5-14B FP16 for maximum performance
 
 ### 📋 Installation Requirements
 
@@ -195,10 +184,6 @@ This PKG installer creates a completely fresh installation. Your existing data a
 2. Note your preferred settings
 3. Install the new PKG version
 4. Reconfigure as needed
-
-### 🤖 Ollama Models Download
-
-Due to GitHub's 2GB file size limit, Ollama models (4.7GB) are not included in this release. They will be automatically downloaded on first run using Ollama's built-in model download system. This ensures you get the latest model versions and reduces the initial download size.
 
 ### 🐛 Bug Fixes & Improvements
 
@@ -280,33 +265,8 @@ gh release upload "$RELEASE_TAG" \
     "ai-models-bundle.tar.gz" \
     --repo "$GITHUB_REPO"
 
-# Upload FFmpeg
-echo "Uploading FFmpeg..."
-gh release upload "$RELEASE_TAG" \
-    "ffmpeg-macos-universal.tar.gz" \
-    --repo "$GITHUB_REPO"
-
-# Upload app source code
-echo "Uploading app source code..."
-gh release upload "$RELEASE_TAG" \
-    "app-source-code.tar.gz" \
-    --repo "$GITHUB_REPO"
-
-# Upload Ollama models (skip if too large for GitHub)
-if [ -f "ollama-models-bundle.tar.gz" ]; then
-    FILE_SIZE=$(stat -f%z "ollama-models-bundle.tar.gz")
-    MAX_SIZE=2147483648  # 2GB limit
-
-    if [ $FILE_SIZE -le $MAX_SIZE ]; then
-        echo "Uploading Ollama models..."
-        gh release upload "$RELEASE_TAG" \
-            "ollama-models-bundle.tar.gz" \
-            --repo "$GITHUB_REPO"
-    else
-        echo "Skipping Ollama models bundle (${FILE_SIZE} bytes exceeds GitHub's 2GB limit)"
-        echo "Users can download Ollama models separately during installation"
-    fi
-fi
+# Upload FFmpeg (skip for now)
+echo "Skipping FFmpeg upload (not available)"
 
 # Upload real README.md
 echo "Uploading project README..."
@@ -335,36 +295,9 @@ for file in "${REQUIRED_FILES[@]}"; do
 done
 
 # Convert to human readable (macOS compatible)
-if command -v numfmt >/dev/null 2>&1; then
-    TOTAL_SIZE_HR=$(numfmt --to=iec-i --suffix=B $TOTAL_SIZE)
-    PKG_SIZE_HR=$(numfmt --to=iec-i --suffix=B $PKG_SIZE)
-    COMPONENTS_SIZE_HR=$(numfmt --to=iec-i --suffix=B $COMPONENTS_SIZE)
-else
-    # Fallback for macOS
-    if [ $TOTAL_SIZE -gt 1073741824 ]; then
-        TOTAL_SIZE_HR=$(echo "scale=1; $TOTAL_SIZE / 1073741824" | bc -l 2>/dev/null || echo "$((TOTAL_SIZE / 1073741824))")GB
-    elif [ $TOTAL_SIZE -gt 1048576 ]; then
-        TOTAL_SIZE_HR=$(echo "scale=1; $TOTAL_SIZE / 1048576" | bc -l 2>/dev/null || echo "$((TOTAL_SIZE / 1048576))")MB
-    else
-        TOTAL_SIZE_HR=$(echo "scale=1; $TOTAL_SIZE / 1024" | bc -l 2>/dev/null || echo "$((TOTAL_SIZE / 1024))")KB
-    fi
-
-    if [ $PKG_SIZE -gt 1073741824 ]; then
-        PKG_SIZE_HR=$(echo "scale=1; $PKG_SIZE / 1073741824" | bc -l 2>/dev/null || echo "$((PKG_SIZE / 1073741824))")GB
-    elif [ $PKG_SIZE -gt 1048576 ]; then
-        PKG_SIZE_HR=$(echo "scale=1; $PKG_SIZE / 1048576" | bc -l 2>/dev/null || echo "$((PKG_SIZE / 1048576))")MB
-    else
-        PKG_SIZE_HR=$(echo "scale=1; $PKG_SIZE / 1024" | bc -l 2>/dev/null || echo "$((PKG_SIZE / 1024))")KB
-    fi
-
-    if [ $COMPONENTS_SIZE -gt 1073741824 ]; then
-        COMPONENTS_SIZE_HR=$(echo "scale=1; $COMPONENTS_SIZE / 1073741824" | bc -l 2>/dev/null || echo "$((COMPONENTS_SIZE / 1073741824))")GB
-    elif [ $COMPONENTS_SIZE -gt 1048576 ]; then
-        COMPONENTS_SIZE_HR=$(echo "scale=1; $COMPONENTS_SIZE / 1048576" | bc -l 2>/dev/null || echo "$((COMPONENTS_SIZE / 1048576))")MB
-    else
-        COMPONENTS_SIZE_HR=$(echo "scale=1; $COMPONENTS_SIZE / 1024" | bc -l 2>/dev/null || echo "$((COMPONENTS_SIZE / 1024))")KB
-    fi
-fi
+TOTAL_SIZE_HR=$(du -h "Skip_the_Podcast_Desktop-${VERSION}.pkg" 2>/dev/null | cut -f1 || echo "${TOTAL_SIZE}B")
+PKG_SIZE_HR=$(du -h "Skip_the_Podcast_Desktop-${VERSION}.pkg" 2>/dev/null | cut -f1 || echo "${PKG_SIZE}B")
+COMPONENTS_SIZE_HR=$(echo "scale=1; $COMPONENTS_SIZE / 1048576" | bc -l 2>/dev/null || echo "${COMPONENTS_SIZE}B")MB
 
 print_status "Release statistics calculated"
 

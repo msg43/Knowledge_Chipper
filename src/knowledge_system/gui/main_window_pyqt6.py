@@ -267,6 +267,15 @@ class MainWindow(QMainWindow):
             process_tab = ProcessTab(self)
             self.tabs.addTab(process_tab, "Process Management")
 
+        # Add Batch Processing tab (always available for advanced users)
+        try:
+            from .tabs.batch_processing_tab import BatchProcessingTab
+
+            batch_processing_tab = BatchProcessingTab(self)
+            self.tabs.addTab(batch_processing_tab, "🚀 Batch Processing")
+        except ImportError as e:
+            logger.warning(f"Batch processing tab not available: {e}")
+
         # Only add File Watcher tab if enabled in settings
         if settings.gui_features.show_file_watcher_tab:
             watcher_tab = WatcherTab(self)
