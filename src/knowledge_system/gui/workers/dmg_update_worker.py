@@ -52,7 +52,9 @@ class DMGUpdateWorker(QThread):
             # Check if marker is recent (within last 5 minutes)
             marker_age = time.time() - update_marker.stat().st_mtime
             if marker_age < 300:  # 5 minutes
-                logger.info(f"Update in progress detected (marker age: {marker_age}s) - skipping auto-update")
+                logger.info(
+                    f"Update in progress detected (marker age: {marker_age}s) - skipping auto-update"
+                )
                 return True
             else:
                 # Remove stale marker
@@ -299,12 +301,12 @@ class DMGUpdateWorker(QThread):
             )
 
             if result.returncode != 0:
-                logger.error(
-                    f"installer failed with return code {result.returncode}"
-                )
+                logger.error(f"installer failed with return code {result.returncode}")
                 logger.error(f"installer stdout: {result.stdout}")
                 logger.error(f"installer stderr: {result.stderr}")
-                raise Exception(f"Failed to install PKG: {result.stderr or result.stdout}")
+                raise Exception(
+                    f"Failed to install PKG: {result.stderr or result.stdout}"
+                )
 
             logger.info("PKG installed successfully")
 
@@ -613,7 +615,7 @@ class DMGUpdateWorker(QThread):
         """Create a script that will install the PKG and restart the app after the current app quits."""
         try:
             # Create a temporary script that will handle the installation
-            script_content = f'''#!/bin/bash
+            script_content = f"""#!/bin/bash
 # Skip the Podcast Desktop Update Installer
 # This script runs after the app quits to install the PKG and restart
 
@@ -670,24 +672,24 @@ sleep 3
 echo "🔍 Verifying installation..."
 if [ -d "$APP_PATH" ]; then
     echo "✅ Installation successful - app found at $APP_PATH"
-    
+
     # Clean up the downloaded PKG
     echo "🧹 Cleaning up downloaded files..."
     rm -f "$PKG_PATH"
     rm -f "$(dirname "$PKG_PATH")"
-    
+
     # Clean up update marker
     echo "🧹 Cleaning up update marker..."
     rm -f "$HOME/.skip_the_podcast_update_in_progress"
-    
+
     # Wait a moment for installation to fully complete
     echo "⏳ Waiting for installation to fully complete..."
     sleep 2
-    
+
     # Launch the new app
     echo "🚀 Launching updated app..."
     echo "App path: $APP_PATH"
-    
+
     # Try multiple methods to launch the app
     if open "$APP_PATH"; then
         echo "✅ App launched successfully with 'open' command"
@@ -702,30 +704,30 @@ if [ -d "$APP_PATH" ]; then
             "$APP_PATH/Contents/MacOS/Skip the Podcast Desktop" &
         fi
     fi
-    
+
     echo "✅ Update complete! Skip the Podcast Desktop v$VERSION should be launching."
 else
     echo "❌ Installation failed - app not found at $APP_PATH"
     echo "Checking what's in /Applications:"
     ls -la "/Applications/" | grep -i skip || echo "No Skip-related apps found"
-    
+
     # Clean up update marker even on failure
     rm -f "$HOME/.skip_the_podcast_update_in_progress"
     exit 1
 fi
-'''
-            
+"""
+
             # Write the script to a temporary file
             script_path = Path(tempfile.mktemp(suffix="_update_installer.sh"))
-            with open(script_path, 'w') as f:
+            with open(script_path, "w") as f:
                 f.write(script_content)
-            
+
             # Make it executable
             os.chmod(script_path, 0o755)
-            
+
             logger.info(f"Created installation script: {script_path}")
             return script_path
-            
+
         except Exception as e:
             logger.error(f"Failed to create install script: {e}")
             raise Exception(f"Failed to create installation script: {e}")
@@ -736,9 +738,9 @@ fi
             # Use a more reliable approach: create a background process that waits
             # for the current app to quit, then runs the installation
             script_path = str(install_script)
-            
+
             # Create a wrapper script that waits for the app to quit
-            wrapper_script_content = f'''#!/bin/bash
+            wrapper_script_content = f"""#!/bin/bash
 # Wait for Skip the Podcast Desktop to quit before installing
 echo "⏳ Waiting for Skip the Podcast Desktop to quit..."
 
@@ -762,30 +764,34 @@ else
     # Show error dialog
     osascript -e 'display dialog "Update installation failed. Check /tmp/skip_podcast_update.log for details." buttons {{"OK"}} default button "OK" with icon caution'
 fi
-'''
-            
+"""
+
             # Write the wrapper script
             wrapper_script = Path(tempfile.mktemp(suffix="_update_wrapper.sh"))
-            with open(wrapper_script, 'w') as f:
+            with open(wrapper_script, "w") as f:
                 f.write(wrapper_script_content)
-            
+
             # Make it executable
             os.chmod(wrapper_script, 0o755)
-            
+
             # Start the wrapper script in the background
-            subprocess.Popen([
-                "bash", str(wrapper_script)
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
+            subprocess.Popen(
+                ["bash", str(wrapper_script)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
             logger.info("Scheduled installation script to run after app quits")
-            
+
         except Exception as e:
             logger.error(f"Failed to schedule installation: {e}")
             # Fallback: try to run the script directly with a longer delay
             try:
-                subprocess.Popen([
-                    "bash", "-c", f"sleep 10 && {install_script}"
-                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(
+                    ["bash", "-c", f"sleep 10 && {install_script}"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
                 logger.info("Scheduled installation script as fallback with 10s delay")
             except Exception as e2:
                 logger.error(f"Fallback scheduling also failed: {e2}")

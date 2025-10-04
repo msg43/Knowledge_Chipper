@@ -39,7 +39,7 @@ case $action in
             mkdir -p ~/.cache/whisper-cpp
             echo "✅ Whisper models hidden"
         fi
-        
+
         echo
         echo "🚀 Models hidden! Now:"
         echo "1. Run: ./launch_gui.command"
@@ -48,7 +48,7 @@ case $action in
         echo
         echo "⚠️  Run '$0 r' to restore models after testing"
         ;;
-        
+
     r)
         echo "📦 Restoring hidden models..."
         # Restore Whisper models
@@ -60,7 +60,7 @@ case $action in
             echo "⚠️  No backup found"
         fi
         ;;
-        
+
     t)
         echo "📦 Removing only tiny model to test partial downloads..."
         rm -f ~/.cache/whisper-cpp/ggml-tiny.bin
@@ -69,12 +69,12 @@ case $action in
         echo "The app will still work with base/small/medium models"
         echo "But you can test downloading tiny if you select it"
         ;;
-        
+
     q)
         echo "👋 Exiting..."
         exit 0
         ;;
-        
+
     *)
         echo "❌ Invalid option"
         exit 1

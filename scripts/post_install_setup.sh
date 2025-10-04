@@ -22,15 +22,15 @@ log "====================================="
 # 1. Download Whisper Models
 download_whisper_models() {
     log "📥 Setting up Whisper models..."
-    
+
     # Create models directory
     WHISPER_CACHE="$HOME/.cache/whisper-cpp"
     mkdir -p "$WHISPER_CACHE"
-    
+
     # Download base model (default for quality/speed balance)
     WHISPER_MODEL="ggml-base.bin"
     WHISPER_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$WHISPER_MODEL"
-    
+
     if [ -f "$WHISPER_CACHE/$WHISPER_MODEL" ]; then
         log "✅ Whisper base model already exists"
     else
@@ -43,26 +43,26 @@ download_whisper_models() {
     fi
 }
 
-# 2. Setup Ollama and Default LLM Model  
+# 2. Setup Ollama and Default LLM Model
 setup_ollama_model() {
     log "🤖 Setting up Ollama models..."
-    
+
     # Check if Ollama is installed
     if ! command -v ollama &> /dev/null; then
         log "⚠️  Ollama not installed - LLM features will require manual setup"
         return
     fi
-    
+
     # Start Ollama service if not running
     if ! pgrep -x "ollama" > /dev/null; then
         log "Starting Ollama service..."
         ollama serve > /dev/null 2>&1 &
         sleep 5
     fi
-    
+
     # Check for any installed Qwen models (our preferred series)
     INSTALLED_MODELS=$(ollama list 2>/dev/null | grep -E "^qwen" | awk '{print $1}' || true)
-    
+
     if [ -n "$INSTALLED_MODELS" ]; then
         log "✅ Found existing Qwen models:"
         echo "$INSTALLED_MODELS" | while read -r model; do
@@ -73,7 +73,7 @@ setup_ollama_model() {
         # No Qwen models found, download default
         DEFAULT_MODEL="qwen2.5:7b"
         log "📥 Downloading default LLM model: $DEFAULT_MODEL (~4.7GB)..."
-        
+
         if ollama pull "$DEFAULT_MODEL" 2>&1 | tee -a "$LOG_FILE"; then
             log "✅ Default LLM model ready: $DEFAULT_MODEL"
         else
@@ -85,10 +85,10 @@ setup_ollama_model() {
 # 3. Setup Pyannote Configuration
 setup_pyannote_config() {
     log "🎙️ Configuring speaker diarization..."
-    
+
     PYANNOTE_DIR="$HOME/.cache/models/pyannote"
     mkdir -p "$PYANNOTE_DIR"
-    
+
     # Create runtime configuration
     cat > "$PYANNOTE_DIR/runtime_download_config.json" << EOF
 {
@@ -99,7 +99,7 @@ setup_pyannote_config() {
     "setup_complete": true
 }
 EOF
-    
+
     log "✅ Pyannote configured for on-demand download"
     log "ℹ️  Note: HuggingFace token required for speaker diarization"
 }
@@ -108,7 +108,7 @@ EOF
 mark_setup_complete() {
     SETTINGS_DIR="$HOME/.knowledge_chipper/settings"
     mkdir -p "$SETTINGS_DIR"
-    
+
     # Create a marker file to indicate post-install setup completed
     cat > "$SETTINGS_DIR/post_install_complete.json" << EOF
 {
@@ -118,20 +118,20 @@ mark_setup_complete() {
     "models_downloaded": true
 }
 EOF
-    
+
     log "✅ Post-install setup marked as complete"
 }
 
 # Main execution
 main() {
     log "Starting post-install setup..."
-    
+
     # Run setup tasks
     download_whisper_models
     setup_ollama_model
     setup_pyannote_config
     mark_setup_complete
-    
+
     log "✅ Post-install setup completed successfully!"
     log "📝 Log saved to: $LOG_FILE"
 }

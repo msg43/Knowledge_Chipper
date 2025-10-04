@@ -1539,23 +1539,23 @@ export PATH="$APP_DIR/MacOS:${PATH}"
 # Check if setup is needed
 if [ ! -f "$SETUP_MARKER" ]; then
     echo "First run setup needed..."
-    
+
     # Show setup dialog
     osascript -e 'display dialog "Setting up Skip the Podcast Desktop...\n\nThis will take a few minutes on first run." buttons {"Continue"} default button "Continue" with title "First Run Setup"'
-    
+
     # Create virtual environment
     echo "Creating Python environment..."
     mkdir -p "$(dirname "$VENV_DIR")"
     /usr/bin/python3 -m venv "$VENV_DIR"
-    
+
     # Install dependencies
     echo "Installing dependencies..."
     "$VENV_DIR/bin/python" -m pip install --upgrade pip
     "$VENV_DIR/bin/python" -m pip install -r "$APP_DIR/Resources/requirements.txt"
-    
+
     # Mark setup as complete
     touch "$SETUP_MARKER"
-    
+
     echo "Setup complete!"
 fi
 

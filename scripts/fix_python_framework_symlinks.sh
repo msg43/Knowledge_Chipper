@@ -57,16 +57,16 @@ echo -e "\n${BLUE}🔍 Fixing symbolic links...${NC}"
 fix_symlink() {
     local link="$1"
     local target=$(readlink "$link")
-    
+
     # Check if it's an absolute symlink pointing to the build directory
     if [[ "$target" == /Users/*/Projects/Knowledge_Chipper/build_framework/* ]]; then
         # Extract the relative part after "build_framework/"
         local relative_part="${target#*/build_framework/}"
-        
+
         # Calculate the relative path from the link to the target
         local link_dir=$(dirname "$link")
         local target_file=$(basename "$target")
-        
+
         # For Python framework, the structure is predictable
         # Links in bin/ point to executables in the same directory
         if [[ "$link" == */bin/* ]] && [[ "$target" == */bin/* ]]; then
@@ -88,24 +88,24 @@ done
 # Special handling for Python framework structure
 if [ -d "framework/Python.framework/Versions/3.13/bin" ]; then
     cd "framework/Python.framework/Versions/3.13/bin"
-    
+
     # Create proper relative symlinks
     print_status "Creating proper symlinks in bin directory"
-    
+
     # python3 should point to the actual executable
     if [ -f "python3.13" ]; then
         rm -f python3
         ln -s python3.13 python3
         print_status "Linked python3 -> python3.13"
     fi
-    
+
     # pip3 should point to pip3.13
     if [ -f "pip3.13" ]; then
         rm -f pip3
         ln -s pip3.13 pip3
         print_status "Linked pip3 -> pip3.13"
     fi
-    
+
     cd "$TEMP_DIR"
 fi
 

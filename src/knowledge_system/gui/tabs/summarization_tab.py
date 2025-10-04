@@ -1846,18 +1846,46 @@ class SummarizationTab(BaseTab):
         # Initialize model dropdowns to be empty by default
         # Guard against optional advanced widgets not being present on some builds
         widget_triplets = [
-            (getattr(self, "miner_provider", None), getattr(self, "miner_model", None), getattr(self, "miner_uri", None)),
-            (getattr(self, "heavy_miner_provider", None), getattr(self, "heavy_miner_model", None), getattr(self, "heavy_miner_uri", None)),
-            (getattr(self, "judge_provider", None), getattr(self, "judge_model", None), getattr(self, "judge_uri", None)),
+            (
+                getattr(self, "miner_provider", None),
+                getattr(self, "miner_model", None),
+                getattr(self, "miner_uri", None),
+            ),
+            (
+                getattr(self, "heavy_miner_provider", None),
+                getattr(self, "heavy_miner_model", None),
+                getattr(self, "heavy_miner_uri", None),
+            ),
+            (
+                getattr(self, "judge_provider", None),
+                getattr(self, "judge_model", None),
+                getattr(self, "judge_uri", None),
+            ),
             (
                 getattr(self, "flagship_judge_provider", None),
                 getattr(self, "flagship_judge_model", None),
                 getattr(self, "flagship_judge_uri", None),
             ),
-            (getattr(self, "embedder_provider", None), getattr(self, "embedder_model", None), getattr(self, "embedder_uri", None)),
-            (getattr(self, "reranker_provider", None), getattr(self, "reranker_model", None), getattr(self, "reranker_uri", None)),
-            (getattr(self, "people_provider", None), getattr(self, "people_model", None), getattr(self, "people_uri", None)),
-            (getattr(self, "nli_provider", None), getattr(self, "nli_model", None), getattr(self, "nli_uri", None)),
+            (
+                getattr(self, "embedder_provider", None),
+                getattr(self, "embedder_model", None),
+                getattr(self, "embedder_uri", None),
+            ),
+            (
+                getattr(self, "reranker_provider", None),
+                getattr(self, "reranker_model", None),
+                getattr(self, "reranker_uri", None),
+            ),
+            (
+                getattr(self, "people_provider", None),
+                getattr(self, "people_model", None),
+                getattr(self, "people_uri", None),
+            ),
+            (
+                getattr(self, "nli_provider", None),
+                getattr(self, "nli_model", None),
+                getattr(self, "nli_uri", None),
+            ),
         ]
 
         for provider_combo, model_combo, _ in widget_triplets:

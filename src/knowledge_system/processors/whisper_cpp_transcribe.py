@@ -97,15 +97,20 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             if model_name == "large":
                 try:
                     import psutil
+
                     available_gb = psutil.virtual_memory().available / (1024**3)
                     if available_gb < 6.0:
-                        logger.error(f"Not enough memory for large model. Available: {available_gb:.1f}GB, Required: 6GB+")
+                        logger.error(
+                            f"Not enough memory for large model. Available: {available_gb:.1f}GB, Required: 6GB+"
+                        )
                         if progress_callback:
-                            progress_callback({
-                                "status": "error",
-                                "model": model_name,
-                                "message": f"Not enough memory: {available_gb:.1f}GB available, need 6GB+"
-                            })
+                            progress_callback(
+                                {
+                                    "status": "error",
+                                    "model": model_name,
+                                    "message": f"Not enough memory: {available_gb:.1f}GB available, need 6GB+",
+                                }
+                            )
                         return None
                 except Exception as e:
                     logger.warning(f"Could not check memory: {e}")
@@ -122,16 +127,18 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
                 # Use safe downloader
                 from ..utils.safe_download import download_with_retry
-                
+
                 # Wrap callback to add model info
                 def wrapped_callback(info):
                     if progress_callback and isinstance(info, dict):
                         info["model"] = model_name
                         progress_callback(info)
-                
+
                 # Download with retry
-                success = download_with_retry(url, model_path, max_retries=3, progress_callback=wrapped_callback)
-                
+                success = download_with_retry(
+                    url, model_path, max_retries=3, progress_callback=wrapped_callback
+                )
+
                 if success:
                     if progress_callback:
                         progress_callback(
@@ -147,11 +154,13 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             except Exception as e:
                 logger.error(f"Failed to download model: {e}")
                 if progress_callback:
-                    progress_callback({
-                        "status": "error",
-                        "model": model_name,
-                        "message": f"Download failed: {str(e)}"
-                    })
+                    progress_callback(
+                        {
+                            "status": "error",
+                            "model": model_name,
+                            "message": f"Download failed: {str(e)}",
+                        }
+                    )
                 return None
 
         return model_path

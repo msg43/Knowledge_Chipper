@@ -2575,76 +2575,88 @@ class YouTubeTab(BaseTab):
     def _on_setting_changed(self):
         """Called when any setting changes to automatically save."""
         self._save_settings()
-    
+
     def _on_transcription_model_changed(self):
         """Handle transcription model selection change."""
         self._save_settings()
-        
+
         # Check if model needs to be downloaded
         selected_model = self.transcription_model_combo.currentText()
-        
+
         # Import model checking utilities
-        from ..utils.model_check import check_model_before_use
-        from ...utils.model_validator import get_model_validator
         from ...processors.whisper_cpp_transcribe import WhisperCppTranscribeProcessor
-        
+        from ...utils.model_validator import get_model_validator
+        from ..utils.model_check import check_model_before_use
+
         # Check if model is available
-        is_available, error_msg = check_model_before_use("Cloud Transcription", "whisper")
-        
+        is_available, error_msg = check_model_before_use(
+            "Cloud Transcription", "whisper"
+        )
+
         if is_available:
             # Check if specific model exists
             validator = get_model_validator()
             whisper_models = validator.check_whisper_models()
-            
+
             if not whisper_models.get(selected_model, False):
                 # Model not downloaded yet
                 self.append_log(f"📥 {selected_model} model not found, downloading...")
-                
+
                 # Check memory for large model
                 if selected_model == "large":
                     from ...utils.memory_monitor import get_memory_monitor
+
                     monitor = get_memory_monitor()
                     # Large model is ~3GB, need at least 6GB free
                     if not monitor.should_load_large_model(3.0):
-                        self.append_log("⚠️ Not enough memory for large model (need 6GB+ free)")
+                        self.append_log(
+                            "⚠️ Not enough memory for large model (need 6GB+ free)"
+                        )
                         # Reset to previous model
                         self.transcription_model_combo.setCurrentText("base")
                         return
-                
+
                 # Start download in background thread to prevent UI freeze
-                from PyQt6.QtCore import QThread, QObject, pyqtSignal
-                
+                from PyQt6.QtCore import QObject, QThread, pyqtSignal
+
                 class ModelDownloadThread(QThread):
                     progress = pyqtSignal(str)
                     finished = pyqtSignal(bool)
-                    
+
                     def __init__(self, model_name):
                         super().__init__()
                         self.model_name = model_name
-                        
+
                     def run(self):
                         try:
-                            processor = WhisperCppTranscribeProcessor(model=self.model_name)
-                            
+                            processor = WhisperCppTranscribeProcessor(
+                                model=self.model_name
+                            )
+
                             def progress_callback(info):
                                 if isinstance(info, dict):
-                                    message = info.get('message', '')
+                                    message = info.get("message", "")
                                     self.progress.emit(f"📥 {message}")
-                            
+
                             # Download model with timeout protection
-                            model_path = processor._download_model(self.model_name, progress_callback)
-                            self.finished.emit(model_path is not None and model_path.exists())
-                            
+                            model_path = processor._download_model(
+                                self.model_name, progress_callback
+                            )
+                            self.finished.emit(
+                                model_path is not None and model_path.exists()
+                            )
+
                         except Exception as e:
                             self.progress.emit(f"❌ Error: {str(e)}")
                             self.finished.emit(False)
-                
+
                 # Create and start download thread
                 self._download_thread = ModelDownloadThread(selected_model)
                 self._download_thread.progress.connect(self.append_log)
                 self._download_thread.finished.connect(
                     lambda success: self.append_log(
-                        f"✅ {selected_model} model downloaded successfully" if success 
+                        f"✅ {selected_model} model downloaded successfully"
+                        if success
                         else f"❌ Failed to download {selected_model} model"
                     )
                 )

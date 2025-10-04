@@ -1255,12 +1255,16 @@ class APIKeysTab(BaseTab):
                 # This is an actual update completion
                 if "Update downloaded successfully" in message:
                     # New flow: app will quit and install automatically
-                    self.status_label.setText("🚀 Update ready! App will restart automatically...")
-                    self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
-                    
+                    self.status_label.setText(
+                        "🚀 Update ready! App will restart automatically..."
+                    )
+                    self.status_label.setStyleSheet(
+                        "color: #4caf50; font-weight: bold;"
+                    )
+
                     # Show info dialog and then quit the app
                     from PyQt6.QtWidgets import QMessageBox
-                    
+
                     msg_box = QMessageBox(self)
                     msg_box.setWindowTitle("Update Ready")
                     msg_box.setText("Update downloaded successfully!")
@@ -1272,13 +1276,17 @@ class APIKeysTab(BaseTab):
                     msg_box.setIcon(QMessageBox.Icon.Information)
                     msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
                     msg_box.exec()
-                    
+
                     # Quit the app to allow PKG installation
                     self._quit_for_update()
                 else:
                     # Legacy flow: manual restart required
-                    self.status_label.setText("✨ Update completed! Please restart the app.")
-                    self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
+                    self.status_label.setText(
+                        "✨ Update completed! Please restart the app."
+                    )
+                    self.status_label.setStyleSheet(
+                        "color: #4caf50; font-weight: bold;"
+                    )
 
                     # Show restart dialog with auto-restart option
                     from PyQt6.QtWidgets import QMessageBox
@@ -1732,14 +1740,15 @@ class APIKeysTab(BaseTab):
     def _quit_for_update(self) -> None:
         """Quit the application to allow PKG installation."""
         from PyQt6.QtWidgets import QApplication
-        
+
         try:
             self.append_log("🚀 Quitting app for update installation...")
-            
+
             # Give a moment for the log to be written
             from PyQt6.QtCore import QTimer
+
             QTimer.singleShot(1000, QApplication.quit)
-            
+
         except Exception as e:
             self.append_log(f"❌ Failed to quit for update: {e}")
             # Force quit as fallback

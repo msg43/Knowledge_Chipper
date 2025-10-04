@@ -904,11 +904,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         """Start transcription process."""
         # Check if required models are available
         from ..utils.model_check import ensure_models_ready
-        
+
         if not ensure_models_ready(self.window(), "Local Transcription", ["whisper"]):
             # Models are downloading, notification shown
             return
-            
+
         # Reset progress tracking for new operation
         self._failed_files = set()
 

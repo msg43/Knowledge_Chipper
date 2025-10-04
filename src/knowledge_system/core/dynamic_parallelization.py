@@ -165,10 +165,10 @@ class DynamicParallelizationManager:
             max_ram_gb=memory_gb,
             max_cpu_cores=cpu_cores,
             model_ram_gb=model_ram_gb,
-        # KV Cache Budget (Qwen2.5-14B-instruct specific)
-        kv_cache_2k_ctx_gb=0.4,  # 2k ctx ≈ 0.3-0.5GB
-        kv_cache_4k_ctx_gb=0.9,  # 4k ctx ≈ 0.8-1.0GB
-        kv_cache_8k_ctx_gb=1.8,  # 8k ctx ≈ 1.6-2.0GB
+            # KV Cache Budget (Qwen2.5-14B-instruct specific)
+            kv_cache_2k_ctx_gb=0.4,  # 2k ctx ≈ 0.3-0.5GB
+            kv_cache_4k_ctx_gb=0.9,  # 4k ctx ≈ 0.8-1.0GB
+            kv_cache_8k_ctx_gb=1.8,  # 8k ctx ≈ 1.6-2.0GB
             # Dynamic Thread Management
             max_total_inference_threads=int(max_total_threads),
             max_threads_per_worker=self._calculate_max_threads_per_worker(
