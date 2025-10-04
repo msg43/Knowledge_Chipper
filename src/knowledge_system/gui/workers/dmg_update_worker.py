@@ -676,7 +676,7 @@ if [ -d "$APP_PATH" ]; then
     # Clean up the downloaded PKG
     echo "🧹 Cleaning up downloaded files..."
     rm -f "$PKG_PATH"
-    rm -f "$(dirname "$PKG_PATH")"
+    rm -rf "$(dirname "$PKG_PATH")"
 
     # Clean up update marker
     echo "🧹 Cleaning up update marker..."
@@ -691,21 +691,40 @@ if [ -d "$APP_PATH" ]; then
     echo "App path: $APP_PATH"
 
     # Try multiple methods to launch the app
-    if open "$APP_PATH"; then
+    echo "Attempting to launch app..."
+    if open "$APP_PATH" 2>/dev/null; then
         echo "✅ App launched successfully with 'open' command"
+        # Show success notification
+        osascript -e 'display notification "Skip the Podcast Desktop has been updated and is launching!" with title "Update Complete"'
     else
         echo "⚠️  'open' command failed, trying alternative method..."
         # Alternative launch method
         if [ -f "$APP_PATH/Contents/MacOS/launch" ]; then
             echo "Trying to launch via launch script..."
             "$APP_PATH/Contents/MacOS/launch" &
+            sleep 1
+            if pgrep -f "Skip the Podcast Desktop" >/dev/null; then
+                echo "✅ App launched successfully via launch script"
+                osascript -e 'display notification "Skip the Podcast Desktop has been updated and is launching!" with title "Update Complete"'
+            else
+                echo "❌ Launch script failed"
+                osascript -e 'display dialog "Update completed but app failed to launch. Please manually open Skip the Podcast Desktop from Applications." buttons {"OK"} default button "OK" with icon caution'
+            fi
         else
             echo "Trying to launch via direct executable..."
             "$APP_PATH/Contents/MacOS/Skip the Podcast Desktop" &
+            sleep 1
+            if pgrep -f "Skip the Podcast Desktop" >/dev/null; then
+                echo "✅ App launched successfully via direct executable"
+                osascript -e 'display notification "Skip the Podcast Desktop has been updated and is launching!" with title "Update Complete"'
+            else
+                echo "❌ Direct executable failed"
+                osascript -e 'display dialog "Update completed but app failed to launch. Please manually open Skip the Podcast Desktop from Applications." buttons {"OK"} default button "OK" with icon caution'
+            fi
         fi
     fi
-
-    echo "✅ Update complete! Skip the Podcast Desktop v$VERSION should be launching."
+    
+    echo "✅ Update complete! Skip the Podcast Desktop v$VERSION installation finished."
 else
     echo "❌ Installation failed - app not found at $APP_PATH"
     echo "Checking what's in /Applications:"
