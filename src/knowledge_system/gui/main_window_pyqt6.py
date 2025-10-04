@@ -289,7 +289,7 @@ class MainWindow(QMainWindow):
         # Only add File Watcher tab if enabled in settings
         if settings.gui_features.show_file_watcher_tab:
             watcher_tab = WatcherTab(self)
-            self.tabs.addTab(watcher_tab, "File Watcher")
+            self.tabs.addTab(watcher_tab, "Monitor")
 
         # Cloud uploads (manual) tab
         try:

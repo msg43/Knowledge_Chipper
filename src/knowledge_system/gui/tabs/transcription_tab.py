@@ -279,6 +279,13 @@ class EnhancedTranscriptionWorker(QThread):
                         }
                         self.progress_updated.emit(progress_data)
                         self.transcription_step_updated.emit(step_msg, 100)
+
+                        # System 2: Handle auto-process if enabled
+                        if (
+                            self.gui_settings.get("auto_process", False)
+                            and result.success
+                        ):
+                            self._handle_auto_process(file_path, transcript_data)
                     else:
                         # Emit progress update with failure
                         progress_data = {
@@ -310,6 +317,45 @@ class EnhancedTranscriptionWorker(QThread):
 
         except Exception as e:
             self.processing_error.emit(str(e))
+
+    def _handle_auto_process(self, file_path: str, transcript_data: dict) -> None:
+        """Handle System 2 auto-process pipeline."""
+        try:
+            # Import System 2 orchestrator
+            from ...core.system2_orchestrator import JobType, System2Orchestrator
+            from ...database import DatabaseService
+
+            # Extract video ID from file path or generate one
+            video_id = Path(file_path).stem
+
+            # Create orchestrator instance
+            orchestrator = System2Orchestrator()
+
+            # Create and execute a pipeline job
+            job_id = orchestrator.create_job(
+                JobType.PIPELINE,
+                video_id,
+                config={
+                    "source": "local_file",
+                    "file_path": file_path,
+                    "transcript_data": transcript_data,
+                },
+                auto_process=True,
+            )
+
+            self.transcription_step_updated.emit(
+                f"🚀 Starting System 2 pipeline for {Path(file_path).name}", 0
+            )
+
+            # Execute in background (orchestrator handles the rest)
+            # In a real implementation, this would be queued
+            logger.info(f"System 2 pipeline initiated for {video_id} (job: {job_id})")
+
+        except Exception as e:
+            logger.error(f"Failed to initiate System 2 pipeline: {e}")
+            self.transcription_step_updated.emit(
+                f"❌ Failed to start pipeline: {str(e)}", 0
+            )
 
     def stop(self) -> None:
         """Stop the transcription process."""
@@ -343,6 +389,10 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # Settings section
         settings_section = self._create_settings_section()
         layout.addWidget(settings_section)
+
+        # System 2 Auto-process section
+        auto_process_section = self._create_auto_process_section()
+        layout.addWidget(auto_process_section)
 
         # Performance section removed - dynamic resource management handles this now
 
@@ -430,6 +480,31 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         return group
 
     # Hardware recommendations section moved to Settings tab
+
+    def _create_auto_process_section(self) -> QGroupBox:
+        """Create the System 2 auto-process section."""
+        group = QGroupBox("🚀 System 2 Pipeline")
+        layout = QVBoxLayout(group)
+
+        # Auto-process checkbox
+        self.auto_process_checkbox = QCheckBox(
+            "Process automatically through entire pipeline"
+        )
+        self.auto_process_checkbox.setToolTip(
+            "When enabled, transcribed files will automatically continue through:\n"
+            "1. Mining (extract claims, people, jargon, mental models)\n"
+            "2. Flagship evaluation (rank and tier claims)\n"
+            "3. Upload to cloud (if configured)\n\n"
+            "This runs the complete knowledge extraction pipeline without manual intervention."
+        )
+        layout.addWidget(self.auto_process_checkbox)
+
+        # Pipeline status label
+        self.pipeline_status_label = QLabel("Ready to process")
+        self.pipeline_status_label.setStyleSheet("color: #666;")
+        layout.addWidget(self.pipeline_status_label)
+
+        return group
 
     def _create_settings_section(self) -> QGroupBox:
         """Create the transcription settings section."""
@@ -857,6 +932,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         # Get transcription settings
         gui_settings = self._get_transcription_settings()
+
+        # Add auto-process setting
+        gui_settings["auto_process"] = self.auto_process_checkbox.isChecked()
 
         # Start transcription worker
         self.transcription_worker = EnhancedTranscriptionWorker(

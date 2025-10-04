@@ -26,6 +26,7 @@ from ..processors import (
 from ..processors.hce.types import EpisodeBundle, Segment
 from ..processors.hce.unified_pipeline import UnifiedHCEPipeline
 from ..utils.hardware_detection import HardwareDetector
+from .llm_adapter import LLMAdapter
 
 logger = get_logger(__name__)
 
@@ -72,6 +73,9 @@ class System2Orchestrator:
         self.db_service = db_service or DatabaseService()
         self.hardware_detector = HardwareDetector()
         self.hardware_specs = self.hardware_detector.detect_hardware()
+
+        # Initialize LLM adapter for centralized model calls
+        self.llm_adapter = LLMAdapter(self.db_service)
 
         # Initialize processors
         self._init_processors()
@@ -321,13 +325,19 @@ class System2Orchestrator:
 
         # Initialize unified miner if needed
         if not hasattr(self, "_unified_miner"):
-            from ..processors.hce.models.llm_any import AnyLLM
-            from ..processors.hce.unified_miner import UnifiedMiner
+            from ..processors.hce.unified_miner_system2 import UnifiedMinerSystem2
 
             # Get miner model from config or use default
-            miner_model = config.get("miner_model", "openai:gpt-4")
-            llm = AnyLLM(miner_model)
-            self._unified_miner = UnifiedMiner(llm)
+            miner_config = config.get("miner_model", "openai:gpt-4")
+            # Parse provider and model from config (format: "provider:model")
+            if ":" in miner_config:
+                provider, model = miner_config.split(":", 1)
+            else:
+                provider, model = "openai", miner_config
+
+            self._unified_miner = UnifiedMinerSystem2(
+                llm_adapter=self.llm_adapter, provider=provider, model=model
+            )
 
         # Convert to segments for HCE
         segments = []
@@ -367,7 +377,9 @@ class System2Orchestrator:
             # Mine each segment
             for segment in batch:
                 try:
-                    miner_output = self._unified_miner.mine_segment(segment)
+                    miner_output = self._unified_miner.mine_segment(
+                        segment, job_run.run_id
+                    )
 
                     # Track LLM request
                     self._track_llm_request(
