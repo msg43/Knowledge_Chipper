@@ -74,33 +74,42 @@ if [ -z "$DEVELOPER_ID_APPLICATION" ]; then
     echo "Found: $DEVELOPER_ID_APPLICATION"
 fi
 
-# Prompt for notarization credentials if not set
-if [ -z "$APPLE_ID" ]; then
-    read -p "Enter your Apple ID email: " APPLE_ID
-fi
-
-if [ -z "$APPLE_TEAM_ID" ]; then
-    read -p "Enter your Team ID (found in developer.apple.com): " APPLE_TEAM_ID
-fi
-
-if [ -z "$APP_PASSWORD" ]; then
-    echo "You need an app-specific password for notarization"
-    echo "Create one at: https://appleid.apple.com/account/manage"
-    read -s -p "Enter app-specific password: " APP_PASSWORD
-    echo
-fi
-
-# Store credentials in keychain for future use (optional)
-echo ""
-read -p "Store credentials in keychain for future use? (y/N): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    xcrun notarytool store-credentials "Skip-the-Podcast-Notary" \
-        --apple-id "$APPLE_ID" \
-        --team-id "$APPLE_TEAM_ID" \
-        --password "$APP_PASSWORD"
+# Check if we already have stored credentials
+if xcrun notarytool history --keychain-profile "Skip-the-Podcast-Notary" >/dev/null 2>&1; then
+    echo "Using stored notarization credentials: Skip-the-Podcast-Notary"
     NOTARY_PROFILE="Skip-the-Podcast-Notary"
+else
+    # Prompt for notarization credentials if not set
+    if [ -z "$APPLE_ID" ]; then
+        read -p "Enter your Apple ID email: " APPLE_ID
+    fi
+
+    if [ -z "$APPLE_TEAM_ID" ]; then
+        read -p "Enter your Team ID (found in developer.apple.com): " APPLE_TEAM_ID
+    fi
+
+    if [ -z "$APP_PASSWORD" ]; then
+        echo "You need an app-specific password for notarization"
+        echo "Create one at: https://appleid.apple.com/account/manage"
+        read -s -p "Enter app-specific password: " APP_PASSWORD
+        echo
+    fi
+
+    # Store credentials in keychain for future use (optional)
+    echo ""
+    read -p "Store credentials in keychain for future use? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        xcrun notarytool store-credentials "Skip-the-Podcast-Notary" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APP_PASSWORD"
+        NOTARY_PROFILE="Skip-the-Podcast-Notary"
+    fi
 fi
+
+# Clean any problematic .rsls files first
+find . -name "*.rsls" -o -name "*.rslsc" -exec rm -f {} \; 2>/dev/null || true
 
 # Build the app bundle first
 echo -e "\n${BLUE}📦 Building app bundle...${NC}"
@@ -127,6 +136,10 @@ print_status "App bundle signed successfully"
 # Build the component package
 echo -e "\n${BLUE}📦 Building component package...${NC}"
 COMPONENT_PKG="$PROJECT_ROOT/build_pkg/component.pkg"
+
+# Remove any .rsls files that might interfere with package creation
+rm -f "$PROJECT_ROOT/build_pkg"/*.rsls "$PROJECT_ROOT/build_pkg"/*.rslsc 2>/dev/null || true
+
 pkgbuild --root "$PROJECT_ROOT/build_pkg/package_root" \
          --scripts "$PROJECT_ROOT/build_pkg/scripts" \
          --identifier "com.knowledgechipper.skipthepodcast" \

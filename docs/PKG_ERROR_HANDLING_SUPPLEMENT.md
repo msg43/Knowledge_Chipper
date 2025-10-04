@@ -348,7 +348,7 @@ verify_ollama_installation() {
     fi
     
     # Verify model installation
-    local model_name="$1"  # e.g., "llama3.2:3b"
+    local model_name="$1"  # e.g., "qwen2.5:7b"
     if ! ollama list | grep -q "$model_name"; then
         echo "❌ Model $model_name not properly installed"
         return 1

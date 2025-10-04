@@ -378,6 +378,47 @@ class YouTubeProcessingConfig(BaseModel):
     api_batch_delay_min: float = Field(default=1.0, ge=0.0, le=10.0)
     api_batch_delay_max: float = Field(default=3.0, ge=0.0, le=10.0)
 
+    # Intelligent pacing settings
+    enable_intelligent_pacing: bool = Field(
+        default=True,
+        description="Enable intelligent pacing to optimize download timing based on processing pipeline",
+    )
+
+    pacing_base_delay: float = Field(
+        default=5.0,
+        ge=1.0,
+        le=30.0,
+        description="Base delay in seconds between downloads for intelligent pacing",
+    )
+
+    pacing_min_delay: float = Field(
+        default=2.0,
+        ge=1.0,
+        le=15.0,
+        description="Minimum delay in seconds between downloads",
+    )
+
+    pacing_max_delay: float = Field(
+        default=15.0,
+        ge=5.0,
+        le=60.0,
+        description="Maximum delay in seconds between downloads",
+    )
+
+    pacing_buffer_multiplier: float = Field(
+        default=1.5,
+        ge=1.0,
+        le=3.0,
+        description="Multiplier for download speed to stay ahead of processing pipeline",
+    )
+
+    pacing_rate_limit_multiplier: float = Field(
+        default=2.0,
+        ge=1.0,
+        le=5.0,
+        description="Multiplier for delays when rate limiting is detected",
+    )
+
 
 class MOCConfig(BaseModel):
     """MOC (Maps of Content) configuration."""

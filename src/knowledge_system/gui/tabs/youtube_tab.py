@@ -936,7 +936,7 @@ class YouTubeTab(BaseTab):
         self.transcription_model_combo.addItems(get_valid_whisper_models())
         self.transcription_model_combo.setCurrentText("base")
         self.transcription_model_combo.currentTextChanged.connect(
-            self._on_setting_changed
+            self._on_transcription_model_changed
         )
         self.transcription_model_combo.setToolTip(
             "<b>Transcription Model</b> - Choose Whisper model for diarization<br/><br/>"
@@ -1027,6 +1027,23 @@ class YouTubeTab(BaseTab):
             "• Falls back to direct downloads if PacketStream unavailable"
         )
         layout.addWidget(self.parallel_downloads_checkbox, 4, 0, 1, 3)
+
+        # Intelligent pacing checkbox - new feature
+        self.intelligent_pacing_checkbox = QCheckBox(
+            "Enable intelligent pacing (recommended)"
+        )
+        self.intelligent_pacing_checkbox.setChecked(True)  # Enabled by default
+        self.intelligent_pacing_checkbox.toggled.connect(self._on_setting_changed)
+        self.intelligent_pacing_checkbox.setToolTip(
+            "Intelligent Pacing - Optimize download timing based on processing pipeline\n"
+            "• Automatically spaces downloads to stay ahead of summarization\n"
+            "• Prevents overwhelming YouTube's bot detection systems\n"
+            "• Adapts to processing speed - longer delays when processing is slow\n"
+            "• Increases delays when rate limiting is detected\n"
+            "• Essential for processing 1000+ videos without getting blocked\n"
+            "• Recommended for large batch operations"
+        )
+        layout.addWidget(self.intelligent_pacing_checkbox, 5, 0, 1, 3)
 
         group.setLayout(layout)
         return group
@@ -1647,6 +1664,7 @@ class YouTubeTab(BaseTab):
             "transcription_model": self.transcription_model_combo.currentText(),  # Pass selected model
             "download_all_mode": self.download_all_checkbox.isChecked(),
             "parallel_downloads": self.parallel_downloads_checkbox.isChecked(),
+            "enable_intelligent_pacing": self.intelligent_pacing_checkbox.isChecked(),
         }
 
         # Choose worker based on processing requirements
@@ -2484,6 +2502,11 @@ class YouTubeTab(BaseTab):
                     self.tab_name, "parallel_downloads", True
                 )
             )
+            self.intelligent_pacing_checkbox.setChecked(
+                self.gui_settings.get_checkbox_state(
+                    self.tab_name, "enable_intelligent_pacing", True
+                )
+            )
 
             # Load radio button state (use checkbox method for boolean values)
             url_radio_selected = self.gui_settings.get_checkbox_state(
@@ -2531,6 +2554,11 @@ class YouTubeTab(BaseTab):
                 "parallel_downloads",
                 self.parallel_downloads_checkbox.isChecked(),
             )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name,
+                "enable_intelligent_pacing",
+                self.intelligent_pacing_checkbox.isChecked(),
+            )
 
             # Save radio button state (use checkbox method for boolean values)
             self.gui_settings.set_checkbox_state(
@@ -2547,6 +2575,94 @@ class YouTubeTab(BaseTab):
     def _on_setting_changed(self):
         """Called when any setting changes to automatically save."""
         self._save_settings()
+
+    def _on_transcription_model_changed(self):
+        """Handle transcription model selection change."""
+        self._save_settings()
+
+        # Check if model needs to be downloaded
+        selected_model = self.transcription_model_combo.currentText()
+
+        # Import model checking utilities
+        from ...processors.whisper_cpp_transcribe import WhisperCppTranscribeProcessor
+        from ...utils.model_validator import get_model_validator
+        from ..utils.model_check import check_model_before_use
+
+        # Check if model is available
+        is_available, error_msg = check_model_before_use(
+            "Cloud Transcription", "whisper"
+        )
+
+        if is_available:
+            # Check if specific model exists
+            validator = get_model_validator()
+            whisper_models = validator.check_whisper_models()
+
+            if not whisper_models.get(selected_model, False):
+                # Model not downloaded yet
+                self.append_log(f"📥 {selected_model} model not found, downloading...")
+
+                # Check memory for large model
+                if selected_model == "large":
+                    from ...utils.memory_monitor import get_memory_monitor
+
+                    monitor = get_memory_monitor()
+                    # Large model is ~3GB, need at least 6GB free
+                    if not monitor.should_load_large_model(3.0):
+                        self.append_log(
+                            "⚠️ Not enough memory for large model (need 6GB+ free)"
+                        )
+                        # Reset to previous model
+                        self.transcription_model_combo.setCurrentText("base")
+                        return
+
+                # Start download in background thread to prevent UI freeze
+                from PyQt6.QtCore import QObject, QThread, pyqtSignal
+
+                class ModelDownloadThread(QThread):
+                    progress = pyqtSignal(str)
+                    finished = pyqtSignal(bool)
+
+                    def __init__(self, model_name):
+                        super().__init__()
+                        self.model_name = model_name
+
+                    def run(self):
+                        try:
+                            processor = WhisperCppTranscribeProcessor(
+                                model=self.model_name
+                            )
+
+                            def progress_callback(info):
+                                if isinstance(info, dict):
+                                    message = info.get("message", "")
+                                    self.progress.emit(f"📥 {message}")
+
+                            # Download model with timeout protection
+                            model_path = processor._download_model(
+                                self.model_name, progress_callback
+                            )
+                            self.finished.emit(
+                                model_path is not None and model_path.exists()
+                            )
+
+                        except Exception as e:
+                            self.progress.emit(f"❌ Error: {str(e)}")
+                            self.finished.emit(False)
+
+                # Create and start download thread
+                self._download_thread = ModelDownloadThread(selected_model)
+                self._download_thread.progress.connect(self.append_log)
+                self._download_thread.finished.connect(
+                    lambda success: self.append_log(
+                        f"✅ {selected_model} model downloaded successfully"
+                        if success
+                        else f"❌ Failed to download {selected_model} model"
+                    )
+                )
+                self._download_thread.start()
+            else:
+                self.append_log(f"✅ {selected_model} model is already available")
 
     def validate_inputs(self) -> bool:
         """Validate inputs before processing."""

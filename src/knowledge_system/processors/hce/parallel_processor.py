@@ -114,8 +114,8 @@ class ParallelHCEProcessor:
 
         # Use the more conservative limit
         optimal = min(
-            memory_based_max, cpu_based_max, 8
-        )  # Cap at 8 for initial implementation
+            memory_based_max, cpu_based_max, 3
+        )  # Cap at 3 for OpenAI API stability
 
         logger.info(
             f"Calculated optimal workers: {optimal} "
@@ -169,7 +169,13 @@ class ParallelHCEProcessor:
                 self.active_tasks += 1
 
             # Process completed futures and submit new ones
-            while submitted_count < len(items) or future_to_index:
+            max_iterations = len(items) * 10  # Safety limit to prevent infinite loops
+            iteration_count = 0
+
+            while (
+                submitted_count < len(items) or future_to_index
+            ) and iteration_count < max_iterations:
+                iteration_count += 1
                 # Check memory pressure before submitting new tasks
                 pressure_level, message = self.memory_handler.check_memory_pressure()
 
@@ -210,19 +216,27 @@ class ParallelHCEProcessor:
 
                 # Wait for next completion
                 if future_to_index:
-                    completed_future = next(
-                        as_completed(future_to_index.keys(), timeout=1)
-                    )
-                    index = future_to_index.pop(completed_future)
-
                     try:
-                        results[index] = completed_future.result()
-                        completed_count += 1
-                    except Exception as e:
-                        logger.error(f"Task {index} failed: {e}")
-                        results[index] = None
+                        # Use longer timeout for LLM API calls - they can take 30+ seconds
+                        completed_future = next(
+                            as_completed(future_to_index.keys(), timeout=60)
+                        )
+                        index = future_to_index.pop(completed_future)
 
-                    self.active_tasks -= 1
+                        try:
+                            results[index] = completed_future.result()
+                            completed_count += 1
+                        except Exception as e:
+                            logger.error(f"Task {index} failed: {e}")
+                            results[index] = None
+
+                        self.active_tasks -= 1
+                    except StopIteration:
+                        # No futures completed within timeout - continue loop
+                        logger.debug(
+                            "No futures completed within timeout, continuing..."
+                        )
+                        continue
 
                     # Submit next task if available and memory allows
                     if submitted_count < len(items) and pressure_level < 3:
@@ -236,6 +250,19 @@ class ParallelHCEProcessor:
                         progress_callback(
                             f"Processed {completed_count}/{len(items)} items"
                         )
+
+        # Handle any remaining unfinished futures
+        if future_to_index:
+            logger.warning(
+                f"Cancelling {len(future_to_index)} unfinished futures due to timeout or iteration limit"
+            )
+            for future in future_to_index.keys():
+                future.cancel()
+
+        if iteration_count >= max_iterations:
+            logger.error(
+                f"Parallel processing stopped due to iteration limit ({max_iterations})"
+            )
 
         logger.info(
             f"Parallel processing completed: {completed_count}/{len(items)} successful"

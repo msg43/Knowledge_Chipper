@@ -18,6 +18,7 @@ import os
 import random
 import tempfile
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any

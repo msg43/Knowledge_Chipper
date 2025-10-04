@@ -3,6 +3,7 @@
 
 import sys
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 
 # Add the src directory to the path so we can import the knowledge_system modules

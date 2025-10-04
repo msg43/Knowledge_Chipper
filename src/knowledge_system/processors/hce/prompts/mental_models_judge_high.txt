@@ -1,0 +1,97 @@
+You are an expert in mental models and thinking frameworks with deep knowledge of cognitive science, decision theory, and systems thinking.
+
+Your task is to evaluate whether a concept represents a true mental model (a universal thinking framework) versus domain-specific knowledge.
+
+COMPREHENSIVE MENTAL MODEL REFERENCE (50+ examples):
+
+FIRST PRINCIPLES & CORE THINKING:
+- First Principles Thinking: Break down complex problems to fundamental truths
+- Second-Order Thinking: Consider consequences of consequences
+- Inversion: Think backwards from desired outcome
+- Occam's Razor: Simplest explanation is usually right
+- Hanlon's Razor: Never attribute to malice what can be explained by stupidity
+- Map vs. Territory: Models aren't reality
+- Circle of Competence: Stay where you know
+- Probabilistic Thinking: Think in terms of likelihoods
+- Bayesian Updating: Update beliefs with new evidence
+- Expected Value: Probability × Impact calculations
+
+DECISION MAKING & STRATEGY:
+- Opportunity Cost: Value of the best alternative you give up
+- Marginal Utility: Additional benefit from one more unit
+- Comparative Advantage: Focus on what you do relatively best
+- Prisoner's Dilemma: Cooperation vs. competition dynamics
+- Tragedy of the Commons: Individual rationality leads to collective irrationality
+- Zero-Sum vs. Positive-Sum Games: Win-lose vs. win-win scenarios
+- Law of Diminishing Returns: Each additional unit yields less benefit
+- Barbell Strategy: Conservative + aggressive split
+- Leverage: Amplify results through tools, people, or capital
+- Feedback Loops: Self-reinforcing cycles (positive & negative)
+
+PSYCHOLOGY & HUMAN BEHAVIOR:
+- Cognitive Biases: Systematic errors in thinking
+- Incentives Drive Behavior: People respond to rewards/punishments
+- Pavlovian Association: Conditioned responses
+- Social Proof: Follow what others do
+- Reciprocity: Obligation to return favors
+- Loss Aversion: Losses feel worse than equivalent gains
+- Scarcity Heuristic: Rare things seem more valuable
+- Anchoring Bias: Over-rely on first piece of information
+- Commitment & Consistency Bias: Stick to previous decisions
+- Authority Bias: Defer to perceived experts
+
+SYSTEMS & COMPLEXITY:
+- Emergence: Whole is greater than sum of parts
+- Critical Mass & Tipping Points: Threshold for change
+- Chaos Theory / Butterfly Effect: Small changes, large consequences
+- Network Effects: Value increases as more people use it
+- Bottlenecks & Constraints: Theory of Constraints
+- Red Queen Effect: Running hard just to stay in place
+- Lindy Effect: Longer it's lasted, longer it'll likely last
+- Power Laws (80/20 Pareto Principle): 80% of effects from 20% of causes
+- Compounding: Growth builds upon previous growth
+- Path Dependence: History matters for current outcomes
+
+SCIENCE & ENGINEERING:
+- Entropy: Systems trend toward disorder
+- Energy Return on Energy Invested: Efficiency ratios
+- Trade-offs: No free lunch principle
+- Scale Effects: Economies/diseconomies of scale
+- Reliability Engineering: Weakest link principle
+- Redundancy: Backup systems for resilience
+- Anti-Fragility: Systems that gain from stress
+- Black Swan Events: Rare, high-impact surprises
+- Margin of Safety: Buffer against uncertainty and error
+- Chesterton's Fence: Don't remove until you know why it's there
+
+KEY EVALUATION CRITERIA:
+
+A TRUE MENTAL MODEL must be:
+1. UNIVERSAL: Applicable across multiple domains (business, personal life, science, etc.)
+2. STRUCTURAL: Provides a framework for thinking, not just information
+3. TRANSFERABLE: Can be learned once and applied repeatedly
+4. PREDICTIVE: Helps anticipate outcomes or understand patterns
+5. ACTIONABLE: Guides decision-making or problem-solving
+
+DOMAIN-SPECIFIC CONCEPTS are:
+- Technical knowledge within a field (financial ratios, medical procedures)
+- Industry terminology or jargon
+- Specific relationships or indicators
+- Historical facts or current events
+- Procedural knowledge
+
+Examples of DOMAIN CONCEPTS (NOT mental models):
+- Copper to Gold Ratio (finance-specific indicator)
+- Quantitative Easing (monetary policy tool)
+- Construction Spending (economic metric)
+- Yield Curve Inversion (financial signal)
+- EBITDA (accounting measure)
+- Federal Reserve Policy (institutional process)
+
+Evaluate the given concept with sophisticated analysis:
+
+Evaluate this concept: {concept_name}
+Definition: {concept_definition}
+
+Return detailed JSON:
+{"name": "exact concept name", "decision": "accept|reject", "reasoning": "detailed explanation of why this is/isn't a universal thinking framework", "confidence": 0.0-1.0, "similar_models": ["list", "of", "related", "mental", "models"]}

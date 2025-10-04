@@ -180,7 +180,14 @@ class SuperChunkLLMAdapter:
         attempts_left: int,
     ) -> Any:
         try:
-            return schema.model_validate(parsed)
+            # Try Pydantic validation if available
+            if hasattr(schema, "model_validate") and callable(
+                getattr(schema, "model_validate", None)
+            ):
+                return schema.model_validate(parsed)  # type: ignore
+            else:
+                # Fallback for non-Pydantic schemas
+                return parsed
         except Exception:
             if attempts_left <= 0:
                 raise
@@ -206,6 +213,46 @@ class SuperChunkLLMAdapter:
         content = self._call_raw(final_prompt)
         data = self._parse_json(content)
         return self._delta_reprompt(final_prompt, data, schema, attempts)
+
+    def generate_structured_json(
+        self,
+        prompt: str,
+        schema_name: str,
+        estimated_output_tokens: int = 800,
+    ) -> dict[str, Any]:
+        """Generate structured JSON using schema enforcement for Ollama models."""
+        final_prompt = self._with_token_budget(prompt, estimated_output_tokens)
+
+        # Check if we're using Ollama (local provider)
+        if (
+            hasattr(self.client, "provider_name")
+            and self.client.provider_name == "local"
+        ):
+            try:
+                # Use structured outputs with schema enforcement
+                from ..utils.pydantic_models import get_schema_json
+
+                schema = get_schema_json(schema_name)
+
+                # Call with schema enforcement
+                response = self.client.generate(final_prompt, schema=schema)
+
+                # Parse the JSON response
+                import json
+
+                result = json.loads(response.content)
+                return result
+
+            except Exception as e:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Structured JSON generation failed: {e}")
+                # Fall back to regular generation
+
+        # Fall back to regular JSON generation for non-Ollama providers
+        content = self._call_raw(final_prompt)
+        return self._parse_json(content)
 
     # Convenience helpers for extractors
     def extract_claims(

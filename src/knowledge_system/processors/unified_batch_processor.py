@@ -213,7 +213,7 @@ class UnifiedBatchProcessor:
         return final_concurrency
 
     def _calculate_optimal_batch_size(self) -> int:
-        """Calculate optimal batch size based on available disk space."""
+        """Calculate optimal batch size based on available disk space and intelligent pacing."""
         try:
             output_dir = Path(self.config.get("output_dir", "."))
             disk_usage = shutil.disk_usage(output_dir)
@@ -226,6 +226,55 @@ class UnifiedBatchProcessor:
             available_for_audio = max(0, available_gb - 2.0)  # Reserve 2GB
             max_simultaneous_files = int(available_for_audio / space_per_audio_gb)
             batch_size = max(10, min(100, max_simultaneous_files // 2))
+
+            # Intelligent pacing adjustment
+            try:
+                from ..utils.intelligent_pacing import (
+                    create_pacing_config_from_settings,
+                    get_pacing_manager,
+                )
+
+                pacing_config = create_pacing_config_from_settings()
+                pacing_manager = get_pacing_manager(pacing_config)
+                pacing_status = pacing_manager.get_pacing_status()
+
+                # Adjust batch size based on processing pipeline
+                processing_ratio = pacing_status.get(
+                    "processing_to_download_ratio", 1.0
+                )
+                if processing_ratio > 5.0:  # Processing is much slower
+                    batch_size = max(3, batch_size // 2)  # Smaller batches
+                    logger.info(
+                        f"Reducing batch size to {batch_size} due to slow processing pipeline"
+                    )
+                elif processing_ratio > 2.0:  # Processing is slower
+                    batch_size = max(
+                        5, int(batch_size * 0.75)
+                    )  # Slightly smaller batches
+                    logger.info(
+                        f"Adjusting batch size to {batch_size} due to processing pipeline timing"
+                    )
+
+                # Adjust for rate limiting
+                rate_limit_freq = pacing_status.get("rate_limit_frequency", 0.0)
+                if rate_limit_freq > 1.0:  # Frequent rate limiting
+                    batch_size = max(2, batch_size // 3)  # Much smaller batches
+                    logger.info(
+                        f"Reducing batch size to {batch_size} due to rate limiting"
+                    )
+
+                # Adjust for processing queue size
+                queue_size = pacing_status.get("processing_queue_size", 0)
+                if queue_size > 10:  # Large processing queue
+                    batch_size = max(2, batch_size // 2)  # Smaller batches
+                    logger.info(
+                        f"Reducing batch size to {batch_size} due to large processing queue ({queue_size})"
+                    )
+
+            except Exception as pacing_error:
+                logger.debug(
+                    f"Could not get pacing status for batch size adjustment: {pacing_error}"
+                )
 
             logger.info(
                 f"Calculated batch size: {batch_size} (based on {available_gb:.1f}GB available)"

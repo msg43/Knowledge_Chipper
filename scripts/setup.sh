@@ -222,11 +222,11 @@ else
     sleep 3
 
     # Download MVP model
-    echo -e "${BLUE}📥 Downloading MVP AI model (llama3.2:3b)...${NC}"
-    ollama pull llama3.2:3b || echo -e "${YELLOW}⚠️  Download failed, will retry...${NC}"
+    echo -e "${BLUE}📥 Downloading MVP AI model (qwen2.5:7b)...${NC}"
+    ollama pull qwen2.5:7b || echo -e "${YELLOW}⚠️  Download failed, will retry...${NC}"
 
     # Verify installation
-    if ollama list | grep -q "llama3.2:3b"; then
+    if ollama list | grep -q "qwen2.5:7b"; then
         echo -e "${GREEN}✅ MVP AI model ready${NC}"
     else
         echo -e "${YELLOW}⚠️  MVP AI model not found, may need manual installation${NC}"

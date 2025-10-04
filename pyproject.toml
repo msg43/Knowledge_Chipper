@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "knowledge-system"
-version = "3.2.35"
+version = "3.2.74"
 description = "Skip the Podcast Desktop - A comprehensive knowledge management system for macOS that transforms videos, audio files, and documents into organized, searchable knowledge."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -118,9 +118,9 @@ knowledge-system-gui = "knowledge_system.gui:main"
 ks-gui = "knowledge_system.gui:main"
 
 [project.urls]
-"Homepage" = "https://github.com/msg43/Knowledge_Chipper"
-"Bug Reports" = "https://github.com/msg43/Knowledge_Chipper/issues"
-"Source" = "https://github.com/msg43/Knowledge_Chipper"
+"Homepage" = "https://github.com/msg43/skipthepodcast.com"
+"Bug Reports" = "https://github.com/msg43/skipthepodcast.com/issues"
+"Source" = "https://github.com/msg43/skipthepodcast.com"
 
 [tool.setuptools.packages.find]
 where = ["src"]

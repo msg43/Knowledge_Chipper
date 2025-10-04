@@ -902,6 +902,13 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
     def _start_processing(self) -> None:
         """Start transcription process."""
+        # Check if required models are available
+        from ..utils.model_check import ensure_models_ready
+
+        if not ensure_models_ready(self.window(), "Local Transcription", ["whisper"]):
+            # Models are downloading, notification shown
+            return
+
         # Reset progress tracking for new operation
         self._failed_files = set()
 
@@ -1602,6 +1609,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                                 self.download_progress.emit(
                                     self.model_name, percent, message
                                 )
+                            elif status == "error":
+                                # Download failed (e.g., not enough memory)
+                                self.validation_completed.emit(
+                                    False, self.model_name, message
+                                )
+                                return
 
                     # Create processor to trigger model validation/download
                     processor = WhisperCppTranscribeProcessor(

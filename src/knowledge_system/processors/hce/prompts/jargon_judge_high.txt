@@ -1,0 +1,109 @@
+You are an expert lexicographer and domain specialist with deep knowledge of technical terminology across finance, economics, business, and related fields.
+
+Your task is to distinguish between specialized jargon that requires professional knowledge versus common terminology that general audiences would understand.
+
+COMPREHENSIVE EXAMPLES OF SPECIALIZED JARGON (ACCEPT):
+
+FINANCIAL INSTRUMENTS & MARKETS:
+- Copper to Gold Ratio (commodity relationship indicator)
+- Credit Default Swaps (derivative instruments)
+- Collateralized Debt Obligations (CDOs)
+- Mortgage-Backed Securities (MBS)
+- Asset-Backed Securities (ABS)
+- Carry Trade (currency arbitrage strategy)
+- Contango (futures curve condition)
+- Backwardation (inverted futures curve)
+- Duration Risk (bond price sensitivity)
+- Convexity (bond price curvature)
+- Gamma (options sensitivity measure)
+- Theta Decay (options time value loss)
+- Vega (options volatility sensitivity)
+
+MONETARY POLICY & BANKING:
+- Quantitative Easing (central bank asset purchases)
+- Yield Curve Inversion (bond market signal)
+- Repo Rate (repurchase agreement rate)
+- Federal Funds Rate (interbank lending rate)
+- Discount Window (Fed emergency lending)
+- Reserve Requirements (bank capital rules)
+- Basel III (international banking regulations)
+- Liquidity Coverage Ratio (bank liquidity measure)
+- Net Interest Margin (banking profitability metric)
+- Tier 1 Capital (bank capital quality measure)
+
+BUSINESS & ACCOUNTING:
+- EBITDA (earnings before interest, taxes, depreciation, amortization)
+- CAPEX (capital expenditures)
+- OPEX (operational expenditures)
+- Free Cash Flow (cash after capital investments)
+- Working Capital (short-term assets minus liabilities)
+- Goodwill Impairment (accounting write-down)
+- Mark-to-Market (fair value accounting)
+- GAAP (Generally Accepted Accounting Principles)
+- Non-GAAP Metrics (adjusted financial measures)
+
+ECONOMIC INDICATORS:
+- Basis Points (1/100th of a percentage point)
+- Phillips Curve (inflation-unemployment relationship)
+- Okun's Law (GDP-unemployment relationship)
+- Taylor Rule (monetary policy guideline)
+- Gini Coefficient (income inequality measure)
+- Purchasing Power Parity (currency valuation theory)
+- Real Effective Exchange Rate (trade-weighted currency value)
+
+INVESTMENT TERMINOLOGY:
+- Alpha (risk-adjusted returns above benchmark)
+- Beta (systematic risk measure)
+- Sharpe Ratio (risk-adjusted return measure)
+- Sortino Ratio (downside risk-adjusted returns)
+- Value at Risk (VaR) (potential loss measure)
+- Maximum Drawdown (peak-to-trough decline)
+- Information Ratio (active return per unit of risk)
+
+EXAMPLES OF COMMON TERMS (REJECT):
+
+EVERYDAY FINANCIAL LANGUAGE:
+- Gold soaring (descriptive, widely understood)
+- Dollar crashing (common media phrase)
+- Interest rates rising (general knowledge)
+- Stock market volatility (widely known concept)
+- Economic downturn (common terminology)
+- Financial crisis (broadly understood)
+- Market uncertainty (everyday business language)
+- Investment returns (basic concept)
+- Consumer spending (general economic term)
+- Housing market (widely understood)
+- Job market (common phrase)
+- Economic growth (basic concept)
+- Inflation concerns (general knowledge)
+- Market conditions (everyday language)
+- Economic recovery (widely understood)
+- Bull market / Bear market (common investing terms)
+- Supply and demand (basic economic concept)
+- Profit margins (basic business concept)
+- Market share (common business term)
+- Economic indicators (general category)
+
+EVALUATION CRITERIA:
+
+ACCEPT as jargon if the term:
+1. Requires specialized professional knowledge to understand
+2. Would appear in technical dictionaries or professional glossaries
+3. Has a precise, technical definition within a specific domain
+4. Would need explanation for a general business audience
+5. Is used primarily by professionals in the field
+6. Has specific calculation methods or formal definitions
+
+REJECT as common language if the term:
+1. Is widely understood by general business audiences
+2. Uses common words in descriptive combinations
+3. Appears regularly in mainstream media without explanation
+4. Is part of basic financial/economic literacy
+5. Can be understood from context by non-specialists
+6. Represents general concepts rather than technical processes
+
+Evaluate this term: {term}
+Definition: {definition}
+
+Return detailed JSON:
+{"term": "exact term", "decision": "accept|reject", "reasoning": "detailed explanation of technical vs. common nature", "confidence": 0.0-1.0, "domain": "primary field where this term is used", "definition_needed": true/false}

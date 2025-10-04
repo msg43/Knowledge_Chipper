@@ -80,27 +80,27 @@ def get_ollama_model_recommendation(specs: HardwareSpecs) -> dict:
     
     if specs.memory_gb >= 64 and specs.chip_type in [ChipType.M3_ULTRA, ChipType.M2_ULTRA]:
         return {
-            "primary": "llama3.2:8b",
-            "size": "4.7GB", 
+            "primary": "qwen2.5:14b",
+            "size": "8.2GB", 
             "description": "High-quality model for Ultra systems",
             "optional_upgrade": "llama3.1:70b (40GB) - Expert mode"
         }
     elif specs.memory_gb >= 32 and specs.chip_type in [ChipType.M3_MAX, ChipType.M2_MAX]:
         return {
-            "primary": "llama3.2:8b",
-            "size": "4.7GB",
+            "primary": "qwen2.5:14b",
+            "size": "8.2GB",
             "description": "Optimal for Max systems" 
         }
     elif specs.memory_gb >= 16:
         return {
-            "primary": "llama3.2:3b", 
+            "primary": "qwen2.5:7b", 
             "size": "2GB",
             "description": "Balanced for Pro systems"
         }
     else:
         return {
-            "primary": "llama3.2:1b",
-            "size": "1.3GB", 
+            "primary": "qwen2.5:3b",
+            "size": "2GB", 
             "description": "Efficient for base systems"
         }
 ```

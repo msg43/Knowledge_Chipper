@@ -77,7 +77,7 @@ else
         echo "📥 Downloading AI model..."
         ollama serve &> /dev/null &
         sleep 3
-        ollama pull llama3.2:3b &> /dev/null || true
+        ollama pull qwen2.5:7b &> /dev/null || true
         kill $! 2>/dev/null || true
     fi
 fi

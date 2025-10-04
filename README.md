@@ -1,23 +1,51 @@
-# Knowledge Chipper (Skip the Podcast Desktop)
+# Skipthepodcast.com (Skip the Podcast Desktop)
 
 > Transform audio, video, and documents into structured knowledge with AI-powered analysis
 
-**Version 3.2.22** | **macOS Application** | **Offline-First Design**
+**Version 3.3.0** | **macOS Application** | **Offline-First Design**
 
-## Why Knowledge Chipper Exists
+## 🆕 What's New in Version 3.3.0
 
-In our information-rich world, valuable insights are buried in hours of podcasts, video lectures, research papers, and meeting recordings. Knowledge Chipper was created to solve a fundamental problem: **extracting actionable intelligence from unstructured media content**.
+### Revolutionary Unified HCE Pipeline
+- **🔄 Two-Pass Architecture**: Streamlined Miner → Flagship Evaluator system
+- **📊 Enhanced Scoring**: Importance, novelty, confidence on 1-10 scale
+- **🎯 Single-Pass Extraction**: Claims, people, concepts, jargon in one operation
+- **📋 Claim Type Classification**: Factual, causal, normative, forecast, definitional
 
-Traditional transcription tools give you text. Knowledge Chipper gives you **structured knowledge**:
-- **Claims** with confidence ratings (A/B/C tiers)
+### Qwen Model Integration
+- **🚀 Superior JSON Compliance**: Industry-leading structured output reliability
+- **🖥️ Hardware-Optimized Selection**: Automatic model recommendations by Mac specs
+- **⚡ Consistent Performance**: All tiers use Qwen models for reliability
+- **🔧 Multi-shot Prompting**: Examples and anti-examples for consistent results
+
+### Technical Improvements
+- **📈 Simplified Architecture**: Removed complex routing and reranking systems
+- **🎛️ Updated GUI**: Streamlined controls for Miner and Flagship model selection
+- **🔍 Schema Validation**: Guaranteed JSON output with comprehensive error handling
+- **📚 Enhanced Documentation**: Updated troubleshooting and configuration guides
+
+### Intelligent Download Pacing
+- **🤖 Smart Rate Limiting**: Automatically spaces YouTube downloads to avoid bot detection
+- **📊 Real-Time Monitoring**: Tracks processing pipeline status and adjusts download timing
+- **⚡ Pipeline Optimization**: Keeps downloads ahead of summarization without overwhelming servers
+- **🔧 Large Scale Support**: Designed for processing 1000+ videos efficiently
+
+---
+
+## Why Skipthepodcast.com Exists
+
+In our information-rich world, valuable insights are buried in hours of podcasts, video lectures, research papers, and meeting recordings. Skipthepodcast.com was created to solve a fundamental problem: **extracting actionable intelligence from unstructured media content**.
+
+Traditional transcription tools give you text. Skipthepodcast.com gives you **structured knowledge**:
+- **Claims** with importance, novelty, and confidence scores (1-10 scale)
 - **Speaker identification** with 97% voice fingerprinting accuracy  
-- **Entity extraction** (people, concepts, technical terms)
-- **Relationship mapping** between ideas and contradictions
+- **Entity extraction** (people, concepts, technical terms) in single pass
+- **Claim type classification** (factual, causal, normative, forecast, definitional)
 - **Evidence citations** linking claims to exact sources
 
 Perfect for researchers, students, professionals, and anyone who needs to process large volumes of content efficiently.
 
-## What Knowledge Chipper Accomplishes
+## What Skipthepodcast.com Accomplishes
 
 ### 🎯 Core Capabilities
 
@@ -34,10 +62,10 @@ Perfect for researchers, students, professionals, and anyone who needs to proces
 - LLM-validated speaker identification
 
 **🧠 Structured Knowledge Extraction**
-- **HCE System**: Hybrid Claim Extractor with A/B/C confidence tiers
-- **Entity Recognition**: People, concepts, jargon, mental models
-- **Contradiction Detection**: Identify conflicting information
-- **Relationship Mapping**: Connect related claims and evidence
+- **Unified HCE Pipeline**: Streamlined two-pass system (Miner → Flagship Evaluator)
+- **Enhanced JSON Compliance**: Qwen models for reliable structured output
+- **Entity Recognition**: People, concepts, jargon, mental models in single pass
+- **Intelligent Claim Ranking**: LLM-powered importance, novelty, and confidence scoring
 - **Semantic Deduplication**: Eliminate redundant content
 
 **📊 Knowledge Organization**
@@ -49,14 +77,14 @@ Perfect for researchers, students, professionals, and anyone who needs to proces
 
 ### 🚀 Key Differentiators
 
-1. **Offline-First Design**: Complete functionality without internet connection
-2. **Bundled Dependencies**: ~600MB DMG includes all AI models and tools
+1. **Unified HCE Pipeline**: Revolutionary two-pass system for superior claim extraction
+2. **Qwen Model Integration**: Industry-leading JSON compliance and structured output
 3. **97% Voice Accuracy**: Enterprise-grade speaker verification models
-4. **Claim-Based Analysis**: Structured extraction vs. basic summarization
-5. **Hardware Optimized**: Apple Silicon MPS and CUDA acceleration
+4. **Hardware-Optimized Models**: Automatic model selection based on Mac specifications
+5. **Apple Silicon Acceleration**: Optimized for M2/M3 with MPS support
 6. **Zero Configuration**: Works immediately after installation
 
-## How to Use Knowledge Chipper
+## How to Use Skipthepodcast.com
 
 ### Quick Start (5 Minutes)
 
@@ -74,8 +102,8 @@ Perfect for researchers, students, professionals, and anyone who needs to proces
 3. **Extract Knowledge**
    - Go to "Summarization" tab
    - Select your transcript file
-   - Choose analysis type (HCE is default)
-   - Review extracted claims with A/B/C confidence ratings
+   - Choose analysis type (Unified HCE is default)
+   - Review extracted claims with importance, novelty, and confidence scores (1-10 scale)
 
 4. **Explore Results**
    - "Claim Search" tab: Filter and explore extracted knowledge
@@ -87,12 +115,12 @@ Perfect for researchers, students, professionals, and anyone who needs to proces
 The application provides a tabbed interface for different workflows:
 
 **🎬 Content Input**
-- **YouTube Extraction**: Process videos and playlists
+- **YouTube Extraction**: Process videos and playlists with intelligent pacing
 - **Local Transcription**: Handle local audio/video files
 - **Document Processing**: Analyze PDFs and text documents
 
 **🧠 Analysis & Organization**  
-- **Summarization**: Extract structured claims and entities (HCE system)
+- **Summarization**: Extract structured claims and entities (Unified HCE system)
 - **Process Management**: Full pipeline processing (transcribe → analyze → organize)
 - **Claim Search**: Explore extracted knowledge across all content
 
@@ -142,16 +170,26 @@ knowledge-system --help
 
 ## Advanced Features
 
-### HCE (Hybrid Claim Extractor) System
+### Unified HCE (Hybrid Claim Extractor) System
 
-The core intelligence engine that replaces traditional summarization:
+The revolutionary two-pass intelligence engine that replaces traditional summarization:
 
-- **A/B/C Confidence Tiers**: Claims rated by reliability
+**🔄 Two-Pass Architecture:**
+1. **Unified Miner**: Single pass extraction of claims, people, concepts, and jargon with claim type classification
+2. **Flagship Evaluator**: Comprehensive LLM-powered ranking and validation of all extracted entities
+
+**📊 Advanced Scoring System:**
+- **Importance** (1-10): Core relevance and significance
+- **Novelty** (1-10): Uniqueness and freshness of information  
+- **Confidence** (1-10): Reliability and evidence quality
+- **Claim Types**: Factual, causal, normative, forecast, definitional
+
+**🎯 Key Features:**
+- **JSON Schema Validation**: Guaranteed structured output with Qwen models
+- **Multi-shot Prompting**: Examples and anti-examples for consistent results
 - **Evidence Citations**: Every claim linked to exact source quotes
-- **Contradiction Detection**: Identify conflicting information
-- **Entity Recognition**: People, concepts, jargon automatically extracted
-- **Relationship Mapping**: Connections between ideas and entities
-- **Interactive Validation**: Review and correct AI-assigned tiers
+- **Entity Recognition**: Comprehensive extraction in single pass
+- **Interactive Validation**: Review and correct AI-assigned scores
 
 ### Voice Fingerprinting Technology
 
@@ -169,16 +207,32 @@ State-of-the-art speaker verification achieving 97% accuracy:
 2. **Transcription** → Whisper with speaker diarization  
 3. **Voice Fingerprinting** → 97% accurate speaker identification
 4. **LLM Validation** → AI-powered speaker name suggestion
-5. **Knowledge Extraction** → HCE claim analysis with entities
-6. **Storage** → SQLite database with relationships
-7. **Export** → Multiple formats for integration
+5. **Unified Mining** → Single-pass extraction of all entities with Qwen models
+6. **Flagship Evaluation** → Comprehensive LLM ranking and validation
+7. **Storage** → SQLite database with relationships
+8. **Export** → Multiple formats for integration
+
+### Hardware-Optimized Model Selection
+
+Automatic model recommendations based on your Mac specifications:
+
+- **🔥 M2/M3 Ultra (64GB+ RAM)**: `qwen2.5:14b-instruct` (8.2GB) - Maximum capability
+- **🔥 M2/M3 Max (32GB+ RAM)**: `qwen2.5:14b-instruct` (8.2GB) - High performance  
+- **🔥 M2/M3 Pro (16GB+ RAM)**: `qwen2.5:7b-instruct` (4GB) - Balanced efficiency
+- **🔥 Base Systems**: `qwen2.5:3b-instruct` (2GB) - Optimized for limited resources
+
+**Key Benefits:**
+- **Consistent JSON Compliance**: All Qwen models excel at structured output
+- **Automatic Detection**: Hardware specs detected during installation
+- **Optimal Performance**: Right-sized models for your system capabilities
+- **Future-Proof**: Easy model upgrades as hardware improves
 
 ### Performance & Optimization
 
 - **Smart Chunking**: Model-aware content segmentation
-- **Batch Processing**: Efficient handling of large volumes
+- **Unified Pipeline**: Streamlined two-pass processing for efficiency
 - **Cache Management**: Intelligent caching for speed
-- **Hardware Acceleration**: Optimized for Apple Silicon and CUDA
+- **Hardware Acceleration**: Optimized for Apple Silicon MPS
 - **Offline Operation**: No internet required for core functionality
 
 ## Configuration & Customization
@@ -190,7 +244,8 @@ The system uses a layered configuration approach:
 3. **Environment Variables**: Runtime overrides
 
 Key configuration areas:
-- **LLM Providers**: OpenAI, Anthropic, local models
+- **LLM Providers**: OpenAI, Anthropic, local Qwen models
+- **HCE Pipeline**: Miner and Flagship model selection
 - **Voice Processing**: Sensitivity thresholds, model selection
 - **Output Preferences**: Export formats, file organization
 - **Performance**: Batch sizes, hardware utilization
@@ -245,6 +300,19 @@ pip install -e ".[full]"
 knowledge-system gui
 ```
 
+### Intelligent Updates & Caching
+
+Skip the Podcast Desktop features an intelligent component caching system that makes updates fast and efficient:
+
+**🚀 Smart Update System:**
+- **Daily patches**: Only download changed app code (~940KB)
+- **Large components**: Python, AI models, FFmpeg cached until version changes
+- **Automatic detection**: System knows what needs updating
+- **Bandwidth efficient**: 99.7% reduction in update downloads
+
+**💡 Recommendation:**
+Enable **"Check for updates on startup"** in the app settings to get the latest features and improvements automatically. The intelligent caching system ensures updates are lightning-fast, typically downloading only the small app code changes rather than re-downloading large components.
+
 ### First Run Setup
 1. Configure API keys for your preferred LLM provider
 2. Test with a short audio file
@@ -280,6 +348,6 @@ knowledge-system gui
 
 ---
 
-**Ready to transform your content into structured knowledge?** Download Knowledge Chipper and start extracting insights from your audio, video, and document libraries today.
+**Ready to transform your content into structured knowledge?** Download Skipthepodcast.com and start extracting insights from your audio, video, and document libraries today.
 
 For technical documentation, troubleshooting, and advanced configuration, see the `/docs` directory and `CHANGELOG.md` for detailed feature history.

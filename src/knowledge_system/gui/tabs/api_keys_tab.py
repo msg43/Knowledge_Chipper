@@ -361,7 +361,7 @@ class APIKeysTab(BaseTab):
             "Automatically check for updates on app launch"
         )
         self.auto_update_checkbox.setToolTip(
-            "When enabled, Knowledge Chipper will automatically check for new versions\n"
+            "When enabled, Skip the Podcast Desktop will automatically check for new versions\n"
             "when you launch the app. Updates use fast DMG downloads (~2-3 minutes)\n"
             "and preserve all your data and settings in their standard macOS locations.\n\n"
             "• Checks: GitHub releases for newer versions\n"
@@ -476,7 +476,7 @@ class APIKeysTab(BaseTab):
 
         # Add description
         tests_description = QLabel(
-            "Run comprehensive tests to validate your Knowledge Chipper configuration and functionality:"
+            "Run comprehensive tests to validate your Skip the Podcast Desktop configuration and functionality:"
         )
         tests_description.setWordWrap(True)
         tests_description.setStyleSheet("color: #666; margin-bottom: 10px;")
@@ -1093,6 +1093,7 @@ class APIKeysTab(BaseTab):
                 self.update_worker = None
 
             # Always create a fresh worker instance to avoid restarting finished QThreads
+            # Uses PKG-based updater (class name retained for compatibility)
             self.update_worker = DMGUpdateWorker(is_auto=is_auto)
             # Track if this is an auto update for silent progress handling
             self._current_update_is_auto = is_auto
@@ -1252,39 +1253,71 @@ class APIKeysTab(BaseTab):
                 QTimer.singleShot(10000, lambda: self.status_label.setText(""))
             else:
                 # This is an actual update completion
-                self.status_label.setText("✨ Update completed! Please restart the app.")
-                self.status_label.setStyleSheet("color: #4caf50; font-weight: bold;")
+                if "Update downloaded successfully" in message:
+                    # New flow: app will quit and install automatically
+                    self.status_label.setText(
+                        "🚀 Update ready! App will restart automatically..."
+                    )
+                    self.status_label.setStyleSheet(
+                        "color: #4caf50; font-weight: bold;"
+                    )
 
-                # Show restart dialog with auto-restart option
-                from PyQt6.QtWidgets import QMessageBox
+                    # Show info dialog and then quit the app
+                    from PyQt6.QtWidgets import QMessageBox
 
-                msg_box = QMessageBox(self)
-                msg_box.setWindowTitle("Update Complete")
-                msg_box.setText("The app has been updated successfully!")
-                msg_box.setInformativeText(
-                    f"{message}\n\n"
-                    "The new version has been installed to /Applications.\n"
-                    "Your settings and data are preserved in their standard locations."
-                )
-                msg_box.setIcon(QMessageBox.Icon.Information)
+                    msg_box = QMessageBox(self)
+                    msg_box.setWindowTitle("Update Ready")
+                    msg_box.setText("Update downloaded successfully!")
+                    msg_box.setInformativeText(
+                        f"{message}\n\n"
+                        "The app will now quit and install the update automatically.\n"
+                        "The new version will launch when installation is complete."
+                    )
+                    msg_box.setIcon(QMessageBox.Icon.Information)
+                    msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+                    msg_box.exec()
 
-                # Add custom buttons
-                restart_button = msg_box.addButton(
-                    "Restart Now", QMessageBox.ButtonRole.AcceptRole
-                )
-                later_button = msg_box.addButton(
-                    "Restart Later", QMessageBox.ButtonRole.RejectRole
-                )
-                msg_box.setDefaultButton(restart_button)
-
-                # Show the dialog and handle response
-                msg_box.exec()
-
-                if msg_box.clickedButton() == restart_button:
-                    self._restart_application()
+                    # Quit the app to allow PKG installation
+                    self._quit_for_update()
                 else:
-                    # Just close the dialog - user will restart manually later
-                    pass
+                    # Legacy flow: manual restart required
+                    self.status_label.setText(
+                        "✨ Update completed! Please restart the app."
+                    )
+                    self.status_label.setStyleSheet(
+                        "color: #4caf50; font-weight: bold;"
+                    )
+
+                    # Show restart dialog with auto-restart option
+                    from PyQt6.QtWidgets import QMessageBox
+
+                    msg_box = QMessageBox(self)
+                    msg_box.setWindowTitle("Update Complete")
+                    msg_box.setText("The app has been updated successfully!")
+                    msg_box.setInformativeText(
+                        f"{message}\n\n"
+                        "The new version has been installed to /Applications.\n"
+                        "Your settings and data are preserved in their standard locations."
+                    )
+                    msg_box.setIcon(QMessageBox.Icon.Information)
+
+                    # Add custom buttons
+                    restart_button = msg_box.addButton(
+                        "Restart Now", QMessageBox.ButtonRole.AcceptRole
+                    )
+                    later_button = msg_box.addButton(
+                        "Restart Later", QMessageBox.ButtonRole.RejectRole
+                    )
+                    msg_box.setDefaultButton(restart_button)
+
+                    # Show the dialog and handle response
+                    msg_box.exec()
+
+                    if msg_box.clickedButton() == restart_button:
+                        self._restart_application()
+                    else:
+                        # Just close the dialog - user will restart manually later
+                        pass
         else:
             # Check if this is "No updates available" or "Already on latest version" - these are not errors
             if (
@@ -1315,7 +1348,7 @@ class APIKeysTab(BaseTab):
                 QMessageBox.warning(
                     self,
                     "Update Failed",
-                    f"Failed to update Knowledge Chipper:\n\n{message}",
+                    f"Failed to update Skip the Podcast Desktop:\n\n{message}",
                     QMessageBox.StandardButton.Ok,
                 )
 
@@ -1672,9 +1705,9 @@ class APIKeysTab(BaseTab):
                 app_path = sys.executable
             else:
                 # Running from source - find the app bundle or start script
-                app_bundle_path = "/Applications/Knowledge_Chipper.app"
+                app_bundle_path = "/Applications/Skip the Podcast Desktop.app"
                 user_app_path = os.path.expanduser(
-                    "~/Applications/Knowledge_Chipper.app"
+                    "~/Applications/Skip the Podcast Desktop.app"
                 )
 
                 if os.path.exists(app_bundle_path):
@@ -1702,7 +1735,24 @@ class APIKeysTab(BaseTab):
 
         except Exception as e:
             self.append_log(f"❌ Failed to restart automatically: {e}")
-            self.append_log("Please restart Knowledge Chipper manually.")
+            self.append_log("Please restart Skip the Podcast Desktop manually.")
+
+    def _quit_for_update(self) -> None:
+        """Quit the application to allow PKG installation."""
+        from PyQt6.QtWidgets import QApplication
+
+        try:
+            self.append_log("🚀 Quitting app for update installation...")
+
+            # Give a moment for the log to be written
+            from PyQt6.QtCore import QTimer
+
+            QTimer.singleShot(1000, QApplication.quit)
+
+        except Exception as e:
+            self.append_log(f"❌ Failed to quit for update: {e}")
+            # Force quit as fallback
+            QApplication.quit()
 
     def _on_worker_finished(self) -> None:
         """Handle worker thread finishing (for crash detection)."""
@@ -1754,7 +1804,7 @@ class APIKeysTab(BaseTab):
             apple_script = """
 tell application "Terminal"
   activate
-  do script "cd {script_dir}; echo '🏗️ Running fallback updater…'; bash {script_name}; echo ''; echo '✅ Update finished. Please restart Knowledge Chipper and close this window.'"
+  do script "cd {script_dir}; echo '🏗️ Running fallback updater…'; bash {script_name}; echo ''; echo '✅ Update finished. Please restart Skip the Podcast Desktop and close this window.'"
 end tell
 """
 
@@ -1882,7 +1932,7 @@ end tell
         QMessageBox.critical(
             self,
             "Update Error",
-            f"An error occurred while updating Knowledge Chipper:\n\n{error}",
+            f"An error occurred while updating Skip the Podcast Desktop:\n\n{error}",
             QMessageBox.StandardButton.Ok,
         )
 

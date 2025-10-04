@@ -189,6 +189,16 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
+        # Create model notification widget first
+        from .widgets.model_notification_widget import ModelNotificationWidget
+
+        self.model_notification = ModelNotificationWidget(self)
+        self.model_notification.hide()
+        self.model_notification.retry_requested.connect(self._retry_model_download)
+
+        # Add notification widget at the top (initially hidden)
+        main_layout.addWidget(self.model_notification)
+
         # Create tab widget with proper size policies
         self.tabs = QTabWidget()
         # Ensure tab widget can expand properly
@@ -266,6 +276,15 @@ class MainWindow(QMainWindow):
         if settings.gui_features.show_process_management_tab:
             process_tab = ProcessTab(self)
             self.tabs.addTab(process_tab, "Process Management")
+
+        # Add Batch Processing tab (always available for advanced users)
+        try:
+            from .tabs.batch_processing_tab import BatchProcessingTab
+
+            batch_processing_tab = BatchProcessingTab(self)
+            self.tabs.addTab(batch_processing_tab, "🚀 Batch Processing")
+        except ImportError as e:
+            logger.warning(f"Batch processing tab not available: {e}")
 
         # Only add File Watcher tab if enabled in settings
         if settings.gui_features.show_file_watcher_tab:
@@ -707,8 +726,166 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Failed to start Ollama service: {e}")
 
+    def _start_background_model_download(self, missing_models: dict) -> None:
+        """Start downloading missing models in background."""
+        try:
+            from PyQt6.QtCore import QObject, QThread, pyqtSignal
+
+            from ..processors.whisper_cpp_transcribe import (
+                WhisperCppTranscribeProcessor,
+            )
+            from ..utils.ollama_manager import get_ollama_manager
+
+            class BackgroundModelDownloader(QObject):
+                progress = pyqtSignal(str)
+                finished = pyqtSignal(bool)
+
+                def __init__(self, models_to_download):
+                    super().__init__()
+                    self.models = models_to_download
+
+                def download(self):
+                    try:
+                        # Download Whisper model if needed
+                        if "whisper" in self.models:
+                            self.progress.emit("📥 Downloading Whisper model...")
+                            processor = WhisperCppTranscribeProcessor(
+                                model=self.models["whisper"]
+                            )
+
+                            def whisper_progress(info):
+                                if isinstance(info, dict):
+                                    percent = info.get("percent", 0)
+                                    message = info.get("message", "")
+                                    self.progress.emit(f"whisper|{percent}|{message}")
+
+                            model_path = processor._download_model(
+                                self.models["whisper"], whisper_progress
+                            )
+                            if model_path and model_path.exists():
+                                self.progress.emit(
+                                    "whisper|100|✅ Whisper model downloaded"
+                                )
+                            else:
+                                self.progress.emit(
+                                    "whisper|-1|⚠️ Failed to download Whisper model"
+                                )
+
+                        # Download LLM model if needed
+                        if "llm" in self.models:
+                            self.progress.emit(
+                                f"📥 Downloading LLM model: {self.models['llm']}..."
+                            )
+                            ollama = get_ollama_manager()
+                            if ollama.is_service_running():
+                                success = ollama.download_model(self.models["llm"])
+                                if success:
+                                    self.progress.emit(
+                                        f"✅ LLM model {self.models['llm']} downloaded"
+                                    )
+                                else:
+                                    self.progress.emit(
+                                        f"⚠️ Failed to download LLM model"
+                                    )
+                            else:
+                                self.progress.emit(
+                                    "⚠️ Ollama not running - skipping LLM download"
+                                )
+
+                        self.finished.emit(True)
+                    except Exception as e:
+                        logger.error(f"Background model download failed: {e}")
+                        self.finished.emit(False)
+
+            # Create and start background thread
+            self.model_download_thread = QThread()
+            self.model_downloader = BackgroundModelDownloader(missing_models)
+            self.model_downloader.moveToThread(self.model_download_thread)
+
+            # Connect signals
+            self.model_download_thread.started.connect(self.model_downloader.download)
+            self.model_downloader.progress.connect(self._handle_model_download_progress)
+            self.model_downloader.finished.connect(self.model_download_thread.quit)
+            self.model_downloader.finished.connect(
+                lambda success: logger.info(
+                    "✅ Background model downloads completed"
+                    if success
+                    else "⚠️ Some model downloads failed"
+                )
+            )
+
+            # Clean up thread when done
+            self.model_download_thread.finished.connect(
+                self.model_download_thread.deleteLater
+            )
+
+            # Start download
+            self.model_download_thread.start()
+
+        except Exception as e:
+            logger.error(f"Failed to start background model download: {e}")
+
+    def _handle_model_download_progress(self, message: str) -> None:
+        """Handle progress updates from model downloads."""
+        try:
+            # Parse progress message format: "model_type|percent|message" or plain message
+            if "|" in message:
+                parts = message.split("|", 2)
+                if len(parts) == 3:
+                    model_type, percent_str, status_msg = parts
+                    try:
+                        percent = int(percent_str)
+                        if percent == -1:
+                            # Download failed
+                            self.model_notification.show_completion(
+                                model_type, False, status_msg
+                            )
+                        elif percent == 100:
+                            # Download completed
+                            self.model_notification.show_completion(
+                                model_type, True, status_msg
+                            )
+                        else:
+                            # Download in progress
+                            self.model_notification.update_progress(
+                                model_type, percent, status_msg
+                            )
+                    except ValueError:
+                        pass
+            else:
+                # Plain message - show in status bar
+                self.status_bar.showMessage(message, 5000)
+
+                # Also show in notification if it's a start message
+                if "Downloading" in message:
+                    model_type = "whisper" if "Whisper" in message else "llm"
+                    self.model_notification.show_model_download(model_type, message)
+
+        except Exception as e:
+            logger.error(f"Error handling model download progress: {e}")
+
+    def _retry_model_download(self, model_type: str) -> None:
+        """Retry downloading a specific model."""
+        try:
+            from ..utils.model_validator import get_model_validator
+
+            validator = get_model_validator()
+            missing = validator.get_missing_models()
+
+            if model_type in missing:
+                logger.info(f"Retrying download of {model_type} model...")
+                self._start_background_model_download({model_type: missing[model_type]})
+            else:
+                logger.info(f"Model {model_type} is already installed")
+                self.model_notification.show_completion(
+                    model_type, True, "Model is already installed"
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to retry model download: {e}")
+
     def _check_first_run_model_setup(self) -> None:
-        """Check if this is first run and offer model download setup."""
+        """Check models and download missing ones automatically."""
         try:
             # CRITICAL: Skip first-run dialogs during testing
             if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
@@ -717,53 +894,73 @@ class MainWindow(QMainWindow):
 
             from pathlib import Path
 
+            from ..utils.model_validator import get_model_validator
             from .core.settings_manager import get_gui_settings_manager
 
             gui = get_gui_settings_manager()
+            validator = get_model_validator()
 
-            # Check if we've already shown the first-run model dialog
-            model_first_run_shown = gui.get_value(
-                "⚙️ Settings", "model_first_run_shown", False
+            # Check if post-install setup was completed
+            post_install_marker = (
+                Path.home()
+                / ".knowledge_chipper"
+                / "settings"
+                / "post_install_complete.json"
             )
 
-            if model_first_run_shown:
-                return  # Already shown, don't show again
+            # Always validate models on startup
+            logger.info("🔍 Validating installed models...")
 
-            # Check if any Whisper models are already available
-            models_dir = Path.home() / ".cache" / "whisper-cpp"
-            local_models_dir = Path("models")
+            # Log detailed validation info
+            whisper_models = validator.check_whisper_models()
+            llm_models = validator.check_llm_models()
+            logger.info(f"Whisper models found: {whisper_models}")
+            logger.info(f"LLM models found: {llm_models}")
 
-            has_models = False
-            if models_dir.exists():
-                # Check for common model files
-                for model_file in ["ggml-tiny.bin", "ggml-base.bin", "ggml-small.bin"]:
-                    if (models_dir / model_file).exists():
-                        has_models = True
-                        break
+            missing_models = validator.get_missing_models()
 
-            if local_models_dir.exists():
-                # Check local models directory
-                for model_file in local_models_dir.glob("*.bin"):
-                    has_models = True
-                    break
+            if missing_models:
+                logger.info(f"📥 Missing essential models: {missing_models}")
 
-            if has_models:
-                # Models already available, mark first-run as shown and skip
-                gui.set_value("⚙️ Settings", "model_first_run_shown", True)
-                gui.save()
-                return
+                # Check if we should show dialog or download automatically
+                auto_download = gui.get_value(
+                    "⚙️ Settings", "auto_download_models", True
+                )
+                model_first_run = gui.get_value(
+                    "⚙️ Settings", "model_first_run_shown", False
+                )
 
-            # Show first-run model setup dialog
-            gui.set_value("⚙️ Settings", "model_first_run_shown", True)
-            gui.save()
+                logger.info(
+                    f"Auto download: {auto_download}, First run shown: {model_first_run}, Post-install marker: {post_install_marker.exists()}"
+                )
 
-            # Use QTimer to emit signal after main window is fully loaded (thread-safe)
-            from PyQt6.QtCore import QTimer
+                if (
+                    auto_download
+                    and not post_install_marker.exists()
+                    and not model_first_run
+                ):
+                    # First run after install - show dialog
+                    gui.set_value("⚙️ Settings", "model_first_run_shown", True)
+                    gui.save()
 
-            QTimer.singleShot(2000, self.show_model_dialog_signal.emit)
+                    # Use QTimer to emit signal after main window is fully loaded
+                    from PyQt6.QtCore import QTimer
+
+                    QTimer.singleShot(2000, self.show_model_dialog_signal.emit)
+                else:
+                    # Background download missing models
+                    logger.info("🚀 Starting background model downloads...")
+                    self._start_background_model_download(missing_models)
+            else:
+                logger.info("✅ All essential models are installed")
+
+                # Log detailed status
+                status_report = validator.get_model_status_report()
+                for line in status_report.split("\n"):
+                    logger.debug(line)
 
         except (ImportError, AttributeError) as e:
-            logger.warning(f"First-run model setup failed: {e}")
+            logger.warning(f"Model validation failed: {e}")
 
     def _show_first_run_model_dialog(self) -> None:
         """Show the first-run model setup dialog."""
@@ -875,7 +1072,7 @@ def launch_gui() -> None:
                     from ctypes import c_char_p
 
                     libc = ctypes.CDLL("libc.dylib")
-                    libc.setproctitle(c_char_p(b"Knowledge Chipper"))
+                    libc.setproctitle(c_char_p(b"Skipthepodcast.com"))
                 except (OSError, AttributeError, ImportError):
                     pass  # Process title setting failed
 

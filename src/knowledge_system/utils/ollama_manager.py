@@ -58,7 +58,7 @@ class OllamaManager:
 
     def __init__(self, base_url: str = "http://localhost:11434") -> None:
         self.base_url = base_url.rstrip("/")
-        self.timeout = 30
+        self.timeout = 120  # Increased for HCE processing
         # Model registry cache - persistent until manually refreshed
         self._registry_cache: list[ModelInfo] = []
         self._cache_valid: bool = False
@@ -401,6 +401,26 @@ class OllamaManager:
         except Exception as e:
             logger.error(f"Failed to get registry models: {e}")
             return []
+
+    def generate(self, model: str, prompt: str, options: dict = None) -> dict:
+        """Generate response using Ollama API."""
+        try:
+            url = f"{self.base_url}/api/generate"
+            payload = {
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "options": options or {},
+            }
+
+            response = requests.post(url, json=payload, timeout=self.timeout)
+            response.raise_for_status()
+
+            return response.json()
+
+        except Exception as e:
+            logger.error(f"Ollama generate failed for model {model}: {e}")
+            return {"response": "", "error": str(e)}
 
     def clear_registry_cache(self) -> None:
         """Clear the model registry cache to force refresh on next request."""

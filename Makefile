@@ -1,4 +1,4 @@
-# Knowledge Chipper Development Makefile
+# Skipthepodcast.com Development Makefile
 # Comprehensive local testing and development commands
 
 .PHONY: help install test test-quick test-full test-unit test-integration test-gui \
@@ -7,7 +7,7 @@
 
 # Default target
 help:
-	@echo "Knowledge Chipper Development Commands"
+	@echo "Skipthepodcast.com Development Commands"
 	@echo "======================================"
 	@echo ""
 	@echo "Setup Commands:"
@@ -42,7 +42,7 @@ help:
 # === SETUP COMMANDS ===
 
 install:
-	@echo "🚀 Setting up Knowledge Chipper development environment..."
+	@echo "🚀 Setting up Skipthepodcast.com development environment..."
 	python -m pip install --upgrade pip
 	pip install -r requirements.txt
 	pip install -r requirements-dev.txt
