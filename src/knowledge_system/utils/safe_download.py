@@ -3,9 +3,9 @@ import os
 import signal
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Optional
-from collections.abc import Callable
 
 import requests
 
