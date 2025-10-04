@@ -1260,14 +1260,17 @@ class SummarizationTab(BaseTab):
         profile_group.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        layout.addWidget(profile_group)
+        # Profile section removed per user request
+        # layout.addWidget(profile_group)
 
         # Settings section
         settings_group = QGroupBox("Settings")
         settings_layout = QGridLayout()
 
-        # Provider selection (made narrower)
+        # Provider selection - REMOVED per user request
+        # Using Advanced Per-stage Models instead
         self.provider_combo = QComboBox()
+        self.provider_combo.setVisible(False)  # Hidden
         self.provider_combo.addItems(["openai", "anthropic", "local"])
         self.provider_combo.currentTextChanged.connect(self._update_models)
         self.provider_combo.currentTextChanged.connect(self._on_setting_changed)
@@ -1276,17 +1279,20 @@ class SummarizationTab(BaseTab):
         self.provider_combo.setMinimumHeight(40)  # Make 100% taller
         # Left-justify the text in the dropdown
         self.provider_combo.setStyleSheet("QComboBox { text-align: left; }")
-        self._add_field_with_info(
-            settings_layout,
-            "Provider:",
-            self.provider_combo,
-            "Choose AI provider: OpenAI (GPT models), Anthropic (Claude models), or Local (self-hosted models). Requires API keys in Settings.",
-            0,
-            0,
-        )
+        # Provider field removed - using Advanced Per-stage Models instead
+        # self._add_field_with_info(
+        #     settings_layout,
+        #     "Provider:",
+        #     self.provider_combo,
+        #     "Choose AI provider: OpenAI (GPT models), Anthropic (Claude models), or Local (self-hosted models). Requires API keys in Settings.",
+        #     0,
+        #     0,
+        # )
 
-        # Model selection (made wider)
+        # Model selection - REMOVED per user request
+        # Using Advanced Per-stage Models instead
         self.model_combo = QComboBox()
+        self.model_combo.setVisible(False)  # Hidden
         # Allow free-text model entry for newly released models
         self.model_combo.setEditable(True)
         self.model_combo.currentTextChanged.connect(self._on_setting_changed)
@@ -1295,8 +1301,8 @@ class SummarizationTab(BaseTab):
         )  # Make model field wider to accommodate long model names
         self.model_combo.setMinimumHeight(40)  # Make 100% taller
 
-        # Model selection with custom layout for tooltip positioning
-        settings_layout.addWidget(QLabel("Model:"), 0, 2)
+        # Model selection removed - using Advanced Per-stage Models instead
+        # settings_layout.addWidget(QLabel("Model:"), 0, 2)
 
         # Create a horizontal layout for model combo + tooltip + refresh button
         model_layout = QHBoxLayout()
@@ -1338,12 +1344,12 @@ class SummarizationTab(BaseTab):
         self.refresh_models_btn.clicked.connect(self._refresh_models)
         model_layout.addWidget(self.refresh_models_btn)
 
-        # Create container widget for the custom layout
-        model_container = QWidget()
-        model_container.setLayout(model_layout)
-        settings_layout.addWidget(
-            model_container, 0, 3, 1, 3
-        )  # Span across multiple columns
+        # Model container removed - using Advanced Per-stage Models instead
+        # model_container = QWidget()
+        # model_container.setLayout(model_layout)
+        # settings_layout.addWidget(
+        #     model_container, 0, 3, 1, 3
+        # )  # Span across multiple columns
 
         # Set tooltips for model combo as well
         self.model_combo.setToolTip(formatted_model_tooltip)
@@ -1497,8 +1503,8 @@ class SummarizationTab(BaseTab):
         )
         layout.addWidget(settings_group)
 
-        # HCE Claim Analysis Settings
-        hce_group = QGroupBox("🔍 Claim Analysis Settings")
+        # HCE Claim Analysis Settings - REMOVED per user request
+        # hce_group = QGroupBox("🔍 Claim Analysis Settings")
         # Three-column layout with very thin separators
         hce_layout = QHBoxLayout()
         hce_layout.setSpacing(6)
@@ -1717,21 +1723,23 @@ class SummarizationTab(BaseTab):
         hce_layout.addWidget(vline2)
         hce_layout.addWidget(col3_widget, 1)
 
-        hce_group.setLayout(hce_layout)
-        hce_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        layout.addWidget(hce_group)
+        # hce_group.setLayout(hce_layout)
+        # hce_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        # Claims Analysis section removed per user request
+        # layout.addWidget(hce_group)
 
         # Advanced: Per-stage Models (collapsible)
         from PyQt6.QtWidgets import QFrame
 
-        self.advanced_models_group = QGroupBox("🔧 Advanced: Per-stage Models")
-        self.advanced_models_group.setCheckable(True)
-        self.advanced_models_group.setChecked(True)  # Expanded by default for usability
-        self.advanced_models_group.toggled.connect(self._on_setting_changed)
+        self.advanced_models_group = QGroupBox(
+            "🔧 Per-stage Model Configuration (Required)"
+        )
+        self.advanced_models_group.setCheckable(False)  # Not collapsible - mandatory
+        # self.advanced_models_group.toggled.connect(self._on_setting_changed)
         self.advanced_models_group.setToolTip(
-            "Configure different models for each analysis stage.\n"
-            "Leave empty to use main model for all stages.\n\n"
-            "💡 Tip: Check this box to expand and enable the dropdowns."
+            "Configure models for each analysis stage.\n"
+            "Default uses MVP LLM (fallback) model for all stages.\n"
+            "You can customize models for specific stages as needed."
         )
 
         advanced_layout = QGridLayout()
@@ -1784,6 +1792,7 @@ class SummarizationTab(BaseTab):
 
             provider_combo = QComboBox()
             provider_combo.addItems(["", "openai", "anthropic", "local"])
+            provider_combo.setCurrentText("local")  # Default to local (MVP LLM)
             provider_combo.setMinimumWidth(120)  # Reasonable width for provider names
             provider_combo.setMaximumWidth(140)  # Prevent it from taking too much space
             provider_combo.currentTextChanged.connect(self._on_setting_changed)
@@ -1897,6 +1906,25 @@ class SummarizationTab(BaseTab):
             except Exception:
                 pass
 
+        # Trigger initial model population for default providers
+        # Use QTimer to ensure this happens after the UI is fully initialized
+        from PyQt6.QtCore import QTimer
+
+        def populate_initial_models():
+            if hasattr(self, "miner_provider") and self.miner_provider:
+                if self.miner_provider.currentText() == "local":
+                    self._update_advanced_model_combo("local", self.miner_model)
+            if (
+                hasattr(self, "flagship_judge_provider")
+                and self.flagship_judge_provider
+            ):
+                if self.flagship_judge_provider.currentText() == "local":
+                    self._update_advanced_model_combo(
+                        "local", self.flagship_judge_model
+                    )
+
+        QTimer.singleShot(100, populate_initial_models)  # Delay to ensure UI is ready
+
         # Budgets & Limits (collapsible)
         self.budgets_group = QGroupBox("💰 Budgets & Limits")
         self.budgets_group.setCheckable(True)
@@ -1935,7 +1963,8 @@ class SummarizationTab(BaseTab):
         self.budgets_group.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        layout.addWidget(self.budgets_group)
+        # Budget Limits section removed per user request
+        # layout.addWidget(self.budgets_group)
 
         # Action buttons
         action_layout = self._create_action_layout()
@@ -2787,11 +2816,11 @@ class SummarizationTab(BaseTab):
                             f"Failed to fetch Ollama models for advanced dropdown: {e}"
                         )
                         models = [
-                            "qwen2.5:7b (4 GB)",
-                            "qwen2.5:3b (2 GB)",
-                            "llama3.2:3b (2 GB)",
-                            "llama3.1:8b (5 GB)",
-                            "mistral:7b (4 GB)",
+                            "qwen2.5:7b-instruct",
+                            "qwen2.5:3b-instruct",
+                            "llama3.2:3b-instruct",
+                            "llama3.1:8b-instruct",
+                            "mistral:7b-instruct",
                         ]
                         logger.debug(f"Using fallback models: {models}")
 
@@ -2802,6 +2831,13 @@ class SummarizationTab(BaseTab):
                 # Try to restore previous selection if it's still valid
                 if current_text and current_text in all_items:
                     model_combo.setCurrentText(current_text)
+                elif provider == "local" and not current_text:
+                    # For local provider with no selection, default to MVP LLM
+                    mvp_model = "qwen2.5:7b-instruct"
+                    if mvp_model in all_items:
+                        model_combo.setCurrentText(mvp_model)
+                    elif len(all_items) > 1:  # Has models besides empty option
+                        model_combo.setCurrentIndex(1)  # Select first real model
 
                 logger.debug(f"Added {len(all_items)} items to model combo")
 
@@ -3515,22 +3551,32 @@ class SummarizationTab(BaseTab):
                 ]
 
                 for stage_name, provider_combo, model_combo in advanced_dropdowns:
-                    # Load provider selection
+                    # Load provider selection - default to local (MVP LLM)
                     saved_provider = self.gui_settings.get_combo_selection(
-                        self.tab_name, f"{stage_name}_provider", ""
+                        self.tab_name,
+                        f"{stage_name}_provider",
+                        "local",  # Default to local
                     )
                     index = provider_combo.findText(saved_provider)
                     if index >= 0:
                         provider_combo.setCurrentIndex(index)
-                        # Update models for this provider
-                        if saved_provider:
-                            self._update_advanced_model_combo(
-                                saved_provider, model_combo
-                            )
+                    else:
+                        # If saved provider not found, use local
+                        local_index = provider_combo.findText("local")
+                        if local_index >= 0:
+                            provider_combo.setCurrentIndex(local_index)
+                            saved_provider = "local"
 
-                    # Load model selection
+                    # Update models for this provider
+                    if saved_provider:
+                        self._update_advanced_model_combo(saved_provider, model_combo)
+
+                    # Load model selection - default to MVP LLM model
+                    default_model = (
+                        "qwen2.5:7b-instruct" if saved_provider == "local" else ""
+                    )
                     saved_model = self.gui_settings.get_combo_selection(
-                        self.tab_name, f"{stage_name}_model", ""
+                        self.tab_name, f"{stage_name}_model", default_model
                     )
                     index = model_combo.findText(saved_model)
                     if index >= 0:

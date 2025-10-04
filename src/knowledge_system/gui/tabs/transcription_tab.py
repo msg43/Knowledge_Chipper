@@ -344,9 +344,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         settings_section = self._create_settings_section()
         layout.addWidget(settings_section)
 
-        # Performance section (consolidated thread/hardware management)
-        performance_section = self._create_performance_section()
-        layout.addWidget(performance_section)
+        # Performance section removed - dynamic resource management handles this now
 
         # Action buttons
         action_layout = self._create_action_layout()
@@ -649,85 +647,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         group.setLayout(layout)
         return group
 
-    def _create_performance_section(self) -> QGroupBox:
-        """Create the thread & resource management section."""
-        group = QGroupBox("Thread & Resource Management")
-        layout = QGridLayout()
-
-        # Configure layout to have no gaps between labels and controls
-        layout.setHorizontalSpacing(2)  # Minimal spacing between label and control
-        layout.setColumnStretch(1, 0)  # Don't stretch control columns
-        layout.setColumnStretch(3, 0)  # Don't stretch control columns
-
-        # OpenMP thread count
-        openmp_label = QLabel("OpenMP Threads:")
-        layout.addWidget(openmp_label, 0, 0, Qt.AlignmentFlag.AlignRight)
-        self.omp_threads = QSpinBox()
-        self.omp_threads.setMinimum(1)
-        self.omp_threads.setMaximum(32)
-        self.omp_threads.setValue(max(1, min(8, os.cpu_count() or 4)))
-        self.omp_threads.setMaximumWidth(60)  # Make 90% shorter
-        self.omp_threads.setToolTip(
-            "Number of OpenMP threads for Whisper.cpp processing cores. "
-            "• More threads = Faster transcription but higher CPU usage "
-            "• Recommended: 4-8 threads for most systems "
-            "• Lower values: Preserve CPU for other applications "
-            "• Higher values: May not improve speed beyond 8-12 threads "
-            "💡 Use 'Apply Recommended Settings' for optimal configuration"
-        )
-        self.omp_threads.valueChanged.connect(self._on_setting_changed)
-        layout.addWidget(self.omp_threads, 0, 1, Qt.AlignmentFlag.AlignLeft)
-
-        # Max concurrent files
-        concurrent_label = QLabel("Max Concurrent Files:")
-        layout.addWidget(concurrent_label, 0, 2, Qt.AlignmentFlag.AlignRight)
-        self.max_concurrent = QSpinBox()
-        self.max_concurrent.setMinimum(1)
-        self.max_concurrent.setMaximum(16)
-        self.max_concurrent.setValue(max(1, min(4, (os.cpu_count() or 4) // 2)))
-        self.max_concurrent.setMaximumWidth(60)  # Make 90% shorter
-        self.max_concurrent.setToolTip(
-            "Maximum number of files processed at the same time (parallel processing). "
-            "• Higher values = Faster batch processing but exponentially more memory usage "
-            "• CAUTION: Each file can use 2-10GB RAM depending on model size "
-            "• Memory usage = Files × Model RAM requirement "
-            "• Reduce if experiencing memory issues, crashes, or system slowdown "
-            "💡 Use 'Apply Recommended Settings' for optimal configuration"
-        )
-        self.max_concurrent.valueChanged.connect(self._on_setting_changed)
-        layout.addWidget(self.max_concurrent, 0, 3, Qt.AlignmentFlag.AlignLeft)
-
-        # Batch size
-        batch_label = QLabel("Batch Size:")
-        layout.addWidget(batch_label, 1, 0, Qt.AlignmentFlag.AlignRight)
-        self.batch_size = QSpinBox()
-        self.batch_size.setMinimum(1)
-        self.batch_size.setMaximum(64)
-        self.batch_size.setValue(16)
-        self.batch_size.setMaximumWidth(60)  # Make 90% shorter
-        self.batch_size.setToolTip(
-            "Number of audio segments processed together. "
-            "Higher values = better GPU utilization but more memory usage. "
-            "Recommended: 16-32 for GPU, 8-16 for CPU. "
-            "Reduce if you get out-of-memory errors."
-        )
-        self.batch_size.valueChanged.connect(self._on_setting_changed)
-        layout.addWidget(self.batch_size, 1, 1, Qt.AlignmentFlag.AlignLeft)
-
-        # Processing mode
-        mode_label = QLabel("Processing Mode:")
-        layout.addWidget(mode_label, 1, 2, Qt.AlignmentFlag.AlignRight)
-        self.processing_mode = QComboBox()
-        self.processing_mode.addItems(["Parallel", "Sequential"])
-        self.processing_mode.setCurrentText("Parallel")
-        self.processing_mode.setToolTip(
-            "Parallel processes multiple files at once (faster). Sequential processes one at a time (uses less resources)."
-        )
-        self.processing_mode.currentTextChanged.connect(self._on_setting_changed)
-        layout.addWidget(self.processing_mode, 1, 3, Qt.AlignmentFlag.AlignLeft)
-
-        group.setLayout(layout)
-        return group
+    # Performance section removed - dynamic resource management handles this now
 
     def _create_progress_section(self) -> QWidget:
         """Create the enhanced progress tracking section."""
@@ -957,8 +877,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         total_files = len(files)
         self.progress_display.start_operation("Local Transcription", total_files)
 
-        # Start rich log display to capture detailed processor information
-        self.rich_log_display.start_processing("Local Transcription")
+        # Rich log display removed - using main output_text area instead
 
         self.status_updated.emit("Transcription in progress...")
 
@@ -1062,8 +981,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # Complete the enhanced progress display
         self.progress_display.complete_operation(completed_files, failed_files)
 
-        # Stop rich log display
-        self.rich_log_display.stop_processing()
+        # Rich log display removed - using main output_text area instead
 
         self.append_log("\n✅ All transcriptions completed!")
         self.append_log(
@@ -1252,10 +1170,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             "enable_speaker_assignment": self.speaker_assignment_checkbox.isChecked(),
             "enable_color_coding": self.color_coded_checkbox.isChecked(),
             "output_dir": self.output_dir_input.text().strip() or None,
-            "batch_size": self.batch_size.value(),
-            "omp_threads": self.omp_threads.value(),
-            "max_concurrent": self.max_concurrent.value(),
-            "processing_mode": self.processing_mode.currentText(),
+            # Thread management handled by dynamic resource system
+            "batch_size": 16,  # Default batch size
+            "omp_threads": max(1, min(8, os.cpu_count() or 4)),  # Default threads
+            "max_concurrent": 1,  # Default to sequential for safety
+            "processing_mode": "Sequential",  # Default mode
             "enable_quality_retry": self.quality_retry_checkbox.isChecked(),
             "max_retry_attempts": self.max_retry_attempts.value(),
             "tokenizers_parallelism": False,  # Disabled: causes warnings and minimal benefit
@@ -1265,8 +1184,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             ),  # Add HF token for diarization
             "kwargs": {
                 "diarization": self.diarization_checkbox.isChecked(),
-                "omp_threads": self.omp_threads.value(),
-                "batch_size": self.batch_size.value(),
+                "omp_threads": max(1, min(8, os.cpu_count() or 4)),  # Default threads
+                "batch_size": 16,  # Default batch size
                 "hf_token": getattr(
                     self.settings.api_keys, "huggingface_token", None
                 ),  # Also add to kwargs for AudioProcessor
@@ -1447,29 +1366,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 )
             )
 
-            # Load spinbox values
-            self.batch_size.setValue(
-                self.gui_settings.get_spinbox_value(self.tab_name, "batch_size", 1)
-            )
-            self.omp_threads.setValue(
-                self.gui_settings.get_spinbox_value(self.tab_name, "omp_threads", 4)
-            )
-            self.max_concurrent.setValue(
-                self.gui_settings.get_spinbox_value(self.tab_name, "max_concurrent", 1)
-            )
+            # Load max retry attempts (performance settings handled by dynamic resource management)
             self.max_retry_attempts.setValue(
                 self.gui_settings.get_spinbox_value(
                     self.tab_name, "max_retry_attempts", 1
                 )
             )
-
-            # Load processing mode selection
-            saved_mode = self.gui_settings.get_combo_selection(
-                self.tab_name, "processing_mode", "balanced"
-            )
-            index = self.processing_mode.findText(saved_mode)
-            if index >= 0:
-                self.processing_mode.setCurrentIndex(index)
 
             # Ensure quality retry state is properly reflected in UI
             self._on_quality_retry_toggled(self.quality_retry_checkbox.isChecked())
@@ -1502,9 +1404,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.gui_settings.set_combo_selection(
                 self.tab_name, "format", self.format_combo.currentText()
             )
-            self.gui_settings.set_combo_selection(
-                self.tab_name, "processing_mode", self.processing_mode.currentText()
-            )
+            # Processing mode handled by dynamic resource management
 
             # Save checkbox states
             self.gui_settings.set_checkbox_state(
@@ -1536,16 +1436,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.quality_retry_checkbox.isChecked(),
             )
 
-            # Save spinbox values
-            self.gui_settings.set_spinbox_value(
-                self.tab_name, "batch_size", self.batch_size.value()
-            )
-            self.gui_settings.set_spinbox_value(
-                self.tab_name, "omp_threads", self.omp_threads.value()
-            )
-            self.gui_settings.set_spinbox_value(
-                self.tab_name, "max_concurrent", self.max_concurrent.value()
-            )
+            # Save max retry attempts (performance settings handled by dynamic resource management)
             self.gui_settings.set_spinbox_value(
                 self.tab_name, "max_retry_attempts", self.max_retry_attempts.value()
             )

@@ -55,6 +55,11 @@ class APIKeysTab(BaseTab):
         # Update progress tracking
         self._current_update_is_auto: bool = False
 
+        # Track app launch time to prevent confusing auto-update checks
+        import time
+
+        self._app_launch_time = time.time()
+
         # Initialize settings manager for session persistence
         from ..core.settings_manager import get_gui_settings_manager
 
@@ -1083,6 +1088,17 @@ class APIKeysTab(BaseTab):
                 logger.error(f"Main thread: {QApplication.instance().thread()}")
                 return
 
+            # For auto-updates, skip if too soon after app launch to avoid confusion
+            if is_auto:
+                import time
+
+                current_time = time.time()
+                if current_time - self._app_launch_time < 30:  # 30 seconds
+                    logger.info(
+                        "Skipping auto-update check - too soon after app launch"
+                    )
+                    return
+
             # If a previous worker exists
             if self.update_worker:
                 # If it's still running, do not start another
@@ -1271,7 +1287,8 @@ class APIKeysTab(BaseTab):
                     msg_box.setInformativeText(
                         f"{message}\n\n"
                         "The app will now quit and install the update automatically.\n"
-                        "The new version will launch when installation is complete."
+                        "The new version will launch when installation is complete.\n\n"
+                        "Note: The app may take a moment to launch after installation."
                     )
                     msg_box.setIcon(QMessageBox.Icon.Information)
                     msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)

@@ -651,9 +651,19 @@ echo "Running: installer -pkg \\"$PKG_PATH\\" -target /"
 
 # Create a simple AppleScript that uses the actual path
 echo "Executing AppleScript for PKG installation..."
-osascript << EOF
+echo "PKG Path for AppleScript: $PKG_PATH"
+
+# Create a temporary AppleScript file to avoid shell escaping issues
+TEMP_SCRIPT=$(mktemp)
+cat > "$TEMP_SCRIPT" << EOF
 do shell script "installer -pkg '$PKG_PATH' -target /" with administrator privileges
 EOF
+
+# Execute the AppleScript
+osascript "$TEMP_SCRIPT" 2>&1
+
+# Clean up
+rm -f "$TEMP_SCRIPT"
 
 INSTALL_EXIT_CODE=$?
 
@@ -661,7 +671,15 @@ if [ $INSTALL_EXIT_CODE -eq 0 ]; then
     echo "✅ PKG installation completed"
 else
     echo "❌ PKG installation failed with exit code $INSTALL_EXIT_CODE"
-    exit 1
+    echo "Trying direct installer command as fallback..."
+    installer -pkg "$PKG_PATH" -target /
+    INSTALL_EXIT_CODE=$?
+    if [ $INSTALL_EXIT_CODE -eq 0 ]; then
+        echo "✅ PKG installation completed via direct installer fallback"
+    else
+        echo "❌ PKG installation failed with exit code $INSTALL_EXIT_CODE"
+        exit 1
+    fi
 fi
 
 # Wait for installation to complete
@@ -684,18 +702,44 @@ if [ -d "$APP_PATH" ]; then
 
     # Wait a moment for installation to fully complete
     echo "⏳ Waiting for installation to fully complete..."
-    sleep 2
+    sleep 5
 
     # Launch the new app
     echo "🚀 Launching updated app..."
     echo "App path: $APP_PATH"
 
+    # Show user that the app is launching
+    osascript -e 'display notification "Launching updated Skip the Podcast Desktop..." with title "Update Complete"'
+
     # Try multiple methods to launch the app
     echo "Attempting to launch app..."
+
+    # Method 1: Use open command
     if open "$APP_PATH" 2>/dev/null; then
         echo "✅ App launched successfully with 'open' command"
-        # Show success notification
-        osascript -e 'display notification "Skip the Podcast Desktop has been updated and is launching!" with title "Update Complete"'
+        sleep 2
+        if pgrep -f "Skip the Podcast Desktop" >/dev/null; then
+            echo "✅ App process confirmed running"
+            osascript -e 'display notification "Skip the Podcast Desktop has been updated and is launching!" with title "Update Complete"'
+        else
+            echo "⚠️  App launched but process not detected, trying alternative method..."
+            # Try alternative method
+            if [ -f "$APP_PATH/Contents/MacOS/launch" ]; then
+                echo "Trying to launch via launch script..."
+                "$APP_PATH/Contents/MacOS/launch" &
+                sleep 3
+                if pgrep -f "Skip the Podcast Desktop" >/dev/null; then
+                    echo "✅ App launched successfully via launch script"
+                    osascript -e 'display notification "Skip the Podcast Desktop has been updated and is launching!" with title "Update Complete"'
+                else
+                    echo "❌ Launch script failed"
+                    osascript -e 'display dialog "Update completed but app failed to launch. Please manually open Skip the Podcast Desktop from Applications." buttons {"OK"} default button "OK" with icon caution'
+                fi
+            else
+                echo "❌ No launch script found"
+                osascript -e 'display dialog "Update completed but app failed to launch. Please manually open Skip the Podcast Desktop from Applications." buttons {"OK"} default button "OK" with icon caution'
+            fi
+        fi
     else
         echo "⚠️  'open' command failed, trying alternative method..."
         # Alternative launch method
@@ -723,7 +767,7 @@ if [ -d "$APP_PATH" ]; then
             fi
         fi
     fi
-    
+
     echo "✅ Update complete! Skip the Podcast Desktop v$VERSION installation finished."
 else
     echo "❌ Installation failed - app not found at $APP_PATH"
