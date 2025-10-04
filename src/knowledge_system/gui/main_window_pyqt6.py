@@ -263,13 +263,13 @@ class MainWindow(QMainWindow):
         summarization_tab = SummarizationTab(self)
         self.tabs.addTab(summarization_tab, "Summarization")
 
-        # Claim search tab for exploring extracted claims
-        claim_search_tab = ClaimSearchTab(self)
-        self.tabs.addTab(claim_search_tab, "🔍 Claim Search")
+        # Claim search tab for exploring extracted claims - HIDDEN
+        # claim_search_tab = ClaimSearchTab(self)
+        # self.tabs.addTab(claim_search_tab, "🔍 Claim Search")
 
-        # Summary cleanup tab for post-processing review
-        summary_cleanup_tab = SummaryCleanupTab(self)
-        self.tabs.addTab(summary_cleanup_tab, "✏️ Summary Cleanup")
+        # Summary cleanup tab for post-processing review - HIDDEN
+        # summary_cleanup_tab = SummaryCleanupTab(self)
+        # self.tabs.addTab(summary_cleanup_tab, "✏️ Summary Cleanup")
 
         # Only add Process Management tab if enabled in settings
         settings = get_settings()

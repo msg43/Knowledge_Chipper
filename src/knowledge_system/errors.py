@@ -5,7 +5,26 @@ Custom exception hierarchy for Knowledge System.
 Provides structured error handling with context preservation.
 """
 
+from enum import Enum
 from typing import Any
+
+
+class ErrorCode(Enum):
+    """Error code taxonomy for System 2 per TECHNICAL_SPECIFICATIONS.md"""
+
+    # High severity - Requires immediate attention
+    VALIDATION_SCHEMA_ERROR_HIGH = "VALIDATION_SCHEMA_ERROR_HIGH"
+    DATABASE_CONNECTION_ERROR_HIGH = "DATABASE_CONNECTION_ERROR_HIGH"
+    MEMORY_EXCEEDED_ERROR_HIGH = "MEMORY_EXCEEDED_ERROR_HIGH"
+
+    # Medium severity - Degraded functionality
+    API_RATE_LIMIT_ERROR_MEDIUM = "API_RATE_LIMIT_ERROR_MEDIUM"
+    NETWORK_TIMEOUT_ERROR_MEDIUM = "NETWORK_TIMEOUT_ERROR_MEDIUM"
+    TRANSCRIPTION_PARTIAL_ERROR_MEDIUM = "TRANSCRIPTION_PARTIAL_ERROR_MEDIUM"
+
+    # Low severity - Minor issues
+    CACHE_MISS_LOW = "CACHE_MISS_LOW"
+    OPTIONAL_FEATURE_UNAVAILABLE_LOW = "OPTIONAL_FEATURE_UNAVAILABLE_LOW"
 
 
 class KnowledgeSystemError(Exception):
@@ -14,7 +33,7 @@ class KnowledgeSystemError(Exception):
     def __init__(
         self,
         message: str,
-        error_code: str | None = None,
+        error_code: str | ErrorCode | None = None,
         context: dict[str, Any] | None = None,
         cause: Exception | None = None,
     ) -> None:
@@ -31,7 +50,11 @@ class KnowledgeSystemError(Exception):
 
         super().__init__(message)
         self.message = message
-        self.error_code = error_code or self.__class__.__name__
+        # Handle ErrorCode enum values
+        if isinstance(error_code, ErrorCode):
+            self.error_code = error_code.value
+        else:
+            self.error_code = error_code or self.__class__.__name__
         self.context = context or {}
         self.cause = cause
 

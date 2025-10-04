@@ -1911,17 +1911,37 @@ class SummarizationTab(BaseTab):
         from PyQt6.QtCore import QTimer
 
         def populate_initial_models():
-            if hasattr(self, "miner_provider") and self.miner_provider:
-                if self.miner_provider.currentText() == "local":
-                    self._update_advanced_model_combo("local", self.miner_model)
-            if (
-                hasattr(self, "flagship_judge_provider")
-                and self.flagship_judge_provider
-            ):
-                if self.flagship_judge_provider.currentText() == "local":
-                    self._update_advanced_model_combo(
-                        "local", self.flagship_judge_model
-                    )
+            try:
+                # For miner model
+                if hasattr(self, "miner_provider") and self.miner_provider:
+                    current_provider = self.miner_provider.currentText()
+                    if current_provider == "local":
+                        self._update_advanced_model_combo("local", self.miner_model)
+                        # Set default MVP LLM model if no model is selected
+                        if not self.miner_model.currentText():
+                            mvp_model = "qwen2.5:7b-instruct"
+                            idx = self.miner_model.findText(mvp_model)
+                            if idx >= 0:
+                                self.miner_model.setCurrentIndex(idx)
+
+                # For flagship judge model
+                if (
+                    hasattr(self, "flagship_judge_provider")
+                    and self.flagship_judge_provider
+                ):
+                    current_provider = self.flagship_judge_provider.currentText()
+                    if current_provider == "local":
+                        self._update_advanced_model_combo(
+                            "local", self.flagship_judge_model
+                        )
+                        # Set default MVP LLM model if no model is selected
+                        if not self.flagship_judge_model.currentText():
+                            mvp_model = "qwen2.5:7b-instruct"
+                            idx = self.flagship_judge_model.findText(mvp_model)
+                            if idx >= 0:
+                                self.flagship_judge_model.setCurrentIndex(idx)
+            except Exception as e:
+                logger.error(f"Error populating initial models: {e}")
 
         QTimer.singleShot(100, populate_initial_models)  # Delay to ensure UI is ready
 

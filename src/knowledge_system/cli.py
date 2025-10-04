@@ -271,7 +271,7 @@ def models_refresh(provider: str | None) -> None:
     "--patterns",
     "-p",
     multiple=True,
-    default=["*.mp4", "*.mp3", "*.wav", "*.pdf"],
+    default=["*.mp4", "*.mp3", "*.wav", "*.m4a", "*.pdf"],
     help="File patterns to watch for",
 )
 @click.option(
@@ -374,6 +374,7 @@ def watch(
                     ".mp3",
                     ".wav",
                     ".webm",
+                    ".m4a",
                 ]:
                     from .processors.audio_processor import AudioProcessor
 

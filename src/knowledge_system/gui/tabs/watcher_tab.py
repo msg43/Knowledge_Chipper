@@ -96,10 +96,10 @@ class WatcherTab(BaseTab, FileOperationsMixin):
         # File patterns
         layout.addWidget(QLabel("File Patterns:"), 1, 0)
         self.file_patterns = QLineEdit()
-        self.file_patterns.setText("*.mp4,*.mp3,*.wav,*.pdf,*.txt,*.md")
+        self.file_patterns.setText("*.mp4,*.mp3,*.wav,*.m4a,*.pdf,*.txt,*.md")
         self.file_patterns.setToolTip(
             "Comma-separated file patterns to watch for (supports wildcards).\n"
-            "• Examples: *.mp4, *.mp3, *.wav (audio/video files)\n"
+            "• Examples: *.mp4, *.mp3, *.wav, *.m4a (audio/video files)\n"
             "• Examples: *.pdf, *.txt, *.md (document files)\n"
             "• Use * as wildcard for any characters\n"
             "• Separate multiple patterns with commas"
@@ -548,7 +548,9 @@ class WatcherTab(BaseTab, FileOperationsMixin):
 
             # Load file patterns
             saved_patterns = self.gui_settings.get_line_edit_text(
-                self.tab_name, "file_patterns", "*.mp4,*.mp3,*.wav,*.pdf,*.txt,*.md"
+                self.tab_name,
+                "file_patterns",
+                "*.mp4,*.mp3,*.wav,*.m4a,*.pdf,*.txt,*.md",
             )
             self.file_patterns.setText(saved_patterns)
 
