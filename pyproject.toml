@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "knowledge-system"
-version = "3.2.39"
+version = "3.2.73"
 description = "Skip the Podcast Desktop - A comprehensive knowledge management system for macOS that transforms videos, audio files, and documents into organized, searchable knowledge."
 readme = "README.md"
 requires-python = ">=3.13"

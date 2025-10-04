@@ -9,7 +9,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 DIST_DIR="$PROJECT_ROOT/dist"
 
 # GitHub configuration
-GITHUB_REPO="msg43/Knowledge_Chipper"
+GITHUB_REPO="msg43/Skipthepodcast.com"
 RELEASE_TAG="v3.2.35"
 FILE_PATH="$DIST_DIR/ollama-models-bundle.tar.gz"
 

@@ -210,31 +210,8 @@ fi
 
 print_status "App bundle skeleton created"
 
-# Create a LaunchDaemon that absolutely requires root
-echo -e "\n${BLUE}🔐 Creating LaunchDaemon (forces root requirement)...${NC}"
-mkdir -p "$PKG_ROOT/Library/LaunchDaemons"
-cat > "$PKG_ROOT/Library/LaunchDaemons/com.knowledgechipper.skipthepodcast.plist" << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.knowledgechipper.skipthepodcast</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Applications/Skip the Podcast Desktop.app/Contents/MacOS/Skip the Podcast Desktop</string>
-        <string>--check-updates</string>
-    </array>
-    <key>RunAtLoad</key>
-    <false/>
-    <key>Disabled</key>
-    <true/>
-</dict>
-</plist>
-EOF
-# LaunchDaemons MUST be owned by root:wheel with specific permissions
-chmod 644 "$PKG_ROOT/Library/LaunchDaemons/com.knowledgechipper.skipthepodcast.plist"
-print_status "LaunchDaemon created (requires root to install)"
+# Skip creating LaunchDaemon to reduce privilege prompts
+echo -e "\n${BLUE}🔐 Skipping LaunchDaemon creation to reduce prompts...${NC}"
 
 # Copy app source code to bundle
 echo -e "\n${BLUE}📁 Copying app source code...${NC}"
@@ -304,8 +281,22 @@ import time
 import signal
 
 # GitHub repository configuration
-GITHUB_REPO = "msg43/Knowledge_Chipper"
-GITHUB_RELEASES_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+GITHUB_REPO = "msg43/Skipthepodcast.com"
+
+def get_app_version(app_bundle_path):
+    """Get the app version from Info.plist."""
+    try:
+        import plistlib
+        info_plist = Path(app_bundle_path) / "Contents" / "Info.plist"
+        with open(info_plist, 'rb') as f:
+            plist = plistlib.load(f)
+        return plist.get('CFBundleShortVersionString', '3.2.40')
+    except Exception:
+        return '3.2.40'  # Fallback version
+
+# Get the app version and construct the release URL
+app_version = get_app_version(sys.argv[1] if len(sys.argv) > 1 else '.')
+GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases/download/v{app_version}"
 
 # Component manifest with version tracking
 COMPONENT_MANIFEST = {
@@ -313,7 +304,7 @@ COMPONENT_MANIFEST = {
         "name": "python-framework-3.13-macos.tar.gz",
         "size_mb": 40,
         "description": "Python 3.13 Framework",
-        "version": "3.13.1",
+        "version": "3.13.3",
         "cache_key": "python_framework",
         "update_frequency": "rare"  # Only updates when Python version changes
     },
@@ -468,18 +459,13 @@ class ComponentDownloader:
 
     def get_latest_release_assets(self):
         """Get download URLs for latest release assets."""
-        try:
-            with urllib.request.urlopen(GITHUB_RELEASES_URL) as response:
-                release_data = json.loads(response.read())
-
-            assets = {}
-            for asset in release_data.get('assets', []):
-                assets[asset['name']] = asset['browser_download_url']
-
-            return assets
-        except Exception as e:
-            print(f"Failed to get release assets: {e}")
-            return {}
+        # Since we can't use the API for private repos, we'll construct the URLs directly
+        # based on the known component names
+        return {
+            "python-framework-3.13-macos.tar.gz": f"{GITHUB_RELEASES_URL}/python-framework-3.13-macos.tar.gz",
+            "ai-models-bundle.tar.gz": f"{GITHUB_RELEASES_URL}/ai-models-bundle.tar.gz",
+            "ffmpeg-macos-universal.tar.gz": f"{GITHUB_RELEASES_URL}/ffmpeg-macos-universal.tar.gz"
+        }
 
     def download_component(self, component_name, component_info, download_url):
         """Download and verify a component."""
@@ -1528,24 +1514,9 @@ report_progress() {
 
 report_progress 80 "Finalizing installation"
 
-# Download components during installation
-echo "Downloading required components..."
-report_progress 90 "Downloading components"
-
-# Download components using the download manager
-DOWNLOAD_SCRIPT="$APP_BUNDLE/Contents/Resources/installer_scripts/download_manager.py"
-if [ -f "$DOWNLOAD_SCRIPT" ]; then
-    echo "Starting component download..."
-    python3 "$DOWNLOAD_SCRIPT" --install-to "$APP_BUNDLE" || {
-        echo "Component download failed during installation"
-        report_progress 95 "Component download failed"
-        exit 1
-    }
-    report_progress 95 "Components downloaded successfully"
-else
-    echo "Download manager not found, skipping component download"
-    report_progress 95 "Components will download on first launch"
-fi
+# Skip component downloads during installation; handled on first run
+echo "Skipping component downloads during installation"
+report_progress 95 "Components will download on first launch if needed"
 
 # Create launch script
 echo "Creating launch script..."
@@ -1554,22 +1525,42 @@ cat > "$APP_BUNDLE/Contents/MacOS/launch" << 'LAUNCH_EOF'
 # Launch script for Skip the Podcast Desktop
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-FRAMEWORK_PYTHON="$APP_DIR/Frameworks/Python.framework/Versions/3.13/bin/python3.13"
+# Put venv in user Library to avoid permission issues
+VENV_DIR="$HOME/Library/Application Support/SkipThePodcast/venv"
+SETUP_MARKER="$VENV_DIR/.setup_complete"
 
 # Set up environment
-export PYTHONPATH="$APP_DIR/Resources:${PYTHONPATH}"
+export PYTHONPATH="$APP_DIR/Resources/src:${PYTHONPATH}"
 export MODELS_BUNDLED="true"
+export FFMPEG_PATH="$APP_DIR/MacOS/ffmpeg"
+export FFPROBE_PATH="$APP_DIR/MacOS/ffprobe"
+export PATH="$APP_DIR/MacOS:${PATH}"
 
-# Check if components are installed
-if [ ! -x "$FRAMEWORK_PYTHON" ]; then
-    # Components not found - this shouldn't happen if installation completed successfully
-    echo "Components not found - installation may have failed"
-    osascript -e 'display dialog "Skip the Podcast Desktop components are missing.\n\nPlease reinstall the application." buttons {"OK"} default button "OK" with title "Installation Error" with icon stop'
-    exit 1
+# Check if setup is needed
+if [ ! -f "$SETUP_MARKER" ]; then
+    echo "First run setup needed..."
+    
+    # Show setup dialog
+    osascript -e 'display dialog "Setting up Skip the Podcast Desktop...\n\nThis will take a few minutes on first run." buttons {"Continue"} default button "Continue" with title "First Run Setup"'
+    
+    # Create virtual environment
+    echo "Creating Python environment..."
+    mkdir -p "$(dirname "$VENV_DIR")"
+    /usr/bin/python3 -m venv "$VENV_DIR"
+    
+    # Install dependencies
+    echo "Installing dependencies..."
+    "$VENV_DIR/bin/python" -m pip install --upgrade pip
+    "$VENV_DIR/bin/python" -m pip install -r "$APP_DIR/Resources/requirements.txt"
+    
+    # Mark setup as complete
+    touch "$SETUP_MARKER"
+    
+    echo "Setup complete!"
 fi
 
 # Launch the application
-exec "$FRAMEWORK_PYTHON" -m knowledge_system.gui
+exec "$VENV_DIR/bin/python" -m knowledge_system.gui
 LAUNCH_EOF
 
 chmod +x "$APP_BUNDLE/Contents/MacOS/launch"
@@ -1607,6 +1598,7 @@ print_status "Post-install script created"
 echo -e "\n${BLUE}📦 Copying installer scripts...${NC}"
 mkdir -p "$RESOURCES_DIR/installer_scripts"
 mkdir -p "$APP_BUNDLE/Contents/Resources/installer_scripts"
+mkdir -p "$APP_BUNDLE/Contents/Resources/scripts"
 
 # Copy to distribution resources
 cp "$SCRIPTS_DIR/download_manager.py" "$RESOURCES_DIR/installer_scripts/"
@@ -1615,6 +1607,13 @@ cp "$SCRIPTS_DIR/hardware_detector.py" "$RESOURCES_DIR/installer_scripts/"
 # Copy to app bundle for runtime access
 cp "$SCRIPTS_DIR/download_manager.py" "$APP_BUNDLE/Contents/Resources/installer_scripts/"
 cp "$SCRIPTS_DIR/hardware_detector.py" "$APP_BUNDLE/Contents/Resources/installer_scripts/"
+
+# Copy post-install model setup script
+if [ -f "$PROJECT_ROOT/scripts/post_install_setup.sh" ]; then
+    cp "$PROJECT_ROOT/scripts/post_install_setup.sh" "$APP_BUNDLE/Contents/Resources/scripts/"
+    chmod +x "$APP_BUNDLE/Contents/Resources/scripts/post_install_setup.sh"
+    print_status "Post-install model setup script included"
+fi
 
 # For now, let's skip creating system-level files to see if that's interfering
 # echo -e "\n${BLUE}📝 Creating system-level installation components...${NC}"
@@ -1628,22 +1627,111 @@ cat > "$APP_BUNDLE/Contents/MacOS/launch" << 'LAUNCH_EOF'
 # Launch script for Skip the Podcast Desktop
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-FRAMEWORK_PYTHON="$APP_DIR/Frameworks/Python.framework/Versions/3.13/bin/python3.13"
+VENV_DIR="$HOME/Library/Application Support/SkipThePodcast/venv"
+SETUP_MARKER="$VENV_DIR/.setup_complete"
+ARCH_NAME="$(uname -m)"
+ARCH_PREFIX=""
+if [[ "$ARCH_NAME" == "arm64" ]]; then ARCH_PREFIX="/usr/bin/arch -arm64"; fi
 
 # Set up environment
-export PYTHONPATH="$APP_DIR/Resources:${PYTHONPATH}"
+export PYTHONPATH="$APP_DIR/Resources/src:${PYTHONPATH}"
 export MODELS_BUNDLED="true"
+export FFMPEG_PATH="$APP_DIR/MacOS/ffmpeg"
+export FFPROBE_PATH="$APP_DIR/MacOS/ffprobe"
+export PATH="$APP_DIR/MacOS:${PATH}"
 
-# Check if components are installed
-if [ ! -x "$FRAMEWORK_PYTHON" ]; then
-    # Components not found - this shouldn't happen if installation completed successfully
-    echo "Components not found - installation may have failed"
-    osascript -e 'display dialog "Skip the Podcast Desktop components are missing.\n\nPlease reinstall the application." buttons {"OK"} default button "OK" with title "Installation Error" with icon stop'
+# Select a Python >= 3.10 interpreter (prefer Homebrew)
+select_python() {
+    local cand=
+    for cand in \
+        "/opt/homebrew/bin/python3.12" \
+        "/opt/homebrew/bin/python3.11" \
+        "/opt/homebrew/bin/python3.10" \
+        "/opt/homebrew/bin/python3" \
+        "/usr/bin/python3"; do
+        if [ -x "$cand" ]; then
+            local ok
+            ok=$($ARCH_PREFIX "$cand" -c 'import sys; print(int(sys.version_info[:2] >= (3,10)))' 2>/dev/null || echo 0)
+            if [ "$ok" = "1" ]; then
+                echo "$cand"
+                return 0
+            fi
+        fi
+    done
+    echo ""  # not found
+}
+
+PYTHON_BIN="$(select_python)"
+if [ -z "$PYTHON_BIN" ]; then
+    osascript -e 'display dialog "A Python 3.10+ interpreter is required.\n\nPlease install Homebrew Python (python@3.12) and re-open the app." buttons {"OK"} default button "OK" with title "Python Required" with icon stop'
     exit 1
 fi
 
+create_venv() {
+    echo "Creating Python environment..."
+    mkdir -p "$(dirname "$VENV_DIR")"
+    rm -rf "$VENV_DIR"
+    $ARCH_PREFIX "$PYTHON_BIN" -m venv "$VENV_DIR"
+    echo "Installing dependencies..."
+    $ARCH_PREFIX "$VENV_DIR/bin/python" -m ensurepip --upgrade || true
+    $ARCH_PREFIX "$VENV_DIR/bin/python" -m pip install --upgrade pip wheel setuptools --no-cache-dir
+    $ARCH_PREFIX "$VENV_DIR/bin/python" -m pip install -r "$APP_DIR/Resources/requirements.txt" --no-cache-dir
+}
+
+validate_imports() {
+    $ARCH_PREFIX "$VENV_DIR/bin/python" - <<'PY'
+import sys, platform
+print(platform.machine())
+try:
+    import pydantic_core, PyQt6, yaml
+    print("OK")
+except Exception as e:
+    print(f"IMPORT_ERROR:{e}", file=sys.stderr)
+    raise SystemExit(1)
+PY
+}
+
+# First-run or recovery setup (enforce Python >= 3.10 and arm64)
+NEED_SETUP=0
+if [ ! -f "$SETUP_MARKER" ]; then
+    NEED_SETUP=1
+else
+    VENV_ARCH="$($ARCH_PREFIX "$VENV_DIR/bin/python" -c 'import platform; print(platform.machine())' 2>/dev/null || echo unknown)"
+    VENV_VER="$($ARCH_PREFIX "$VENV_DIR/bin/python" -c 'import sys; print("%d.%d"%sys.version_info[:2])' 2>/dev/null || echo 0.0)"
+    # Version compare helper (returns 1 if $1 < $2)
+    version_lt() { [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n1)" != "$2" ]; }
+    if [[ "$ARCH_NAME" == "arm64" && "$VENV_ARCH" != "arm64" ]]; then
+        echo "Venv architecture mismatch ($VENV_ARCH); rebuilding for arm64..."
+        NEED_SETUP=1
+    elif version_lt "$VENV_VER" "3.10"; then
+        echo "Venv Python $VENV_VER < 3.10; rebuilding with $PYTHON_BIN..."
+        NEED_SETUP=1
+    else
+        if ! validate_imports >/dev/null 2>&1; then
+            echo "Import validation failed; rebuilding venv..."
+            NEED_SETUP=1
+        fi
+    fi
+fi
+
+if [ $NEED_SETUP -eq 1 ]; then
+    osascript -e 'display dialog "Setting up Skip the Podcast Desktop...\n\nThis will take a few minutes on first run." buttons {"Continue"} default button "Continue" with title "First Run Setup"'
+    create_venv
+    if ! validate_imports; then
+        echo "Reinstalling pydantic_core without cache..."
+        $ARCH_PREFIX "$VENV_DIR/bin/python" -m pip install --force-reinstall --no-cache-dir pydantic_core || true
+        # Validate again; if still failing, show dialog
+        if ! validate_imports; then
+            osascript -e 'display dialog "Dependency setup failed.\n\nPlease run: brew install python@3.12 and re-open the app." buttons {"OK"} default button "OK" with title "Setup Error" with icon stop'
+            exit 1
+        fi
+    fi
+    touch "$SETUP_MARKER"
+    echo "Setup complete!"
+fi
+
 # Launch the application
-exec "$FRAMEWORK_PYTHON" -m knowledge_system.gui
+exec $ARCH_PREFIX "$VENV_DIR/bin/python" -m knowledge_system.gui
 LAUNCH_EOF
 
 chmod +x "$APP_BUNDLE/Contents/MacOS/launch"
@@ -1866,7 +1954,7 @@ cat > "$RESOURCES_DIR/conclusion.html" << 'EOF'
         </ul>
     </div>
 
-    <p>For support and documentation, visit: <a href="https://github.com/msg43/Knowledge_Chipper">GitHub Repository</a></p>
+    <p>For support and documentation, visit: <a href="https://github.com/msg43/Skipthepodcast.com">GitHub Repository</a></p>
 </body>
 </html>
 EOF

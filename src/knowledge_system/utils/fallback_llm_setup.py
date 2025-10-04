@@ -22,6 +22,8 @@ FALLBACK_MODEL = "qwen2.5:7b-instruct"  # 7B instruct model, ~4GB download, exce
 FALLBACK_MODEL_ALTERNATIVES = [
     "qwen2.5:7b-instruct",  # 7B, 4GB - excellent JSON compliance, best for structured output
     "qwen2.5:3b-instruct",  # 3B, 2GB - smaller Qwen instruct option
+    "qwen3:8b",  # 8B, 5.2GB - base model with thinking (use enable_thinking=False for instruct mode)
+    "qwen3:4b",  # 4B, ~2.5GB - base model with thinking (use enable_thinking=False for instruct mode)
     "llama3.2:3b-instruct",  # 3B, 2GB - fallback instruct option
     "phi3:3.8b-mini-instruct",  # 3.8B, 2.3GB - very good at text
 ]
@@ -31,6 +33,8 @@ MVP_MODEL = "qwen2.5:7b-instruct"  # 7B instruct model, ~4GB download, excellent
 MVP_MODEL_ALTERNATIVES = [
     "qwen2.5:7b-instruct",  # 7B, 4GB - excellent JSON compliance, best for structured output
     "qwen2.5:3b-instruct",  # 3B, 2GB - smaller Qwen instruct option
+    "qwen3:8b",  # 8B, 5.2GB - base model with thinking (use enable_thinking=False for instruct mode)
+    "qwen3:4b",  # 4B, ~2.5GB - base model with thinking (use enable_thinking=False for instruct mode)
     "llama3.2:3b-instruct",  # 3B, 2GB - fallback instruct option
     "phi3:3.8b-mini-instruct",  # 3.8B, 2.3GB - very good at text
 ]

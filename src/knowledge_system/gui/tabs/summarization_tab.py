@@ -1844,22 +1844,30 @@ class SummarizationTab(BaseTab):
         layout.addWidget(self.advanced_models_group)
 
         # Initialize model dropdowns to be empty by default
-        for provider_combo, model_combo, _ in [
-            (self.miner_provider, self.miner_model, self.miner_uri),
-            (self.heavy_miner_provider, self.heavy_miner_model, self.heavy_miner_uri),
-            (self.judge_provider, self.judge_model, self.judge_uri),
+        # Guard against optional advanced widgets not being present on some builds
+        widget_triplets = [
+            (getattr(self, "miner_provider", None), getattr(self, "miner_model", None), getattr(self, "miner_uri", None)),
+            (getattr(self, "heavy_miner_provider", None), getattr(self, "heavy_miner_model", None), getattr(self, "heavy_miner_uri", None)),
+            (getattr(self, "judge_provider", None), getattr(self, "judge_model", None), getattr(self, "judge_uri", None)),
             (
-                self.flagship_judge_provider,
-                self.flagship_judge_model,
-                self.flagship_judge_uri,
+                getattr(self, "flagship_judge_provider", None),
+                getattr(self, "flagship_judge_model", None),
+                getattr(self, "flagship_judge_uri", None),
             ),
-            (self.embedder_provider, self.embedder_model, self.embedder_uri),
-            (self.reranker_provider, self.reranker_model, self.reranker_uri),
-            (self.people_provider, self.people_model, self.people_uri),
-            (self.nli_provider, self.nli_model, self.nli_uri),
-        ]:
-            model_combo.clear()
-            model_combo.addItems([""])  # Start with empty option
+            (getattr(self, "embedder_provider", None), getattr(self, "embedder_model", None), getattr(self, "embedder_uri", None)),
+            (getattr(self, "reranker_provider", None), getattr(self, "reranker_model", None), getattr(self, "reranker_uri", None)),
+            (getattr(self, "people_provider", None), getattr(self, "people_model", None), getattr(self, "people_uri", None)),
+            (getattr(self, "nli_provider", None), getattr(self, "nli_model", None), getattr(self, "nli_uri", None)),
+        ]
+
+        for provider_combo, model_combo, _ in widget_triplets:
+            if model_combo is None:
+                continue
+            try:
+                model_combo.clear()
+                model_combo.addItems([""])  # Start with empty option
+            except Exception:
+                pass
 
         # Budgets & Limits (collapsible)
         self.budgets_group = QGroupBox("💰 Budgets & Limits")

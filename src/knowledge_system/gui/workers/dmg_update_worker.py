@@ -1,4 +1,9 @@
-"""DMG-based update worker for Knowledge Chipper."""
+"""PKG-based update worker for Skip the Podcast Desktop.
+
+This module previously implemented a DMG-based updater. Releases now ship PKG
+installers, so the logic has been converted to download the PKG from the
+GitHub release assets and install it via the macOS `installer` tool.
+"""
 
 import json
 import os
@@ -19,7 +24,7 @@ logger = get_logger(__name__)
 
 
 class DMGUpdateWorker(QThread):
-    """Worker thread for handling DMG-based app updates."""
+    """Worker thread for handling PKG-based app updates."""
 
     # Signals
     update_progress = pyqtSignal(str)  # Status message
@@ -28,7 +33,7 @@ class DMGUpdateWorker(QThread):
     update_error = pyqtSignal(str)  # Error message
 
     def __init__(self, is_auto: bool = False) -> None:
-        """Initialize the DMG update worker."""
+        """Initialize the (PKG) update worker."""
         super().__init__()
         self.public_repo_url = (
             "https://api.github.com/repos/msg43/Skipthepodcast.com/releases/latest"
@@ -40,6 +45,18 @@ class DMGUpdateWorker(QThread):
         """Check if this is a fresh installation that shouldn't auto-update."""
         import time
         from pathlib import Path
+
+        # Check for update in progress marker to prevent loops
+        update_marker = Path.home() / ".skip_the_podcast_update_in_progress"
+        if update_marker.exists():
+            # Check if marker is recent (within last 5 minutes)
+            marker_age = time.time() - update_marker.stat().st_mtime
+            if marker_age < 300:  # 5 minutes
+                logger.info(f"Update in progress detected (marker age: {marker_age}s) - skipping auto-update")
+                return True
+            else:
+                # Remove stale marker
+                update_marker.unlink(missing_ok=True)
 
         # Check for markers that indicate this is a fresh install
         install_markers = [
@@ -73,7 +90,7 @@ class DMGUpdateWorker(QThread):
         """Run the DMG update process."""
         try:
             logger.info(
-                f"Starting DMG update check from version {self.current_version}"
+                f"Starting PKG update check from version {self.current_version}"
             )
 
             # Check if this is a fresh install - skip auto-updates for new installations
@@ -106,17 +123,21 @@ class DMGUpdateWorker(QThread):
 
             logger.info(f"Update available: {self.current_version} → {new_version}")
 
+            # Create update marker to prevent loops
+            update_marker = Path.home() / ".skip_the_podcast_update_in_progress"
+            update_marker.touch()
+
             # Step 2: Download DMG
             self.update_progress.emit(
-                f"📥 Downloading Knowledge Chipper v{new_version}..."
+                f"📥 Downloading Skip the Podcast Desktop v{new_version}..."
             )
             self.update_progress_percent.emit(25, "Downloading update")
 
-            dmg_url = self._get_dmg_download_url(latest_release)
-            if not dmg_url:
-                raise Exception("Could not find DMG download in release assets")
+            pkg_url = self._get_pkg_download_url(latest_release)
+            if not pkg_url:
+                raise Exception("Could not find PKG download in release assets")
 
-            dmg_path = self._download_dmg(dmg_url, new_version)
+            pkg_path = self._download_pkg(pkg_url, new_version)
 
             # Step 3: Backup user data (minimal since data is in proper locations)
             self.update_progress.emit("💾 Preparing for installation...")
@@ -124,31 +145,30 @@ class DMGUpdateWorker(QThread):
 
             backup_info = self._prepare_update()
 
-            # Step 4: Install DMG
-            self.update_progress.emit("🔄 Installing update...")
-            self.update_progress_percent.emit(80, "Installing new version")
+            # Step 4: Prepare for installation and quit app
+            self.update_progress.emit("🔄 Preparing for installation...")
+            self.update_progress_percent.emit(80, "Preparing to install update")
 
-            self._install_dmg(dmg_path)
+            # Create installation script that will run after app quits
+            install_script = self._create_install_script(pkg_path, new_version)
 
-            # Step 5: Complete installation
-            self.update_progress.emit("✅ Finalizing installation...")
-            self.update_progress_percent.emit(95, "Completing update")
+            # Step 5: Schedule installation and quit app
+            self.update_progress.emit("🚀 Installing update...")
+            self.update_progress_percent.emit(90, "Installing new version")
 
-            self._finalize_update(backup_info)
+            # Schedule the installation script to run after app quits
+            self._schedule_install_and_restart(install_script)
 
-            # Step 6: Success
-            self.update_progress_percent.emit(100, "Update complete")
+            # Step 6: Success - app will quit and restart automatically
+            self.update_progress_percent.emit(100, "Update ready")
             self.update_finished.emit(
                 True,
-                f"✅ Successfully updated to v{new_version}!\n\nThe app will restart automatically.",
+                f"✅ Update downloaded successfully!\n\nThe app will now quit and install v{new_version} automatically.",
                 False,  # Success updates are never silent
             )
 
-            # Schedule app restart
-            self._schedule_restart()
-
         except Exception as e:
-            logger.error(f"DMG update failed: {e}", exc_info=True)
+            logger.error(f"PKG update failed: {e}", exc_info=True)
             self.update_error.emit(f"Update failed: {str(e)}")
 
     def _check_for_updates(self) -> dict[str, Any] | None:
@@ -186,35 +206,35 @@ class DMGUpdateWorker(QThread):
             logger.warning(f"Version comparison failed: {e}, assuming update needed")
             return True
 
-    def _get_dmg_download_url(self, release_data: dict[str, Any]) -> str | None:
-        """Extract DMG download URL from release assets."""
+    def _get_pkg_download_url(self, release_data: dict[str, Any]) -> str | None:
+        """Extract PKG download URL from release assets."""
         try:
             assets = release_data.get("assets", [])
             for asset in assets:
-                if asset.get("name", "").endswith(".dmg"):
+                if asset.get("name", "").endswith(".pkg"):
                     download_url = asset.get("browser_download_url")
                     logger.info(
-                        f"Found DMG asset: {asset.get('name')} ({asset.get('size', 0)} bytes)"
+                        f"Found PKG asset: {asset.get('name')} ({asset.get('size', 0)} bytes)"
                     )
                     return download_url
 
-            logger.warning("No DMG asset found in release")
+            logger.warning("No PKG asset found in release")
             return None
 
         except Exception as e:
-            logger.error(f"Failed to find DMG download URL: {e}")
+            logger.error(f"Failed to find PKG download URL: {e}")
             return None
 
-    def _download_dmg(self, download_url: str, version: str) -> Path:
-        """Download the DMG file with progress tracking."""
+    def _download_pkg(self, download_url: str, version: str) -> Path:
+        """Download the PKG file with progress tracking."""
         try:
             # Create temp directory for download
-            temp_dir = Path(tempfile.mkdtemp(prefix="knowledge_chipper_update_"))
-            dmg_filename = f"Skip_the_Podcast_Desktop-{version}.dmg"
-            dmg_path = temp_dir / dmg_filename
+            temp_dir = Path(tempfile.mkdtemp(prefix="skip_the_podcast_update_"))
+            pkg_filename = f"Skip_the_Podcast_Desktop-{version}.pkg"
+            pkg_path = temp_dir / pkg_filename
 
-            logger.info(f"Downloading DMG from: {download_url}")
-            logger.info(f"Download destination: {dmg_path}")
+            logger.info(f"Downloading PKG from: {download_url}")
+            logger.info(f"Download destination: {pkg_path}")
 
             def progress_hook(block_num: int, block_size: int, total_size: int):
                 if total_size > 0:
@@ -230,18 +250,18 @@ class DMGUpdateWorker(QThread):
                         f"Downloading: {mb_downloaded:.1f}/{mb_total:.1f} MB ({percent}%)",
                     )
 
-            urlretrieve(download_url, dmg_path, reporthook=progress_hook)
+            urlretrieve(download_url, pkg_path, reporthook=progress_hook)
 
-            if not dmg_path.exists():
-                raise Exception("Downloaded DMG file not found")
+            if not pkg_path.exists():
+                raise Exception("Downloaded PKG file not found")
 
-            file_size = dmg_path.stat().st_size
-            logger.info(f"DMG downloaded successfully: {file_size} bytes")
+            file_size = pkg_path.stat().st_size
+            logger.info(f"PKG downloaded successfully: {file_size} bytes")
 
-            return dmg_path
+            return pkg_path
 
         except Exception as e:
-            logger.error(f"DMG download failed: {e}")
+            logger.error(f"PKG download failed: {e}")
             raise Exception(f"Failed to download update: {e}")
 
     def _prepare_update(self) -> dict[str, Any]:
@@ -251,7 +271,7 @@ class DMGUpdateWorker(QThread):
             backup_info = {
                 "timestamp": time.time(),
                 "current_version": self.current_version,
-                "app_path": "/Applications/Knowledge_Chipper.app",
+                "app_path": "/Applications/Skip the Podcast Desktop.app",
                 "backup_needed": False,  # Data is in proper locations, survives app replacement
             }
 
@@ -261,6 +281,43 @@ class DMGUpdateWorker(QThread):
         except Exception as e:
             logger.error(f"Update preparation failed: {e}")
             raise Exception(f"Failed to prepare for update: {e}")
+
+    def _install_pkg(self, pkg_path: Path) -> None:
+        """Install the new app from PKG using macOS installer with admin auth."""
+        try:
+            logger.info(f"Installing PKG: {pkg_path}")
+
+            # Use AppleScript to prompt for admin credentials and run installer
+            # Properly escape the PKG path for AppleScript
+            escaped_path = str(pkg_path).replace('"', '\\"')
+            script = (
+                f'do shell script "installer -pkg \\"{escaped_path}\\" -target /" '
+                "with administrator privileges"
+            )
+            result = subprocess.run(
+                ["osascript", "-e", script], capture_output=True, text=True
+            )
+
+            if result.returncode != 0:
+                logger.error(
+                    f"installer failed with return code {result.returncode}"
+                )
+                logger.error(f"installer stdout: {result.stdout}")
+                logger.error(f"installer stderr: {result.stderr}")
+                raise Exception(f"Failed to install PKG: {result.stderr or result.stdout}")
+
+            logger.info("PKG installed successfully")
+
+            # Cleanup downloaded PKG
+            try:
+                pkg_path.unlink(missing_ok=True)
+                pkg_path.parent.rmdir()
+            except Exception:
+                pass
+
+        except Exception as e:
+            logger.error(f"PKG installation failed: {e}")
+            raise Exception(f"Failed to install update: {e}")
 
     def _install_dmg(self, dmg_path: Path) -> None:
         """Install the new app from DMG."""
@@ -348,7 +405,7 @@ class DMGUpdateWorker(QThread):
                     raise Exception("No .app found in DMG")
 
                 # Replace the existing app
-                target_app = Path("/Applications/Knowledge_Chipper.app")
+                target_app = Path("/Applications/Skip the Podcast Desktop.app")
 
                 # Remove old app if it exists
                 if target_app.exists():
@@ -440,7 +497,7 @@ class DMGUpdateWorker(QThread):
             # Method 3: Check common mount point patterns
             common_mount_points = [
                 "/Volumes/Skip the Podcast Desktop",
-                "/Volumes/Knowledge Chipper",
+                "/Volumes/Skip the Podcast Desktop",
                 "/Volumes/Skip_the_Podcast_Desktop",
                 "/Volumes/Knowledge_Chipper",
             ]
@@ -476,7 +533,7 @@ class DMGUpdateWorker(QThread):
 
             # Since data is in proper macOS locations, no restoration needed
             # Just verify the new app exists
-            target_app = Path("/Applications/Knowledge_Chipper.app")
+            target_app = Path("/Applications/Skip the Podcast Desktop.app")
             if not target_app.exists():
                 raise Exception("New app installation not found")
 
@@ -551,6 +608,188 @@ class DMGUpdateWorker(QThread):
                 else:
                     logger.error(f"Failed to copy essential file: {source_item} ({e})")
                     raise
+
+    def _create_install_script(self, pkg_path: Path, version: str) -> Path:
+        """Create a script that will install the PKG and restart the app after the current app quits."""
+        try:
+            # Create a temporary script that will handle the installation
+            script_content = f'''#!/bin/bash
+# Skip the Podcast Desktop Update Installer
+# This script runs after the app quits to install the PKG and restart
+
+set -e
+
+PKG_PATH="{pkg_path}"
+APP_PATH="/Applications/Skip the Podcast Desktop.app"
+VERSION="{version}"
+
+echo "🚀 Installing Skip the Podcast Desktop v$VERSION..."
+echo "PKG Path: $PKG_PATH"
+echo "Target App: $APP_PATH"
+
+# Verify PKG file exists
+if [ ! -f "$PKG_PATH" ]; then
+    echo "❌ PKG file not found: $PKG_PATH"
+    exit 1
+fi
+
+# Wait a bit more to ensure app is fully quit
+echo "⏳ Waiting for app to fully quit..."
+sleep 5
+
+# Check if app is still running
+if pgrep -f "Skip the Podcast Desktop" > /dev/null; then
+    echo "⚠️  App still running, waiting longer..."
+    sleep 5
+fi
+
+# Install the PKG with admin privileges
+echo "📦 Installing PKG package..."
+echo "Running: installer -pkg \\"$PKG_PATH\\" -target /"
+
+# Create a simple AppleScript that uses the actual path
+echo "Executing AppleScript for PKG installation..."
+osascript << EOF
+do shell script "installer -pkg '$PKG_PATH' -target /" with administrator privileges
+EOF
+
+INSTALL_EXIT_CODE=$?
+
+if [ $INSTALL_EXIT_CODE -eq 0 ]; then
+    echo "✅ PKG installation completed"
+else
+    echo "❌ PKG installation failed with exit code $INSTALL_EXIT_CODE"
+    exit 1
+fi
+
+# Wait for installation to complete
+echo "⏳ Waiting for installation to complete..."
+sleep 3
+
+# Verify installation
+echo "🔍 Verifying installation..."
+if [ -d "$APP_PATH" ]; then
+    echo "✅ Installation successful - app found at $APP_PATH"
+    
+    # Clean up the downloaded PKG
+    echo "🧹 Cleaning up downloaded files..."
+    rm -f "$PKG_PATH"
+    rm -f "$(dirname "$PKG_PATH")"
+    
+    # Clean up update marker
+    echo "🧹 Cleaning up update marker..."
+    rm -f "$HOME/.skip_the_podcast_update_in_progress"
+    
+    # Wait a moment for installation to fully complete
+    echo "⏳ Waiting for installation to fully complete..."
+    sleep 2
+    
+    # Launch the new app
+    echo "🚀 Launching updated app..."
+    echo "App path: $APP_PATH"
+    
+    # Try multiple methods to launch the app
+    if open "$APP_PATH"; then
+        echo "✅ App launched successfully with 'open' command"
+    else
+        echo "⚠️  'open' command failed, trying alternative method..."
+        # Alternative launch method
+        if [ -f "$APP_PATH/Contents/MacOS/launch" ]; then
+            echo "Trying to launch via launch script..."
+            "$APP_PATH/Contents/MacOS/launch" &
+        else
+            echo "Trying to launch via direct executable..."
+            "$APP_PATH/Contents/MacOS/Skip the Podcast Desktop" &
+        fi
+    fi
+    
+    echo "✅ Update complete! Skip the Podcast Desktop v$VERSION should be launching."
+else
+    echo "❌ Installation failed - app not found at $APP_PATH"
+    echo "Checking what's in /Applications:"
+    ls -la "/Applications/" | grep -i skip || echo "No Skip-related apps found"
+    
+    # Clean up update marker even on failure
+    rm -f "$HOME/.skip_the_podcast_update_in_progress"
+    exit 1
+fi
+'''
+            
+            # Write the script to a temporary file
+            script_path = Path(tempfile.mktemp(suffix="_update_installer.sh"))
+            with open(script_path, 'w') as f:
+                f.write(script_content)
+            
+            # Make it executable
+            os.chmod(script_path, 0o755)
+            
+            logger.info(f"Created installation script: {script_path}")
+            return script_path
+            
+        except Exception as e:
+            logger.error(f"Failed to create install script: {e}")
+            raise Exception(f"Failed to create installation script: {e}")
+
+    def _schedule_install_and_restart(self, install_script: Path) -> None:
+        """Schedule the installation script to run after the app quits."""
+        try:
+            # Use a more reliable approach: create a background process that waits
+            # for the current app to quit, then runs the installation
+            script_path = str(install_script)
+            
+            # Create a wrapper script that waits for the app to quit
+            wrapper_script_content = f'''#!/bin/bash
+# Wait for Skip the Podcast Desktop to quit before installing
+echo "⏳ Waiting for Skip the Podcast Desktop to quit..."
+
+# Wait for the app process to exit
+while pgrep -f "Skip the Podcast Desktop" > /dev/null; do
+    sleep 1
+done
+
+echo "✅ App has quit, starting installation..."
+sleep 2  # Give it a moment to fully quit
+
+# Run the installation script with visible output
+echo "🚀 Running installation script..."
+bash -x "{script_path}" 2>&1 | tee /tmp/skip_podcast_update.log
+
+# Check if installation was successful
+if [ $? -eq 0 ]; then
+    echo "✅ Installation completed successfully"
+else
+    echo "❌ Installation failed - check /tmp/skip_podcast_update.log"
+    # Show error dialog
+    osascript -e 'display dialog "Update installation failed. Check /tmp/skip_podcast_update.log for details." buttons {{"OK"}} default button "OK" with icon caution'
+fi
+'''
+            
+            # Write the wrapper script
+            wrapper_script = Path(tempfile.mktemp(suffix="_update_wrapper.sh"))
+            with open(wrapper_script, 'w') as f:
+                f.write(wrapper_script_content)
+            
+            # Make it executable
+            os.chmod(wrapper_script, 0o755)
+            
+            # Start the wrapper script in the background
+            subprocess.Popen([
+                "bash", str(wrapper_script)
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            logger.info("Scheduled installation script to run after app quits")
+            
+        except Exception as e:
+            logger.error(f"Failed to schedule installation: {e}")
+            # Fallback: try to run the script directly with a longer delay
+            try:
+                subprocess.Popen([
+                    "bash", "-c", f"sleep 10 && {install_script}"
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                logger.info("Scheduled installation script as fallback with 10s delay")
+            except Exception as e2:
+                logger.error(f"Fallback scheduling also failed: {e2}")
+                raise Exception(f"Failed to schedule installation: {e}")
 
     def _schedule_restart(self) -> None:
         """Schedule the app to restart after update."""

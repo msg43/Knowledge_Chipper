@@ -93,36 +93,22 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             import time
             import urllib.request
 
-            def download_with_progress(url, dest_path, callback=None):
-                """Download with progress."""
-                start_time = time.time()
-
-                def report_progress(block_num, block_size, total_size):
-                    """Report progress."""
-                    downloaded = block_num * block_size
-                    percent = (
-                        min(100, (downloaded / total_size) * 100)
-                        if total_size > 0
-                        else 0
-                    )
-                    elapsed = time.time() - start_time
-                    speed = downloaded / elapsed if elapsed > 0 else 0
-                    speed_mb = speed / (1024 * 1024)
-
-                    if callback:
-                        callback(
-                            {
-                                "status": "downloading",
+            # Check available memory before downloading large models
+            if model_name == "large":
+                try:
+                    import psutil
+                    available_gb = psutil.virtual_memory().available / (1024**3)
+                    if available_gb < 6.0:
+                        logger.error(f"Not enough memory for large model. Available: {available_gb:.1f}GB, Required: 6GB+")
+                        if progress_callback:
+                            progress_callback({
+                                "status": "error",
                                 "model": model_name,
-                                "percent": percent,
-                                "downloaded_mb": downloaded / (1024 * 1024),
-                                "total_mb": total_size / (1024 * 1024),
-                                "speed_mbps": speed_mb,
-                                "message": f"Downloading {model_name} model: {percent:.1f}% ({speed_mb:.1f} MB/s)",
-                            }
-                        )
-
-                urllib.request.urlretrieve(url, dest_path, reporthook=report_progress)
+                                "message": f"Not enough memory: {available_gb:.1f}GB available, need 6GB+"
+                            })
+                        return None
+                except Exception as e:
+                    logger.warning(f"Could not check memory: {e}")
 
             try:
                 if progress_callback:
@@ -134,21 +120,39 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                         }
                     )
 
-                download_with_progress(url, str(model_path), progress_callback)
-
-                if progress_callback:
-                    progress_callback(
-                        {
-                            "status": "download_complete",
-                            "model": model_name,
-                            "message": f"Successfully downloaded {model_name} model",
-                        }
-                    )
+                # Use safe downloader
+                from ..utils.safe_download import download_with_retry
+                
+                # Wrap callback to add model info
+                def wrapped_callback(info):
+                    if progress_callback and isinstance(info, dict):
+                        info["model"] = model_name
+                        progress_callback(info)
+                
+                # Download with retry
+                success = download_with_retry(url, model_path, max_retries=3, progress_callback=wrapped_callback)
+                
+                if success:
+                    if progress_callback:
+                        progress_callback(
+                            {
+                                "status": "download_complete",
+                                "model": model_name,
+                                "message": f"Successfully downloaded {model_name} model",
+                            }
+                        )
+                else:
+                    return None
 
             except Exception as e:
-                if model_path.exists():
-                    model_path.unlink()  # Remove partial download
-                raise Exception(f"Failed to download model: {e}")
+                logger.error(f"Failed to download model: {e}")
+                if progress_callback:
+                    progress_callback({
+                        "status": "error",
+                        "model": model_name,
+                        "message": f"Download failed: {str(e)}"
+                    })
+                return None
 
         return model_path
 

@@ -14,7 +14,7 @@ DIST_DIR="$PROJECT_ROOT/dist"
 VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('$PROJECT_ROOT/pyproject.toml', 'rb'))['project']['version'])")
 
 # GitHub configuration
-GITHUB_REPO="msg43/Knowledge_Chipper"
+GITHUB_REPO="msg43/Skipthepodcast.com"
 RELEASE_TAG="v$VERSION"
 RELEASE_NAME="Skip the Podcast Desktop v$VERSION"
 
@@ -68,10 +68,6 @@ echo -e "\n${BLUE}🔍 Verifying all components...${NC}"
 
 REQUIRED_FILES=(
     "Skip_the_Podcast_Desktop-${VERSION}.pkg"
-    "python-framework-3.13-macos.tar.gz"
-    "ai-models-bundle.tar.gz"
-    "ffmpeg-macos-universal.tar.gz"
-    "app-source-code.tar.gz"
 )
 
 # Optional files (too large for GitHub)
@@ -209,9 +205,9 @@ Due to GitHub's 2GB file size limit, Ollama models (4.7GB) are not included in t
 
 ### 📚 Documentation
 
-- [Installation Guide](https://github.com/msg43/Knowledge_Chipper/blob/main/README.md)
-- [Configuration Options](https://github.com/msg43/Knowledge_Chipper/blob/main/config/README.md)
-- [Troubleshooting](https://github.com/msg43/Knowledge_Chipper/issues)
+- [Installation Guide](https://github.com/msg43/Skipthepodcast.com/blob/main/README.md)
+- [Configuration Options](https://github.com/msg43/Skipthepodcast.com/blob/main/config/README.md)
+- [Troubleshooting](https://github.com/msg43/Skipthepodcast.com/issues)
 
 ### 🙏 Acknowledgments
 
@@ -219,7 +215,7 @@ This release represents a complete architectural overhaul focusing on reliabilit
 
 ---
 
-**Full Changelog**: https://github.com/msg43/Knowledge_Chipper/compare/v$(echo $VERSION | awk -F. '{print $1"."$2"."$3-1}')...v${VERSION}
+**Full Changelog**: https://github.com/msg43/Skipthepodcast.com/compare/v$(echo $VERSION | awk -F. '{print $1"."$2"."$3-1}')...v${VERSION}
 EOF
 
 print_status "Release notes created"

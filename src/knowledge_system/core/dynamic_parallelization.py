@@ -51,9 +51,9 @@ class ResourceLimits:
     model_ram_gb: float  # RAM used by the loaded model
 
     # KV Cache Budget Management (Critical for M2 Ultra)
-    kv_cache_2k_ctx_gb: float = 0.4  # Qwen2.5-14B: 2k ctx ≈ 0.3-0.5GB
-    kv_cache_4k_ctx_gb: float = 0.9  # Qwen2.5-14B: 4k ctx ≈ 0.8-1.0GB
-    kv_cache_8k_ctx_gb: float = 1.8  # Qwen2.5-14B: 8k ctx ≈ 1.6-2.0GB
+    kv_cache_2k_ctx_gb: float = 0.4  # Qwen2.5-14B-instruct: 2k ctx ≈ 0.3-0.5GB
+    kv_cache_4k_ctx_gb: float = 0.9  # Qwen2.5-14B-instruct: 4k ctx ≈ 0.8-1.0GB
+    kv_cache_8k_ctx_gb: float = 1.8  # Qwen2.5-14B-instruct: 8k ctx ≈ 1.6-2.0GB
 
     # Dynamic Thread Management (Based on actual hardware capacity)
     max_total_inference_threads: int = 0  # Calculated dynamically
@@ -143,16 +143,16 @@ class DynamicParallelizationManager:
 
         # Model RAM usage (FP16 optimization for high-end systems)
         if memory_gb >= 64 and ("ultra" in chip_type or "max" in chip_type):
-            model_ram_gb = 32.0  # Qwen2.5-14B FP16
+            model_ram_gb = 32.0  # Qwen2.5-14B-instruct FP16
             os_reserve_cores = 6  # More aggressive on high-end systems
         elif memory_gb >= 32 and ("max" in chip_type or "pro" in chip_type):
-            model_ram_gb = 32.0  # Qwen2.5-14B FP16
+            model_ram_gb = 32.0  # Qwen2.5-14B-instruct FP16
             os_reserve_cores = 5
         elif memory_gb >= 16:
-            model_ram_gb = 8.0  # Qwen2.5-7B
+            model_ram_gb = 8.0  # Qwen2.5-7b-instruct
             os_reserve_cores = 4
         else:
-            model_ram_gb = 4.0  # Qwen2.5-3B
+            model_ram_gb = 4.0  # Qwen2.5-3b-instruct
             os_reserve_cores = 3
 
         # Calculate dynamic thread limits based on actual hardware
@@ -165,10 +165,10 @@ class DynamicParallelizationManager:
             max_ram_gb=memory_gb,
             max_cpu_cores=cpu_cores,
             model_ram_gb=model_ram_gb,
-            # KV Cache Budget (Qwen2.5-14B specific)
-            kv_cache_2k_ctx_gb=0.4,  # 2k ctx ≈ 0.3-0.5GB
-            kv_cache_4k_ctx_gb=0.9,  # 4k ctx ≈ 0.8-1.0GB
-            kv_cache_8k_ctx_gb=1.8,  # 8k ctx ≈ 1.6-2.0GB
+        # KV Cache Budget (Qwen2.5-14B-instruct specific)
+        kv_cache_2k_ctx_gb=0.4,  # 2k ctx ≈ 0.3-0.5GB
+        kv_cache_4k_ctx_gb=0.9,  # 4k ctx ≈ 0.8-1.0GB
+        kv_cache_8k_ctx_gb=1.8,  # 8k ctx ≈ 1.6-2.0GB
             # Dynamic Thread Management
             max_total_inference_threads=int(max_total_threads),
             max_threads_per_worker=self._calculate_max_threads_per_worker(

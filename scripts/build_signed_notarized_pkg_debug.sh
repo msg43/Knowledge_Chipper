@@ -85,8 +85,8 @@ check_apple_status() {
 verify_certificates() {
     print_debug "Verifying certificates..."
 
-    # Check for Developer ID Installer
-    INSTALLER_CERTS=$(security find-identity -v -p codesigning | grep "Developer ID Installer")
+    # Check for Developer ID Installer (do not restrict to codesigning policy; some systems omit it there)
+    INSTALLER_CERTS=$(security find-identity -v | grep "Developer ID Installer")
     if [ -z "$INSTALLER_CERTS" ]; then
         print_error "No Developer ID Installer certificate found"
         return 1
@@ -141,23 +141,26 @@ check_keychain() {
 check_notary_credentials() {
     print_debug "Checking for stored notarization credentials..."
 
-    # Check for stored credentials
-    if xcrun notarytool store-credentials --list 2>&1 | grep -q "Skip-the-Podcast-Notary"; then
-        print_status "Found stored notarization credentials: Skip-the-Podcast-Notary"
-
-        # Validate the credentials
-        print_debug "Testing stored credentials..."
-        if xcrun notarytool history --keychain-profile "Skip-the-Podcast-Notary" 2>&1 | head -1 | grep -q "history"; then
+    # Prefer a pre-set profile name from the environment
+    if [ -n "$NOTARY_PROFILE" ]; then
+        print_status "Using NOTARY_PROFILE from environment: $NOTARY_PROFILE"
+        if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
             print_status "Stored credentials are valid"
             return 0
         else
-            print_warning "Stored credentials may be invalid"
-            return 1
+            print_warning "Specified NOTARY_PROFILE is not valid in keychain"
         fi
-    else
-        print_warning "No stored notarization credentials found"
-        return 1
     fi
+
+    # Fallback: try our default profile name
+    if xcrun notarytool history --keychain-profile "Skip-the-Podcast-Notary" >/dev/null 2>&1; then
+        print_status "Found stored notarization credentials: Skip-the-Podcast-Notary"
+        NOTARY_PROFILE="Skip-the-Podcast-Notary"
+        return 0
+    fi
+
+    print_warning "No stored notarization credentials found"
+    return 1
 }
 
 # Function to check app bundle for common issues
@@ -225,7 +228,8 @@ check_notary_credentials && NOTARY_PROFILE="Skip-the-Podcast-Notary"
 # Check for required environment variables or prompt
 if [ -z "$DEVELOPER_ID_INSTALLER" ]; then
     echo "Finding Developer ID Installer certificate..."
-    DEVELOPER_ID_INSTALLER=$(security find-identity -v -p codesigning | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
+    # Avoid filtering by codesigning; use full identity list
+    DEVELOPER_ID_INSTALLER=$(security find-identity -v | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
     if [ -z "$DEVELOPER_ID_INSTALLER" ]; then
         print_error "No Developer ID Installer certificate found"
         exit 1
