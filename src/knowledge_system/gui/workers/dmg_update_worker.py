@@ -651,17 +651,38 @@ echo "Running: installer -pkg \\"$PKG_PATH\\" -target /"
 
 # Create a simple AppleScript that uses the actual path
 echo "Executing AppleScript for PKG installation..."
-osascript << EOF
-do shell script "installer -pkg '$PKG_PATH' -target /" with administrator privileges
-EOF
+echo "PKG Path for AppleScript: $PKG_PATH"
+
+# Try AppleScript first with timeout
+echo "Attempting AppleScript installation..."
+timeout 300 osascript -e "do shell script \"installer -pkg '$PKG_PATH' -target /\" with administrator privileges" 2>&1
 
 INSTALL_EXIT_CODE=$?
 
 if [ $INSTALL_EXIT_CODE -eq 0 ]; then
-    echo "✅ PKG installation completed"
+    echo "✅ PKG installation completed via AppleScript"
+elif [ $INSTALL_EXIT_CODE -eq 124 ]; then
+    echo "⚠️  AppleScript timed out, trying direct installer command..."
+    # Fallback: try direct installer command (will prompt for password)
+    installer -pkg "$PKG_PATH" -target /
+    INSTALL_EXIT_CODE=$?
+    if [ $INSTALL_EXIT_CODE -eq 0 ]; then
+        echo "✅ PKG installation completed via direct installer"
+    else
+        echo "❌ PKG installation failed with exit code $INSTALL_EXIT_CODE"
+        exit 1
+    fi
 else
-    echo "❌ PKG installation failed with exit code $INSTALL_EXIT_CODE"
-    exit 1
+    echo "❌ AppleScript PKG installation failed with exit code $INSTALL_EXIT_CODE"
+    echo "Trying direct installer command as fallback..."
+    installer -pkg "$PKG_PATH" -target /
+    INSTALL_EXIT_CODE=$?
+    if [ $INSTALL_EXIT_CODE -eq 0 ]; then
+        echo "✅ PKG installation completed via direct installer fallback"
+    else
+        echo "❌ PKG installation failed with exit code $INSTALL_EXIT_CODE"
+        exit 1
+    fi
 fi
 
 # Wait for installation to complete
@@ -723,7 +744,7 @@ if [ -d "$APP_PATH" ]; then
             fi
         fi
     fi
-    
+
     echo "✅ Update complete! Skip the Podcast Desktop v$VERSION installation finished."
 else
     echo "❌ Installation failed - app not found at $APP_PATH"
