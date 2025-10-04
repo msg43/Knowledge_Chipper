@@ -130,6 +130,100 @@ class EnhancedSummarizationWorker(QThread):
             "top_concepts": [c.get("name", "") for c in concepts[:5] if c.get("name")],
         }
 
+    def _run_with_system2_orchestrator(self) -> None:
+        """Run summarization using System 2 orchestrator for job management."""
+        try:
+            from ...core.system2_orchestrator import JobType, System2Orchestrator
+            from ...utils.progress import SummarizationProgress
+
+            # Create orchestrator instance
+            orchestrator = System2Orchestrator()
+
+            success_count = 0
+            failure_count = 0
+            total_count = len(self.files)
+
+            for i, file_path in enumerate(self.files):
+                if self.should_stop:
+                    self.processing_error.emit("Processing was cancelled by user")
+                    return
+
+                file_name = Path(file_path).name
+
+                # Create episode ID from file name
+                episode_id = Path(file_path).stem
+
+                # Create mining job for this file
+                job_id = orchestrator.create_job(
+                    JobType.MINE,
+                    episode_id,
+                    config={
+                        "source": "manual_summarization",
+                        "file_path": str(file_path),
+                        "gui_settings": self.gui_settings,
+                        "miner_model": f"{self.gui_settings.get('provider', 'openai')}:{self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')}",
+                    },
+                    auto_process=False,  # Manual job, don't chain
+                )
+
+                # Emit progress
+                progress = SummarizationProgress(
+                    current_file=file_path,
+                    total_files=total_count,
+                    completed_files=i,
+                    current_step=f"🚀 Processing {file_name} with System 2 orchestrator (job: {job_id})",
+                    percent=(i / total_count) * 100.0,
+                    provider=self.gui_settings.get("provider", "openai"),
+                    model_name=self.gui_settings.get("model", "gpt-4o-mini-2024-07-18"),
+                )
+                self.progress_updated.emit(progress)
+
+                try:
+                    # Execute the job
+                    result = orchestrator.execute_job(job_id)
+
+                    if result["status"] == "succeeded":
+                        success_count += 1
+                        self.file_completed.emit(i + 1, total_count)
+
+                        # Emit HCE analytics if available
+                        if (
+                            "result" in result
+                            and "claims_extracted" in result["result"]
+                        ):
+                            analytics = {
+                                "filename": file_name,
+                                "total_claims": result["result"].get(
+                                    "claims_extracted", 0
+                                ),
+                                "people_count": result["result"].get(
+                                    "people_extracted", 0
+                                ),
+                                "concepts_count": result["result"].get(
+                                    "mental_models_extracted", 0
+                                ),
+                            }
+                            self.hce_analytics_updated.emit(analytics)
+                    else:
+                        failure_count += 1
+                        error_msg = result.get("error", "Unknown error")
+                        progress.status = "error"
+                        progress.current_step = f"❌ Failed: {error_msg}"
+                        self.progress_updated.emit(progress)
+
+                except Exception as e:
+                    failure_count += 1
+                    logger.error(f"System 2 job failed for {file_path}: {e}")
+                    progress.status = "error"
+                    progress.current_step = f"❌ Error: {str(e)}"
+                    self.progress_updated.emit(progress)
+
+            self.processing_finished.emit(success_count, failure_count, total_count)
+
+        except Exception as e:
+            logger.error(f"System 2 orchestrator error: {e}")
+            self.processing_error.emit(f"System 2 processing failed: {str(e)}")
+
     def run(self) -> None:
         """Run the summarization process."""
         try:
@@ -143,6 +237,14 @@ class EnhancedSummarizationWorker(QThread):
 
             provider = self.gui_settings.get("provider", "openai")
             model = self.gui_settings.get("model", "gpt-4o-mini-2024-07-18")
+
+            # System 2: Check if we should use the orchestrator
+            use_system2 = self.gui_settings.get("use_system2_orchestrator", False)
+
+            if use_system2:
+                # Use System 2 orchestrator for job management
+                self._run_with_system2_orchestrator()
+                return
 
             # Strip both "(Installed)" and "(X GB)" suffixes to get clean model name
             clean_model_name = model.replace(" (Installed)", "")
@@ -1466,9 +1568,21 @@ class SummarizationTab(BaseTab):
         self.export_getreceipts_checkbox.toggled.connect(self._on_setting_changed)
         settings_layout.addWidget(self.export_getreceipts_checkbox, 3, 4, 1, 2)
 
+        # System 2: Orchestrator checkbox
+        self.use_system2_checkbox = QCheckBox("🚀 Use System 2 Orchestrator")
+        self.use_system2_checkbox.setToolTip(
+            "Use the System 2 orchestrator for job management:\n"
+            "• Creates job records in database for tracking\n"
+            "• Enables checkpoint/resume functionality\n"
+            "• Provides better error handling and metrics\n"
+            "• Required for pipeline automation"
+        )
+        self.use_system2_checkbox.toggled.connect(self._on_setting_changed)
+        settings_layout.addWidget(self.use_system2_checkbox, 4, 0, 1, 2)
+
         # Output folder (only shown when not updating in-place)
         self.output_label = QLabel("Output Directory:")
-        settings_layout.addWidget(self.output_label, 4, 0)
+        settings_layout.addWidget(self.output_label, 5, 0)
         self.output_edit = QLineEdit()
         self.output_edit.setPlaceholderText(
             "Click Browse to select output directory (required)"
@@ -1480,7 +1594,7 @@ class SummarizationTab(BaseTab):
             "• Summary files will be organized by analysis type\n"
             "• Ensure you have write permissions to this directory"
         )
-        settings_layout.addWidget(self.output_edit, 4, 1, 1, 3)
+        settings_layout.addWidget(self.output_edit, 5, 1, 1, 3)
         browse_output_btn = QPushButton("Browse")
         browse_output_btn.setFixedWidth(80)
         browse_output_btn.clicked.connect(self._select_output)
@@ -1491,7 +1605,7 @@ class SummarizationTab(BaseTab):
         )
         # Store reference so other methods can show/hide it
         self.output_btn = browse_output_btn
-        settings_layout.addWidget(browse_output_btn, 4, 4)
+        settings_layout.addWidget(browse_output_btn, 5, 4)
 
         # Initially hide output selector based on checkbox state
         self._toggle_output_options()
@@ -2068,6 +2182,7 @@ class SummarizationTab(BaseTab):
                 "force_regenerate": self.force_regenerate_checkbox.isChecked(),
                 "analysis_type": "Document Summary",  # Fixed to Document Summary
                 "export_getreceipts": self.export_getreceipts_checkbox.isChecked(),
+                "use_system2_orchestrator": self.use_system2_checkbox.isChecked(),
                 # New HCE settings
                 "profile": self.profile_combo.currentText(),
                 "use_skim": self.use_skim_checkbox.isChecked(),
@@ -2099,6 +2214,7 @@ class SummarizationTab(BaseTab):
             "force_regenerate": self.force_regenerate_checkbox.isChecked(),
             "analysis_type": "Document Summary",  # Fixed to Document Summary
             "export_getreceipts": self.export_getreceipts_checkbox.isChecked(),
+            "use_system2_orchestrator": self.use_system2_checkbox.isChecked(),
             # Unified Pipeline HCE settings
             "profile": self.profile_combo.currentText(),
             "use_skim": self.use_skim_checkbox.isChecked(),

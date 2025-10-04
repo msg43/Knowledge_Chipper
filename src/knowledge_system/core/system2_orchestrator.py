@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from ..database import DatabaseService, Job, JobRun, LLMRequest, LLMResponse
 from ..errors import ErrorCode, KnowledgeSystemError
 from ..logger import get_logger
+from ..logger_system2 import get_system2_logger
 from ..processors import (
     AudioProcessor,
     YouTubeDownloadProcessor,
@@ -28,7 +29,11 @@ from ..processors.hce.unified_pipeline import UnifiedHCEPipeline
 from ..utils.hardware_detection import HardwareDetector
 from .llm_adapter import LLMAdapter
 
-logger = get_logger(__name__)
+# Use System 2 logger if available, fallback to standard
+try:
+    logger = get_system2_logger(__name__)
+except ImportError:
+    logger = get_logger(__name__)
 
 
 class JobType(Enum):
@@ -80,8 +85,13 @@ class System2Orchestrator:
         # Initialize processors
         self._init_processors()
 
+        # Log initialization with System 2 context
+        if hasattr(logger, "set_context"):
+            logger.set_context(component="System2Orchestrator")
+
         logger.info(
-            f"System2 Orchestrator initialized for {self.hardware_specs.get('chip_type', 'Unknown')}"
+            f"System2 Orchestrator initialized for {self.hardware_specs.get('chip_type', 'Unknown')}",
+            context={"hardware_specs": self.hardware_specs},
         )
 
     def _init_processors(self):
@@ -124,7 +134,17 @@ class System2Orchestrator:
             session.add(job)
             session.commit()
 
-        logger.info(f"Created job {job_id} for {job_type.value} on {input_id}")
+        # Log job creation with System 2 metrics
+        if hasattr(logger, "log_job_event"):
+            logger.log_job_event(
+                event_type="job_created",
+                job_id=job_id,
+                job_type=job_type.value,
+                status="queued",
+            )
+        else:
+            logger.info(f"Created job {job_id} for {job_type.value} on {input_id}")
+
         return job_id
 
     def execute_job(self, job_id: str, progress_callback=None) -> dict[str, Any]:

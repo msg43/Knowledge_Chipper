@@ -263,6 +263,15 @@ class MainWindow(QMainWindow):
         summarization_tab = SummarizationTab(self)
         self.tabs.addTab(summarization_tab, "Summarization")
 
+        # System 2: Review tab for editing claims
+        try:
+            from .tabs.review_tab_system2 import ReviewTabSystem2
+
+            review_tab = ReviewTabSystem2(self)
+            self.tabs.addTab(review_tab, "📋 Review")
+        except ImportError as e:
+            logger.warning(f"System 2 Review tab not available: {e}")
+
         # Claim search tab for exploring extracted claims - HIDDEN
         # claim_search_tab = ClaimSearchTab(self)
         # self.tabs.addTab(claim_search_tab, "🔍 Claim Search")
