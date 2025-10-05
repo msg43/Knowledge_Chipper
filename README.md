@@ -2,7 +2,33 @@
 
 > Transform audio, video, and documents into structured knowledge with AI-powered analysis
 
-**Version 3.3.0** | **macOS Application** | **Offline-First Design**
+**Version 3.4.0** | **macOS Application** | **Offline-First Design**
+
+## 🆕 What's New in Version 3.4.0 - System 2 Architecture
+
+### System 2: Production-Grade Reliability
+- **🗄️ Database-Backed Job Orchestration**: All operations create persistent job records with SQLite
+- **🔄 Checkpoint/Resume Capability**: Failed jobs resume from their last successful checkpoint
+- **💾 Perfect State Persistence**: No more lost work due to crashes or interruptions
+- **📊 Complete Audit Trail**: Track every LLM call, token usage, and processing metric
+
+### Hardware-Aware Resource Management
+- **🖥️ Automatic Hardware Detection**: Adapts to your system (Consumer/Prosumer/Professional/Server)
+- **🧠 Dynamic Memory Monitoring**: Prevents out-of-memory crashes with intelligent throttling
+- **⚡ Tier-Based Concurrency**: Optimal worker counts for your specific hardware
+- **📈 Real-Time Performance Metrics**: Monitor resource usage and processing efficiency
+
+### Enhanced Observability
+- **🏷️ Structured Error Codes**: HIGH/MEDIUM/LOW severity taxonomy for better debugging
+- **📋 Job State Tracking**: Monitor jobs through queued→running→completed lifecycle
+- **🔍 LLM Request Logging**: Full visibility into model interactions and costs
+- **📊 System 2 Review Tab**: SQLite-backed claim editor with validation
+
+### GUI Enhancements
+- **✅ Auto-Process Pipeline**: Chain transcribe→mine→flagship→upload automatically
+- **📝 Review Tab**: Edit and validate claims with direct database integration
+- **📊 Monitor Tab**: Track System 2 pipeline progress and job states
+- **🚀 Orchestrator Integration**: Summarization tab now uses job management
 
 ## 🆕 What's New in Version 3.3.0
 
@@ -235,6 +261,54 @@ Automatic model recommendations based on your Mac specifications:
 - **Hardware Acceleration**: Optimized for Apple Silicon MPS
 - **Offline Operation**: No internet required for core functionality
 
+## System 2 Architecture
+
+### Job Orchestration
+The System 2 architecture introduces database-backed job management for reliability and observability:
+
+**Job Types:**
+- `download`: Media file acquisition
+- `transcribe`: Audio/video to text conversion
+- `mine`: Extract claims, entities, and concepts
+- `flagship`: Evaluate and rank extractions
+- `upload`: Cloud synchronization
+- `pipeline`: End-to-end processing chain
+
+**Key Features:**
+- **Persistent State**: All jobs tracked in SQLite with WAL mode
+- **Checkpoint/Resume**: Failed jobs resume from last checkpoint
+- **Auto-Process Chains**: Automatic progression through pipeline stages
+- **Metrics Tracking**: Token usage, latency, and cost per operation
+
+### Resource Management
+System 2 automatically adapts to your hardware:
+
+| Hardware Tier | RAM | CPU Cores | Mining Workers | Eval Workers |
+|--------------|-----|-----------|----------------|--------------|
+| Consumer | <8GB | 2-4 | 2 | 1 |
+| Prosumer | 16GB | 8 | 4 | 2 |
+| Professional | 32GB | 12+ | 6 | 3 |
+| Server | 64GB+ | 16+ | 10 | 5 |
+
+**Memory Protection:**
+- Dynamic throttling when memory usage exceeds 70%
+- Critical mode at 90% prevents new job starts
+- Graceful degradation maintains system stability
+
+### Observability
+Comprehensive logging and monitoring:
+
+**Error Taxonomy:**
+- `HIGH`: Immediate attention (database errors, schema failures)
+- `MEDIUM`: Degraded function (API limits, partial failures)
+- `LOW`: Minor issues (cache misses, optional features)
+
+**Monitoring:**
+- Job state transitions tracked in database
+- LLM token usage and costs per operation
+- Memory throttle events and performance metrics
+- Structured logs with contextual information
+
 ## Configuration & Customization
 
 The system uses a layered configuration approach:
@@ -345,6 +419,8 @@ Enable **"Check for updates on startup"** in the app settings to get the latest 
 - Review processing reports for specific error messages
 - Use the built-in model refresh to update available options
 - Consult the CHANGELOG.md for version-specific information
+- See OPERATIONS.md for System 2 operational guidance
+- Review Architecture Decision Records in `/docs/adr/`
 
 ---
 
