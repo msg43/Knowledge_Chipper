@@ -734,29 +734,46 @@ def transcribe(
     )
 
     try:
+        logger.info(f"🔍 DEBUG CLI: Starting transcribe command with input: {input}")
         # Check if input is a YouTube URL (playlist or single video)
         if "youtube.com" in input or "youtu.be" in input:
+            logger.info(f"🔍 DEBUG CLI: Detected YouTube URL")
             # First, check if this is a playlist and if it has >3 videos
             from ..utils.youtube_utils import (
                 expand_playlist_urls_with_metadata,
                 is_playlist_url,
             )
 
+            logger.info(f"🔍 DEBUG CLI: Imported youtube_utils successfully")
+
             if is_playlist_url(input):
+                logger.info(f"🔍 DEBUG CLI: Detected playlist URL, expanding...")
                 # Expand playlist to check size
                 expansion_result = expand_playlist_urls_with_metadata([input])
                 expanded_urls = expansion_result["expanded_urls"]
+                logger.info(
+                    f"🔍 DEBUG CLI: Playlist expanded to {len(expanded_urls)} videos"
+                )
 
                 if len(expanded_urls) > 3:
+                    logger.info(
+                        f"🔍 DEBUG CLI: Playlist has {len(expanded_urls)} videos (>3), using batch processor"
+                    )
                     # Use unified batch processor for large playlists
+                    logger.info(
+                        f"🔍 DEBUG CLI: About to print console message and create batch processor"
+                    )
                     if not ctx.quiet:
                         console.print(
                             f"[bold green]Detected playlist with {len(expanded_urls)} videos - using optimized batch processing[/bold green]"
                         )
 
+                    logger.info(f"🔍 DEBUG CLI: Importing UnifiedBatchProcessor...")
                     from ..processors.unified_batch_processor import (
                         UnifiedBatchProcessor,
                     )
+
+                    logger.info(f"🔍 DEBUG CLI: Import successful, creating config...")
 
                     config = {
                         "output_dir": output,
@@ -784,14 +801,23 @@ def transcribe(
                             url_short = url[:50] + "..." if len(url) > 50 else url
                             console.print(f"{status} {url_short}: {message}")
 
+                    logger.info(
+                        f"🔍 DEBUG CLI: Creating UnifiedBatchProcessor instance..."
+                    )
                     processor = UnifiedBatchProcessor(
                         items=[input],  # Will be expanded internally
                         config=config,
                         progress_callback=progress_callback,
                         url_completed_callback=url_completed_callback,
                     )
+                    logger.info(
+                        f"🔍 DEBUG CLI: UnifiedBatchProcessor created, calling process_all()..."
+                    )
 
                     results = processor.process_all()
+                    logger.info(
+                        f"🔍 DEBUG CLI: process_all() completed with results: {results}"
+                    )
 
                     if not ctx.quiet:
                         console.print(
@@ -809,7 +835,18 @@ def transcribe(
                             )
 
                     # Exit with appropriate code
+                    logger.info(
+                        f"🔍 DEBUG CLI: Exiting with code {0 if results['failed'] == 0 else 1}"
+                    )
                     sys.exit(0 if results["failed"] == 0 else 1)
+                else:
+                    logger.info(
+                        f"🔍 DEBUG CLI: Playlist has {len(expanded_urls)} videos (<=3), using standard processing"
+                    )
+            else:
+                logger.info(
+                    f"🔍 DEBUG CLI: Not a playlist URL, using standard processing"
+                )
 
             # For single videos or small playlists, use existing logic
             # Extract video ID

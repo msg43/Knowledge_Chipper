@@ -1067,7 +1067,23 @@ class YouTubeTranscriptProcessor(BaseProcessor):
 
                     success_download = False
                     try:
-                        success_download = attempt_download(with_proxy=False)
+                        # Try with proxy first if available, fallback to direct
+                        if proxy_url:
+                            logger.info(
+                                "Attempting download with PacketStream proxy..."
+                            )
+                            try:
+                                success_download = attempt_download(with_proxy=True)
+                            except Exception as proxy_exc:
+                                logger.warning(
+                                    f"Proxy download failed: {proxy_exc}, trying direct connection..."
+                                )
+                                success_download = attempt_download(with_proxy=False)
+                        else:
+                            logger.info(
+                                "No proxy configured, using direct connection..."
+                            )
+                            success_download = attempt_download(with_proxy=False)
                     except Exception as direct_exc:
                         logger.error(f"Audio download failed: {direct_exc}")
                         raise

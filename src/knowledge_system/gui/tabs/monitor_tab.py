@@ -27,7 +27,7 @@ from ..core.settings_manager import get_gui_settings_manager
 logger = get_logger(__name__)
 
 
-class WatcherTab(BaseTab, FileOperationsMixin):
+class MonitorTab(BaseTab, FileOperationsMixin):
     """Tab for monitoring directories and auto-processing files with System 2 pipeline."""
 
     def __init__(self, parent=None) -> None:

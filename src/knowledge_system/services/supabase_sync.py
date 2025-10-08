@@ -546,30 +546,58 @@ class SupabaseSyncService:
 
         with self.db.get_session() as session:
             for table in self.SYNC_TABLES:
-                # Count records by sync status
-                result = session.execute(
-                    text(
-                        """
-                        SELECT
-                            sync_status,
-                            COUNT(*) as count
-                        FROM {table}
-                        GROUP BY sync_status
-                    """
-                    )
-                ).fetchall()
+                try:
+                    # Check if table exists and has sync_status column
+                    table_info = session.execute(
+                        text(f"PRAGMA table_info({table})")
+                    ).fetchall()
 
-                table_status = {}
-                for row in result:
-                    status_value = row.sync_status or "unsynced"
-                    table_status[status_value] = row.count
+                    if not table_info:
+                        # Table doesn't exist
+                        status[table] = {"total": 0, "unsynced": 0}
+                        continue
 
-                # Get total count
-                total_result = session.execute(
-                    text(f"SELECT COUNT(*) as total FROM {table}")
-                ).fetchone()
+                    # Check if sync_status column exists
+                    has_sync_status = any(col[1] == "sync_status" for col in table_info)
 
-                table_status["total"] = total_result.total if total_result else 0
-                status[table] = table_status
+                    if has_sync_status:
+                        # Count records by sync status
+                        result = session.execute(
+                            text(
+                                f"""
+                                SELECT
+                                    sync_status,
+                                    COUNT(*) as count
+                                FROM {table}
+                                GROUP BY sync_status
+                                """
+                            )
+                        ).fetchall()
+
+                        table_status = {}
+                        for row in result:
+                            status_value = row.sync_status or "unsynced"
+                            table_status[status_value] = row.count
+                    else:
+                        # No sync_status column - treat all as unsynced
+                        table_status = {}
+
+                    # Get total count
+                    total_result = session.execute(
+                        text(f"SELECT COUNT(*) as total FROM {table}")
+                    ).fetchone()
+
+                    table_status["total"] = total_result.total if total_result else 0
+
+                    # If no sync_status column, mark all as unsynced
+                    if not has_sync_status and table_status["total"] > 0:
+                        table_status["unsynced"] = table_status["total"]
+
+                    status[table] = table_status
+
+                except Exception as e:
+                    # Table doesn't exist or other error
+                    logger.debug(f"Could not get sync status for table {table}: {e}")
+                    status[table] = {"total": 0, "unsynced": 0}
 
         return status

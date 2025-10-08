@@ -1,106 +1,151 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Flagship Evaluation Output",
-  "description": "Schema for flagship LLM evaluation and ranking of extracted content",
+  "title": "FlagshipOutputV1",
+  "description": "Output schema for the Flagship Evaluator system that ranks and scores claims",
   "type": "object",
+  "required": ["evaluated_claims", "summary_assessment"],
   "properties": {
     "evaluated_claims": {
       "type": "array",
-      "description": "Claims after flagship evaluation and ranking",
+      "description": "All claims with evaluation decisions and scores",
       "items": {
         "type": "object",
+        "required": ["original_claim_text", "decision", "reasoning", "rank"],
         "properties": {
+          "claim_id": {
+            "type": "string",
+            "description": "Identifier from input if provided"
+          },
           "original_claim_text": {
             "type": "string",
-            "description": "Original claim text from miner"
+            "description": "The original claim text"
           },
           "decision": {
             "type": "string",
             "enum": ["accept", "reject", "merge", "split"],
-            "description": "What to do with this claim"
+            "description": "Evaluation decision"
           },
-          "rejection_reason": {
+          "revised_claim_text": {
             "type": "string",
-            "description": "Why claim was rejected (if decision=reject)"
-          },
-          "refined_claim_text": {
-            "type": "string",
-            "description": "Improved/refined version of claim (if different from original)"
-          },
-          "merge_with": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Other claims to merge with (if decision=merge)"
-          },
-          "split_into": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Multiple claims to split into (if decision=split)"
+            "description": "Revised claim text if modified"
           },
           "importance": {
-            "type": "integer",
-            "minimum": 1,
+            "type": "number",
+            "minimum": 0,
             "maximum": 10,
-            "description": "How important/significant this claim is (1-10 scale)"
+            "description": "Importance score (0-10)"
           },
           "novelty": {
-            "type": "integer",
-            "minimum": 1,
+            "type": "number",
+            "minimum": 0,
             "maximum": 10,
-            "description": "How novel or surprising this claim is (1-10 scale)"
+            "description": "Novelty score (0-10)"
           },
           "confidence_final": {
-            "type": "integer",
-            "minimum": 1,
+            "type": "number",
+            "minimum": 0,
             "maximum": 10,
-            "description": "Overall confidence in this claim (1-10 scale)"
+            "description": "Confidence score (0-10)"
           },
           "reasoning": {
             "type": "string",
-            "description": "Explanation of the evaluation and scoring"
+            "description": "Detailed reasoning for decision and scores"
           },
           "rank": {
             "type": "integer",
             "minimum": 1,
-            "description": "Final importance ranking (1 = most important)"
+            "description": "Ranking among accepted claims"
+          },
+          "tier": {
+            "type": "string",
+            "enum": ["A", "B", "C"],
+            "description": "Quality tier based on scores"
+          },
+          "merge_with": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "IDs of claims to merge with (if decision is 'merge')"
+          },
+          "split_into": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["claim_text", "claim_type"],
+              "properties": {
+                "claim_text": {"type": "string"},
+                "claim_type": {
+                  "type": "string",
+                  "enum": ["factual", "causal", "normative", "forecast", "definition"]
+                }
+              }
+            },
+            "description": "New claims if split (if decision is 'split')"
           }
-        },
-        "required": ["original_claim_text", "decision", "importance", "novelty", "confidence_final", "reasoning", "rank"]
+        }
       }
     },
     "summary_assessment": {
       "type": "object",
-      "description": "Overall assessment of the content and extracted claims",
+      "required": ["total_claims_processed", "claims_accepted", "claims_rejected", "overall_quality"],
       "properties": {
         "total_claims_processed": {
           "type": "integer",
-          "description": "Number of claims evaluated"
+          "minimum": 0,
+          "description": "Total number of claims evaluated"
         },
         "claims_accepted": {
           "type": "integer",
+          "minimum": 0,
           "description": "Number of claims accepted"
         },
         "claims_rejected": {
           "type": "integer",
+          "minimum": 0,
           "description": "Number of claims rejected"
+        },
+        "claims_merged": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of claims merged"
+        },
+        "claims_split": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of claims split"
         },
         "key_themes": {
           "type": "array",
           "items": {"type": "string"},
-          "description": "Main themes or topics identified"
+          "description": "Main themes identified in the claims"
         },
-        "overall_quality": {
-          "type": "string",
-          "enum": ["high", "medium", "low"],
-          "description": "Overall quality of the extracted claims"
-        },
+                "overall_quality": {
+                  "type": "string",
+                  "enum": ["high", "medium", "low"],
+                  "description": "Overall assessment of extraction quality"
+                },
         "recommendations": {
           "type": "string",
-          "description": "Suggestions for improving claim extraction or content analysis"
+          "description": "Suggestions for improvement"
+        },
+        "average_scores": {
+          "type": "object",
+          "properties": {
+            "importance": {"type": "number"},
+            "novelty": {"type": "number"},
+            "confidence": {"type": "number"}
+          },
+          "description": "Average scores across accepted claims"
         }
-      },
-      "required": ["total_claims_processed", "claims_accepted", "claims_rejected", "key_themes", "overall_quality"]
+      }
+    },
+    "tier_distribution": {
+      "type": "object",
+      "description": "Distribution of claims across quality tiers",
+      "properties": {
+        "A": {"type": "integer", "minimum": 0},
+        "B": {"type": "integer", "minimum": 0},
+        "C": {"type": "integer", "minimum": 0}
+      }
     }
-  },
-  "required": ["evaluated_claims", "summary_assessment"]
+  }
 }

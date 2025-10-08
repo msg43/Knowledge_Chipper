@@ -26,6 +26,17 @@ class ErrorCode(Enum):
     CACHE_MISS_LOW = "CACHE_MISS_LOW"
     OPTIONAL_FEATURE_UNAVAILABLE_LOW = "OPTIONAL_FEATURE_UNAVAILABLE_LOW"
 
+    # Legacy codes for backwards compatibility
+    # TODO: Migrate these to new taxonomy
+    PROCESSING_FAILED = "PROCESSING_FAILED"
+    INVALID_INPUT = "INVALID_INPUT"
+    LLM_API_ERROR = "LLM_API_ERROR"
+    LLM_PARSE_ERROR = "LLM_PARSE_ERROR"
+    DATABASE_ERROR = "DATABASE_ERROR"
+    FILE_NOT_FOUND = "FILE_NOT_FOUND"
+    TRANSCRIPTION_ERROR = "TRANSCRIPTION_ERROR"
+    CONFIGURATION_ERROR = "CONFIGURATION_ERROR"
+
 
 class KnowledgeSystemError(Exception):
     """Base exception for all Knowledge System errors."""

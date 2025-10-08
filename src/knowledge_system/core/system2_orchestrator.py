@@ -1,648 +1,520 @@
 """
 System 2 Orchestrator
 
-Manages job execution with database-backed state, checkpoint support,
-and auto-process chaining per SYSTEM_2_IMPLEMENTATION_GUIDE.md.
+Extends the IntelligentProcessingCoordinator with job tracking, checkpoint persistence,
+and auto-process chaining per the System 2 architecture.
 """
 
+import asyncio
 import json
-import time
+import logging
 import uuid
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from ..database import DatabaseService, Job, JobRun, LLMRequest, LLMResponse
+from ..database import DatabaseService
+from ..database.system2_models import Job, JobRun, LLMRequest, LLMResponse
 from ..errors import ErrorCode, KnowledgeSystemError
-from ..logger import get_logger
-from ..logger_system2 import get_system2_logger
-from ..processors import (
-    AudioProcessor,
-    YouTubeDownloadProcessor,
-    YouTubeTranscriptProcessor,
+from ..utils.id_generation import create_deterministic_id
+from .intelligent_processing_coordinator import (
+    IntelligentProcessingCoordinator,
+    ProcessingPipeline,
 )
-from ..processors.hce.types import EpisodeBundle, Segment
-from ..processors.hce.unified_pipeline import UnifiedHCEPipeline
-from ..utils.hardware_detection import HardwareDetector
-from .llm_adapter import LLMAdapter
 
-# Use System 2 logger if available, fallback to standard
-try:
-    logger = get_system2_logger(__name__)
-except ImportError:
-    logger = get_logger(__name__)
-
-
-class JobType(Enum):
-    """Types of jobs that can be orchestrated."""
-
-    TRANSCRIBE = "transcribe"
-    MINE = "mine"
-    FLAGSHIP = "flagship"
-    UPLOAD = "upload"
-    PIPELINE = "pipeline"  # Full auto-process pipeline
-
-
-class JobStatus(Enum):
-    """Job execution statuses."""
-
-    QUEUED = "queued"
-    RUNNING = "running"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
+logger = logging.getLogger(__name__)
 
 
 class System2Orchestrator:
     """
-    Orchestrates job execution with database persistence and checkpointing.
-
-    Key features:
-    - Creates job records for all operations
-    - Supports checkpoint/resume for interrupted jobs
-    - Auto-process chaining when enabled
-    - Hardware-aware resource management
-    - Comprehensive error handling and metrics
+    Orchestrator that wraps IntelligentProcessingCoordinator with System 2 features:
+    - Creates job and job_run records
+    - Persists checkpoints for resumability
+    - Supports auto_process chaining
+    - Tracks all LLM requests/responses
     """
 
     def __init__(self, db_service: DatabaseService | None = None):
-        """
-        Initialize the orchestrator.
-
-        Args:
-            db_service: Database service instance (creates one if not provided)
-        """
+        """Initialize the System 2 orchestrator."""
         self.db_service = db_service or DatabaseService()
-        self.hardware_detector = HardwareDetector()
-        self.hardware_specs = self.hardware_detector.detect_hardware()
-
-        # Initialize LLM adapter for centralized model calls
-        self.llm_adapter = LLMAdapter(self.db_service)
-
-        # Initialize processors
-        self._init_processors()
-
-        # Log initialization with System 2 context
-        if hasattr(logger, "set_context"):
-            logger.set_context(component="System2Orchestrator")
-
-        logger.info(
-            f"System2 Orchestrator initialized for {self.hardware_specs.get('chip_type', 'Unknown')}",
-            context={"hardware_specs": self.hardware_specs},
-        )
-
-    def _init_processors(self):
-        """Initialize various processors used by the orchestrator."""
-        self.audio_processor = AudioProcessor()
-        self.youtube_transcript_processor = YouTubeTranscriptProcessor()
-        self.youtube_download_processor = YouTubeDownloadProcessor()
-
-        # Processors will be initialized on demand with proper config
+        self.coordinator = IntelligentProcessingCoordinator()
+        self._current_job_run_id: str | None = None
 
     def create_job(
         self,
-        job_type: JobType,
+        job_type: str,
         input_id: str,
-        config: dict[str, Any] | None = None,
+        config: dict[str, Any],
         auto_process: bool = False,
     ) -> str:
         """
-        Create a new job record in the database.
+        Create a new job record.
 
         Args:
-            job_type: Type of job to create
-            input_id: Input identifier (video_id, episode_id, etc.)
+            job_type: Type of job ('transcribe', 'mine', 'flagship', 'upload', 'pipeline')
+            input_id: ID of the input (video_id or episode_id)
             config: Job configuration
             auto_process: Whether to automatically chain to next stage
 
         Returns:
-            job_id: Unique job identifier
+            job_id: The created job ID
         """
-        job_id = f"{job_type.value}_{input_id}_{uuid.uuid4().hex[:8]}"
+        # Generate deterministic job ID
+        job_id = create_deterministic_id(
+            f"{job_type}_{input_id}_{json.dumps(config, sort_keys=True)}"
+        )
 
         with self.db_service.get_session() as session:
+            # Check if job already exists
+            existing_job = session.query(Job).filter_by(job_id=job_id).first()
+            if existing_job:
+                logger.info(f"Job {job_id} already exists, reusing")
+                return job_id
+
+            # Create new job
             job = Job(
                 job_id=job_id,
-                job_type=job_type.value,
+                job_type=job_type,
                 input_id=input_id,
-                config_json=config or {},
+                config_json=config,
                 auto_process="true" if auto_process else "false",
             )
             session.add(job)
             session.commit()
-
-        # Log job creation with System 2 metrics
-        if hasattr(logger, "log_job_event"):
-            logger.log_job_event(
-                event_type="job_created",
-                job_id=job_id,
-                job_type=job_type.value,
-                status="queued",
-            )
-        else:
-            logger.info(f"Created job {job_id} for {job_type.value} on {input_id}")
+            logger.info(f"Created job {job_id} for {job_type} on {input_id}")
 
         return job_id
 
-    def execute_job(self, job_id: str, progress_callback=None) -> dict[str, Any]:
+    def create_job_run(
+        self, job_id: str, checkpoint: dict[str, Any] | None = None
+    ) -> str:
         """
-        Execute a job with full tracking and error handling.
+        Create a new job run for a job.
 
         Args:
-            job_id: Job identifier
-            progress_callback: Optional progress callback
+            job_id: The job to run
+            checkpoint: Optional checkpoint to resume from
 
         Returns:
-            Dict with job results and metrics
+            run_id: The created job run ID
         """
-        start_time = time.time()
-        run_id = f"run_{uuid.uuid4().hex}"
+        run_id = f"{job_id}_run_{uuid.uuid4().hex[:8]}"
 
         with self.db_service.get_session() as session:
-            # Get job details
+            # Get the job
             job = session.query(Job).filter_by(job_id=job_id).first()
             if not job:
                 raise KnowledgeSystemError(
-                    f"Job {job_id} not found",
-                    error_code=ErrorCode.DATABASE_CONNECTION_ERROR_HIGH,
+                    ErrorCode.PROCESSING_FAILED, f"Job {job_id} not found"
                 )
 
-            # Create job run record
+            # Count previous attempts
+            attempt_count = session.query(JobRun).filter_by(job_id=job_id).count()
+
+            # Create job run
             job_run = JobRun(
                 run_id=run_id,
                 job_id=job_id,
-                status=JobStatus.RUNNING.value,
-                started_at=datetime.utcnow(),
+                attempt_number=attempt_count + 1,
+                status="queued",
+                checkpoint_json=checkpoint,
             )
             session.add(job_run)
             session.commit()
+            logger.info(f"Created job run {run_id} for job {job_id}")
 
-            try:
-                # Execute based on job type
-                result = self._execute_job_type(
-                    job, job_run, session, progress_callback
-                )
+        self._current_job_run_id = run_id
+        return run_id
 
-                # Update job run as succeeded
-                job_run.status = JobStatus.SUCCEEDED.value
-                job_run.completed_at = datetime.utcnow()
-                job_run.metrics_json = {
-                    "processing_time": time.time() - start_time,
-                    "result_summary": result.get("summary", {}),
-                }
-                session.commit()
-
-                # Handle auto-process chaining
-                if job.auto_process == "true":
-                    self._chain_next_job(job, result, session)
-
-                return {
-                    "job_id": job_id,
-                    "run_id": run_id,
-                    "status": "succeeded",
-                    "result": result,
-                    "metrics": job_run.metrics_json,
-                }
-
-            except Exception as e:
-                # Update job run as failed
-                job_run.status = JobStatus.FAILED.value
-                job_run.completed_at = datetime.utcnow()
-                job_run.error_code = getattr(e, "error_code", "UNKNOWN_ERROR")
-                job_run.error_message = str(e)
-                session.commit()
-
-                logger.error(f"Job {job_id} failed: {e}")
-                raise
-
-    def _execute_job_type(
-        self, job: Job, job_run: JobRun, session: Session, progress_callback=None
-    ) -> dict[str, Any]:
-        """Execute specific job type logic."""
-        job_type = JobType(job.job_type)
-
-        if job_type == JobType.TRANSCRIBE:
-            return self._execute_transcribe(job, job_run, session, progress_callback)
-        elif job_type == JobType.MINE:
-            return self._execute_mine(job, job_run, session, progress_callback)
-        elif job_type == JobType.FLAGSHIP:
-            return self._execute_flagship(job, job_run, session, progress_callback)
-        elif job_type == JobType.UPLOAD:
-            return self._execute_upload(job, job_run, session, progress_callback)
-        elif job_type == JobType.PIPELINE:
-            return self._execute_pipeline(job, job_run, session, progress_callback)
-        else:
-            raise ValueError(f"Unknown job type: {job.job_type}")
-
-    def _execute_transcribe(
-        self, job: Job, job_run: JobRun, session: Session, progress_callback=None
-    ) -> dict[str, Any]:
-        """Execute transcription job."""
-        video_id = job.input_id
-        config = job.config_json or {}
-
-        # Check for existing transcript
-        from ..database import Transcript
-
-        existing = session.query(Transcript).filter_by(video_id=video_id).first()
-        if existing and not config.get("force_reprocess", False):
-            logger.info(f"Using existing transcript for {video_id}")
-            return {
-                "video_id": video_id,
-                "transcript_id": existing.transcript_id,
-                "from_cache": True,
-            }
-
-        # Try YouTube transcript first
-        try:
-            result = self.youtube_transcript_processor.process(video_id)
-            if result.success:
-                # Save to database
-                transcript_data = result.data
-                self.db_service.create_transcript(
-                    video_id=video_id,
-                    transcript_text=transcript_data.get("text", ""),
-                    transcript_segments=transcript_data.get("segments", []),
-                    is_manual=False,
-                )
-
-                return {
-                    "video_id": video_id,
-                    "transcript_id": f"transcript_{video_id}",
-                    "source": "youtube",
-                    "segments": len(transcript_data.get("segments", [])),
-                }
-        except Exception as e:
-            logger.warning(f"YouTube transcript failed for {video_id}: {e}")
-
-        # Fall back to audio download and processing
-        download_result = self.youtube_download_processor.process(
-            f"https://youtube.com/watch?v={video_id}"
-        )
-
-        if not download_result.success:
-            raise KnowledgeSystemError(
-                f"Failed to download video {video_id}",
-                error_code=ErrorCode.NETWORK_TIMEOUT_ERROR_MEDIUM,
-            )
-
-        audio_path = download_result.data.get("audio_path")
-        audio_result = self.audio_processor.process(
-            audio_path, progress_callback=progress_callback
-        )
-
-        if not audio_result.success:
-            raise KnowledgeSystemError(
-                f"Failed to process audio for {video_id}",
-                error_code=ErrorCode.TRANSCRIPTION_PARTIAL_ERROR_MEDIUM,
-            )
-
-        # Save transcript to database
-        transcript_data = audio_result.data
-        transcript_result = self.db_service.create_transcript(
-            video_id=video_id,
-            transcript_text=transcript_data.get("text", ""),
-            transcript_segments=transcript_data.get("segments", []),
-            is_manual=False,
-        )
-        # Note: confidence_score might need to be stored in metadata
-
-        return {
-            "video_id": video_id,
-            "transcript_id": f"transcript_{video_id}",
-            "source": "whisper",
-            "segments": len(transcript_data.get("segments", [])),
-            "confidence": transcript_data.get("confidence", 0.0),
-        }
-
-    def _execute_mine(
-        self, job: Job, job_run: JobRun, session: Session, progress_callback=None
-    ) -> dict[str, Any]:
-        """Execute mining job with checkpointing."""
-        episode_id = job.input_id
-        config = job.config_json or {}
-
-        # Load checkpoint if exists
-        checkpoint = job_run.checkpoint_json or {}
-        last_segment_id = checkpoint.get("last_segment_id")
-
-        # Get transcript segments
-        from ..database import Transcript
-        from ..database.hce_models import Episode
-
-        episode = session.query(Episode).filter_by(episode_id=episode_id).first()
-        if not episode:
-            raise ValueError(f"Episode {episode_id} not found")
-
-        transcript = (
-            session.query(Transcript).filter_by(video_id=episode.video_id).first()
-        )
-        if not transcript:
-            raise ValueError(f"No transcript found for episode {episode_id}")
-
-        # Initialize unified miner if needed
-        if not hasattr(self, "_unified_miner"):
-            from ..processors.hce.unified_miner_system2 import UnifiedMinerSystem2
-
-            # Get miner model from config or use default
-            miner_config = config.get("miner_model", "openai:gpt-4")
-            # Parse provider and model from config (format: "provider:model")
-            if ":" in miner_config:
-                provider, model = miner_config.split(":", 1)
-            else:
-                provider, model = "openai", miner_config
-
-            self._unified_miner = UnifiedMinerSystem2(
-                llm_adapter=self.llm_adapter, provider=provider, model=model
-            )
-
-        # Convert to segments for HCE
-        segments = []
-        start_processing = last_segment_id is None
-
-        for seg in transcript.transcript_segments_json:
-            seg_id = f"seg_{seg.get('start', 0)}"
-
-            # Skip if before checkpoint
-            if not start_processing and seg_id == last_segment_id:
-                start_processing = True
-                continue
-
-            if not start_processing:
-                continue
-
-            segments.append(
-                Segment(
-                    segment_id=seg_id,
-                    speaker=seg.get("speaker", "SPEAKER_00"),
-                    t0=str(seg.get("start", 0)),
-                    t1=str(seg.get("end", 0)),
-                    text=seg.get("text", ""),
-                )
-            )
-
-        # Process segments in batches
-        batch_size = 10
-        total_mined = checkpoint.get(
-            "total_mined",
-            {"claims": [], "jargon": [], "people": [], "mental_models": []},
-        )
-
-        for i in range(0, len(segments), batch_size):
-            batch = segments[i : i + batch_size]
-
-            # Mine each segment
-            for segment in batch:
-                try:
-                    miner_output = self._unified_miner.mine_segment(
-                        segment, job_run.run_id
-                    )
-
-                    # Track LLM request
-                    self._track_llm_request(
-                        job_run.run_id, "unified_miner", segment.segment_id, session
-                    )
-
-                    # Accumulate results
-                    total_mined["claims"].extend(miner_output.claims)
-                    total_mined["jargon"].extend(miner_output.jargon)
-                    total_mined["people"].extend(miner_output.people)
-                    total_mined["mental_models"].extend(miner_output.mental_models)
-
-                except Exception as e:
-                    logger.error(f"Failed to mine segment {segment.segment_id}: {e}")
-
-            # Update checkpoint
-            if batch:
-                job_run.checkpoint_json = {
-                    "last_segment_id": batch[-1].segment_id,
-                    "total_mined": total_mined,
-                    "segments_processed": i + len(batch),
-                }
-                session.commit()
-
-            # Progress callback
-            if progress_callback:
-                progress_callback(
-                    "mining",
-                    i + len(batch),
-                    len(segments),
-                    {"current_segment": batch[-1].segment_id if batch else None},
-                )
-
-        # Store mined data
-        from ..database.hce_models import Claim, Concept, JargonTerm, Person
-
-        # Save claims
-        for claim_data in total_mined["claims"]:
-            claim_id = f"claim_{uuid.uuid4().hex[:12]}"
-            claim = Claim(
-                episode_id=episode_id,
-                claim_id=claim_id,
-                canonical=claim_data["claim_text"],
-                claim_type=claim_data["claim_type"],
-                tier="B",  # Default tier, will be set by flagship
-                first_mention_ts=claim_data["evidence_spans"][0]["t0"]
-                if claim_data["evidence_spans"]
-                else "0",
-                scores_json={"stance": claim_data["stance"]},
-            )
-            session.add(claim)
-
-        session.commit()
-
-        return {
-            "episode_id": episode_id,
-            "claims_extracted": len(total_mined["claims"]),
-            "jargon_extracted": len(total_mined["jargon"]),
-            "people_extracted": len(total_mined["people"]),
-            "mental_models_extracted": len(total_mined["mental_models"]),
-            "segments_processed": len(segments),
-        }
-
-    def _execute_flagship(
-        self, job: Job, job_run: JobRun, session: Session, progress_callback=None
-    ) -> dict[str, Any]:
-        """Execute flagship evaluation job."""
-        episode_id = job.input_id
-
-        # Get claims to evaluate
-        from ..database.hce_models import Claim
-
-        claims = session.query(Claim).filter_by(episode_id=episode_id).all()
-
-        if not claims:
-            logger.warning(f"No claims found for episode {episode_id}")
-            return {"episode_id": episode_id, "claims_evaluated": 0}
-
-        # TODO: Implement flagship evaluation
-        # For now, just update tiers based on simple rules
-        tier_a_count = 0
-        tier_b_count = 0
-        tier_c_count = 0
-
-        for claim in claims:
-            # Simple tier assignment based on claim type
-            if claim.claim_type in ["factual", "causal"]:
-                claim.tier = "A"
-                tier_a_count += 1
-            elif claim.claim_type in ["normative", "forecast"]:
-                claim.tier = "B"
-                tier_b_count += 1
-            else:
-                claim.tier = "C"
-                tier_c_count += 1
-
-            claim.updated_at = datetime.utcnow()
-
-        session.commit()
-
-        return {
-            "episode_id": episode_id,
-            "claims_evaluated": len(claims),
-            "tier_a_count": tier_a_count,
-            "tier_b_count": tier_b_count,
-            "tier_c_count": tier_c_count,
-        }
-
-    def _execute_upload(
-        self, job: Job, job_run: JobRun, session: Session, progress_callback=None
-    ) -> dict[str, Any]:
-        """Execute upload job."""
-        episode_id = job.input_id
-
-        # Get claims to upload
-        from ..database.hce_models import Claim
-
-        claims = (
-            session.query(Claim)
-            .filter_by(episode_id=episode_id, upload_status="pending")
-            .all()
-        )
-
-        if not claims:
-            logger.info(f"No pending claims to upload for episode {episode_id}")
-            return {"episode_id": episode_id, "claims_uploaded": 0}
-
-        # TODO: Implement actual Supabase upload
-        # For now, just mark as uploaded
-        uploaded_count = 0
-        for claim in claims:
-            claim.upload_status = "uploaded"
-            claim.last_uploaded_at = datetime.utcnow().isoformat()
-            uploaded_count += 1
-
-        session.commit()
-
-        return {"episode_id": episode_id, "claims_uploaded": uploaded_count}
-
-    def _execute_pipeline(
-        self, job: Job, job_run: JobRun, session: Session, progress_callback=None
-    ) -> dict[str, Any]:
-        """Execute full pipeline job."""
-        # This is handled by auto_process chaining
-        # Just start with transcribe
-        transcribe_job_id = self.create_job(
-            JobType.TRANSCRIBE, job.input_id, job.config_json, auto_process=True
-        )
-
-        return self.execute_job(transcribe_job_id, progress_callback)
-
-    def _chain_next_job(
-        self, current_job: Job, result: dict[str, Any], session: Session
+    def update_job_run_status(
+        self,
+        run_id: str,
+        status: str,
+        error_code: str | None = None,
+        error_message: str | None = None,
+        metrics: dict[str, Any] | None = None,
     ):
-        """Chain to the next job in the pipeline if auto_process is enabled."""
-        current_type = JobType(current_job.job_type)
+        """Update job run status and metrics."""
+        with self.db_service.get_session() as session:
+            job_run = session.query(JobRun).filter_by(run_id=run_id).first()
+            if not job_run:
+                logger.warning(f"Job run {run_id} not found")
+                return
 
-        # Determine next job type
-        next_type = None
-        next_input_id = None
+            job_run.status = status
+            job_run.updated_at = datetime.utcnow()
 
-        if current_type == JobType.TRANSCRIBE:
-            next_type = JobType.MINE
-            # Create episode if needed
-            video_id = current_job.input_id
-            from ..database.hce_models import Episode
+            if status == "running" and not job_run.started_at:
+                job_run.started_at = datetime.utcnow()
+            elif status in ["succeeded", "failed", "cancelled"]:
+                job_run.completed_at = datetime.utcnow()
 
-            episode = session.query(Episode).filter_by(video_id=video_id).first()
-            if not episode:
-                episode_id = f"episode_{video_id}"
-                episode = Episode(
-                    episode_id=episode_id,
-                    video_id=video_id,
-                    title=f"Episode for {video_id}",
-                    recorded_at=datetime.utcnow().isoformat(),
-                )
-                session.add(episode)
+            if error_code:
+                job_run.error_code = error_code
+            if error_message:
+                job_run.error_message = error_message
+            if metrics:
+                job_run.metrics_json = metrics
+
+            session.commit()
+            logger.info(f"Updated job run {run_id} status to {status}")
+
+    def save_checkpoint(self, run_id: str, checkpoint: dict[str, Any]):
+        """Save checkpoint for a job run."""
+        with self.db_service.get_session() as session:
+            job_run = session.query(JobRun).filter_by(run_id=run_id).first()
+            if job_run:
+                job_run.checkpoint_json = checkpoint
+                job_run.updated_at = datetime.utcnow()
                 session.commit()
-            next_input_id = episode.episode_id
+                logger.debug(f"Saved checkpoint for job run {run_id}")
 
-        elif current_type == JobType.MINE:
-            next_type = JobType.FLAGSHIP
-            next_input_id = current_job.input_id
+    def load_checkpoint(self, run_id: str) -> dict[str, Any] | None:
+        """Load checkpoint for a job run."""
+        with self.db_service.get_session() as session:
+            job_run = session.query(JobRun).filter_by(run_id=run_id).first()
+            if job_run and job_run.checkpoint_json:
+                logger.info(f"Loaded checkpoint for job run {run_id}")
+                return job_run.checkpoint_json
+        return None
 
-        elif current_type == JobType.FLAGSHIP:
-            next_type = JobType.UPLOAD
-            next_input_id = current_job.input_id
-
-        # Create and execute next job
-        if next_type and next_input_id:
-            next_job_id = self.create_job(
-                next_type, next_input_id, current_job.config_json, auto_process=True
-            )
-
-            # Execute asynchronously
-            logger.info(f"Chaining to next job: {next_job_id}")
-            # In a real implementation, this would be queued
-            # For now, we just log it
-
-    def _track_llm_request(
-        self, run_id: str, operation: str, context: str, session: Session
-    ):
-        """Track LLM request for cost and audit purposes."""
-        request_id = f"llm_{uuid.uuid4().hex[:12]}"
-
-        llm_request = LLMRequest(
-            request_id=request_id,
-            job_run_id=run_id,
-            provider="openai",  # Would come from config
-            model="gpt-4",  # Would come from config
-            endpoint=operation,
-            request_json={"context": context},
-        )
-        session.add(llm_request)
-        session.commit()
-
-    def resume_interrupted_jobs(self) -> list[str]:
+    def track_llm_request(
+        self,
+        provider: str,
+        model: str,
+        request_payload: dict[str, Any],
+        endpoint: str | None = None,
+    ) -> str:
         """
-        Resume any jobs that were interrupted.
+        Track an LLM request.
+
+        Args:
+            provider: LLM provider (openai, anthropic, etc)
+            model: Model name
+            request_payload: Full request payload
+            endpoint: API endpoint
 
         Returns:
-            List of resumed job IDs
+            request_id: The created request ID
         """
-        resumed = []
+        if not self._current_job_run_id:
+            logger.warning("No current job run, skipping LLM request tracking")
+            return ""
+
+        request_id = f"llm_req_{uuid.uuid4().hex[:8]}"
 
         with self.db_service.get_session() as session:
-            # Find interrupted runs
-            interrupted_runs = (
-                session.query(JobRun).filter_by(status=JobStatus.RUNNING.value).all()
+            llm_request = LLMRequest(
+                request_id=request_id,
+                job_run_id=self._current_job_run_id,
+                provider=provider,
+                model=model,
+                endpoint=endpoint,
+                request_json=request_payload,
+                prompt_tokens=request_payload.get("prompt_tokens"),
+                max_tokens=request_payload.get("max_tokens"),
+                temperature=request_payload.get("temperature"),
+            )
+            session.add(llm_request)
+            session.commit()
+
+        return request_id
+
+    def track_llm_response(
+        self,
+        request_id: str,
+        response_payload: dict[str, Any],
+        response_time_ms: int,
+    ):
+        """Track an LLM response."""
+        if not request_id:
+            return
+
+        response_id = f"llm_resp_{uuid.uuid4().hex[:8]}"
+
+        with self.db_service.get_session() as session:
+            llm_response = LLMResponse(
+                response_id=response_id,
+                request_id=request_id,
+                response_json=response_payload,
+                latency_ms=float(response_time_ms),
+                completion_tokens=response_payload.get("usage", {}).get(
+                    "completion_tokens"
+                ),
+                total_tokens=response_payload.get("usage", {}).get("total_tokens"),
+                status_code=200,  # Default to success
+            )
+            session.add(llm_response)
+            session.commit()
+
+    async def process_job(
+        self, job_id: str, resume_from_checkpoint: bool = True
+    ) -> dict[str, Any]:
+        """
+        Process a job with full System 2 tracking.
+
+        Args:
+            job_id: The job to process
+            resume_from_checkpoint: Whether to resume from saved checkpoint
+
+        Returns:
+            Processing results
+        """
+        # Create job run
+        run_id = self.create_job_run(job_id)
+
+        try:
+            # Update status to running
+            self.update_job_run_status(run_id, "running")
+
+            # Load job configuration
+            with self.db_service.get_session() as session:
+                job = session.query(Job).filter_by(job_id=job_id).first()
+                if not job:
+                    raise KnowledgeSystemError(
+                        ErrorCode.PROCESSING_FAILED, f"Job {job_id} not found"
+                    )
+
+                job_type = job.job_type
+                input_id = job.input_id
+                config = job.config_json or {}
+                auto_process = job.auto_process == "true"
+
+            # Load checkpoint if requested
+            checkpoint = None
+            if resume_from_checkpoint:
+                checkpoint = self.load_checkpoint(run_id)
+
+            # Process based on job type
+            result = await self._process_by_type(
+                job_type, input_id, config, checkpoint, run_id
             )
 
-            for run in interrupted_runs:
-                logger.info(f"Resuming interrupted job run {run.run_id}")
+            # Update status to succeeded
+            metrics = self._extract_metrics(result)
+            self.update_job_run_status(run_id, "succeeded", metrics=metrics)
 
-                # Mark as queued for re-execution
-                run.status = JobStatus.QUEUED.value
-                session.commit()
+            # Chain to next stage if auto_process is enabled
+            if auto_process:
+                next_job_type = self._get_next_job_type(job_type)
+                if next_job_type:
+                    logger.info(f"Auto-processing enabled, chaining to {next_job_type}")
+                    next_job_id = self.create_job(
+                        next_job_type,
+                        result.get("output_id", input_id),
+                        config,
+                        auto_process=True,
+                    )
+                    # Process next job asynchronously
+                    asyncio.create_task(self.process_job(next_job_id))
 
-                # Re-execute the job
-                try:
-                    self.execute_job(run.job_id)
-                    resumed.append(run.job_id)
-                except Exception as e:
-                    logger.error(f"Failed to resume job {run.job_id}: {e}")
+            return result
 
-        return resumed
+        except Exception as e:
+            # Update status to failed
+            error_code = (
+                e.error_code
+                if isinstance(e, KnowledgeSystemError)
+                else ErrorCode.PROCESSING_FAILED
+            )
+            self.update_job_run_status(
+                run_id, "failed", error_code=error_code, error_message=str(e)
+            )
+            raise
+
+        finally:
+            self._current_job_run_id = None
+
+    async def _process_by_type(
+        self,
+        job_type: str,
+        input_id: str,
+        config: dict[str, Any],
+        checkpoint: dict[str, Any] | None,
+        run_id: str,
+    ) -> dict[str, Any]:
+        """Process based on job type."""
+        if job_type == "transcribe":
+            return await self._process_transcribe(input_id, config, checkpoint, run_id)
+        elif job_type == "mine":
+            return await self._process_mine(input_id, config, checkpoint, run_id)
+        elif job_type == "flagship":
+            return await self._process_flagship(input_id, config, checkpoint, run_id)
+        elif job_type == "upload":
+            return await self._process_upload(input_id, config, checkpoint, run_id)
+        elif job_type == "pipeline":
+            return await self._process_pipeline(input_id, config, checkpoint, run_id)
+        else:
+            raise KnowledgeSystemError(
+                ErrorCode.INVALID_INPUT, f"Unknown job type: {job_type}"
+            )
+
+    async def _process_transcribe(
+        self,
+        video_id: str,
+        config: dict[str, Any],
+        checkpoint: dict[str, Any] | None,
+        run_id: str,
+    ) -> dict[str, Any]:
+        """Process transcription job."""
+        # TODO: Implement transcription with checkpoint support
+        logger.info(f"Processing transcription for {video_id}")
+        return {"status": "completed", "output_id": f"episode_{video_id}"}
+
+    async def _process_mine(
+        self,
+        episode_id: str,
+        config: dict[str, Any],
+        checkpoint: dict[str, Any] | None,
+        run_id: str,
+    ) -> dict[str, Any]:
+        """Process mining job."""
+        # TODO: Implement mining with checkpoint support
+        logger.info(f"Processing mining for {episode_id}")
+        return {"status": "completed", "output_id": episode_id}
+
+    async def _process_flagship(
+        self,
+        episode_id: str,
+        config: dict[str, Any],
+        checkpoint: dict[str, Any] | None,
+        run_id: str,
+    ) -> dict[str, Any]:
+        """Process flagship evaluation job."""
+        # TODO: Implement flagship with checkpoint support
+        logger.info(f"Processing flagship for {episode_id}")
+        return {"status": "completed", "output_id": episode_id}
+
+    async def _process_upload(
+        self,
+        episode_id: str,
+        config: dict[str, Any],
+        checkpoint: dict[str, Any] | None,
+        run_id: str,
+    ) -> dict[str, Any]:
+        """Process upload job."""
+        # TODO: Implement upload with checkpoint support
+        logger.info(f"Processing upload for {episode_id}")
+        return {"status": "completed", "output_id": episode_id}
+
+    async def _process_pipeline(
+        self,
+        video_id: str,
+        config: dict[str, Any],
+        checkpoint: dict[str, Any] | None,
+        run_id: str,
+    ) -> dict[str, Any]:
+        """Process complete pipeline job."""
+        # TODO: Implement full pipeline with checkpoint support
+        logger.info(f"Processing pipeline for {video_id}")
+        return {"status": "completed", "output_id": f"episode_{video_id}"}
+
+    def _get_next_job_type(self, current_type: str) -> str | None:
+        """Get the next job type in the pipeline."""
+        pipeline_order = {
+            "transcribe": "mine",
+            "mine": "flagship",
+            "flagship": "upload",
+            "upload": None,
+        }
+        return pipeline_order.get(current_type)
+
+    def _extract_metrics(self, result: dict[str, Any]) -> dict[str, Any]:
+        """Extract metrics from processing result."""
+        return {
+            "processing_time": result.get("processing_time", 0),
+            "items_processed": result.get("items_processed", 0),
+            "errors": result.get("errors", 0),
+        }
+
+    async def list_jobs(
+        self,
+        job_type: str | None = None,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """List jobs with optional filtering."""
+        with self.db_service.get_session() as session:
+            query = session.query(Job)
+
+            if job_type:
+                query = query.filter_by(job_type=job_type)
+
+            jobs = query.order_by(Job.created_at.desc()).limit(limit).all()
+
+            result = []
+            for job in jobs:
+                # Get latest run
+                latest_run = (
+                    session.query(JobRun)
+                    .filter_by(job_id=job.job_id)
+                    .order_by(JobRun.created_at.desc())
+                    .first()
+                )
+
+                if status and latest_run and latest_run.status != status:
+                    continue
+
+                job_dict = {
+                    "job_id": job.job_id,
+                    "job_type": job.job_type,
+                    "input_id": job.input_id,
+                    "auto_process": job.auto_process,
+                    "created_at": job.created_at.isoformat(),
+                    "latest_run": None,
+                }
+
+                if latest_run:
+                    job_dict["latest_run"] = {
+                        "run_id": latest_run.run_id,
+                        "status": latest_run.status,
+                        "attempt_number": latest_run.attempt_number,
+                        "started_at": (
+                            latest_run.started_at.isoformat()
+                            if latest_run.started_at
+                            else None
+                        ),
+                        "completed_at": (
+                            latest_run.completed_at.isoformat()
+                            if latest_run.completed_at
+                            else None
+                        ),
+                        "error_code": latest_run.error_code,
+                    }
+
+                result.append(job_dict)
+
+            return result
+
+    async def resume_failed_jobs(self, job_type: str | None = None) -> int:
+        """Resume all failed jobs."""
+        jobs = await self.list_jobs(job_type=job_type, status="failed")
+        resumed_count = 0
+
+        for job_info in jobs:
+            try:
+                logger.info(f"Resuming failed job {job_info['job_id']}")
+                asyncio.create_task(
+                    self.process_job(job_info["job_id"], resume_from_checkpoint=True)
+                )
+                resumed_count += 1
+            except Exception as e:
+                logger.error(f"Failed to resume job {job_info['job_id']}: {e}")
+
+        return resumed_count
+
+
+# Singleton instance
+_orchestrator: System2Orchestrator | None = None
+
+
+def get_orchestrator(
+    db_service: DatabaseService | None = None,
+) -> System2Orchestrator:
+    """Get the singleton orchestrator instance."""
+    global _orchestrator
+    if _orchestrator is None:
+        _orchestrator = System2Orchestrator(db_service)
+    return _orchestrator

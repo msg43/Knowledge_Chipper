@@ -1,501 +1,414 @@
 """
-LLM Adapter for System 2
+System 2 LLM Adapter
 
-Centralizes all LLM calls with hardware-aware concurrency control,
-memory management, and exponential backoff per SYSTEM_2_IMPLEMENTATION_GUIDE.md.
+Centralizes all LLM API calls with:
+- Hardware tier-specific concurrency limits
+- Memory-aware throttling (70% threshold)
+- Exponential backoff for rate limits
+- Request/response tracking
+- Cost estimation
 """
 
 import asyncio
 import json
-import random
+import logging
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import psutil
-from sqlalchemy.orm import Session
 
-from ..database import DatabaseService, LLMRequest, LLMResponse
+from ..database import DatabaseService
 from ..errors import ErrorCode, KnowledgeSystemError
-from ..logger import get_logger
-from ..utils.hardware_detection import HardwareDetector
+from ..utils.hardware_detection import detect_hardware_specs
 
-logger = get_logger(__name__)
-
-
-@dataclass
-class HardwareTierConfig:
-    """Hardware tier configuration from TECHNICAL_SPECIFICATIONS.md"""
-
-    tier: str
-    download_workers: int
-    mining_workers: int
-    evaluation_workers: int
-    max_threads: int
-    memory_threshold: float = 0.7  # 70% memory threshold
-    critical_threshold: float = 0.9  # 90% critical threshold
-
-
-# Hardware tier configurations from TECHNICAL_SPECIFICATIONS.md §Hardware Tier Configurations
-HARDWARE_TIERS = {
-    "consumer": HardwareTierConfig(
-        tier="consumer",
-        download_workers=2,
-        mining_workers=2,
-        evaluation_workers=1,
-        max_threads=4,
-    ),
-    "prosumer": HardwareTierConfig(
-        tier="prosumer",
-        download_workers=3,
-        mining_workers=4,
-        evaluation_workers=2,
-        max_threads=8,
-    ),
-    "professional": HardwareTierConfig(
-        tier="professional",
-        download_workers=4,
-        mining_workers=6,
-        evaluation_workers=3,
-        max_threads=12,
-    ),
-    "server": HardwareTierConfig(
-        tier="server",
-        download_workers=6,
-        mining_workers=10,
-        evaluation_workers=5,
-        max_threads=20,
-    ),
-}
-
-
-class MemoryMonitor:
-    """Monitors system memory and provides throttling recommendations."""
-
-    def __init__(self, threshold: float = 0.7, critical_threshold: float = 0.9):
-        self.threshold = threshold
-        self.critical_threshold = critical_threshold
-        self._last_check = 0
-        self._check_interval = 1.0  # Check every second
-
-    def get_memory_usage(self) -> float:
-        """Get current memory usage percentage."""
-        return psutil.virtual_memory().percent / 100.0
-
-    def should_throttle(self) -> tuple[bool, float]:
-        """
-        Check if we should throttle operations.
-
-        Returns:
-            Tuple of (should_throttle, current_usage)
-        """
-        current_time = time.time()
-        if current_time - self._last_check < self._check_interval:
-            return False, 0.0
-
-        self._last_check = current_time
-        usage = self.get_memory_usage()
-
-        return usage > self.threshold, usage
-
-    def is_critical(self) -> bool:
-        """Check if memory usage is at critical level."""
-        return self.get_memory_usage() > self.critical_threshold
+logger = logging.getLogger(__name__)
 
 
 class RateLimiter:
-    """Implements exponential backoff with jitter for rate limiting."""
+    """Token bucket rate limiter with exponential backoff."""
 
-    def __init__(self, initial_delay: float = 1.0, max_delay: float = 60.0):
-        self.initial_delay = initial_delay
-        self.max_delay = max_delay
-        self.current_delay = initial_delay
-        self.consecutive_errors = 0
+    def __init__(self, requests_per_minute: int = 60):
+        self.rpm = requests_per_minute
+        self.tokens = float(requests_per_minute)
+        self.last_update = time.time()
+        self.backoff_until = None
+        self.backoff_multiplier = 1
 
-    def reset(self):
-        """Reset the rate limiter after successful request."""
-        self.current_delay = self.initial_delay
-        self.consecutive_errors = 0
+    async def acquire(self):
+        """Acquire a token, waiting if necessary."""
+        while True:
+            # Check if we're in backoff
+            if self.backoff_until and datetime.now() < self.backoff_until:
+                wait_seconds = (self.backoff_until - datetime.now()).total_seconds()
+                logger.info(f"Rate limit backoff, waiting {wait_seconds:.1f}s")
+                await asyncio.sleep(wait_seconds)
+                self.backoff_until = None
 
-    def backoff(self):
-        """Calculate and apply backoff with jitter."""
-        self.consecutive_errors += 1
+            # Update token bucket
+            now = time.time()
+            elapsed = now - self.last_update
+            self.tokens = min(self.rpm, self.tokens + elapsed * (self.rpm / 60))
+            self.last_update = now
 
-        # Exponential backoff: delay = min(initial * 2^errors, max_delay)
-        base_delay = min(
-            self.initial_delay * (2**self.consecutive_errors), self.max_delay
-        )
+            # Check if we have tokens
+            if self.tokens >= 1:
+                self.tokens -= 1
+                self.backoff_multiplier = 1  # Reset on success
+                return
 
-        # Add jitter (±25% randomization)
-        jitter = base_delay * 0.25 * (2 * random.random() - 1)
-        self.current_delay = base_delay + jitter
+            # Wait for tokens
+            wait_time = (1 - self.tokens) / (self.rpm / 60)
+            await asyncio.sleep(wait_time)
 
-        logger.info(
-            f"Rate limit backoff: {self.current_delay:.2f}s (attempt {self.consecutive_errors})"
-        )
-        time.sleep(self.current_delay)
+    def trigger_backoff(self):
+        """Trigger exponential backoff on rate limit error."""
+        backoff_seconds = min(60 * self.backoff_multiplier, 300)  # Max 5 min
+        self.backoff_until = datetime.now() + timedelta(seconds=backoff_seconds)
+        self.backoff_multiplier = min(self.backoff_multiplier * 2, 8)
+        logger.warning(f"Rate limit hit, backing off for {backoff_seconds}s")
+
+
+class MemoryThrottler:
+    """Throttles requests when memory usage exceeds threshold."""
+
+    def __init__(self, threshold_percent: float = 70.0):
+        self.threshold = threshold_percent
+        self._last_check = 0
+        self._check_interval = 1.0  # Check every second
+
+    async def check_and_wait(self):
+        """Check memory and wait if above threshold."""
+        now = time.time()
+        if now - self._last_check < self._check_interval:
+            return
+
+        self._last_check = now
+        memory_percent = psutil.virtual_memory().percent
+
+        if memory_percent > self.threshold:
+            logger.warning(
+                f"Memory usage at {memory_percent:.1f}%, throttling LLM requests"
+            )
+            # Wait proportionally to how far over threshold we are
+            over_threshold = memory_percent - self.threshold
+            wait_time = min(over_threshold / 10, 5.0)  # Max 5s wait
+            await asyncio.sleep(wait_time)
 
 
 class LLMAdapter:
     """
-    Centralized LLM adapter with concurrency control and memory management.
+    Centralized adapter for all LLM API calls with System 2 features.
 
     Features:
-    - Hardware tier-based worker limits
-    - Dynamic memory-based throttling
-    - Exponential backoff for rate limits
-    - Token budget tracking
-    - Request/response logging to database
+    - Hardware-aware concurrency limits
+    - Memory-based throttling
+    - Rate limiting with exponential backoff
+    - Request/response tracking in database
+    - Cost estimation
     """
 
-    def __init__(self, db_service: DatabaseService | None = None):
+    # Hardware tier concurrency limits
+    CONCURRENCY_LIMITS = {
+        "consumer": 2,  # M1/M2 base models
+        "prosumer": 4,  # M1/M2 Pro/Max
+        "enterprise": 8,  # M1/M2 Ultra, high-end x86
+    }
+
+    def __init__(
+        self,
+        db_service: DatabaseService | None = None,
+        hardware_specs: dict[str, Any] | None = None,
+    ):
+        """Initialize the LLM adapter."""
         self.db_service = db_service or DatabaseService()
-        self.hardware_detector = HardwareDetector()
-        self.hardware_specs = self.hardware_detector.detect_hardware()
 
-        # Determine hardware tier
-        self.tier_config = self._determine_tier()
-        logger.info(f"LLMAdapter initialized for {self.tier_config.tier} tier")
+        # Detect hardware tier
+        if hardware_specs is None:
+            hardware_specs = detect_hardware_specs()
 
-        # Initialize components
-        self.memory_monitor = MemoryMonitor(
-            threshold=self.tier_config.memory_threshold,
-            critical_threshold=self.tier_config.critical_threshold,
-        )
-        self.rate_limiters: dict[str, RateLimiter] = {}  # Per-provider rate limiters
+        self.hardware_tier = self._determine_hardware_tier(hardware_specs)
+        self.max_concurrent = self.CONCURRENCY_LIMITS.get(self.hardware_tier, 2)
 
-        # Worker pools for different job types
-        self.mining_executor = ThreadPoolExecutor(
-            max_workers=self.tier_config.mining_workers, thread_name_prefix="llm_mining"
-        )
-        self.evaluation_executor = ThreadPoolExecutor(
-            max_workers=self.tier_config.evaluation_workers,
-            thread_name_prefix="llm_eval",
+        logger.info(
+            f"LLM Adapter initialized for {self.hardware_tier} tier "
+            f"(max {self.max_concurrent} concurrent requests)"
         )
 
-        # Metrics
-        self.metrics = {
-            "total_requests": 0,
-            "successful_requests": 0,
-            "failed_requests": 0,
-            "total_tokens": 0,
-            "total_cost_usd": 0.0,
-            "memory_throttle_events": 0,
+        # Concurrency control
+        self.semaphore = asyncio.Semaphore(self.max_concurrent)
+        self.active_requests = 0
+
+        # Rate limiters per provider
+        self.rate_limiters = {
+            "openai": RateLimiter(60),  # 60 RPM default
+            "anthropic": RateLimiter(50),  # 50 RPM default
+            "google": RateLimiter(60),  # 60 RPM default
+            "ollama": RateLimiter(1000),  # Local, no real limit
         }
 
-    def _determine_tier(self) -> HardwareTierConfig:
-        """Determine hardware tier based on system specs."""
-        memory_gb = self.hardware_specs.get("memory_gb", 8)
-        cpu_cores = self.hardware_specs.get("cpu_cores", 4)
+        # Memory throttler
+        self.memory_throttler = MemoryThrottler(70.0)
 
-        if memory_gb >= 64 and cpu_cores >= 16:
-            return HARDWARE_TIERS["server"]
-        elif memory_gb >= 32 and cpu_cores >= 8:
-            return HARDWARE_TIERS["professional"]
-        elif memory_gb >= 16 and cpu_cores >= 4:
-            return HARDWARE_TIERS["prosumer"]
+        # Cost tracking
+        self.cost_per_1k_tokens = {
+            "gpt-4": {"input": 0.03, "output": 0.06},
+            "gpt-3.5-turbo": {"input": 0.001, "output": 0.002},
+            "claude-3-opus": {"input": 0.015, "output": 0.075},
+            "claude-3-sonnet": {"input": 0.003, "output": 0.015},
+            "gemini-pro": {"input": 0.001, "output": 0.002},
+        }
+
+        # Request tracking
+        self._current_job_run_id: str | None = None
+
+    def set_job_run_id(self, job_run_id: str):
+        """Set the current job run ID for request tracking."""
+        self._current_job_run_id = job_run_id
+
+    def _determine_hardware_tier(self, specs: dict[str, Any]) -> str:
+        """Determine hardware tier from specs."""
+        # Check for Apple Silicon
+        if "apple" in specs.get("chip_type", "").lower():
+            if "ultra" in specs.get("chip_variant", "").lower():
+                return "enterprise"
+            elif any(
+                x in specs.get("chip_variant", "").lower() for x in ["pro", "max"]
+            ):
+                return "prosumer"
+            else:
+                return "consumer"
+
+        # Check x86 by core count and memory
+        cores = specs.get("performance_cores", 0) + specs.get("efficiency_cores", 0)
+        memory_gb = specs.get("total_memory_gb", 0)
+
+        if cores >= 16 and memory_gb >= 32:
+            return "enterprise"
+        elif cores >= 8 and memory_gb >= 16:
+            return "prosumer"
         else:
-            return HARDWARE_TIERS["consumer"]
+            return "consumer"
 
-    def _get_rate_limiter(self, provider: str) -> RateLimiter:
-        """Get or create rate limiter for provider."""
-        if provider not in self.rate_limiters:
-            self.rate_limiters[provider] = RateLimiter()
-        return self.rate_limiters[provider]
-
-    def _check_memory_and_throttle(self) -> float | None:
-        """
-        Check memory usage and throttle if needed.
-
-        Returns:
-            Sleep duration if throttling, None otherwise
-        """
-        should_throttle, usage = self.memory_monitor.should_throttle()
-
-        if self.memory_monitor.is_critical():
-            # Critical level - pause new jobs
-            logger.warning(f"Critical memory usage: {usage:.1%} - pausing new jobs")
-            self.metrics["memory_throttle_events"] += 1
-            return 5.0  # Pause for 5 seconds
-        elif should_throttle:
-            # High usage - reduce parallelization
-            logger.info(f"High memory usage: {usage:.1%} - throttling operations")
-            self.metrics["memory_throttle_events"] += 1
-            return 1.0  # Brief pause
-
-        return None
-
-    async def call_llm_async(
+    async def complete(
         self,
         provider: str,
         model: str,
-        prompt: str,
-        job_run_id: str | None = None,
-        max_tokens: int | None = None,
+        messages: list[dict[str, str]],
         temperature: float = 0.7,
-        response_format: str | None = None,
-        max_retries: int = 3,
+        max_tokens: int | None = None,
+        **kwargs,
     ) -> dict[str, Any]:
         """
-        Async LLM call with full tracking and retry logic.
+        Make an LLM completion request with all System 2 features.
 
         Args:
-            provider: LLM provider (openai, anthropic, google)
-            model: Model identifier
-            prompt: Input prompt
-            job_run_id: Optional job run ID for tracking
-            max_tokens: Maximum response tokens
+            provider: LLM provider (openai, anthropic, google, ollama)
+            model: Model name
+            messages: Chat messages
             temperature: Sampling temperature
-            response_format: Expected response format (e.g., "json")
-            max_retries: Maximum retry attempts
+            max_tokens: Maximum tokens to generate
+            **kwargs: Additional provider-specific parameters
 
         Returns:
-            Dict with response data and metadata
+            Response dictionary with 'content' and metadata
         """
-        request_id = f"llm_{time.time_ns()}"
-        rate_limiter = self._get_rate_limiter(provider)
+        start_time = time.time()
 
-        for attempt in range(max_retries):
+        # Validate provider
+        if provider not in self.rate_limiters:
+            raise KnowledgeSystemError(
+                ErrorCode.INVALID_INPUT, f"Unknown provider: {provider}"
+            )
+
+        # Wait for rate limiter
+        rate_limiter = self.rate_limiters[provider]
+        await rate_limiter.acquire()
+
+        # Check memory throttling
+        await self.memory_throttler.check_and_wait()
+
+        # Acquire concurrency slot
+        async with self.semaphore:
+            self.active_requests += 1
+            logger.info(
+                f"LLM request starting ({self.active_requests}/{self.max_concurrent} active)"
+            )
+
             try:
-                # Check memory before making request
-                throttle_duration = self._check_memory_and_throttle()
-                if throttle_duration:
-                    await asyncio.sleep(throttle_duration)
+                # Build request payload
+                request_payload = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    **kwargs,
+                }
 
-                # Track request start
-                start_time = time.time()
-                self.metrics["total_requests"] += 1
+                # Track request in database
+                request_id = self._track_request(provider, model, request_payload)
 
-                # Create request record
-                if job_run_id:
-                    with self.db_service.get_session() as session:
-                        llm_request = LLMRequest(
-                            request_id=request_id,
-                            job_run_id=job_run_id,
-                            provider=provider,
-                            model=model,
-                            max_tokens=max_tokens,
-                            temperature=temperature,
-                            request_json={
-                                "prompt": prompt[:1000],  # Truncate for storage
-                                "full_length": len(prompt),
-                                "response_format": response_format,
-                            },
-                        )
-                        session.add(llm_request)
-                        session.commit()
+                # Make the actual API call
+                response = await self._call_provider(provider, model, request_payload)
 
-                # Make actual LLM call (provider-specific)
-                response = await self._call_provider_async(
-                    provider, model, prompt, max_tokens, temperature, response_format
-                )
+                # Track response
+                response_time_ms = int((time.time() - start_time) * 1000)
+                self._track_response(request_id, response, response_time_ms)
 
-                # Track success
-                latency_ms = (time.time() - start_time) * 1000
-                self.metrics["successful_requests"] += 1
-                self.metrics["total_tokens"] += response.get("total_tokens", 0)
-                self.metrics["total_cost_usd"] += response.get("cost_usd", 0.0)
-
-                # Store response
-                if job_run_id:
-                    with self.db_service.get_session() as session:
-                        llm_response = LLMResponse(
-                            response_id=f"resp_{request_id}",
-                            request_id=request_id,
-                            status_code=200,
-                            completion_tokens=response.get("completion_tokens", 0),
-                            total_tokens=response.get("total_tokens", 0),
-                            latency_ms=latency_ms,
-                            cost_usd=response.get("cost_usd", 0.0),
-                            response_json=response,
-                        )
-                        session.add(llm_response)
-                        session.commit()
-
-                # Reset rate limiter on success
-                rate_limiter.reset()
+                # Estimate cost
+                cost = self._estimate_cost(provider, model, response)
+                if cost > 0:
+                    logger.info(f"Estimated cost: ${cost:.4f}")
 
                 return response
 
             except Exception as e:
-                self.metrics["failed_requests"] += 1
+                # Handle rate limit errors
+                if "rate" in str(e).lower() or "429" in str(e):
+                    rate_limiter.trigger_backoff()
 
-                # Check if it's a rate limit error
-                if "429" in str(e) or "rate" in str(e).lower():
-                    if attempt < max_retries - 1:
-                        rate_limiter.backoff()
-                        continue
-                    else:
-                        raise KnowledgeSystemError(
-                            f"Rate limit exceeded for {provider} after {max_retries} attempts",
-                            error_code=ErrorCode.API_RATE_LIMIT_ERROR_MEDIUM,
-                            context={"provider": provider, "model": model},
-                        )
+                self.active_requests -= 1
+                raise KnowledgeSystemError(
+                    ErrorCode.LLM_API_ERROR, f"LLM request failed: {e}"
+                ) from e
 
-                # Log error response
-                if job_run_id:
-                    with self.db_service.get_session() as session:
-                        llm_response = LLMResponse(
-                            response_id=f"resp_{request_id}",
-                            request_id=request_id,
-                            status_code=getattr(e, "status_code", 500),
-                            error_message=str(e),
-                            response_json={"error": str(e)},
-                        )
-                        session.add(llm_response)
-                        session.commit()
+            finally:
+                self.active_requests -= 1
 
-                # Re-raise on last attempt
-                if attempt == max_retries - 1:
-                    raise
-
-        # Should never reach here, but return error response for type safety
-        return {"error": "Max retries exceeded", "provider": provider, "model": model}
-
-    def call_llm(
-        self,
-        provider: str,
-        model: str,
-        prompt: str,
-        job_run_id: str | None = None,
-        max_tokens: int | None = None,
-        temperature: float = 0.7,
-        response_format: str | None = None,
-        job_type: str = "mining",
+    async def _call_provider(
+        self, provider: str, model: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
-        """
-        Synchronous LLM call with executor-based concurrency control.
+        """Make the actual API call to the provider."""
+        # This is a placeholder - in reality, this would call the actual provider APIs
+        # For now, return a mock response
+        logger.info(f"Calling {provider} API with model {model}")
 
-        Args:
-            provider: LLM provider
-            model: Model identifier
-            prompt: Input prompt
-            job_run_id: Optional job run ID
-            max_tokens: Maximum response tokens
-            temperature: Sampling temperature
-            response_format: Expected response format
-            job_type: Type of job (mining/evaluation) for executor selection
-
-        Returns:
-            Dict with response data
-        """
-        # Select appropriate executor based on job type
-        executor = (
-            self.mining_executor if job_type == "mining" else self.evaluation_executor
-        )
-
-        # Create async task and run in executor
-        async def _async_call():
-            return await self.call_llm_async(
-                provider,
-                model,
-                prompt,
-                job_run_id,
-                max_tokens,
-                temperature,
-                response_format,
-            )
-
-        # Run in thread pool to respect concurrency limits
-        future = executor.submit(asyncio.run, _async_call())
-        return future.result()
-
-    async def _call_provider_async(
-        self,
-        provider: str,
-        model: str,
-        prompt: str,
-        max_tokens: int | None,
-        temperature: float,
-        response_format: str | None,
-    ) -> dict[str, Any]:
-        """
-        Provider-specific LLM call implementation.
-
-        This is a placeholder - actual implementation would use
-        provider SDKs (OpenAI, Anthropic, Google, etc.)
-        """
-        # Simulate API call delay
+        # Simulate API delay
         await asyncio.sleep(0.5)
 
         # Mock response
-        response_text = f"Mock response for {provider}/{model}"
-        if response_format == "json":
-            response_text = json.dumps(
-                {"claims": [], "jargon": [], "people": [], "mental_models": []}
-            )
-
+        mock_content = "This is a mock LLM response for System 2 testing."
         return {
-            "text": response_text,
-            "completion_tokens": len(response_text.split()),
-            "prompt_tokens": len(prompt.split()),
-            "total_tokens": len(response_text.split()) + len(prompt.split()),
-            "cost_usd": 0.001
-            * (len(response_text.split()) + len(prompt.split()))
-            / 1000,
+            "content": mock_content,
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+            },
             "model": model,
             "provider": provider,
         }
 
-    def process_batch(
+    def _track_request(self, provider: str, model: str, payload: dict[str, Any]) -> str:
+        """Track request in database."""
+        if not self._current_job_run_id:
+            return ""
+
+        try:
+            from ..core.system2_orchestrator import get_orchestrator
+
+            orchestrator = get_orchestrator(self.db_service)
+            return orchestrator.track_llm_request(provider, model, payload)
+        except Exception as e:
+            logger.warning(f"Failed to track LLM request: {e}")
+            return ""
+
+    def _track_response(
+        self, request_id: str, response: dict[str, Any], response_time_ms: int
+    ):
+        """Track response in database."""
+        if not request_id:
+            return
+
+        try:
+            from ..core.system2_orchestrator import get_orchestrator
+
+            orchestrator = get_orchestrator(self.db_service)
+            orchestrator.track_llm_response(request_id, response, response_time_ms)
+        except Exception as e:
+            logger.warning(f"Failed to track LLM response: {e}")
+
+    def _estimate_cost(
+        self, provider: str, model: str, response: dict[str, Any]
+    ) -> float:
+        """Estimate cost of the request."""
+        usage = response.get("usage", {})
+        input_tokens = usage.get("prompt_tokens", 0)
+        output_tokens = usage.get("completion_tokens", 0)
+
+        # Get cost rates
+        model_key = None
+        if "gpt-4" in model:
+            model_key = "gpt-4"
+        elif "gpt-3.5" in model:
+            model_key = "gpt-3.5-turbo"
+        elif "claude-3-opus" in model:
+            model_key = "claude-3-opus"
+        elif "claude-3-sonnet" in model:
+            model_key = "claude-3-sonnet"
+        elif "gemini" in model:
+            model_key = "gemini-pro"
+
+        if not model_key or model_key not in self.cost_per_1k_tokens:
+            return 0.0
+
+        rates = self.cost_per_1k_tokens[model_key]
+        input_cost = (input_tokens / 1000) * rates["input"]
+        output_cost = (output_tokens / 1000) * rates["output"]
+
+        return input_cost + output_cost
+
+    async def complete_with_retry(
         self,
-        items: list[dict[str, Any]],
-        processor_func,
-        job_type: str = "mining",
-        progress_callback=None,
-    ) -> list[Any]:
-        """
-        Process a batch of items with concurrency control.
+        provider: str,
+        model: str,
+        messages: list[dict[str, str]],
+        max_retries: int = 3,
+        **kwargs,
+    ) -> dict[str, Any]:
+        """Complete with automatic retry on transient failures."""
+        last_error = None
 
-        Args:
-            items: List of items to process
-            processor_func: Function to process each item
-            job_type: Type of job for executor selection
-            progress_callback: Optional progress callback
-
-        Returns:
-            List of results
-        """
-        executor = (
-            self.mining_executor if job_type == "mining" else self.evaluation_executor
-        )
-        results = []
-
-        # Submit all tasks
-        futures = {
-            executor.submit(processor_func, item): i for i, item in enumerate(items)
-        }
-
-        # Process completions
-        completed = 0
-        for future in as_completed(futures):
+        for attempt in range(max_retries):
             try:
-                result = future.result()
-                results.append(result)
-                completed += 1
+                return await self.complete(provider, model, messages, **kwargs)
+            except KnowledgeSystemError as e:
+                last_error = e
+                if (
+                    e.error_code == ErrorCode.LLM_API_ERROR
+                    and attempt < max_retries - 1
+                ):
+                    wait_time = 2**attempt  # Exponential backoff
+                    logger.warning(
+                        f"LLM request failed (attempt {attempt + 1}/{max_retries}), "
+                        f"retrying in {wait_time}s: {e}"
+                    )
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise
 
-                if progress_callback:
-                    progress_callback(completed, len(items))
+        raise last_error
 
-            except Exception as e:
-                logger.error(f"Batch processing error: {e}")
-                results.append(None)
-
-        return results
-
-    def get_metrics(self) -> dict[str, Any]:
-        """Get current adapter metrics."""
+    def get_stats(self) -> dict[str, Any]:
+        """Get adapter statistics."""
         return {
-            **self.metrics,
-            "memory_usage": self.memory_monitor.get_memory_usage(),
-            "tier": self.tier_config.tier,
-            "active_mining_workers": self.mining_executor._threads.__len__(),
-            "active_eval_workers": self.evaluation_executor._threads.__len__(),
+            "hardware_tier": self.hardware_tier,
+            "max_concurrent": self.max_concurrent,
+            "active_requests": self.active_requests,
+            "memory_usage": psutil.virtual_memory().percent,
         }
 
-    def shutdown(self):
-        """Shutdown executor pools."""
-        self.mining_executor.shutdown(wait=True)
-        self.evaluation_executor.shutdown(wait=True)
+
+# Singleton instance
+_adapter: LLMAdapter | None = None
+
+
+def get_llm_adapter(
+    db_service: DatabaseService | None = None,
+    hardware_specs: dict[str, Any] | None = None,
+) -> LLMAdapter:
+    """Get the singleton LLM adapter instance."""
+    global _adapter
+    if _adapter is None:
+        _adapter = LLMAdapter(db_service, hardware_specs)
+    return _adapter

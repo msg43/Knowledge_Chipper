@@ -26,6 +26,7 @@ class Job(Base):
     """Top-level job records for orchestrating work across the pipeline."""
 
     __tablename__ = "job"
+    __table_args__ = {"extend_existing": True}
 
     job_id = Column(String(100), primary_key=True)
     job_type = Column(
@@ -51,6 +52,7 @@ class JobRun(Base):
     """Individual execution attempts of a job with metrics and status."""
 
     __tablename__ = "job_run"
+    __table_args__ = {"extend_existing": True}
 
     run_id = Column(String(100), primary_key=True)
     job_id = Column(String(100), ForeignKey("job.job_id"), nullable=False)
@@ -82,6 +84,7 @@ class LLMRequest(Base):
     """Tracks all LLM API requests for auditing and cost tracking."""
 
     __tablename__ = "llm_request"
+    __table_args__ = {"extend_existing": True}
 
     request_id = Column(String(100), primary_key=True)
     job_run_id = Column(String(100), ForeignKey("job_run.run_id"), nullable=False)
@@ -103,6 +106,7 @@ class LLMResponse(Base):
     """Stores LLM API responses with metrics."""
 
     __tablename__ = "llm_response"
+    __table_args__ = {"extend_existing": True}
 
     response_id = Column(String(100), primary_key=True)
     request_id = Column(String(100), ForeignKey("llm_request.request_id"), unique=True)

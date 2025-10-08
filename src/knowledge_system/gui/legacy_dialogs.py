@@ -931,23 +931,23 @@ class ModelDownloadDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # Header
-        header_label = QLabel("🤖 Model Not Found")
+        self.header_label = QLabel("🤖 Model Not Found")
         header_font = QFont()
         header_font.setPointSize(16)
         header_font.setBold(True)
-        header_label.setFont(header_font)
-        header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(header_label)
+        self.header_label.setFont(header_font)
+        self.header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.header_label)
 
         # Description
-        desc_label = QLabel(
+        self.desc_label = QLabel(
             f"The model '{self.model_name}' is not available locally.\n\n"
             "Would you like to download it now? This may take several minutes depending on the model size.\n\n"
             "Note: Summarization will be disabled until the download completes."
         )
-        desc_label.setWordWrap(True)
-        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(desc_label)
+        self.desc_label.setWordWrap(True)
+        self.desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.desc_label)
 
         # Progress section (initially hidden)
         self.progress_widget = QVBoxLayout()
@@ -996,7 +996,9 @@ class ModelDownloadDialog(QDialog):
 
     def _start_download(self):
         """Start the model download."""
-        # Hide description and show progress
+        # Hide initial UI elements and show progress
+        self.header_label.hide()
+        self.desc_label.hide()
         self.download_btn.hide()
         self.cancel_btn.setText("Cancel Download")
         self.cancel_btn.clicked.disconnect()

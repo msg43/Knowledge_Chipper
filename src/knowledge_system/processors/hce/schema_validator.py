@@ -47,18 +47,19 @@ class SchemaValidator:
         for schema_file in schema_dir.glob("*.json"):
             try:
                 # Handle versioned schema names (e.g., miner_output.v1.json)
-                schema_name = schema_file.stem
-                # Also store without version for backward compatibility
-                base_name = schema_name.split(".")[0]
+                schema_name = schema_file.stem  # e.g., "miner_output.v1"
 
                 with open(schema_file) as f:
                     schema_content = json.load(f)
                     self.schemas[schema_name] = schema_content
-                    # Store both versioned and unversioned names
-                    if schema_name != base_name:
+
+                    # Also store without version for backward compatibility
+                    # e.g., "miner_output.v1" -> "miner_output"
+                    base_name = schema_name.split(".")[0]
+                    if base_name != schema_name:
                         self.schemas[base_name] = schema_content
 
-                logger.debug(f"Loaded schema: {schema_name}")
+                logger.debug(f"Loaded schema: {schema_name} (also as {base_name})")
             except Exception as e:
                 logger.warning(f"Failed to load schema {schema_file}: {e}")
 

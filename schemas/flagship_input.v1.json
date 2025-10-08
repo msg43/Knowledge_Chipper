@@ -1,26 +1,59 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Flagship Input Schema",
-  "description": "Input schema for the flagship LLM evaluation of miner outputs",
+  "title": "FlagshipInputV1",
+  "description": "Input schema for the Flagship Evaluator system that ranks and scores claims",
   "type": "object",
+  "required": ["content_summary", "claims_to_evaluate"],
   "properties": {
-    "episode_id": {
+    "content_summary": {
       "type": "string",
-      "description": "Unique identifier for the episode"
+      "description": "Summary of the full content for context",
+      "minLength": 50
     },
-    "episode_title": {
-      "type": "string",
-      "description": "Title of the episode being evaluated"
+    "episode_metadata": {
+      "type": "object",
+      "description": "Metadata about the episode",
+      "properties": {
+        "episode_id": {
+          "type": "string",
+          "description": "Unique identifier for the episode"
+        },
+        "title": {
+          "type": "string",
+          "description": "Episode title"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Total duration in HH:MM:SS format"
+        },
+        "speakers": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "List of speakers in the episode"
+        },
+        "key_topics": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Main topics discussed"
+        }
+      }
     },
-    "claims": {
+    "claims_to_evaluate": {
       "type": "array",
-      "description": "Claims extracted by the miner to be evaluated",
+      "description": "Claims extracted by the miner for evaluation",
+      "minItems": 1,
       "items": {
         "type": "object",
+        "required": ["claim_text", "claim_type", "stance", "evidence_spans"],
         "properties": {
+          "claim_id": {
+            "type": "string",
+            "description": "Unique identifier for the claim"
+          },
           "claim_text": {
             "type": "string",
-            "description": "The exact claim being made"
+            "description": "The claim statement to evaluate",
+            "minLength": 10
           },
           "claim_type": {
             "type": "string",
@@ -30,34 +63,59 @@
           "stance": {
             "type": "string",
             "enum": ["asserts", "questions", "opposes", "neutral"],
-            "description": "How the speaker presents the claim"
+            "description": "Speaker's stance"
           },
           "evidence_spans": {
             "type": "array",
-            "description": "Supporting quotes with timestamps",
+            "description": "Supporting evidence from the transcript",
             "items": {
               "type": "object",
+              "required": ["quote", "t0", "t1"],
               "properties": {
                 "quote": {
                   "type": "string",
-                  "description": "Verbatim text supporting the claim"
+                  "description": "Exact quote from transcript"
                 },
                 "t0": {
                   "type": "string",
-                  "description": "Start timestamp"
+                  "description": "Start timestamp",
+                  "pattern": "^\\d{2}:\\d{2}$"
                 },
                 "t1": {
                   "type": "string",
-                  "description": "End timestamp"
+                  "description": "End timestamp",
+                  "pattern": "^\\d{2}:\\d{2}$"
                 }
-              },
-              "required": ["quote", "t0", "t1"]
+              }
             }
+          },
+          "speaker": {
+            "type": "string",
+            "description": "Who made the claim"
+          },
+          "segment_id": {
+            "type": "string",
+            "description": "Source segment ID"
           }
+        }
+      }
+    },
+    "evaluation_criteria": {
+      "type": "object",
+      "description": "Optional custom evaluation criteria",
+      "properties": {
+        "focus_areas": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Specific aspects to focus on"
         },
-        "required": ["claim_text", "claim_type", "stance", "evidence_spans"]
+        "importance_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Minimum importance score to accept"
+        }
       }
     }
-  },
-  "required": ["episode_id", "episode_title", "claims"]
+  }
 }

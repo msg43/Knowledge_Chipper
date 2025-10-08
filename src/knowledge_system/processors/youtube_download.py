@@ -236,13 +236,12 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
         # PROXY CONFIGURATION - PacketStream (optional)
         from ..config import get_settings
-        from ..utils.deduplication import VideoDeduplicationService
         from ..utils.packetstream_proxy import PacketStreamProxyManager
 
         settings = get_settings()
 
-        # Initialize deduplication service for cost optimization
-        dedup_service = VideoDeduplicationService()
+        # Note: VideoDeduplicationService already initialized at line 170
+        # No need to reinitialize here
 
         # PacketStream proxy (optional)
         use_proxy = False
@@ -323,18 +322,18 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     if test_response.status_code == 200:
                         proxy_ip = test_response.json().get("origin", "unknown")
                         logger.info(
-                            f"✅ Bright Data proxy working - connected via IP: {proxy_ip}"
+                            f"✅ PacketStream proxy working - connected via IP: {proxy_ip}"
                         )
                         if progress_callback:
                             progress_callback(
-                                f"✅ Bright Data proxy working - IP: {proxy_ip}"
+                                f"✅ PacketStream proxy working - IP: {proxy_ip}"
                             )
                     else:
                         logger.warning(
-                            f"Bright Data proxy test returned status {test_response.status_code}"
+                            f"PacketStream proxy test returned status {test_response.status_code}"
                         )
                 else:
-                    logger.error("Failed to generate Bright Data proxy URL")
+                    logger.error("Failed to generate PacketStream proxy URL")
 
                     # Smart fallback: Allow single video downloads, block bulk downloads
                     if len(urls) == 1:
@@ -343,19 +342,19 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         )
                         if progress_callback:
                             progress_callback(
-                                "❌ Failed to generate Bright Data proxy URL"
+                                "❌ Failed to generate PacketStream proxy URL"
                             )
                             progress_callback(
                                 "⚠️ Single video: Proceeding with direct connection (low risk)"
                             )
-                        use_bright_data = False
+                        use_proxy = False
                     else:
                         logger.error(
                             f"Bulk download detected ({len(urls)} URLs) - blocking due to proxy URL failure"
                         )
                         if progress_callback:
                             progress_callback(
-                                "❌ Failed to generate Bright Data proxy URL"
+                                "❌ Failed to generate PacketStream proxy URL"
                             )
                             progress_callback(
                                 f"🚫 BLOCKED: Bulk download ({len(urls)} URLs) without proxy protection"
@@ -367,14 +366,14 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                 "💡 Tip: Single video downloads are still allowed without proxy"
                             )
                             progress_callback(
-                                "🔧 Please fix Bright Data configuration before bulk downloading"
+                                "🔧 Please fix PacketStream configuration before bulk downloading"
                             )
 
                         return ProcessorResult(
                             success=False,
                             data=None,
                             errors=[
-                                f"Failed to generate Bright Data proxy URL for bulk download ({len(urls)} URLs). "
+                                f"Failed to generate PacketStream proxy URL for bulk download ({len(urls)} URLs). "
                                 "Bulk downloads without proxy protection are blocked to prevent IP bans. "
                                 "Single video downloads are still allowed."
                             ],
@@ -388,7 +387,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
             except Exception as proxy_test_error:
                 error_msg = str(proxy_test_error)
-                logger.error(f"❌ Bright Data proxy test failed: {error_msg}")
+                logger.error(f"❌ PacketStream proxy test failed: {error_msg}")
 
                 # Smart fallback: Allow single video downloads, block bulk downloads
                 if len(urls) == 1:
@@ -397,22 +396,22 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     )
                     if progress_callback:
                         progress_callback(
-                            f"❌ Bright Data proxy test failed: {error_msg}"
+                            f"❌ PacketStream proxy test failed: {error_msg}"
                         )
                         progress_callback(
                             "⚠️ Single video: Proceeding with direct connection (low risk)"
                         )
                         progress_callback(
-                            "🔄 Consider fixing Bright Data for future bulk downloads..."
+                            "🔄 Consider fixing PacketStream for future bulk downloads..."
                         )
-                    use_bright_data = False
+                    use_proxy = False
                 else:
                     logger.error(
                         f"Bulk download detected ({len(urls)} URLs) - blocking direct connection to prevent IP ban"
                     )
                     if progress_callback:
                         progress_callback(
-                            f"❌ Bright Data proxy test failed: {error_msg}"
+                            f"❌ PacketStream proxy test failed: {error_msg}"
                         )
                         progress_callback(
                             f"🚫 BLOCKED: Bulk download ({len(urls)} URLs) without proxy protection"
@@ -424,14 +423,14 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             "💡 Tip: Single video downloads are still allowed without proxy"
                         )
                         progress_callback(
-                            "🔧 Please fix Bright Data configuration before bulk downloading"
+                            "🔧 Please fix PacketStream configuration before bulk downloading"
                         )
 
                     return ProcessorResult(
                         success=False,
                         data=None,
                         errors=[
-                            f"Bright Data proxy failed for bulk download ({len(urls)} URLs): {error_msg}. "
+                            f"PacketStream proxy failed for bulk download ({len(urls)} URLs): {error_msg}. "
                             "Bulk downloads without proxy protection are blocked to prevent IP bans. "
                             "Single video downloads are still allowed."
                         ],
@@ -443,7 +442,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         },
                     )
 
-        # Proxy usage requires Bright Data; no legacy WebShare fallback
+        # Proxy usage with PacketStream (optional); no legacy WebShare fallback
 
         # Configure base yt-dlp options
         ydl_opts = {**self.ydl_opts_base}
@@ -579,38 +578,25 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         playlist_context = f" [Playlist: {playlist['title'][:40]}{'...' if len(playlist['title']) > 40 else ''} - Video {playlist_position}/{playlist['total_videos']}]"
                         break
 
-                # Extract video ID for Bright Data session management
+                # Extract video ID for logging
                 video_id = None
-                current_proxy_url = proxy_url  # Default to existing proxy_url
-                current_session_id = None
+                import re
 
-                if use_bright_data:
-                    # Extract video ID from URL
-                    import re
+                youtube_id_match = re.search(
+                    r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url
+                )
+                if youtube_id_match:
+                    video_id = youtube_id_match.group(1)
 
-                    youtube_id_match = re.search(
-                        r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url
+                # Use PacketStream proxy (already initialized)
+                current_proxy_url = proxy_url
+
+                if current_proxy_url and video_id:
+                    logger.info(f"Using PacketStream proxy for video {video_id}")
+                elif video_id:
+                    logger.info(
+                        f"Using direct connection for video {video_id} (no proxy configured)"
                     )
-                    if youtube_id_match:
-                        video_id = youtube_id_match.group(1)
-
-                        # Create specific session for this video
-                        current_session_id = session_manager.create_session_for_file(
-                            video_id, "audio_download"
-                        )
-                        current_proxy_url = session_manager.get_proxy_url_for_file(
-                            video_id, "audio_download"
-                        )
-
-                        if current_proxy_url:
-                            logger.info(
-                                f"Created Bright Data session {current_session_id} for video {video_id}"
-                            )
-                        else:
-                            logger.warning(
-                                f"Failed to create Bright Data session for {video_id}, using fallback"
-                            )
-                            current_proxy_url = proxy_url
 
                 # First, extract metadata to get actual duration for better concurrency calculation
                 if progress_callback:
@@ -626,12 +612,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         "socket_timeout": 30,
                     }
 
-                    proxy_type = (
-                        "Bright Data" if use_bright_data else "Direct (NO PROXY)"
-                    )
+                    proxy_type = "PacketStream" if use_proxy else "Direct (NO PROXY)"
                     with yt_dlp.YoutubeDL(test_opts) as ydl_test:
                         logger.info(f"Testing {proxy_type} connectivity for: {url}")
-                        if progress_callback and not use_bright_data:
+                        if progress_callback and not use_proxy:
                             progress_callback(
                                 "⚠️ WARNING: Using direct connection (no proxy protection)"
                             )
@@ -728,10 +712,8 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                 with yt_dlp.YoutubeDL(final_ydl_opts) as ydl:
                     logger.info(f"Downloading audio for: {url}{playlist_context}")
-                    if use_bright_data and video_id:
-                        logger.info(
-                            f"Using Bright Data session {current_session_id} for video {video_id}"
-                        )
+                    if use_proxy and video_id:
+                        logger.info(f"Using PacketStream proxy for video {video_id}")
 
                     try:
                         # Track download start time for cost calculation
@@ -753,32 +735,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             download_end_time - download_start_time
                         ).total_seconds()
 
-                        # Track usage for Bright Data sessions
-                        if use_bright_data and current_session_id and session_manager:
-                            try:
-                                # Estimate data downloaded (rough calculation based on duration)
-                                estimated_bytes = int(
-                                    estimated_size_mb * 1024 * 1024
-                                )  # Convert MB to bytes
-                                estimated_cost = 0.01 * (
-                                    estimated_size_mb / 100
-                                )  # Rough cost estimate
-
-                                # Update session usage in database
-                                session_manager.update_session_usage(
-                                    current_session_id,
-                                    requests_count=1,
-                                    data_downloaded_bytes=estimated_bytes,
-                                    cost=estimated_cost,
-                                )
-
-                                logger.info(
-                                    f"Tracked Bright Data usage: {estimated_size_mb:.1f}MB, ~${estimated_cost:.4f}"
-                                )
-                            except Exception as cost_error:
-                                logger.warning(
-                                    f"Failed to track Bright Data costs: {cost_error}"
-                                )
+                        # PacketStream proxies do not require usage tracking (flat rate)
 
                         # Register video in database for future deduplication
                         if video_id and db_service:
@@ -794,7 +751,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     url=url,
                                     status="completed",
                                     extraction_method=(
-                                        "bright_data" if use_bright_data else "direct"
+                                        "packetstream" if use_proxy else "direct"
                                     ),
                                 )
                                 logger.debug(
@@ -888,15 +845,8 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     errors.append(f"Failed to download {url}: {error_msg}")
 
             finally:
-                # Clean up Bright Data session for this video
-                if use_bright_data and video_id and session_manager:
-                    try:
-                        session_manager.end_session_for_file(video_id)
-                        logger.debug(f"Ended Bright Data session for video {video_id}")
-                    except Exception as cleanup_error:
-                        logger.warning(
-                            f"Failed to cleanup session for {video_id}: {cleanup_error}"
-                        )
+                # PacketStream proxies do not require session cleanup (stateless)
+                pass
 
         return ProcessorResult(
             success=len(errors) == 0,

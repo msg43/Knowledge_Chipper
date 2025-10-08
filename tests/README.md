@@ -1,6 +1,6 @@
-# Knowledge Chipper GUI Comprehensive Testing
+# Knowledge Chipper Testing Framework (System 2)
 
-This directory contains a comprehensive automated testing framework for the Knowledge Chipper GUI that validates every permutation of input types, GUI tabs, and processing operations.
+This directory contains a comprehensive automated testing framework for Knowledge Chipper System 2, including unit tests, integration tests, GUI tests, and end-to-end pipeline tests.
 
 ## Quick Start
 
@@ -9,41 +9,58 @@ This directory contains a comprehensive automated testing framework for the Know
 Ensure you have the testing dependencies installed:
 
 ```bash
-pip install pytest PyQt6 pyyaml
+pip install pytest pytest-asyncio pytest-cov PyQt6 pyyaml
 ```
 
-### 2. Prepare Sample Files
+### 2. Run All Tests (Recommended)
 
-You need to provide sample test files as outlined in the plan. See `tests/fixtures/sample_files/README.md` for detailed requirements.
-
-**Required Sample Files:**
-- Audio files: MP3, WAV, M4A, FLAC, OGG, AAC (various sizes)
-- Video files: MP4, WEBM, AVI, MOV, MKV (various sizes)  
-- Document files: PDF, TXT, MD, DOCX, DOC, RTF, HTML (various complexities)
-- URL test cases: YouTube URLs, RSS feeds, web pages (in text files)
-
-### 3. Run Tests
+Use the unified test runner for comprehensive testing:
 
 ```bash
-# Quick smoke tests (5-10 minutes)
-python -m tests.gui_comprehensive.main_test_runner smoke
-
-# Basic functionality tests (30 minutes)  
-python -m tests.gui_comprehensive.main_test_runner basic
-
-# Comprehensive testing (1-2 hours)
-python -m tests.gui_comprehensive.main_test_runner comprehensive
-
-# Stress testing (2+ hours)
-python -m tests.gui_comprehensive.main_test_runner stress
-
 # Run all test suites
-python -m tests.gui_comprehensive.main_test_runner all
+./tests/run_all_tests.py all
+
+# Run specific categories
+./tests/run_all_tests.py unit              # Unit tests only
+./tests/run_all_tests.py integration       # Integration tests only
+./tests/run_all_tests.py system2           # System 2 tests only
+./tests/run_all_tests.py gui               # GUI tests only
+./tests/run_all_tests.py comprehensive     # Comprehensive tests only
+
+# With options
+./tests/run_all_tests.py all --verbose     # Detailed output
+./tests/run_all_tests.py all --coverage    # With coverage report
+./tests/run_all_tests.py all --fast        # Skip slow tests
+```
+
+### 3. Run Individual Test Suites
+
+```bash
+# System 2 comprehensive tests
+python test_comprehensive.py               # HCE pipeline tests
+python tests/comprehensive_test_suite.py   # CLI comprehensive tests
+
+# Integration tests
+pytest tests/integration/ -v
+
+# GUI tests
+python tests/gui_comprehensive/main_test_runner.py smoke
 ```
 
 ## Framework Components
 
-### Core Framework (`gui_comprehensive/`)
+### System 2 Test Infrastructure
+
+- **`run_all_tests.py`** - Unified test runner for all test suites
+- **`fixtures/system2_fixtures.py`** - Reusable test fixtures for System 2 components
+- **`integration/test_system2_database.py`** - Database operation tests
+- **`integration/test_system2_orchestrator.py`** - Job orchestration tests
+- **`integration/test_llm_adapter.py`** - LLM adapter and rate limiting tests
+- **`integration/test_schema_validation_comprehensive.py`** - JSON schema validation tests
+- **`comprehensive_test_suite.py`** - Comprehensive CLI test suite
+- **`test_comprehensive.py`** - HCE pipeline comprehensive tests
+
+### GUI Testing Framework (`gui_comprehensive/`)
 
 - **`test_framework.py`** - Base testing infrastructure and test result management
 - **`gui_automation.py`** - PyQt6 GUI interaction automation
@@ -56,6 +73,7 @@ python -m tests.gui_comprehensive.main_test_runner all
 - **`sample_files/`** - Test input files organized by type
 - **`test_configs/`** - YAML configuration files for different test scenarios
 - **`expected_outputs/`** - Known good results for validation
+- **`system2_fixtures.py`** - System 2 test fixtures and helper functions
 
 ### Test Reports (`reports/`)
 
@@ -71,17 +89,27 @@ python -m tests.gui_comprehensive.main_test_runner all
 - **Documents**: PDF, TXT, MD, DOCX, DOC, RTF, HTML, HTM
 - **URLs**: YouTube videos/playlists, RSS feeds, web pages
 
+### System 2 Components Tested
+- **Job Orchestration**: Job creation, execution, state transitions
+- **Database Operations**: Job, JobRun, LLMRequest, LLMResponse tables
+- **LLM Adapter**: Rate limiting, memory throttling, concurrency control
+- **Schema Validation**: JSON schema validation and repair
+- **Checkpoint/Resume**: Job persistence and recovery
+- **Auto-process Chaining**: Automatic job pipeline (transcribe → mine → flagship)
+
 ### GUI Tabs Tested
 - Introduction Tab
 - Process Pipeline Tab
-- File Watcher Tab  
+- Monitor Tab (System 2 - renamed from File Watcher)
 - YouTube Tab
 - Transcription Tab
 - Summarization Tab
 - Claim Search Tab
 - Speaker Attribution Tab
 - Summary Cleanup Tab
+- Review Tab (System 2 - SQLite integration)
 - API Keys Tab
+- Prompts Tab (System 2)
 - Sync Status Tab
 
 ### Operations Tested

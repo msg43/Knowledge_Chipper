@@ -62,6 +62,57 @@ def migrate_to_system2(session: Session):
             # Table might not exist yet
             print(f"   - Skipping {table}: {str(e)}")
 
+    # 2.5 Add missing columns for System 2
+    print("2.5. Adding missing System 2 columns...")
+
+    # Add missing columns to episodes table
+    episode_columns = [
+        ("subtitle", "TEXT"),
+        ("description", "TEXT"),
+        ("processed_at", "TIMESTAMP"),
+    ]
+
+    try:
+        result = session.execute(text("PRAGMA table_info(episodes)"))
+        existing_cols = [row[1] for row in result]
+
+        for col_name, col_type in episode_columns:
+            if col_name not in existing_cols:
+                session.execute(
+                    text(f"ALTER TABLE episodes ADD COLUMN {col_name} {col_type}")
+                )
+                print(f"   ✓ Added {col_name} to episodes")
+            else:
+                print(f"   - {col_name} already exists in episodes")
+        session.commit()
+    except Exception as e:
+        print(f"   - Error updating episodes table: {str(e)}")
+
+    # Add missing columns to claims table
+    claim_columns = [
+        ("original_text", "TEXT"),
+        ("evaluator_notes", "TEXT"),
+        ("upload_timestamp", "TIMESTAMP"),
+        ("upload_error", "TEXT"),
+        ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+    ]
+
+    try:
+        result = session.execute(text("PRAGMA table_info(claims)"))
+        existing_cols = [row[1] for row in result]
+
+        for col_name, col_type in claim_columns:
+            if col_name not in existing_cols:
+                session.execute(
+                    text(f"ALTER TABLE claims ADD COLUMN {col_name} {col_type}")
+                )
+                print(f"   ✓ Added {col_name} to claims")
+            else:
+                print(f"   - {col_name} already exists in claims")
+        session.commit()
+    except Exception as e:
+        print(f"   - Error updating claims table: {str(e)}")
+
     # 3. Create new System 2 tables
     print("3. Creating System 2 tables...")
 

@@ -7,28 +7,39 @@
 ## 🆕 What's New in Version 3.4.0 - System 2 Architecture
 
 ### System 2: Production-Grade Reliability
-- **🗄️ Database-Backed Job Orchestration**: All operations create persistent job records with SQLite
-- **🔄 Checkpoint/Resume Capability**: Failed jobs resume from their last successful checkpoint
+- **🗄️ Database-Backed Job Orchestration**: All operations create persistent job records with SQLite WAL mode
+- **🔄 Checkpoint/Resume Capability**: Failed jobs resume from their last successful checkpoint automatically
 - **💾 Perfect State Persistence**: No more lost work due to crashes or interruptions
-- **📊 Complete Audit Trail**: Track every LLM call, token usage, and processing metric
+- **📊 Complete Audit Trail**: Track every LLM call, token usage, and processing metric in database
 
 ### Hardware-Aware Resource Management
-- **🖥️ Automatic Hardware Detection**: Adapts to your system (Consumer/Prosumer/Professional/Server)
-- **🧠 Dynamic Memory Monitoring**: Prevents out-of-memory crashes with intelligent throttling
-- **⚡ Tier-Based Concurrency**: Optimal worker counts for your specific hardware
-- **📈 Real-Time Performance Metrics**: Monitor resource usage and processing efficiency
+- **🖥️ Automatic Hardware Detection**: Adapts to your system tier:
+  - Consumer (M1/M2 base): 2 concurrent LLM requests
+  - Prosumer (M1/M2 Pro/Max): 4 concurrent LLM requests
+  - Enterprise (M1/M2 Ultra): 8 concurrent LLM requests
+- **🧠 Dynamic Memory Monitoring**: Throttles at 70% memory usage to prevent crashes
+- **⚡ Exponential Backoff**: Intelligent rate limit handling for all providers
+- **📈 Real-Time Performance Metrics**: JSON-structured logs with correlation IDs
 
 ### Enhanced Observability
-- **🏷️ Structured Error Codes**: HIGH/MEDIUM/LOW severity taxonomy for better debugging
-- **📋 Job State Tracking**: Monitor jobs through queued→running→completed lifecycle
-- **🔍 LLM Request Logging**: Full visibility into model interactions and costs
-- **📊 System 2 Review Tab**: SQLite-backed claim editor with validation
+- **🏷️ Structured Error Codes**: HIGH/MEDIUM/LOW severity taxonomy per TECHNICAL_SPECIFICATIONS.md
+- **📋 Job State Tracking**: Monitor jobs through queued→running→succeeded/failed lifecycle
+- **🔍 LLM Request/Response Tables**: Full database tracking with costs and metrics
+- **📊 System2Logger**: Structured JSON logging with job_run_id correlation
 
-### GUI Enhancements
-- **✅ Auto-Process Pipeline**: Chain transcribe→mine→flagship→upload automatically
-- **📝 Review Tab**: Edit and validate claims with direct database integration
-- **📊 Monitor Tab**: Track System 2 pipeline progress and job states
-- **🚀 Orchestrator Integration**: Summarization tab now uses job management
+### GUI Simplified to 7 Tabs
+- **1️⃣ Introduction**: Getting started guide
+- **2️⃣ Transcribe**: With "Process automatically through entire pipeline" checkbox
+- **3️⃣ Summarize**: LLM-powered summarization
+- **4️⃣ Review**: SQLite-backed claim editor with tier coloring (A/B/C)
+- **5️⃣ Upload**: Cloud storage management
+- **6️⃣ Monitor**: Directory watching (renamed from Watcher)
+- **7️⃣ Settings**: Configuration and API keys
+
+### JSON Schema Validation
+- **📋 Versioned Schemas**: All LLM I/O validated against `/schemas/*.v1.json`
+- **🔧 Automatic Repair**: Schema validator fixes common issues
+- **✅ Type Safety**: Guaranteed structure for miner and flagship outputs
 
 ## 🆕 What's New in Version 3.3.0
 
@@ -349,6 +360,51 @@ Key configuration areas:
 - Build personal knowledge bases
 - Track insights across multiple sources
 - Integrate with Obsidian workflows
+
+## System 2 Architecture
+
+Skipthepodcast.com v3.4.0 introduces System 2, a production-grade architecture designed for reliability and observability:
+
+### Core Components
+
+**1. Job Orchestration (`System2Orchestrator`)**
+- Persistent job records with unique IDs
+- Checkpoint save/restore for resumability
+- Auto-process chaining between pipeline stages
+- Failed job retry with exponential backoff
+
+**2. LLM Adapter (`LLMAdapter`)**
+- Centralized API management for all providers
+- Hardware-aware concurrency limits
+- Memory-based throttling (70% threshold)
+- Cost tracking and estimation
+
+**3. Database Layer**
+- SQLite with WAL mode for concurrency
+- New tables: `job`, `job_run`, `llm_request`, `llm_response`
+- Optimistic locking with `updated_at` columns
+- Complete audit trail of all operations
+
+**4. Structured Logging (`System2Logger`)**
+- JSON-formatted logs with correlation IDs
+- Error taxonomy (HIGH/MEDIUM/LOW severity)
+- Performance metrics on every operation
+- Integration with log aggregation tools
+
+**5. Schema Validation**
+- Versioned JSON schemas in `/schemas/` directory
+- Automatic repair of malformed LLM outputs
+- Type safety for all pipeline data
+
+### Benefits
+
+- **Reliability**: Jobs resume automatically after failures
+- **Observability**: Complete visibility into system behavior
+- **Cost Control**: Track and limit LLM API usage
+- **Performance**: Optimized for your specific hardware
+- **Maintainability**: Consistent patterns across codebase
+
+For detailed operations guide, see [OPERATIONS.md](OPERATIONS.md).
 
 ## Installation & Setup
 

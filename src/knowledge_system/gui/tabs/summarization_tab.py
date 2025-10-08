@@ -225,820 +225,9 @@ class EnhancedSummarizationWorker(QThread):
             self.processing_error.emit(f"System 2 processing failed: {str(e)}")
 
     def run(self) -> None:
-        """Run the summarization process."""
-        try:
-            from datetime import datetime as _dt
-            from pathlib import Path
-
-            from ...processors.summarizer import SummarizerProcessor
-            from ...utils.file_io import overwrite_or_insert_summary_section
-            from ...utils.ollama_manager import get_ollama_manager
-            from ...utils.progress import SummarizationProgress
-
-            provider = self.gui_settings.get("provider", "openai")
-            model = self.gui_settings.get("model", "gpt-4o-mini-2024-07-18")
-
-            # System 2: Check if we should use the orchestrator
-            use_system2 = self.gui_settings.get("use_system2_orchestrator", False)
-
-            if use_system2:
-                # Use System 2 orchestrator for job management
-                self._run_with_system2_orchestrator()
-                return
-
-            # Strip both "(Installed)" and "(X GB)" suffixes to get clean model name
-            clean_model_name = model.replace(" (Installed)", "")
-            # Remove size suffix pattern like " (4 GB)"
-            import re
-
-            clean_model_name = re.sub(r" \(\d+ GB\)$", "", clean_model_name)
-
-            # Double-check Ollama service for local provider (in case it stopped between GUI check and worker execution)
-            if provider == "local":
-                ollama_manager = get_ollama_manager()
-                if not ollama_manager.is_service_running():
-                    self.processing_error.emit(
-                        "Ollama service is not running. Please start Ollama service first using the Hardware tab or by running 'ollama serve' in your terminal."
-                    )
-                    return
-
-                # Also check if model is available (use clean name)
-                if not ollama_manager.is_model_available(clean_model_name):
-                    self.processing_error.emit(
-                        f"Model '{clean_model_name}' is not available in Ollama. Please download the model first using the Hardware tab or by running 'ollama pull {clean_model_name}'."
-                    )
-                    return
-
-            # Create processor with GUI settings (use clean model name)
-            processor = SummarizerProcessor(
-                provider=provider,
-                model=clean_model_name,
-                max_tokens=self.gui_settings.get("max_tokens", 10000),
-                hce_options={
-                    "use_skim": self.gui_settings.get("use_skim", True),
-                    "miner_model_override": self.gui_settings.get(
-                        "miner_model_override"
-                    ),
-                    "flagship_judge_model": self.gui_settings.get(
-                        "flagship_judge_model"
-                    ),
-                },
-            )
-
-            # Get output directory (if not updating in-place)
-            output_dir = None
-            if not self.gui_settings.get("update_in_place", False):
-                output_dir = Path(self.gui_settings.get("output_dir", ""))
-                if output_dir:
-                    output_dir.mkdir(parents=True, exist_ok=True)
-
-            # Build index if not forcing re-summarization
-            summary_index = {}
-            skipped_files = []
-            force_regenerate = self.gui_settings.get("force_regenerate", False)
-
-            if output_dir and not force_regenerate:
-                summary_index = processor._build_summary_index(output_dir)
-
-                # Check each file
-                files_to_process = []
-                for file_path in self.files:
-                    file_path_obj = Path(file_path)
-                    needs_summary, reason = processor._check_needs_summarization(
-                        file_path_obj, summary_index
-                    )
-                    if not needs_summary:
-                        skipped_files.append((file_path, reason))
-                        # Emit progress for skipped file
-                        skip_progress = SummarizationProgress(
-                            current_file=file_path,
-                            total_files=len(self.files),
-                            completed_files=len(skipped_files),
-                            current_step=f"⏭️ Skipping: {reason}",
-                            percent=(len(skipped_files) / len(self.files)) * 100.0,
-                            status="skipped_unchanged",
-                            provider=self.gui_settings.get("provider", "openai"),
-                            model_name=self.gui_settings.get(
-                                "model", "gpt-4o-mini-2024-07-18"
-                            ),
-                        )
-                        self.progress_updated.emit(skip_progress)
-                    else:
-                        files_to_process.append(file_path)
-
-                # Update files list to only process needed files
-                if skipped_files:
-                    self.progress_updated.emit(
-                        SummarizationProgress(
-                            current_step=f"⏭️ Skipped {len(skipped_files)} unchanged files",
-                            percent=0.0,
-                            status="skipping_complete",
-                            provider=self.gui_settings.get("provider", "openai"),
-                            model_name=self.gui_settings.get(
-                                "model", "gpt-4o-mini-2024-07-18"
-                            ),
-                        )
-                    )
-                    self.files = files_to_process
-
-            success_count = 0
-            failure_count = 0
-            total_count = len(self.files)
-
-            # Calculate character-based progress weighting for accurate ETAs
-            file_sizes = []
-            total_characters = 0
-            characters_completed = 0
-
-            # Get file sizes for character-weighted progress
-            for file_path in self.files:
-                try:
-                    file_size = Path(file_path).stat().st_size
-                    file_sizes.append(file_size)
-                    total_characters += file_size
-                except Exception:
-                    # Fallback for files we can't read
-                    estimated_size = 10000  # 10KB default estimate
-                    file_sizes.append(estimated_size)
-                    total_characters += estimated_size
-
-            logger.info(
-                f"📊 Batch character analysis: {len(self.files)} files, {total_characters:,} total characters"
-            )
-            for i, file_path in enumerate(self.files):
-                file_name = Path(file_path).name
-                size_kb = file_sizes[i] / 1024
-                weight_pct = (file_sizes[i] / total_characters) * 100
-                logger.info(
-                    f"  📄 {file_name}: {size_kb:.1f}KB ({weight_pct:.1f}% of batch)"
-                )
-
-            for i, file_path in enumerate(self.files):
-                if self.should_stop:
-                    self.processing_error.emit("Processing was cancelled by user")
-                    return
-
-                file_path_obj = Path(file_path)
-                current_file_size = file_sizes[i]
-
-                # Character-based batch progress calculation
-                batch_progress_start = (characters_completed / total_characters) * 100.0
-
-                # Create enhanced progress object with character-weighted batch progress
-                remaining_files = len(self.files) - i - 1
-                remaining_str = (
-                    f" ({remaining_files} left)" if remaining_files > 0 else ""
-                )
-                progress = SummarizationProgress(
-                    current_file=file_path,
-                    total_files=len(self.files),
-                    completed_files=i,
-                    current_step=f"📄 Starting {file_path_obj.name} ({i+1}/{len(self.files)}{remaining_str}) - {current_file_size/1024:.1f}KB",
-                    percent=batch_progress_start,
-                    provider=self.gui_settings.get("provider", "openai"),
-                    model_name=self.gui_settings.get("model", "gpt-4o-mini-2024-07-18"),
-                )
-
-                # Add character-based batch information
-                progress.total_characters = total_characters
-                progress.characters_completed = characters_completed
-                progress.current_file_size = current_file_size
-
-                self.progress_updated.emit(progress)
-
-                # Process the file
-                template_path = self.gui_settings.get("template_path", None)
-                logger.info(
-                    f"🔧 DEBUG: template_path from gui_settings: '{template_path}' (type: {type(template_path)})"
-                )
-
-                # If no custom template provided, determine template based on analysis type
-                if not template_path or not template_path.strip():
-                    analysis_type = self.gui_settings.get(
-                        "analysis_type", "Document Summary"
-                    )
-
-                    # Convert analysis type to template filename dynamically
-                    filename = _analysis_type_to_filename(analysis_type)
-                    template_path = f"config/prompts/{filename}.txt"
-                    logger.info(
-                        f"🔧 Auto-determined template for '{analysis_type}': {template_path}"
-                    )
-
-                if (
-                    template_path and template_path.strip()
-                ):  # Check for empty/whitespace strings
-                    template_path = Path(template_path)
-                    logger.info(f"🔧 DEBUG: template_path as Path: '{template_path}'")
-                    logger.info(
-                        f"🔧 DEBUG: template_path absolute: '{template_path.absolute()}'"
-                    )
-                    if not template_path.exists():
-                        logger.error(f"❌ Template path does not exist: {template_path}")
-                        template_path = None
-                    else:
-                        logger.info(f"✅ Template path exists: {template_path}")
-                else:
-                    logger.error("❌ Could not determine template path")
-                    template_path = None
-
-                # Create enhanced progress callback with character-based tracking
-                def enhanced_progress_callback(p: Any) -> None:
-                    """Enhanced progress callback with character-based batch tracking."""
-                    # Add batch progress context to the progress object
-                    if hasattr(p, "__dict__"):
-                        # File-level information
-                        p.total_files = len(self.files)
-                        p.completed_files = i  # Files completed so far
-                        p.current_file = file_path
-
-                        # Character-based progress calculation
-                        p.total_characters = total_characters
-                        p.current_file_size = current_file_size
-
-                        # Handle character progress based on processing status
-                        if hasattr(p, "status") and p.status == "completed":
-                            # File completed - mark all characters as done
-                            current_file_chars_done = current_file_size
-                        elif (
-                            hasattr(p, "status")
-                            and p.status in ["chunk_completed", "processing_chunks"]
-                            and hasattr(p, "chunk_number")
-                            and hasattr(p, "total_chunks")
-                            and p.total_chunks
-                        ):
-                            # Chunking: progress based on completed chunks
-                            chunks_completed = (
-                                getattr(p, "chunk_number", 1) - 1
-                            )  # chunk_number is 1-based
-                            if p.status == "chunk_completed":
-                                chunks_completed = getattr(
-                                    p, "chunk_number", 1
-                                )  # Include current chunk as completed
-                            current_file_chars_done = (
-                                chunks_completed / p.total_chunks
-                            ) * current_file_size
-                        else:
-                            # File still in progress - no characters completed yet
-                            current_file_chars_done = 0
-
-                        # Total characters completed (previous files + current file completion)
-                        p.characters_completed = (
-                            characters_completed + current_file_chars_done
-                        )
-
-                        # Note: batch_percent_characters is auto-calculated in __post_init__
-                        # Keep individual file progress in percent field
-                        # p.percent already contains the file-level progress
-
-                    self.progress_updated.emit(p)
-
-                # Check for cancellation before processing each file
-                if self.should_stop:
-                    logger.info("Stopping summarization as requested")
-                    self.cancellation_token.cancel("User requested stop")
-                    break
-
-                # Handle different file types
-                if file_path_obj.suffix.lower() == ".pdf":
-                    # Extract text from PDF first
-                    enhanced_progress_callback(
-                        SummarizationProgress(
-                            current_file=file_path,
-                            current_step="📄 Extracting text from PDF...",
-                            percent=0.0,
-                            status="extracting_pdf",
-                        )
-                    )
-
-                    from ...processors.pdf import PDFProcessor
-
-                    pdf_processor = PDFProcessor()
-                    pdf_result = pdf_processor.process(file_path_obj)
-
-                    if not pdf_result.success:
-                        self.processing_error.emit(
-                            f"PDF extraction failed for {file_path_obj.name}: {'; '.join(pdf_result.errors)}"
-                        )
-                        failure_count += 1
-                        continue
-
-                    pdf_results = pdf_result.data.get("results", [])
-                    if not pdf_results:
-                        self.processing_error.emit(
-                            f"No text extracted from PDF: {file_path_obj.name}"
-                        )
-                        failure_count += 1
-                        continue
-
-                    text_to_summarize = pdf_results[0]["text"]
-                    if not text_to_summarize.strip():
-                        self.processing_error.emit(
-                            f"PDF appears to be empty or contains no readable text: {file_path_obj.name}"
-                        )
-                        failure_count += 1
-                        continue
-
-                    enhanced_progress_callback(
-                        SummarizationProgress(
-                            current_file=file_path,
-                            current_step=f"✓ Extracted {len(text_to_summarize):,} characters",
-                            percent=10.0,
-                            status="pdf_extracted",
-                        )
-                    )
-
-                    # Process the extracted text
-                    result = processor.process(
-                        text_to_summarize,
-                        prompt_template=template_path,
-                        progress_callback=enhanced_progress_callback,
-                        cancellation_token=self.cancellation_token,
-                        prefer_template_summary=self.gui_settings.get(
-                            "prompt_driven_mode", False
-                        ),
-                        allow_llm_fallback=True,
-                    )
-                elif file_path_obj.suffix.lower() in {".docx", ".doc", ".rt"}:
-                    # Extract text from document files first
-                    doc_type = (
-                        "Word document"
-                        if file_path_obj.suffix.lower() in {".docx", ".doc"}
-                        else "RTF document"
-                    )
-                    enhanced_progress_callback(
-                        SummarizationProgress(
-                            current_file=file_path,
-                            current_step=f"📄 Extracting text from {doc_type}...",
-                            percent=0.0,
-                            status="extracting_document",
-                        )
-                    )
-
-                    from ...processors.document_processor import DocumentProcessor
-
-                    doc_processor = DocumentProcessor()
-                    doc_result = doc_processor.process(file_path_obj)
-
-                    if not doc_result.success:
-                        self.processing_error.emit(
-                            f"Document extraction failed for {file_path_obj.name}: {'; '.join(doc_result.errors)}"
-                        )
-                        failure_count += 1
-                        continue
-
-                    doc_results = doc_result.data.get("results", [])
-                    if not doc_results:
-                        self.processing_error.emit(
-                            f"No text extracted from document: {file_path_obj.name}"
-                        )
-                        failure_count += 1
-                        continue
-
-                    text_to_summarize = doc_results[0]["text"]
-                    if not text_to_summarize.strip():
-                        self.processing_error.emit(
-                            f"Document appears to be empty or contains no readable text: {file_path_obj.name}"
-                        )
-                        failure_count += 1
-                        continue
-
-                    enhanced_progress_callback(
-                        SummarizationProgress(
-                            current_file=file_path,
-                            current_step=f"✓ Extracted {len(text_to_summarize):,} characters",
-                            percent=10.0,
-                            status="document_extracted",
-                        )
-                    )
-
-                    # Process the extracted text
-                    result = processor.process(
-                        text_to_summarize,
-                        prompt_template=template_path,
-                        progress_callback=enhanced_progress_callback,
-                        cancellation_token=self.cancellation_token,
-                        prefer_template_summary=self.gui_settings.get(
-                            "prompt_driven_mode", False
-                        ),
-                        allow_llm_fallback=True,
-                    )
-                else:
-                    # Handle text/markdown/HTML/JSON files directly
-                    result = processor.process(
-                        file_path_obj,
-                        prompt_template=template_path,
-                        progress_callback=enhanced_progress_callback,
-                        cancellation_token=self.cancellation_token,
-                        prefer_template_summary=self.gui_settings.get(
-                            "prompt_driven_mode", False
-                        ),
-                        allow_llm_fallback=True,  # Enable fallback for better reliability
-                    )
-
-                if result.success:
-                    # File completed successfully - update character counter
-                    characters_completed += current_file_size
-
-                    # Extract and emit HCE analytics if available
-                    if (
-                        hasattr(result, "data")
-                        and result.data
-                        and isinstance(result.data, dict)
-                    ):
-                        hce_data = result.data.get("hce_data")
-                        if hce_data and isinstance(hce_data, dict):
-                            analytics = self._extract_hce_analytics(
-                                hce_data, file_path_obj.name
-                            )
-                            self.hce_analytics_updated.emit(analytics)
-
-                            # Export to GetReceipts if enabled
-                            if self.gui_settings.get("export_getreceipts", False):
-                                try:
-                                    # Import our knowledge_chipper_integration function
-                                    import sys
-                                    from pathlib import Path as PathLib
-
-                                    # Add the project root to Python path to import our integration
-                                    project_root = PathLib(
-                                        __file__
-                                    ).parent.parent.parent.parent.parent
-                                    if str(project_root) not in sys.path:
-                                        sys.path.insert(0, str(project_root))
-
-                                    from knowledge_chipper_integration import (  # type: ignore
-                                        publish_to_getreceipts,
-                                    )
-
-                                    # Read file content for transcript
-                                    transcript_text = ""
-                                    if file_path_obj.exists():
-                                        transcript_text = file_path_obj.read_text(
-                                            encoding="utf-8"
-                                        )
-
-                                    # Convert HCE data to GetReceipts format
-                                    claims = []
-                                    people = []
-                                    jargon = []
-                                    mental_models = []
-
-                                    # Extract claims (only high-quality ones)
-                                    for claim in hce_data.get("claims", []):
-                                        if claim.get("tier") in [
-                                            "A",
-                                            "B",
-                                        ]:  # Only high-quality claims
-                                            claims.append(claim.get("canonical", ""))
-
-                                    # Extract people
-                                    for person in hce_data.get("people", []):
-                                        people.append(
-                                            {
-                                                "name": person.get(
-                                                    "normalized",
-                                                    person.get("surface", ""),
-                                                ),
-                                                "bio": None,  # HCE doesn't provide bio
-                                                "expertise": None,  # HCE doesn't provide expertise
-                                                "credibility_score": person.get(
-                                                    "confidence", 0.5
-                                                ),
-                                                "sources": [],  # HCE doesn't provide sources
-                                            }
-                                        )
-
-                                    # Extract jargon terms
-                                    for term in hce_data.get("jargon", []):
-                                        jargon.append(
-                                            {
-                                                "term": term.get("term", ""),
-                                                "definition": term.get(
-                                                    "definition", ""
-                                                ),
-                                                "domain": term.get("category"),
-                                                "related_terms": [],
-                                                "examples": [],
-                                            }
-                                        )
-
-                                    # Extract mental models (concepts)
-                                    for concept in hce_data.get("concepts", []):
-                                        # Convert HCE relations to GetReceipts format
-                                        concept_relations = []
-                                        for relation in hce_data.get("relations", []):
-                                            if relation.get(
-                                                "source_claim_id"
-                                            ) == concept.get("model_id"):
-                                                rel_type = relation.get("type", "")
-                                                # Map HCE relation types to GetReceipts types
-                                                if rel_type == "supports":
-                                                    gr_type = "enables"
-                                                elif rel_type == "depends_on":
-                                                    gr_type = "requires"
-                                                elif rel_type == "contradicts":
-                                                    gr_type = "conflicts_with"
-                                                else:
-                                                    gr_type = "causes"
-
-                                                concept_relations.append(
-                                                    {
-                                                        "from": concept.get("name", ""),
-                                                        "to": relation.get(
-                                                            "target_claim_id", ""
-                                                        ),
-                                                        "type": gr_type,
-                                                    }
-                                                )
-
-                                        mental_models.append(
-                                            {
-                                                "name": concept.get("name", ""),
-                                                "description": concept.get(
-                                                    "definition", ""
-                                                ),
-                                                "domain": None,  # HCE doesn't provide domain
-                                                "key_concepts": concept.get(
-                                                    "aliases", []
-                                                ),
-                                                "relationships": concept_relations,
-                                            }
-                                        )
-
-                                    # Determine video URL if available
-                                    video_url = f"file://{str(file_path_obj)}"
-
-                                    # Call our GetReceipts integration function
-                                    getreceipts_result = publish_to_getreceipts(
-                                        transcript=transcript_text[
-                                            :5000
-                                        ],  # Limit to first 5000 chars
-                                        video_url=video_url,
-                                        claims=claims,
-                                        people=people,
-                                        jargon=jargon,
-                                        mental_models=mental_models,
-                                        topics=[
-                                            file_path_obj.stem,
-                                            "knowledge_chipper",
-                                            "gui_processing",
-                                        ],
-                                    )
-
-                                    if getreceipts_result["success"]:
-                                        claims_exported = getreceipts_result[
-                                            "published_claims"
-                                        ]
-                                        # Update progress with GetReceipts success
-                                        progress.current_step = f"✅ Exported {claims_exported} claims to GetReceipts"
-                                        self.progress_updated.emit(progress)
-                                    else:
-                                        errors = getreceipts_result.get(
-                                            "errors", ["Unknown error"]
-                                        )
-                                        # Update progress with GetReceipts error
-                                        progress.current_step = f"⚠️ GetReceipts export failed: {'; '.join(errors[:1])}"
-                                        self.progress_updated.emit(progress)
-
-                                except Exception as e:
-                                    # Update progress with GetReceipts error
-                                    progress.current_step = (
-                                        f"⚠️ GetReceipts export error: {str(e)}"
-                                    )
-                                    self.progress_updated.emit(progress)
-
-                    # Save the summary to file(s) based on user selection
-                    try:
-                        actions_completed = []
-
-                        # Handle in-place update if selected
-                        if (
-                            self.gui_settings.get("update_in_place", False)
-                            and file_path_obj.suffix.lower() == ".md"
-                        ):
-                            # Generate unified YAML metadata for in-place updates
-                            from ...utils.file_io import generate_unified_yaml_metadata
-
-                            template_path = (
-                                Path(self.gui_settings.get("template_path"))
-                                if self.gui_settings.get("template_path")
-                                else None
-                            )
-                            additional_yaml_fields = generate_unified_yaml_metadata(
-                                file_path_obj,
-                                result.data,
-                                self.gui_settings.get(
-                                    "model", "gpt-4o-mini-2024-07-18"
-                                ),
-                                (result.metadata or {}).get(
-                                    "provider",
-                                    self.gui_settings.get("provider", "unknown"),
-                                ),
-                                result.metadata or {},
-                                template_path,
-                                self.gui_settings.get(
-                                    "analysis_type", "document summary"
-                                ),
-                                existing_file_path=file_path_obj,  # Pass existing file path for duplicate checking
-                            )
-
-                            # Update existing .md file in-place with YAML fields
-                            overwrite_or_insert_summary_section(
-                                file_path_obj, result.data, additional_yaml_fields
-                            )
-                            actions_completed.append(
-                                f"Updated in-place: {file_path_obj.name}"
-                            )
-
-                        # Handle separate file creation if selected
-                        if self.gui_settings.get("create_separate_file", False):
-                            # Create new summary file
-                            # Clean filename for filesystem compatibility
-                            from ...utils.file_io import safe_filename
-
-                            clean_display_name = file_path_obj.stem.replace(
-                                "-", " "
-                            ).replace("_", " ")
-                            clean_filename = safe_filename(
-                                f"{clean_display_name}_summary"
-                            )
-
-                            # Get output directory and ensure it's a Path object
-                            output_dir_setting = self.gui_settings.get("output_dir")
-                            if not output_dir_setting:
-                                # Fallback: create summary next to original file
-                                output_file = (
-                                    file_path_obj.parent / f"{clean_filename}.md"
-                                )
-                            else:
-                                # Convert string path to Path object
-                                output_dir_path = Path(output_dir_setting)
-                                output_file = output_dir_path / f"{clean_filename}.md"
-
-                            # Ensure output directory exists
-                            output_file.parent.mkdir(parents=True, exist_ok=True)
-
-                            # Extract thumbnail from original file and prepare YAML metadata
-                            metadata = result.metadata or {}
-                            thumbnail_content = self._extract_thumbnail_from_file(
-                                file_path_obj
-                            )
-
-                            # Copy thumbnail image file if it exists and update reference
-                            (
-                                thumbnail_copied,
-                                updated_thumbnail_content,
-                            ) = self._copy_thumbnail_file_and_update_reference(
-                                file_path_obj, output_file, thumbnail_content
-                            )
-                            if thumbnail_copied:
-                                thumbnail_content = updated_thumbnail_content
-
-                            # Generate unified YAML metadata for separate file
-                            from ...utils.file_io import generate_unified_yaml_metadata
-
-                            template_path = (
-                                Path(self.gui_settings.get("template_path"))
-                                if self.gui_settings.get("template_path")
-                                else None
-                            )
-                            yaml_fields = generate_unified_yaml_metadata(
-                                file_path_obj,
-                                result.data,
-                                self.gui_settings.get(
-                                    "model", "gpt-4o-mini-2024-07-18"
-                                ),
-                                metadata.get(
-                                    "provider",
-                                    self.gui_settings.get("provider", "unknown"),
-                                ),
-                                metadata,
-                                template_path,
-                                self.gui_settings.get(
-                                    "analysis_type", "document summary"
-                                ),
-                            )
-
-                            with open(output_file, "w", encoding="utf-8") as f:
-                                # Write YAML frontmatter using unified metadata
-                                f.write("---\n")
-                                for field_name, field_value in yaml_fields.items():
-                                    # Handle boolean values properly (don't quote them)
-                                    if field_value.lower() in ["true", "false"]:
-                                        f.write(f"{field_name}: {field_value}\n")
-                                    else:
-                                        # Escape quotes and other special characters in field values for strings
-                                        escaped_value = (
-                                            str(field_value)
-                                            .replace('"', '\\"')
-                                            .replace("\n", "\\n")
-                                            .replace("\r", "\\r")
-                                        )
-                                        # Prevent extremely long field values that could break YAML
-                                        if len(escaped_value) > 1000:
-                                            escaped_value = escaped_value[:997] + "..."
-                                            logger.warning(
-                                                f"Truncated long field value for {field_name}"
-                                            )
-                                        f.write(f'{field_name}: "{escaped_value}"\n')
-
-                                # Add generation timestamp
-                                f.write(f'generated: "{_dt.now().isoformat()}"\n')
-                                f.write("---\n\n")
-
-                                # Add thumbnail if found
-                                if thumbnail_content:
-                                    f.write(thumbnail_content + "\n\n")
-
-                                # Add YouTube watch link if this is YouTube content
-                                youtube_url = self._extract_youtube_url_from_file(
-                                    file_path_obj
-                                )
-                                if youtube_url:
-                                    f.write(
-                                        f"**🎥 [Watch on YouTube]({youtube_url})**\n\n"
-                                    )
-
-                                # Write the actual summary content
-                                # Use the same clean display name for the content title
-                                f.write(f"# Summary of {clean_display_name}\n\n")
-                                f.write(result.data)
-
-                            actions_completed.append(
-                                f"Created separate file: {output_file.name}"
-                            )
-
-                        # Emit combined progress message
-                        if actions_completed:
-                            combined_message = " | ".join(actions_completed)
-                            self.progress_updated.emit(
-                                SummarizationProgress(
-                                    current_file=file_path,
-                                    total_files=len(self.files),
-                                    completed_files=i + 1,
-                                    current_step=f"✅ {combined_message}",
-                                    percent=100.0,  # Individual file complete
-                                    total_characters=total_characters,
-                                    characters_completed=characters_completed,
-                                    provider=self.gui_settings.get(
-                                        "provider", "openai"
-                                    ),
-                                    model_name=self.gui_settings.get(
-                                        "model", "gpt-4o-mini-2024-07-18"
-                                    ),
-                                )
-                            )
-
-                    except Exception as save_error:
-                        self.processing_error.emit(
-                            f"Failed to save summary for {file_path_obj.name}: {save_error}"
-                        )
-                        failure_count += 1
-                        continue
-
-                    success_count += 1
-                else:
-                    # Handle processing failure - still update character counter for batch ETA accuracy
-                    characters_completed += current_file_size
-
-                    error_msg = (
-                        "; ".join(result.errors) if result.errors else "Unknown error"
-                    )
-                    self.progress_updated.emit(
-                        SummarizationProgress(
-                            current_file=file_path,
-                            total_files=len(self.files),
-                            completed_files=i + 1,
-                            current_step=f"❌ Failed: {error_msg}",
-                            percent=100.0,  # Individual file complete (even if failed)
-                            total_characters=total_characters,
-                            characters_completed=characters_completed,
-                            provider=self.gui_settings.get("provider", "openai"),
-                            model_name=self.gui_settings.get(
-                                "model", "gpt-4o-mini-2024-07-18"
-                            ),
-                        )
-                    )
-                    failure_count += 1
-
-                self.file_completed.emit(i + 1, len(self.files))
-
-            self.processing_finished.emit(success_count, failure_count, total_count)
-
-        except Exception as e:
-            # Import CancellationError to handle cancellation properly
-            from ...utils.cancellation import CancellationError
-
-            if isinstance(e, CancellationError):
-                logger.info(f"Summarization cancelled: {e}")
-                # Don't emit this as an error - it's a normal cancellation
-                self.processing_finished.emit(
-                    success_count, failure_count, len(self.files)
-                )
-            else:
-                logger.error(f"Summarization error: {e}")
-                self.processing_error.emit(str(e))
+        """Run the summarization process using System 2 orchestrator."""
+        # Always use System 2 orchestrator for job tracking, error handling, and metrics
+        self._run_with_system2_orchestrator()
 
     def stop(self) -> None:
         """Stop the summarization process."""
@@ -1397,6 +586,7 @@ class SummarizationTab(BaseTab):
         self.model_combo.setVisible(False)  # Hidden
         # Allow free-text model entry for newly released models
         self.model_combo.setEditable(True)
+        self.model_combo.currentTextChanged.connect(self._on_model_changed)
         self.model_combo.currentTextChanged.connect(self._on_setting_changed)
         self.model_combo.setMinimumWidth(
             300
@@ -1456,26 +646,6 @@ class SummarizationTab(BaseTab):
         # Set tooltips for model combo as well
         self.model_combo.setToolTip(formatted_model_tooltip)
 
-        # Max tokens
-        max_tokens_label = QLabel("Max Response Size (Tokens):")
-        max_tokens_label.setToolTip(
-            "Maximum response size for claim extraction. Higher values allow more detailed analysis but cost more. 1000 tokens ≈ 750 words."
-        )
-        self.max_tokens_spin = QSpinBox()
-        self.max_tokens_spin.setRange(100, 100000)
-        self.max_tokens_spin.setValue(10000)
-        self.max_tokens_spin.setToolTip(
-            "Maximum response size for claim extraction. Higher values allow more detailed analysis but cost more. 1000 tokens ≈ 750 words."
-        )
-        self.max_tokens_spin.valueChanged.connect(self._on_setting_changed)
-        self.max_tokens_spin.setMinimumWidth(80)
-        self.max_tokens_spin.setToolTip(
-            "Maximum response size for claim extraction. Higher values allow more detailed analysis but cost more. 1000 tokens ≈ 750 words."
-        )
-
-        settings_layout.addWidget(max_tokens_label, 1, 0)
-        settings_layout.addWidget(self.max_tokens_spin, 1, 1)
-
         # Prompt file
         prompt_label = QLabel("Prompt File:")
         prompt_label.setToolTip(
@@ -1502,83 +672,6 @@ class SummarizationTab(BaseTab):
             "• Leave empty to use built-in templates for each analysis type"
         )
         settings_layout.addWidget(browse_template_btn, 1, 4)
-
-        # Prompt-driven summary mode
-        self.prompt_driven_mode_checkbox = QCheckBox(
-            "Prompt-Driven Summary (use template structure)"
-        )
-        self.prompt_driven_mode_checkbox.setToolTip(
-            "Uses selected template as authoritative structure.\n"
-            "• HCE metadata still extracted but formatting follows template exactly\n"
-            "• Useful for consistent output format across documents\n"
-            "• Requires a properly formatted template file"
-        )
-        self.prompt_driven_mode_checkbox.toggled.connect(self._on_setting_changed)
-        self.prompt_driven_mode_checkbox.toggled.connect(self._on_template_mode_changed)
-        settings_layout.addWidget(self.prompt_driven_mode_checkbox, 1, 5, 1, 1)
-
-        # Options
-        self.update_md_checkbox = QCheckBox("Append Summary To Transcript File")
-        self.update_md_checkbox.setToolTip(
-            "If checked, will update the ## Summary section of existing .md files instead of creating new files"
-        )
-        self.update_md_checkbox.toggled.connect(self._on_checkbox_changed)
-        self.update_md_checkbox.toggled.connect(self._on_setting_changed)
-        settings_layout.addWidget(self.update_md_checkbox, 2, 0, 1, 2)
-
-        self.separate_file_checkbox = QCheckBox("Create A Separate Summary File")
-        self.separate_file_checkbox.setToolTip(
-            "If checked, will create separate summary files instead of updating existing files"
-        )
-        self.separate_file_checkbox.toggled.connect(self._on_checkbox_changed)
-        self.separate_file_checkbox.toggled.connect(self._on_setting_changed)
-        settings_layout.addWidget(self.separate_file_checkbox, 3, 0, 1, 2)
-
-        self.progress_checkbox = QCheckBox("Show progress tracking")
-        self.progress_checkbox.toggled.connect(self._on_setting_changed)
-        self.progress_checkbox.setToolTip(
-            "Show detailed progress tracking during summarization.\n"
-            "• Displays real-time progress for each file\n"
-            "• Shows token usage and processing statistics\n"
-            "• Useful for monitoring long-running batch jobs"
-        )
-        settings_layout.addWidget(self.progress_checkbox, 2, 2, 1, 2)
-
-        self.force_regenerate_checkbox = QCheckBox("Force regenerate all")
-        self.force_regenerate_checkbox.setToolTip(
-            "If checked, will regenerate all summaries even if they are up-to-date. Otherwise, only modified files will be summarized."
-        )
-        self.force_regenerate_checkbox.toggled.connect(self._on_setting_changed)
-        settings_layout.addWidget(self.force_regenerate_checkbox, 3, 2, 1, 2)
-
-        self.resume_checkbox = QCheckBox("Resume from checkpoint")
-        self.resume_checkbox.setToolTip(
-            "If a previous summarization was interrupted, resume from where it left off using the checkpoint file"
-        )
-        self.resume_checkbox.toggled.connect(self._on_setting_changed)
-        settings_layout.addWidget(self.resume_checkbox, 2, 4, 1, 2)
-
-        self.export_getreceipts_checkbox = QCheckBox("Export to GetReceipts")
-        self.export_getreceipts_checkbox.setToolTip(
-            "Export extracted claims to GetReceipts platform (getreceipts-web.vercel.app)\n"
-            "• Automatically publishes claims with evidence and timestamps\n"
-            "• Includes people, jargon, and mental models as knowledge artifacts\n"
-            "• Creates shareable claim pages for community discussion"
-        )
-        self.export_getreceipts_checkbox.toggled.connect(self._on_setting_changed)
-        settings_layout.addWidget(self.export_getreceipts_checkbox, 3, 4, 1, 2)
-
-        # System 2: Orchestrator checkbox
-        self.use_system2_checkbox = QCheckBox("🚀 Use System 2 Orchestrator")
-        self.use_system2_checkbox.setToolTip(
-            "Use the System 2 orchestrator for job management:\n"
-            "• Creates job records in database for tracking\n"
-            "• Enables checkpoint/resume functionality\n"
-            "• Provides better error handling and metrics\n"
-            "• Required for pipeline automation"
-        )
-        self.use_system2_checkbox.toggled.connect(self._on_setting_changed)
-        settings_layout.addWidget(self.use_system2_checkbox, 4, 0, 1, 2)
 
         # Output folder (only shown when not updating in-place)
         self.output_label = QLabel("Output Directory:")
@@ -1607,8 +700,7 @@ class SummarizationTab(BaseTab):
         self.output_btn = browse_output_btn
         settings_layout.addWidget(browse_output_btn, 5, 4)
 
-        # Initially hide output selector based on checkbox state
-        self._toggle_output_options()
+        # Output selector is always visible
 
         settings_group.setLayout(settings_layout)
         # Settings should never shrink - use a fixed size policy
@@ -1675,86 +767,6 @@ class SummarizationTab(BaseTab):
         self.max_claims_spin.setSpecialValueText("Unlimited")
         self.max_claims_spin.valueChanged.connect(self._on_setting_changed)
 
-        # Contradictions (Column 1)
-        contradictions_layout = QHBoxLayout()
-        self.include_contradictions_checkbox = QCheckBox(
-            "Include Contradiction Analysis"
-        )
-        self.include_contradictions_checkbox.setChecked(True)
-        self.include_contradictions_checkbox.setToolTip(
-            "Analyze contradictions between claims within and across documents.\n"
-            "Helps identify conflicting information and inconsistencies."
-        )
-        self.include_contradictions_checkbox.toggled.connect(self._on_setting_changed)
-        contradictions_layout.addWidget(self.include_contradictions_checkbox)
-
-        contradictions_info = QLabel("ⓘ")
-        contradictions_info.setFixedSize(16, 16)
-        contradictions_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        contradictions_info.setToolTip(
-            "<b>Include Contradiction Analysis:</b><br/><br/>"
-            "Analyze contradictions between claims within and across documents.<br/>"
-            "Helps identify conflicting information and inconsistencies."
-        )
-        contradictions_info.setStyleSheet(
-            """
-            QLabel {
-                color: #007AFF;
-                font-size: 12px;
-                font-weight: bold;
-                background: transparent;
-                border: none;
-            }
-            QLabel:hover {
-                color: #0051D5;
-            }
-        """
-        )
-        contradictions_layout.addWidget(contradictions_info)
-        contradictions_layout.addStretch()
-        contradictions_widget = QWidget()
-        contradictions_widget.setLayout(contradictions_layout)
-        col1_layout.addWidget(contradictions_widget, 1, 0, 1, 2)
-
-        # Relations (Column 2)
-        relations_layout = QHBoxLayout()
-        self.include_relations_checkbox = QCheckBox("Include Relationship Mapping")
-        self.include_relations_checkbox.setChecked(True)
-        self.include_relations_checkbox.setToolTip(
-            "Map relationships between claims, entities, and concepts.\n"
-            "Creates connections that help understand how ideas relate."
-        )
-        self.include_relations_checkbox.toggled.connect(self._on_setting_changed)
-        relations_layout.addWidget(self.include_relations_checkbox)
-
-        relations_info = QLabel("ⓘ")
-        relations_info.setFixedSize(16, 16)
-        relations_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        relations_info.setToolTip(
-            "<b>Include Relationship Mapping:</b><br/><br/>"
-            "Map relationships between claims, entities, and concepts.<br/>"
-            "Creates connections that help understand how ideas relate."
-        )
-        relations_info.setStyleSheet(
-            """
-            QLabel {
-                color: #007AFF;
-                font-size: 12px;
-                font-weight: bold;
-                background: transparent;
-                border: none;
-            }
-            QLabel:hover {
-                color: #0051D5;
-            }
-        """
-        )
-        relations_layout.addWidget(relations_info)
-        relations_layout.addStretch()
-        relations_widget = QWidget()
-        relations_widget.setLayout(relations_layout)
-        col2_layout.addWidget(relations_widget, 1, 0, 1, 2)
-
         # Thresholds
         self.tier_a_threshold_spin = QSpinBox()
         self.tier_a_threshold_spin.setMaximumWidth(60)
@@ -1787,18 +799,6 @@ class SummarizationTab(BaseTab):
         self.tier_b_threshold_spin.setValue(65)
         self.tier_b_threshold_spin.setSuffix("%")
         self.tier_b_threshold_spin.valueChanged.connect(self._on_setting_changed)
-
-        # Column 3 toggles - Updated for Unified Pipeline
-        self.use_skim_checkbox = QCheckBox("High-level skim (pre-pass)")
-        self.use_skim_checkbox.setChecked(True)
-        self.use_skim_checkbox.setToolTip(
-            "Runs a quick milestone scan before detailed analysis.\n"
-            "• Identifies key topics and structure\n"
-            "• Guides claim extraction focus\n"
-            "• Disabling reduces LLM calls but may miss context"
-        )
-        self.use_skim_checkbox.toggled.connect(self._on_setting_changed)
-        col3_layout.addWidget(self.use_skim_checkbox, 0, 0, 1, 2)
 
         # Unified Pipeline Info
         unified_info = QLabel("📋 Unified Pipeline Active")
@@ -1915,6 +915,9 @@ class SummarizationTab(BaseTab):
             model_combo = QComboBox()
             model_combo.setEditable(True)
             model_combo.setMinimumWidth(400)  # Much wider for full model names
+            model_combo.currentTextChanged.connect(
+                lambda: self._on_advanced_model_changed(provider_combo, model_combo)
+            )
             model_combo.currentTextChanged.connect(self._on_setting_changed)
             model_combo.setToolTip(f"Specific model name for {name}")
 
@@ -2170,26 +1173,20 @@ class SummarizationTab(BaseTab):
             self._pending_gui_settings = {
                 "provider": provider,
                 "model": model,
-                "max_tokens": self.max_tokens_spin.value(),
+                "max_tokens": 10000,
                 "template_path": self.template_path_edit.text(),
-                "output_dir": (
-                    self.output_edit.text()
-                    if self.separate_file_checkbox.isChecked()
-                    else None
-                ),
-                "update_in_place": self.update_md_checkbox.isChecked(),
-                "create_separate_file": self.separate_file_checkbox.isChecked(),
-                "force_regenerate": self.force_regenerate_checkbox.isChecked(),
+                "output_dir": self.output_edit.text() or None,
+                "update_in_place": False,
+                "create_separate_file": False,
+                "force_regenerate": False,
                 "analysis_type": "Document Summary",  # Fixed to Document Summary
-                "export_getreceipts": self.export_getreceipts_checkbox.isChecked(),
-                "use_system2_orchestrator": self.use_system2_checkbox.isChecked(),
+                "export_getreceipts": False,
                 # New HCE settings
                 "profile": self.profile_combo.currentText(),
-                "use_skim": self.use_skim_checkbox.isChecked(),
-                "enable_routing": self.enable_routing_checkbox.isChecked(),
-                "routing_threshold": self.routing_threshold_spin.value()
-                / 100.0,  # Convert to 0-1
-                "prompt_driven_mode": self.prompt_driven_mode_checkbox.isChecked(),
+                "use_skim": True,
+                "enable_routing": True,
+                "routing_threshold": 0.35,  # Default: 35%
+                "prompt_driven_mode": False,
                 "flagship_file_tokens": self.flagship_file_tokens_spin.value(),
                 "flagship_session_tokens": self.flagship_session_tokens_spin.value(),
             }
@@ -2202,22 +1199,17 @@ class SummarizationTab(BaseTab):
         gui_settings = {
             "provider": provider,
             "model": model,
-            "max_tokens": self.max_tokens_spin.value(),
+            "max_tokens": 10000,
             "template_path": self.template_path_edit.text(),
-            "output_dir": (
-                self.output_edit.text()
-                if self.separate_file_checkbox.isChecked()
-                else None
-            ),
-            "update_in_place": self.update_md_checkbox.isChecked(),
-            "create_separate_file": self.separate_file_checkbox.isChecked(),
-            "force_regenerate": self.force_regenerate_checkbox.isChecked(),
+            "output_dir": self.output_edit.text() or None,
+            "update_in_place": False,
+            "create_separate_file": False,
+            "force_regenerate": False,
             "analysis_type": "Document Summary",  # Fixed to Document Summary
-            "export_getreceipts": self.export_getreceipts_checkbox.isChecked(),
-            "use_system2_orchestrator": self.use_system2_checkbox.isChecked(),
+            "export_getreceipts": False,
             # Unified Pipeline HCE settings
             "profile": self.profile_combo.currentText(),
-            "use_skim": self.use_skim_checkbox.isChecked(),
+            "use_skim": True,
             "miner_model_override": self._get_model_override(
                 self.miner_provider, self.miner_model
             ),
@@ -2283,29 +1275,9 @@ class SummarizationTab(BaseTab):
             return False
 
         # Check that at least one output option is selected
-        append_selected = self.update_md_checkbox.isChecked()
-        separate_file_selected = self.separate_file_checkbox.isChecked()
-
-        if not append_selected and not separate_file_selected:
-            self.show_warning(
-                "No Output Option Selected",
-                "Please select at least one output option:\n"
-                "• 'Append Summary To Transcript File' to add summary to existing files\n"
-                "• 'Create A Separate Summary File' to create new summary files\n"
-                "• Or both options to do both actions",
-            )
-            return False
-
-        # If separate file option is selected, validate output directory
-        if separate_file_selected:
-            output_dir = self.output_edit.text().strip()
-            if not output_dir:
-                self.show_warning(
-                    "No Output Directory",
-                    "Please select an output directory when creating separate summary files.",
-                )
-                return False
-
+        # Validate output directory if provided
+        output_dir = self.output_edit.text().strip()
+        if output_dir:
             if not Path(output_dir).exists():
                 self.show_warning(
                     "Invalid Output Directory",
@@ -3004,18 +1976,6 @@ class SummarizationTab(BaseTab):
         if folder_path:
             self.output_edit.setText(folder_path)
 
-    def _toggle_output_options(self):
-        """Toggle output directory visibility based on checkbox options."""
-        # Show output directory if separate file creation is enabled
-        show_output = self.separate_file_checkbox.isChecked()
-        self.output_label.setVisible(show_output)
-        self.output_edit.setVisible(show_output)
-        self.output_btn.setVisible(show_output)
-
-    def _on_checkbox_changed(self):
-        """Called when output-related checkboxes change."""
-        self._toggle_output_options()
-
     def _on_progress_updated(self, progress):
         """Handle progress updates with clean, informative status."""
         import time
@@ -3354,14 +2314,11 @@ class SummarizationTab(BaseTab):
             )
 
         # Show output location information
-        if self.update_md_checkbox.isChecked():
-            self.append_log("📝 Summary sections updated in-place for .md files")
+        output_dir = self.output_edit.text()
+        if output_dir:
+            self.append_log(f"📁 Summary files saved to: {output_dir}")
         else:
-            output_dir = self.output_edit.text()
-            if output_dir:
-                self.append_log(f"📁 Summary files saved to: {output_dir}")
-            else:
-                self.append_log("📁 Summary files saved next to original files")
+            self.append_log("📁 Summary files saved next to original files")
 
         # Enable report button if available
         if hasattr(self, "report_btn"):
@@ -3449,7 +2406,7 @@ class SummarizationTab(BaseTab):
                     self.append_log(f"      Key Concepts: {concepts_str}")
 
             # Show routing analytics (if routing was enabled)
-            if self.enable_routing_checkbox.isChecked():
+            if True:  # Routing always enabled
                 flagship_routed = analytics.get("flagship_routed_count", 0)
                 local_processed = analytics.get("local_processed_count", 0)
                 if flagship_routed > 0 or local_processed > 0:
@@ -3522,23 +2479,13 @@ class SummarizationTab(BaseTab):
                 self.output_edit,
                 self.provider_combo,
                 self.model_combo,
-                self.max_tokens_spin,
                 self.template_path_edit,
-                self.update_md_checkbox,
-                self.separate_file_checkbox,
-                self.force_regenerate_checkbox,
-                self.progress_checkbox,
-                self.resume_checkbox,
-                self.export_getreceipts_checkbox,
                 self.claim_tier_combo,
                 self.max_claims_spin,
-                self.include_contradictions_checkbox,
-                self.include_relations_checkbox,
                 self.tier_a_threshold_spin,
                 self.tier_b_threshold_spin,
                 # Unified Pipeline HCE fields
                 self.profile_combo,
-                self.use_skim_checkbox,
                 # Advanced per-stage provider and model dropdowns (unified pipeline)
                 self.advanced_models_group,
                 self.miner_provider,
@@ -3577,48 +2524,11 @@ class SummarizationTab(BaseTab):
                     self.model_combo.setCurrentIndex(index)
 
                 # Load max tokens
-                saved_max_tokens = self.gui_settings.get_spinbox_value(
-                    self.tab_name, "max_tokens", 10000
-                )
-                self.max_tokens_spin.setValue(saved_max_tokens)
-
                 # Load template path
                 saved_template = self.gui_settings.get_line_edit_text(
                     self.tab_name, "template_path", ""
                 )
                 self.template_path_edit.setText(saved_template)
-
-                # Load checkbox states
-                self.update_md_checkbox.setChecked(
-                    self.gui_settings.get_checkbox_state(
-                        self.tab_name, "update_in_place", False
-                    )
-                )
-                self.separate_file_checkbox.setChecked(
-                    self.gui_settings.get_checkbox_state(
-                        self.tab_name, "separate_file", False
-                    )
-                )
-                self.force_regenerate_checkbox.setChecked(
-                    self.gui_settings.get_checkbox_state(
-                        self.tab_name, "force_regenerate", False
-                    )
-                )
-                self.progress_checkbox.setChecked(
-                    self.gui_settings.get_checkbox_state(
-                        self.tab_name, "show_progress", True
-                    )
-                )
-                self.resume_checkbox.setChecked(
-                    self.gui_settings.get_checkbox_state(
-                        self.tab_name, "resume_checkpoint", False
-                    )
-                )
-                self.export_getreceipts_checkbox.setChecked(
-                    self.gui_settings.get_checkbox_state(
-                        self.tab_name, "export_getreceipts", False
-                    )
-                )
 
                 # Load HCE settings
                 saved_claim_tier = self.gui_settings.get_combo_selection(
@@ -3632,17 +2542,6 @@ class SummarizationTab(BaseTab):
                     self.tab_name, "max_claims", 0
                 )
                 self.max_claims_spin.setValue(saved_max_claims)
-
-                self.include_contradictions_checkbox.setChecked(
-                    self.gui_settings.get_checkbox_state(
-                        self.tab_name, "include_contradictions", True
-                    )
-                )
-                self.include_relations_checkbox.setChecked(
-                    self.gui_settings.get_checkbox_state(
-                        self.tab_name, "include_relations", True
-                    )
-                )
 
                 saved_tier_a_threshold = self.gui_settings.get_spinbox_value(
                     self.tab_name, "tier_a_threshold", 85
@@ -3662,13 +2561,6 @@ class SummarizationTab(BaseTab):
                 index = self.profile_combo.findText(saved_profile)
                 if index >= 0:
                     self.profile_combo.setCurrentIndex(index)
-
-                # Skim and routing settings
-                self.use_skim_checkbox.setChecked(
-                    self.gui_settings.get_checkbox_state(
-                        self.tab_name, "use_skim", True
-                    )
-                )
 
                 # Load advanced models section state
                 saved_advanced_expanded = self.gui_settings.get_checkbox_state(
@@ -3718,9 +2610,6 @@ class SummarizationTab(BaseTab):
                     if index >= 0:
                         model_combo.setCurrentIndex(index)
 
-                # Update output visibility based on checkbox state
-                self._toggle_output_options()
-
             finally:
                 # Always restore signals, even if an exception occurred
                 for widget in widgets_to_block:
@@ -3734,86 +2623,117 @@ class SummarizationTab(BaseTab):
         """Save current settings to session."""
         logger.debug(f"💾 Saving settings for {self.tab_name} tab...")
         try:
+            # Check if UI is fully initialized before attempting to save
+            if not hasattr(self, "provider_combo") or self.provider_combo is None:
+                logger.debug("UI not fully initialized yet, skipping save")
+                return
+
+            # Helper function to safely get widget value
+            def safe_get_text(widget, widget_name="widget"):
+                try:
+                    if widget is None:
+                        logger.debug(f"{widget_name} is None, skipping")
+                        return None
+                    return (
+                        widget.currentText()
+                        if hasattr(widget, "currentText")
+                        else widget.text()
+                    )
+                except RuntimeError as e:
+                    logger.debug(f"{widget_name} has been deleted: {e}")
+                    return None
+
+            def safe_get_value(widget, widget_name="widget"):
+                try:
+                    if widget is None:
+                        logger.debug(f"{widget_name} is None, skipping")
+                        return None
+                    return widget.value()
+                except RuntimeError as e:
+                    logger.debug(f"{widget_name} has been deleted: {e}")
+                    return None
+
+            def safe_get_checked(widget, widget_name="widget"):
+                try:
+                    if widget is None:
+                        logger.debug(f"{widget_name} is None, skipping")
+                        return None
+                    return widget.isChecked()
+                except RuntimeError as e:
+                    logger.debug(f"{widget_name} has been deleted: {e}")
+                    return None
+
             # Save output directory
-            self.gui_settings.set_output_directory(
-                self.tab_name, self.output_edit.text()
-            )
+            output_text = safe_get_text(self.output_edit, "output_edit")
+            if output_text is not None:
+                self.gui_settings.set_output_directory(self.tab_name, output_text)
 
             # Save combo selections
-            self.gui_settings.set_combo_selection(
-                self.tab_name, "provider", self.provider_combo.currentText()
-            )
-            self.gui_settings.set_combo_selection(
-                self.tab_name, "model", self.model_combo.currentText()
-            )
+            provider_text = safe_get_text(self.provider_combo, "provider_combo")
+            if provider_text is not None:
+                self.gui_settings.set_combo_selection(
+                    self.tab_name, "provider", provider_text
+                )
 
-            # Save spinbox values
-            self.gui_settings.set_spinbox_value(
-                self.tab_name, "max_tokens", self.max_tokens_spin.value()
-            )
+            model_text = safe_get_text(self.model_combo, "model_combo")
+            if model_text is not None:
+                self.gui_settings.set_combo_selection(
+                    self.tab_name, "model", model_text
+                )
 
             # Save line edit text
-            self.gui_settings.set_line_edit_text(
-                self.tab_name, "template_path", self.template_path_edit.text()
-            )
-
-            # Save checkbox states
-            self.gui_settings.set_checkbox_state(
-                self.tab_name, "update_in_place", self.update_md_checkbox.isChecked()
-            )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name, "separate_file", self.separate_file_checkbox.isChecked()
-            )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name,
-                "force_regenerate",
-                self.force_regenerate_checkbox.isChecked(),
-            )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name, "show_progress", self.progress_checkbox.isChecked()
-            )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name, "resume_checkpoint", self.resume_checkbox.isChecked()
-            )
+            template_text = safe_get_text(self.template_path_edit, "template_path_edit")
+            if template_text is not None:
+                self.gui_settings.set_line_edit_text(
+                    self.tab_name, "template_path", template_text
+                )
 
             # Save HCE settings
-            self.gui_settings.set_combo_selection(
-                self.tab_name, "claim_tier", self.claim_tier_combo.currentText()
+            claim_tier_text = safe_get_text(self.claim_tier_combo, "claim_tier_combo")
+            if claim_tier_text is not None:
+                self.gui_settings.set_combo_selection(
+                    self.tab_name, "claim_tier", claim_tier_text
+                )
+
+            max_claims_value = safe_get_value(self.max_claims_spin, "max_claims_spin")
+            if max_claims_value is not None:
+                self.gui_settings.set_spinbox_value(
+                    self.tab_name, "max_claims", max_claims_value
+                )
+
+            tier_a_value = safe_get_value(
+                self.tier_a_threshold_spin, "tier_a_threshold_spin"
             )
-            self.gui_settings.set_spinbox_value(
-                self.tab_name, "max_claims", self.max_claims_spin.value()
+            if tier_a_value is not None:
+                self.gui_settings.set_spinbox_value(
+                    self.tab_name, "tier_a_threshold", tier_a_value
+                )
+
+            tier_b_value = safe_get_value(
+                self.tier_b_threshold_spin, "tier_b_threshold_spin"
             )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name,
-                "include_contradictions",
-                self.include_contradictions_checkbox.isChecked(),
-            )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name,
-                "include_relations",
-                self.include_relations_checkbox.isChecked(),
-            )
-            self.gui_settings.set_spinbox_value(
-                self.tab_name, "tier_a_threshold", self.tier_a_threshold_spin.value()
-            )
-            self.gui_settings.set_spinbox_value(
-                self.tab_name, "tier_b_threshold", self.tier_b_threshold_spin.value()
-            )
+            if tier_b_value is not None:
+                self.gui_settings.set_spinbox_value(
+                    self.tab_name, "tier_b_threshold", tier_b_value
+                )
 
             # Save unified pipeline HCE settings
-            self.gui_settings.set_combo_selection(
-                self.tab_name, "profile", self.profile_combo.currentText()
-            )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name, "use_skim", self.use_skim_checkbox.isChecked()
-            )
+            profile_text = safe_get_text(self.profile_combo, "profile_combo")
+            if profile_text is not None:
+                self.gui_settings.set_combo_selection(
+                    self.tab_name, "profile", profile_text
+                )
 
             # Save advanced models section state
-            self.gui_settings.set_checkbox_state(
-                self.tab_name,
-                "advanced_models_expanded",
-                self.advanced_models_group.isChecked(),
+            advanced_checked = safe_get_checked(
+                self.advanced_models_group, "advanced_models_group"
             )
+            if advanced_checked is not None:
+                self.gui_settings.set_checkbox_state(
+                    self.tab_name,
+                    "advanced_models_expanded",
+                    advanced_checked,
+                )
 
             # Save advanced per-stage provider and model selections (unified pipeline)
             advanced_dropdowns = [
@@ -3827,19 +2747,151 @@ class SummarizationTab(BaseTab):
 
             for stage_name, provider_combo, model_combo in advanced_dropdowns:
                 # Save provider selection
-                self.gui_settings.set_combo_selection(
-                    self.tab_name,
-                    f"{stage_name}_provider",
-                    provider_combo.currentText(),
+                stage_provider_text = safe_get_text(
+                    provider_combo, f"{stage_name}_provider"
                 )
+                if stage_provider_text is not None:
+                    self.gui_settings.set_combo_selection(
+                        self.tab_name,
+                        f"{stage_name}_provider",
+                        stage_provider_text,
+                    )
+
                 # Save model selection
-                self.gui_settings.set_combo_selection(
-                    self.tab_name, f"{stage_name}_model", model_combo.currentText()
-                )
+                stage_model_text = safe_get_text(model_combo, f"{stage_name}_model")
+                if stage_model_text is not None:
+                    self.gui_settings.set_combo_selection(
+                        self.tab_name, f"{stage_name}_model", stage_model_text
+                    )
 
             logger.info(f"✅ Successfully saved settings for {self.tab_name} tab")
         except Exception as e:
+            import traceback
+
             logger.error(f"Failed to save settings for {self.tab_name} tab: {e}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+
+    def _on_model_changed(self):
+        """Called when the model selection changes - validate local models."""
+        provider = self.provider_combo.currentText()
+        model = self.model_combo.currentText()
+
+        # Only validate for local provider
+        if provider != "local" or not model:
+            return
+
+        # Check if model already has "(Installed)" suffix - no need to check
+        if "(Installed)" in model:
+            return
+
+        logger.debug(f"🔄 Model changed to: {model}, checking availability...")
+
+        # Simple inline check without blocking processing flow
+        from ...utils.ollama_manager import get_ollama_manager
+
+        try:
+            ollama_manager = get_ollama_manager()
+
+            # Quick check if service is running
+            if not ollama_manager.is_service_running():
+                return  # Don't bother user if service isn't running
+
+            # Clean model name
+            import re
+
+            clean_model_name = model.replace(" (Installed)", "")
+            clean_model_name = re.sub(r" \(\d+ GB\)$", "", clean_model_name)
+
+            # Check if model is installed
+            is_available = ollama_manager.is_model_available(clean_model_name)
+
+            if not is_available:
+                # Show download dialog (reuse existing method)
+                from PyQt6.QtWidgets import QDialog
+
+                from ..legacy_dialogs import ModelDownloadDialog
+
+                logger.info(
+                    f"Model '{clean_model_name}' not installed, showing download dialog"
+                )
+
+                dialog = ModelDownloadDialog(clean_model_name, self)
+                result = dialog.exec()
+
+                if result == QDialog.DialogCode.Accepted:
+                    logger.info(f"Model '{clean_model_name}' installation completed")
+                    # Refresh the model list to show it as installed
+                    self._update_models(force_refresh=True)
+                else:
+                    logger.info(f"Model '{clean_model_name}' installation cancelled")
+        except Exception as e:
+            logger.debug(f"Error checking model on change: {e}")
+            # Don't bother user with errors on dropdown change
+
+    def _on_advanced_model_changed(
+        self, provider_combo: QComboBox, model_combo: QComboBox
+    ):
+        """Called when an advanced model selection changes - validate local models."""
+        try:
+            provider = provider_combo.currentText()
+            model = model_combo.currentText()
+
+            # Only validate for local provider
+            if provider != "local" or not model:
+                return
+
+            # Check if model already has "(Installed)" suffix - no need to check
+            if "(Installed)" in model:
+                return
+
+            logger.debug(
+                f"🔄 Advanced model changed to: {model}, checking availability..."
+            )
+
+            # Simple inline check without blocking processing flow
+            from ...utils.ollama_manager import get_ollama_manager
+
+            ollama_manager = get_ollama_manager()
+
+            # Quick check if service is running
+            if not ollama_manager.is_service_running():
+                return  # Don't bother user if service isn't running
+
+            # Clean model name
+            import re
+
+            clean_model_name = model.replace(" (Installed)", "")
+            clean_model_name = re.sub(r" \(\d+ GB\)$", "", clean_model_name)
+
+            # Check if model is installed
+            is_available = ollama_manager.is_model_available(clean_model_name)
+
+            if not is_available:
+                # Show download dialog
+                from PyQt6.QtWidgets import QDialog
+
+                from ..legacy_dialogs import ModelDownloadDialog
+
+                logger.info(
+                    f"Advanced model '{clean_model_name}' not installed, showing download dialog"
+                )
+
+                dialog = ModelDownloadDialog(clean_model_name, self)
+                result = dialog.exec()
+
+                if result == QDialog.DialogCode.Accepted:
+                    logger.info(
+                        f"Advanced model '{clean_model_name}' installation completed"
+                    )
+                    # Refresh the model list for the specific combo
+                    self._update_advanced_model_combo("local", model_combo)
+                else:
+                    logger.info(
+                        f"Advanced model '{clean_model_name}' installation cancelled"
+                    )
+        except Exception as e:
+            logger.debug(f"Error checking advanced model on change: {e}")
+            # Don't bother user with errors on dropdown change
 
     def _on_setting_changed(self):
         """Called when any setting changes to automatically save."""
@@ -3900,39 +2952,13 @@ class SummarizationTab(BaseTab):
         logger.debug(f"🔄 Profile changed to: {profile}")
 
         # Apply profile settings
-        if profile == "Fast":
-            # Fast: skim off, routing off, lightweight only
-            self.use_skim_checkbox.setChecked(False)
-            self.enable_routing_checkbox.setChecked(False)
-            self.routing_threshold_spin.setValue(50)  # Higher threshold = less routing
-
-        elif profile == "Balanced":
-            # Balanced: skim on, routing on, default settings
-            self.use_skim_checkbox.setChecked(True)
-            self.enable_routing_checkbox.setChecked(True)
-            self.routing_threshold_spin.setValue(35)  # Default
-
-        elif profile == "Quality":
-            # Quality: skim on, aggressive routing, all features
-            self.use_skim_checkbox.setChecked(True)
-            self.enable_routing_checkbox.setChecked(True)
-            self.routing_threshold_spin.setValue(25)  # Lower = more routing
+        # Profile changes no longer affect routing settings (always enabled with default threshold)
 
         # Show brief feedback
         self.append_log(f"📋 Applied {profile} profile settings")
 
         # Trigger settings save
         self._save_settings()
-
-    def _on_template_mode_changed(self, enabled: bool) -> None:
-        """Handle template mode toggle changes."""
-        if enabled:
-            self.append_log(
-                "📋 Prompt-driven mode enabled - HCE formatting will be bypassed"
-            )
-            # Could add visual indicators here if needed
-        else:
-            self.append_log("🔍 Standard HCE analysis mode enabled")
 
     def _generate_session_report(
         self, success_count: int, failure_count: int, total_count: int, time_text: str
@@ -3955,29 +2981,25 @@ class SummarizationTab(BaseTab):
                     "profile": self.profile_combo.currentText(),
                     "provider": self.provider_combo.currentText(),
                     "model": self.model_combo.currentText(),
-                    "max_tokens": self.max_tokens_spin.value(),
+                    "max_tokens": 10000,
                     "analysis_type": "Document Summary",  # Fixed to Document Summary
-                    "use_skim": self.use_skim_checkbox.isChecked(),
-                    "enable_routing": self.enable_routing_checkbox.isChecked(),
-                    "routing_threshold": self.routing_threshold_spin.value(),
-                    "prompt_driven_mode": self.prompt_driven_mode_checkbox.isChecked(),
+                    "use_skim": True,
+                    "enable_routing": True,
+                    "routing_threshold": 35,  # Default: 35%
+                    "prompt_driven_mode": False,
                     "flagship_file_tokens": self.flagship_file_tokens_spin.value(),
                     "flagship_session_tokens": self.flagship_session_tokens_spin.value(),
                 },
                 "output_settings": {
-                    "update_in_place": self.update_md_checkbox.isChecked(),
-                    "create_separate_file": self.separate_file_checkbox.isChecked(),
+                    "update_in_place": False,
+                    "create_separate_file": False,
                     "output_directory": self.output_edit.text(),
-                    "force_regenerate": self.force_regenerate_checkbox.isChecked(),
+                    "force_regenerate": False,
                 },
             }
 
             # Save report to output directory or default location
-            output_dir = (
-                self.output_edit.text()
-                if self.separate_file_checkbox.isChecked()
-                else "output/summaries"
-            )
+            output_dir = self.output_edit.text() or "output/summaries"
             report_path = (
                 Path(output_dir)
                 / f"session_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"

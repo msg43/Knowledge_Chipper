@@ -1,6 +1,6 @@
-# GUI Comprehensive Testing Framework
+# GUI Comprehensive Testing Framework (System 2)
 
-This framework provides automated comprehensive testing for the Knowledge Chipper GUI application, covering all permutations of input types, GUI tabs, and processing operations.
+This framework provides automated comprehensive testing for the Knowledge Chipper GUI application with System 2 integration, covering all permutations of input types, GUI tabs, and processing operations with job tracking and orchestration.
 
 ## Quick Start
 
@@ -109,7 +109,7 @@ The framework tests all combinations of:
 - Local Transcription
 - Summarization
 - YouTube
-- File Watcher
+- Monitor (System 2 - renamed from File Watcher)
 
 ### Operations
 - Transcribe only

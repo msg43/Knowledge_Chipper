@@ -1,327 +1,267 @@
 # System 2 Operations Guide
 
-This guide covers operational aspects of the Knowledge Chipper System 2 implementation.
+## Overview
 
-## Table of Contents
-1. [System Overview](#system-overview)
-2. [Job Management](#job-management)
-3. [Database Operations](#database-operations)
-4. [Monitoring and Observability](#monitoring-and-observability)
-5. [Troubleshooting](#troubleshooting)
-6. [Performance Tuning](#performance-tuning)
+System 2 represents a major architectural evolution of the Knowledge Chipper, introducing:
+- SQLite-first truth layer with WAL enabled
+- Job orchestration with checkpoint persistence  
+- Centralized LLM adapter with hardware-aware concurrency
+- Structured logging with error taxonomy
+- Versioned JSON schemas for all LLM I/O
 
-## System Overview
+## Key Components
 
-System 2 introduces a job-based orchestration system with:
-- **Database-backed state management**: All operations create persistent job records
-- **Checkpoint/resume capability**: Jobs can be resumed from their last checkpoint
-- **Hardware-aware concurrency**: System adapts to available resources
-- **Structured error handling**: Error codes following severity taxonomy
+### 1. Database Layer
 
-### Key Components
+**Tables Added:**
+- `job` - Top-level job records
+- `job_run` - Individual execution attempts
+- `llm_request` - All LLM API calls
+- `llm_response` - LLM responses with metrics
 
-1. **System2Orchestrator**: Central job execution engine
-2. **LLMAdapter**: Manages all LLM API calls with concurrency control
-3. **Job/JobRun tables**: Track job state and metrics
-4. **Schema Validator**: Ensures data integrity with automatic repair
+**Enhanced Tables:**
+- All HCE tables now have `updated_at` columns for optimistic concurrency
 
-## Job Management
+**Configuration:**
+```sql
+PRAGMA journal_mode=WAL;  -- Write-Ahead Logging enabled
+```
 
-### Job Types
+### 2. Job Orchestration
 
-- `download`: Download media files from URLs
-- `transcribe`: Generate transcripts from audio/video
-- `mine`: Extract claims, people, jargon, and concepts
-- `flagship`: Evaluate and rank extracted claims
-- `upload`: Upload results to cloud storage
-- `pipeline`: Full end-to-end processing
-
-### Creating Jobs
+The `System2Orchestrator` manages all processing jobs:
 
 ```python
-from knowledge_system.core.system2_orchestrator import System2Orchestrator, JobType
+from knowledge_system.core.system2_orchestrator import get_orchestrator
 
-orchestrator = System2Orchestrator()
+orchestrator = get_orchestrator()
 
-# Create a single job
+# Create a job
 job_id = orchestrator.create_job(
-    JobType.TRANSCRIBE,
-    input_id="video_123",
-    config={"source": "youtube"},
+    job_type="mine",  # or "transcribe", "flagship", "upload", "pipeline"
+    input_id="episode_001",
+    config={"model": "gpt-3.5-turbo"},
     auto_process=True  # Chain to next stage automatically
 )
 
-# Execute the job
-result = orchestrator.execute_job(job_id)
+# Process the job
+result = await orchestrator.process_job(job_id)
 ```
 
-### Job States
+**Job Types:**
+- `transcribe` - Audio/video to transcript
+- `mine` - Extract claims, jargon, people, mental models
+- `flagship` - Evaluate and rank claims
+- `upload` - Upload to cloud storage
+- `pipeline` - Complete end-to-end processing
 
-Jobs progress through these states:
-1. `queued`: Job created but not started
-2. `running`: Job execution in progress (via JobRun)
-3. `completed`: Job finished successfully
-4. `failed`: Job encountered an error
-5. `cancelled`: Job was cancelled by user
+### 3. LLM Adapter
 
-### Resuming Failed Jobs
+Centralized LLM management with hardware-aware limits:
 
 ```python
-# Resume a job from its last checkpoint
-result = orchestrator.resume_job(job_id)
+from knowledge_system.core.llm_adapter import get_llm_adapter
+
+adapter = get_llm_adapter()
+
+# Make LLM call with automatic rate limiting and retries
+response = await adapter.complete_with_retry(
+    provider="openai",
+    model="gpt-3.5-turbo", 
+    messages=[{"role": "user", "content": "Extract claims..."}],
+    temperature=0.7
+)
 ```
 
-## Database Operations
+**Hardware Tiers:**
+- Consumer (M1/M2 base): 2 concurrent requests
+- Prosumer (M1/M2 Pro/Max): 4 concurrent requests  
+- Enterprise (M1/M2 Ultra): 8 concurrent requests
 
-### Enable WAL Mode
+### 4. Structured Logging
 
-System 2 uses SQLite with Write-Ahead Logging (WAL) for better concurrency:
-
-```sql
-PRAGMA journal_mode=WAL;
-```
-
-### Key Tables
-
-1. **job**: High-level job records
-   - `job_id`: Unique identifier
-   - `job_type`: Type of processing
-   - `status`: Current job state
-   - `auto_process`: Whether to chain next job
-
-2. **job_run**: Individual execution attempts
-   - `run_id`: Unique run identifier
-   - `job_id`: Parent job reference
-   - `checkpoint_json`: Resume point data
-   - `metrics_json`: Performance metrics
-
-3. **llm_request/llm_response**: LLM API tracking
-   - Full request/response logging
-   - Token usage and costs
-   - Latency measurements
-
-### Database Queries
-
-Monitor active jobs:
-```sql
-SELECT job_id, job_type, status, created_at 
-FROM job 
-WHERE status IN ('queued', 'running')
-ORDER BY created_at DESC;
-```
-
-Check job metrics:
-```sql
-SELECT jr.run_id, jr.status, jr.metrics_json
-FROM job_run jr
-JOIN job j ON jr.job_id = j.job_id
-WHERE j.job_type = 'mine'
-AND jr.completed_at > datetime('now', '-1 day');
-```
-
-## Monitoring and Observability
-
-### Structured Logging
-
-System 2 uses structured logging with the `System2Logger`:
+System 2 introduces JSON-structured logs with correlation IDs:
 
 ```python
-from knowledge_system.logger_system2 import get_system2_logger
+from knowledge_system.core.system2_logger import get_system2_logger
 
 logger = get_system2_logger(__name__)
-logger.set_context(
-    job_run_id="run_123",
-    component="miner",
-    operation="extract_claims"
+logger.set_job_run_id("run_123")
+
+# Log with metrics
+logger.log_operation(
+    "mining",
+    duration_ms=1500,
+    status="success",
+    segments_processed=10
 )
 
 # Log with error code
 logger.error(
-    "Validation failed",
-    error_code=ErrorCode.VALIDATION_SCHEMA_ERROR_HIGH,
-    context={"schema": "miner_output.v1", "field": "claims"}
+    "Processing failed",
+    error_code=ErrorCode.LLM_API_ERROR,
+    exc_info=True
 )
-
-# Log metrics
-logger.log_metric("claims_extracted", 42, tags={"tier": "A"})
 ```
 
-### Log Files
+### 5. Schema Validation
 
-- **Main log**: `logs/knowledge_system_s2.log`
-- **Metrics log**: `logs/metrics.jsonl` (filtered for METRIC: and JOB_EVENT:)
+All LLM inputs/outputs are validated against JSON schemas:
 
-### Error Codes
-
-Error severity levels:
-- **HIGH**: Immediate attention required (e.g., `DATABASE_CONNECTION_ERROR_HIGH`)
-- **MEDIUM**: Degraded functionality (e.g., `API_RATE_LIMIT_ERROR_MEDIUM`)
-- **LOW**: Minor issues (e.g., `CACHE_MISS_LOW`)
-
-### Monitoring Queries
-
-Active memory usage:
 ```python
-# Check LLM adapter metrics
-adapter = orchestrator.llm_adapter
-metrics = adapter.get_metrics()
-print(f"Total requests: {metrics['total_requests']}")
-print(f"Memory throttle events: {metrics['memory_throttle_events']}")
+from knowledge_system.processors.hce.schema_validator import get_validator
+
+validator = get_validator()
+
+# Validate miner output
+is_valid, errors = validator.validate_miner_output(result)
+
+# Repair and validate
+repaired, is_valid, errors = validator.repair_and_validate(
+    result, "miner_output"
+)
+```
+
+## GUI Updates
+
+### Tab Structure (7 tabs only)
+1. **Introduction** - Getting started
+2. **Transcribe** - With "Process automatically through entire pipeline" checkbox
+3. **Summarize** - LLM summarization 
+4. **Review** - SQLite-backed claim editor
+5. **Upload** - Cloud storage management
+6. **Monitor** - Directory watching (renamed from Watcher)
+7. **Settings** - Configuration
+
+### Review Tab Features
+- Direct SQLite integration
+- Real-time validation
+- Tier-based color coding (A=green, B=blue, C=red)
+- Auto-save option
+- CSV export
+
+## Monitoring & Observability
+
+### Metrics Collection
+```python
+from knowledge_system.core.system2_logger import get_metrics_collector
+
+metrics = get_metrics_collector()
+metrics.start_timer("processing")
+# ... do work ...
+duration = metrics.stop_timer("processing")
+metrics.increment("claims_extracted", 42)
+```
+
+### Log Aggregation
+All logs are JSON-formatted for easy parsing:
+```json
+{
+  "timestamp": "2024-01-01T12:00:00Z",
+  "level": "INFO",
+  "logger": "knowledge_system.core.orchestrator",
+  "message": "Job completed",
+  "job_run_id": "run_123",
+  "metrics": {
+    "duration_ms": 5000,
+    "claims_extracted": 42
+  }
+}
+```
+
+### Error Taxonomy
+- **HIGH severity**: `DATABASE_CONNECTION_ERROR_HIGH`, `MEMORY_EXCEEDED_ERROR_HIGH`
+- **MEDIUM severity**: `API_RATE_LIMIT_ERROR_MEDIUM`, `TRANSCRIPTION_PARTIAL_ERROR_MEDIUM`
+- **LOW severity**: `CACHE_MISS_LOW`, `OPTIONAL_FEATURE_UNAVAILABLE_LOW`
+
+## Common Operations
+
+### Resume Failed Jobs
+```python
+# Resume all failed mining jobs
+resumed_count = await orchestrator.resume_failed_jobs(job_type="mine")
+```
+
+### List Recent Jobs
+```python
+# Get last 50 jobs with status
+jobs = await orchestrator.list_jobs(limit=50)
+for job in jobs:
+    print(f"{job['job_id']}: {job['latest_run']['status']}")
+```
+
+### Check LLM Usage
+```python
+stats = adapter.get_stats()
+print(f"Active requests: {stats['active_requests']}/{stats['max_concurrent']}")
+print(f"Memory usage: {stats['memory_usage']}%")
 ```
 
 ## Troubleshooting
 
-### Common Issues
+### Database Issues
+1. Check WAL mode is enabled: `PRAGMA journal_mode;`
+2. Verify tables exist: `SELECT name FROM sqlite_master WHERE type='table';`
+3. Check for lock contention in logs
 
-1. **Job Stuck in Running State**
-   - Check for zombie job runs
-   - Verify the process is still active
-   - Consider cancelling and resuming
+### LLM Rate Limits
+1. Check backoff status in logs
+2. Reduce concurrency if needed
+3. Monitor with `adapter.get_stats()`
 
-2. **Memory Throttling**
-   - Check system memory usage
-   - Reduce concurrent worker count
-   - Enable more aggressive throttling
+### Memory Throttling
+1. Check memory usage when throttled
+2. Adjust threshold if needed (default 70%)
+3. Close other applications
 
-3. **Schema Validation Failures**
-   - Enable repair mode
-   - Check schema version compatibility
-   - Review error messages for specific fields
-
-### Debug Mode
-
-Enable debug logging:
-```python
-from knowledge_system.logger_system2 import setup_system2_logging
-
-setup_system2_logging(
-    log_level="DEBUG",
-    enable_json=True  # For machine parsing
-)
-```
-
-### Recovery Procedures
-
-1. **Corrupt Database**
-   ```bash
-   # Backup current database
-   cp knowledge_system.db knowledge_system.db.backup
-   
-   # Run integrity check
-   sqlite3 knowledge_system.db "PRAGMA integrity_check;"
-   
-   # If needed, export and reimport
-   sqlite3 knowledge_system.db .dump > backup.sql
-   sqlite3 knowledge_system_new.db < backup.sql
-   ```
-
-2. **Failed Migration**
-   ```python
-   # Re-run migration manually
-   from knowledge_system.database.migrations.system2_migration import migrate_to_system2
-   from knowledge_system.database import DatabaseService
-   
-   db = DatabaseService()
-   with db.get_session() as session:
-       migrate_to_system2(session)
-   ```
+### Schema Validation Failures
+1. Check error details in logs
+2. Use repair functionality
+3. Update schemas if structure changed
 
 ## Performance Tuning
 
-### Hardware Tiers
-
-System automatically detects hardware tier:
-- **Consumer**: 2-4 cores, <8GB RAM
-- **Prosumer**: 8 cores, 16GB RAM
-- **Professional**: 12+ cores, 32GB RAM
-- **Server**: 16+ cores, 64GB+ RAM
-
 ### Concurrency Settings
-
-Adjust worker counts per tier:
+Adjust based on your hardware:
 ```python
-# Override hardware detection
-from knowledge_system.core.llm_adapter import HARDWARE_TIERS
-
-custom_tier = HARDWARE_TIERS["prosumer"]
-custom_tier.mining_workers = 6  # Increase mining concurrency
-```
-
-### Memory Management
-
-Configure memory thresholds:
-```python
-adapter.memory_monitor.threshold = 0.6  # Start throttling at 60%
-adapter.memory_monitor.critical_threshold = 0.85  # Critical at 85%
-```
-
-### Batch Processing
-
-Optimize batch sizes:
-```python
-# In orchestrator._process_mine()
-batch_size = 10  # Process 10 segments at a time
+# Override auto-detection
+adapter.max_concurrent = 6  # Custom limit
 ```
 
 ### Database Optimization
+```sql
+-- Ensure indexes exist
+CREATE INDEX IF NOT EXISTS idx_job_run_status ON job_run(status);
+CREATE INDEX IF NOT EXISTS idx_llm_request_job_run ON llm_request(job_run_id);
+```
 
-1. **Enable auto-vacuum**:
-   ```sql
-   PRAGMA auto_vacuum = INCREMENTAL;
+### Memory Management
+- Monitor with `psutil.virtual_memory().percent`
+- Adjust throttle threshold as needed
+- Use checkpoint persistence for large jobs
+
+## Migration from System 1
+
+1. Run database migration:
+   ```python
+   python src/knowledge_system/database/migrations/system2_migration.py
    ```
 
-2. **Optimize queries**:
-   ```sql
-   ANALYZE;  -- Update query planner statistics
-   ```
+2. Update imports:
+   - Use `System2LLM` instead of `AnyLLM`
+   - Use `System2Orchestrator` for job management
+   - Use `get_system2_logger` for logging
 
-3. **Monitor database size**:
-   ```bash
-   # Check database file size
-   ls -lh knowledge_system.db*
-   
-   # Vacuum if needed
-   sqlite3 knowledge_system.db "VACUUM;"
-   ```
+3. Test with small batches first
+
+4. Monitor logs for any issues
 
 ## Best Practices
 
-1. **Always use auto_process for pipelines** to ensure proper chaining
-2. **Monitor checkpoint sizes** - large checkpoints can slow resume
-3. **Set appropriate job timeouts** to prevent resource exhaustion
-4. **Use structured logging** for better observability
-5. **Regular database maintenance** - vacuum and analyze periodically
-6. **Test recovery procedures** before production issues arise
-
-## Emergency Procedures
-
-### Stop All Processing
-```python
-# Cancel all running jobs
-with db.get_session() as session:
-    running_jobs = session.query(Job).filter_by(status="running").all()
-    for job in running_jobs:
-        job.status = "cancelled"
-    session.commit()
-```
-
-### Reset System State
-```python
-# Clear all job history (careful!)
-with db.get_session() as session:
-    session.query(JobRun).delete()
-    session.query(Job).delete()
-    session.commit()
-```
-
-### Export Critical Data
-```python
-# Export claims before maintenance
-import csv
-with db.get_session() as session:
-    claims = session.query(Claim).all()
-    with open('claims_backup.csv', 'w') as f:
-        writer = csv.writer(f)
-        for claim in claims:
-            writer.writerow([claim.claim_id, claim.canonical, claim.tier])
-```
+1. **Always use job orchestration** for processing
+2. **Set job_run_id** in logs for correlation
+3. **Handle checkpoints** for long-running jobs
+4. **Monitor metrics** for performance insights
+5. **Use auto_process** for pipeline chaining
+6. **Validate schemas** before LLM calls
+7. **Check hardware tier** for concurrency tuning

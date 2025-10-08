@@ -483,12 +483,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
     def _create_auto_process_section(self) -> QGroupBox:
         """Create the System 2 auto-process section."""
-        group = QGroupBox("🚀 System 2 Pipeline")
+        group = QGroupBox("")
         layout = QVBoxLayout(group)
 
         # Auto-process checkbox
         self.auto_process_checkbox = QCheckBox(
-            "Process automatically through entire pipeline"
+            "Run these transcriptions through Summarization Process Automatically"
         )
         self.auto_process_checkbox.setToolTip(
             "When enabled, transcribed files will automatically continue through:\n"

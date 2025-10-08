@@ -1026,6 +1026,10 @@ class AudioProcessor(BaseProcessor):
         # Determine max attempts based on settings
         max_attempts = self.max_retry_attempts + 1 if self.enable_quality_retry else 1
 
+        # Initialize diarization variables at function scope to avoid scope issues
+        diarization_segments = None
+        diarization_successful = False
+
         for attempt in range(max_attempts):
             try:
                 # Update transcriber model for this attempt
@@ -1316,13 +1320,13 @@ class AudioProcessor(BaseProcessor):
                             self.transcriber, "model", None
                         ) or getattr(self.transcriber, "model_name", current_model)
 
-                        # Process diarization results
+                        # Initialize result data
                         final_data = transcription_result.data
+                        # Reset diarization variables for this attempt
                         diarization_segments = None
+                        diarization_successful = False
 
                         if diarization_enabled:
-                            diarization_successful = False
-
                             if diarization_result and diarization_result.success:
                                 # Store diarization segments for speaker assignment
                                 diarization_segments = diarization_result.data

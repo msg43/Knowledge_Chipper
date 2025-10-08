@@ -529,8 +529,22 @@ class QualityMetrics(Base):
 
 # Database initialization functions
 def create_database_engine(database_url: str = "sqlite:///knowledge_system.db"):
-    """Create SQLAlchemy engine for the database."""
-    return create_engine(database_url, echo=False)
+    """Create SQLAlchemy engine for the database with foreign key enforcement."""
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    engine = create_engine(database_url, echo=False)
+
+    # Enable foreign key constraints for SQLite
+    if database_url.startswith("sqlite"):
+
+        @event.listens_for(Engine, "connect")
+        def set_sqlite_pragma(dbapi_conn, connection_record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+    return engine
 
 
 def create_all_tables(engine):

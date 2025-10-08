@@ -1,0 +1,91 @@
+# System 2 Test Configuration
+# Configuration for System 2 integration tests
+
+# Database Configuration
+database:
+  test_db_path: "test_knowledge_system.db"
+  enable_wal: true
+  enable_foreign_keys: true
+  connection_pool_size: 5
+
+# Job Orchestration Configuration
+orchestrator:
+  max_concurrent_jobs: 3
+  checkpoint_interval_seconds: 30
+  retry_max_attempts: 3
+  retry_backoff_multiplier: 2.0
+  job_timeout_seconds: 3600
+
+# LLM Adapter Configuration
+llm_adapter:
+  # Hardware-aware concurrency
+  max_concurrent_llm_calls:
+    m1_m2: 2
+    m3_plus: 4
+    cuda: 8
+    cpu: 1
+
+  # Rate limiting
+  rate_limit_per_minute: 60
+
+  # Retry configuration
+  retry_max_attempts: 3
+  retry_exponential_base: 2
+  retry_initial_delay_ms: 1000
+
+  # Timeout
+  request_timeout_seconds: 300
+
+# Schema Validation Configuration
+schema_validation:
+  strict_mode: true
+  schemas_directory: "schemas"
+  validate_inputs: true
+  validate_outputs: true
+
+# Test Data Configuration
+test_data:
+  sample_transcript: "tests/fixtures/sample_transcript.txt"
+  sample_video: "tests/fixtures/sample_video.mp4"
+  sample_audio: "tests/fixtures/sample_audio.wav"
+
+# Test Modes
+test_modes:
+  smoke:
+    timeout_seconds: 60
+    max_jobs: 2
+
+  basic:
+    timeout_seconds: 300
+    max_jobs: 5
+
+  comprehensive:
+    timeout_seconds: 1800
+    max_jobs: 10
+
+  stress:
+    timeout_seconds: 3600
+    max_jobs: 50
+    concurrent_jobs: 10
+
+# Logging Configuration
+logging:
+  level: "DEBUG"
+  log_file: "tests/logs/system2_test.log"
+  structured_logging: true
+  include_timestamps: true
+
+# Performance Thresholds
+performance:
+  max_job_creation_time_ms: 100
+  max_db_query_time_ms: 50
+  max_llm_overhead_ms: 500
+  max_checkpoint_time_ms: 200
+
+# Integration Test Configuration
+integration:
+  test_llm_providers: ["openai", "anthropic", "together"]
+  test_job_types: ["transcribe", "mine", "flagship"]
+  test_auto_process_chains: true
+  test_concurrent_jobs: true
+  test_checkpoint_resume: true

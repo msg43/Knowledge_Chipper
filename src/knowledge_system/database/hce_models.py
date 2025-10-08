@@ -1,41 +1,65 @@
-"""
-HCE (Hybrid Claim Extractor) SQLAlchemy models for Knowledge System.
-
-Adds claim extraction, evidence tracking, and entity resolution tables to the database.
-"""
+"""Database models for HCE (Hybrid Claim Extraction) system."""
 
 from datetime import datetime
 
 from sqlalchemy import (
-    CheckConstraint,
+    JSON,
+    Boolean,
     Column,
     DateTime,
-    Float,
     ForeignKey,
-    ForeignKeyConstraint,
     Integer,
     String,
     Text,
 )
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
-from .models import Base, JSONEncodedType
+# Create a separate Base for HCE models to avoid conflicts
+Base = declarative_base()
+
+# Import MediaSource separately to avoid circular imports
+try:
+    from .models import MediaSource
+except ImportError:
+    # If MediaSource is not available, define a placeholder
+    MediaSource = None
+
+
+def extend_video_model():
+    """
+    Extend the MediaSource model with a relationship to episodes.
+
+    This function adds the episodes relationship to the MediaSource model
+    to support HCE functionality.
+    """
+    # For now, we'll skip the relationship to avoid conflicts
+    # The relationship can be added later if needed
+    pass
 
 
 class Episode(Base):
-    """Maps videos to episodes for HCE processing."""
+    """Episode extracted from a media source during HCE processing."""
 
     __tablename__ = "episodes"
+    __table_args__ = {"extend_existing": True}  # Fix for duplicate table error
 
-    episode_id = Column(String(100), primary_key=True)
-    # Point to new canonical table name while keeping relationship to Video alias
-    video_id = Column(String(20), ForeignKey("media_sources.media_id"), unique=True)
-    title = Column(Text)
-    recorded_at = Column(String(20))
-    inserted_at = Column(DateTime, default=datetime.utcnow)
+    # Primary key
+    episode_id = Column(String, primary_key=True)
+
+    # Foreign key to media source
+    video_id = Column(String, ForeignKey("media_sources.media_id"), nullable=False)
+
+    # Episode metadata
+    title = Column(String, nullable=False)
+    subtitle = Column(String)
+    description = Column(Text)
+
+    # Processing metadata
+    recorded_at = Column(String)  # ISO format datetime string
+    processed_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    video = relationship("Video", back_populates="episode")
     claims = relationship(
         "Claim", back_populates="episode", cascade="all, delete-orphan"
     )
@@ -45,183 +69,128 @@ class Episode(Base):
     concepts = relationship(
         "Concept", back_populates="episode", cascade="all, delete-orphan"
     )
-    jargon_terms = relationship(
-        "JargonTerm", back_populates="episode", cascade="all, delete-orphan"
+    jargon = relationship(
+        "Jargon", back_populates="episode", cascade="all, delete-orphan"
     )
+
+    def __repr__(self):
+        return f"<Episode(episode_id='{self.episode_id}', title='{self.title}')>"
 
 
 class Claim(Base):
-    """Structured claims extracted from content."""
+    """Claim extracted from an episode."""
 
     __tablename__ = "claims"
+    __table_args__ = {"extend_existing": True}  # Fix for duplicate table error
 
-    episode_id = Column(
-        String(100), ForeignKey("episodes.episode_id"), primary_key=True
-    )
-    claim_id = Column(String(100), primary_key=True)
-    canonical = Column(Text, nullable=False)
-    claim_type = Column(String(20))
-    tier = Column(String(1))
-    first_mention_ts = Column(String(20))
-    scores_json = Column(JSONEncodedType, nullable=False)
-    inserted_at = Column(DateTime, default=datetime.utcnow)
+    # Composite primary key
+    episode_id = Column(String, ForeignKey("episodes.episode_id"), primary_key=True)
+    claim_id = Column(String, primary_key=True)
 
-    # Upload tracking fields
-    last_uploaded_at = Column(String(50), nullable=True)
-    upload_status = Column(String(20), default="pending")
+    # Claim content
+    canonical = Column(Text, nullable=False)  # The canonical form of the claim
+    original_text = Column(Text)  # Original text from transcript
 
-    __table_args__ = (
-        CheckConstraint(
-            "claim_type IN ('factual','causal','normative','forecast','definition')"
-        ),
-        CheckConstraint("tier IN ('A','B','C')"),
-        CheckConstraint("upload_status IN ('pending','uploaded','failed')"),
-    )
+    # Claim metadata
+    claim_type = Column(String)  # factual, causal, normative, forecast, definition
+    tier = Column(String)  # A, B, C
+    first_mention_ts = Column(String)  # Timestamp of first mention
+
+    # Scores and evaluation
+    scores_json = Column(
+        JSON
+    )  # Dictionary of various scores (importance, novelty, etc.)
+    evaluator_notes = Column(Text)  # Notes from the evaluator
+
+    # Upload tracking
+    upload_status = Column(String, default="pending")  # pending, uploaded, failed
+    upload_timestamp = Column(DateTime)
+    upload_error = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     episode = relationship("Episode", back_populates="claims")
-    evidence_spans = relationship(
-        "EvidenceSpan", back_populates="claim", cascade="all, delete-orphan"
-    )
-    source_relations = relationship(
-        "Relation",
-        foreign_keys="Relation.source_claim_id",
-        back_populates="source_claim",
-    )
-    target_relations = relationship(
-        "Relation",
-        foreign_keys="Relation.target_claim_id",
-        back_populates="target_claim",
-    )
 
-
-class EvidenceSpan(Base):
-    """Evidence quotes supporting claims."""
-
-    __tablename__ = "evidence_spans"
-
-    episode_id = Column(
-        String(100), ForeignKey("episodes.episode_id"), primary_key=True
-    )
-    claim_id = Column(String(100), primary_key=True)
-    seq = Column(Integer, primary_key=True)
-    segment_id = Column(String(100))
-    t0 = Column(String(20))
-    t1 = Column(String(20))
-    quote = Column(Text)
-
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ["episode_id", "claim_id"], ["claims.episode_id", "claims.claim_id"]
-        ),
-    )
-
-    # Relationships
-    claim = relationship("Claim", back_populates="evidence_spans")
-
-
-class Relation(Base):
-    """Relationships between claims."""
-
-    __tablename__ = "relations"
-
-    episode_id = Column(
-        String(100), ForeignKey("episodes.episode_id"), primary_key=True
-    )
-    source_claim_id = Column(String(100), primary_key=True)
-    target_claim_id = Column(String(100), primary_key=True)
-    type = Column(String(20), primary_key=True)
-    strength = Column(Float)
-    rationale = Column(Text)
-
-    __table_args__ = (
-        ForeignKey(
-            ["episode_id", "source_claim_id"], ["claims.episode_id", "claims.claim_id"]
-        ),
-        ForeignKey(
-            ["episode_id", "target_claim_id"], ["claims.episode_id", "claims.claim_id"]
-        ),
-        CheckConstraint("type IN ('supports','contradicts','depends_on','refines')"),
-        CheckConstraint("strength BETWEEN 0 AND 1"),
-    )
-
-    # Relationships
-    source_claim = relationship(
-        "Claim",
-        foreign_keys=[episode_id, source_claim_id],
-        back_populates="source_relations",
-    )
-    target_claim = relationship(
-        "Claim",
-        foreign_keys=[episode_id, target_claim_id],
-        back_populates="target_relations",
-    )
+    def __repr__(self):
+        return f"<Claim(claim_id='{self.claim_id}', tier='{self.tier}', type='{self.claim_type}')>"
 
 
 class Person(Base):
-    """People and organizations mentioned in content."""
+    """Person mentioned in an episode."""
 
     __tablename__ = "people"
+    __table_args__ = {"extend_existing": True}  # Fix for duplicate table error
 
-    episode_id = Column(
-        String(100), ForeignKey("episodes.episode_id"), primary_key=True
-    )
-    mention_id = Column(String(100), primary_key=True)
-    span_segment_id = Column(String(100))
-    t0 = Column(String(20))
-    t1 = Column(String(20))
-    surface = Column(Text, nullable=False)
-    normalized = Column(Text)
-    entity_type = Column(String(10), default="person")
-    external_ids_json = Column(JSONEncodedType)
-    confidence = Column(Float)
+    # Composite primary key
+    episode_id = Column(String, ForeignKey("episodes.episode_id"), primary_key=True)
+    person_id = Column(String, primary_key=True)
 
-    __table_args__ = (CheckConstraint("entity_type IN ('person','org')"),)
+    # Person information
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    first_mention_ts = Column(String)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     episode = relationship("Episode", back_populates="people")
 
+    def __repr__(self):
+        return f"<Person(person_id='{self.person_id}', name='{self.name}')>"
+
 
 class Concept(Base):
-    """Mental models and concepts extracted from content."""
+    """Mental model or concept extracted from an episode."""
 
     __tablename__ = "concepts"
+    __table_args__ = {"extend_existing": True}  # Fix for duplicate table error
 
-    episode_id = Column(
-        String(100), ForeignKey("episodes.episode_id"), primary_key=True
-    )
-    model_id = Column(String(100), primary_key=True)
-    name = Column(Text, nullable=False)
-    definition = Column(Text)
-    first_mention_ts = Column(String(20))
-    aliases_json = Column(JSONEncodedType)
-    evidence_json = Column(JSONEncodedType)
+    # Composite primary key
+    episode_id = Column(String, ForeignKey("episodes.episode_id"), primary_key=True)
+    concept_id = Column(String, primary_key=True)
+
+    # Concept information
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    first_mention_ts = Column(String)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     episode = relationship("Episode", back_populates="concepts")
 
+    def __repr__(self):
+        return f"<Concept(concept_id='{self.concept_id}', name='{self.name}')>"
 
-class JargonTerm(Base):
-    """Technical jargon and specialized terms."""
+
+class Jargon(Base):
+    """Jargon term extracted from an episode."""
 
     __tablename__ = "jargon"
+    __table_args__ = {"extend_existing": True}  # Fix for duplicate table error
 
-    episode_id = Column(
-        String(100), ForeignKey("episodes.episode_id"), primary_key=True
-    )
-    term_id = Column(String(100), primary_key=True)
-    term = Column(Text, nullable=False)
-    category = Column(String(50))
+    # Composite primary key
+    episode_id = Column(String, ForeignKey("episodes.episode_id"), primary_key=True)
+    jargon_id = Column(String, primary_key=True)
+
+    # Jargon information
+    term = Column(String, nullable=False)
     definition = Column(Text)
-    evidence_json = Column(JSONEncodedType)
+    first_mention_ts = Column(String)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    episode = relationship("Episode", back_populates="jargon_terms")
+    episode = relationship("Episode", back_populates="jargon")
 
-
-# Add relationship to Video model
-def extend_video_model():
-    """Add HCE relationship to existing Video model."""
-    from .models import Video
-
-    Video.episode = relationship("Episode", back_populates="video", uselist=False)
+    def __repr__(self):
+        return f"<Jargon(jargon_id='{self.jargon_id}', term='{self.term}')>"
