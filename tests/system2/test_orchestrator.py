@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from src.knowledge_system.core.system2_orchestrator import JobType, System2Orchestrator
+from src.knowledge_system.core.system2_orchestrator import System2Orchestrator
 from src.knowledge_system.database.system2_models import Job, JobRun
 from src.knowledge_system.errors import ErrorCode, KnowledgeSystemError
 
@@ -38,7 +38,7 @@ class TestSystem2Orchestrator:
         orchestrator = System2Orchestrator(test_db_service)
 
         job_id = orchestrator.create_job(
-            JobType.TRANSCRIBE,
+            "transcribe",
             "test_video_123",
             config={"source": "test"},
             auto_process=True,
@@ -70,7 +70,7 @@ class TestSystem2Orchestrator:
             mock_process.return_value = mock_result
 
             job_id = orchestrator.create_job(
-                JobType.TRANSCRIBE, "test_video_123", config={"source": "youtube"}
+                "transcribe", "test_video_123", config={"source": "youtube"}
             )
 
             result = orchestrator.execute_job(job_id)
@@ -117,7 +117,7 @@ class TestSystem2Orchestrator:
             orchestrator._unified_miner = mock_miner
 
             job_id = orchestrator.create_job(
-                JobType.MINE,
+                "mine",
                 sample_episode.episode_id,
                 config={"miner_model": "openai:gpt-4"},
             )
@@ -132,7 +132,7 @@ class TestSystem2Orchestrator:
         orchestrator = System2Orchestrator(test_db_service)
 
         # Create job
-        job_id = orchestrator.create_job(JobType.TRANSCRIBE, "test_video")
+        job_id = orchestrator.create_job("transcribe", "test_video")
 
         with test_db_service.get_session() as session:
             # Initial state
@@ -164,7 +164,7 @@ class TestSystem2Orchestrator:
 
         # Create a job with checkpoint
         job_id = orchestrator.create_job(
-            JobType.MINE, sample_episode.episode_id, config={"test_checkpoint": True}
+            "mine", sample_episode.episode_id, config={"test_checkpoint": True}
         )
 
         # Simulate partial execution with checkpoint
@@ -207,7 +207,7 @@ class TestSystem2Orchestrator:
 
         # Create download job with auto_process
         job_id = orchestrator.create_job(
-            JobType.DOWNLOAD, "https://youtube.com/watch?v=test123", auto_process=True
+            "download", "https://youtube.com/watch?v=test123", auto_process=True
         )
 
         # Mock download success
@@ -244,7 +244,7 @@ class TestSystem2Orchestrator:
         )
 
         # Test network error during download
-        job_id = orchestrator.create_job(JobType.DOWNLOAD, "test_url")
+        job_id = orchestrator.create_job("download", "test_url")
 
         with patch.object(
             orchestrator.youtube_download_processor, "process"
@@ -272,7 +272,7 @@ class TestSystem2Orchestrator:
         """Test metrics are properly tracked in job runs."""
         orchestrator = System2Orchestrator(test_db_service)
 
-        job_id = orchestrator.create_job(JobType.TRANSCRIBE, "test_video")
+        job_id = orchestrator.create_job("transcribe", "test_video")
 
         # Create job run with metrics
         with test_db_service.get_session() as session:

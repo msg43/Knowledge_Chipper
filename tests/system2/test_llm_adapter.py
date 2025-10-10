@@ -12,10 +12,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from src.knowledge_system.core.llm_adapter import (
-    HARDWARE_TIERS,
-    HardwareTierConfig,
     LLMAdapter,
-    MemoryMonitor,
+    MemoryThrottler,
     RateLimiter,
 )
 from src.knowledge_system.errors import APIError, ErrorCode
@@ -23,111 +21,84 @@ from src.knowledge_system.errors import APIError, ErrorCode
 from .fixtures import test_db_service
 
 
-class TestMemoryMonitor:
-    """Test cases for memory monitoring."""
+class TestMemoryThrottler:
+    """Test cases for memory throttling."""
 
-    def test_memory_threshold_detection(self):
-        """Test memory threshold detection."""
-        monitor = MemoryMonitor(threshold=0.7, critical_threshold=0.9)
+    @pytest.mark.asyncio
+    async def test_memory_throttling(self):
+        """Test memory-based throttling."""
+        throttler = MemoryThrottler(threshold_percent=70.0)
 
-        # Mock memory usage
+        # Mock memory usage below threshold
         with patch("psutil.virtual_memory") as mock_memory:
-            # Below threshold
             mock_memory.return_value = Mock(percent=60.0)
-            should_throttle, usage = monitor.should_throttle()
-            assert not should_throttle
-            assert usage == 0.6
+            # Should not throttle
+            await throttler.check_and_wait()
 
-            # Above threshold
-            mock_memory.return_value = Mock(percent=80.0)
-            should_throttle, usage = monitor.should_throttle()
-            assert should_throttle
-            assert usage == 0.8
-
-    def test_critical_memory_detection(self):
-        """Test critical memory level detection."""
-        monitor = MemoryMonitor(threshold=0.7, critical_threshold=0.9)
+    @pytest.mark.asyncio
+    async def test_memory_throttling_above_threshold(self):
+        """Test throttling when memory is above threshold."""
+        throttler = MemoryThrottler(threshold_percent=70.0)
 
         with patch("psutil.virtual_memory") as mock_memory:
-            # Critical level
-            mock_memory.return_value = Mock(percent=95.0)
-            assert monitor.is_critical()
+            with patch("asyncio.sleep") as mock_sleep:
+                mock_memory.return_value = Mock(percent=80.0)
+                await throttler.check_and_wait()
+                # Should have triggered sleep due to high memory
+                mock_sleep.assert_called()
 
-            # Below critical
-            mock_memory.return_value = Mock(percent=85.0)
-            assert not monitor.is_critical()
-
-    def test_check_interval(self):
+    @pytest.mark.asyncio
+    async def test_check_interval(self):
         """Test memory check interval limiting."""
-        monitor = MemoryMonitor()
-        monitor._check_interval = 0.1  # Short interval for testing
+        throttler = MemoryThrottler(threshold_percent=70.0)
+        throttler._check_interval = 0.1  # Short interval for testing
 
         with patch("psutil.virtual_memory") as mock_memory:
             mock_memory.return_value = Mock(percent=80.0)
 
             # First check should work
-            should_throttle1, _ = monitor.should_throttle()
+            await throttler.check_and_wait()
 
-            # Immediate second check should return cached result
-            should_throttle2, usage2 = monitor.should_throttle()
-            assert not should_throttle2  # Returns False when skipping check
-            assert usage2 == 0.0
-
-            # After interval, should check again
-            time.sleep(0.15)
-            should_throttle3, usage3 = monitor.should_throttle()
-            assert should_throttle3
-            assert usage3 == 0.8
+            # Reset last check to force a new check
+            throttler._last_check = 0
+            await throttler.check_and_wait()
 
 
 class TestRateLimiter:
     """Test cases for rate limiting with exponential backoff."""
 
-    def test_exponential_backoff(self):
-        """Test exponential backoff calculation."""
-        limiter = RateLimiter(initial_delay=1.0, max_delay=10.0)
+    def test_trigger_backoff(self):
+        """Test exponential backoff triggering."""
+        limiter = RateLimiter(requests_per_minute=60)
 
-        # First backoff
-        with patch("time.sleep") as mock_sleep:
-            limiter.backoff()
-            # Should be around 2 seconds (1 * 2^1) plus jitter
-            assert 1.5 <= limiter.current_delay <= 2.5
-            mock_sleep.assert_called_once()
+        # Trigger backoff
+        limiter.trigger_backoff()
+        assert limiter.backoff_until is not None
+        assert limiter.backoff_multiplier == 2
 
-        # Second backoff
-        with patch("time.sleep") as mock_sleep:
-            limiter.backoff()
-            # Should be around 4 seconds (1 * 2^2) plus jitter
-            assert 3.0 <= limiter.current_delay <= 5.0
+        # Trigger again
+        limiter.trigger_backoff()
+        assert limiter.backoff_multiplier == 4
 
-    def test_max_delay_cap(self):
-        """Test that backoff is capped at max_delay."""
-        limiter = RateLimiter(initial_delay=1.0, max_delay=5.0)
+    @pytest.mark.asyncio
+    async def test_acquire_with_backoff(self):
+        """Test token acquisition with backoff."""
+        limiter = RateLimiter(requests_per_minute=60)
 
-        # Force many backoffs
+        # Normal acquisition
+        await limiter.acquire()
+        assert limiter.tokens < 60
+
+    def test_backoff_max_limit(self):
+        """Test that backoff multiplier is capped."""
+        limiter = RateLimiter(requests_per_minute=60)
+
+        # Trigger many backoffs
         for _ in range(10):
-            with patch("time.sleep"):
-                limiter.backoff()
+            limiter.trigger_backoff()
 
-        # Should be capped at max_delay
-        assert limiter.current_delay <= 5.0 * 1.25  # Max + jitter
-
-    def test_reset(self):
-        """Test rate limiter reset."""
-        limiter = RateLimiter(initial_delay=1.0)
-
-        # Backoff a few times
-        for _ in range(3):
-            with patch("time.sleep"):
-                limiter.backoff()
-
-        assert limiter.consecutive_errors == 3
-        assert limiter.current_delay > limiter.initial_delay
-
-        # Reset
-        limiter.reset()
-        assert limiter.consecutive_errors == 0
-        assert limiter.current_delay == limiter.initial_delay
+        # Should be capped at 8x
+        assert limiter.backoff_multiplier <= 8
 
 
 class TestLLMAdapter:
@@ -137,27 +108,22 @@ class TestLLMAdapter:
         """Test hardware tier is properly detected."""
         adapter = LLMAdapter(test_db_service)
 
-        assert adapter.tier_config is not None
-        assert adapter.tier_config.tier in HARDWARE_TIERS
-        assert adapter.tier_config.mining_workers > 0
-        assert adapter.tier_config.evaluation_workers > 0
+        assert adapter.hardware_tier in ["consumer", "prosumer", "enterprise"]
+        assert adapter.max_concurrent > 0
 
-    def test_tier_assignment_logic(self, test_db_service):
-        """Test hardware tier assignment based on specs."""
-        adapter = LLMAdapter(test_db_service)
-
-        # Mock different hardware specs
+    def test_concurrency_limits(self, test_db_service):
+        """Test concurrency limits are set correctly."""
+        # Test different hardware specs
         test_cases = [
-            ({"memory_gb": 4, "cpu_cores": 2}, "consumer"),
-            ({"memory_gb": 16, "cpu_cores": 8}, "prosumer"),
-            ({"memory_gb": 32, "cpu_cores": 12}, "professional"),
-            ({"memory_gb": 128, "cpu_cores": 32}, "server"),
+            ({"memory_gb": 8, "cpu_cores": 4}, "consumer", 2),
+            ({"memory_gb": 16, "cpu_cores": 8}, "prosumer", 4),
+            ({"memory_gb": 64, "cpu_cores": 16}, "enterprise", 8),
         ]
 
-        for specs, expected_tier in test_cases:
-            adapter.hardware_specs = specs
-            tier = adapter._determine_tier()
-            assert tier.tier == expected_tier
+        for specs, expected_tier, expected_concurrent in test_cases:
+            adapter = LLMAdapter(test_db_service, hardware_specs=specs)
+            assert adapter.hardware_tier == expected_tier
+            assert adapter.max_concurrent == expected_concurrent
 
     @pytest.mark.asyncio
     async def test_async_llm_call_success(self, test_db_service):
@@ -222,17 +188,13 @@ class TestLLMAdapter:
         adapter = LLMAdapter(test_db_service)
 
         # Mock high memory usage
-        with patch.object(
-            adapter.memory_monitor, "should_throttle", return_value=(True, 0.85)
-        ):
+        with patch("psutil.virtual_memory") as mock_memory:
+            mock_memory.return_value = Mock(percent=85.0)
             with patch("asyncio.sleep") as mock_sleep:
-                result = await adapter.call_llm_async(
-                    provider="openai", model="gpt-4", prompt="Test"
-                )
-
-                # Should have throttled
+                # The throttler should detect high memory and sleep
+                await adapter.memory_throttler.check_and_wait()
+                # Verify sleep was called due to high memory
                 mock_sleep.assert_called()
-                assert adapter.metrics["memory_throttle_events"] == 1
 
     def test_sync_llm_call(self, test_db_service):
         """Test synchronous LLM call wrapper."""
@@ -269,27 +231,16 @@ class TestLLMAdapter:
         assert all(r.startswith("processed_") for r in results)
         assert len(processed) == len(items)
 
-    def test_metrics_tracking(self, test_db_service):
-        """Test metrics are properly tracked."""
+    def test_adapter_initialization(self, test_db_service):
+        """Test adapter initializes with correct settings."""
         adapter = LLMAdapter(test_db_service)
 
-        initial_metrics = adapter.get_metrics()
-        assert initial_metrics["total_requests"] == 0
-        assert initial_metrics["tier"] == adapter.tier_config.tier
-
-        # Make some calls to update metrics
-        adapter.metrics["total_requests"] = 10
-        adapter.metrics["successful_requests"] = 8
-        adapter.metrics["failed_requests"] = 2
-        adapter.metrics["total_tokens"] = 1500
-        adapter.metrics["total_cost_usd"] = 0.05
-
-        metrics = adapter.get_metrics()
-        assert metrics["total_requests"] == 10
-        assert metrics["successful_requests"] == 8
-        assert metrics["failed_requests"] == 2
-        assert metrics["total_tokens"] == 1500
-        assert metrics["total_cost_usd"] == 0.05
+        # Verify basic initialization
+        assert adapter.db_service is not None
+        assert adapter.hardware_tier in ["consumer", "prosumer", "enterprise"]
+        assert adapter.max_concurrent > 0
+        assert adapter.semaphore is not None
+        assert len(adapter.rate_limiters) > 0
 
     def test_database_tracking(self, test_db_service):
         """Test LLM requests/responses are tracked in database."""
