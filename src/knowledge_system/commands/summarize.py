@@ -92,8 +92,8 @@ def _extract_youtube_url_from_file(file_path: Path) -> str | None:
 @click.option(
     "--model",
     "-m",
-    default="gpt-4o-mini-2024-07-18",
-    help="LLM model to use for summarization",
+    default=None,
+    help="LLM model to use (deprecated - use stage-specific model options instead)",
 )
 @click.option(
     "--provider",
@@ -198,11 +198,6 @@ def _extract_youtube_url_from_file(file_path: Path) -> str | None:
     help="Override reranker model URI",
 )
 @click.option(
-    "--profile",
-    type=click.Choice(["fast", "balanced", "quality"]),
-    help="Prefill recommended options for speed/quality tradeoffs",
-)
-@click.option(
     "--flagship-max-claims-per-file",
     type=int,
     help="Cap the number of routed flagship claims per file",
@@ -241,7 +236,6 @@ def summarize(
     heavy_miner_model: str | None,
     embedder_model: str | None,
     reranker_model: str | None,
-    profile: str | None,
     use_skim: bool,
 ) -> None:
     """Summarize transcripts or documents using LLM.
@@ -373,41 +367,20 @@ def summarize(
 
     # Use provider from CLI option if provided, otherwise from settings
     effective_provider = provider if provider else settings.llm.provider
-    # Apply profile defaults (can be overridden by explicit flags)
-    profile_opts: dict[str, Any] = {}
-    if profile == "fast":
-        profile_opts.update(
-            {
-                "use_skim": False,
-                "router_uncertainty_threshold": 1.0,
-                "flagship_judge_model": None,
-            }
-        )
-    elif profile == "balanced":
-        profile_opts.update(
-            {
-                "use_skim": True,
-                "router_uncertainty_threshold": 0.35,
-            }
-        )
-    elif profile == "quality":
-        profile_opts.update(
-            {
-                "use_skim": True,
-                "router_uncertainty_threshold": 0.25,
-            }
-        )
+
+    # Determine effective model for metadata (use miner_model or fall back to model parameter)
+    effective_model = miner_model or model or "local://qwen2.5:7b"
 
     processor = SummarizerProcessor(
         provider=effective_provider,
-        model=model,
+        model=effective_model,  # Used only for metadata/reporting
         max_tokens=max_tokens,
         hce_options={
             "min_claim_tier": min_claim_tier,
             "include_contradictions": include_contradictions,
             "include_relations": include_relations,
             "max_claims": max_claims,
-            "use_skim": profile_opts.get("use_skim", use_skim),
+            "use_skim": use_skim,
             "router_uncertainty_threshold": router_uncertainty_threshold,
             "judge_model_override": judge_model,
             "flagship_judge_model": flagship_judge_model,
@@ -416,7 +389,6 @@ def summarize(
             "heavy_miner_model": heavy_miner_model,
             "embedder_model": embedder_model,
             "reranker_model": reranker_model,
-            **profile_opts,
         },
     )
 

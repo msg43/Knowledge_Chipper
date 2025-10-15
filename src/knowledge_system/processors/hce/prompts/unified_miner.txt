@@ -44,7 +44,6 @@ Extract technical terms, industry-specific language, or specialized vocabulary t
 ## PEOPLE EXTRACTION
 Identify any people mentioned, including:
 - Names (full names, first names, last names, nicknames)
-- Roles or titles when names aren't given
 - Historical figures, experts, authorities
 - Anyone whose ideas or actions are discussed
 
@@ -83,9 +82,232 @@ Each mental model must include:
 - **context_quote**: Quote illustrating the mental model
 - **timestamp**: When it's discussed
 
-## EXAMPLES
+## EXAMPLES BY TYPE
 
-<examples>
+### CLAIM EXAMPLES
+
+<claim_examples>
+  <example type="factual">
+    <input>"Bitcoin's price dropped 15% yesterday, marking its worst single-day loss since March 2020."</input>
+    <good_extraction>
+{
+  "claim_text": "Bitcoin dropped 15% yesterday, marking its worst single-day loss since March 2020",
+  "claim_type": "factual",
+  "stance": "asserts",
+  "evidence_spans": [{"quote": "Bitcoin's price dropped 15% yesterday, marking its worst single-day loss since March 2020", "t0": "02:15", "t1": "02:22"}]
+}
+    </good_extraction>
+    <explanation>Specific factual assertion with verifiable data that can be checked.</explanation>
+  </example>
+
+  <example type="causal">
+    <input>"The reason inflation has remained stubborn is that supply chains are still disrupted from the pandemic, which keeps pushing prices higher."</input>
+    <good_extraction>
+{
+  "claim_text": "Supply chain disruptions from the pandemic cause persistent inflation by pushing prices higher",
+  "claim_type": "causal",
+  "stance": "asserts",
+  "evidence_spans": [{"quote": "The reason inflation has remained stubborn is that supply chains are still disrupted from the pandemic, which keeps pushing prices higher", "t0": "05:10", "t1": "05:18"}]
+}
+    </good_extraction>
+    <explanation>Clear cause-and-effect relationship between supply chains and inflation.</explanation>
+  </example>
+
+  <example type="normative">
+    <input>"Investors really need to diversify beyond tech stocks right now. It's too risky to have everything concentrated in one sector."</input>
+    <good_extraction>
+{
+  "claim_text": "Investors should diversify beyond tech stocks because concentration in one sector is too risky",
+  "claim_type": "normative",
+  "stance": "asserts",
+  "evidence_spans": [{"quote": "Investors really need to diversify beyond tech stocks right now. It's too risky to have everything concentrated in one sector", "t0": "08:30", "t1": "08:38"}]
+}
+    </good_extraction>
+    <explanation>Value judgment and recommendation about what investors ought to do.</explanation>
+  </example>
+
+  <example type="forecast">
+    <input>"I expect the Fed to cut rates by at least 50 basis points by the end of Q2, given the softening labor market data we're seeing."</input>
+    <good_extraction>
+{
+  "claim_text": "The Fed will cut rates by at least 50 basis points by end of Q2 due to softening labor market",
+  "claim_type": "forecast",
+  "stance": "asserts",
+  "evidence_spans": [{"quote": "I expect the Fed to cut rates by at least 50 basis points by the end of Q2, given the softening labor market data we're seeing", "t0": "12:05", "t1": "12:14"}]
+}
+    </good_extraction>
+    <explanation>Specific prediction about future events with reasoning.</explanation>
+  </example>
+
+  <example type="definition">
+    <input>"What we call 'stagflation' is when you get high inflation combined with stagnant economic growth - it's the worst of both worlds."</input>
+    <good_extraction>
+{
+  "claim_text": "Stagflation is high inflation combined with stagnant economic growth",
+  "claim_type": "definition",
+  "stance": "asserts",
+  "evidence_spans": [{"quote": "What we call 'stagflation' is when you get high inflation combined with stagnant economic growth", "t0": "15:20", "t1": "15:27"}]
+}
+    </good_extraction>
+    <explanation>Technical definition being explained in context. Note: Only extract definitions of specialized terms, not obvious concepts.</explanation>
+  </example>
+</claim_examples>
+
+### STANCE EXAMPLES
+
+<stance_examples>
+  <example stance="asserts">
+    <input>"Electric vehicles will dominate the market within 10 years. The infrastructure is coming, battery tech is improving, and government mandates are accelerating adoption."</input>
+    <note>Speaker confidently presents claim as true with supporting reasoning. Use "asserts".</note>
+  </example>
+
+  <example stance="questions">
+    <input>"Some analysts believe AI will replace most knowledge workers, but I'm skeptical. Can these models really handle complex judgment calls? I'm not convinced."</input>
+    <note>Speaker expresses doubt or presents claim as questionable. Use "questions".</note>
+  </example>
+
+  <example stance="opposes">
+    <input>"People say printing money causes inflation, but that's not what we've seen in Japan over the past 20 years. They've had massive monetary expansion without significant inflation. The simple money supply theory just doesn't hold up empirically."</input>
+    <note>Speaker actively refutes or argues against the claim. Use "opposes".</note>
+  </example>
+
+  <example stance="neutral">
+    <input>"According to the Bank of England's recent report, higher interest rates reduce consumer spending. They cite several mechanisms through which this occurs."</input>
+    <note>Speaker reports claim without endorsing or questioning it. Use "neutral".</note>
+  </example>
+</stance_examples>
+
+### JARGON EXAMPLES
+
+<jargon_examples>
+  <good_example>
+    <input>"The company used a series of SPVs - special purpose vehicles - to move debt off their balance sheet."</input>
+    <extraction>
+{
+  "term": "SPV (special purpose vehicle)",
+  "definition": "Legal entity created to isolate financial risk by moving assets or debt off a company's main balance sheet",
+  "context_quote": "The company used a series of SPVs - special purpose vehicles - to move debt off their balance sheet",
+  "timestamp": "03:45"
+}
+    </extraction>
+    <explanation>Technical financial term that general audiences wouldn't know.</explanation>
+  </good_example>
+
+  <good_example>
+    <input>"The algorithm uses backpropagation to adjust the neural network weights during training."</input>
+    <extraction>
+{
+  "term": "backpropagation",
+  "definition": "Machine learning technique for adjusting neural network weights during training by propagating errors backward through the network",
+  "context_quote": "The algorithm uses backpropagation to adjust the neural network weights during training",
+  "timestamp": "07:12"
+}
+    </extraction>
+    <explanation>Domain-specific ML term requiring specialized knowledge.</explanation>
+  </good_example>
+
+  <bad_example>
+    <input>"The stock market went up today and investors were happy about the gains."</input>
+    <explanation>DON'T extract "stock market" or "investors" - these are common terms that general audiences understand. Only extract genuinely technical or specialized vocabulary.</explanation>
+  </bad_example>
+</jargon_examples>
+
+### PEOPLE EXAMPLES
+
+<people_examples>
+  <good_example>
+    <input>"Warren Buffett has long advocated for index fund investing, arguing that most people can't beat the market."</input>
+    <extraction>
+{
+  "name": "Warren Buffett",
+  "role_or_description": "Investor and advocate of index fund investing",
+  "context_quote": "Warren Buffett has long advocated for index fund investing",
+  "timestamp": "04:20"
+}
+    </extraction>
+    <explanation>Person whose ideas or actions are being discussed substantively.</explanation>
+  </good_example>
+
+  <good_example>
+    <input>"Keynes believed that government spending could pull economies out of depression."</input>
+    <extraction>
+{
+  "name": "Keynes",
+  "role_or_description": "Economist who advocated for government spending to combat depression",
+  "context_quote": "Keynes believed that government spending could pull economies out of depression",
+  "timestamp": "09:15"
+}
+    </extraction>
+    <explanation>Historical figure whose ideas are relevant to the discussion.</explanation>
+  </good_example>
+
+  <bad_example>
+    <input>"I was talking to my friend Bob the other day and he mentioned something interesting about bonds."</input>
+    <explanation>DON'T extract "Bob" - casual mention without substantive discussion. Only extract people whose ideas, work, or actions are meaningfully discussed.</explanation>
+  </bad_example>
+
+  <bad_example>
+    <input>"Thanks for tuning in, I'm Sarah and today we'll discuss inflation."</input>
+    <explanation>DON'T extract "Sarah" - procedural self-identification by the speaker. Only extract when the person is the subject of discussion.</explanation>
+  </bad_example>
+</people_examples>
+
+### MENTAL MODELS EXAMPLES
+
+<mental_models_examples>
+  <good_example>
+    <input>"I use what I call the 'Circle of Competence' approach - only invest in businesses you genuinely understand. Stay within your circle, know its boundaries, and don't venture beyond it just because something looks attractive."</input>
+    <extraction>
+{
+  "name": "Circle of Competence",
+  "description": "Investment framework where one only invests in businesses within their area of genuine understanding, staying within known boundaries rather than venturing into unfamiliar territory",
+  "context_quote": "I use what I call the 'Circle of Competence' approach - only invest in businesses you genuinely understand. Stay within your circle, know its boundaries",
+  "timestamp": "11:30"
+}
+    </extraction>
+    <explanation>Clear decision-making framework with systematic approach to problem (investment selection).</explanation>
+  </good_example>
+
+  <good_example>
+    <input>"The scientific method is really about falsification, not confirmation. You don't try to prove your theory right - you try to prove it wrong. If it survives repeated attempts at falsification, then you can have confidence in it."</input>
+    <extraction>
+{
+  "name": "Falsificationism / Popperian method",
+  "description": "Scientific framework where theories are tested by attempting to disprove them rather than confirm them, gaining confidence through surviving falsification attempts",
+  "context_quote": "The scientific method is really about falsification, not confirmation. You don't try to prove your theory right - you try to prove it wrong",
+  "timestamp": "14:45"
+}
+    </extraction>
+    <explanation>Philosophical framework that describes a systematic approach to knowledge validation.</explanation>
+  </good_example>
+
+  <good_example>
+    <input>"Porter's Five Forces helps you analyze industry competition by looking at five factors: threat of new entrants, bargaining power of suppliers, bargaining power of buyers, threat of substitutes, and rivalry among existing competitors."</input>
+    <extraction>
+{
+  "name": "Porter's Five Forces",
+  "description": "Strategic framework for analyzing industry competition through five factors: threat of new entrants, supplier power, buyer power, threat of substitutes, and competitive rivalry",
+  "context_quote": "Porter's Five Forces helps you analyze industry competition by looking at five factors: threat of new entrants, bargaining power of suppliers, bargaining power of buyers, threat of substitutes, and rivalry among existing competitors",
+  "timestamp": "18:20"
+}
+    </extraction>
+    <explanation>Named analytical framework with structured methodology.</explanation>
+  </good_example>
+
+  <bad_example>
+    <input>"Higher prices reduce demand - that's just basic supply and demand."</input>
+    <explanation>DON'T extract "supply and demand" here - it's referenced too casually. Mental models should be frameworks being explained or applied meaningfully, not just mentioned in passing.</explanation>
+  </bad_example>
+
+  <bad_example>
+    <input>"You need to think about the opportunity cost of your time."</input>
+    <explanation>DON'T extract "opportunity cost" - this is a simple concept mention, not a framework being explained. Only extract when a structured approach or methodology is being described.</explanation>
+  </bad_example>
+</mental_models_examples>
+
+## COMPREHENSIVE EXAMPLES
+
+<comprehensive_examples>
   <example>
     <input>
 "The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices. Jerome Powell mentioned that this creates what economists call a 'wealth effect' where rising asset prices boost consumer spending. However, some critics argue this approach primarily benefits wealthy asset holders."
@@ -147,21 +369,15 @@ Each mental model must include:
   "people": [
     {
       "name": "Jerome Powell",
-      "role_or_description": "Federal Reserve Chairman",
+      "role_or_description": "Federal Reserve Chairman discussing monetary policy effects",
       "context_quote": "Jerome Powell mentioned that this creates",
       "timestamp": "00:25"
     }
   ],
-  "mental_models": [
-    {
-      "name": "wealth effect mechanism",
-      "description": "Framework explaining how monetary policy affects consumer behavior through asset price changes",
-      "context_quote": "creates what economists call a 'wealth effect' where rising asset prices boost consumer spending",
-      "timestamp": "00:28"
-    }
-  ]
+  "mental_models": []
 }
     </good_response>
+    <explanation>Note: Removed "wealth effect mechanism" from mental models - it's more of a concept/phenomenon than a framework. Mental models should be structured approaches or methodologies, not just economic concepts.</explanation>
   </example>
 
   <example>
@@ -178,31 +394,78 @@ Each mental model must include:
     </good_response>
     <explanation>This content contains only basic definitions and procedural statements. "A stock represents ownership in a company" is a trivial definition that doesn't meet our criteria for extraction. No novel insights, jargon, people, or mental models are present.</explanation>
   </example>
-</examples>
+</comprehensive_examples>
+
+## ANTI-EXAMPLES
 
 <anti_examples>
-  <example>
-    <input>
-"Today I want to talk about investing. Let me start by explaining what a stock is. A stock represents ownership in a company. This is basic stuff that everyone should know."
-    </input>
-    <bad_response>
-{
-  "claims": [
-    {
-      "claim_text": "Today I want to talk about investing",
-      "claim_type": "factual",
-      "stance": "asserts"
-    },
-    {
-      "claim_text": "A stock represents ownership in a company",
-      "claim_type": "definition",
-      "stance": "asserts"
-    }
-  ]
-}
-    </bad_response>
-    <explanation>These are procedural statements and basic definitions, not substantive claims worth extracting. They fail the "non-obvious" and "intellectually significant" criteria.</explanation>
-  </example>
+  <bad_claims>
+    <example>
+      <input>"Today I want to talk about investing."</input>
+      <bad_extraction>{"claim_text": "Today I want to talk about investing", "claim_type": "factual", "stance": "asserts"}</bad_extraction>
+      <explanation>DON'T extract procedural statements about what the speaker will discuss.</explanation>
+    </example>
+
+    <example>
+      <input>"This is interesting."</input>
+      <bad_extraction>{"claim_text": "This is interesting", "claim_type": "normative", "stance": "asserts"}</bad_extraction>
+      <explanation>DON'T extract vague value statements without specific content.</explanation>
+    </example>
+
+    <example>
+      <input>"As I mentioned earlier..."</input>
+      <bad_extraction>{"claim_text": "As I mentioned earlier", "claim_type": "factual", "stance": "asserts"}</bad_extraction>
+      <explanation>DON'T extract meta-commentary about the discussion itself.</explanation>
+    </example>
+
+    <example>
+      <input>"The stock market exists."</input>
+      <bad_extraction>{"claim_text": "The stock market exists", "claim_type": "factual", "stance": "asserts"}</bad_extraction>
+      <explanation>DON'T extract trivially obvious facts that contain no insight.</explanation>
+    </example>
+  </bad_claims>
+
+  <bad_jargon>
+    <example>
+      <input>"The company, investors, and the stock market all play important roles."</input>
+      <bad_extraction>Extract "company", "investors", "stock market" as jargon</bad_extraction>
+      <explanation>DON'T extract common business terms that general audiences understand.</explanation>
+    </example>
+
+    <example>
+      <input>"We need to think about this carefully and make a good decision."</input>
+      <bad_extraction>Extract "think", "decision" as jargon</bad_extraction>
+      <explanation>DON'T extract everyday vocabulary just because it appears in a technical discussion.</explanation>
+    </example>
+  </bad_jargon>
+
+  <bad_people>
+    <example>
+      <input>"My colleague mentioned this to me yesterday."</input>
+      <bad_extraction>{"name": "colleague", "role_or_description": "person who mentioned something"}</bad_extraction>
+      <explanation>DON'T extract unnamed people or casual mentions.</explanation>
+    </example>
+
+    <example>
+      <input>"I'm Dr. Smith and today I'll be discussing economics."</input>
+      <bad_extraction>{"name": "Dr. Smith", "role_or_description": "economics presenter"}</bad_extraction>
+      <explanation>DON'T extract the speaker introducing themselves.</explanation>
+    </example>
+  </bad_people>
+
+  <bad_mental_models>
+    <example>
+      <input>"We should use common sense here."</input>
+      <bad_extraction>{"name": "common sense", "description": "using common sense"}</bad_extraction>
+      <explanation>DON'T extract vague appeals to general reasoning.</explanation>
+    </example>
+
+    <example>
+      <input>"Think about supply and demand."</input>
+      <bad_extraction>{"name": "supply and demand", "description": "economic concept"}</bad_extraction>
+      <explanation>DON'T extract casual mentions. Only extract when a framework is actually being explained or meaningfully applied.</explanation>
+    </example>
+  </bad_mental_models>
 </anti_examples>
 
 Remember: Be thorough but precise. Extract everything significant, but ensure each item meets the quality criteria. Focus on substantive insights, not basic facts or procedural content.

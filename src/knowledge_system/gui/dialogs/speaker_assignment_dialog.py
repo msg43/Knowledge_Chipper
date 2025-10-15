@@ -1332,6 +1332,9 @@ class SpeakerAssignmentDialog(QDialog):
         if self.save_for_future_cb.isChecked():
             self._save_assignments_to_database(final_assignments)
 
+        # Check if HCE data exists and offer to update
+        self._check_and_offer_hce_update(final_assignments)
+
         # Emit completion signal
         self.speaker_assignments_completed.emit(final_assignments)
         self.accept()
@@ -1460,6 +1463,99 @@ class SpeakerAssignmentDialog(QDialog):
 
         except Exception as e:
             logger.error(f"Error learning channel mappings: {e}")
+
+    def _check_and_offer_hce_update(self, assignments: dict[str, str]):
+        """
+        Check if HCE data exists for this episode and offer to update it.
+
+        Args:
+            assignments: Final speaker assignments {speaker_id: name}
+        """
+        try:
+            # Only proceed if we have a video_id
+            video_id = self.metadata.get("video_id") or self.metadata.get("id")
+            if not video_id:
+                logger.debug("No video_id found, skipping HCE update check")
+                return
+
+            # Check if HCE data exists for this video
+            from ...processors.speaker_processor import SpeakerProcessor
+
+            episode_id = SpeakerProcessor.find_episode_id_for_video(video_id)
+
+            if not episode_id:
+                logger.debug(f"No HCE data found for video {video_id}, skipping update")
+                return
+
+            logger.info(
+                f"Found HCE episode {episode_id} for video {video_id}, offering update"
+            )
+
+            # Build speaker mappings (old_speaker -> new_speaker)
+            speaker_mappings = {}
+            for speaker_data in self.speaker_data_list:
+                old_speaker = speaker_data.speaker_id
+                new_speaker = assignments.get(old_speaker)
+
+                if new_speaker and old_speaker != new_speaker:
+                    speaker_mappings[old_speaker] = new_speaker
+
+            if not speaker_mappings:
+                logger.debug("No speaker name changes detected, skipping HCE update")
+                return
+
+            # We need the transcript data to reprocess
+            # Try to load it from the database
+            try:
+                from ...database.service import DatabaseService
+
+                db_service = DatabaseService()
+                transcripts = db_service.get_transcripts_for_video(video_id)
+
+                if not transcripts:
+                    logger.warning(f"No transcript found for video {video_id}")
+                    return
+
+                # Get the most recent transcript
+                transcript = transcripts[0]
+
+                # Build transcript data dictionary
+                transcript_data = {
+                    "segments": transcript.transcript_segments_json or [],
+                    "text": transcript.transcript_text or "",
+                }
+
+                # Apply speaker assignments to transcript data (in memory)
+                for segment in transcript_data["segments"]:
+                    old_speaker = segment.get("speaker")
+                    if old_speaker in assignments:
+                        segment["speaker"] = assignments[old_speaker]
+
+                # Show HCE update dialog
+                from .hce_update_dialog import show_hce_update_dialog
+
+                segment_count = len(transcript_data["segments"])
+
+                logger.info(
+                    f"Showing HCE update dialog for episode {episode_id} "
+                    f"with {len(speaker_mappings)} speaker changes"
+                )
+
+                # This will handle the update and reprocessing
+                show_hce_update_dialog(
+                    episode_id=episode_id,
+                    video_id=video_id,
+                    speaker_mappings=speaker_mappings,
+                    transcript_data=transcript_data,
+                    segment_count=segment_count,
+                    parent=self,
+                )
+
+            except Exception as e:
+                logger.error(f"Failed to load transcript for HCE update: {e}")
+
+        except Exception as e:
+            logger.error(f"Error checking for HCE update: {e}")
 
     def _identify_likely_host(self) -> str | None:
         """Identify the speaker most likely to be the host based on speaking patterns."""

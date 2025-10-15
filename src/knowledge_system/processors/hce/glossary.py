@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from .models.llm_any import AnyLLM
+from .models.llm_system2 import System2LLM
 from .types import EvidenceSpan, JargonTerm, Segment
 
 
 class GlossaryExtractor:
-    def __init__(self, llm: AnyLLM, prompt: Path):
+    def __init__(self, llm: System2LLM, prompt: Path):
         self.llm = llm
         self.template = prompt.read_text()
 
@@ -102,10 +102,10 @@ def extract_jargon(episode, model_uri: str = "local://qwen2.5:7b") -> list[Jargo
     # For now, we'll use a simple approach
     # In a full implementation, this would extract jargon terms
     try:
-        from .models.llm_any import AnyLLM
+        from .models.llm_system2 import System2LLM
 
         # Use provided model URI
-        llm = AnyLLM(model_uri)
+        llm = System2LLM(model_uri)
         prompt_path = Path(__file__).parent / "prompts" / "glossary_detect.txt"
 
         extractor = GlossaryExtractor(llm, prompt_path)

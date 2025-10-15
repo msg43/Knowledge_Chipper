@@ -4,7 +4,8 @@ Direct GUI launcher entrypoint.
 Avoids importing CLI modules to prevent unintended side-effects during app launch.
 """
 
-from ..utils.optional_deps import add_vendor_to_sys_path
+from knowledge_system.utils.optional_deps import add_vendor_to_sys_path
+
 from . import main as launch_gui
 
 

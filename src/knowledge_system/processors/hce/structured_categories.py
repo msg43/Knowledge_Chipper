@@ -14,7 +14,7 @@ import logging
 from collections import defaultdict
 from pathlib import Path
 
-from .models.llm_any import AnyLLM
+from .models.llm_system2 import System2LLM
 from .types import PipelineOutputs, ScoredClaim, StructuredCategory
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ class StructuredCategoryAnalyzer:
     identifying what topics an episode covers based on its claims, entities, and concepts.
     """
 
-    def __init__(self, llm: AnyLLM, prompt_path: Path):
+    def __init__(self, llm: System2LLM, prompt_path: Path):
         self.llm = llm
         self.template = prompt_path.read_text()
 
@@ -259,25 +259,45 @@ def analyze_structured_categories(
     Returns:
         List of structured categories
     """
+    try:
+        # Use the prompt from config/prompts directory
+        prompt_path = (
+            Path(__file__).parent.parent.parent.parent
+            / "config"
+            / "prompts"
+            / "structured_categories.txt"
+        )
 
-    # Currently disabled - return empty list until prompt template is created
-    # TODO: Create structured categories prompt template
-    logger.info(
-        "Structured categories analysis disabled - no prompt template available"
-    )
-    return []
+        if not prompt_path.exists():
+            logger.warning(
+                f"Structured categories prompt not found at {prompt_path}, skipping analysis"
+            )
+            return []
 
-    # Future implementation:
-    # settings = get_settings()
-    # prompt_path = settings.prompts_dir / "structured_categories.txt"
-    #
-    # if not prompt_path.exists():
-    #     logger.warning("Structured categories prompt template not found, skipping analysis")
-    #     return []
-    #
-    # llm = create_llm(model_uri)
-    # analyzer = StructuredCategoryAnalyzer(llm, prompt_path)
-    # return analyzer.analyze_episode_categories(outputs)
+        logger.info(f"Analyzing structured categories for episode {outputs.episode_id}")
+
+        # Create LLM instance and analyzer
+        from .models.llm_system2 import create_system2_llm
+
+        # Parse model URI: "provider:model" or just "model"
+        if ":" in model_uri:
+            provider, model = model_uri.split(":", 1)
+        else:
+            provider = "openai"
+            model = model_uri
+
+        llm = create_system2_llm(provider=provider, model=model)
+        analyzer = StructuredCategoryAnalyzer(llm, prompt_path)
+        categories = analyzer.analyze_episode_categories(outputs)
+
+        logger.info(
+            f"Identified {len(categories)} structured categories for episode {outputs.episode_id}"
+        )
+        return categories
+
+    except Exception as e:
+        logger.error(f"Failed to analyze structured categories: {e}")
+        return []
 
 
 # Utility functions for category analysis

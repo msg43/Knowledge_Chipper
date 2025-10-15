@@ -1,0 +1,41 @@
+You are an expert content analyst tasked with creating a concise overview of an episode or document.
+
+## OBJECTIVE
+Generate a brief, high-level summary (1-2 paragraphs) that captures the essential nature of the content WITHOUT analyzing specific claims or details. This summary will provide context for later detailed analysis.
+
+## WHAT TO INCLUDE
+- **Main Topic**: What is this content primarily about?
+- **Context**: What setting, situation, or background frames the discussion?
+- **Participants**: Who are the key speakers or authors? (if identifiable)
+- **Primary Themes**: What are the 2-4 major themes or subject areas covered?
+- **Tone & Approach**: Is this academic, conversational, technical, opinion-based, narrative, analytical?
+
+## WHAT TO AVOID
+- Do NOT extract specific claims, facts, or arguments (that comes later)
+- Do NOT provide detailed analysis or critique
+- Do NOT list every topic mentioned
+- Keep it high-level and contextual
+
+## OUTPUT FORMAT
+Write 1-2 concise paragraphs in clear prose. Focus on giving a reader quick orientation to what they're about to encounter.
+
+## EXAMPLE
+
+### Input
+[Episode segments discussing Federal Reserve policy, inflation data, Jerome Powell's testimony, and debate about rate cuts...]
+
+### Good Output
+This episode focuses on U.S. monetary policy and the Federal Reserve's response to persistent inflation. The discussion centers on recent economic data and Fed Chairman Jerome Powell's recent testimony before Congress, examining the central bank's strategy for managing interest rates in a challenging economic environment.
+
+The conversation takes an analytical yet accessible tone, examining competing perspectives on whether the Fed should cut rates or maintain its restrictive stance. Major themes include the relationship between monetary policy and inflation, the Fed's dual mandate of price stability and employment, and the political pressures surrounding rate decisions.
+
+### Bad Output
+The episode makes several claims about inflation. First, they say inflation is at 3.5%. Second, Jerome Powell testified on Tuesday. Third, some economists think rates should be cut by 50 basis points. They also discuss the wealth effect and quantitative easing...
+
+(This is BAD because it lists specific claims rather than providing high-level context)
+
+## CONTENT TO SUMMARIZE
+
+{content}
+
+Generate a 1-2 paragraph overview following the guidelines above.

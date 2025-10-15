@@ -465,140 +465,39 @@ class APIKeysTab(BaseTab):
         self._web_auth_user = None
         self._web_uploader = None
 
-        # Initialize and check auth on startup
-        try:
-            from ...cloud.oauth import GetReceiptsOAuthClient
-
-            self._web_oauth_client = GetReceiptsOAuthClient()
-            self._refresh_web_auth_ui()
-        except ImportError:
-            logger.warning("GetReceipts OAuth client not available")
-            self.web_oauth_btn.setEnabled(False)
-            self.web_auth_status_label.setText("OAuth not available")
+        # Note: OAuth authentication is handled in the Cloud Uploads tab
+        # This section is a placeholder for future direct OAuth integration
+        logger.info("Web auth UI initialized - OAuth handled via Cloud Uploads tab")
+        self.web_oauth_btn.setEnabled(False)
+        self.web_auth_status_label.setText("Use Cloud Uploads tab for authentication")
 
         return group
 
     def _refresh_web_auth_ui(self):
         """Refresh web auth UI based on current auth state."""
-        try:
-            from ...cloud.oauth import GetReceiptsOAuthClient
-
-            oauth_client = GetReceiptsOAuthClient()
-            is_authenticated = oauth_client.is_authenticated()
-
-            if is_authenticated:
-                user_info = oauth_client.get_user_info()
-                if user_info:
-                    email = user_info.get("email", "Unknown")
-                    self.web_auth_status_label.setText(f"✅ Signed in as: {email}")
-                    self.web_auth_status_label.setStyleSheet(
-                        "color: #4caf50; font-weight: bold;"
-                    )
-                    self.web_oauth_btn.setEnabled(False)
-                    self.web_logout_btn.setEnabled(True)
-                    self._web_auth_user = user_info
-                else:
-                    self.web_auth_status_label.setText("Not signed in")
-                    self.web_auth_status_label.setStyleSheet(
-                        "color: #666; font-style: italic;"
-                    )
-                    self.web_oauth_btn.setEnabled(True)
-                    self.web_logout_btn.setEnabled(False)
-                    self._web_auth_user = None
-            else:
-                self.web_auth_status_label.setText("Not signed in")
-                self.web_auth_status_label.setStyleSheet(
-                    "color: #666; font-style: italic;"
-                )
-                self.web_oauth_btn.setEnabled(True)
-                self.web_logout_btn.setEnabled(False)
-                self._web_auth_user = None
-        except Exception as e:
-            logger.error(f"Error refreshing web auth UI: {e}")
-            self.web_auth_status_label.setText("Authentication error")
-            self.web_auth_status_label.setStyleSheet("color: #f44336;")
+        # OAuth authentication is handled in the Cloud Uploads tab
+        # This is a placeholder for future direct integration
+        self.web_auth_status_label.setText("Use Cloud Uploads tab for authentication")
+        self.web_auth_status_label.setStyleSheet("color: #666; font-style: italic;")
 
     def _web_sign_in_with_oauth(self):
         """Sign in using OAuth flow."""
-        try:
-            from PyQt6.QtWidgets import QProgressDialog
-
-            from ...cloud.oauth import GetReceiptsOAuthClient
-
-            # Create progress dialog
-            progress = QProgressDialog(
-                "Opening browser for authentication...\n"
-                "Please sign in via Skipthepodcast.com",
-                "Cancel",
-                0,
-                0,
-                self,
-            )
-            progress.setWindowTitle("Skip The Podcast Web Sign In")
-            progress.setModal(True)
-            progress.show()
-
-            try:
-                oauth_client = GetReceiptsOAuthClient()
-                success = oauth_client.authenticate()
-
-                progress.close()
-
-                if success:
-                    QMessageBox.information(
-                        self,
-                        "Sign In Successful",
-                        "Successfully signed in to Skip The Podcast Web!",
-                    )
-                    self._refresh_web_auth_ui()
-                else:
-                    QMessageBox.warning(
-                        self,
-                        "Sign In Failed",
-                        "Failed to sign in. Please try again.",
-                    )
-            except Exception as auth_error:
-                progress.close()
-                QMessageBox.critical(
-                    self,
-                    "Authentication Error",
-                    f"Failed to authenticate:\n\n{str(auth_error)}",
-                )
-        except ImportError as e:
-            QMessageBox.critical(
-                self,
-                "Import Error",
-                f"OAuth functionality not available:\n\n{str(e)}",
-            )
+        # OAuth authentication is handled in the Cloud Uploads tab
+        QMessageBox.information(
+            self,
+            "OAuth Authentication",
+            "Please use the 'Cloud Uploads' tab for OAuth authentication with Skipthepodcast.com.\n\n"
+            "The Cloud Uploads tab provides full OAuth sign-in and upload functionality.",
+        )
 
     def _web_sign_out(self):
         """Sign out of Skip The Podcast Web."""
-        try:
-            from ...cloud.oauth import GetReceiptsOAuthClient
-
-            reply = QMessageBox.question(
-                self,
-                "Sign Out",
-                "Are you sure you want to sign out of Skip The Podcast Web?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-
-            if reply == QMessageBox.StandardButton.Yes:
-                oauth_client = GetReceiptsOAuthClient()
-                oauth_client.sign_out()
-                self._refresh_web_auth_ui()
-                QMessageBox.information(
-                    self,
-                    "Signed Out",
-                    "Successfully signed out of Skip The Podcast Web.",
-                )
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Sign Out Error",
-                f"Failed to sign out:\n\n{str(e)}",
-            )
+        # OAuth authentication is handled in the Cloud Uploads tab
+        QMessageBox.information(
+            self,
+            "OAuth Sign Out",
+            "Please use the 'Cloud Uploads' tab to sign out of Skipthepodcast.com.",
+        )
 
     def _show_hf_token_help(self) -> None:
         """Show a popup with instructions to obtain a free Hugging Face token."""

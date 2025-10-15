@@ -206,6 +206,25 @@ class EnhancedErrorDialog(QDialog):
                 ],
                 "help_url": "https://skipthepodcast.com/account",
             },
+            "import_error": {
+                "patterns": [
+                    "no module named",
+                    "module not found",
+                    "import error",
+                    "cannot import",
+                    "import failed",
+                ],
+                "title": "📦 Import/Module Error",
+                "description": "There's a problem with a required module or dependency.",
+                "solutions": [
+                    "1. This is typically a development/build issue",
+                    "2. Try restarting the application",
+                    "3. If the problem persists, this may require a software update",
+                    "4. Check if all required dependencies are properly installed",
+                    "5. For advanced users: Check the application logs for more details",
+                ],
+                "help_url": None,
+            },
         }
 
         self._setup_ui()
@@ -365,8 +384,8 @@ class EnhancedErrorDialog(QDialog):
         self,
         error_title: str,
         error_message: str,
-        technical_details: str = "",
         context: str = "",
+        technical_details: str = "",
     ) -> None:
         """Show enhanced error dialog with contextual help."""
         # Analyze error to provide contextual help
@@ -471,7 +490,7 @@ class EnhancedErrorDialog(QDialog):
 
 
 def show_enhanced_error(
-    parent, title: str, message: str, details: str = "", context: str = ""
+    parent, title: str, message: str, context: str = "", details: str = ""
 ) -> None:
     """Convenience function to show enhanced error dialog."""
     try:
@@ -486,7 +505,7 @@ def show_enhanced_error(
                 if app:
                     dlg_parent = app.activeWindow()
             dialog = EnhancedErrorDialog(dlg_parent)
-            dialog.show_error(title, message, details, context)
+            dialog.show_error(title, message, context, details)
             dialog.exec()
 
         app = QApplication.instance()
@@ -497,5 +516,5 @@ def show_enhanced_error(
     except Exception:
         # Best-effort fallback
         dialog = EnhancedErrorDialog(parent)
-        dialog.show_error(title, message, details, context)
+        dialog.show_error(title, message, context, details)
         dialog.exec()

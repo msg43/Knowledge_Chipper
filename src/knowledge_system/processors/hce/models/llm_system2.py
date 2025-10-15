@@ -84,19 +84,12 @@ class System2LLM:
         Synchronous wrapper for compatibility with existing code.
         """
         try:
-            # Run async in sync context
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If already in async context, create task
-                future = asyncio.create_task(self._complete_async(prompt, **kwargs))
-                return loop.run_until_complete(future)
-            else:
-                # Create new event loop
-                return asyncio.run(self._complete_async(prompt, **kwargs))
+            # Always use asyncio.run() for clean event loop handling
+            return asyncio.run(self._complete_async(prompt, **kwargs))
         except Exception as e:
             logger.error(f"Completion failed: {e}")
             raise KnowledgeSystemError(
-                ErrorCode.LLM_API_ERROR, f"Failed to generate completion: {e}"
+                f"Failed to generate completion: {e}", ErrorCode.LLM_API_ERROR
             ) from e
 
     async def _generate_json_async(self, prompt: str, **kwargs) -> dict[str, Any]:
@@ -122,7 +115,7 @@ class System2LLM:
 
             logger.error(f"Failed to parse JSON response: {response_text[:200]}")
             raise KnowledgeSystemError(
-                ErrorCode.LLM_PARSE_ERROR, f"Invalid JSON response: {e}"
+                f"Invalid JSON response: {e}", ErrorCode.LLM_PARSE_ERROR
             ) from e
 
     def generate_json(self, prompt: str, **kwargs) -> dict[str, Any]:
@@ -132,15 +125,8 @@ class System2LLM:
         Synchronous wrapper for compatibility.
         """
         try:
-            # Run async in sync context
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                future = asyncio.create_task(
-                    self._generate_json_async(prompt, **kwargs)
-                )
-                return loop.run_until_complete(future)
-            else:
-                return asyncio.run(self._generate_json_async(prompt, **kwargs))
+            # Always use asyncio.run() for clean event loop handling
+            return asyncio.run(self._generate_json_async(prompt, **kwargs))
         except Exception as e:
             logger.error(f"JSON generation failed: {e}")
             raise
@@ -173,16 +159,10 @@ class System2LLM:
         Falls back to regular JSON generation for other providers.
         """
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                future = asyncio.create_task(
-                    self._generate_structured_json_async(prompt, schema_name, **kwargs)
-                )
-                return loop.run_until_complete(future)
-            else:
-                return asyncio.run(
-                    self._generate_structured_json_async(prompt, schema_name, **kwargs)
-                )
+            # Always use asyncio.run() for clean event loop handling
+            return asyncio.run(
+                self._generate_structured_json_async(prompt, schema_name, **kwargs)
+            )
         except Exception as e:
             logger.error(f"Structured JSON generation failed: {e}")
             raise

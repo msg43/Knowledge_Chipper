@@ -10,7 +10,7 @@ This module analyzes claims to determine whether they are:
 import logging
 from pathlib import Path
 
-from .models.llm_any import AnyLLM
+from .models.llm_system2 import System2LLM
 from .types import ScoredClaim, TemporalityScore, TemporalityType
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class TemporalityAnalyzer:
     """Analyzes claims for temporal characteristics using LLM reasoning."""
 
-    def __init__(self, llm: AnyLLM, prompt_path: Path):
+    def __init__(self, llm: System2LLM, prompt_path: Path):
         """Initialize the temporality analyzer."""
         self.llm = llm
         self.template = prompt_path.read_text()
@@ -125,7 +125,7 @@ def analyze_temporality(claims: list[ScoredClaim], model_uri: str) -> list[Score
     #     logger.warning("Temporality prompt template not found, skipping analysis")
     #     return claims
     #
-    # llm = AnyLLM(model_uri)
+    # llm = System2LLM(model_uri)
     # analyzer = TemporalityAnalyzer(llm, prompt_path)
     # return analyzer.analyze_claims_batch(claims)
 

@@ -1,11 +1,11 @@
-from .models.llm_any import AnyLLM
+from .models.llm_system2 import System2LLM
 from .types import Segment
 
 DISCOURSE_TAGS = ["claim", "evidence", "anecdote", "caveat", "hedge", "other"]
 
 
 class DiscourseTagger:
-    def __init__(self, llm: AnyLLM):
+    def __init__(self, llm: System2LLM):
         self.llm = llm
 
     def tag(self, seg: Segment) -> dict:

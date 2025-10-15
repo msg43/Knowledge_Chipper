@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from .models.llm_any import AnyLLM
+from .models.llm_system2 import System2LLM
 from .types import Relation, ScoredClaim
 
 
 class RelationMiner:
-    def __init__(self, llm: AnyLLM, prompt_path: Path):
+    def __init__(self, llm: System2LLM, prompt_path: Path):
         self.llm = llm
         self.template = prompt_path.read_text()
 

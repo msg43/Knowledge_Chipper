@@ -193,6 +193,25 @@ class YouTubeErrorHandler:
             "message": "🌍 Geographic restriction: video is not available in your region",
             "category": "access",
         },
+        "player_response_failed": {
+            "patterns": [
+                "Failed to extract any player response",
+                "No player response extracted",
+                "Player response extraction failed",
+                "Unable to extract player response",
+            ],
+            "message": "🔧 yt-dlp extraction error: Video data could not be parsed from YouTube's response - may need format configuration update or temporary YouTube API changes",
+            "category": "technical",
+        },
+        "format_not_available": {
+            "patterns": [
+                "Requested format is not available",
+                "Format not available",
+                "No formats found",
+            ],
+            "message": "🎯 Format error: The requested video format is not available for this video - may need format configuration update",
+            "category": "technical",
+        },
     }
 
     @classmethod

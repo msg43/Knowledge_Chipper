@@ -289,3 +289,38 @@ class SummarizerProcessor(BaseProcessor):
                     "model": self.model,
                 },
             )
+
+    def _calculate_file_hash(self, file_path: Path) -> str:
+        """Calculate SHA-256 hash of file contents."""
+        sha256_hash = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+
+    def _build_summary_index(self, output_dir: Path) -> dict[str, Any]:
+        """Build index of existing summaries (stub for CLI compatibility)."""
+        # This is a simplified version - the HCE pipeline doesn't use file-based indexing
+        # Return empty dict to indicate no existing summaries to skip
+        return {}
+
+    def _save_index_to_file(
+        self, index_file: Path, summary_index: dict[str, Any]
+    ) -> None:
+        """Save summary index to file (stub for CLI compatibility)."""
+        # Not needed for HCE pipeline - no-op
+        pass
+
+    def _check_needs_summarization(
+        self, file_path: Path, summary_index: dict[str, Any]
+    ) -> tuple[bool, str]:
+        """Check if file needs summarization (stub for CLI compatibility)."""
+        # Always return True to process all files
+        return (True, "HCE pipeline processes all files")
+
+    def _update_index_file(
+        self, index_file: Path, file_path: Path, file_hash: str
+    ) -> None:
+        """Update index file with processed file info (stub for CLI compatibility)."""
+        # Not needed for HCE pipeline - no-op
+        pass

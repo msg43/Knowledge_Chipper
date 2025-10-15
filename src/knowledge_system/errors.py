@@ -77,7 +77,14 @@ class KnowledgeSystemError(Exception):
             parts.append(f"[{self.error_code}]")
 
         if self.context:
-            context_str = ", ".join(f"{k}={v}" for k, v in self.context.items())
+            # Ensure all context values are properly stringified (handle ErrorCode enums)
+            context_items = []
+            for k, v in self.context.items():
+                if isinstance(v, ErrorCode):
+                    context_items.append(f"{k}={v.value}")
+                else:
+                    context_items.append(f"{k}={v}")
+            context_str = ", ".join(context_items)
             parts.append(f"({context_str})")
 
         return " ".join(parts)

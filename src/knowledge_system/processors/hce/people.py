@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 
-from .models.llm_any import AnyLLM
+from .models.llm_system2 import System2LLM
 from .types import PersonMention, Segment
 
 logger = logging.getLogger(__name__)
@@ -10,10 +10,10 @@ logger = logging.getLogger(__name__)
 class PeopleExtractor:
     def __init__(
         self,
-        llm_local: AnyLLM,
+        llm_local: System2LLM,
         detect_prompt: Path,
         disambig_prompt: Path,
-        flagship: AnyLLM | None = None,
+        flagship: System2LLM | None = None,
         use_entity_cache: bool = True,
     ):
         self.local = llm_local
@@ -159,7 +159,7 @@ def extract_people(episode, people_disambiguator_model_uri: str) -> list[PersonM
     from pathlib import Path
 
     # Build LLM from provided model URI
-    llm = AnyLLM(people_disambiguator_model_uri)
+    llm = System2LLM(people_disambiguator_model_uri)
 
     # Get prompt paths
     detect_prompt = Path(__file__).parent / "prompts" / "people_detect.txt"

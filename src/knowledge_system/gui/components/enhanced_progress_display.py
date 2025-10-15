@@ -130,13 +130,23 @@ class TranscriptionProgressDisplay(QFrame):
                 text-align: center;
                 font-weight: bold;
                 height: 24px;
+                color: #2c3e50;
+                font-size: 12px;
             }
             QProgressBar::chunk {
                 background-color: #27ae60;
                 border-radius: 4px;
             }
+            QProgressBar::text {
+                color: #2c3e50;
+                font-weight: bold;
+                font-size: 12px;
+            }
         """
         )
+        # Ensure percentage text is visible
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setFormat("%p%")  # Show percentage with % symbol
         progress_layout.addWidget(self.progress_bar)
 
         # Status and ETA info
@@ -198,6 +208,11 @@ class TranscriptionProgressDisplay(QFrame):
         self.progress_bar.setMaximum(total_files)
         self.progress_bar.setValue(0)
 
+        # Debug logging
+        print(
+            f"🔍 Progress bar initialized: max={total_files}, value=0, text_visible={self.progress_bar.isTextVisible()}"
+        )
+
         self._update_statistics()
         self._update_status("Starting...")
 
@@ -223,6 +238,16 @@ class TranscriptionProgressDisplay(QFrame):
 
         total_processed = completed + failed
         self.progress_bar.setValue(total_processed)
+
+        # Debug logging
+        percentage = (
+            int((total_processed / self.total_files) * 100)
+            if self.total_files > 0
+            else 0
+        )
+        print(
+            f"🔍 Progress updated: {total_processed}/{self.total_files} = {percentage}%, text_visible={self.progress_bar.isTextVisible()}"
+        )
 
         # Update current status
         if current_file and current_status:

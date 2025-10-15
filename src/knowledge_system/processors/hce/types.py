@@ -159,3 +159,9 @@ class PipelineOutputs(BaseModel):
     concepts: list[MentalModel] = []
     jargon: list[JargonTerm] = []
     structured_categories: list[StructuredCategory] = []
+
+    # Summary fields (new)
+    short_summary: str | None = None  # Pre-mining overview (1-2 paragraphs)
+    long_summary: str | None = (
+        None  # Post-evaluation comprehensive analysis (3-5 paragraphs)
+    )

@@ -222,6 +222,22 @@ class SpeakerAttributionTab(QWidget):
         )
         controls_layout.addWidget(self.save_assignments_btn)
 
+        # Update HCE Database button
+        self.update_hce_btn = QPushButton("Update HCE Database")
+        self.update_hce_btn.clicked.connect(self.update_hce_database)
+        self.update_hce_btn.setEnabled(False)  # Enabled when HCE data exists
+        self.update_hce_btn.setStyleSheet(
+            "background-color: #3498db; color: white; font-weight: bold; padding: 6px 12px;"
+        )
+        self.update_hce_btn.setToolTip(
+            "Update HCE database with corrected speaker names and reprocess analysis.\n"
+            "• Updates speaker names in HCE segments table\n"
+            "• Deletes existing claims, evidence, and entities\n"
+            "• Re-runs HCE analysis with correct speaker context\n"
+            "• Only available when HCE data exists for this transcript"
+        )
+        controls_layout.addWidget(self.update_hce_btn)
+
         controls_layout.addStretch()
         layout.addLayout(controls_layout)
 
@@ -545,6 +561,9 @@ class SpeakerAttributionTab(QWidget):
             has_queue and self.queue_index < len(self.unconfirmed_queue) - 1
         )
         self.confirm_next_btn.setEnabled(True if self.speaker_segments else False)
+
+        # Check if HCE data exists for this transcript
+        self._check_hce_data_exists()
 
     def parse_transcript(self, file_path: Path) -> list[SpeakerSegment]:
         """Parse transcript file and extract speaker segments."""
@@ -1280,3 +1299,136 @@ class SpeakerAttributionTab(QWidget):
         except Exception as e:
             logger.error(f"Error deleting channel mapping: {e}")
             QMessageBox.critical(self, "Error", f"Error deleting mapping: {str(e)}")
+
+    def update_hce_database(self):
+        """Update HCE database with corrected speaker names and reprocess analysis."""
+        try:
+            if not self.current_transcript_path:
+                QMessageBox.warning(
+                    self, "No Transcript", "Please load a transcript first."
+                )
+                return
+
+            # First, save current assignments to ensure transcript is up-to-date
+            if not self.save_assignments():
+                return  # save_assignments shows its own error messages
+
+            # Load transcript data to get video_id
+            with open(self.current_transcript_path, encoding="utf-8") as f:
+                transcript_data = json.load(f)
+
+            video_id = transcript_data.get("video_id") or transcript_data.get("id")
+            if not video_id:
+                QMessageBox.warning(
+                    self,
+                    "Missing Video ID",
+                    "Could not find video ID in transcript data.\n"
+                    "HCE update requires a video ID to locate the episode.",
+                )
+                return
+
+            # Check if HCE data exists
+            from ...processors.speaker_processor import SpeakerProcessor
+
+            episode_id = SpeakerProcessor.find_episode_id_for_video(video_id)
+
+            if not episode_id:
+                QMessageBox.information(
+                    self,
+                    "No HCE Data",
+                    f"No HCE data found for video {video_id}.\n\n"
+                    "HCE data is created when you run summarization with HCE enabled.\n"
+                    "There is nothing to update.",
+                )
+                return
+
+            # Build speaker mappings from current assignments
+            speaker_mappings = {}
+            for speaker_id, assigned_name in self.speaker_mappings.items():
+                if speaker_id != assigned_name:  # Only map if changed
+                    speaker_mappings[speaker_id] = assigned_name
+
+            if not speaker_mappings:
+                QMessageBox.information(
+                    self,
+                    "No Changes",
+                    "No speaker name changes detected.\n\n"
+                    "The HCE database already has the current speaker names.",
+                )
+                return
+
+            # Show HCE update dialog
+            from ..dialogs.hce_update_dialog import show_hce_update_dialog
+
+            segment_count = len(transcript_data.get("segments", []))
+
+            logger.info(
+                f"Triggering HCE update for episode {episode_id} "
+                f"with {len(speaker_mappings)} speaker changes"
+            )
+
+            # Show dialog and execute update
+            success = show_hce_update_dialog(
+                episode_id=episode_id,
+                video_id=video_id,
+                speaker_mappings=speaker_mappings,
+                transcript_data=transcript_data,
+                segment_count=segment_count,
+                parent=self,
+            )
+
+            if success:
+                QMessageBox.information(
+                    self,
+                    "Update Complete",
+                    "HCE database has been updated with corrected speaker names!\n\n"
+                    "All claims, evidence, and entities have been reprocessed.",
+                )
+            else:
+                logger.info("HCE update was cancelled or failed")
+
+        except Exception as e:
+            logger.error(f"Error updating HCE database: {e}")
+            QMessageBox.critical(
+                self, "Error", f"Failed to update HCE database:\n\n{str(e)}"
+            )
+
+    def _check_hce_data_exists(self):
+        """Check if HCE data exists for current transcript and update button state."""
+        try:
+            if not self.current_transcript_path:
+                self.update_hce_btn.setEnabled(False)
+                return
+
+            # Load transcript to get video_id
+            with open(self.current_transcript_path, encoding="utf-8") as f:
+                transcript_data = json.load(f)
+
+            video_id = transcript_data.get("video_id") or transcript_data.get("id")
+            if not video_id:
+                self.update_hce_btn.setEnabled(False)
+                return
+
+            # Check if HCE data exists
+            from ...processors.speaker_processor import SpeakerProcessor
+
+            episode_id = SpeakerProcessor.find_episode_id_for_video(video_id)
+
+            if episode_id:
+                self.update_hce_btn.setEnabled(True)
+                self.update_hce_btn.setToolTip(
+                    f"Update HCE database for episode: {episode_id}\n"
+                    "• Updates speaker names in HCE segments table\n"
+                    "• Deletes existing claims, evidence, and entities\n"
+                    "• Re-runs HCE analysis with correct speaker context"
+                )
+                logger.debug(
+                    f"HCE data found for video {video_id}, enabling update button"
+                )
+            else:
+                self.update_hce_btn.setEnabled(False)
+                logger.debug(f"No HCE data found for video {video_id}")
+
+        except Exception as e:
+            logger.warning(f"Error checking HCE data existence: {e}")
+            self.update_hce_btn.setEnabled(False)

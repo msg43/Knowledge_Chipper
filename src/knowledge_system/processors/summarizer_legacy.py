@@ -85,14 +85,21 @@ class HCEPipeline:
         from pathlib import Path
 
         from .hce.miner import Miner
-        from .hce.models.llm_any import AnyLLM
+        from .hce.models.llm_system2 import System2LLM
 
         report_progress(
             "Mining claims", 15.0, "Extracting candidate claims from content"
         )
 
         # Create miner directly to get candidates
-        miner_llm = AnyLLM(self.config.models.miner)
+        # Parse model URI to create System2LLM
+        miner_uri = self.config.models.miner
+        if ":" in miner_uri:
+            provider, model = miner_uri.split(":", 1)
+        else:
+            provider = "openai"
+            model = miner_uri
+        miner_llm = System2LLM(provider=provider, model=model, temperature=0.3)
         miner_prompt = Path(__file__).parent / "hce" / "prompts" / "miner.txt"
         miner_obj = Miner(miner_llm, miner_prompt)
 

@@ -97,7 +97,17 @@ class AudioProcessor(BaseProcessor):
 
     @property
     def supported_formats(self) -> list[str]:
-        return [".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".webm"]
+        return [
+            ".mp3",
+            ".wav",
+            ".m4a",
+            ".flac",
+            ".ogg",
+            ".aac",
+            ".mp4",
+            ".webm",
+            ".opus",
+        ]
 
     def validate_input(self, input_data: str | Path) -> bool:
         if isinstance(input_data, (str, Path)):
@@ -977,12 +987,47 @@ class AudioProcessor(BaseProcessor):
     ) -> ProcessorResult:
         """Process audio with automatic retry and failure logging."""
         # SECURITY CHECK: Verify app authorization before transcription
+        # Add timeout to prevent indefinite hanging
         try:
+            import signal
+            import threading
+
             from knowledge_system.utils.security_verification import (
                 ensure_secure_before_transcription,
             )
 
-            ensure_secure_before_transcription()
+            # Create a timeout mechanism for security verification
+            security_result: list[bool | None] = [None]
+            security_error: list[Exception | None] = [None]
+
+            def security_check():
+                try:
+                    ensure_secure_before_transcription()
+                    security_result[0] = True
+                except Exception as e:
+                    security_error[0] = e
+
+            # Run security check with 10 second timeout
+            security_thread = threading.Thread(target=security_check, daemon=True)
+            security_thread.start()
+            security_thread.join(timeout=10)
+
+            if security_thread.is_alive():
+                logger.warning(
+                    "Security verification timed out - proceeding with transcription"
+                )
+            elif security_error[0]:
+                logger.error(f"Security verification failed: {security_error[0]}")
+                return ProcessorResult(
+                    success=False,
+                    errors=[
+                        f"App not properly authorized for transcription: {security_error[0]}. Please restart the app and complete the authorization process."
+                    ],
+                    dry_run=dry_run,
+                )
+            elif security_result[0]:
+                logger.debug("Security verification passed")
+
         except ImportError:
             logger.warning(
                 "Security verification module not available - proceeding with transcription"

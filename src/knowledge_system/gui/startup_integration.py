@@ -19,13 +19,13 @@ from typing import Any
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
-from ..logger import get_logger
-from ..utils.memory_monitor import MemoryMonitor
-from ..utils.process_analytics import ProcessAnalytics
-from ..utils.process_isolation import (
+from ...utils.memory_monitor import MemoryMonitor
+from ...utils.process_analytics import ProcessAnalytics
+from ...utils.process_isolation import (
     ProcessIsolationConfig,
     validate_system_requirements,
 )
+from ..logger import get_logger
 from .dialogs.crash_recovery_dialog import CrashRecoveryManager
 
 logger = get_logger(__name__)

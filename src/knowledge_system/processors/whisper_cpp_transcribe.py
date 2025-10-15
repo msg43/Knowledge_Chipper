@@ -42,7 +42,17 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
     @property
     def supported_formats(self) -> list[str]:
-        return [".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".webm"]
+        return [
+            ".mp3",
+            ".wav",
+            ".m4a",
+            ".flac",
+            ".ogg",
+            ".aac",
+            ".mp4",
+            ".webm",
+            ".opus",
+        ]
 
     def validate_input(self, input_path: str | Path) -> bool:
         path = Path(input_path)
@@ -89,7 +99,8 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             # Note: Expected size available in model_sizes_mb if needed for
             # validation
 
-            # Download with progress tracking
+            # Download with progress tracking and timeout
+            import threading
             import time
             import urllib.request
 
@@ -434,7 +445,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                         [bundled_path, "--help"],
                         capture_output=True,
                         check=True,
-                        timeout=5,
+                        timeout=3,
                     )
                     logger.info(f"Found bundled whisper binary: {bundled_path}")
                     return bundled_path
@@ -460,7 +471,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                             [str(potential_whisper), "--help"],
                             capture_output=True,
                             check=True,
-                            timeout=5,
+                            timeout=3,
                         )
                         logger.info(
                             f"Found app bundle whisper binary: {potential_whisper}"

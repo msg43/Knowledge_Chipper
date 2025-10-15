@@ -417,9 +417,8 @@ class UnifiedBatchProcessor:
             from ..processors.youtube_download import YouTubeDownloadProcessor
 
             # Create processor for this download
-            # Use webm format for best quality (will be converted later if needed)
+            # Keep original format - AudioProcessor will convert to WAV for transcription
             processor = YouTubeDownloadProcessor(
-                output_format="webm",
                 download_thumbnails=False,
             )
 

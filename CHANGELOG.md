@@ -12,6 +12,17 @@ Skip the Podcast Desktop - A revolutionary knowledge management system for macOS
 
 ## 🎉 What's New (Latest Updates)
 
+### 🔧 **System 2 HCE Migration Complete (October 2025)**
+- **BREAKING**: All HCE processors now use centralized LLM adapter with System 2 architecture
+- **Centralized LLM Management**: All LLM calls tracked in database with hardware-aware concurrency limits
+- **Rate Limiting**: Automatic rate limiting prevents API overuse across all providers
+- **Hardware Optimization**: Concurrency automatically tuned to hardware tier (Consumer/Prosumer/Enterprise)
+- **Cost Tracking**: All LLM requests logged with token usage and estimated costs
+- **Unified Architecture**: Replaced legacy `AnyLLM` with `System2LLM` wrapper across 11 HCE processors
+- **Database Tracking**: Every LLM request/response stored in `llm_request` and `llm_response` tables
+- **No Data Migration Required**: Purely architectural change - all existing data fully compatible
+- **API Compatibility**: Model URIs still work (`provider:model` format) with backward compatibility
+
 ### 📦 **Complete Bundle Approach: Everything Included (January 2025)**
 - **Full-Featured DMG**: ~600MB with all models and dependencies included
 - **Offline Ready**: Works completely without internet connection

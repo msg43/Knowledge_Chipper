@@ -36,6 +36,13 @@
 - **6️⃣ Monitor**: Directory watching (renamed from Watcher)
 - **7️⃣ Settings**: Configuration and API keys
 
+### Smart Speaker Correction System
+- **🔄 HCE Database Sync**: Automatically detects when speaker names are corrected
+- **⚡ Background Reprocessing**: Updates all claims and evidence with correct speaker context
+- **💰 Cost Transparency**: Shows estimated time and API costs before reprocessing
+- **🎯 Manual Control**: "Update HCE Database" button in Speaker Attribution tab
+- **📊 Real-Time Progress**: Beautiful dialog with live updates during reprocessing
+
 ### JSON Schema Validation
 - **📋 Versioned Schemas**: All LLM I/O validated against `/schemas/*.v1.json`
 - **🔧 Automatic Repair**: Schema validator fixes common issues
@@ -44,10 +51,12 @@
 ## 🆕 What's New in Version 3.3.0
 
 ### Revolutionary Unified HCE Pipeline
-- **🔄 Two-Pass Architecture**: Streamlined Miner → Flagship Evaluator system
+- **🔄 Four-Pass Architecture**: Short Summary → Miner → Flagship Evaluator → Long Summary + Categories
+- **📝 Intelligent Summaries**: Pre-mining context and post-evaluation comprehensive analysis
 - **📊 Enhanced Scoring**: Importance, novelty, confidence on 1-10 scale
 - **🎯 Single-Pass Extraction**: Claims, people, concepts, jargon in one operation
 - **📋 Claim Type Classification**: Factual, causal, normative, forecast, definitional
+- **🏷️ WikiData Categories**: Automatic topic categorization with confidence scores
 
 ### Qwen Model Integration
 - **🚀 Superior JSON Compliance**: Industry-leading structured output reliability
@@ -99,10 +108,12 @@ Perfect for researchers, students, professionals, and anyone who needs to proces
 - LLM-validated speaker identification
 
 **🧠 Structured Knowledge Extraction**
-- **Unified HCE Pipeline**: Streamlined two-pass system (Miner → Flagship Evaluator)
+- **Unified HCE Pipeline**: Advanced four-pass system (Short Summary → Miner → Flagship Evaluator → Long Summary + Categories)
+- **Intelligent Summaries**: Pre-mining overview and post-evaluation comprehensive analysis
 - **Enhanced JSON Compliance**: Qwen models for reliable structured output
 - **Entity Recognition**: People, concepts, jargon, mental models in single pass
 - **Intelligent Claim Ranking**: LLM-powered importance, novelty, and confidence scoring
+- **WikiData Categories**: Automatic topic categorization for content organization
 - **Semantic Deduplication**: Eliminate redundant content
 
 **📊 Knowledge Organization**
@@ -114,12 +125,14 @@ Perfect for researchers, students, professionals, and anyone who needs to proces
 
 ### 🚀 Key Differentiators
 
-1. **Unified HCE Pipeline**: Revolutionary two-pass system for superior claim extraction
+1. **Unified HCE Pipeline**: Revolutionary four-pass system with intelligent summaries and category detection
 2. **Qwen Model Integration**: Industry-leading JSON compliance and structured output
-3. **97% Voice Accuracy**: Enterprise-grade speaker verification models
-4. **Hardware-Optimized Models**: Automatic model selection based on Mac specifications
-5. **Apple Silicon Acceleration**: Optimized for M2/M3 with MPS support
-6. **Zero Configuration**: Works immediately after installation
+3. **Intelligent Summaries**: Pre-mining context and post-evaluation comprehensive analysis
+4. **WikiData Categories**: Automatic topic categorization for content discovery
+5. **97% Voice Accuracy**: Enterprise-grade speaker verification models
+6. **Hardware-Optimized Models**: Automatic model selection based on Mac specifications
+7. **Apple Silicon Acceleration**: Optimized for M2/M3 with MPS support
+8. **Zero Configuration**: Works immediately after installation
 
 ## How to Use Skipthepodcast.com
 
@@ -163,6 +176,7 @@ The application provides a tabbed interface for different workflows:
 
 **🎙️ Speaker Management**
 - **Speaker Attribution**: Review and assign speaker names
+- **HCE Database Sync**: Automatically update analysis when speaker names change
 - **Voice Enrollment**: Create persistent speaker profiles
 
 **⚙️ System Management**
@@ -209,11 +223,13 @@ knowledge-system --help
 
 ### Unified HCE (Hybrid Claim Extractor) System
 
-The revolutionary two-pass intelligence engine that replaces traditional summarization:
+The revolutionary four-pass intelligence engine that replaces traditional summarization:
 
-**🔄 Two-Pass Architecture:**
-1. **Unified Miner**: Single pass extraction of claims, people, concepts, and jargon with claim type classification
-2. **Flagship Evaluator**: Comprehensive LLM-powered ranking and validation of all extracted entities
+**🔄 Four-Pass Architecture:**
+1. **Short Summary (Pre-Mining)**: Generate 1-2 paragraph contextual overview before extraction begins
+2. **Unified Miner**: Single pass extraction of claims, people, concepts, and jargon with claim type classification
+3. **Flagship Evaluator**: Comprehensive LLM-powered ranking using short summary for context
+4. **Long Summary + Categories**: Generate 3-5 paragraph comprehensive analysis and identify WikiData topic categories
 
 **📊 Advanced Scoring System:**
 - **Importance** (1-10): Core relevance and significance
@@ -222,6 +238,8 @@ The revolutionary two-pass intelligence engine that replaces traditional summari
 - **Claim Types**: Factual, causal, normative, forecast, definitional
 
 **🎯 Key Features:**
+- **Intelligent Summaries**: Pre-mining context improves evaluation; post-evaluation creates coherent narrative
+- **WikiData Categories**: Automatic topic categorization with confidence scores (3-8 categories per episode)
 - **JSON Schema Validation**: Guaranteed structured output with Qwen models
 - **Multi-shot Prompting**: Examples and anti-examples for consistent results
 - **Evidence Citations**: Every claim linked to exact source quotes
@@ -237,6 +255,7 @@ State-of-the-art speaker verification achieving 97% accuracy:
 - **Hardware Accelerated**: Automatic MPS (Apple Silicon) and CUDA support
 - **Persistent Profiles**: Voice enrollment for automatic recognition
 - **Conservative Diarization**: Moderate clustering with AI-powered merging
+- **Smart HCE Sync**: Automatically update analysis database when speaker names are corrected
 
 ### Intelligent Processing Pipeline
 
@@ -244,10 +263,33 @@ State-of-the-art speaker verification achieving 97% accuracy:
 2. **Transcription** → Whisper with speaker diarization  
 3. **Voice Fingerprinting** → 97% accurate speaker identification
 4. **LLM Validation** → AI-powered speaker name suggestion
-5. **Unified Mining** → Single-pass extraction of all entities with Qwen models
-6. **Flagship Evaluation** → Comprehensive LLM ranking and validation
-7. **Storage** → SQLite database with relationships
-8. **Export** → Multiple formats for integration
+5. **Short Summary** → Pre-mining contextual overview (1-2 paragraphs)
+6. **Unified Mining** → Single-pass extraction of all entities with Qwen models
+7. **Flagship Evaluation** → Comprehensive LLM ranking using context from short summary
+8. **Long Summary** → Post-evaluation comprehensive analysis (3-5 paragraphs)
+9. **Category Detection** → WikiData topic identification with confidence scores
+10. **Storage** → SQLite database with relationships
+11. **Export** → Multiple formats for integration
+
+### Speaker Correction & HCE Sync
+
+When you correct speaker assignments after analysis, the system intelligently updates everything:
+
+**Automatic Workflow:**
+1. **Correct Names** → Update speaker assignments in the Speaker Attribution tab
+2. **Detect Changes** → System checks if HCE analysis exists for this content
+3. **Confirm Update** → Beautiful dialog shows what will be reprocessed with cost/time estimates
+4. **Background Processing** → Reprocess claims, evidence, and entities with correct speaker context
+5. **Complete Sync** → Database fully updated with corrected speaker attributions
+
+**Key Features:**
+- **Non-Blocking**: Reprocessing runs in background with real-time progress
+- **Smart Detection**: Only triggers when HCE data actually exists
+- **Cost Transparency**: Shows estimated API costs before confirming
+- **Complete Reprocessing**: All claims and evidence updated with correct speaker context
+- **Manual Control**: Optional "Update HCE Database" button for on-demand updates
+
+This ensures your knowledge base always reflects the correct speaker attributions, even if you fix mistakes after initial processing.
 
 ### Hardware-Optimized Model Selection
 

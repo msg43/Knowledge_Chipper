@@ -218,7 +218,7 @@ class LLMAdapter:
         # Validate provider
         if provider not in self.rate_limiters:
             raise KnowledgeSystemError(
-                ErrorCode.INVALID_INPUT, f"Unknown provider: {provider}"
+                f"Unknown provider: {provider}", ErrorCode.INVALID_INPUT
             )
 
         # Wait for rate limiter
@@ -269,7 +269,7 @@ class LLMAdapter:
 
                 self.active_requests -= 1
                 raise KnowledgeSystemError(
-                    ErrorCode.LLM_API_ERROR, f"LLM request failed: {e}"
+                    f"LLM request failed: {e}", ErrorCode.LLM_API_ERROR
                 ) from e
 
             finally:
@@ -375,7 +375,7 @@ class LLMAdapter:
             except KnowledgeSystemError as e:
                 last_error = e
                 if (
-                    e.error_code == ErrorCode.LLM_API_ERROR
+                    e.error_code == ErrorCode.LLM_API_ERROR.value
                     and attempt < max_retries - 1
                 ):
                     wait_time = 2**attempt  # Exponential backoff

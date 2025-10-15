@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from .models.llm_any import AnyLLM
+from .models.llm_system2 import System2LLM
 from .types import EvidenceSpan, MentalModel, Segment
 
 
 class ConceptExtractor:
-    def __init__(self, llm: AnyLLM, prompt: Path):
+    def __init__(self, llm: System2LLM, prompt: Path):
         self.llm = llm
         self.template = prompt.read_text()
 
@@ -107,10 +107,10 @@ def extract_concepts(
     # For now, we'll use a simple approach
     # In a full implementation, this would use the scored claims to inform concept extraction
     try:
-        from .models.llm_any import AnyLLM
+        from .models.llm_system2 import System2LLM
 
         # Use provided model URI
-        llm = AnyLLM(model_uri)
+        llm = System2LLM(model_uri)
         prompt_path = Path(__file__).parent / "prompts" / "concepts_detect.txt"
 
         extractor = ConceptExtractor(llm, prompt_path)

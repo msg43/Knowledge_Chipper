@@ -975,12 +975,17 @@ class YouTubeTranscriptProcessor(BaseProcessor):
 
                     report_progress("📥 Starting audio download...", 25)
 
-                    # Configure yt-dlp options for high-quality audio extraction
+                    # Configure yt-dlp options for data-efficient audio extraction
+                    from ..utils.browser_fingerprint import (
+                        get_standard_user_agent,
+                        get_standard_yt_dlp_headers,
+                    )
+
                     base_ydl_opts = {
-                        "format": "bestaudio[ext=m4a]/bestaudio/best",  # High quality audio, prefer m4a
+                        "format": "worstaudio[ext=webm]/worstaudio[ext=opus]/worstaudio[ext=m4a]/worstaudio/bestaudio[ext=webm][abr<=96]/bestaudio[ext=m4a][abr<=128]/bestaudio[abr<=128]/bestaudio/worst",  # Optimal cascade: smallest formats first, guaranteed audio-only fallback
                         "extractaudio": True,
                         "audioformat": "mp3",
-                        "audioquality": 0,  # Best quality for accurate transcription/diarization
+                        "audioquality": 9,  # 64kbps - data efficient while maintaining diarization quality
                         "outtmpl": str(audio_file.with_suffix(".%(ext)s")),
                         "quiet": True,
                         "no_warnings": True,
@@ -990,15 +995,17 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                         "http_chunk_size": 524288,  # 512KB chunks - balance between efficiency and stability
                         # Network tuning
                         "nocheckcertificate": True,
-                        "prefer_insecure": True,
                         "http_chunk_retry": True,
                         "keep_fragments": False,  # Don't keep fragments to save space
                         "concurrent_fragment_downloads": 12,  # Use more connections for diarization downloads
+                        # Add standardized browser fingerprinting
+                        "user_agent": get_standard_user_agent(),
+                        "http_headers": get_standard_yt_dlp_headers(),
                         "postprocessors": [
                             {
                                 "key": "FFmpegExtractAudio",
                                 "preferredcodec": "mp3",
-                                "preferredquality": "0",  # Best quality
+                                "preferredquality": "64",  # 64kbps - efficient for voice fingerprinting
                             }
                         ],
                     }

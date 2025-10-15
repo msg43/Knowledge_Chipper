@@ -125,6 +125,11 @@ class YouTubeMetadataProxyProcessor(BaseProcessor):
 
         try:
             # Configure yt-dlp options
+            from ..utils.browser_fingerprint import (
+                get_standard_user_agent,
+                get_standard_yt_dlp_headers,
+            )
+
             ydl_opts = {
                 "quiet": True,
                 "no_warnings": True,
@@ -132,41 +137,48 @@ class YouTubeMetadataProxyProcessor(BaseProcessor):
                 "writesubtitles": False,
                 "writeautomaticsub": False,
                 "ignoreerrors": False,
-                "format": "best",
+                # No format specified - just extract metadata without downloading
                 # Extract all available metadata
                 "writeinfojson": False,
                 "writethumbnail": False,
                 # Add timeout and retry settings
                 "socket_timeout": 30,
                 "retries": 3,
-                # Add user agent to avoid detection
-                "http_headers": {
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                },
+                # Add standardized browser fingerprinting
+                "user_agent": get_standard_user_agent(),
+                "http_headers": get_standard_yt_dlp_headers(),
             }
 
-            # Extract metadata with proxy rotation on retries
+            # Extract metadata with proxy session management
             max_retries = 2
             for attempt in range(max_retries):
                 try:
-                    # Configure proxy for this attempt (rotate IP on retries)
+                    # Configure proxy for this attempt
                     current_ydl_opts = ydl_opts.copy()
                     if self.proxy_manager:
-                        if attempt > 0:
-                            # Rotate to new IP for retry attempts
-                            self.logger.info(
-                                f"🔄 Rotating PacketStream IP for retry attempt {attempt + 1} ({video_id})"
+                        # Use sticky session for first attempt, rotate IP for retries
+                        if attempt == 0:
+                            # First attempt: use sticky session based on URL
+                            session_id = PacketStreamProxyManager.generate_session_id(
+                                url, video_id
                             )
-                            self.proxy_manager.rotate_session()
+                            proxy_url = self.proxy_manager.get_proxy_url(
+                                session_id=session_id
+                            )
+                            self.logger.info(
+                                f"🌐 Using PacketStream proxy session '{session_id}' for {video_id}"
+                            )
+                        else:
+                            # Retry: use different session to rotate IP
+                            retry_session_id = f"{video_id}_retry{attempt}"
+                            proxy_url = self.proxy_manager.get_proxy_url(
+                                session_id=retry_session_id
+                            )
+                            self.logger.info(
+                                f"🔄 Using PacketStream retry session '{retry_session_id}' for {video_id} (attempt {attempt + 1})"
+                            )
 
-                        proxy_config = self.proxy_manager._get_proxy_config(
-                            use_socks5=False
-                        )
-                        proxy_url = proxy_config["https"]
                         current_ydl_opts["proxy"] = proxy_url
-                        self.logger.info(
-                            f"🌐 Using PacketStream proxy for {video_id} (attempt {attempt + 1})"
-                        )
                     else:
                         self.logger.info(
                             f"🔗 Using direct connection for {video_id} (attempt {attempt + 1})"

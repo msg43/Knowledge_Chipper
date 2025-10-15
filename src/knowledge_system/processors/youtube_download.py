@@ -7,7 +7,10 @@ Supports configurable output format (mp3/wav), error handling, and returns outpu
 """
 
 import os
+import sys
+from contextlib import contextmanager
 from datetime import datetime
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +25,17 @@ from .base import BaseProcessor, ProcessorResult
 logger = get_logger(__name__)
 
 
+@contextmanager
+def suppress_stderr():
+    """Suppress stderr output to prevent yt-dlp from printing internal errors."""
+    old_stderr = sys.stderr
+    sys.stderr = StringIO()
+    try:
+        yield
+    finally:
+        sys.stderr = old_stderr
+
+
 class YouTubeDownloadProcessor(BaseProcessor):
     """Processor for downloading audio and thumbnails from YouTube videos/playlists."""
 
@@ -34,7 +48,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
     def __init__(
         self,
         name: str | None = None,
-        output_format: str = "webm",  # Default to WebM for best source quality (temp file only)
+        output_format: str = "best",  # Keep original format - will be converted to WAV for transcription
         download_thumbnails: bool = True,
     ) -> None:
         super().__init__(name or "youtube_download")
@@ -45,7 +59,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
         self.ydl_opts_base = {
             "quiet": True,
             "no_warnings": True,
-            "format": "250/249/140/worst",  # Prioritize lowest quality: 250 (70kbps Opus), 249 (50kbps Opus), 140 (128kbps AAC), or worst available
+            "format": "worstaudio[ext=webm]/worstaudio[ext=opus]/worstaudio[ext=m4a]/worstaudio/bestaudio[ext=webm][abr<=96]/bestaudio[ext=m4a][abr<=128]/bestaudio[abr<=128]/bestaudio/worst",  # Optimal cascade: smallest formats first, guaranteed audio-only fallback
             "outtmpl": "%(title)s.%(ext)s",
             "ignoreerrors": True,
             "noplaylist": False,
@@ -53,36 +67,23 @@ class YouTubeDownloadProcessor(BaseProcessor):
             "http_chunk_size": 524288,  # 512KB chunks - balance between efficiency and stability
             "no_check_formats": True,  # Skip format validation for faster processing
             "prefer_free_formats": True,  # Prefer formats that don't require fragmentation
-            "youtube_include_dash_manifest": False,  # Disable DASH (fragmented) formats
+            # Note: youtube_include_dash_manifest option removed (deprecated in yt-dlp 2025.9+)
             "no_part": False,  # Enable partial downloading/resuming for connection interruptions
             "retries": 3,  # Standard retries for connection issues
-            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "headers": {
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-us,en;q=0.5",
-                "Accept-Encoding": "gzip, deflate",
-                "Accept-Charset": "ISO-8859-1,utf-8;q=0.7,*;q=0.7",
-                "Keep-Alive": "timeout=5, max=100",
-                "Connection": "keep-alive",
-                # Additional headers to appear more like a regular browser
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "none",
-                "Sec-Fetch-User": "?1",
-                "Upgrade-Insecure-Requests": "1",
-            },
             "extractor_retries": 3,  # Standard retries for connection issues
             "socket_timeout": 45,  # Longer timeout for large file downloads through proxy
+            # NOTE: Do NOT use Android client with PacketStream - causes "Fixed to extract player response"
             "fragment_retries": 5,  # Moderate fragment retries for stability
             # Network tuning
             "nocheckcertificate": True,
-            "prefer_insecure": True,
             "http_chunk_retry": True,
             "keep_fragments": False,  # Don't keep fragments to save space
-            "concurrent_fragment_downloads": 8,  # Use multiple connections for parallel chunks
-            "postprocessors": [
-                {"key": "FFmpegAudioConvertor", "preferredcodec": "mp3"}
-            ],  # Default post-processor for audio conversion
+            # Additional options to help with YouTube anti-bot detection
+            "sleep_interval": 1,  # Add small delay between requests
+            "max_sleep_interval": 5,  # Maximum sleep interval
+            "sleep_interval_requests": 1,  # Sleep between requests
+            # NO postprocessors - keep original format to avoid double conversion
+            # Audio will be converted directly to 16kHz mono WAV by AudioProcessor
         }
 
     @property
@@ -297,27 +298,17 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     # Test proxy connectivity
                     import requests
 
-                    # SSL certificate path for restricted accounts
-                    ssl_cert_path = os.path.join(
-                        os.path.dirname(
-                            os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-                        ),
-                        "config",
-                        "brightdata_proxy_ca",
-                        "New SSL certifcate - MUST BE USED WITH PORT 33335",
-                        "BrightData SSL certificate (port 33335).crt",
-                    )
-
-                    # Use SSL certificate if available
-                    verify_param = (
-                        ssl_cert_path if os.path.exists(ssl_cert_path) else True
+                    # PacketStream proxies don't require SSL certificate verification
+                    # Use HTTP endpoint to avoid SSL certificate issues
+                    from ..utils.browser_fingerprint import (
+                        get_standard_requests_headers,
                     )
 
                     test_response = requests.get(
-                        "https://httpbin.org/ip",
+                        "http://httpbin.org/ip",
                         proxies={"http": proxy_url, "https": proxy_url},
                         timeout=15,
-                        verify=verify_param,
+                        headers=get_standard_requests_headers(),
                     )
                     if test_response.status_code == 200:
                         proxy_ip = test_response.json().get("origin", "unknown")
@@ -445,34 +436,17 @@ class YouTubeDownloadProcessor(BaseProcessor):
         # Proxy usage with PacketStream (optional); no legacy WebShare fallback
 
         # Configure base yt-dlp options
-        ydl_opts = {**self.ydl_opts_base}
+        import copy
 
-        # Dynamic concurrency based on expected file size and connection count
-        def calculate_optimal_concurrency(estimated_size_mb: float) -> int:
-            """Calculate optimal concurrent connections based on file size."""
-            if estimated_size_mb < 10:  # Small files: 2-4 connections
-                return min(4, max(2, int(estimated_size_mb / 3)))
-            elif estimated_size_mb < 50:  # Medium files: 4-8 connections
-                return min(8, max(4, int(estimated_size_mb / 8)))
-            elif estimated_size_mb < 200:  # Large files: 8-16 connections
-                return min(16, max(8, int(estimated_size_mb / 15)))
-            else:  # Very large files: 16-32 connections
-                return min(32, max(16, int(estimated_size_mb / 25)))
+        ydl_opts = copy.deepcopy(
+            self.ydl_opts_base
+        )  # Deep copy to avoid modifying base config
 
-        # Estimate file size for format 250 (70kbps Opus)
-        # Rough estimate: 70kbps ≈ 0.5MB per minute
-        estimated_duration_minutes = 60  # Default assumption for unknown duration
-        estimated_size_mb = estimated_duration_minutes * 0.5
-        optimal_concurrency = calculate_optimal_concurrency(estimated_size_mb)
+        # NOTE: Do NOT add custom user-agent or http_headers when using PacketStream
+        # PacketStream residential proxies work best with yt-dlp's default headers
+        # Custom headers can cause "Failed to parse JSON" errors through the proxy
 
-        # Override concurrent downloads with calculated value
-        ydl_opts["concurrent_fragment_downloads"] = optimal_concurrency
-
-        logger.info(
-            f"Configuring parallel downloads: {optimal_concurrency} connections (estimated {estimated_size_mb:.1f}MB file)"
-        )
-
-        # Add progress hook for real-time download progress in GUI with diagnostic info
+        # Add progress hook for real-time download progress in GUI
         if progress_callback:
             import time
 
@@ -509,19 +483,14 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         # Create single line progress message with all info
                         progress_msg = f"📥 Downloading: {clean_filename[:30]}{'...' if len(clean_filename) > 30 else ''} | {downloaded_mb:.1f}/{total_mb:.1f} MB ({percent:.1f}%)"
 
-                        # Enhanced diagnostics for parallel download performance
+                        # Add speed information if available
                         time_since_last = current_time - last_progress_time[0]
                         if speed_mbps > 0:
                             progress_msg += f" @ {speed_mbps:.1f} MB/s"
-                            # Show parallel connection info for higher speeds
-                            if speed_mbps > 2.0:  # Good parallel performance
-                                progress_msg += f" [{optimal_concurrency} connections]"
                         elif time_since_last > 10:  # No progress for 10+ seconds
-                            progress_msg += f" (stalled - retrying with {optimal_concurrency} connections)"
+                            progress_msg += " (stalled - retrying...)"
                         else:
-                            progress_msg += (
-                                f" (buffering {optimal_concurrency} streams...)"
-                            )
+                            progress_msg += " (buffering...)"
 
                         # Use single line update if message changed significantly
                         if (
@@ -561,7 +530,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
             ydl_opts["progress_hooks"] = [download_progress_hook]
 
-        ydl_opts["postprocessors"][0]["preferredcodec"] = output_format
+        # No postprocessor override needed - keeping original format
         ydl_opts["outtmpl"] = str(output_dir / "%(title)s.%(ext)s")
 
         all_files = []
@@ -588,29 +557,47 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 if youtube_id_match:
                     video_id = youtube_id_match.group(1)
 
-                # Use PacketStream proxy (already initialized)
-                current_proxy_url = proxy_url
+                # Generate unique session ID for this video (sticky IP per URL)
+                # Each URL gets a consistent session ID, ensuring same IP for all requests
+                # (metadata, download chunks, thumbnail) while different URLs get different IPs
+                current_proxy_url = None
+                if use_proxy and proxy_manager:
+                    from ..utils.packetstream_proxy import PacketStreamProxyManager
+
+                    session_id = PacketStreamProxyManager.generate_session_id(
+                        url, video_id
+                    )
+                    current_proxy_url = proxy_manager.get_proxy_url(
+                        session_id=session_id
+                    )
 
                 if current_proxy_url and video_id:
-                    logger.info(f"Using PacketStream proxy for video {video_id}")
+                    logger.info(
+                        f"Using PacketStream proxy session '{video_id}' for video {video_id} ({i}/{len(urls)})"
+                    )
+                elif current_proxy_url:
+                    logger.info(f"Using PacketStream proxy for URL ({i}/{len(urls)})")
                 elif video_id:
                     logger.info(
                         f"Using direct connection for video {video_id} (no proxy configured)"
                     )
 
-                # First, extract metadata to get actual duration for better concurrency calculation
+                # Extract metadata to verify video availability
                 if progress_callback:
                     progress_callback(f"🔍 Extracting video metadata for: {url}")
 
                 try:
-                    # Test proxy connectivity first
-                    test_opts = {
-                        "proxy": current_proxy_url,
-                        "quiet": True,
-                        "no_warnings": True,
-                        "extract_flat": True,
-                        "socket_timeout": 30,
-                    }
+                    # Test proxy connectivity and extract metadata
+                    # IMPORTANT: Include full ydl_opts (cookies, Android client, etc)
+                    test_opts = {**ydl_opts, "proxy": current_proxy_url}
+                    test_opts.update(
+                        {
+                            "quiet": True,
+                            "no_warnings": True,
+                            "extract_flat": True,
+                            "socket_timeout": 30,
+                        }
+                    )
 
                     proxy_type = "PacketStream" if use_proxy else "Direct (NO PROXY)"
                     with yt_dlp.YoutubeDL(test_opts) as ydl_test:
@@ -620,53 +607,48 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                 "⚠️ WARNING: Using direct connection (no proxy protection)"
                             )
                         if progress_callback:
-                            progress_callback(
-                                f"🔗 Testing {proxy_type} proxy connectivity..."
-                            )
+                            progress_callback(f"🔗 Testing {proxy_type} connectivity...")
 
                         # Quick connectivity test
                         test_info = ydl_test.extract_info(url, download=False)
                         if not test_info:
                             raise Exception(
-                                "Proxy connectivity test failed - no video info returned"
+                                "Connectivity test failed - no video info returned"
                             )
 
-                        logger.info(f"✅ {proxy_type} proxy connectivity test passed")
+                        logger.info(f"✅ {proxy_type} connectivity test passed")
                         if progress_callback:
                             progress_callback(
-                                f"✅ {proxy_type} proxy working - extracting full metadata..."
+                                f"✅ {proxy_type} working - extracting metadata..."
                             )
 
-                    # Now extract full metadata
-                    with yt_dlp.YoutubeDL(
-                        {**ydl_opts, "extract_flat": False}
-                    ) as ydl_info:
+                    # Extract full metadata (without format validation to avoid proxy issues)
+                    # IMPORTANT: Merge full ydl_opts (with cookies, Android client, etc)
+                    metadata_opts = {**ydl_opts, "proxy": current_proxy_url}
+                    metadata_opts.update(
+                        {
+                            "quiet": True,
+                            "no_warnings": True,
+                            "socket_timeout": 30,
+                        }
+                    )
+                    with yt_dlp.YoutubeDL(metadata_opts) as ydl_info:
                         info_only = ydl_info.extract_info(url, download=False)
-                        duration_seconds = info_only.get(
-                            "duration", 3600
-                        )  # Default to 1 hour if unknown
-                        duration_minutes = duration_seconds / 60
-                        video_title = info_only.get("title", "Unknown Title")
-
-                        # Recalculate optimal concurrency with actual duration
-                        estimated_size_mb = (
-                            duration_minutes * 0.5
-                        )  # 70kbps ≈ 0.5MB per minute
-                        optimal_concurrency = calculate_optimal_concurrency(
-                            estimated_size_mb
-                        )
-                        ydl_opts["concurrent_fragment_downloads"] = optimal_concurrency
-
-                        logger.info(
-                            f"✅ Video '{video_title}' - Duration: {duration_minutes:.1f}min, "
-                            f"estimated size: {estimated_size_mb:.1f}MB, "
-                            f"using {optimal_concurrency} concurrent connections"
-                        )
-
-                        if progress_callback:
-                            progress_callback(
-                                f"📊 '{video_title[:40]}...' - {duration_minutes:.1f}min → {optimal_concurrency} connections"
+                        if info_only:
+                            duration_seconds = info_only.get("duration", 0)
+                            duration_minutes = (
+                                duration_seconds / 60 if duration_seconds else 0
                             )
+                            video_title = info_only.get("title", "Unknown Title")
+
+                            logger.info(
+                                f"✅ Video '{video_title}' - Duration: {duration_minutes:.1f}min"
+                            )
+
+                            if progress_callback:
+                                progress_callback(
+                                    f"📊 '{video_title[:40]}...' - {duration_minutes:.1f} min"
+                                )
 
                 except Exception as e:
                     error_msg = str(e)
@@ -681,7 +663,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             progress_callback(f"❌ Video not found or private: {url}")
                         elif "timeout" in error_msg.lower():
                             progress_callback(
-                                "❌ Proxy connection timeout - Proxy service may have connectivity issues"
+                                "❌ Connection timeout - Proxy service may have connectivity issues"
                             )
                         elif "proxy" in error_msg.lower():
                             progress_callback(
@@ -694,143 +676,214 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                     # Continue with default settings if metadata extraction fails
                     logger.warning(
-                        "Continuing with default concurrency settings due to metadata failure"
+                        "Continuing with standard settings despite metadata failure"
                     )
                     if progress_callback:
-                        progress_callback(
-                            "⚠️ Using default settings - attempting download anyway..."
-                        )
+                        progress_callback("⚠️ Attempting download anyway...")
 
-                # Attempt the actual download with enhanced error handling
+                # Attempt the actual download
                 if progress_callback:
-                    progress_callback(
-                        f"🚀 Starting download with {optimal_concurrency} parallel connections..."
-                    )
+                    progress_callback("🚀 Starting download...")
 
                 # Configure yt-dlp options with the specific proxy for this video
                 final_ydl_opts = {**ydl_opts, "proxy": current_proxy_url}
 
-                with yt_dlp.YoutubeDL(final_ydl_opts) as ydl:
-                    logger.info(f"Downloading audio for: {url}{playlist_context}")
-                    if use_proxy and video_id:
-                        logger.info(f"Using PacketStream proxy for video {video_id}")
+                # Suppress yt-dlp's stderr output to prevent spurious error messages like "ERROR: 'webm'"
+                with suppress_stderr():
+                    with yt_dlp.YoutubeDL(final_ydl_opts) as ydl:
+                        logger.info(f"Downloading audio for: {url}{playlist_context}")
+                        if use_proxy and video_id:
+                            logger.info(
+                                f"Using PacketStream proxy for video {video_id}"
+                            )
 
-                    try:
-                        # Track download start time for cost calculation
-                        download_start_time = datetime.now()
+                        try:
+                            # Track download start time for cost calculation
+                            download_start_time = datetime.now()
 
-                        info = ydl.extract_info(url, download=True)
+                            info = ydl.extract_info(url, download=True)
 
-                        if info is None:
-                            logger.warning(f"No info extracted for {url}")
+                            if info is None:
+                                # yt-dlp returned None - check if files were actually downloaded
+                                # Sometimes yt-dlp returns None after successful post-processing
+                                # Look for any common audio formats since the actual format depends on YouTube's availability
+                                downloaded_files = []
+                                for ext in ["m4a", "opus", "webm", "ogg", "mp3", "aac"]:
+                                    downloaded_files.extend(output_dir.glob(f"*.{ext}"))
+                                if downloaded_files:
+                                    # Files exist! This is a false negative - download succeeded
+                                    logger.warning(
+                                        f"yt-dlp returned None but files were downloaded for {url}"
+                                    )
+                                    if progress_callback:
+                                        progress_callback(
+                                            "✅ Audio download completed successfully"
+                                        )
+                                    # Continue processing - don't raise error
+                                    info = {
+                                        "title": "Downloaded",
+                                        "id": video_id or "unknown",
+                                    }
+                                else:
+                                    # No files found - this is a real error
+                                    error_msg = "Failed to extract any player response; please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U"
+                                    logger.error(
+                                        f"No info extracted for {url}: {error_msg}"
+                                    )
+                                    if progress_callback:
+                                        progress_callback(
+                                            "❌ Failed to extract video information - yt-dlp could not parse YouTube's response"
+                                        )
+                                    # Raise exception to be caught by outer handler which adds to errors list
+                                    raise Exception(error_msg)
+
+                            # Calculate download metrics for cost tracking
+                            download_end_time = datetime.now()
+                            download_duration = (
+                                download_end_time - download_start_time
+                            ).total_seconds()
+
+                            # PacketStream proxies do not require usage tracking (flat rate)
+
+                            # Register video in database for future deduplication
+                            if video_id and db_service:
+                                try:
+                                    video_title = (
+                                        info.get("title", "Unknown Title")
+                                        if info
+                                        else "Unknown Title"
+                                    )
+                                    db_service.create_video(
+                                        video_id=video_id,
+                                        title=video_title,
+                                        url=url,
+                                        status="completed",
+                                        extraction_method=(
+                                            "packetstream" if use_proxy else "direct"
+                                        ),
+                                    )
+                                    logger.debug(
+                                        f"Registered video {video_id} in database for deduplication"
+                                    )
+                                except Exception as db_error:
+                                    logger.warning(
+                                        f"Failed to register video in database: {db_error}"
+                                    )
+
+                            logger.info(f"✅ Successfully downloaded audio for: {url}")
                             if progress_callback:
                                 progress_callback(
-                                    "⚠️ No video information returned - video may be unavailable"
-                                )
-                            continue
-
-                        # Calculate download metrics for cost tracking
-                        download_end_time = datetime.now()
-                        download_duration = (
-                            download_end_time - download_start_time
-                        ).total_seconds()
-
-                        # PacketStream proxies do not require usage tracking (flat rate)
-
-                        # Register video in database for future deduplication
-                        if video_id and db_service:
-                            try:
-                                video_title = (
-                                    info.get("title", "Unknown Title")
-                                    if info
-                                    else "Unknown Title"
-                                )
-                                db_service.create_video(
-                                    video_id=video_id,
-                                    title=video_title,
-                                    url=url,
-                                    status="completed",
-                                    extraction_method=(
-                                        "packetstream" if use_proxy else "direct"
-                                    ),
-                                )
-                                logger.debug(
-                                    f"Registered video {video_id} in database for deduplication"
-                                )
-                            except Exception as db_error:
-                                logger.warning(
-                                    f"Failed to register video in database: {db_error}"
+                                    "✅ Audio download completed successfully"
                                 )
 
-                        logger.info(f"✅ Successfully downloaded audio for: {url}")
-                        if progress_callback:
-                            progress_callback("✅ Audio download completed successfully")
-
-                    except Exception as download_error:
-                        download_error_msg = str(download_error)
-                        logger.error(
-                            f"❌ Download failed for {url}: {download_error_msg}"
-                        )
-
-                        if progress_callback:
-                            if "HTTP Error 403" in download_error_msg:
-                                progress_callback(
-                                    "❌ Download blocked (403) - YouTube detected proxy"
-                                )
-                                progress_callback(
-                                    "   Try again later or check proxy IP rotation"
-                                )
-                            elif "HTTP Error 429" in download_error_msg:
-                                progress_callback(
-                                    "❌ Rate limited (429) - too many requests"
-                                )
-                                progress_callback(
-                                    "   YouTube is throttling this proxy IP"
-                                )
-                            elif "HTTP Error 404" in download_error_msg:
-                                progress_callback(
-                                    "❌ Video not found (404) - may be private or deleted"
-                                )
-                            elif "timeout" in download_error_msg.lower():
-                                progress_callback(
-                                    "❌ Download timeout - connection too slow"
-                                )
-                                progress_callback(
-                                    "   Try reducing concurrent connections or check proxy service status"
-                                )
-                            elif "proxy" in download_error_msg.lower():
-                                progress_callback("❌ Proxy connection failed")
-                                progress_callback(
-                                    "   Check proxy account status and credentials"
-                                )
-                            elif "certificate" in download_error_msg.lower():
-                                progress_callback("❌ SSL certificate issue with proxy")
+                            # Process entries (handle both playlists and single videos)
+                            if "entries" in info and info["entries"]:
+                                entries = info["entries"]
                             else:
-                                progress_callback(
-                                    f"❌ Download error: {download_error_msg}"
-                                )
+                                entries = [info]
 
-                        # Re-raise the exception to be caught by outer try-catch
-                        raise download_error
+                            for entry in entries:
+                                if entry and "title" in entry:
+                                    # Get actual filename from yt-dlp
+                                    filename = None
 
-                    if "entries" in info and info["entries"]:
-                        entries = info["entries"]
-                    else:
-                        entries = [info]
+                                    # Try to get filename from requested_downloads
+                                    if (
+                                        "requested_downloads" in entry
+                                        and entry["requested_downloads"]
+                                    ):
+                                        filename = entry["requested_downloads"][0].get(
+                                            "filepath"
+                                        ) or entry["requested_downloads"][0].get(
+                                            "filename"
+                                        )
 
-                    for entry in entries:
-                        if entry and "title" in entry:
-                            # Audio file
-                            filename = output_dir / f"{entry['title']}.{output_format}"
-                            all_files.append(str(filename))
+                                    # Try to get extension from entry
+                                    if not filename and "ext" in entry:
+                                        filename = (
+                                            output_dir
+                                            / f"{entry['title']}.{entry['ext']}"
+                                        )
 
-                            # Thumbnail - save to Thumbnails subdirectory
-                            if download_thumbnails:
-                                thumbnail_path = self._download_thumbnail_from_url(
-                                    url, thumbnails_dir
-                                )
-                                if thumbnail_path:
-                                    all_thumbnails.append(thumbnail_path)
+                                    # Last resort: search for any file with this title
+                                    if not filename:
+                                        title = entry["title"]
+                                        for ext in [
+                                            "m4a",
+                                            "opus",
+                                            "webm",
+                                            "ogg",
+                                            "mp3",
+                                            "aac",
+                                        ]:
+                                            potential_file = (
+                                                output_dir / f"{title}.{ext}"
+                                            )
+                                            if potential_file.exists():
+                                                filename = potential_file
+                                                break
+
+                                    if filename:
+                                        all_files.append(str(filename))
+
+                                    # Thumbnail - save to Thumbnails subdirectory
+                                    if download_thumbnails:
+                                        thumbnail_path = (
+                                            self._download_thumbnail_from_url(
+                                                url, thumbnails_dir
+                                            )
+                                        )
+                                        if thumbnail_path:
+                                            all_thumbnails.append(thumbnail_path)
+
+                        except Exception as download_error:
+                            download_error_msg = str(download_error)
+                            logger.error(
+                                f"❌ Download failed for {url}: {download_error_msg}"
+                            )
+
+                            if progress_callback:
+                                if "HTTP Error 403" in download_error_msg:
+                                    progress_callback(
+                                        "❌ Download blocked (403) - YouTube detected proxy"
+                                    )
+                                    progress_callback(
+                                        "   Try again later or check proxy IP rotation"
+                                    )
+                                elif "HTTP Error 429" in download_error_msg:
+                                    progress_callback(
+                                        "❌ Rate limited (429) - too many requests"
+                                    )
+                                    progress_callback(
+                                        "   YouTube is throttling this proxy IP"
+                                    )
+                                elif "HTTP Error 404" in download_error_msg:
+                                    progress_callback(
+                                        "❌ Video not found (404) - may be private or deleted"
+                                    )
+                                elif "timeout" in download_error_msg.lower():
+                                    progress_callback(
+                                        "❌ Download timeout - connection too slow"
+                                    )
+                                    progress_callback(
+                                        "   Try reducing concurrent connections or check proxy service status"
+                                    )
+                                elif "proxy" in download_error_msg.lower():
+                                    progress_callback("❌ Proxy connection failed")
+                                    progress_callback(
+                                        "   Check proxy account status and credentials"
+                                    )
+                                elif "certificate" in download_error_msg.lower():
+                                    progress_callback(
+                                        "❌ SSL certificate issue with proxy"
+                                    )
+                                else:
+                                    progress_callback(
+                                        f"❌ Download error: {download_error_msg}"
+                                    )
+
+                            # Re-raise the exception to be caught by outer try-catch
+                            raise download_error
 
             except Exception as e:
                 error_msg = str(e)

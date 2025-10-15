@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
-from .models.llm_any import AnyLLM
+from .models.llm_system2 import System2LLM
 from .schema_validator import validate_flagship_output
 from .unified_miner import UnifiedMinerOutput
 
@@ -90,7 +90,7 @@ class FlagshipEvaluator:
     Flagship evaluator that reviews extracted claims and ranks them by importance.
     """
 
-    def __init__(self, llm: AnyLLM, prompt_path: Path | None = None):
+    def __init__(self, llm: System2LLM, prompt_path: Path | None = None):
         self.llm = llm
 
         # Load prompt
@@ -261,15 +261,23 @@ def evaluate_claims_flagship(
     Args:
         content_summary: High-level summary of the content
         miner_outputs: List of outputs from the unified miner
-        flagship_model_uri: URI for the flagship LLM model
+        flagship_model_uri: URI for the flagship LLM model (format: "provider:model")
 
     Returns:
         FlagshipEvaluationOutput with ranked and filtered claims
     """
-    llm = AnyLLM(flagship_model_uri)
+    # Parse model URI: "provider:model" or just "model" (defaults to openai)
+    if ":" in flagship_model_uri:
+        provider, model = flagship_model_uri.split(":", 1)
+    else:
+        provider = "openai"
+        model = flagship_model_uri
+
+    # Create System2LLM instance
+    llm = System2LLM(provider=provider, model=model, temperature=0.3)
 
     # Use simplified prompt for Ollama models
-    if "ollama:" in flagship_model_uri.lower():
+    if provider.lower() == "ollama":
         prompt_path = (
             Path(__file__).parent / "prompts" / "flagship_evaluator_ollama.txt"
         )

@@ -55,6 +55,8 @@ We will implement System 2 architecture with the following core components:
 - Created `LLMAdapter` with rate limiting
 - Added memory-based throttling
 - Implemented exponential backoff
+- Migrated all 11 HCE processors to use `System2LLM` wrapper
+- Removed legacy `AnyLLM` - all LLM calls now centralized
 
 ### Phase 4: Observability (Complete)
 - Implemented `System2Logger` with JSON output

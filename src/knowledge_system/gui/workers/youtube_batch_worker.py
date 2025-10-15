@@ -853,7 +853,7 @@ class YouTubeBatchWorker(QThread):
 
             # Configure yt-dlp with proxy and progress hook
             ydl_opts = {
-                "format": "250/249/140/worst",  # Use lowest quality audio to minimize file size
+                "format": "worstaudio[ext=webm]/worstaudio[ext=opus]/worstaudio[ext=m4a]/worstaudio/bestaudio[ext=webm][abr<=96]/bestaudio[ext=m4a][abr<=128]/bestaudio[abr<=128]/bestaudio/worst",  # Optimal cascade: smallest formats first, guaranteed audio-only fallback
                 "outtmpl": str(audio_file.with_suffix(".%(ext)s")),
                 "extractaudio": True,
                 "audioformat": "wav",
@@ -975,6 +975,16 @@ class YouTubeBatchWorker(QThread):
             return "permission"
         elif any(keyword in error_lower for keyword in ["format", "quality", "stream"]):
             return "format"
+        elif any(
+            keyword in error_lower
+            for keyword in ["player response", "extract any player"]
+        ):
+            return "player_response"
+        elif any(
+            keyword in error_lower
+            for keyword in ["requested format is not available", "format not available"]
+        ):
+            return "format_error"
         else:
             return "other"
 
@@ -1458,17 +1468,21 @@ class YouTubeBatchWorker(QThread):
                 logger.debug(f"Download cancelled before starting for {video_id}")
                 return None
 
-            # Get proxy URL - PacketStream handles session rotation internally
+            # Get proxy URL with sticky session per URL
             from ...utils.packetstream_proxy import PacketStreamProxyManager
 
             proxy_manager = PacketStreamProxyManager()
-            proxy_url = proxy_manager.get_proxy_url()
 
-            # Note: PacketStream automatically rotates IPs for each new connection
-            # No need to modify the URL - each download will get a different IP
+            # Generate unique proxy session ID for this URL (ensures sticky IP per URL)
+            # Each URL gets its own IP, but all requests for that URL use the same IP
+            proxy_session_id = PacketStreamProxyManager.generate_session_id(
+                url, video_id
+            )
+            proxy_url = proxy_manager.get_proxy_url(session_id=proxy_session_id)
+
             if proxy_url:
                 logger.info(
-                    f"🌐 Using PacketStream proxy for {session_id} (rotating residential IP)"
+                    f"🌐 Using PacketStream proxy session '{proxy_session_id}' (sticky IP for this URL)"
                 )
             else:
                 logger.warning(
@@ -1478,14 +1492,17 @@ class YouTubeBatchWorker(QThread):
             import yt_dlp
 
             # Use fallback authentication strategy (no cookies)
+            from ...utils.browser_fingerprint import (
+                get_standard_user_agent,
+                get_standard_yt_dlp_headers,
+            )
+
             auth_options = {
-                "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "user_agent": get_standard_user_agent(),
                 "sleep_interval_requests": 1,
                 "sleep_interval": 3,
                 "max_sleep_interval": 10,
-                "http_headers": {
-                    "Accept-Language": "en-US,en;q=0.9",
-                },
+                "http_headers": get_standard_yt_dlp_headers(),
             }
             logger.info("🚫 Using no-cookie authentication strategy")
 
@@ -1516,7 +1533,7 @@ class YouTubeBatchWorker(QThread):
 
             # Configure yt-dlp with session proxy
             ydl_opts = {
-                "format": "250/249/140/worst",  # Use lowest quality audio to minimize file size
+                "format": "worstaudio[ext=webm]/worstaudio[ext=opus]/worstaudio[ext=m4a]/worstaudio/bestaudio[ext=webm][abr<=96]/bestaudio[ext=m4a][abr<=128]/bestaudio[abr<=128]/bestaudio/worst",  # Optimal cascade: smallest formats first, guaranteed audio-only fallback
                 "outtmpl": str(audio_file.with_suffix(".%(ext)s")),
                 "extractaudio": True,
                 "audioformat": "wav",

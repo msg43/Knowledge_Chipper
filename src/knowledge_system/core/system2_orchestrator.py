@@ -107,7 +107,7 @@ class System2Orchestrator:
             job = session.query(Job).filter_by(job_id=job_id).first()
             if not job:
                 raise KnowledgeSystemError(
-                    ErrorCode.PROCESSING_FAILED, f"Job {job_id} not found"
+                    f"Job {job_id} not found", ErrorCode.PROCESSING_FAILED
                 )
 
             # Count previous attempts
@@ -274,7 +274,7 @@ class System2Orchestrator:
                 job = session.query(Job).filter_by(job_id=job_id).first()
                 if not job:
                     raise KnowledgeSystemError(
-                        ErrorCode.PROCESSING_FAILED, f"Job {job_id} not found"
+                        f"Job {job_id} not found", ErrorCode.PROCESSING_FAILED
                     )
 
                 job_type = job.job_type
@@ -348,7 +348,7 @@ class System2Orchestrator:
             return await self._process_pipeline(input_id, config, checkpoint, run_id)
         else:
             raise KnowledgeSystemError(
-                ErrorCode.INVALID_INPUT, f"Unknown job type: {job_type}"
+                f"Unknown job type: {job_type}", ErrorCode.INVALID_INPUT
             )
 
     async def _process_transcribe(

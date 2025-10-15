@@ -128,8 +128,10 @@ class SchemaValidator:
             self._log_repair_diff(data, repaired_data)
         else:
             # If repair failed, raise high severity error
+            # Ensure all errors are strings before joining
+            error_strings = [str(e) for e in errors]
             raise KnowledgeSystemError(
-                f"Schema validation failed for {schema_name}: {'; '.join(errors)}",
+                f"Schema validation failed for {schema_name}: {'; '.join(error_strings)}",
                 error_code=ErrorCode.VALIDATION_SCHEMA_ERROR_HIGH,
             )
 

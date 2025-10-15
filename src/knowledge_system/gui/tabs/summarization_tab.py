@@ -133,7 +133,8 @@ class EnhancedSummarizationWorker(QThread):
     def _run_with_system2_orchestrator(self) -> None:
         """Run summarization using System 2 orchestrator for job management."""
         try:
-            from ...core.system2_orchestrator import JobType, System2Orchestrator
+            from ...core.dynamic_parallelization import JobType
+            from ...core.system2_orchestrator import System2Orchestrator
             from ...utils.progress import SummarizationProgress
 
             # Create orchestrator instance
@@ -155,7 +156,7 @@ class EnhancedSummarizationWorker(QThread):
 
                 # Create mining job for this file
                 job_id = orchestrator.create_job(
-                    JobType.MINE,
+                    JobType.MINER.value,
                     episode_id,
                     config={
                         "source": "manual_summarization",
@@ -497,6 +498,11 @@ class SummarizationTab(BaseTab):
         self.file_list.setMinimumHeight(150)
         input_layout.addWidget(self.file_list)
 
+        # Add default file if it exists (using curly quotes: U+2018 and U+2019)
+        default_input_file = "/Users/matthewgreer/Projects/Knowledge_Chipper/output/transcripts/Steve Bannon_ Silicon Valley Is Turning Us Into \u2018Digital Serfs\u2019_vvj_J2tB2Ag.md"
+        if Path(default_input_file).exists():
+            self.file_list.addItem(default_input_file)
+
         # File buttons
         button_layout = QHBoxLayout()
         add_files_btn = QPushButton("Add Files")
@@ -527,32 +533,7 @@ class SummarizationTab(BaseTab):
 
         # Analysis Type removed - now defaults to "Document Summary" with entity extraction
 
-        # Profile section
-        profile_group = QGroupBox("Analysis Profile")
-        profile_layout = QHBoxLayout()
-
-        self.profile_combo = QComboBox()
-        self.profile_combo.addItems(["Balanced", "Fast", "Quality", "Custom"])
-        self.profile_combo.currentTextChanged.connect(self._on_profile_changed)
-        self.profile_combo.setMinimumWidth(150)
-        self.profile_combo.setToolTip(
-            "Choose analysis profile:\n"
-            "• Fast: Lightweight models, no routing, skim disabled\n"
-            "• Balanced: Default settings with routing enabled\n"
-            "• Quality: Flagship models, aggressive routing, all features\n"
-            "• Custom: Manual configuration"
-        )
-
-        profile_layout.addWidget(QLabel("Profile:"))
-        profile_layout.addWidget(self.profile_combo)
-        profile_layout.addStretch()
-
-        profile_group.setLayout(profile_layout)
-        profile_group.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        # Profile section removed per user request
-        # layout.addWidget(profile_group)
+        # Profile section removed - not needed (explicit per-stage model controls used instead)
 
         # Settings section
         settings_group = QGroupBox("Settings")
@@ -651,7 +632,10 @@ class SummarizationTab(BaseTab):
         prompt_label.setToolTip(
             "Path to custom prompt template file for claim extraction. Leave empty to use default HCE prompts."
         )
-        self.template_path_edit = QLineEdit("")
+        default_template_path = (
+            "/Users/matthewgreer/Projects/Prompts/Summary Prompt.txt"
+        )
+        self.template_path_edit = QLineEdit(default_template_path)
         self.template_path_edit.setMinimumWidth(200)  # Reduced from 280 to 200
         self.template_path_edit.setToolTip(
             "Path to custom prompt template file for claim extraction. Leave empty to use default HCE prompts."
@@ -1129,8 +1113,8 @@ class SummarizationTab(BaseTab):
     def _connect_signals(self) -> None:
         """Connect internal signals."""
         # Load settings after UI is fully set up and signals are connected
-        # Use a timer to ensure this happens after the widget is fully initialized
-        QTimer.singleShot(0, self._load_settings)
+        # Use a timer with a small delay to ensure all widgets are fully initialized
+        QTimer.singleShot(200, self._load_settings)
 
     def _get_start_button_text(self) -> str:
         """Get the text for the start button."""
@@ -1182,7 +1166,6 @@ class SummarizationTab(BaseTab):
                 "analysis_type": "Document Summary",  # Fixed to Document Summary
                 "export_getreceipts": False,
                 # New HCE settings
-                "profile": self.profile_combo.currentText(),
                 "use_skim": True,
                 "enable_routing": True,
                 "routing_threshold": 0.35,  # Default: 35%
@@ -1208,7 +1191,6 @@ class SummarizationTab(BaseTab):
             "analysis_type": "Document Summary",  # Fixed to Document Summary
             "export_getreceipts": False,
             # Unified Pipeline HCE settings
-            "profile": self.profile_combo.currentText(),
             "use_skim": True,
             "miner_model_override": self._get_model_override(
                 self.miner_provider, self.miner_model
@@ -2474,8 +2456,21 @@ class SummarizationTab(BaseTab):
         """Load saved settings from session."""
         logger.info(f"🔧 Loading settings for {self.tab_name} tab...")
         try:
+            # Helper function to safely check if a widget is valid
+            def is_widget_valid(widget):
+                try:
+                    if widget is None:
+                        return False
+                    # Try to access a property to verify the widget hasn't been deleted
+                    _ = widget.objectName()
+                    return True
+                except RuntimeError:
+                    # Widget has been deleted
+                    return False
+
             # Block signals during loading to prevent redundant saves
-            widgets_to_block = [
+            # Only include widgets that are valid
+            candidate_widgets = [
                 self.output_edit,
                 self.provider_combo,
                 self.model_combo,
@@ -2484,8 +2479,7 @@ class SummarizationTab(BaseTab):
                 self.max_claims_spin,
                 self.tier_a_threshold_spin,
                 self.tier_b_threshold_spin,
-                # Unified Pipeline HCE fields
-                self.profile_combo,
+                # Unified Pipeline HCE fields (profile_combo removed - stored internally)
                 # Advanced per-stage provider and model dropdowns (unified pipeline)
                 self.advanced_models_group,
                 self.miner_provider,
@@ -2493,6 +2487,44 @@ class SummarizationTab(BaseTab):
                 self.flagship_judge_provider,
                 self.flagship_judge_model,
             ]
+
+            widgets_to_block = [w for w in candidate_widgets if is_widget_valid(w)]
+
+            if len(widgets_to_block) != len(candidate_widgets):
+                # Find which widgets are invalid for debugging
+                invalid_widget_names = []
+                widget_names = [
+                    "output_edit",
+                    "provider_combo",
+                    "model_combo",
+                    "template_path_edit",
+                    "claim_tier_combo",
+                    "max_claims_spin",
+                    "tier_a_threshold_spin",
+                    "tier_b_threshold_spin",
+                    "advanced_models_group",
+                    "miner_provider",
+                    "miner_model",
+                    "flagship_judge_provider",
+                    "flagship_judge_model",
+                ]
+                for i, widget in enumerate(candidate_widgets):
+                    if not is_widget_valid(widget):
+                        invalid_widget_names.append(
+                            widget_names[i] if i < len(widget_names) else f"widget_{i}"
+                        )
+
+                logger.debug(
+                    f"Some widgets are not valid yet: {invalid_widget_names} - continuing with available widgets"
+                )
+                # If critical widgets are missing, skip loading settings
+                if not all(
+                    is_widget_valid(w) for w in [self.provider_combo, self.model_combo]
+                ):
+                    logger.warning(
+                        "Critical widgets not available, skipping settings load"
+                    )
+                    return
 
             # Block all signals
             for widget in widgets_to_block:
@@ -2504,69 +2536,86 @@ class SummarizationTab(BaseTab):
                 saved_output_dir = self.gui_settings.get_output_directory(
                     self.tab_name, default_output_dir
                 )
-                self.output_edit.setText(saved_output_dir)
+                if is_widget_valid(self.output_edit):
+                    self.output_edit.setText(saved_output_dir)
 
                 # Load provider selection
                 saved_provider = self.gui_settings.get_combo_selection(
                     self.tab_name, "provider", "local"
                 )
-                index = self.provider_combo.findText(saved_provider)
-                if index >= 0:
-                    self.provider_combo.setCurrentIndex(index)
-                    self._update_models()  # Update models after setting provider
+                if is_widget_valid(self.provider_combo):
+                    index = self.provider_combo.findText(saved_provider)
+                    if index >= 0:
+                        self.provider_combo.setCurrentIndex(index)
+                        self._update_models()  # Update models after setting provider
 
                 # Load model selection
                 saved_model = self.gui_settings.get_combo_selection(
                     self.tab_name, "model", "qwen2.5-coder:7b-instruct"
                 )
-                index = self.model_combo.findText(saved_model)
-                if index >= 0:
-                    self.model_combo.setCurrentIndex(index)
+                if is_widget_valid(self.model_combo):
+                    index = self.model_combo.findText(saved_model)
+                    if index >= 0:
+                        self.model_combo.setCurrentIndex(index)
 
                 # Load max tokens
                 # Load template path
+                default_template = (
+                    "/Users/matthewgreer/Projects/Prompts/Summary Prompt.txt"
+                )
                 saved_template = self.gui_settings.get_line_edit_text(
                     self.tab_name, "template_path", ""
                 )
-                self.template_path_edit.setText(saved_template)
+                # Use default if saved template is empty
+                if not saved_template or not saved_template.strip():
+                    saved_template = default_template
+                if is_widget_valid(self.template_path_edit):
+                    self.template_path_edit.setText(saved_template)
+
+                # Load file list - add default file if list is empty
+                if is_widget_valid(self.file_list) and self.file_list.count() == 0:
+                    # Using curly quotes (U+2018 and U+2019) to match actual filename
+                    default_input_file = "/Users/matthewgreer/Projects/Knowledge_Chipper/output/transcripts/Steve Bannon_ Silicon Valley Is Turning Us Into \u2018Digital Serfs\u2019_vvj_J2tB2Ag.md"
+                    if Path(default_input_file).exists():
+                        self.file_list.addItem(default_input_file)
+                        logger.debug(f"Added default input file: {default_input_file}")
 
                 # Load HCE settings
                 saved_claim_tier = self.gui_settings.get_combo_selection(
                     self.tab_name, "claim_tier", "All"
                 )
-                index = self.claim_tier_combo.findText(saved_claim_tier)
-                if index >= 0:
-                    self.claim_tier_combo.setCurrentIndex(index)
+                if is_widget_valid(self.claim_tier_combo):
+                    index = self.claim_tier_combo.findText(saved_claim_tier)
+                    if index >= 0:
+                        self.claim_tier_combo.setCurrentIndex(index)
 
                 saved_max_claims = self.gui_settings.get_spinbox_value(
                     self.tab_name, "max_claims", 0
                 )
-                self.max_claims_spin.setValue(saved_max_claims)
+                if is_widget_valid(self.max_claims_spin):
+                    self.max_claims_spin.setValue(saved_max_claims)
 
                 saved_tier_a_threshold = self.gui_settings.get_spinbox_value(
                     self.tab_name, "tier_a_threshold", 85
                 )
-                self.tier_a_threshold_spin.setValue(saved_tier_a_threshold)
+                if is_widget_valid(self.tier_a_threshold_spin):
+                    self.tier_a_threshold_spin.setValue(saved_tier_a_threshold)
 
                 saved_tier_b_threshold = self.gui_settings.get_spinbox_value(
                     self.tab_name, "tier_b_threshold", 65
                 )
-                self.tier_b_threshold_spin.setValue(saved_tier_b_threshold)
+                if is_widget_valid(self.tier_b_threshold_spin):
+                    self.tier_b_threshold_spin.setValue(saved_tier_b_threshold)
 
                 # Load new HCE settings
-                # Profile selection
-                saved_profile = self.gui_settings.get_combo_selection(
-                    self.tab_name, "profile", "Balanced"
-                )
-                index = self.profile_combo.findText(saved_profile)
-                if index >= 0:
-                    self.profile_combo.setCurrentIndex(index)
+                # Profile removed - using explicit per-stage model controls instead
 
                 # Load advanced models section state
                 saved_advanced_expanded = self.gui_settings.get_checkbox_state(
                     self.tab_name, "advanced_models_expanded", True
                 )
-                self.advanced_models_group.setChecked(saved_advanced_expanded)
+                if is_widget_valid(self.advanced_models_group):
+                    self.advanced_models_group.setChecked(saved_advanced_expanded)
 
                 # Load advanced per-stage provider and model selections (unified pipeline)
                 advanced_dropdowns = [
@@ -2579,41 +2628,71 @@ class SummarizationTab(BaseTab):
                 ]
 
                 for stage_name, provider_combo, model_combo in advanced_dropdowns:
-                    # Load provider selection - default to local (MVP LLM)
-                    saved_provider = self.gui_settings.get_combo_selection(
-                        self.tab_name,
-                        f"{stage_name}_provider",
-                        "local",  # Default to local
-                    )
-                    index = provider_combo.findText(saved_provider)
-                    if index >= 0:
-                        provider_combo.setCurrentIndex(index)
-                    else:
-                        # If saved provider not found, use local
-                        local_index = provider_combo.findText("local")
-                        if local_index >= 0:
-                            provider_combo.setCurrentIndex(local_index)
-                            saved_provider = "local"
+                    # Skip if widgets are not valid
+                    if not is_widget_valid(provider_combo) or not is_widget_valid(
+                        model_combo
+                    ):
+                        logger.debug(f"Skipping {stage_name} - widgets not valid")
+                        continue
 
-                    # Update models for this provider
-                    if saved_provider:
-                        self._update_advanced_model_combo(saved_provider, model_combo)
+                    try:
+                        # Load provider selection - default to local (MVP LLM)
+                        saved_provider = self.gui_settings.get_combo_selection(
+                            self.tab_name,
+                            f"{stage_name}_provider",
+                            "local",  # Default to local
+                        )
+                        index = provider_combo.findText(saved_provider)
+                        if index >= 0:
+                            provider_combo.setCurrentIndex(index)
+                        else:
+                            # If saved provider not found, use local
+                            local_index = provider_combo.findText("local")
+                            if local_index >= 0:
+                                provider_combo.setCurrentIndex(local_index)
+                                saved_provider = "local"
 
-                    # Load model selection - default to MVP LLM model
-                    default_model = (
-                        "qwen2.5:7b-instruct" if saved_provider == "local" else ""
-                    )
-                    saved_model = self.gui_settings.get_combo_selection(
-                        self.tab_name, f"{stage_name}_model", default_model
-                    )
-                    index = model_combo.findText(saved_model)
-                    if index >= 0:
-                        model_combo.setCurrentIndex(index)
+                        # Update models for this provider
+                        if saved_provider:
+                            self._update_advanced_model_combo(
+                                saved_provider, model_combo
+                            )
+
+                        # Load model selection - default to MVP LLM model
+                        default_model = (
+                            "qwen2.5:7b-instruct" if saved_provider == "local" else ""
+                        )
+                        saved_model = self.gui_settings.get_combo_selection(
+                            self.tab_name, f"{stage_name}_model", default_model
+                        )
+
+                        # If we have a saved model, try to set it
+                        if saved_model:
+                            index = model_combo.findText(saved_model)
+                            if index >= 0:
+                                model_combo.setCurrentIndex(index)
+                            elif saved_provider == "local" and default_model:
+                                # Saved model not found but provider is local, use default
+                                index = model_combo.findText(default_model)
+                                if index >= 0:
+                                    model_combo.setCurrentIndex(index)
+                        elif saved_provider == "local" and default_model:
+                            # No saved model but provider is local, use default
+                            index = model_combo.findText(default_model)
+                            if index >= 0:
+                                model_combo.setCurrentIndex(index)
+                    except RuntimeError as e:
+                        logger.debug(f"Widget access error for {stage_name}: {e}")
+                        continue
 
             finally:
                 # Always restore signals, even if an exception occurred
                 for widget in widgets_to_block:
-                    widget.blockSignals(False)
+                    try:
+                        widget.blockSignals(False)
+                    except RuntimeError:
+                        # Widget was deleted, skip it
+                        pass
 
             logger.info(f"✅ Successfully loaded settings for {self.tab_name} tab")
         except Exception as e:
@@ -2718,11 +2797,7 @@ class SummarizationTab(BaseTab):
                 )
 
             # Save unified pipeline HCE settings
-            profile_text = safe_get_text(self.profile_combo, "profile_combo")
-            if profile_text is not None:
-                self.gui_settings.set_combo_selection(
-                    self.tab_name, "profile", profile_text
-                )
+            # Profile removed - using explicit per-stage model controls instead
 
             # Save advanced models section state
             advanced_checked = safe_get_checked(
@@ -2944,22 +3019,6 @@ class SummarizationTab(BaseTab):
         # Trigger settings save after template path is updated
         self._on_setting_changed()
 
-    def _on_profile_changed(self, profile: str) -> None:
-        """Handle profile selection changes."""
-        if profile == "Custom":
-            return  # Don't override custom settings
-
-        logger.debug(f"🔄 Profile changed to: {profile}")
-
-        # Apply profile settings
-        # Profile changes no longer affect routing settings (always enabled with default threshold)
-
-        # Show brief feedback
-        self.append_log(f"📋 Applied {profile} profile settings")
-
-        # Trigger settings save
-        self._save_settings()
-
     def _generate_session_report(
         self, success_count: int, failure_count: int, total_count: int, time_text: str
     ) -> None:
@@ -2978,7 +3037,6 @@ class SummarizationTab(BaseTab):
                     "processing_time": time_text.strip(),
                 },
                 "configuration": {
-                    "profile": self.profile_combo.currentText(),
                     "provider": self.provider_combo.currentText(),
                     "model": self.model_combo.currentText(),
                     "max_tokens": 10000,

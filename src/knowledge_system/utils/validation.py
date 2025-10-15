@@ -65,9 +65,29 @@ def validate_audio_input(input_path: str | Path) -> bool:
     Returns:
         True if input is a valid audio file, False otherwise
     """
-    audio_formats = [".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".webm"]
+    audio_formats = [
+        ".mp3",
+        ".wav",
+        ".m4a",
+        ".flac",
+        ".ogg",
+        ".aac",
+        ".mp4",
+        ".webm",
+        ".opus",
+    ]
 
-    audio_formats = [".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".webm"]
+    audio_formats = [
+        ".mp3",
+        ".wav",
+        ".m4a",
+        ".flac",
+        ".ogg",
+        ".aac",
+        ".mp4",
+        ".webm",
+        ".opus",
+    ]
     return validate_file_input(input_path, audio_formats)
 
 

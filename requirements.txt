@@ -24,7 +24,9 @@ pydub>=0.25.1  # Audio processing and manipulation (required by pyproject.toml)
 # ML and transcription (core)
 
 # YouTube processing
-yt-dlp>=2023.10.13
+# PRODUCTION PIN: Exact version tested and verified
+# To test updates: use requirements-dev.txt, then update this pin after testing
+yt-dlp==2025.9.26  # Last tested: 2025-10-11 - format selection and signature extraction working
 pytube>=15.0.0
 
 # HTTP requests
@@ -48,7 +50,6 @@ psutil>=6.0.0
 # Web scraping and processing
 beautifulsoup4>=4.12.0
 youtube-transcript-api>=1.2.0
-yt-dlp>=2023.12.30
 feedparser>=6.0.0
 
 # Settings management
