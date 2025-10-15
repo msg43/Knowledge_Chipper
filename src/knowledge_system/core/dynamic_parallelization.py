@@ -15,17 +15,14 @@ Key Features:
 - Memory-aware parallelization
 """
 
-import asyncio
 import json
 import logging
 import threading
 import time
-from collections.abc import Callable
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import psutil
 
@@ -748,7 +745,7 @@ def get_parallelization_manager() -> DynamicParallelizationManager | None:
 
 
 def initialize_parallelization_manager(
-    hardware_specs: dict[str, Any]
+    hardware_specs: dict[str, Any],
 ) -> DynamicParallelizationManager:
     """Initialize the global parallelization manager"""
     global _global_manager

@@ -12,7 +12,6 @@ Features:
 - Intelligent disk space management
 """
 
-import asyncio
 import json
 import logging
 import shutil
@@ -22,7 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 from ..processors.hce.config_flex import PipelineConfigFlex, StageModelConfig
 from ..processors.hce.types import EpisodeBundle
@@ -30,14 +29,9 @@ from ..processors.hce.unified_pipeline import UnifiedHCEPipeline
 from ..processors.youtube_download import YouTubeDownloadProcessor
 from ..utils.hardware_detection import detect_hardware_specs
 from .dynamic_parallelization import (
-    DynamicParallelizationManager,
-    JobMetrics,
-    JobType,
-    get_parallelization_manager,
     initialize_parallelization_manager,
 )
-from .intelligent_processing_coordinator import ProcessingPipeline
-from .parallel_processor import ParallelProcessor, initialize_parallel_processor
+from .parallel_processor import initialize_parallel_processor
 
 logger = logging.getLogger(__name__)
 
@@ -214,8 +208,9 @@ class ConnectedProcessingCoordinator:
     async def process_with_audio_preservation(
         self,
         urls: list[str],
-        progress_callback: None
-        | (Callable[[str, int, int, dict[str, Any]], None]) = None,
+        progress_callback: None | (
+            Callable[[str, int, int, dict[str, Any]], None]
+        ) = None,
         resume_from_existing: bool = True,
     ) -> dict[str, Any]:
         """
@@ -382,11 +377,15 @@ class ConnectedProcessingCoordinator:
             output_dir = self.audio_config.staging_location / "downloads"
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Process with YouTube downloader
+            # Process with YouTube downloader (with database service for tracking)
+            from ..database.service import DatabaseService
+            db_service = DatabaseService()
+            
             result = self.youtube_processor.process(
                 url,
                 output_dir=str(output_dir),
                 progress_callback=lambda msg: logger.debug(f"Download progress: {msg}"),
+                db_service=db_service,
             )
 
             if result.success and result.output_files:
@@ -399,16 +398,18 @@ class ConnectedProcessingCoordinator:
                 return {
                     "success": True,
                     "audio_path": str(audio_file),
-                    "transcript_path": str(result.metadata.get("transcript_path"))
-                    if result.metadata.get("transcript_path")
-                    else None,
+                    "transcript_path": (
+                        str(result.metadata.get("transcript_path"))
+                        if result.metadata.get("transcript_path")
+                        else None
+                    ),
                 }
             else:
                 return {
                     "success": False,
-                    "error": result.errors[0]
-                    if result.errors
-                    else "Unknown download error",
+                    "error": (
+                        result.errors[0] if result.errors else "Unknown download error"
+                    ),
                 }
 
         except Exception as e:
@@ -647,9 +648,11 @@ class ConnectedProcessingCoordinator:
                     str(job.audio_path) if job.audio_path else None,
                     str(job.transcript_path) if job.transcript_path else None,
                     json.dumps(job.mining_results) if job.mining_results else None,
-                    json.dumps(job.evaluation_results)
-                    if job.evaluation_results
-                    else None,
+                    (
+                        json.dumps(job.evaluation_results)
+                        if job.evaluation_results
+                        else None
+                    ),
                     job.status,
                     job.created_at.isoformat(),
                     job.completed_at.isoformat() if job.completed_at else None,
@@ -672,9 +675,9 @@ class ConnectedProcessingCoordinator:
             "total_time_seconds": total_time,
             "avg_time_per_job": total_time / total_jobs if total_jobs > 0 else 0,
             "preserved_audio_files": preserved_audio,
-            "audio_preservation_rate": preserved_audio / total_jobs
-            if total_jobs > 0
-            else 0,
+            "audio_preservation_rate": (
+                preserved_audio / total_jobs if total_jobs > 0 else 0
+            ),
         }
 
     def _calculate_audio_size_gb(self) -> float:

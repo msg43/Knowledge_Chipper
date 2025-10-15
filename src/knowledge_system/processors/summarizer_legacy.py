@@ -526,7 +526,7 @@ class SummarizerProcessor(BaseProcessor):
 
         # Group claims by tier
         tier_a_claims = [c for c in filtered_claims if c.tier == "A"]
-        tier_b_claims = [c for c in filtered_claims if c.tier == "B"]
+        _tier_b_claims = [c for c in filtered_claims if c.tier == "B"]
 
         summary_parts = []
 

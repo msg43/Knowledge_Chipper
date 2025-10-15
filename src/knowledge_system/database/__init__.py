@@ -32,7 +32,7 @@ from .models import (
 
 # System 2 models
 try:
-    from .system2_models import Job, JobRun, LLMRequest, LLMResponse
+    pass
 
     SYSTEM2_AVAILABLE = True
 except Exception:
@@ -40,7 +40,7 @@ except Exception:
 
 # Backward-compatibility: export legacy symbol `Video` even if models renamed
 Video = MediaSource
-from .service import DatabaseService
+from .service import DatabaseService  # noqa: E402
 
 # Extend Video model with HCE relationship
 extend_video_model()

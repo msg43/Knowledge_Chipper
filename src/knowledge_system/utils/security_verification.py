@@ -10,7 +10,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 from knowledge_system.logger import get_logger
 
@@ -19,8 +18,6 @@ logger = get_logger(__name__)
 
 class SecurityVerificationError(Exception):
     """Raised when security verification fails."""
-
-    pass
 
 
 class AuthorizationVerifier:

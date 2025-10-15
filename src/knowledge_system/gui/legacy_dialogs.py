@@ -504,9 +504,9 @@ class ProcessingProgressDialog(QDialog):
         self.operation_name = operation_name
         self.file_count = file_count
         self.current_file = 0
-        self.processing_worker: None | (
-            Any
-        ) = None  # Will be set to actual worker thread
+        self.processing_worker: None | (Any) = (
+            None  # Will be set to actual worker thread
+        )
         self.cancellation_token = CancellationToken()  # Create cancellation token
 
         self.setWindowTitle(f"{operation_name} Progress")

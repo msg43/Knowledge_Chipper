@@ -7,7 +7,7 @@ get real-time insights into download and processing performance.
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 from ..logger import get_logger
 from .intelligent_pacing import create_pacing_config_from_settings, get_pacing_manager
@@ -134,7 +134,7 @@ class PacingMonitor:
 
     def _get_recommended_delay(self, status_data: dict[str, Any]) -> float:
         """Get recommended delay for next download."""
-        pacing_manager = self._get_pacing_manager()
+        self._get_pacing_manager()
 
         # Get current processing speed and queue status
         processing_speed = status_data.get("current_processing_speed", 0.0)
@@ -320,7 +320,7 @@ def get_pacing_monitor() -> PacingMonitor:
 def print_current_status():
     """Print current pipeline status to console."""
     monitor = get_pacing_monitor()
-    status = monitor.get_current_status()
+    monitor.get_current_status()
     print(monitor.get_status_summary())
 
 

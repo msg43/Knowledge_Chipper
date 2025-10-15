@@ -225,7 +225,7 @@ class RichLogDisplay(QFrame):
             "ERROR": "#dc3545",
             "CRITICAL": "#dc3545",
         }
-        level_color = level_colors.get(level, "#fffff")
+        _level_color = level_colors.get(level, "#fffff")
 
         # Create formatted text
         format_normal = QTextCharFormat()

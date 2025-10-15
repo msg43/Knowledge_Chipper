@@ -18,19 +18,14 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from ..utils.hardware_detection import detect_hardware_specs
-from .batch_processor import IntelligentBatchProcessor
 from .dynamic_parallelization import (
-    DynamicParallelizationManager,
-    JobMetrics,
     JobType,
-    get_parallelization_manager,
     initialize_parallelization_manager,
 )
-from .parallel_processor import ParallelProcessor, initialize_parallel_processor
+from .parallel_processor import initialize_parallel_processor
 
 logger = logging.getLogger(__name__)
 
@@ -385,7 +380,7 @@ class IntelligentProcessingCoordinator:
 
 # Convenience functions
 def create_processing_coordinator(
-    hardware_specs: dict[str, Any] | None = None
+    hardware_specs: dict[str, Any] | None = None,
 ) -> IntelligentProcessingCoordinator:
     """Create a new intelligent processing coordinator"""
     return IntelligentProcessingCoordinator(hardware_specs)

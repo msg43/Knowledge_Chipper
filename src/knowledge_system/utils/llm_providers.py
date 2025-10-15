@@ -361,9 +361,9 @@ class LocalLLMProvider(BaseLLMProvider):
                 "prompt": prompt,
                 "stream": False,
                 "options": {
-                    "temperature": 0
-                    if schema
-                    else self.temperature,  # Use temp=0 for schema enforcement
+                    "temperature": (
+                        0 if schema else self.temperature
+                    ),  # Use temp=0 for schema enforcement
                     "top_k": 40,
                     "top_p": 0.9,
                     "repeat_penalty": 1.1,

@@ -383,7 +383,9 @@ class YouTubeTranscriptProcessor(BaseProcessor):
             self.proxy_manager = PacketStreamProxyManager()
             if self.proxy_manager.username and self.proxy_manager.auth_key:
                 self.use_proxy = True
-                logger.info("✅ Configured PacketStream proxy for transcript extraction")
+                logger.info(
+                    "✅ Configured PacketStream proxy for transcript extraction"
+                )
             else:
                 logger.warning("⚠️ PACKETSTREAM PROXY NOT CONFIGURED")
                 logger.warning(
@@ -1158,7 +1160,7 @@ class YouTubeTranscriptProcessor(BaseProcessor):
                             else 0
                         )
                         file_info = f" ({file_size_mb:.1f}MB)"
-                    except:
+                    except Exception:
                         file_info = ""
 
                     report_progress(
@@ -2435,9 +2437,7 @@ Diarization processing failed for this video. The transcript was not saved to al
             if index_file and index_file.exists():
                 try:
                     index_file.unlink()
-                    logger.debug(
-                        f"🗑️  Cleaned up session index file: {index_file.name}"
-                    )
+                    logger.debug(f"🗑️  Cleaned up session index file: {index_file.name}")
                 except Exception as e:
                     logger.debug(f"Could not delete index file: {e}")
 

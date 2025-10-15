@@ -6,7 +6,6 @@ Downloads audio and thumbnails from YouTube videos or playlists using yt-dlp.
 Supports configurable output format (mp3/wav), error handling, and returns output file paths and metadata.
 """
 
-import os
 import sys
 from contextlib import contextmanager
 from datetime import datetime
@@ -616,6 +615,14 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 if progress_callback:
                     progress_callback(f"🔍 Extracting video metadata for: {url}")
 
+                # Track metadata and audio download success separately
+                metadata_extracted = False
+                metadata_error = None
+                audio_downloaded_successfully = False
+                audio_file_path_for_db = None
+                audio_file_size = None
+                audio_file_format = None
+
                 try:
                     # Test proxy connectivity and extract metadata
                     # IMPORTANT: Include full ydl_opts (cookies, Android client, etc)
@@ -637,7 +644,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                 "⚠️ WARNING: Using direct connection (no proxy protection)"
                             )
                         if progress_callback:
-                            progress_callback(f"🔗 Testing {proxy_type} connectivity...")
+                            progress_callback(
+                                f"🔗 Testing {proxy_type} connectivity..."
+                            )
 
                         # Quick connectivity test
                         test_info = ydl_test.extract_info(url, download=False)
@@ -680,9 +689,15 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     f"📊 '{video_title[:40]}...' - {duration_minutes:.1f} min"
                                 )
 
+                            # Mark metadata as successfully extracted
+                            metadata_extracted = True
+
                 except Exception as e:
                     error_msg = str(e)
-                    logger.error(f"❌ Metadata extraction failed for {url}: {error_msg}")
+                    metadata_error = error_msg
+                    logger.error(
+                        f"❌ Metadata extraction failed for {url}: {error_msg}"
+                    )
 
                     if progress_callback:
                         if "403" in error_msg or "forbidden" in error_msg.lower():
@@ -786,6 +801,14 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         logger.info(
                                             f"   Found downloaded file: {file_path.name}"
                                         )
+                                        # Track audio file info for database
+                                        audio_downloaded_successfully = True
+                                        audio_file_path_for_db = str(file_path)
+                                        if file_path.exists():
+                                            audio_file_size = file_path.stat().st_size
+                                            audio_file_format = file_path.suffix[
+                                                1:
+                                            ]  # Remove the dot
 
                                     # Mark files as already tracked to skip duplicate processing
                                     files_already_tracked = True
@@ -859,7 +882,8 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                             # PacketStream proxies do not require usage tracking (flat rate)
 
-                            # Register video in database for future deduplication
+                            # Register video in database - MANDATORY for tracking
+                            # Without database entry, downloaded files are orphaned and unusable
                             if video_id and db_service:
                                 try:
                                     video_title = (
@@ -867,22 +891,114 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         if info
                                         else "Unknown Title"
                                     )
-                                    db_service.create_video(
+
+                                    # Create or update video record
+                                    video = db_service.create_video(
                                         video_id=video_id,
                                         title=video_title,
                                         url=url,
-                                        status="completed",
+                                        status=(
+                                            "completed"
+                                            if (
+                                                audio_downloaded_successfully
+                                                and metadata_extracted
+                                            )
+                                            else "partial"
+                                        ),
                                         extraction_method=(
                                             "packetstream" if use_proxy else "direct"
                                         ),
                                     )
-                                    logger.debug(
-                                        f"Registered video {video_id} in database for deduplication"
+
+                                    if not video:
+                                        raise Exception(
+                                            "Database create_video returned None"
+                                        )
+
+                                    # Update audio download status
+                                    if audio_downloaded_successfully:
+                                        db_service.update_audio_status(
+                                            video_id=video_id,
+                                            audio_file_path=audio_file_path_for_db,
+                                            audio_downloaded=True,
+                                            audio_file_size_bytes=audio_file_size,
+                                            audio_format=audio_file_format,
+                                        )
+
+                                    # Update metadata status
+                                    db_service.update_metadata_status(
+                                        video_id=video_id,
+                                        metadata_complete=metadata_extracted,
                                     )
+
+                                    # Mark for retry if either component failed
+                                    if (
+                                        not audio_downloaded_successfully
+                                        or not metadata_extracted
+                                    ):
+                                        db_service.mark_for_retry(
+                                            video_id=video_id,
+                                            needs_metadata_retry=not metadata_extracted,
+                                            needs_audio_retry=not audio_downloaded_successfully,
+                                            failure_reason=(
+                                                f"Metadata: {'OK' if metadata_extracted else metadata_error or 'Failed'}; "
+                                                f"Audio: {'OK' if audio_downloaded_successfully else 'Failed'}"
+                                            ),
+                                        )
+
+                                    logger.info(
+                                        f"Registered video {video_id} in database: "
+                                        f"audio={audio_downloaded_successfully}, metadata={metadata_extracted}"
+                                    )
+
                                 except Exception as db_error:
-                                    logger.warning(
-                                        f"Failed to register video in database: {db_error}"
+                                    # CRITICAL: Database write failure means we can't track this download
+                                    # Clean up the audio file and fail the download
+                                    logger.error(
+                                        f"CRITICAL: Failed to register video {video_id} in database: {db_error}"
                                     )
+
+                                    # Clean up downloaded audio file (orphaned without database entry)
+                                    if (
+                                        audio_file_path_for_db
+                                        and Path(audio_file_path_for_db).exists()
+                                    ):
+                                        try:
+                                            Path(audio_file_path_for_db).unlink()
+                                            logger.info(
+                                                f"Cleaned up orphaned audio file: {audio_file_path_for_db}"
+                                            )
+                                        except Exception as cleanup_error:
+                                            logger.error(
+                                                f"Failed to clean up orphaned file: {cleanup_error}"
+                                            )
+
+                                    # Raise exception to mark this download as failed
+                                    raise Exception(
+                                        f"Database write failed - cannot track download: {db_error}"
+                                    )
+                            elif video_id and not db_service:
+                                # No database service available - this is a critical error
+                                logger.error(
+                                    "CRITICAL: No database service available - cannot track downloads"
+                                )
+                                # Clean up audio file
+                                if (
+                                    audio_file_path_for_db
+                                    and Path(audio_file_path_for_db).exists()
+                                ):
+                                    try:
+                                        Path(audio_file_path_for_db).unlink()
+                                        logger.info(
+                                            f"Cleaned up orphaned audio file: {audio_file_path_for_db}"
+                                        )
+                                    except Exception as cleanup_error:
+                                        logger.error(
+                                            f"Failed to clean up orphaned file: {cleanup_error}"
+                                        )
+                                raise Exception(
+                                    "No database service available - cannot track downloads"
+                                )
 
                             logger.info(f"✅ Successfully downloaded audio for: {url}")
                             if progress_callback:
@@ -994,6 +1110,18 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                                         if filename:
                                             all_files.append(str(filename))
+                                            # Track audio file info for database
+                                            audio_downloaded_successfully = True
+                                            audio_file_path_for_db = str(filename)
+                                            if Path(filename).exists():
+                                                audio_file_size = (
+                                                    Path(filename).stat().st_size
+                                                )
+                                                audio_file_format = Path(
+                                                    filename
+                                                ).suffix[
+                                                    1:
+                                                ]  # Remove the dot
                                         else:
                                             # Check if we have .part files - indicates incomplete download
                                             if part_files:

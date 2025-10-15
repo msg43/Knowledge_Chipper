@@ -5,7 +5,7 @@ Confirms user intent to update HCE database with corrected speaker names
 and reprocess all affected claims and evidence.
 """
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
     QHBoxLayout,

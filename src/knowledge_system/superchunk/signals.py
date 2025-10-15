@@ -93,7 +93,7 @@ def compute_signals(text: str) -> list[tuple[int, Signals]]:
         # sentence-length variance (normalized)
         lens = _sentence_lengths(window_text)
         mean_len = sum(lens) / len(lens)
-        var = sum((l - mean_len) ** 2 for l in lens) / len(lens)
+        var = sum((length - mean_len) ** 2 for length in lens) / len(lens)
         sent_var = max(0.0, min(1.0, var / (mean_len**2 + 1e-6)))
 
         results.append(

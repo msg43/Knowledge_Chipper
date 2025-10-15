@@ -22,7 +22,7 @@ oauth_package_path = (
 if str(oauth_package_path) not in sys.path:
     sys.path.append(str(oauth_package_path))
 
-from ..logger import get_logger
+from ..logger import get_logger  # noqa: E402
 
 logger = get_logger(__name__)
 

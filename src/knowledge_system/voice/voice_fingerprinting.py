@@ -42,8 +42,11 @@ try:
 except ImportError:
     HAS_SPEECHBRAIN = False
 
-from ..database.speaker_models import SpeakerDatabaseService, SpeakerVoiceModel
-from ..logger import get_logger
+from ..database.speaker_models import (
+    SpeakerDatabaseService,
+    SpeakerVoiceModel,
+)  # noqa: E402
+from ..logger import get_logger  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -137,7 +140,7 @@ class VoiceFeatureExtractor:
             try:
                 tempo, _ = librosa.beat.beat_track(y=audio, sr=self.sample_rate)
                 tempo_features = np.array([tempo])
-            except:
+            except Exception:
                 tempo_features = np.array([0.0])
 
             return np.concatenate([pitch_features, tempo_features])
@@ -549,7 +552,7 @@ class VoiceFingerprintProcessor:
         """Identify the most likely speaker from enrolled profiles."""
         try:
             # Extract fingerprint from audio
-            test_fingerprint = self.extract_voice_fingerprint(audio)
+            self.extract_voice_fingerprint(audio)
 
             # Get all voice profiles
             # TODO: Implement get_all_voices in database service

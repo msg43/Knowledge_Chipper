@@ -77,13 +77,15 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         if not model_path.exists():
             return False, "Model file does not exist"
 
-        # Expected minimum sizes (in MB) - corrupted files will be much smaller
+        # Expected minimum sizes (in MB) - set to ~90% of typical size to catch corruption
+        # while allowing for compression variations
+        # Truly corrupted files will be MUCH smaller (like 6MB instead of 3000MB)
         expected_min_sizes = {
-            "tiny": 70,
-            "base": 135,
-            "small": 450,
-            "medium": 1400,
-            "large": 3000,
+            "tiny": 65,  # ~90% of 75MB
+            "base": 120,  # ~90% of 142MB
+            "small": 400,  # ~90% of 466MB
+            "medium": 1200,  # ~90% of 1400MB
+            "large": 2700,  # ~90% of 3094MB - allows for 2951MB to pass
         }
 
         file_size_mb = model_path.stat().st_size / (1024 * 1024)
@@ -157,9 +159,6 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             # validation
 
             # Download with progress tracking and timeout
-            import threading
-            import time
-            import urllib.request
 
             # Check available memory before downloading large models
             if model_name == "large":
@@ -759,7 +758,9 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 #     cmd.extend(["-fa"])  # Enable flash attention
                 #     logger.info("🚀 Enabled flash attention for Apple Silicon")
 
-                logger.info("🚀 GPU acceleration enabled (default whisper.cpp behavior)")
+                logger.info(
+                    "🚀 GPU acceleration enabled (default whisper.cpp behavior)"
+                )
 
                 # Add output options
                 cmd.extend(
@@ -1125,7 +1126,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                     # Extract filename from command (the input file is usually the last argument)
                     try:
                         filename = Path(cmd[-5]).name if len(cmd) > 5 else "audio"
-                    except:
+                    except Exception:
                         filename = "audio"
 
                     self.progress_callback(

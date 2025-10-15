@@ -129,7 +129,7 @@ class SupabaseStorageService:
         try:
             with open(path, "rb") as f:
                 # Supabase-py v2: storage.from_(bucket).upload(file=f, path=dest, file_options={...})
-                response = self.client.storage.from_(
+                _response = self.client.storage.from_(
                     effective_bucket
                 ).upload(  # type: ignore[attr-defined]
                     file=f, path=dest_path, file_options=file_options

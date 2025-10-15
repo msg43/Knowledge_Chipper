@@ -157,7 +157,35 @@ class VideoDeduplicationService:
             "status": existing_video.status,
             "processed_at": existing_video.processed_at,
             "extraction_method": existing_video.extraction_method,
+            "audio_downloaded": getattr(existing_video, "audio_downloaded", False),
+            "metadata_complete": getattr(existing_video, "metadata_complete", False),
         }
+
+        # CRITICAL: Check if video is actually complete (has both audio and metadata)
+        # Partial downloads should NOT be considered duplicates
+        is_complete = getattr(existing_video, "audio_downloaded", False) and getattr(
+            existing_video, "metadata_complete", False
+        )
+
+        if not is_complete:
+            # Video exists but is incomplete - allow reprocessing
+            logger.info(
+                f"Video {video_id} exists but is incomplete "
+                f"(audio={getattr(existing_video, 'audio_downloaded', False)}, "
+                f"metadata={getattr(existing_video, 'metadata_complete', False)}). "
+                "Allowing reprocessing."
+            )
+            return DeduplicationResult(
+                video_id=video_id,
+                is_duplicate=False,  # Not a duplicate - needs completion
+                existing_video=video_data,
+                recommendations=[
+                    "Video has partial download - will attempt to complete",
+                    f"Missing: {'audio' if not getattr(existing_video, 'audio_downloaded', False) else ''}"
+                    f"{' and ' if not getattr(existing_video, 'audio_downloaded', False) and not getattr(existing_video, 'metadata_complete', False) else ''}"
+                    f"{'metadata' if not getattr(existing_video, 'metadata_complete', False) else ''}",
+                ],
+            )
 
         if policy == DuplicationPolicy.FORCE_REPROCESS:
             return DeduplicationResult(

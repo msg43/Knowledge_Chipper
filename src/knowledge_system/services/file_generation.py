@@ -631,7 +631,7 @@ class FileGenerationService:
         # Categorize claims by tier
         tier_a_claims = [c for c in claims if c.get("tier") == "A"]
         tier_b_claims = [c for c in claims if c.get("tier") == "B"]
-        tier_c_claims = [c for c in claims if c.get("tier") == "C"]
+        _tier_c_claims = [c for c in claims if c.get("tier") == "C"]
 
         # Generate markdown content with proper YAML frontmatter
         yaml_frontmatter = yaml.dump(frontmatter, default_flow_style=False)

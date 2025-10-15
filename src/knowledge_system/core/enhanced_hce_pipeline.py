@@ -6,16 +6,14 @@ Integrates the dynamic parallelization system with the existing
 Hybrid Claim Extractor (HCE) pipeline for optimal performance.
 """
 
-import asyncio
 import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from .dynamic_parallelization import JobType, get_parallelization_manager
+from .dynamic_parallelization import get_parallelization_manager
 from .parallel_processor import (
-    get_parallel_processor,
     initialize_parallel_processor,
     process_evaluation_parallel,
     process_mining_parallel,
@@ -97,13 +95,15 @@ class EnhancedHCEPipeline:
             chunks,
             miner_func,
             self.hardware_specs,
-            lambda completed, total: progress_callback(
-                f"Mining claims ({completed}/{total})",
-                10 + (completed * 40) // total,
-                100,
-            )
-            if progress_callback
-            else None,
+            lambda completed, total: (
+                progress_callback(
+                    f"Mining claims ({completed}/{total})",
+                    10 + (completed * 40) // total,
+                    100,
+                )
+                if progress_callback
+                else None
+            ),
         )
         mining_time = time.time() - mining_start
 
@@ -126,13 +126,15 @@ class EnhancedHCEPipeline:
             all_claims,
             evaluator_func,
             self.hardware_specs,
-            lambda completed, total: progress_callback(
-                f"Evaluating claims ({completed}/{total})",
-                50 + (completed * 40) // total,
-                100,
-            )
-            if progress_callback
-            else None,
+            lambda completed, total: (
+                progress_callback(
+                    f"Evaluating claims ({completed}/{total})",
+                    50 + (completed * 40) // total,
+                    100,
+                )
+                if progress_callback
+                else None
+            ),
         )
         evaluation_time = time.time() - evaluation_start
 
@@ -258,9 +260,9 @@ class EnhancedHCEPipeline:
         """Get current resource utilization status"""
         resource_status = self.processor.get_resource_status()
         resource_status["processing_stats"] = self.processing_stats
-        resource_status[
-            "hardware_optimization"
-        ] = self._get_hardware_optimization_status()
+        resource_status["hardware_optimization"] = (
+            self._get_hardware_optimization_status()
+        )
         return resource_status
 
     def save_performance_data(self, filepath: Path):

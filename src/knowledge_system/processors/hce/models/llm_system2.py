@@ -8,7 +8,7 @@ through the System 2 LLM adapter for proper tracking and rate limiting.
 import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ....core.llm_adapter import get_llm_adapter
 from ....errors import ErrorCode, KnowledgeSystemError
@@ -84,8 +84,20 @@ class System2LLM:
         Synchronous wrapper for compatibility with existing code.
         """
         try:
-            # Always use asyncio.run() for clean event loop handling
-            return asyncio.run(self._complete_async(prompt, **kwargs))
+            # Check if we're already in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context - create a task and run it
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(
+                        asyncio.run, 
+                        self._complete_async(prompt, **kwargs)
+                    )
+                    return future.result()
+            except RuntimeError:
+                # No running loop - safe to use asyncio.run()
+                return asyncio.run(self._complete_async(prompt, **kwargs))
         except Exception as e:
             logger.error(f"Completion failed: {e}")
             raise KnowledgeSystemError(
@@ -125,8 +137,20 @@ class System2LLM:
         Synchronous wrapper for compatibility.
         """
         try:
-            # Always use asyncio.run() for clean event loop handling
-            return asyncio.run(self._generate_json_async(prompt, **kwargs))
+            # Check if we're already in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context - create a task and run it
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(
+                        asyncio.run, 
+                        self._generate_json_async(prompt, **kwargs)
+                    )
+                    return future.result()
+            except RuntimeError:
+                # No running loop - safe to use asyncio.run()
+                return asyncio.run(self._generate_json_async(prompt, **kwargs))
         except Exception as e:
             logger.error(f"JSON generation failed: {e}")
             raise
@@ -159,10 +183,22 @@ class System2LLM:
         Falls back to regular JSON generation for other providers.
         """
         try:
-            # Always use asyncio.run() for clean event loop handling
-            return asyncio.run(
-                self._generate_structured_json_async(prompt, schema_name, **kwargs)
-            )
+            # Check if we're already in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context - create a task and run it
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(
+                        asyncio.run,
+                        self._generate_structured_json_async(prompt, schema_name, **kwargs)
+                    )
+                    return future.result()
+            except RuntimeError:
+                # No running loop - safe to use asyncio.run()
+                return asyncio.run(
+                    self._generate_structured_json_async(prompt, schema_name, **kwargs)
+                )
         except Exception as e:
             logger.error(f"Structured JSON generation failed: {e}")
             raise

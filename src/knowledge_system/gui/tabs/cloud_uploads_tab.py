@@ -534,7 +534,7 @@ class CloudUploadsTab(BaseTab):
             return
 
         try:
-            stats = self.claims_service.get_database_stats()
+            _stats = self.claims_service.get_database_stats()
             stats_text = """Total Claims: {stats.get('total_claims', 0)}
 Unuploaded: {stats.get('unuploaded_claims', 0)}
 Uploaded: {stats.get('uploaded_claims', 0)}
@@ -976,7 +976,7 @@ Episodes: {stats.get('total_episodes', 0)}"""
                     try:
                         check_timer.stop()
                         progress.close()
-                    except:
+                    except Exception:
                         pass
 
             check_timer.timeout.connect(check_progress)

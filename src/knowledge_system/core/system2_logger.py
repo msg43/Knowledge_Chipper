@@ -14,9 +14,8 @@ import logging
 import time
 from contextvars import ContextVar
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
-from ..errors import ErrorCode
 
 # Context variables for correlation
 _job_run_id: ContextVar[str | None] = ContextVar("job_run_id", default=None)
@@ -222,9 +221,9 @@ class System2Logger:
             "output_count": output_count,
             "duration_ms": duration_ms,
             "errors": errors,
-            "success_rate": (output_count - errors) / input_count
-            if input_count > 0
-            else 0,
+            "success_rate": (
+                (output_count - errors) / input_count if input_count > 0 else 0
+            ),
         }
 
         metrics.update(kwargs)

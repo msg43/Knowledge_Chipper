@@ -9,7 +9,6 @@ Handles formats like:
 """
 
 import re
-from typing import Tuple
 
 
 def parse_model_uri(model_uri: str) -> tuple[str, str]:

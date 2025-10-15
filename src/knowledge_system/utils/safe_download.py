@@ -1,11 +1,9 @@
 """Safe download utilities with proper error handling and recovery."""
-import os
-import signal
+
 import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Optional
 
 import requests
 
@@ -134,7 +132,7 @@ class SafeDownloader:
             if temp_path.exists():
                 try:
                     temp_path.unlink()
-                except:
+                except Exception:
                     pass
 
         return False

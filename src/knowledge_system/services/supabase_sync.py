@@ -338,7 +338,7 @@ class SupabaseSyncService:
 
                     try:
                         # Try upsert to Supabase
-                        response = (
+                        _response = (
                             self.client.table(table_name)
                             .upsert(clean_data, on_conflict=pk_field)
                             .execute()

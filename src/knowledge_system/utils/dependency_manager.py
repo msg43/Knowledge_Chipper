@@ -4,12 +4,10 @@ Handles runtime downloading and management of all models and dependencies.
 """
 
 import json
-import os
 import subprocess
-import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..logger import get_logger
 from .macos_paths import get_cache_dir, get_config_dir

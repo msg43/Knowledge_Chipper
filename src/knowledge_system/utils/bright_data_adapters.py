@@ -592,56 +592,6 @@ class BrightDataAdapter:
         return normalized
 
     @staticmethod
-    def _get_related_videos(response: dict[str, Any]) -> list[dict[str, Any]]:
-        """Extract related videos from Bright Data response."""
-        for field in ["related_videos", "recommendations", "suggested_videos"]:
-            value = BrightDataAdapter._get_nested_field(response, field)
-            if value and isinstance(value, list):
-                return value
-        return []
-
-    @staticmethod
-    def _get_channel_stats(response: dict[str, Any]) -> dict[str, Any]:
-        """Extract channel statistics from Bright Data response."""
-        stats = {}
-
-        # Extract subscriber count
-        subscribers = BrightDataAdapter._get_nested_field(response, "subscribers")
-        if subscribers:
-            stats["subscribers"] = subscribers
-
-        # Extract verification status
-        verified = BrightDataAdapter._get_nested_field(response, "verified")
-        if verified is not None:
-            stats["verified"] = verified
-
-        # Extract channel URL
-        channel_url = BrightDataAdapter._get_nested_field(response, "channel_url")
-        if channel_url:
-            stats["channel_url"] = channel_url
-
-        # Extract handle name
-        handle_name = BrightDataAdapter._get_nested_field(response, "handle_name")
-        if handle_name:
-            stats["handle_name"] = handle_name
-
-        # Extract avatar image
-        avatar_img = BrightDataAdapter._get_nested_field(response, "avatar_img_channel")
-        if avatar_img:
-            stats["avatar_img_channel"] = avatar_img
-
-        return stats
-
-    @staticmethod
-    def _get_video_chapters(response: dict[str, Any]) -> list[dict[str, Any]]:
-        """Extract video chapters/timestamps from Bright Data response."""
-        for field in ["chapters", "video_chapters", "timestamps", "segments"]:
-            value = BrightDataAdapter._get_nested_field(response, field)
-            if value and isinstance(value, list):
-                return value
-        return []
-
-    @staticmethod
     def _is_manual_transcript(response: dict[str, Any]) -> bool:
         """Determine if transcript is manual or auto-generated."""
         for field in ["is_manual", "manual", "kind"]:

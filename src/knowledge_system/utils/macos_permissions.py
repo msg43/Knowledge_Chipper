@@ -10,7 +10,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Optional, Tuple
 
 from knowledge_system.logger import get_logger
 
@@ -35,7 +34,7 @@ class MacOSPermissionHandler:
         try:
             app_path = os.path.abspath(sys.executable)
             return "/Applications/" in app_path
-        except:
+        except Exception:
             return False
 
     def check_file_access(self, path: str) -> tuple[bool, str]:

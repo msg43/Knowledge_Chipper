@@ -5,12 +5,10 @@ This module provides a Disk Drill-like experience for requesting
 Full Disk Access on macOS, with clear user guidance.
 """
 
-import os
 import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional, Tuple
 
 from knowledge_system.logger import get_logger
 
@@ -101,7 +99,7 @@ class FullDiskAccessHelper:
             display dialog "About Full Disk Access\\n\\nFull Disk Access is a macOS security feature that controls which apps can access all files on your computer.\\n\\nWhy does Skip the Podcast Desktop need it?\\n• To read media files from any folder without repeated permission dialogs\\n• To save output files wherever you choose\\n• To access external drives and cloud storage\\n\\nYour Privacy:\\n• We only access files you explicitly choose to process\\n• No data is sent to any servers\\n• You can revoke access anytime in System Settings\\n\\nThe app works without FDA, but you'll need to grant permission for each folder individually." buttons {"OK"} default button "OK" with title "Full Disk Access Information" with icon note
             """
             subprocess.run(["osascript", "-e", info_script], check=False)
-        except:
+        except Exception:
             pass
 
     def guide_to_fda_settings(self) -> bool:

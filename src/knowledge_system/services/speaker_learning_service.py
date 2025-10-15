@@ -165,7 +165,7 @@ class SpeakerLearningService:
                 return None
 
             # Count frequency of names for similar speaker positions
-            speaker_position = speaker_data.get(
+            _speaker_position = speaker_data.get(
                 "position", 0
             )  # 0=main, 1=first guest, etc.
             name_counts = {}

@@ -11,8 +11,10 @@ from pathlib import Path
 # Add the src directory to the path so we can import our modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from knowledge_system.logger import get_logger
-from knowledge_system.utils.obsidian_tags import add_obsidian_hashtags_to_content
+from knowledge_system.logger import get_logger  # noqa: E402
+from knowledge_system.utils.obsidian_tags import (
+    add_obsidian_hashtags_to_content,
+)  # noqa: E402
 
 logger = get_logger(__name__)
 

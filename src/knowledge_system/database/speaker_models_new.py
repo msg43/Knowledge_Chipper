@@ -6,7 +6,6 @@ The database models now live in models.py, but the service class and Pydantic
 models remain here.
 """
 
-import json
 import os
 import sys
 from datetime import datetime, timedelta

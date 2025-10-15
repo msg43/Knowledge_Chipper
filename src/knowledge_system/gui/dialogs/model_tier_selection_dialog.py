@@ -10,32 +10,27 @@ import sys
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QDialog,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QProgressBar,
     QPushButton,
     QRadioButton,
-    QScrollArea,
-    QSizePolicy,
-    QSpacerItem,
     QTextEdit,
     QVBoxLayout,
-    QWidget,
 )
 
 # Import the GitHub model downloader and system detector
 sys.path.append(str(Path(__file__).parent.parent.parent.parent.parent / "scripts"))
-from download_models_from_github import GitHubModelDownloader
+from download_models_from_github import GitHubModelDownloader  # noqa: E402
 
 # Import system detection
 sys.path.append(str(Path(__file__).parent.parent.parent))
-from utils.system_detector import SystemCapabilityDetector, get_system_recommendations
+from utils.system_detector import get_system_recommendations  # noqa: E402
 
 
 class ModelDownloadWorker(QThread):

@@ -272,7 +272,7 @@ class DocumentProcessor(BaseProcessor):
             db = DatabaseService()
             media_id = f"doc_{file_path.stem}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-            media_record = db.create_media_source(
+            _media_record = db.create_media_source(
                 media_id=media_id,
                 title=metadata.title,
                 url=metadata.url or f"file://{file_path.absolute()}",

@@ -370,7 +370,9 @@ def generate_color_coded_markdown_transcript(
         # Process segments
         segments = transcript_data.get("segments", [])
         if not segments:
-            lines.extend(["## 📝 Transcript", "", "*No transcript segments available.*"])
+            lines.extend(
+                ["## 📝 Transcript", "", "*No transcript segments available.*"]
+            )
             return "\n".join(lines)
 
         # Collect speakers for legend

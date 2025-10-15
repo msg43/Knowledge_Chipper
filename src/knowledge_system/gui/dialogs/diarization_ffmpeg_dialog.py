@@ -211,7 +211,9 @@ class DiarizationFFmpegDialog(QDialog):
                 ffprobe_existing = _shutil.which("ffprobe")
                 if ffprobe_existing:
                     _os.environ["FFPROBE_PATH"] = ffprobe_existing
-                self.progress_label.setText("✅ FFmpeg already installed - configuring…")
+                self.progress_label.setText(
+                    "✅ FFmpeg already installed - configuring…"
+                )
                 self.progress_bar.setValue(100)
                 self.installation_completed.emit(True)
                 self.accept()

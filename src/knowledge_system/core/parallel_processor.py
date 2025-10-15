@@ -6,19 +6,15 @@ Integrates the dynamic parallelization manager with the existing
 processing pipeline to provide intelligent resource-aware parallelization.
 """
 
-import asyncio
 import logging
-import time
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from .dynamic_parallelization import (
-    DynamicParallelizationManager,
     JobMetrics,
     JobType,
-    get_parallelization_manager,
     initialize_parallelization_manager,
 )
 

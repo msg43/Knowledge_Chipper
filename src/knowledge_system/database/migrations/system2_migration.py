@@ -7,15 +7,8 @@ This migration:
 3. Creates new job orchestration and LLM tracking tables
 """
 
-import sqlite3
-from datetime import datetime
-from pathlib import Path
-
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-
-from ..models import Base
-from ..system2_models import Job, JobRun, LLMRequest, LLMResponse
 
 
 def migrate_to_system2(session: Session):
@@ -180,7 +173,7 @@ def migrate_to_system2(session: Session):
         .all()
     )
 
-    required_tables = set(new_tables + tables_to_update)
+    set(new_tables + tables_to_update)
     existing = set(final_tables)
 
     if all(table in existing for table in new_tables):
@@ -196,9 +189,6 @@ if __name__ == "__main__":
     # Standalone execution for manual migration
     import os
     import sys
-
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
 
     sys.path.append(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))

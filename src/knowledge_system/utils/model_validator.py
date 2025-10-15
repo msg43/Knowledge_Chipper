@@ -1,9 +1,9 @@
 """Model validation and compatibility checking utilities."""
+
 import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +56,15 @@ class ModelValidator:
         self._cache_timestamp: float | None = None
         self._cache_ttl = 5.0  # Cache for 5 seconds to cover startup checks
 
-    def check_whisper_models(self, use_cache: bool = True) -> dict[str, bool]:
+    def check_whisper_models(
+        self, use_cache: bool = True, log_findings: bool = False
+    ) -> dict[str, bool]:
         """
         Check which Whisper models are installed.
 
         Args:
             use_cache: If True, use cached results if available and fresh
+            log_findings: If True, log each model found (useful for debugging)
         """
         # Check if we have a valid cache
         if (
@@ -90,9 +93,10 @@ class ModelValidator:
                         model_file = check_dir / f"ggml-{model_variant}.bin"
                         if model_file.exists():
                             found = True
-                            logger.info(
-                                f"Found Whisper model: {model_variant} at {model_file}"
-                            )
+                            if log_findings:
+                                logger.info(
+                                    f"Found Whisper model: {model_variant} at {model_file}"
+                                )
                             break
                 if found:
                     break

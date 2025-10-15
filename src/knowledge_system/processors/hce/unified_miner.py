@@ -5,7 +5,7 @@ Unified Miner for extracting claims, jargon, people, and mental models in a sing
 import json
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from .model_uri_parser import parse_model_uri
 from .models.llm_system2 import System2LLM

@@ -1,5 +1,6 @@
 """Model download notification widget for persistent user feedback."""
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+
+from PyQt6.QtCore import QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QFrame,
@@ -7,7 +8,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QProgressBar,
     QPushButton,
-    QWidget,
 )
 
 from ...logger import get_logger

@@ -378,7 +378,7 @@ def test_model_cache():
     print(f"✅ Same instance: {model1 is model2}")
 
     print("Loading diarization model...")
-    model3 = cache.get_model(
+    _model3 = cache.get_model(
         ModelType.DIARIZATION,
         "pyannote/speaker-diarization@2023.07",
         "mps",

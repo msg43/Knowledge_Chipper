@@ -67,7 +67,7 @@ class IPCCommunicator:
                 }
                 try:
                     print(json.dumps(fallback_message), file=sys.stdout, flush=True)
-                except:
+                except Exception:
                     # Last resort - raw text
                     print(f"FATAL_IPC_ERROR: {str(e)}", file=sys.stderr, flush=True)
 

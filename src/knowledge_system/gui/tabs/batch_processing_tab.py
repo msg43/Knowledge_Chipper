@@ -7,13 +7,11 @@ Provides one-button processing for large-scale episode operations.
 """
 
 import asyncio
-import threading
 import time
 from collections.abc import Callable
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -25,10 +23,8 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QSpinBox,
     QSplitter,
-    QTabWidget,
     QTextEdit,
     QTreeWidget,
     QTreeWidgetItem,
@@ -41,7 +37,6 @@ from ...core.batch_processor import (
     IntelligentBatchProcessor,
     start_episode_batch_process,
 )
-from ...core.dynamic_parallelization import initialize_parallelization_manager
 from ...utils.hardware_detection import detect_hardware_specs
 from ..components.base_tab import BaseTab
 

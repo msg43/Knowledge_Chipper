@@ -75,9 +75,11 @@ class ConceptExtractor:
                             model_id=f"mm_chunk_{i//chunk_size}_{j}",
                             name=r["name"],
                             definition=r.get("definition"),
-                            first_mention_ts=str(first_mention_ts)
-                            if first_mention_ts
-                            else source_segment.t0,
+                            first_mention_ts=(
+                                str(first_mention_ts)
+                                if first_mention_ts
+                                else source_segment.t0
+                            ),
                             evidence_spans=[
                                 EvidenceSpan(**e)
                                 for e in r.get("evidence", [])

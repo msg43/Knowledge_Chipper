@@ -809,7 +809,7 @@ class YouTubeBatchWorker(QThread):
             # Download using yt-dlp with Webshare proxy
             from ...config import get_settings
 
-            settings = get_settings()
+            _settings = get_settings()
 
             import yt_dlp
 
@@ -871,7 +871,7 @@ class YouTubeBatchWorker(QThread):
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
-            except Exception as e:
+            except Exception:
                 if (
                     download_cancelled
                     or self.should_stop
@@ -1008,7 +1008,7 @@ class YouTubeBatchWorker(QThread):
             progress_callback("Starting transcription processing")
 
             # Record processing start for intelligent pacing
-            processing_start_time = time.time()
+            _processing_start_time = time.time()
             try:
                 from ...utils.intelligent_pacing import (
                     create_pacing_config_from_settings,
@@ -1556,7 +1556,7 @@ class YouTubeBatchWorker(QThread):
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
-            except Exception as e:
+            except Exception:
                 if (
                     download_cancelled
                     or self.should_stop

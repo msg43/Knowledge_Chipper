@@ -161,7 +161,7 @@ class StructuredCategoryAnalyzer:
         """
         try:
             # Create mapping of category names to categories for easy lookup
-            category_map = {cat.category_name: cat for cat in categories}
+            _category_map = {cat.category_name: cat for cat in categories}
 
             for claim in claims:
                 claim_categories = []

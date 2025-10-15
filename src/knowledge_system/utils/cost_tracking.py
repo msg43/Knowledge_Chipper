@@ -102,7 +102,7 @@ class CostTracker:
 
             # Calculate date range
             end_date = datetime.utcnow()
-            start_date = end_date - timedelta(days=days)
+            _start_date = end_date - timedelta(days=days)
 
             # Get Bright Data specific costs
             bright_data_costs = cost_breakdown.get("bright_data_costs", [])

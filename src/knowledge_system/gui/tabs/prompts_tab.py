@@ -1,16 +1,14 @@
 """Prompts tab for managing and editing system prompts and JSON schemas."""
 
-import json
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont, QTextCharFormat, QTextCursor
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QComboBox,
     QFileDialog,
-    QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -745,9 +743,7 @@ class PromptsTab(BaseTab):
     def _load_settings(self) -> None:
         """Load saved settings from session."""
         # No persistent settings for this tab currently
-        pass
 
     def _save_settings(self) -> None:
         """Save current settings to session."""
         # No persistent settings for this tab currently
-        pass

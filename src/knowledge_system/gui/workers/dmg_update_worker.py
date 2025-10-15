@@ -145,7 +145,7 @@ class DMGUpdateWorker(QThread):
             self.update_progress.emit("💾 Preparing for installation...")
             self.update_progress_percent.emit(60, "Backing up settings")
 
-            backup_info = self._prepare_update()
+            self._prepare_update()
 
             # Step 4: Prepare for installation and quit app
             self.update_progress.emit("🔄 Preparing for installation...")

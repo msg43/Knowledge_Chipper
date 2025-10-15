@@ -6,7 +6,6 @@ from typing import Any
 import yaml
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -1465,7 +1464,9 @@ class SummarizationTab(BaseTab):
             # If download succeeded, continue processing
             dialog_result = dialog.result()
             if dialog_result == QDialog.DialogCode.Accepted:
-                self.append_log(f"✅ Model '{clean_model_name}' downloaded successfully")
+                self.append_log(
+                    f"✅ Model '{clean_model_name}' downloaded successfully"
+                )
                 self._continue_processing_after_model_check()
             else:
                 self.append_log("❌ Model download cancelled or failed")
@@ -3141,7 +3142,7 @@ class SummarizationTab(BaseTab):
             try:
                 recent_claims = db.get_recent_claims(limit=1)
                 return len(recent_claims) > 0
-            except:
+            except Exception:
                 # If get_recent_claims doesn't exist, assume we have claims if HCE is enabled
                 return True
 
@@ -3314,20 +3315,6 @@ class SummarizationTab(BaseTab):
 
         except Exception as e:
             logger.error(f"Failed to handle claim validation completion: {e}")
-
-    def _on_processing_finished(
-        self, success_count: int, failure_count: int, total_count: int
-    ):
-        """Handle summarization completion."""
-        # Stop rich log display
-        self.rich_log_display.stop_processing()
-
-        self.append_log("\n✅ Enhanced summarization completed!")
-        self.append_log("📊 Final Summary:")
-        self.append_log(f"   • Successfully processed: {success_count} files")
-        if failure_count > 0:
-            self.append_log(f"   • Failed to process: {failure_count} files")
-        self.append_log(f"   • Total files: {total_count}")
 
     def _on_processor_progress(self, message: str, percentage: int):
         """Handle progress updates from the processor log integrator."""

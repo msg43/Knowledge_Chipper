@@ -9,11 +9,6 @@ This creates a Disk Drill-like experience where the app:
 4. Relaunches without warnings
 """
 
-import os
-import plistlib
-import subprocess
-import sys
-import tempfile
 from pathlib import Path
 
 

@@ -697,7 +697,7 @@ class CloudTranscriptionSummary(QDialog):
                         # Handle both dictionary and string formats
                         if isinstance(failure, dict):
                             title = failure.get("title", "Unknown")
-                            error = failure.get("error", "Unknown error")
+                            failure.get("error", "Unknown error")
                         elif isinstance(failure, str):
                             # If it's just a URL string, extract video ID or use URL
                             title = (
@@ -705,10 +705,8 @@ class CloudTranscriptionSummary(QDialog):
                                 if len(failure) >= 11
                                 else failure
                             )
-                            error = "Processing failed"
                         else:
                             title = "Unknown"
-                            error = "Unknown error"
 
                         # Truncate long titles for display
                         display_title = title[:40] + "..." if len(title) > 40 else title

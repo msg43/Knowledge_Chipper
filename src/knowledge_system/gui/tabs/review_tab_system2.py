@@ -7,20 +7,17 @@ extracted by the HCE pipeline with SQLite backend and validation.
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from PyQt6.QtCore import (
     QAbstractTableModel,
     QModelIndex,
     Qt,
     QTimer,
-    QVariant,
-    pyqtSignal,
 )
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QAbstractItemView,
-    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -51,7 +48,7 @@ def extract_scores(claim: Claim) -> dict[str, Any]:
         if isinstance(claim.scores_json, str):
             try:
                 scores = json.loads(claim.scores_json)
-            except:
+            except Exception:
                 scores = {}
         elif isinstance(claim.scores_json, dict):
             scores = claim.scores_json
@@ -196,8 +193,6 @@ class ClaimsTableModel(QAbstractTableModel):
 
     Implements the Claim Review Grid specification from TECHNICAL_SPECIFICATIONS.md.
     """
-
-    dataChanged = pyqtSignal()
 
     def __init__(self, db_service: DatabaseService, parent=None):
         super().__init__(parent)
@@ -570,6 +565,11 @@ class ReviewTabSystem2(QWidget):
 
         # Enable double-click editing
         self.table_view.doubleClicked.connect(self._on_cell_double_clicked)
+        
+        # Connect selection changed to update delete button state
+        self.table_view.selectionModel().selectionChanged.connect(
+            self._on_selection_changed
+        )
 
         layout.addWidget(self.table_view)
 
@@ -582,6 +582,16 @@ class ReviewTabSystem2(QWidget):
         button_layout.addWidget(auto_save_info)
 
         button_layout.addStretch()
+
+        # Delete button
+        self.delete_btn = QPushButton("🗑️ Delete Selected")
+        self.delete_btn.clicked.connect(self._delete_selected_claims)
+        self.delete_btn.setEnabled(False)  # Initially disabled until selection is made
+        self.delete_btn.setToolTip(
+            "Permanently delete selected claims from the database.\n"
+            "This action cannot be undone."
+        )
+        button_layout.addWidget(self.delete_btn)
 
         # Export button group
         export_csv_btn = QPushButton("📤 Export CSV")
@@ -652,7 +662,11 @@ class ReviewTabSystem2(QWidget):
     def _on_data_changed(self):
         """Handle data changes - auto-save is now handled per-cell in setData."""
         # Changes are auto-saved immediately, so nothing to do here
-        pass
+
+    def _on_selection_changed(self):
+        """Handle selection changes to enable/disable delete button."""
+        selected_indexes = self.table_view.selectionModel().selectedRows()
+        self.delete_btn.setEnabled(len(selected_indexes) > 0)
 
     def _save_changes(self):
         """Save all pending changes."""
@@ -682,7 +696,73 @@ class ReviewTabSystem2(QWidget):
         """Check for database updates (for multi-user scenarios)."""
         # In a production system, this would check for changes
         # made by other users and prompt to reload if needed
-        pass
+
+    def _delete_selected_claims(self):
+        """Delete selected claims from the database."""
+        # Get selected rows
+        selected_indexes = self.table_view.selectionModel().selectedRows()
+        
+        if not selected_indexes:
+            QMessageBox.information(
+                self,
+                "No Selection",
+                "Please select one or more claims to delete.",
+            )
+            return
+        
+        # Get unique rows (in case multiple cells in same row are selected)
+        selected_rows = sorted(set(index.row() for index in selected_indexes), reverse=True)
+        
+        # Get the claims to delete
+        claims_to_delete = [self.model.claims[row] for row in selected_rows]
+        
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self,
+            "Confirm Deletion",
+            f"Are you sure you want to permanently delete {len(claims_to_delete)} claim(s)?\n\n"
+            "This action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        # Delete from database
+        try:
+            deleted_count = 0
+            with self.db_service.get_session() as session:
+                for claim in claims_to_delete:
+                    # Find and delete the claim
+                    db_claim = (
+                        session.query(Claim)
+                        .filter_by(episode_id=claim.episode_id, claim_id=claim.claim_id)
+                        .first()
+                    )
+                    
+                    if db_claim:
+                        session.delete(db_claim)
+                        deleted_count += 1
+                
+                session.commit()
+            
+            # Refresh the view
+            self._refresh_data()
+            
+            QMessageBox.information(
+                self,
+                "Deletion Complete",
+                f"Successfully deleted {deleted_count} claim(s) from the database.",
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to delete claims: {e}")
+            QMessageBox.critical(
+                self,
+                "Deletion Error",
+                f"Failed to delete claims:\n\n{str(e)}",
+            )
 
     def _export_to_csv(self):
         """Export current view to CSV."""
@@ -818,9 +898,11 @@ class ReviewTabSystem2(QWidget):
                             "source_url": episode.source_url,
                             "media_type": episode.media_type,
                             "duration_seconds": episode.duration_seconds,
-                            "published_at": str(episode.published_at)
-                            if episode.published_at
-                            else None,
+                            "published_at": (
+                                str(episode.published_at)
+                                if episode.published_at
+                                else None
+                            ),
                         }
                     )
 
@@ -836,12 +918,12 @@ class ReviewTabSystem2(QWidget):
                             "first_mention_ts": claim.first_mention_ts,
                             "upload_status": claim.upload_status,
                             "scores_json": claim.scores_json,
-                            "inserted_at": str(claim.inserted_at)
-                            if claim.inserted_at
-                            else None,
-                            "updated_at": str(claim.updated_at)
-                            if claim.updated_at
-                            else None,
+                            "inserted_at": (
+                                str(claim.inserted_at) if claim.inserted_at else None
+                            ),
+                            "updated_at": (
+                                str(claim.updated_at) if claim.updated_at else None
+                            ),
                         }
                     )
 
@@ -911,9 +993,9 @@ class ReviewTabSystem2(QWidget):
                         "source_url": episode.source_url or "",
                         "media_type": episode.media_type or "unknown",
                         "duration_seconds": episode.duration_seconds or 0,
-                        "published_at": str(episode.published_at)
-                        if episode.published_at
-                        else None,
+                        "published_at": (
+                            str(episode.published_at) if episode.published_at else None
+                        ),
                     }
 
                 # Build claim upload data

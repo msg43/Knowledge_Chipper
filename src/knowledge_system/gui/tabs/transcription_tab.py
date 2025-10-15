@@ -31,7 +31,6 @@ from ...utils.cancellation import CancellationError
 from ..components.base_tab import BaseTab
 from ..components.completion_summary import TranscriptionCompletionSummary
 from ..components.enhanced_error_dialog import show_enhanced_error
-from ..components.enhanced_progress_display import TranscriptionProgressDisplay
 from ..components.file_operations import FileOperationsMixin
 
 # Removed rich log display import - using main output_text area instead
@@ -218,7 +217,15 @@ class EnhancedTranscriptionWorker(QThread):
                         int(20 + (idx / total) * 70),
                     )
 
-                    result = downloader.process(url, output_dir=downloads_dir)
+                    # Import and pass database service for partial download tracking
+                    from ...database.service import DatabaseService
+                    db_service = DatabaseService()
+                    
+                    result = downloader.process(
+                        url, 
+                        output_dir=downloads_dir,
+                        db_service=db_service
+                    )
 
                     if result.success and result.data.get("downloaded_files"):
                         audio_file = result.data["downloaded_files"][0]
@@ -372,7 +379,7 @@ class EnhancedTranscriptionWorker(QThread):
                         f"🚀 Starting conveyor belt download: {len(expanded_urls)} URLs, max {max_concurrent_downloads} concurrent"
                     )
                     # Show actual number of files vs max concurrency
-                    actual_concurrent = min(
+                    _actual_concurrent = min(
                         len(expanded_urls), max_concurrent_downloads
                     )
                     if len(expanded_urls) == 1:
@@ -477,6 +484,83 @@ class EnhancedTranscriptionWorker(QThread):
             # Notify UI that total files count has been determined
             self.total_files_determined.emit(self.total_files)
 
+            # Check if we have any files to process
+            if len(all_files) == 0:
+                # No files to process - emit completion immediately
+                logger.info("No files to process (all downloads may have failed)")
+
+                # Show failed downloads summary if any
+                if self.failed_urls:
+                    self.transcription_step_updated.emit(
+                        f"\n{'='*60}\n📋 FAILED DOWNLOADS SUMMARY ({len(self.failed_urls)} URLs)\n{'='*60}",
+                        0,
+                    )
+                    for failed_item in self.failed_urls:
+                        self.transcription_step_updated.emit(
+                            f"❌ [{failed_item['index']}] {failed_item['url']}", 0
+                        )
+                        self.transcription_step_updated.emit(
+                            f"   Error: {failed_item['error_guidance']}", 0
+                        )
+
+                    # Save failed URLs to file for easy retry
+                    try:
+                        output_dir = self.gui_settings.get("output_dir")
+                        if output_dir:
+                            failed_urls_file = Path(output_dir) / "failed_downloads.txt"
+                            with open(failed_urls_file, "w") as f:
+                                f.write(
+                                    f"# Failed YouTube Downloads - {len(self.failed_urls)} URLs\n"
+                                )
+                                f.write(
+                                    f"# Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                                )
+                                for failed_item in self.failed_urls:
+                                    f.write(f"{failed_item['url']}\n")
+                                    f.write(
+                                        f"# Error: {failed_item['error_guidance']}\n\n"
+                                    )
+
+                            self.transcription_step_updated.emit(
+                                f"💾 Failed URLs saved to: {failed_urls_file}", 0
+                            )
+                            logger.info(f"Failed URLs saved to: {failed_urls_file}")
+                    except Exception as e:
+                        logger.error(f"Failed to save failed URLs file: {e}")
+
+                    self.transcription_step_updated.emit(
+                        f"{'='*60}\n💡 Tip: Copy URLs above or use saved file to retry\n{'='*60}",
+                        0,
+                    )
+                else:
+                    self.transcription_step_updated.emit(
+                        "⚠️ No files available for transcription", 0
+                    )
+
+                # Combine failed URLs and failed files for comprehensive error reporting
+                all_failed_details = []
+
+                # Add failed URLs
+                for failed_url in self.failed_urls:
+                    all_failed_details.append(
+                        {
+                            "file": failed_url.get("url", "Unknown URL"),
+                            "error": failed_url.get(
+                                "error_guidance",
+                                failed_url.get("error", "Unknown error"),
+                            ),
+                        }
+                    )
+
+                # Add failed local files
+                all_failed_details.extend(self.failed_files)
+
+                # Emit processing finished with failure counts
+                self.processing_finished.emit(
+                    self.completed_count, self.failed_count, all_failed_details
+                )
+                return
+
             # Create processor with GUI settings - filter out conflicting diarization parameter
             kwargs = self.gui_settings.get("kwargs", {})
             # Extract diarization setting and pass it as enable_diarization
@@ -485,7 +569,9 @@ class EnhancedTranscriptionWorker(QThread):
 
             testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
             if testing_mode:
-                logger.info("🧪 Testing mode detected in worker - disabling diarization")
+                logger.info(
+                    "🧪 Testing mode detected in worker - disabling diarization"
+                )
             # For local transcription, default to False to prevent unwanted speaker dialogs
             enable_diarization = kwargs.get("diarization", False) and not testing_mode
 
@@ -544,7 +630,9 @@ class EnhancedTranscriptionWorker(QThread):
                     **audio_processor_kwargs,
                 )
 
-                self.transcription_step_updated.emit("✅ Transcription engine ready", 10)
+                self.transcription_step_updated.emit(
+                    "✅ Transcription engine ready", 10
+                )
 
             except Exception as e:
                 error_msg = f"Failed to initialize transcription engine: {str(e)}"
@@ -618,14 +706,14 @@ class EnhancedTranscriptionWorker(QThread):
                     # Override diarization setting if in testing mode
                     if testing_mode:
                         processing_kwargs_with_output["diarization"] = False
-                    processing_kwargs_with_output[
-                        "enable_color_coding"
-                    ] = self.gui_settings.get("enable_color_coding", True)
+                    processing_kwargs_with_output["enable_color_coding"] = (
+                        self.gui_settings.get("enable_color_coding", True)
+                    )
 
                     # Pass cancellation token for proper stop support
-                    processing_kwargs_with_output[
-                        "cancellation_token"
-                    ] = self.cancellation_token
+                    processing_kwargs_with_output["cancellation_token"] = (
+                        self.cancellation_token
+                    )
 
                     result = processor.process(
                         Path(file_path), **processing_kwargs_with_output
@@ -680,9 +768,9 @@ class EnhancedTranscriptionWorker(QThread):
                             {
                                 "file": file_name,
                                 "text_length": text_length,
-                                "saved_to": Path(saved_file).name
-                                if saved_file
-                                else None,
+                                "saved_to": (
+                                    Path(saved_file).name if saved_file else None
+                                ),
                             }
                         )
 
@@ -829,7 +917,6 @@ class EnhancedTranscriptionWorker(QThread):
         try:
             # Import System 2 orchestrator
             from ...core.system2_orchestrator import System2Orchestrator
-            from ...database import DatabaseService
 
             # Extract video ID from file path or generate one
             video_id = Path(file_path).stem
@@ -1445,7 +1532,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
     def eventFilter(self, obj, event):
         """Handle paste events for the file list to support URL pasting."""
         try:
-            from PyQt6.QtCore import QEvent, Qt
+            from PyQt6.QtCore import QEvent
             from PyQt6.QtGui import QKeySequence
             from PyQt6.QtWidgets import QApplication
 
@@ -1604,7 +1691,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                         self.append_log("✅ YouTube anti-bot protection enabled")
                         packetstream_available = True
                     else:
-                        self.append_log(f"❌ PacketStream proxy failed: {proxy_message}")
+                        self.append_log(
+                            f"❌ PacketStream proxy failed: {proxy_message}"
+                        )
                         self.append_log("⚠️ Falling back to direct download")
                 else:
                     self.append_log(
@@ -2533,7 +2622,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
     def _on_processor_progress(self, message: str, percentage: int):
         """Handle progress updates from the processor log integrator."""
         # Just log the message - simple progress bar doesn't need this
-        pass
 
     def _on_processor_status(self, status: str):
         """Handle status updates from the processor log integrator."""

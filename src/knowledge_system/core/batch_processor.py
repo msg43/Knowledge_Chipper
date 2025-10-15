@@ -23,15 +23,13 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from .dynamic_parallelization import (
-    DynamicParallelizationManager,
     JobType,
-    get_parallelization_manager,
     initialize_parallelization_manager,
 )
-from .parallel_processor import get_parallel_processor, initialize_parallel_processor
+from .parallel_processor import initialize_parallel_processor
 
 logger = logging.getLogger(__name__)
 
@@ -183,8 +181,9 @@ class IntelligentBatchProcessor:
         download_func: Callable[[str], str],
         mining_func: Callable[[str], dict[str, Any]],
         evaluation_func: Callable[[dict[str, Any]], dict[str, Any]],
-        progress_callback: None
-        | (Callable[[str, int, int, dict[str, Any]], None]) = None,
+        progress_callback: None | (
+            Callable[[str, int, int, dict[str, Any]], None]
+        ) = None,
     ) -> str:
         """
         Start a new batch processing operation.
@@ -501,9 +500,11 @@ class IntelligentBatchProcessor:
                     max_parallel_mining=row["max_parallel_mining"],
                     max_parallel_evaluation=row["max_parallel_evaluation"],
                     resume_enabled=bool(row["resume_enabled"]),
-                    results_summary=json.loads(row["results_summary"])
-                    if row["results_summary"]
-                    else {},
+                    results_summary=(
+                        json.loads(row["results_summary"])
+                        if row["results_summary"]
+                        else {}
+                    ),
                 )
         return None
 
@@ -559,9 +560,11 @@ class IntelligentBatchProcessor:
                     job.download_path,
                     job.transcript_path,
                     json.dumps(job.mining_results) if job.mining_results else None,
-                    json.dumps(job.evaluation_results)
-                    if job.evaluation_results
-                    else None,
+                    (
+                        json.dumps(job.evaluation_results)
+                        if job.evaluation_results
+                        else None
+                    ),
                     json.dumps(job.metadata),
                 ),
             )
@@ -618,10 +621,10 @@ class IntelligentBatchProcessor:
             "total_claims_extracted": total_claims,
             "total_evaluations_completed": total_evaluations,
             "processing_time_seconds": (
-                self.active_batch.completed_at - self.active_batch.started_at
-            )
-            if self.active_batch.completed_at
-            else 0,
+                (self.active_batch.completed_at - self.active_batch.started_at)
+                if self.active_batch.completed_at
+                else 0
+            ),
             "parallelization_efficiency": self.manager.get_resource_status().get(
                 "parallelization_efficiency", 0
             ),
@@ -669,12 +672,16 @@ class IntelligentBatchProcessor:
                     error_message=row["error_message"],
                     download_path=row["download_path"],
                     transcript_path=row["transcript_path"],
-                    mining_results=json.loads(row["mining_results"])
-                    if row["mining_results"]
-                    else None,
-                    evaluation_results=json.loads(row["evaluation_results"])
-                    if row["evaluation_results"]
-                    else None,
+                    mining_results=(
+                        json.loads(row["mining_results"])
+                        if row["mining_results"]
+                        else None
+                    ),
+                    evaluation_results=(
+                        json.loads(row["evaluation_results"])
+                        if row["evaluation_results"]
+                        else None
+                    ),
                     metadata=json.loads(row["metadata"]) if row["metadata"] else {},
                 )
                 jobs.append(job)
@@ -687,7 +694,7 @@ class IntelligentBatchProcessor:
         if not batch:
             return None
 
-        jobs = self._load_batch_jobs(batch_id)
+        self._load_batch_jobs(batch_id)
 
         return {
             "batch_id": batch_id,
@@ -698,17 +705,21 @@ class IntelligentBatchProcessor:
                 "completed": batch.jobs_completed,
                 "failed": batch.jobs_failed,
                 "cancelled": batch.jobs_cancelled,
-                "percentage": (batch.jobs_completed / batch.total_jobs) * 100
-                if batch.total_jobs > 0
-                else 0,
+                "percentage": (
+                    (batch.jobs_completed / batch.total_jobs) * 100
+                    if batch.total_jobs > 0
+                    else 0
+                ),
             },
             "timing": {
                 "created_at": batch.created_at,
                 "started_at": batch.started_at,
                 "completed_at": batch.completed_at,
-                "duration_seconds": (batch.completed_at - batch.started_at)
-                if batch.completed_at and batch.started_at
-                else None,
+                "duration_seconds": (
+                    (batch.completed_at - batch.started_at)
+                    if batch.completed_at and batch.started_at
+                    else None
+                ),
             },
             "parallelization": {
                 "max_downloads": batch.max_parallel_downloads,
@@ -747,9 +758,11 @@ class IntelligentBatchProcessor:
                     "created_at": row["created_at"],
                     "started_at": row["started_at"],
                     "completed_at": row["completed_at"],
-                    "success_rate": (row["jobs_completed"] / row["total_jobs"]) * 100
-                    if row["total_jobs"] > 0
-                    else 0,
+                    "success_rate": (
+                        (row["jobs_completed"] / row["total_jobs"]) * 100
+                        if row["total_jobs"] > 0
+                        else 0
+                    ),
                 }
                 batches.append(batch_info)
 

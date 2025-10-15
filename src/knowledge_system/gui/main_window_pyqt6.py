@@ -35,22 +35,22 @@ def _get_build_date() -> str:
 
 
 # Import workers and components
-from .components.progress_tracking import EnhancedProgressBar
+from .components.progress_tracking import EnhancedProgressBar  # noqa: E402
 
 # Import core GUI components
-from .core.session_manager import get_session_manager
-from .core.settings_manager import get_gui_settings_manager
+from .core.session_manager import get_session_manager  # noqa: E402
+from .core.settings_manager import get_gui_settings_manager  # noqa: E402
 
 # Import dialogs
-from .dialogs.first_run_setup_dialog import FirstRunSetupDialog
+from .dialogs.first_run_setup_dialog import FirstRunSetupDialog  # noqa: E402
 
 # Import modular tabs for System 2
-from .tabs import APIKeysTab  # Settings tab
-from .tabs import IntroductionTab  # Introduction tab
-from .tabs import MonitorTab  # Monitor tab (renamed from WatcherTab)
-from .tabs import PromptsTab  # Prompts tab
-from .tabs import SummarizationTab  # Summarize tab
-from .tabs import TranscriptionTab  # Transcribe tab
+from .tabs import APIKeysTab  # Settings tab  # noqa: E402
+from .tabs import IntroductionTab  # Introduction tab  # noqa: E402
+from .tabs import MonitorTab  # Monitor tab (renamed from WatcherTab)  # noqa: E402
+from .tabs import PromptsTab  # Prompts tab  # noqa: E402
+from .tabs import SummarizationTab  # Summarize tab  # noqa: E402
+from .tabs import TranscriptionTab  # Transcribe tab  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -146,6 +146,9 @@ class MainWindow(QMainWindow):
         # Delay first-run setup to ensure GUI is fully ready and avoid thread violations
         QTimer.singleShot(500, self._delayed_first_run_setup)
 
+        # Run startup cleanup/validation for partial downloads
+        QTimer.singleShot(1000, self._run_startup_cleanup)
+
     def _delayed_first_run_setup(self) -> None:
         """Delayed first-run setup to ensure GUI is fully initialized before creating dialogs."""
         try:
@@ -156,6 +159,69 @@ class MainWindow(QMainWindow):
             self._check_first_run_model_setup()
         except Exception as e:
             logger.warning(f"Delayed first-run setup failed: {e}")
+
+    def _run_startup_cleanup(self) -> None:
+        """Run startup cleanup and validation for partial downloads."""
+        try:
+            from ..database.service import DatabaseService
+            from ..utils.download_cleanup import DownloadCleanupService
+            from pathlib import Path
+
+            logger.info("Running startup download cleanup and validation...")
+
+            # Initialize database service
+            db_service = DatabaseService()
+            
+            # Get output directory from settings (Settings is a Pydantic model, not a dict)
+            output_dir = Path(getattr(self.settings, "output_directory", "output"))
+
+            # Run cleanup
+            cleanup_service = DownloadCleanupService(db_service, output_dir)
+            report = cleanup_service.run_startup_validation()
+
+            # Save reports
+            cleanup_service.save_cleanup_report()
+            failed_urls_file = cleanup_service.save_failed_urls_to_file()
+
+            # Show popup if there are failed videos (exceeded retry limit)
+            failed_count = len(report.get("failed_videos", []))
+            if failed_count > 0:
+                from PyQt6.QtWidgets import QMessageBox
+
+                msg = QMessageBox(self)
+                msg.setIcon(QMessageBox.Icon.Warning)
+                msg.setWindowTitle("Partial Download Failures Detected")
+                msg.setText(
+                    f"Found {failed_count} video(s) that failed after 3 retry attempts."
+                )
+
+                details = "Failed URLs have been saved to:\n"
+                if failed_urls_file:
+                    details += f"{failed_urls_file}\n\n"
+                details += "You can copy these URLs and paste them back into the download tab to try again.\n\n"
+                details += "Failed videos:\n"
+                for video in report["failed_videos"][:10]:  # Show first 10
+                    details += f"- {video['title']}\n"
+                if failed_count > 10:
+                    details += f"... and {failed_count - 10} more\n"
+
+                msg.setDetailedText(details)
+                msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+                msg.exec()
+
+            # Log summary of other issues
+            incomplete_count = len(report.get("incomplete_videos", []))
+            retry_count = len(report.get("videos_needing_retry", []))
+            orphaned_count = len(report.get("orphaned_files_found", []))
+
+            if incomplete_count > 0 or retry_count > 0 or orphaned_count > 0:
+                logger.info(
+                    f"Startup cleanup summary: {incomplete_count} incomplete, "
+                    f"{retry_count} needing retry, {orphaned_count} orphaned files"
+                )
+
+        except Exception as e:
+            logger.warning(f"Startup cleanup failed: {e}")
 
     def _set_window_icon(self) -> None:
         """Set the custom window icon."""
@@ -424,9 +490,9 @@ class MainWindow(QMainWindow):
 
             # Set Anthropic API key
             if self.settings.api_keys.anthropic_api_key:
-                os.environ[
-                    "ANTHROPIC_API_KEY"
-                ] = self.settings.api_keys.anthropic_api_key
+                os.environ["ANTHROPIC_API_KEY"] = (
+                    self.settings.api_keys.anthropic_api_key
+                )
 
             logger.debug("API keys loaded to environment variables")
 
@@ -881,15 +947,12 @@ class MainWindow(QMainWindow):
             # Always validate models on startup
             logger.info("🔍 Validating installed models...")
 
-            # Check for missing models (this internally checks both whisper and LLM)
-            missing_models = validator.get_missing_models()
+            # Check installed models with logging enabled for startup
+            _whisper_models = validator.check_whisper_models(log_findings=True)
+            validator.check_llm_models()
 
-            # Only log detailed info if needed for debugging
-            if missing_models:
-                whisper_models = validator.check_whisper_models()
-                llm_models = validator.check_llm_models()
-                logger.info(f"Whisper models found: {whisper_models}")
-                logger.info(f"LLM models found: {llm_models}")
+            # Check for missing models
+            missing_models = validator.get_missing_models()
 
             if missing_models:
                 logger.info(f"📥 Missing essential models: {missing_models}")

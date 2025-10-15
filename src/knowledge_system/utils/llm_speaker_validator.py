@@ -154,7 +154,9 @@ class LLMSpeakerValidator:
             )
             context_lines.append(f"Description: {desc}")
 
-        context = "\n".join(context_lines) if context_lines else "No metadata available"
+        _context = (
+            "\n".join(context_lines) if context_lines else "No metadata available"
+        )
 
         # Build speaker analysis section
         speaker_sections = []
@@ -165,7 +167,7 @@ class LLMSpeakerValidator:
             data["segment_count"]
 
             mins, secs = divmod(int(duration), 60)
-            duration_str = f"{mins}:{secs:02d}"
+            _duration_str = f"{mins}:{secs:02d}"
 
             speaker_section = """
 SPEAKER: {assigned_name} (ID: {speaker_id})
@@ -179,7 +181,7 @@ SPEAKER: {assigned_name} (ID: {speaker_id})
 
             speaker_sections.append(speaker_section)
 
-        speakers_text = "\n".join(speaker_sections)
+        _speakers_text = "\n".join(speaker_sections)
 
         prompt = """You are an expert at analyzing podcast/interview transcripts to validate speaker identity assignments. Your task is to analyze the proposed speaker assignments and determine if they are accurate based on the speech content and context.
 
@@ -321,7 +323,9 @@ Focus on accuracy and provide specific reasoning based on the speech content."""
     ) -> str:
         """Create a human-readable summary of the validation for the user interface."""
         if not validation_result.get("llm_available", False):
-            return "🤖 LLM validation not available. Please review assignments manually."
+            return (
+                "🤖 LLM validation not available. Please review assignments manually."
+            )
 
         overall_confidence = validation_result.get("overall_confidence", 0.5)
         summary = validation_result.get("validation_summary", "")
@@ -341,9 +345,7 @@ Focus on accuracy and provide specific reasoning based on the speech content."""
         confidence_emoji = (
             "🟢"
             if overall_confidence > 0.8
-            else "🟡"
-            if overall_confidence > 0.6
-            else "🔴"
+            else "🟡" if overall_confidence > 0.6 else "🔴"
         )
 
         summary_text = (

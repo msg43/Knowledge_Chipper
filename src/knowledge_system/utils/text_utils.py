@@ -558,10 +558,10 @@ def generate_chunk_summary_prompt(
 
     # Modify the original prompt to work better with chunks
     if "{text}" in original_prompt_template:
-        chunk_prompt = original_prompt_template.replace("{text}", chunk.content)
+        _chunk_prompt = original_prompt_template.replace("{text}", chunk.content)
     else:
         # Fallback if no {text} placeholder
-        chunk_prompt = f"{original_prompt_template}\n\n{chunk.content}"
+        _chunk_prompt = f"{original_prompt_template}\n\n{chunk.content}"
 
     # Add chunk-specific instructions
     chunk_instructions = """
@@ -603,7 +603,7 @@ def reassemble_chunk_summaries(
         return chunk_summaries[0]
 
     # Combine all chunk summaries
-    combined_summaries = "\n\n".join(
+    _combined_summaries = "\n\n".join(
         [f"Section {i+1}:\n{summary}" for i, summary in enumerate(chunk_summaries)]
     )
 

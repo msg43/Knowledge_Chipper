@@ -1,5 +1,4 @@
 """Utility to check model availability before feature use."""
-from typing import Optional, Tuple
 
 from ...logger import get_logger
 from ...utils.model_validator import get_model_validator

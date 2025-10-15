@@ -60,13 +60,12 @@ class GlossaryExtractor:
 
                     # Determine which segment this term belongs to (use source_segment_id or fallback)
                     source_segment_id = r.get("source_segment_id")
-                    source_segment = chunk[0]  # Default to first segment in chunk
+                    _source_segment = chunk[0]  # Default to first segment in chunk
 
                     if source_segment_id:
                         # Try to match segment_id to specific segment
                         for seg in chunk:
                             if seg.segment_id == source_segment_id:
-                                source_segment = seg
                                 break
 
                     out.append(

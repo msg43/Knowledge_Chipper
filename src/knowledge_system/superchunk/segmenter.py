@@ -109,7 +109,7 @@ class Segmenter:
             if not hotspots:
                 return candidate_para_end, "no_hotspots"
             reason = "no_hotspot_overlap"
-            start = current_para_start
+            _start = current_para_start
             end = candidate_para_end
             for hs_start, hs_end in hotspots:
                 # if boundary would cut inside a hotspot, extend to hotspot end

@@ -9,7 +9,7 @@ enabling automatic optimization based on system specifications.
 import json
 import platform
 import subprocess
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 def detect_hardware_specs() -> dict[str, Any]:
@@ -146,7 +146,7 @@ def _detect_generic_hardware() -> dict[str, Any]:
         # Get CPU info
         try:
             cpu_info = platform.processor()
-        except:
+        except Exception:
             cpu_info = "Unknown"
 
         return {
@@ -242,12 +242,12 @@ def get_optimization_recommendations(hardware_specs: dict[str, Any]) -> dict[str
             "cpu_cores": cpu_cores,
         },
         "performance_estimate": {
-            "expected_speedup": "4-6x"
-            if optimization_level in ["Maximum", "High"]
-            else "2-3x",
-            "parallelization_efficiency": "90%+"
-            if optimization_level in ["Maximum", "High"]
-            else "70%+",
+            "expected_speedup": (
+                "4-6x" if optimization_level in ["Maximum", "High"] else "2-3x"
+            ),
+            "parallelization_efficiency": (
+                "90%+" if optimization_level in ["Maximum", "High"] else "70%+"
+            ),
         },
     }
 

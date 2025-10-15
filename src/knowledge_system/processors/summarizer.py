@@ -5,17 +5,14 @@ Clean implementation using the new 2-pass unified pipeline.
 """
 
 import hashlib
-import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from ..config import get_settings
 from ..logger import get_logger
 from ..processors.html import fetch_html_text
-from ..utils.llm_providers import UnifiedLLMClient
 from .base import BaseProcessor, ProcessorResult
-from .hce.config_flex import PipelineConfigFlex, StageModelConfig
+from .hce.config_flex import PipelineConfigFlex
 from .hce.health import HCEValidationError, validate_hce_or_raise
 from .hce.types import EpisodeBundle, PipelineOutputs, Segment
 from .hce.unified_pipeline import UnifiedHCEPipeline
@@ -309,7 +306,6 @@ class SummarizerProcessor(BaseProcessor):
     ) -> None:
         """Save summary index to file (stub for CLI compatibility)."""
         # Not needed for HCE pipeline - no-op
-        pass
 
     def _check_needs_summarization(
         self, file_path: Path, summary_index: dict[str, Any]
@@ -323,4 +319,3 @@ class SummarizerProcessor(BaseProcessor):
     ) -> None:
         """Update index file with processed file info (stub for CLI compatibility)."""
         # Not needed for HCE pipeline - no-op
-        pass

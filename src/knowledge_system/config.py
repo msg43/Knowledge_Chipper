@@ -6,7 +6,6 @@ Supports YAML files, environment variables, and settings persistence.
 """
 
 import os
-import re
 from pathlib import Path
 from typing import Any
 
@@ -889,9 +888,9 @@ class Settings(BaseSettings):
         if self.performance.override_batch_size:
             profile_config["batch_size"] = self.performance.override_batch_size
         if self.performance.override_max_concurrent:
-            profile_config[
-                "max_concurrent_files"
-            ] = self.performance.override_max_concurrent
+            profile_config["max_concurrent_files"] = (
+                self.performance.override_max_concurrent
+            )
 
         # Apply force settings
         if self.performance.force_mps:

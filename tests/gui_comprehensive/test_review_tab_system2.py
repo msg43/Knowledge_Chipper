@@ -206,6 +206,39 @@ class TestReviewTabIntegration:
         assert self.review_tab.refresh_timer is not None
         assert self.review_tab.refresh_timer.isActive()
 
+    def test_delete_button_exists(self):
+        """Test that delete button exists in the UI."""
+        assert hasattr(self.review_tab, "delete_btn")
+        assert self.review_tab.delete_btn is not None
+
+    def test_delete_button_initially_disabled(self):
+        """Test that delete button is initially disabled when no selection."""
+        assert self.review_tab.delete_btn.isEnabled() is False
+
+    def test_delete_button_enabled_on_selection(self, qtbot):
+        """Test that delete button is enabled when rows are selected."""
+        # Only test if there are claims to select
+        if self.review_tab.model.rowCount() > 0:
+            # Select first row
+            self.review_tab.table_view.selectRow(0)
+            
+            # Delete button should now be enabled
+            assert self.review_tab.delete_btn.isEnabled() is True
+
+    def test_delete_button_disabled_on_deselection(self, qtbot):
+        """Test that delete button is disabled when selection is cleared."""
+        # Only test if there are claims to select
+        if self.review_tab.model.rowCount() > 0:
+            # Select first row
+            self.review_tab.table_view.selectRow(0)
+            assert self.review_tab.delete_btn.isEnabled() is True
+            
+            # Clear selection
+            self.review_tab.table_view.clearSelection()
+            
+            # Delete button should now be disabled
+            assert self.review_tab.delete_btn.isEnabled() is False
+
 
 if __name__ == "__main__":
     # Need QApplication for Qt tests

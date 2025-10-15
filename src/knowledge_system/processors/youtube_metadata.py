@@ -509,7 +509,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
                 upload_date = datetime.strptime(
                     yt_info["upload_date"], "%Y%m%d"
                 ).isoformat()
-            except:
+            except Exception:
                 upload_date = yt_info.get("upload_date")
 
         # Extract tags

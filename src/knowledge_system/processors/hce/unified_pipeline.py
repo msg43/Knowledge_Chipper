@@ -4,7 +4,6 @@ Unified HCE Pipeline - 4-pass system: Short Summary → Mining → Evaluation �
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import List
 
 from ...logger import get_logger
 from .config_flex import PipelineConfigFlex
@@ -450,11 +449,11 @@ class UnifiedHCEPipeline:
                 canonical=eval_claim.get_final_claim_text(),
                 claim_type=original_claim.get("claim_type", "factual"),
                 evidence=evidence_spans,
-                tier="A"
-                if eval_claim.importance >= 8
-                else "B"
-                if eval_claim.importance >= 5
-                else "C",
+                tier=(
+                    "A"
+                    if eval_claim.importance >= 8
+                    else "B" if eval_claim.importance >= 5 else "C"
+                ),
                 scores={
                     "importance": eval_claim.importance
                     / 10.0,  # Convert back to 0-1 scale
@@ -485,16 +484,18 @@ class UnifiedHCEPipeline:
                         term_id=f"jargon_{len(all_jargon):04d}",
                         term=jargon_data.get("term", ""),
                         definition=jargon_data.get("definition"),
-                        evidence_spans=[
-                            EvidenceSpan(
-                                t0=jargon_data.get("timestamp", "00:00"),
-                                t1=jargon_data.get("timestamp", "00:00"),
-                                quote=jargon_data.get("context_quote", ""),
-                                segment_id=None,
-                            )
-                        ]
-                        if jargon_data.get("context_quote")
-                        else [],
+                        evidence_spans=(
+                            [
+                                EvidenceSpan(
+                                    t0=jargon_data.get("timestamp", "00:00"),
+                                    t1=jargon_data.get("timestamp", "00:00"),
+                                    quote=jargon_data.get("context_quote", ""),
+                                    segment_id=None,
+                                )
+                            ]
+                            if jargon_data.get("context_quote")
+                            else []
+                        ),
                     )
                     all_jargon.append(jargon_term)
 
@@ -521,16 +522,18 @@ class UnifiedHCEPipeline:
                         name=model_data.get("name", ""),
                         definition=model_data.get("description"),
                         first_mention_ts=model_data.get("timestamp", "00:00"),
-                        evidence_spans=[
-                            EvidenceSpan(
-                                t0=model_data.get("timestamp", "00:00"),
-                                t1=model_data.get("timestamp", "00:00"),
-                                quote=model_data.get("context_quote", ""),
-                                segment_id=None,
-                            )
-                        ]
-                        if model_data.get("context_quote")
-                        else [],
+                        evidence_spans=(
+                            [
+                                EvidenceSpan(
+                                    t0=model_data.get("timestamp", "00:00"),
+                                    t1=model_data.get("timestamp", "00:00"),
+                                    quote=model_data.get("context_quote", ""),
+                                    segment_id=None,
+                                )
+                            ]
+                            if model_data.get("context_quote")
+                            else []
+                        ),
                     )
                     all_mental_models.append(mental_model)
 

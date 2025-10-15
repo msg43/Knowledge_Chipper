@@ -122,39 +122,6 @@ class SpeakerProcessor(BaseProcessor):
         required_keys = ["diarization_segments", "transcript_segments"]
         return all(key in input_data for key in required_keys)
 
-    def process(self, input_data: Any, **kwargs) -> ProcessorResult:
-        """
-        Process speaker diarization data.
-
-        Args:
-            input_data: Dictionary containing diarization_segments and transcript_segments
-            **kwargs: Additional processing options
-
-        Returns:
-            ProcessorResult: Processing result with speaker data
-        """
-        try:
-            if not self.validate_input(input_data):
-                return ProcessorResult(
-                    success=False, error="Invalid input data for speaker processing"
-                )
-
-            diarization_segments = input_data["diarization_segments"]
-            transcript_segments = input_data["transcript_segments"]
-
-            # Prepare speaker data
-            speaker_data_list = self.prepare_speaker_data(
-                diarization_segments, transcript_segments
-            )
-
-            return ProcessorResult(
-                success=True, data={"speaker_data_list": speaker_data_list}
-            )
-
-        except Exception as e:
-            logger.error(f"Error processing speaker data: {e}")
-            return ProcessorResult(success=False, error=str(e))
-
     def prepare_speaker_data(
         self,
         diarization_segments: list[dict[str, Any]],
@@ -478,19 +445,19 @@ class SpeakerProcessor(BaseProcessor):
 
         # Generate suggestion based on patterns
         if leadership_count > 2:
-            analysis_data[
-                "suggestion_reason"
-            ] = f"High leadership indicators: {leadership_count}"
+            analysis_data["suggestion_reason"] = (
+                f"High leadership indicators: {leadership_count}"
+            )
             return "Meeting Leader", 0.6
         elif formal_count > informal_count and formal_count > 1:
-            analysis_data[
-                "suggestion_reason"
-            ] = f"Formal speech: {formal_count} vs {informal_count} informal"
+            analysis_data["suggestion_reason"] = (
+                f"Formal speech: {formal_count} vs {informal_count} informal"
+            )
             return "Presenter", 0.5
         elif speaker_data.total_duration > 300:  # More than 5 minutes
-            analysis_data[
-                "suggestion_reason"
-            ] = f"Long speaking time: {speaker_data.total_duration:.1f}s"
+            analysis_data["suggestion_reason"] = (
+                f"Long speaking time: {speaker_data.total_duration:.1f}s"
+            )
             return "Main Speaker", 0.4
         else:
             analysis_data["suggestion_reason"] = "Default participant role"
@@ -568,7 +535,7 @@ class SpeakerProcessor(BaseProcessor):
             try:
                 from ..voice.voice_fingerprinting import VoiceFingerprintProcessor
 
-                voice_processor = VoiceFingerprintProcessor()
+                VoiceFingerprintProcessor()
                 logger.info(
                     "🎯 Voice fingerprinting available - analyzing speaker segments"
                 )
@@ -927,12 +894,9 @@ class SpeakerProcessor(BaseProcessor):
             try:
                 from ..voice.voice_fingerprinting import VoiceFingerprintProcessor
 
-                voice_processor = VoiceFingerprintProcessor()
-                voice_fingerprinting_available = True
+                VoiceFingerprintProcessor()
             except ImportError as e:
                 logger.warning(f"Voice fingerprinting not available: {e}")
-                voice_processor = None
-                voice_fingerprinting_available = False
 
             llm_suggestions = suggest_speaker_names_with_llm(
                 speaker_segments_for_llm, metadata
@@ -1057,7 +1021,9 @@ class SpeakerProcessor(BaseProcessor):
             )
 
             if not contextual_mapping:
-                logger.info("🧠 No contextual improvements found, using LLM suggestions")
+                logger.info(
+                    "🧠 No contextual improvements found, using LLM suggestions"
+                )
                 return None
 
             # Apply contextual improvements to LLM suggestions
@@ -1388,9 +1354,9 @@ class SpeakerProcessor(BaseProcessor):
                     speaker_id = segment.get("speaker")
                     if speaker_id and speaker_id in assignments:
                         segment["speaker"] = assignments[speaker_id]
-                        segment[
-                            "original_speaker_id"
-                        ] = speaker_id  # Keep original for reference
+                        segment["original_speaker_id"] = (
+                            speaker_id  # Keep original for reference
+                        )
 
             # Add assignment metadata
             updated_data["speaker_assignments"] = assignments
@@ -1624,7 +1590,6 @@ class SpeakerProcessor(BaseProcessor):
             from .hce.config_flex import PipelineConfigFlex, StageModelConfig
             from .hce.storage_sqlite import (
                 delete_episode_hce_data,
-                ensure_schema,
                 open_db,
                 store_segments,
                 upsert_pipeline_outputs,

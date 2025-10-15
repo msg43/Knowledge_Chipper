@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Set terminal window size to 206 columns x 43 rows
+osascript -e 'tell application "Terminal" to set bounds of front window to {0, 0, 1200, 800}'
+osascript -e 'tell application "Terminal" to set number of columns of front window to 206'
+osascript -e 'tell application "Terminal" to set number of rows of front window to 43'
+
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 

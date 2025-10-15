@@ -108,6 +108,29 @@ class MediaSource(Base):
         String(20), default="pending"
     )  # 'pending', 'processing', 'completed', 'failed'
 
+    # Audio file tracking (for partial download detection and cleanup)
+    audio_file_path = Column(String(500))  # Path to downloaded audio file
+    audio_downloaded = Column(
+        Boolean, default=False
+    )  # True if audio successfully downloaded
+    audio_file_size_bytes = Column(Integer)  # Size of audio file for validation
+    audio_format = Column(String(10))  # Audio format (m4a, opus, webm, etc.)
+
+    # Metadata completion tracking
+    metadata_complete = Column(Boolean, default=False)  # True if all metadata extracted
+
+    # Retry tracking (for smart retry logic)
+    needs_metadata_retry = Column(
+        Boolean, default=False
+    )  # True if metadata download failed
+    needs_audio_retry = Column(Boolean, default=False)  # True if audio download failed
+    retry_count = Column(Integer, default=0)  # Number of retry attempts
+    last_retry_at = Column(DateTime)  # Timestamp of last retry attempt
+
+    # Failure tracking (after max retries exceeded)
+    max_retries_exceeded = Column(Boolean, default=False)  # True if retry limit reached
+    failure_reason = Column(Text)  # Detailed failure reason for user reporting
+
     # Relationships
     transcripts = relationship(
         "Transcript", back_populates="video", cascade="all, delete-orphan"

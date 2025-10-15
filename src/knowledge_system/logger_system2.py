@@ -6,12 +6,11 @@ and metrics integration per SYSTEM_2_IMPLEMENTATION_GUIDE.md.
 """
 
 import json
-import logging
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from loguru import logger
 

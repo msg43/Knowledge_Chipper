@@ -229,7 +229,9 @@ class SimpleTranscriptionProgressBar(QFrame):
         self._update_status()
         self.cancel_btn.hide()
 
-        print(f"🔍 [SimpleProgressBar] Finished: completed={completed}, failed={failed}")
+        print(
+            f"🔍 [SimpleProgressBar] Finished: completed={completed}, failed={failed}"
+        )
 
     def reset(self):
         """Reset the progress bar to initial state."""

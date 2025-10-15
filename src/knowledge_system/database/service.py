@@ -16,7 +16,11 @@ from sqlalchemy import desc, func, or_, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..logger import get_logger
-from .models import BrightDataSession, ClaimTierValidation, GeneratedFile
+from .models import (
+    BrightDataSession,
+    ClaimTierValidation,
+    GeneratedFile,
+)
 from .models import MediaSource as Video  # Back-compat alias
 from .models import (
     MOCExtraction,
@@ -136,7 +140,6 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to run System 2 migration: {e}")
             # Don't fail initialization if migration fails
-            pass
 
     # =============================================================================
     # VIDEO OPERATIONS
@@ -253,6 +256,208 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to search videos: {e}")
             return []
+
+    # =============================================================================
+    # PARTIAL DOWNLOAD TRACKING (Audio vs Metadata)
+    # =============================================================================
+
+    def update_audio_status(
+        self,
+        video_id: str,
+        audio_file_path: str | Path | None,
+        audio_downloaded: bool,
+        audio_file_size_bytes: int | None = None,
+        audio_format: str | None = None,
+    ) -> bool:
+        """Update audio download status for a video."""
+        try:
+            with self.get_session() as session:
+                video = session.query(Video).filter(Video.video_id == video_id).first()
+                if not video:
+                    logger.warning(
+                        f"Cannot update audio status: video {video_id} not found"
+                    )
+                    return False
+
+                video.audio_file_path = (
+                    str(audio_file_path) if audio_file_path else None
+                )
+                video.audio_downloaded = audio_downloaded
+                video.audio_file_size_bytes = audio_file_size_bytes
+                video.audio_format = audio_format
+
+                # Clear audio retry flag if successful
+                if audio_downloaded:
+                    video.needs_audio_retry = False
+
+                session.commit()
+                logger.debug(
+                    f"Updated audio status for {video_id}: downloaded={audio_downloaded}"
+                )
+                return True
+        except Exception as e:
+            logger.error(f"Failed to update audio status for {video_id}: {e}")
+            return False
+
+    def update_metadata_status(self, video_id: str, metadata_complete: bool) -> bool:
+        """Update metadata completion status for a video."""
+        try:
+            with self.get_session() as session:
+                video = session.query(Video).filter(Video.video_id == video_id).first()
+                if not video:
+                    logger.warning(
+                        f"Cannot update metadata status: video {video_id} not found"
+                    )
+                    return False
+
+                video.metadata_complete = metadata_complete
+
+                # Clear metadata retry flag if successful
+                if metadata_complete:
+                    video.needs_metadata_retry = False
+
+                session.commit()
+                logger.debug(
+                    f"Updated metadata status for {video_id}: complete={metadata_complete}"
+                )
+                return True
+        except Exception as e:
+            logger.error(f"Failed to update metadata status for {video_id}: {e}")
+            return False
+
+    def mark_for_retry(
+        self,
+        video_id: str,
+        needs_metadata_retry: bool = False,
+        needs_audio_retry: bool = False,
+        failure_reason: str | None = None,
+    ) -> bool:
+        """Mark a video for retry (metadata, audio, or both)."""
+        try:
+            with self.get_session() as session:
+                video = session.query(Video).filter(Video.video_id == video_id).first()
+                if not video:
+                    logger.warning(f"Cannot mark for retry: video {video_id} not found")
+                    return False
+
+                video.needs_metadata_retry = needs_metadata_retry
+                video.needs_audio_retry = needs_audio_retry
+                video.retry_count += 1
+                video.last_retry_at = datetime.utcnow()
+
+                if failure_reason:
+                    video.failure_reason = failure_reason
+
+                # Check if max retries exceeded (3 attempts)
+                if video.retry_count >= 3:
+                    video.max_retries_exceeded = True
+                    video.status = "failed"
+                    logger.warning(f"Video {video_id} exceeded max retries (3)")
+
+                session.commit()
+                logger.info(
+                    f"Marked {video_id} for retry (attempt {video.retry_count}): "
+                    f"metadata={needs_metadata_retry}, audio={needs_audio_retry}"
+                )
+                return True
+        except Exception as e:
+            logger.error(f"Failed to mark {video_id} for retry: {e}")
+            return False
+
+    def get_videos_needing_retry(
+        self, metadata_only: bool = False, audio_only: bool = False
+    ) -> list[Video]:
+        """Get videos that need retry (not exceeded max attempts)."""
+        try:
+            with self.get_session() as session:
+                q = session.query(Video).filter(
+                    Video.max_retries_exceeded == False,  # noqa: E712
+                    or_(
+                        Video.needs_metadata_retry == True,
+                        Video.needs_audio_retry == True,
+                    ),  # noqa: E712
+                )
+
+                if metadata_only:
+                    q = q.filter(Video.needs_metadata_retry == True)  # noqa: E712
+                if audio_only:
+                    q = q.filter(Video.needs_audio_retry == True)  # noqa: E712
+
+                return q.order_by(desc(Video.last_retry_at)).all()
+        except Exception as e:
+            logger.error(f"Failed to get videos needing retry: {e}")
+            return []
+
+    def get_failed_videos(self) -> list[Video]:
+        """Get videos that exceeded max retry attempts."""
+        try:
+            with self.get_session() as session:
+                return (
+                    session.query(Video)
+                    .filter(Video.max_retries_exceeded == True)  # noqa: E712
+                    .order_by(desc(Video.last_retry_at))
+                    .all()
+                )
+        except Exception as e:
+            logger.error(f"Failed to get failed videos: {e}")
+            return []
+
+    def get_incomplete_videos(self) -> list[Video]:
+        """Get videos with partial downloads (missing audio or metadata)."""
+        try:
+            with self.get_session() as session:
+                return (
+                    session.query(Video)
+                    .filter(
+                        or_(
+                            Video.audio_downloaded == False,  # noqa: E712
+                            Video.metadata_complete == False,  # noqa: E712
+                        ),
+                        Video.max_retries_exceeded == False,  # noqa: E712
+                    )
+                    .order_by(desc(Video.processed_at))
+                    .all()
+                )
+        except Exception as e:
+            logger.error(f"Failed to get incomplete videos: {e}")
+            return []
+
+    def is_video_complete(self, video_id: str) -> bool:
+        """Check if video has both audio and metadata complete."""
+        try:
+            with self.get_session() as session:
+                video = session.query(Video).filter(Video.video_id == video_id).first()
+                if not video:
+                    return False
+                return video.audio_downloaded and video.metadata_complete
+        except Exception as e:
+            logger.error(f"Failed to check if video {video_id} is complete: {e}")
+            return False
+
+    def validate_audio_file_exists(self, video_id: str) -> bool:
+        """Validate that the audio file path in database actually exists on disk."""
+        try:
+            with self.get_session() as session:
+                video = session.query(Video).filter(Video.video_id == video_id).first()
+                if not video or not video.audio_file_path:
+                    return False
+
+                audio_path = Path(video.audio_file_path)
+                exists = audio_path.exists()
+
+                # If file doesn't exist but database says it does, mark for retry
+                if not exists and video.audio_downloaded:
+                    logger.warning(
+                        f"Audio file missing for {video_id}: {video.audio_file_path}"
+                    )
+                    video.audio_downloaded = False
+                    video.needs_audio_retry = True
+                    session.commit()
+
+                return exists
+        except Exception as e:
+            logger.error(f"Failed to validate audio file for {video_id}: {e}")
+            return False
 
     # =============================================================================
     # TRANSCRIPT OPERATIONS

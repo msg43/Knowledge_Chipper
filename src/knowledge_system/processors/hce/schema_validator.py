@@ -8,7 +8,7 @@ per System 2 specifications.
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 try:
     import jsonschema
@@ -224,14 +224,14 @@ def validate_flagship_output(data: dict[str, Any]) -> tuple[bool, list[str]]:
 
 
 def repair_and_validate_miner_output(
-    data: dict[str, Any]
+    data: dict[str, Any],
 ) -> tuple[dict[str, Any], bool, list[str]]:
     """Repair and validate miner output."""
     return get_validator().repair_and_validate(data, "miner_output")
 
 
 def repair_and_validate_flagship_output(
-    data: dict[str, Any]
+    data: dict[str, Any],
 ) -> tuple[dict[str, Any], bool, list[str]]:
     """Repair and validate flagship output."""
     return get_validator().repair_and_validate(data, "flagship_output")

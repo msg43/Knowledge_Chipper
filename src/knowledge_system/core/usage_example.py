@@ -8,7 +8,7 @@ with intelligent audio preservation and staging.
 
 import asyncio
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from .connected_processing_coordinator import (
     AudioPreservationConfig,

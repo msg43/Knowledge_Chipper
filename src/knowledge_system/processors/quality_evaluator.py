@@ -287,7 +287,7 @@ class QualityEvaluator(BaseProcessor):
 
     def _get_summary_evaluation_prompt(self, summary: str, original_text: str) -> str:
         """Create evaluation prompt for summary quality assessment."""
-        original_preview = (
+        _original_preview = (
             original_text[:2000] + "..." if len(original_text) > 2000 else original_text
         )
 
@@ -328,7 +328,7 @@ Respond ONLY in valid JSON format:
         word_count = len(transcript.split()) if transcript else 0
         (word_count / (duration / 60)) if duration > 0 else 0
 
-        transcript_preview = (
+        _transcript_preview = (
             transcript[:2000] + "..." if len(transcript) > 2000 else transcript
         )
 
@@ -367,13 +367,13 @@ Respond ONLY in valid JSON format:
         self, moc_data: dict[str, Any], source_content: str
     ) -> str:
         """Create evaluation prompt for MOC extraction quality assessment."""
-        source_preview = (
+        _source_preview = (
             source_content[:1500] + "..."
             if len(source_content) > 1500
             else source_content
         )
 
-        moc_summary = {
+        _moc_summary = {
             "people": list(moc_data.get("people", {}).keys())[:10],
             "tags": list(moc_data.get("tags", {}).keys())[:15],
             "jargon": [item.get("term", "") for item in moc_data.get("jargon", [])][

@@ -86,8 +86,8 @@ def _resolve_version() -> str:
 
 
 # Core imports
-from .config import Settings, get_settings
-from .logger import get_logger
+from .config import Settings, get_settings  # noqa: E402
+from .logger import get_logger  # noqa: E402
 
 __version__ = _resolve_version()
 __author__ = "Skip the Podcast Desktop"

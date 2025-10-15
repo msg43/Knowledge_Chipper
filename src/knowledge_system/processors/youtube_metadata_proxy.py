@@ -228,7 +228,7 @@ class YouTubeMetadataProxyProcessor(BaseProcessor):
                 upload_date = datetime.strptime(
                     yt_info["upload_date"], "%Y%m%d"
                 ).isoformat()
-            except:
+            except Exception:
                 upload_date = yt_info.get("upload_date")
 
         # Extract tags
@@ -316,7 +316,7 @@ class YouTubeMetadataProxyProcessor(BaseProcessor):
                 return int(parts[0]) * 60 + int(parts[1])
             else:
                 return int(float(duration_str))
-        except:
+        except Exception:
             return None
 
     def process(
@@ -404,7 +404,7 @@ class YouTubeMetadataProxyProcessor(BaseProcessor):
             if self.proxy_manager:
                 try:
                     self.proxy_manager.cleanup()
-                except:
+                except Exception:
                     pass
 
     def validate_input(self, input_data: Any) -> bool:

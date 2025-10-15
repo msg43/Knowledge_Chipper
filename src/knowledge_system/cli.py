@@ -47,7 +47,7 @@ console = Console()
 logger = get_logger("cli")
 
 # Version info (single source from package)
-from . import __version__
+from . import __version__  # noqa: E402
 
 
 class CLIContext:
@@ -743,7 +743,9 @@ def flag() -> None:
     from .utils.cache_management import create_manual_clear_flag
 
     create_manual_clear_flag()
-    click.echo("✅ Created cache clear flag. Cache will be cleared on next app startup.")
+    click.echo(
+        "✅ Created cache clear flag. Cache will be cleared on next app startup."
+    )
 
 
 # Add the cache command group to main CLI

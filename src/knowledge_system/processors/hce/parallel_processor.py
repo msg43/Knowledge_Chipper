@@ -11,7 +11,7 @@ import logging
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, List
+from typing import Any
 
 import psutil
 

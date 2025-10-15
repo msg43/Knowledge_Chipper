@@ -5,7 +5,6 @@ Provides Disk Drill-like authorization when Gatekeeper blocks the app.
 This runs at app startup to detect and fix Gatekeeper blocks.
 """
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -20,7 +19,7 @@ def is_running_from_applications():
     try:
         exe_path = sys.executable if hasattr(sys, "executable") else sys.argv[0]
         return "/Applications/" in str(exe_path)
-    except:
+    except Exception:
         return False
 
 
@@ -198,7 +197,7 @@ def handle_gatekeeper_at_startup():
                         'tell application "Skip the Podcast Desktop" to quit',
                     ]
                 )
-            except:
+            except Exception:
                 pass
 
             # Relaunch the app

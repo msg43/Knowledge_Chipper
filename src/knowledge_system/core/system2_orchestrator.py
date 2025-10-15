@@ -11,9 +11,8 @@ import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-from sqlalchemy.orm import Session
 
 from ..database import DatabaseService
 from ..database.system2_models import Job, JobRun, LLMRequest, LLMResponse
@@ -21,7 +20,6 @@ from ..errors import ErrorCode, KnowledgeSystemError
 from ..utils.id_generation import create_deterministic_id
 from .intelligent_processing_coordinator import (
     IntelligentProcessingCoordinator,
-    ProcessingPipeline,
 )
 
 logger = logging.getLogger(__name__)
@@ -507,7 +505,7 @@ class System2Orchestrator:
                 )
 
             # 2. Run flagship evaluation (simplified for MVP)
-            flagship_model = config.get(
+            _flagship_model = config.get(
                 "flagship_judge_model", "ollama:qwen2.5:7b-instruct"
             )
 
@@ -572,9 +570,9 @@ class System2Orchestrator:
                 # Create sub-job
                 stage_job_id = self.create_job(
                     job_type=stage,
-                    input_id=video_id
-                    if stage == "transcribe"
-                    else f"episode_{video_id}",
+                    input_id=(
+                        video_id if stage == "transcribe" else f"episode_{video_id}"
+                    ),
                     config=config,
                     auto_process=False,
                 )

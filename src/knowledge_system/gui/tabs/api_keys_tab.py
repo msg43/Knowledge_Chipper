@@ -541,27 +541,27 @@ class APIKeysTab(BaseTab):
         """Load existing API key values from settings."""
         # Load OpenAI key
         if self.settings.api_keys.openai_api_key:
-            self._actual_api_keys[
-                "openai_api_key"
-            ] = self.settings.api_keys.openai_api_key
+            self._actual_api_keys["openai_api_key"] = (
+                self.settings.api_keys.openai_api_key
+            )
             self.openai_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
 
         # Load Anthropic key
         if self.settings.api_keys.anthropic_api_key:
-            self._actual_api_keys[
-                "anthropic_api_key"
-            ] = self.settings.api_keys.anthropic_api_key
+            self._actual_api_keys["anthropic_api_key"] = (
+                self.settings.api_keys.anthropic_api_key
+            )
             self.anthropic_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
 
         # Load HuggingFace token
         if self.settings.api_keys.huggingface_token:
-            self._actual_api_keys[
-                "huggingface_token"
-            ] = self.settings.api_keys.huggingface_token
+            self._actual_api_keys["huggingface_token"] = (
+                self.settings.api_keys.huggingface_token
+            )
             self.huggingface_token_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
@@ -571,9 +571,9 @@ class APIKeysTab(BaseTab):
             hasattr(self.settings.api_keys, "bright_data_api_key")
             and self.settings.api_keys.bright_data_api_key
         ):
-            self._actual_api_keys[
-                "bright_data_api_key"
-            ] = self.settings.api_keys.bright_data_api_key
+            self._actual_api_keys["bright_data_api_key"] = (
+                self.settings.api_keys.bright_data_api_key
+            )
             self.bright_data_api_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
@@ -583,9 +583,9 @@ class APIKeysTab(BaseTab):
             hasattr(self.settings.api_keys, "packetstream_username")
             and self.settings.api_keys.packetstream_username
         ):
-            self._actual_api_keys[
-                "packetstream_username"
-            ] = self.settings.api_keys.packetstream_username
+            self._actual_api_keys["packetstream_username"] = (
+                self.settings.api_keys.packetstream_username
+            )
             self.packetstream_username_edit.setText(
                 self.settings.api_keys.packetstream_username
             )
@@ -595,9 +595,9 @@ class APIKeysTab(BaseTab):
             hasattr(self.settings.api_keys, "packetstream_auth_key")
             and self.settings.api_keys.packetstream_auth_key
         ):
-            self._actual_api_keys[
-                "packetstream_auth_key"
-            ] = self.settings.api_keys.packetstream_auth_key
+            self._actual_api_keys["packetstream_auth_key"] = (
+                self.settings.api_keys.packetstream_auth_key
+            )
             self.packetstream_auth_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
@@ -898,7 +898,6 @@ class APIKeysTab(BaseTab):
 
     def check_for_updates_on_launch(self) -> None:
         """Check for updates if auto-update is enabled."""
-        import time
         from pathlib import Path
 
         from ...config import get_settings
@@ -1183,7 +1182,7 @@ class APIKeysTab(BaseTab):
                     restart_button = msg_box.addButton(
                         "Restart Now", QMessageBox.ButtonRole.AcceptRole
                     )
-                    later_button = msg_box.addButton(
+                    _later_button = msg_box.addButton(
                         "Restart Later", QMessageBox.ButtonRole.RejectRole
                     )
                     msg_box.setDefaultButton(restart_button)
@@ -1258,8 +1257,7 @@ class APIKeysTab(BaseTab):
             return
 
         try:
-            import subprocess  # nosec B404 # Required for test execution
-            from pathlib import Path
+            import subprocess  # nosec B404  # noqa: F401 # Required for test execution
 
             # Find the test runner script using dynamic project root detection
             from ...utils.file_io import find_project_root
@@ -1664,7 +1662,6 @@ class APIKeysTab(BaseTab):
         """Fallback update method using Terminal."""
         try:
             import subprocess  # nosec B404 # Required for Terminal automation
-            from pathlib import Path
 
             # Find the script using dynamic project root detection
             from ...utils.file_io import find_project_root
@@ -1708,7 +1705,6 @@ end tell
         """
         try:
             import subprocess  # nosec B404 # Required for Terminal automation
-            from pathlib import Path
 
             # Use dynamic project root detection instead of hardcoded path
             from ...utils.file_io import find_project_root

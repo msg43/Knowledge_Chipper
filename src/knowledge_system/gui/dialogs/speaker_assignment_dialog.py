@@ -697,9 +697,9 @@ class SpeakerAssignmentDialog(QDialog):
                     self.recording_path
                 )
                 for assignment in db_assignments:
-                    existing_assignments[
-                        assignment.speaker_id
-                    ] = assignment.assigned_name
+                    existing_assignments[assignment.speaker_id] = (
+                        assignment.assigned_name
+                    )
                     logger.info(
                         f"Found existing assignment: {assignment.speaker_id} → '{assignment.assigned_name}'"
                     )
@@ -1187,9 +1187,7 @@ class SpeakerAssignmentDialog(QDialog):
                 emoji = (
                     "✅"
                     if recommendation == "ACCEPT"
-                    else "❌"
-                    if recommendation == "REJECT"
-                    else "❓"
+                    else "❌" if recommendation == "REJECT" else "❓"
                 )
                 details_text += f"{emoji} {validation.get('original_assignment', 'Unknown')} ({confidence:.0%}): {reasoning}\n"
 

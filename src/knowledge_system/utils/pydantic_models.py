@@ -3,7 +3,7 @@ Pydantic models for structured outputs that match existing JSON schemas.
 These models are used for schema enforcement with Ollama's structured outputs feature.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 

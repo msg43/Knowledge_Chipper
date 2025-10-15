@@ -595,7 +595,7 @@ class SpeakerDiarizationProcessor(BaseProcessor):
             try:
                 file_size_mb = Path(path).stat().st_size / (1024 * 1024)
                 file_info = f"({file_size_mb:.1f}MB)"
-            except:
+            except Exception:
                 file_info = ""
 
             # Report start of actual diarization processing

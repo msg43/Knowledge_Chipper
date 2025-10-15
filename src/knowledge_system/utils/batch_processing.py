@@ -814,7 +814,7 @@ def test_batch_processing():
     )
 
     # Test batch processor initialization
-    processor = BatchProcessor(max_concurrent_files=max_concurrent, strategy=strategy)
+    _processor = BatchProcessor(max_concurrent_files=max_concurrent, strategy=strategy)
 
     print("✅ Batch processor initialized")
 

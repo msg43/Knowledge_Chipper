@@ -4,7 +4,7 @@ Flagship Evaluator for ranking and filtering extracted claims.
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from .model_uri_parser import parse_model_uri
 from .models.llm_system2 import System2LLM

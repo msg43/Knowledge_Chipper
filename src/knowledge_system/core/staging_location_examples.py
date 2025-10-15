@@ -54,7 +54,9 @@ async def example_network_drive():
     # Process with network staging
     urls = ["https://www.youtube.com/watch?v=example1"]
 
-    result = await process_with_audio_preservation(urls=urls, audio_config=audio_config)
+    _result = await process_with_audio_preservation(
+        urls=urls, audio_config=audio_config
+    )
 
 
 async def example_cloud_storage_mount():
@@ -73,7 +75,9 @@ async def example_cloud_storage_mount():
 
     urls = ["https://www.youtube.com/watch?v=example1"]
 
-    result = await process_with_audio_preservation(urls=urls, audio_config=audio_config)
+    _result = await process_with_audio_preservation(
+        urls=urls, audio_config=audio_config
+    )
 
 
 async def example_multiple_locations():
@@ -122,7 +126,7 @@ async def example_multiple_locations():
         # Process with selected location
         urls = ["https://www.youtube.com/watch?v=example1"]
 
-        result = await process_with_audio_preservation(
+        _result = await process_with_audio_preservation(
             urls=urls, audio_config=audio_config
         )
     else:

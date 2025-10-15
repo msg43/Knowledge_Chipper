@@ -213,7 +213,7 @@ class ResourceCoordinator:
                 ),
                 timeout=1,
             )
-        except:
+        except Exception:
             pass  # Queue might be full, processor will wake up eventually
 
     def _process_queue(self) -> None:

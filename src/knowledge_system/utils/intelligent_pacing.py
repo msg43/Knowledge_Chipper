@@ -14,8 +14,7 @@ import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from ..logger import get_logger
 
@@ -338,7 +337,7 @@ class IntelligentPacingManager:
             self.processing_queue_size += 1
 
             # Schedule processing completion (for queue management)
-            estimated_completion = time.time() + processing_time
+            time.time() + processing_time
             threading.Timer(processing_time, self._mark_processing_complete).start()
 
     def record_rate_limit_event(self):

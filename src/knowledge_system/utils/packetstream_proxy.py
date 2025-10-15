@@ -192,7 +192,7 @@ class PacketStreamProxyManager:
         if self.current_session_id and self.current_session_id in self.sessions:
             try:
                 self.sessions[self.current_session_id].close()
-            except:
+            except Exception:
                 pass
             del self.sessions[self.current_session_id]
 
@@ -416,7 +416,7 @@ class PacketStreamProxyManager:
         for session in self.sessions.values():
             try:
                 session.close()
-            except:
+            except Exception:
                 pass
         self.sessions.clear()
         self.current_session_id = None
@@ -464,7 +464,7 @@ def test_packetstream_proxy():
     finally:
         try:
             proxy_manager.cleanup()
-        except:
+        except Exception:
             pass
 
 

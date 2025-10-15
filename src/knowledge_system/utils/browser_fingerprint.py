@@ -8,7 +8,6 @@ to avoid bot detection while maintaining the appearance of legitimate browser tr
 # Use basic logging instead of the full logger system to avoid dependencies
 import logging
 import random
-from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
