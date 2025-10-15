@@ -44,8 +44,9 @@ def test_all_models_accessible_from_unified_base():
     assert 'speaker_voices' in tables
     assert 'speaker_assignments' in tables
     assert 'speaker_learning_history' in tables
+    assert 'speaker_sessions' in tables
     assert 'channel_host_mappings' in tables
-    assert 'speaker_clusters' in tables
+    assert 'speaker_processing_sessions' in tables
 
 
 def test_in_memory_database_creation():
@@ -98,8 +99,9 @@ def test_speaker_models_in_unified_base():
     from src.knowledge_system.database.models import (
         ChannelHostMapping,
         SpeakerAssignment,
-        SpeakerCluster,
         SpeakerLearningHistory,
+        SpeakerSession,
+        SpeakerProcessingSession,
         SpeakerVoice,
     )
     
@@ -107,13 +109,15 @@ def test_speaker_models_in_unified_base():
     assert SpeakerVoice.__table__.metadata is Base.metadata
     assert SpeakerAssignment.__table__.metadata is Base.metadata
     assert SpeakerLearningHistory.__table__.metadata is Base.metadata
+    assert SpeakerSession.__table__.metadata is Base.metadata
     assert ChannelHostMapping.__table__.metadata is Base.metadata
-    assert SpeakerCluster.__table__.metadata is Base.metadata
+    assert SpeakerProcessingSession.__table__.metadata is Base.metadata
 
 
 def test_system2_models_in_unified_base():
     """Test that all System2 models are in the unified Base."""
-    from src.knowledge_system.database.models import (
+    # System2 models are imported through system2_models.py
+    from src.knowledge_system.database.system2_models import (
         Job,
         JobRun,
         LLMRequest,
@@ -155,8 +159,9 @@ def test_backward_compatibility_speaker_imports():
         Base as SpeakerBase,
         ChannelHostMapping,
         SpeakerAssignment,
-        SpeakerCluster,
         SpeakerLearningHistory,
+        SpeakerSession,
+        SpeakerProcessingSession,
         SpeakerVoice,
     )
     
@@ -167,8 +172,9 @@ def test_backward_compatibility_speaker_imports():
     assert SpeakerVoice is not None
     assert SpeakerAssignment is not None
     assert SpeakerLearningHistory is not None
+    assert SpeakerSession is not None
     assert ChannelHostMapping is not None
-    assert SpeakerCluster is not None
+    assert SpeakerProcessingSession is not None
 
 
 def test_backward_compatibility_system2_imports():
