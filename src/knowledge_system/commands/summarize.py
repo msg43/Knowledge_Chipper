@@ -552,11 +552,13 @@ def summarize(
                     # Calculate cost
                     prompt_tokens = metadata.get("prompt_tokens", 0)
                     completion_tokens = metadata.get("completion_tokens", 0)
-                    if "gpt-4" in model.lower():
+                    # Get model from metadata or parameter (with null check)
+                    cost_model = metadata.get("model", model) or ""
+                    if "gpt-4" in cost_model.lower():
                         file_cost = (
                             prompt_tokens * 0.03 + completion_tokens * 0.06
                         ) / 1000
-                    elif "gpt-3.5" in model.lower():
+                    elif "gpt-3.5" in cost_model.lower():
                         file_cost = (
                             prompt_tokens * 0.001 + completion_tokens * 0.002
                         ) / 1000

@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Dict, List
 
+from .model_uri_parser import parse_model_uri
 from .models.llm_system2 import System2LLM
 from .schema_validator import validate_miner_output
 from .types import EpisodeBundle, Segment
@@ -87,8 +88,19 @@ class UnifiedMiner:
                 except Exception as e:
                     import logging
                     import traceback
+                    
+                    # Import error classes from the correct location
+                    import sys
+                    sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+                    from knowledge_system.errors import ErrorCode, KnowledgeSystemError
 
                     logger = logging.getLogger(__name__)
+                    
+                    # If this is a critical error (like invalid provider), don't fall back - re-raise
+                    if isinstance(e, KnowledgeSystemError) and hasattr(e, 'error_code') and e.error_code == ErrorCode.INVALID_INPUT:
+                        logger.error(f"Critical error in structured JSON generation: {e}")
+                        raise
+                    
                     # Safely convert exception to string (handle ErrorCode enums in exception args)
                     try:
                         error_msg = str(e)
@@ -227,18 +239,14 @@ def mine_episode_unified(
     Returns:
         List of UnifiedMinerOutput objects, one per segment
     """
-    # Parse model URI: "provider:model" or just "model" (defaults to openai)
-    if ":" in miner_model_uri:
-        provider, model = miner_model_uri.split(":", 1)
-    else:
-        provider = "openai"
-        model = miner_model_uri
+    # Parse model URI with proper handling of local:// and other formats
+    provider, model = parse_model_uri(miner_model_uri)
 
     # Create System2LLM instance
     llm = System2LLM(provider=provider, model=model, temperature=0.3)
 
     # Use simplified prompt for Ollama models
-    if provider.lower() == "ollama":
+    if provider and provider.lower() == "ollama":
         prompt_path = Path(__file__).parent / "prompts" / "unified_miner_ollama.txt"
         if not prompt_path.exists():
             # Fall back to main prompt if Ollama version doesn't exist

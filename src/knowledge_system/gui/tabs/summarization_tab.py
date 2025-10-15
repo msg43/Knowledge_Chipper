@@ -133,7 +133,6 @@ class EnhancedSummarizationWorker(QThread):
     def _run_with_system2_orchestrator(self) -> None:
         """Run summarization using System 2 orchestrator for job management."""
         try:
-            from ...core.dynamic_parallelization import JobType
             from ...core.system2_orchestrator import System2Orchestrator
             from ...utils.progress import SummarizationProgress
 
@@ -156,7 +155,7 @@ class EnhancedSummarizationWorker(QThread):
 
                 # Create mining job for this file
                 job_id = orchestrator.create_job(
-                    JobType.MINER.value,
+                    "mine",  # Database job type (not JobType enum)
                     episode_id,
                     config={
                         "source": "manual_summarization",
@@ -180,10 +179,11 @@ class EnhancedSummarizationWorker(QThread):
                 self.progress_updated.emit(progress)
 
                 try:
-                    # Execute the job
-                    result = orchestrator.execute_job(job_id)
+                    # Execute the job (process_job is async, so we need to run it with asyncio)
+                    import asyncio
+                    result = asyncio.run(orchestrator.process_job(job_id))
 
-                    if result["status"] == "succeeded":
+                    if result.get("status") == "succeeded":
                         success_count += 1
                         self.file_completed.emit(i + 1, total_count)
 
@@ -207,7 +207,7 @@ class EnhancedSummarizationWorker(QThread):
                             self.hce_analytics_updated.emit(analytics)
                     else:
                         failure_count += 1
-                        error_msg = result.get("error", "Unknown error")
+                        error_msg = result.get("error_message", result.get("error", "Processing failed"))
                         progress.status = "error"
                         progress.current_step = f"❌ Failed: {error_msg}"
                         self.progress_updated.emit(progress)

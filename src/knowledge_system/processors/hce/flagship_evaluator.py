@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+from .model_uri_parser import parse_model_uri
 from .models.llm_system2 import System2LLM
 from .schema_validator import validate_flagship_output
 from .unified_miner import UnifiedMinerOutput
@@ -165,8 +166,20 @@ class FlagshipEvaluator:
                     )
                 except Exception as e:
                     import logging
+                    
+                    # Import error classes from the correct location
+                    import sys
+                    from pathlib import Path
+                    sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+                    from knowledge_system.errors import ErrorCode, KnowledgeSystemError
 
                     logger = logging.getLogger(__name__)
+                    
+                    # If this is a critical error (like invalid provider), don't fall back - re-raise
+                    if isinstance(e, KnowledgeSystemError) and hasattr(e, 'error_code') and e.error_code == ErrorCode.INVALID_INPUT:
+                        logger.error(f"Critical error in structured JSON generation: {e}")
+                        raise
+                    
                     logger.warning(
                         f"Structured JSON generation failed, falling back: {e}"
                     )
@@ -266,18 +279,14 @@ def evaluate_claims_flagship(
     Returns:
         FlagshipEvaluationOutput with ranked and filtered claims
     """
-    # Parse model URI: "provider:model" or just "model" (defaults to openai)
-    if ":" in flagship_model_uri:
-        provider, model = flagship_model_uri.split(":", 1)
-    else:
-        provider = "openai"
-        model = flagship_model_uri
+    # Parse model URI with proper handling of local:// and other formats
+    provider, model = parse_model_uri(flagship_model_uri)
 
     # Create System2LLM instance
     llm = System2LLM(provider=provider, model=model, temperature=0.3)
 
     # Use simplified prompt for Ollama models
-    if provider.lower() == "ollama":
+    if provider and provider.lower() == "ollama":
         prompt_path = (
             Path(__file__).parent / "prompts" / "flagship_evaluator_ollama.txt"
         )

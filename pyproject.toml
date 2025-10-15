@@ -133,6 +133,10 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v"
+markers = [
+    "integration: marks tests as integration tests (requires external services like Ollama)",
+    "e2e: marks tests as end-to-end tests",
+]
 
 [tool.black]
 line-length = 88

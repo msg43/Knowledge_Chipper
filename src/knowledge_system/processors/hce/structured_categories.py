@@ -277,14 +277,11 @@ def analyze_structured_categories(
         logger.info(f"Analyzing structured categories for episode {outputs.episode_id}")
 
         # Create LLM instance and analyzer
+        from .model_uri_parser import parse_model_uri
         from .models.llm_system2 import create_system2_llm
 
-        # Parse model URI: "provider:model" or just "model"
-        if ":" in model_uri:
-            provider, model = model_uri.split(":", 1)
-        else:
-            provider = "openai"
-            model = model_uri
+        # Parse model URI with proper handling of local:// and other formats
+        provider, model = parse_model_uri(model_uri)
 
         llm = create_system2_llm(provider=provider, model=model)
         analyzer = StructuredCategoryAnalyzer(llm, prompt_path)

@@ -27,11 +27,15 @@ logger = get_logger(__name__)
 
 @contextmanager
 def suppress_stderr():
-    """Suppress stderr output to prevent yt-dlp from printing internal errors."""
+    """
+    Capture stderr output to prevent yt-dlp from printing internal errors,
+    but return the captured content for error analysis.
+    """
     old_stderr = sys.stderr
-    sys.stderr = StringIO()
+    captured = StringIO()
+    sys.stderr = captured
     try:
-        yield
+        yield captured
     finally:
         sys.stderr = old_stderr
 
@@ -55,7 +59,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
         self.output_format = output_format
         self.download_thumbnails = download_thumbnails
 
-        # Base options without cookies (cookies will be added dynamically)
+        # Base options without cookies (cookies will be added dynamically if needed)
         self.ydl_opts_base = {
             "quiet": True,
             "no_warnings": True,
@@ -536,8 +540,21 @@ class YouTubeDownloadProcessor(BaseProcessor):
         all_files = []
         all_thumbnails = []
         errors = []
+        
+        # Smart retry system for bot detection
+        # Track URLs that hit bot detection and need retry with fresh IP
+        retry_queue = []
+        used_session_ids = {}  # Track session IDs to force new IPs on retry
+        
+        # Convert to list for modification during iteration
+        urls_to_process = list(urls)
+        url_index = 0
 
-        for i, url in enumerate(urls, 1):
+        while url_index < len(urls_to_process):
+            url = urls_to_process[url_index]
+            i = url_index + 1
+            video_id = None  # Initialize early for error handling
+            
             try:
                 # Determine playlist context for progress display
                 playlist_context = ""
@@ -548,7 +565,6 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         break
 
                 # Extract video ID for logging
-                video_id = None
                 import re
 
                 youtube_id_match = re.search(
@@ -560,13 +576,27 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 # Generate unique session ID for this video (sticky IP per URL)
                 # Each URL gets a consistent session ID, ensuring same IP for all requests
                 # (metadata, download chunks, thumbnail) while different URLs get different IPs
+                # SMART RETRY: If this URL previously hit bot detection, force a NEW session ID
                 current_proxy_url = None
                 if use_proxy and proxy_manager:
                     from ..utils.packetstream_proxy import PacketStreamProxyManager
 
-                    session_id = PacketStreamProxyManager.generate_session_id(
+                    # Generate base session ID from video
+                    base_session_id = PacketStreamProxyManager.generate_session_id(
                         url, video_id
                     )
+                    
+                    # If this URL was retried, append retry counter to force NEW IP
+                    if url in used_session_ids:
+                        retry_count = used_session_ids[url]
+                        session_id = f"{base_session_id}_retry{retry_count}"
+                        logger.info(
+                            f"🔄 Retry #{retry_count} for {video_id or 'URL'} - forcing NEW IP with session '{session_id}'"
+                        )
+                    else:
+                        session_id = base_session_id
+                        used_session_ids[url] = 0  # Track first attempt
+                    
                     current_proxy_url = proxy_manager.get_proxy_url(
                         session_id=session_id
                     )
@@ -689,7 +719,8 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 final_ydl_opts = {**ydl_opts, "proxy": current_proxy_url}
 
                 # Suppress yt-dlp's stderr output to prevent spurious error messages like "ERROR: 'webm'"
-                with suppress_stderr():
+                # But capture it for error analysis
+                with suppress_stderr() as captured_stderr:
                     with yt_dlp.YoutubeDL(final_ydl_opts) as ydl:
                         logger.info(f"Downloading audio for: {url}{playlist_context}")
                         if use_proxy and video_id:
@@ -703,13 +734,33 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                             info = ydl.extract_info(url, download=True)
 
+                            # Track whether files were already added (for info is None case)
+                            files_already_tracked = False
+                            
                             if info is None:
                                 # yt-dlp returned None - check if files were actually downloaded
                                 # Sometimes yt-dlp returns None after successful post-processing
                                 # Look for any common audio formats since the actual format depends on YouTube's availability
+                                logger.warning(
+                                    f"yt-dlp returned None for {url}, searching for downloaded files in {output_dir}"
+                                )
                                 downloaded_files = []
                                 for ext in ["m4a", "opus", "webm", "ogg", "mp3", "aac"]:
-                                    downloaded_files.extend(output_dir.glob(f"*.{ext}"))
+                                    found = list(output_dir.glob(f"*.{ext}"))
+                                    logger.debug(f"   Searching *.{ext}: found {len(found)} files")
+                                    # Only include files modified AFTER download started
+                                    for file_path in found:
+                                        file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
+                                        if file_mtime >= download_start_time:
+                                            downloaded_files.append(file_path)
+                                            logger.debug(f"   Found newly downloaded file: {file_path.name} (modified {file_mtime})")
+                                        else:
+                                            logger.debug(f"   Skipping old file: {file_path.name} (modified {file_mtime}, before download start {download_start_time})")
+                                
+                                # Also check all files in directory for debugging
+                                all_dir_files = list(output_dir.glob("*"))
+                                logger.debug(f"   Total files in {output_dir}: {[f.name for f in all_dir_files if f.is_file()]}")
+                                
                                 if downloaded_files:
                                     # Files exist! This is a false negative - download succeeded
                                     logger.warning(
@@ -719,21 +770,52 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         progress_callback(
                                             "✅ Audio download completed successfully"
                                         )
-                                    # Continue processing - don't raise error
+                                    # Add files directly to results since we have them
+                                    for file_path in downloaded_files:
+                                        all_files.append(str(file_path))
+                                        logger.info(f"   Found downloaded file: {file_path.name}")
+                                    
+                                    # Mark files as already tracked to skip duplicate processing
+                                    files_already_tracked = True
+                                    
+                                    # Create minimal info dict for database/thumbnail processing only
                                     info = {
-                                        "title": "Downloaded",
+                                        "title": downloaded_files[0].stem,  # Use filename as title
                                         "id": video_id or "unknown",
+                                        "ext": downloaded_files[0].suffix[1:],  # Extension without dot
                                     }
                                 else:
                                     # No files found - this is a real error
-                                    error_msg = "Failed to extract any player response; please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U"
+                                    # Check if we captured any stderr output from yt-dlp
+                                    stderr_output = captured_stderr.getvalue() if captured_stderr else ""
+                                    if stderr_output:
+                                        # Extract the actual error message from stderr
+                                        error_lines = [line for line in stderr_output.split('\n') if line.strip()]
+                                        if error_lines:
+                                            error_msg = error_lines[0]  # First non-empty line usually has the main error
+                                        else:
+                                            error_msg = "yt-dlp failed to download video (no error message captured)"
+                                    else:
+                                        error_msg = "Failed to extract any player response; please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U"
+                                    
                                     logger.error(
                                         f"No info extracted for {url}: {error_msg}"
                                     )
+                                    
+                                    # Provide user-friendly error message
                                     if progress_callback:
-                                        progress_callback(
-                                            "❌ Failed to extract video information - yt-dlp could not parse YouTube's response"
-                                        )
+                                        if "bot" in error_msg.lower() or "sign in" in error_msg.lower():
+                                            progress_callback(
+                                                "❌ YouTube bot detection - video blocked. Try again later or use different proxy."
+                                            )
+                                        elif "403" in error_msg or "forbidden" in error_msg.lower():
+                                            progress_callback(
+                                                "❌ Access denied - YouTube may be blocking this proxy IP"
+                                            )
+                                        else:
+                                            progress_callback(
+                                                f"❌ Failed to download: {error_msg[:100]}"
+                                            )
                                     # Raise exception to be caught by outer handler which adds to errors list
                                     raise Exception(error_msg)
 
@@ -777,64 +859,112 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                 )
 
                             # Process entries (handle both playlists and single videos)
-                            if "entries" in info and info["entries"]:
-                                entries = info["entries"]
-                            else:
-                                entries = [info]
+                            # Skip file tracking if already done in the info is None case
+                            if not files_already_tracked:
+                                if "entries" in info and info["entries"]:
+                                    entries = info["entries"]
+                                else:
+                                    entries = [info]
 
-                            for entry in entries:
-                                if entry and "title" in entry:
-                                    # Get actual filename from yt-dlp
-                                    filename = None
+                                for entry in entries:
+                                    if entry and "title" in entry:
+                                        # Get actual filename from yt-dlp
+                                        filename = None
 
-                                    # Try to get filename from requested_downloads
-                                    if (
-                                        "requested_downloads" in entry
-                                        and entry["requested_downloads"]
-                                    ):
-                                        filename = entry["requested_downloads"][0].get(
-                                            "filepath"
-                                        ) or entry["requested_downloads"][0].get(
-                                            "filename"
-                                        )
-
-                                    # Try to get extension from entry
-                                    if not filename and "ext" in entry:
-                                        filename = (
-                                            output_dir
-                                            / f"{entry['title']}.{entry['ext']}"
-                                        )
-
-                                    # Last resort: search for any file with this title
-                                    if not filename:
-                                        title = entry["title"]
-                                        for ext in [
-                                            "m4a",
-                                            "opus",
-                                            "webm",
-                                            "ogg",
-                                            "mp3",
-                                            "aac",
-                                        ]:
-                                            potential_file = (
-                                                output_dir / f"{title}.{ext}"
+                                        # Try to get filename from requested_downloads
+                                        if (
+                                            "requested_downloads" in entry
+                                            and entry["requested_downloads"]
+                                        ):
+                                            filename = entry["requested_downloads"][0].get(
+                                                "filepath"
+                                            ) or entry["requested_downloads"][0].get(
+                                                "filename"
                                             )
-                                            if potential_file.exists():
-                                                filename = potential_file
-                                                break
 
-                                    if filename:
-                                        all_files.append(str(filename))
-
-                                    # Thumbnail - save to Thumbnails subdirectory
-                                    if download_thumbnails:
-                                        thumbnail_path = (
-                                            self._download_thumbnail_from_url(
-                                                url, thumbnails_dir
+                                        # Try to get extension from entry
+                                        if not filename and "ext" in entry:
+                                            potential_filename = (
+                                                output_dir
+                                                / f"{entry['title']}.{entry['ext']}"
                                             )
-                                        )
-                                        if thumbnail_path:
-                                            all_thumbnails.append(thumbnail_path)
+                                            # Only use this filename if it actually exists
+                                            if potential_filename.exists():
+                                                filename = potential_filename
+                                            else:
+                                                logger.warning(
+                                                    f"Expected file not found: {potential_filename.name}"
+                                                )
+
+                                        # Last resort: search for any file with this title
+                                        if not filename:
+                                            title = entry["title"]
+                                            for ext in [
+                                                "m4a",
+                                                "opus",
+                                                "webm",
+                                                "ogg",
+                                                "mp3",
+                                                "aac",
+                                            ]:
+                                                potential_file = (
+                                                    output_dir / f"{title}.{ext}"
+                                                )
+                                                if potential_file.exists():
+                                                    filename = potential_file
+                                                    break
+                                            
+                                            # If still not found, search for any audio file in output_dir
+                                            if not filename:
+                                                logger.warning(
+                                                    f"Could not find file for title '{title}', searching all audio files in {output_dir}"
+                                                )
+                                                for ext in ["m4a", "opus", "webm", "ogg", "mp3", "aac"]:
+                                                    found_files = list(output_dir.glob(f"*.{ext}"))
+                                                    if found_files:
+                                                        filename = found_files[0]  # Take first match
+                                                        logger.info(f"Found alternate file: {filename.name}")
+                                                        break
+                                        
+                                        # Clean up any .part files (incomplete downloads)
+                                        part_files = list(output_dir.glob("*.part"))
+                                        if part_files:
+                                            logger.warning(f"Found {len(part_files)} incomplete download(s), cleaning up...")
+                                            for part_file in part_files:
+                                                try:
+                                                    part_file.unlink()
+                                                    logger.debug(f"Removed incomplete download: {part_file.name}")
+                                                except Exception as e:
+                                                    logger.warning(f"Failed to remove {part_file.name}: {e}")
+
+                                        if filename:
+                                            all_files.append(str(filename))
+                                        else:
+                                            # Check if we have .part files - indicates incomplete download
+                                            if part_files:
+                                                error_msg = f"Download incomplete for: {entry.get('title', 'Unknown')} - connection may have been interrupted or rate-limited"
+                                                logger.error(error_msg)
+                                                raise Exception(error_msg)
+                                            else:
+                                                logger.error(f"Failed to locate downloaded file for: {entry.get('title', 'Unknown')}")
+
+                                        # Thumbnail - save to Thumbnails subdirectory
+                                        if download_thumbnails:
+                                            thumbnail_path = (
+                                                self._download_thumbnail_from_url(
+                                                    url, thumbnails_dir
+                                                )
+                                            )
+                                            if thumbnail_path:
+                                                all_thumbnails.append(thumbnail_path)
+                            
+                            # Handle thumbnail download even if files were already tracked
+                            if files_already_tracked and download_thumbnails:
+                                thumbnail_path = self._download_thumbnail_from_url(
+                                    url, thumbnails_dir
+                                )
+                                if thumbnail_path:
+                                    all_thumbnails.append(thumbnail_path)
 
                         except Exception as download_error:
                             download_error_msg = str(download_error)
@@ -889,8 +1019,34 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 error_msg = str(e)
                 logger.error(f"Error downloading audio for {url}: {error_msg}")
 
+                # Check for bot detection - add to retry queue for second pass
+                if "bot" in error_msg.lower() or "sign in to confirm" in error_msg.lower():
+                    # Check if this is already a retry
+                    current_retry_count = used_session_ids.get(url, 0)
+                    max_retries = 2  # Allow up to 2 retries (3 total attempts)
+                    
+                    if current_retry_count < max_retries:
+                        logger.warning(
+                            f"🤖 Bot detection for {video_id or url[:50]} - queueing for retry with fresh IP (attempt {current_retry_count + 1}/{max_retries + 1})"
+                        )
+                        retry_queue.append(url)
+                        used_session_ids[url] = current_retry_count + 1
+                        if progress_callback:
+                            progress_callback(
+                                f"🔄 Bot detection - will retry with fresh IP after processing other URLs"
+                            )
+                        # Don't add to errors yet - will retry
+                        url_index += 1
+                        continue
+                    else:
+                        logger.error(
+                            f"❌ Bot detection persists after {max_retries} retries for {video_id or url[:50]}"
+                        )
+                        errors.append(
+                            f"Failed to download {url} after {max_retries + 1} attempts with different IPs: {error_msg}"
+                        )
                 # Check for specific payment required error
-                if "402 Payment Required" in error_msg:
+                elif "402 Payment Required" in error_msg:
                     errors.append(
                         f"💰 Payment required for {url}: Your proxy account is out of funds. Please add payment to your proxy service account."
                     )
@@ -900,6 +1056,24 @@ class YouTubeDownloadProcessor(BaseProcessor):
             finally:
                 # PacketStream proxies do not require session cleanup (stateless)
                 pass
+            
+            # Move to next URL
+            url_index += 1
+            
+            # SMART RETRY SYSTEM: Check if we need to add retry URLs
+            # When we finish first pass, add retry queue to end
+            if url_index == len(urls) and retry_queue:
+                logger.info(
+                    f"🔄 First pass complete. Adding {len(retry_queue)} URLs to retry queue with fresh IPs"
+                )
+                if progress_callback:
+                    progress_callback(
+                        f"🔄 Retrying {len(retry_queue)} bot-detected URLs with fresh IPs..."
+                    )
+                
+                # Add retry URLs to end of processing list
+                urls_to_process.extend(retry_queue)
+                retry_queue.clear()  # Clear queue to prevent duplicates
 
         return ProcessorResult(
             success=len(errors) == 0,

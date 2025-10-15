@@ -17,8 +17,13 @@ Usage:
     # With options
     python tests/run_all_tests.py all --verbose    # Detailed output
     python tests/run_all_tests.py all --coverage   # With coverage report
-    python tests/run_all_tests.py all --fast       # Skip slow tests
+    python tests/run_all_tests.py all --fast       # Skip slow tests (no Ollama)
     python tests/run_all_tests.py all --parallel   # Run tests in parallel
+
+Note: System 2 integration tests require Ollama running with qwen2.5:7b-instruct.
+      Use --fast to skip integration tests that require Ollama.
+      
+Manual Test: python3 scripts/test_ollama_integration.py
 """
 
 import argparse
@@ -180,27 +185,51 @@ class TestRunner:
         """Run System 2 specific tests."""
         success = True
 
-        # Database tests
+        # HCE Operations tests (unit tests)
         success &= self.run_pytest_suite(
-            "System 2 Database Tests", "tests/integration/test_system2_database.py"
+            "System 2 HCE Operations Tests",
+            "tests/system2/test_hce_operations.py",
+            markers=["not integration"] if self.fast else None
         )
 
-        # Orchestrator tests
-        success &= self.run_pytest_suite(
-            "System 2 Orchestrator Tests",
-            "tests/integration/test_system2_orchestrator.py",
-        )
+        # LLM Adapter tests (requires Ollama)
+        if not self.fast:
+            success &= self.run_pytest_suite(
+                "System 2 LLM Adapter Tests (Integration)",
+                "tests/system2/test_llm_adapter_real.py",
+                markers=["integration"]
+            )
 
-        # LLM Adapter tests
-        success &= self.run_pytest_suite(
-            "System 2 LLM Adapter Tests", "tests/integration/test_llm_adapter.py"
-        )
+        # Mining tests (requires Ollama)
+        if not self.fast:
+            success &= self.run_pytest_suite(
+                "System 2 Mining Tests (Integration)",
+                "tests/system2/test_mining_full.py",
+                markers=["integration"]
+            )
 
-        # Schema validation tests
-        success &= self.run_pytest_suite(
-            "System 2 Schema Validation Tests",
-            "tests/integration/test_schema_validation.py",
-        )
+        # Orchestrator integration tests (requires Ollama)
+        if not self.fast:
+            success &= self.run_pytest_suite(
+                "System 2 Orchestrator Integration Tests",
+                "tests/system2/test_orchestrator_integration.py",
+                markers=["integration"]
+            )
+
+        # Legacy System 2 tests (if they still exist)
+        legacy_tests = [
+            ("tests/integration/test_system2_database.py", "Database"),
+            ("tests/integration/test_system2_orchestrator.py", "Orchestrator"),
+            ("tests/integration/test_llm_adapter.py", "LLM Adapter"),
+            ("tests/integration/test_schema_validation.py", "Schema Validation"),
+        ]
+        
+        for test_path, test_name in legacy_tests:
+            if Path(test_path).exists():
+                success &= self.run_pytest_suite(
+                    f"System 2 {test_name} Tests (Legacy)",
+                    test_path
+                )
 
         return success
 

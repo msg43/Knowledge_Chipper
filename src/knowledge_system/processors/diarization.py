@@ -446,50 +446,50 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                             )
                             print(
                                 f"[DIARIZATION 80%] Device requested: {self.device}",
-                                flush=True,
+                            flush=True,
+                        )
+                        sys.stdout.flush()
+
+                        logger.debug(
+                            f"Preparing to move pipeline to {self.device}"
+                        )
+                        logger.debug(f"Pipeline type: {type(pipeline)}")
+                        logger.debug(f"Device requested: {self.device}")
+
+                        # Convert device string to torch.device object
+                        torch_device = torch.device(self.device)
+
+                        # Add timeout for GPU transfer
+                        logger.info("Starting GPU transfer...")
+                        import concurrent.futures
+
+                        def move_to_device():
+                            logger.info(
+                                f"Inside move_to_device, calling pipeline.to({torch_device})"
                             )
-                            sys.stdout.flush()
+                            return pipeline.to(torch_device)
 
-                            logger.critical(
-                                f"REACHED 80% - About to move pipeline to {self.device}"
-                            )
-                            logger.critical(f"Pipeline type: {type(pipeline)}")
-                            logger.critical(f"Device requested: {self.device}")
-
-                            # Convert device string to torch.device object
-                            torch_device = torch.device(self.device)
-
-                            # Add timeout for GPU transfer
-                            logger.info("Starting GPU transfer...")
-                            import concurrent.futures
-
-                            def move_to_device():
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(move_to_device)
+                            try:
+                                pipeline = future.result(
+                                    timeout=30
+                                )  # 30 second timeout
                                 logger.info(
-                                    f"Inside move_to_device, calling pipeline.to({torch_device})"
+                                    f"Diarization pipeline successfully moved to {self.device}"
                                 )
-                                return pipeline.to(torch_device)
-
-                            with concurrent.futures.ThreadPoolExecutor() as executor:
-                                future = executor.submit(move_to_device)
-                                try:
-                                    pipeline = future.result(
-                                        timeout=30
-                                    )  # 30 second timeout
-                                    logger.info(
-                                        f"Diarization pipeline successfully moved to {self.device}"
-                                    )
-                                except concurrent.futures.TimeoutError:
-                                    logger.error(
-                                        f"GPU transfer timed out after 30 seconds. Falling back to CPU."
-                                    )
-                                    self.device = "cpu"
-                                    # Pipeline stays on CPU
-                                except Exception as e:
-                                    logger.error(
-                                        f"Failed to move model to {self.device}: {e}. Using CPU instead."
-                                    )
-                                    self.device = "cpu"
-                                    # Pipeline stays on CPU
+                            except concurrent.futures.TimeoutError:
+                                logger.error(
+                                    f"GPU transfer timed out after 30 seconds. Falling back to CPU."
+                                )
+                                self.device = "cpu"
+                                # Pipeline stays on CPU
+                            except Exception as e:
+                                logger.error(
+                                    f"Failed to move model to {self.device}: {e}. Using CPU instead."
+                                )
+                                self.device = "cpu"
+                                # Pipeline stays on CPU
                     except Exception as e:
                         logger.warning(
                             f"Failed to move pipeline to {self.device}, falling back to CPU: {e}"

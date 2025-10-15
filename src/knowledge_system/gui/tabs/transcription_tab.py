@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
 
 from ...config import get_valid_whisper_models
 from ...logger import get_logger
+from ...utils.cancellation import CancellationError
 from ..components.base_tab import BaseTab
 from ..components.completion_summary import TranscriptionCompletionSummary
 from ..components.enhanced_error_dialog import show_enhanced_error
@@ -71,6 +72,10 @@ class EnhancedTranscriptionWorker(QThread):
         self.failed_urls = []  # Track failed URLs with details
         self.failed_files = []  # Track failed local files with details
         self.successful_files = []  # Track successful files with details
+        
+        # Create cancellation token for proper stop support
+        from ...utils.cancellation import CancellationToken
+        self.cancellation_token = CancellationToken()
 
     def _transcription_progress_callback(
         self, step_description_or_dict: Any, progress_percent: int = 0
@@ -223,6 +228,13 @@ class EnhancedTranscriptionWorker(QThread):
                         )
                         return (url, audio_file, True, None)
                     else:
+                        # Debug: Log the result details
+                        logger.error(
+                            f"[{idx}/{total}] Download result check failed - "
+                            f"success={result.success}, "
+                            f"downloaded_files={result.data.get('downloaded_files', [])}, "
+                            f"errors={result.errors}"
+                        )
                         last_error = (
                             result.errors[0] if result.errors else "Unknown error"
                         )
@@ -358,10 +370,23 @@ class EnhancedTranscriptionWorker(QThread):
                     logger.info(
                         f"🚀 Starting conveyor belt download: {len(expanded_urls)} URLs, max {max_concurrent_downloads} concurrent"
                     )
-                    self.transcription_step_updated.emit(
-                        f"🚀 Starting {max_concurrent_downloads} parallel downloads (rolling concurrency)...",
-                        0,
-                    )
+                    # Show actual number of files vs max concurrency
+                    actual_concurrent = min(len(expanded_urls), max_concurrent_downloads)
+                    if len(expanded_urls) == 1:
+                        self.transcription_step_updated.emit(
+                            f"🚀 Starting download (1 file)...",
+                            0,
+                        )
+                    elif len(expanded_urls) <= max_concurrent_downloads:
+                        self.transcription_step_updated.emit(
+                            f"🚀 Starting {len(expanded_urls)} parallel downloads...",
+                            0,
+                        )
+                    else:
+                        self.transcription_step_updated.emit(
+                            f"🚀 Starting downloads ({len(expanded_urls)} files, {max_concurrent_downloads} at a time)...",
+                            0,
+                        )
 
                     # Conveyor belt pattern: ThreadPoolExecutor with rolling concurrency
                     with ThreadPoolExecutor(
@@ -594,6 +619,9 @@ class EnhancedTranscriptionWorker(QThread):
                         "enable_color_coding"
                     ] = self.gui_settings.get("enable_color_coding", True)
 
+                    # Pass cancellation token for proper stop support
+                    processing_kwargs_with_output["cancellation_token"] = self.cancellation_token
+
                     result = processor.process(
                         Path(file_path), **processing_kwargs_with_output
                     )
@@ -687,6 +715,15 @@ class EnhancedTranscriptionWorker(QThread):
                         self.transcription_step_updated.emit(
                             f"❌ Transcription of {file_name} failed", 0
                         )
+
+                except CancellationError:
+                    # User cancelled the operation
+                    logger.info(f"Transcription cancelled by user for file: {file_name}")
+                    self.transcription_step_updated.emit(
+                        f"⏹ Transcription of {file_name} cancelled", 0
+                    )
+                    # Break out of the file loop
+                    break
 
                 except Exception as e:
                     # Track failed completion
@@ -794,10 +831,8 @@ class EnhancedTranscriptionWorker(QThread):
             orchestrator = System2Orchestrator()
 
             # Create and execute a pipeline job
-            from ...core.system2_orchestrator import JobType
-
             job_id = orchestrator.create_job(
-                JobType.PIPELINE,
+                "pipeline",  # Database job type (not JobType enum)
                 video_id,
                 config={
                     "source": "local_file",
@@ -824,6 +859,9 @@ class EnhancedTranscriptionWorker(QThread):
     def stop(self) -> None:
         """Stop the transcription process."""
         self.should_stop = True
+        # Cancel the token to stop any ongoing processor operations
+        if hasattr(self, 'cancellation_token') and self.cancellation_token:
+            self.cancellation_token.cancel()
 
 
 class TranscriptionTab(BaseTab, FileOperationsMixin):
@@ -1820,39 +1858,109 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
     def _retry_failed_files(self):
         """Retry transcription for files that failed."""
-        # This would need to track failed files and retry them
-        # For now, just restart the whole process
-        self.append_log(
-            "🔄 Retry functionality not yet implemented - please restart transcription"
-        )
+        # Check if there are any failed items to retry
+        if not hasattr(self, 'failed_urls'):
+            self.failed_urls = []
+        if not hasattr(self, 'failed_files'):
+            self.failed_files = []
+            
+        total_failed = len(self.failed_urls) + len(self.failed_files)
+        
+        if total_failed == 0:
+            self.append_log("ℹ️ No failed files to retry")
+            return
+        
+        # Collect items to retry
+        retry_items = []
+        
+        # Add failed URLs
+        if self.failed_urls:
+            for failed_item in self.failed_urls:
+                retry_items.append(failed_item.get('url', ''))
+            self.append_log(f"🔄 Retrying {len(self.failed_urls)} failed YouTube download(s)...")
+        
+        # Add failed local files
+        if self.failed_files:
+            for failed_item in self.failed_files:
+                file_path = failed_item.get('file', '')
+                if file_path and Path(file_path).exists():
+                    retry_items.append(file_path)
+            self.append_log(f"🔄 Retrying {len(self.failed_files)} failed local file(s)...")
+        
+        if not retry_items:
+            self.append_log("⚠️ No valid items found to retry")
+            return
+        
+        # Clear failed tracking for fresh retry
+        self.failed_urls = []
+        self.failed_files = []
+        
+        # Clear current file list and add retry items
+        self.transcription_files.clear()
+        
+        for item in retry_items:
+            self.transcription_files.addItem(str(item))
+        
+        self.append_log(f"✅ Loaded {len(retry_items)} item(s) for retry")
+        
+        # Automatically start the retry
+        self.append_log("🚀 Starting retry...")
+        self.run()
 
     def _stop_processing(self):
-        """Stop the current transcription process."""
-        if self.transcription_worker and self.transcription_worker.isRunning():
-            self.append_log("⏹ Stopping transcription (please wait)...")
-            self.transcription_worker.stop()
+        """Stop the current transcription process.
+        
+        Note: If a file is currently being transcribed, it will complete before stopping.
+        The stop will take effect between files or during URL processing.
+        """
+        self.append_log("⏹ Stop button clicked...")
+        self.append_log("💡 Note: Current file will complete before stopping")
+        
+        # Immediately disable the stop button to prevent multiple clicks
+        if hasattr(self, "stop_btn"):
+            self.stop_btn.setEnabled(False)
+        
+        if self.transcription_worker:
+            if self.transcription_worker.isRunning():
+                self.append_log("⏹ Stopping transcription (please wait)...")
+                
+                # Set the stop flag and cancel the token
+                self.transcription_worker.stop()
+                
+                # Process events to ensure UI updates
+                from PyQt6.QtWidgets import QApplication
+                QApplication.processEvents()
 
-            # Wait a short time for graceful shutdown
-            if not self.transcription_worker.wait(2000):  # Wait up to 2 seconds
-                # Force terminate if it doesn't stop gracefully
-                self.append_log("⚠️ Forcing transcription to stop...")
-                self.transcription_worker.terminate()
-                self.transcription_worker.wait()
+                # Wait a short time for graceful shutdown
+                if not self.transcription_worker.wait(3000):  # Wait up to 3 seconds
+                    # Force terminate if it doesn't stop gracefully
+                    self.append_log("⚠️ Worker did not stop gracefully, forcing termination...")
+                    self.transcription_worker.terminate()
+                    
+                    # Wait for termination to complete
+                    if not self.transcription_worker.wait(2000):
+                        self.append_log("⚠️ Worker termination timed out")
+                    else:
+                        self.append_log("✓ Worker terminated")
+                else:
+                    self.append_log("✓ Transcription stopped gracefully")
+            else:
+                self.append_log("⚠️ Worker exists but is not running (already stopped)")
+        else:
+            self.append_log("⚠️ No active transcription worker found")
 
-            self.append_log("✓ Transcription stopped")
+        # Reset UI state regardless of worker state
+        self.progress_display.reset()
+        self._failed_files = set()
 
-            # Reset UI state
-            self.progress_display.reset()
-            self._failed_files = set()
+        # Disable processing state (enables start, disables stop)
+        self.set_processing_state(False)
+        self.start_btn.setText(self._get_start_button_text())
+        self.pipeline_status_label.setText("Ready to process")
+        self.pipeline_status_label.setStyleSheet("color: #666;")
 
-            # Disable processing state (enables start, disables stop)
-            self.set_processing_state(False)
-            self.start_btn.setText(self._get_start_button_text())
-            self.pipeline_status_label.setText("Ready to process")
-            self.pipeline_status_label.setStyleSheet("color: #666;")
-
-            # Override the "Ready" status from set_processing_state with specific stop status
-            self.status_updated.emit("Transcription stopped - Ready")
+        # Override the "Ready" status from set_processing_state with specific stop status
+        self.status_updated.emit("Transcription stopped - Ready")
 
     def _show_completion_summary(
         self, completed_files: int, failed_files: int, failed_files_details: list

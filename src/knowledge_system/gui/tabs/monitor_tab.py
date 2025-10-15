@@ -538,7 +538,7 @@ class MonitorTab(BaseTab, FileOperationsMixin):
     def _process_with_system2_pipeline(self, file_path: Path, config: dict[str, Any]):
         """Process file through the System 2 pipeline."""
         try:
-            from ...core.system2_orchestrator import JobType, System2Orchestrator
+            from ...core.system2_orchestrator import System2Orchestrator
 
             # Create video ID from file name
             video_id = file_path.stem
@@ -552,7 +552,7 @@ class MonitorTab(BaseTab, FileOperationsMixin):
 
             # Create and execute a pipeline job
             job_id = orchestrator.create_job(
-                JobType.PIPELINE,
+                "pipeline",  # Database job type (not JobType enum)
                 video_id,
                 config={
                     "source": "file_watcher",

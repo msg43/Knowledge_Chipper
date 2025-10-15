@@ -33,7 +33,7 @@ from knowledge_system.processors.hce.flagship_evaluator import (
     FlagshipEvaluator,
     evaluate_claims_flagship,
 )
-from knowledge_system.processors.hce.models.llm_any import AnyLLM
+from knowledge_system.processors.hce.models.llm_system2 import System2LLM
 from knowledge_system.processors.hce.schema_validator import SchemaValidator
 from knowledge_system.processors.hce.types import EpisodeBundle, Segment
 from knowledge_system.processors.hce.unified_miner import (
@@ -49,7 +49,7 @@ def test_llm_connection():
     print("-" * 30)
 
     try:
-        llm = AnyLLM("openai://gpt-4o-mini")
+        llm = System2LLM("openai://gpt-4o-mini")
         response = llm.generate_json(
             'Return a simple JSON object with a greeting: {"message": "Hello, World!"}'
         )

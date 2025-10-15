@@ -279,25 +279,73 @@ class LLMAdapter:
         self, provider: str, model: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
         """Make the actual API call to the provider."""
-        # This is a placeholder - in reality, this would call the actual provider APIs
-        # For now, return a mock response
-        logger.info(f"Calling {provider} API with model {model}")
+        if provider == "ollama":
+            return await self._call_ollama(model, payload)
+        else:
+            raise KnowledgeSystemError(
+                f"Provider {provider} not implemented yet",
+                ErrorCode.INVALID_INPUT
+            )
 
-        # Simulate API delay
-        await asyncio.sleep(0.5)
+    async def _call_ollama(
+        self, model: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Call Ollama local API."""
+        import aiohttp
 
-        # Mock response
-        mock_content = "This is a mock LLM response for System 2 testing."
-        return {
-            "content": mock_content,
-            "usage": {
-                "prompt_tokens": 100,
-                "completion_tokens": 20,
-                "total_tokens": 120,
-            },
+        url = "http://localhost:11434/api/chat"
+
+        request_payload = {
             "model": model,
-            "provider": provider,
+            "messages": payload["messages"],
+            "stream": False,
+            "options": {
+                "temperature": payload.get("temperature", 0.7),
+            }
         }
+
+        if payload.get("format") == "json":
+            request_payload["format"] = "json"
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url, 
+                    json=request_payload, 
+                    timeout=aiohttp.ClientTimeout(total=300)
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise KnowledgeSystemError(
+                            f"Ollama API error: {error_text}",
+                            ErrorCode.LLM_API_ERROR
+                        )
+                    result = await response.json()
+
+            content = result["message"]["content"]
+            prompt_tokens = sum(len(m["content"].split()) for m in payload["messages"]) * 1.3
+            completion_tokens = len(content.split()) * 1.3
+
+            return {
+                "content": content,
+                "usage": {
+                    "prompt_tokens": int(prompt_tokens),
+                    "completion_tokens": int(completion_tokens),
+                    "total_tokens": int(prompt_tokens + completion_tokens),
+                },
+                "model": model,
+                "provider": "ollama",
+            }
+        except aiohttp.ClientError as e:
+            raise KnowledgeSystemError(
+                f"Ollama connection failed: {e}. Is Ollama running?",
+                ErrorCode.LLM_API_ERROR
+            ) from e
+        except KeyError as e:
+            raise KnowledgeSystemError(
+                f"Unexpected Ollama response format: {e}",
+                ErrorCode.LLM_API_ERROR
+            ) from e
 
     def _track_request(self, provider: str, model: str, payload: dict[str, Any]) -> str:
         """Track request in database."""
@@ -305,10 +353,27 @@ class LLMAdapter:
             return ""
 
         try:
-            from ..core.system2_orchestrator import get_orchestrator
+            import uuid
+            from ..database.system2_models import LLMRequest
 
-            orchestrator = get_orchestrator(self.db_service)
-            return orchestrator.track_llm_request(provider, model, payload)
+            request_id = f"llm_req_{uuid.uuid4().hex[:8]}"
+
+            with self.db_service.get_session() as session:
+                llm_request = LLMRequest(
+                    request_id=request_id,
+                    job_run_id=self._current_job_run_id,
+                    provider=provider,
+                    model=model,
+                    endpoint=None,
+                    request_json=payload,
+                    prompt_tokens=payload.get("prompt_tokens"),
+                    max_tokens=payload.get("max_tokens"),
+                    temperature=payload.get("temperature"),
+                )
+                session.add(llm_request)
+                session.commit()
+
+            return request_id
         except Exception as e:
             logger.warning(f"Failed to track LLM request: {e}")
             return ""
@@ -321,10 +386,23 @@ class LLMAdapter:
             return
 
         try:
-            from ..core.system2_orchestrator import get_orchestrator
+            import uuid
+            from ..database.system2_models import LLMResponse
 
-            orchestrator = get_orchestrator(self.db_service)
-            orchestrator.track_llm_response(request_id, response, response_time_ms)
+            usage = response.get("usage", {})
+            response_id = f"llm_resp_{uuid.uuid4().hex[:8]}"
+
+            with self.db_service.get_session() as session:
+                llm_response = LLMResponse(
+                    response_id=response_id,
+                    request_id=request_id,
+                    response_json=response,
+                    completion_tokens=usage.get("completion_tokens", 0),
+                    total_tokens=usage.get("total_tokens", 0),
+                    latency_ms=response_time_ms,
+                )
+                session.add(llm_response)
+                session.commit()
         except Exception as e:
             logger.warning(f"Failed to track LLM response: {e}")
 

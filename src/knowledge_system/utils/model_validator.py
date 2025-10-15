@@ -49,9 +49,26 @@ class ModelValidator:
         self.whisper_cache_dir = Path.home() / ".cache" / "whisper-cpp"
         self.settings_dir = Path.home() / ".knowledge_chipper" / "settings"
         self.settings_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Cache for model checks to avoid redundant filesystem operations
+        self._whisper_models_cache: Optional[dict[str, bool]] = None
+        self._llm_models_cache: Optional[dict[str, list[str]]] = None
+        self._cache_timestamp: Optional[float] = None
+        self._cache_ttl = 5.0  # Cache for 5 seconds to cover startup checks
 
-    def check_whisper_models(self) -> dict[str, bool]:
-        """Check which Whisper models are installed."""
+    def check_whisper_models(self, use_cache: bool = True) -> dict[str, bool]:
+        """
+        Check which Whisper models are installed.
+        
+        Args:
+            use_cache: If True, use cached results if available and fresh
+        """
+        # Check if we have a valid cache
+        if use_cache and self._whisper_models_cache is not None and self._cache_timestamp is not None:
+            import time
+            if time.time() - self._cache_timestamp < self._cache_ttl:
+                return self._whisper_models_cache
+        
         installed = {}
 
         # Check both cache and local models directory
@@ -76,10 +93,26 @@ class ModelValidator:
                     break
             installed[model_size] = found
 
+        # Update cache
+        import time
+        self._whisper_models_cache = installed
+        self._cache_timestamp = time.time()
+        
         return installed
 
-    def check_llm_models(self) -> dict[str, list[str]]:
-        """Check which LLM models are installed via Ollama."""
+    def check_llm_models(self, use_cache: bool = True) -> dict[str, list[str]]:
+        """
+        Check which LLM models are installed via Ollama.
+        
+        Args:
+            use_cache: If True, use cached results if available and fresh
+        """
+        # Check if we have a valid cache
+        if use_cache and self._llm_models_cache is not None and self._cache_timestamp is not None:
+            import time
+            if time.time() - self._cache_timestamp < self._cache_ttl:
+                return self._llm_models_cache
+        
         installed = {}
 
         try:
@@ -108,6 +141,11 @@ class ModelValidator:
         except Exception as e:
             logger.error(f"Failed to check LLM models: {e}")
 
+        # Update cache
+        import time
+        self._llm_models_cache = installed
+        self._cache_timestamp = time.time()
+        
         return installed
 
     def has_valid_whisper_model(self) -> bool:
@@ -152,6 +190,12 @@ class ModelValidator:
             missing["llm"] = "qwen2.5:7b"  # Default model to download
 
         return missing
+    
+    def invalidate_cache(self) -> None:
+        """Invalidate the model cache to force a fresh check."""
+        self._whisper_models_cache = None
+        self._llm_models_cache = None
+        self._cache_timestamp = None
 
     def should_download_model(self, model_type: str, model_name: str) -> bool:
         """Check if a specific model should be downloaded."""

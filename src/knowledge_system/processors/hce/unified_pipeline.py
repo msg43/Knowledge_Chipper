@@ -353,17 +353,14 @@ class UnifiedHCEPipeline:
 
             # Call LLM with flagship model
             from .models.llm_system2 import create_system2_llm
+            from .model_uri_parser import parse_model_uri
 
             flagship_model_uri = getattr(
                 self.config.models, "flagship_judge", self.config.models.judge
             )
 
-            # Parse model URI
-            if ":" in flagship_model_uri:
-                provider, model = flagship_model_uri.split(":", 1)
-            else:
-                provider = "openai"
-                model = flagship_model_uri
+            # Parse model URI with proper handling of local:// and other formats
+            provider, model = parse_model_uri(flagship_model_uri)
 
             llm = create_system2_llm(provider=provider, model=model)
             response = llm.generate_json(full_prompt)
