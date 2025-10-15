@@ -97,7 +97,7 @@ class TranscriptionCompletionSummary(QDialog):
             "📝 Total transcription text: -- characters\n"
             "🎯 Average quality score: --"
         )
-        self.performance_label.setStyleSheet("color: #333; line-height: 1.4;")
+        self.performance_label.setStyleSheet("color: white; line-height: 1.4;")
         perf_layout.addWidget(self.performance_label)
 
         layout.addWidget(perf_group)
@@ -183,7 +183,7 @@ class TranscriptionCompletionSummary(QDialog):
 
         self.next_steps_label = QLabel()
         self.next_steps_label.setWordWrap(True)
-        self.next_steps_label.setStyleSheet("color: #333; line-height: 1.4;")
+        self.next_steps_label.setStyleSheet("color: white; line-height: 1.4;")
         next_steps_layout.addWidget(self.next_steps_label)
 
         layout.addWidget(next_steps_group)

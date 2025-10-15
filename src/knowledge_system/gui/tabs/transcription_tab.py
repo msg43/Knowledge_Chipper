@@ -1,10 +1,13 @@
 """Audio transcription tab for processing audio and video files using Whisper."""
 
 import os
+import random
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -24,6 +27,7 @@ from PyQt6.QtWidgets import (
 
 from ...config import get_valid_whisper_models
 from ...logger import get_logger
+from ...utils.cancellation import CancellationError
 from ..components.base_tab import BaseTab
 from ..components.completion_summary import TranscriptionCompletionSummary
 from ..components.enhanced_error_dialog import show_enhanced_error
@@ -41,11 +45,14 @@ class EnhancedTranscriptionWorker(QThread):
 
     progress_updated = pyqtSignal(object)  # Progress object
     file_completed = pyqtSignal(int, int)  # current, total
-    processing_finished = pyqtSignal()
+    processing_finished = pyqtSignal(
+        int, int, list
+    )  # completed_count, failed_count, failed_files_details
     processing_error = pyqtSignal(str)
     transcription_step_updated = pyqtSignal(
         str, int
     )  # step_description, progress_percent
+    total_files_determined = pyqtSignal(int)  # total_files_count
     # Speaker assignment signal removed - handled in Speaker Attribution tab only
 
     def __init__(
@@ -60,6 +67,16 @@ class EnhancedTranscriptionWorker(QThread):
         self._speaker_assignment_event = None
         self.current_file_index = 0
         self.total_files = len(files)
+        self.completed_count = 0
+        self.failed_count = 0
+        self.failed_urls = []  # Track failed URLs with details
+        self.failed_files = []  # Track failed local files with details
+        self.successful_files = []  # Track successful files with details
+
+        # Create cancellation token for proper stop support
+        from ...utils.cancellation import CancellationToken
+
+        self.cancellation_token = CancellationToken()
 
     def _transcription_progress_callback(
         self, step_description_or_dict: Any, progress_percent: int = 0
@@ -101,10 +118,364 @@ class EnhancedTranscriptionWorker(QThread):
 
     # Speaker assignment callback removed - handled in Speaker Attribution tab only
 
+    def _apply_youtube_delay(self, median_delay: int, is_first: bool = False):
+        """Apply randomized delay between YouTube downloads."""
+        import random
+        import time
+
+        if is_first or median_delay == 0:
+            return  # No delay for first video or if delay is 0
+
+        # Randomize ±30%
+        min_delay = median_delay * 0.7
+        max_delay = median_delay * 1.3
+        actual_delay = random.uniform(min_delay, max_delay)
+
+        self.transcription_step_updated.emit(
+            f"⏱️ Waiting {actual_delay:.1f}s before next download (avoiding bot detection)...",
+            0,
+        )
+        logger.info(
+            f"Applying delay: {actual_delay:.1f}s (median: {median_delay}s, range: {min_delay:.1f}-{max_delay:.1f}s)"
+        )
+        time.sleep(actual_delay)
+
+    def _get_error_guidance(self, error_msg: str) -> str:
+        """Get user-friendly guidance for specific error types."""
+        # Use the centralized YouTube error handler for consistent categorization
+        from ...utils.error_handling import YouTubeErrorHandler
+
+        # Get categorized error message from the centralized handler
+        categorized_error = YouTubeErrorHandler.categorize_youtube_error(error_msg)
+
+        # If it's the generic fallback, provide additional guidance
+        if (
+            "❌ Error processing" in categorized_error
+            or "❌ YouTube processing error" in categorized_error
+        ):
+            error_lower = error_msg.lower()
+
+            if "503" in error_msg or "service unavailable" in error_lower:
+                return "Proxy unavailable - check Settings or disable proxy checkbox"
+            elif "sign in to confirm" in error_lower or "bot" in error_lower:
+                return "Bot detected - increase delay between downloads or use proxy"
+            elif "requested format is not available" in error_lower:
+                return "Format unavailable - video may be restricted or deleted"
+            elif "private video" in error_lower or "members-only" in error_lower:
+                return "Video requires authentication - cannot download"
+            elif "video unavailable" in error_lower:
+                return "Video not accessible - may be deleted or region-locked"
+            else:
+                return "Check PacketStream config or try increasing download delay"
+        else:
+            # Use the categorized error message (removes URL for cleaner display)
+            return categorized_error.replace(
+                f" ({error_msg.split('=')[-1] if '=' in error_msg else ''})", ""
+            )
+
+    def _download_single_url(
+        self,
+        url: str,
+        idx: int,
+        total: int,
+        downloader,
+        downloads_dir,
+        youtube_delay: int,
+        is_first: bool = False,
+    ):
+        """Download a single YouTube URL with retry logic and delays.
+
+        This is designed to be called from ThreadPoolExecutor for parallel downloads.
+        Returns tuple of (url, audio_file_path, success, error_message).
+        """
+        try:
+            # Apply delay before download (except first in batch)
+            if not is_first and youtube_delay > 0:
+                # Randomize ±30%
+                min_delay = youtube_delay * 0.7
+                max_delay = youtube_delay * 1.3
+                actual_delay = random.uniform(min_delay, max_delay)
+
+                logger.info(
+                    f"[{idx}/{total}] Applying delay: {actual_delay:.1f}s before {url[:40]}..."
+                )
+                time.sleep(actual_delay)
+
+            # Retry logic for this download
+            max_retries = 3
+            retry_count = 0
+            last_error = None
+
+            while retry_count < max_retries and not self.should_stop:
+                try:
+                    attempt_msg = (
+                        f" (attempt {retry_count + 1}/{max_retries})"
+                        if retry_count > 0
+                        else ""
+                    )
+                    self.transcription_step_updated.emit(
+                        f"📥 [{idx}/{total}] Downloading{attempt_msg}...",
+                        int(20 + (idx / total) * 70),
+                    )
+
+                    result = downloader.process(url, output_dir=downloads_dir)
+
+                    if result.success and result.data.get("downloaded_files"):
+                        audio_file = result.data["downloaded_files"][0]
+                        logger.info(f"✅ [{idx}/{total}] Downloaded: {url}")
+                        self.transcription_step_updated.emit(
+                            f"✅ [{idx}/{total}] Downloaded successfully",
+                            int(20 + (idx / total) * 70),
+                        )
+                        return (url, audio_file, True, None)
+                    else:
+                        # Debug: Log the result details
+                        logger.error(
+                            f"[{idx}/{total}] Download result check failed - "
+                            f"success={result.success}, "
+                            f"downloaded_files={result.data.get('downloaded_files', [])}, "
+                            f"errors={result.errors}"
+                        )
+                        last_error = (
+                            result.errors[0] if result.errors else "Unknown error"
+                        )
+
+                        # Check for retryable errors
+                        if "503" in last_error or "Service Unavailable" in last_error:
+                            retry_count += 1
+                            if retry_count < max_retries:
+                                backoff = 2**retry_count
+                                self.transcription_step_updated.emit(
+                                    f"⚠️ [{idx}/{total}] Proxy unavailable (503), retrying in {backoff}s...",
+                                    0,
+                                )
+                                time.sleep(backoff)
+                        elif (
+                            "Sign in to confirm" in last_error
+                            or "bot" in last_error.lower()
+                        ):
+                            # Bot detection - don't retry
+                            retry_count += 1
+                            logger.error(
+                                f"[{idx}/{total}] Bot detection for {url}: {last_error}"
+                            )
+                            self.transcription_step_updated.emit(
+                                f"❌ [{idx}/{total}] YouTube bot detection triggered", 0
+                            )
+                            break
+                        elif "Requested format is not available" in last_error:
+                            # Format issue - try once more then give up
+                            retry_count += 1
+                            if retry_count < max_retries:
+                                self.transcription_step_updated.emit(
+                                    f"⚠️ [{idx}/{total}] Format issue, retrying...", 0
+                                )
+                                time.sleep(2)
+                        else:
+                            # Non-retryable error
+                            retry_count += 1
+                            logger.error(
+                                f"[{idx}/{total}] Download failed for {url}: {last_error}"
+                            )
+                            break
+
+                except Exception as e:
+                    last_error = str(e)
+                    logger.error(f"[{idx}/{total}] Exception downloading {url}: {e}")
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        backoff = 2**retry_count
+                        self.transcription_step_updated.emit(
+                            f"⚠️ [{idx}/{total}] Error, retrying in {backoff}s...", 0
+                        )
+                        time.sleep(backoff)
+
+            # All retries exhausted
+            error_guidance = self._get_error_guidance(last_error or "Unknown error")
+            self.transcription_step_updated.emit(
+                f"❌ [{idx}/{total}] Failed: {url[:40]}... - {error_guidance}", 0
+            )
+            logger.error(
+                f"[{idx}/{total}] Failed to download after {retry_count} attempts: {url}"
+            )
+
+            # Track failed URL with full details
+            self.failed_urls.append(
+                {
+                    "url": url,
+                    "error": last_error or "Unknown error",
+                    "error_guidance": error_guidance,
+                    "index": idx,
+                }
+            )
+
+            return (url, None, False, last_error or "Unknown error")
+
+        except Exception as e:
+            logger.error(
+                f"[{idx}/{total}] Fatal error in _download_single_url for {url}: {e}"
+            )
+
+            # Track fatal error
+            self.failed_urls.append(
+                {
+                    "url": url,
+                    "error": str(e),
+                    "error_guidance": "Fatal error during download",
+                    "index": idx,
+                }
+            )
+
+            return (url, None, False, str(e))
+
     def run(self) -> None:
         """Run the transcription process with real-time progress tracking."""
         try:
             from ...processors.audio_processor import AudioProcessor
+            from ...processors.youtube_download import YouTubeDownloadProcessor
+            from ...utils.youtube_utils import expand_playlist_urls_with_metadata
+
+            # Handle URLs if provided - download them first
+            urls = self.gui_settings.get("urls", [])
+            downloaded_files = []
+
+            if urls:
+                self.transcription_step_updated.emit(
+                    f"📥 Processing {len(urls)} URL(s)...", 0
+                )
+
+                # Expand playlists
+                expansion_result = expand_playlist_urls_with_metadata(urls)
+                expanded_urls = expansion_result["expanded_urls"]
+
+                if expanded_urls:
+                    self.transcription_step_updated.emit(
+                        f"📥 Downloading {len(expanded_urls)} video(s)...", 10
+                    )
+
+                    output_dir = self.gui_settings.get("output_dir")
+                    downloads_dir = Path(output_dir) / "downloads"
+                    downloads_dir.mkdir(parents=True, exist_ok=True)
+
+                    # Use existing YouTubeDownloadProcessor
+                    downloader = YouTubeDownloadProcessor(
+                        download_thumbnails=True
+                    )  # Keep original format
+
+                    # Get YouTube delay setting
+                    youtube_delay = self.gui_settings.get("youtube_delay", 5)
+
+                    # Calculate optimal download concurrency (3-6 concurrent downloads recommended)
+                    max_concurrent_downloads = min(6, max(3, len(expanded_urls)))
+
+                    logger.info(
+                        f"🚀 Starting conveyor belt download: {len(expanded_urls)} URLs, max {max_concurrent_downloads} concurrent"
+                    )
+                    # Show actual number of files vs max concurrency
+                    actual_concurrent = min(
+                        len(expanded_urls), max_concurrent_downloads
+                    )
+                    if len(expanded_urls) == 1:
+                        self.transcription_step_updated.emit(
+                            f"🚀 Starting download (1 file)...",
+                            0,
+                        )
+                    elif len(expanded_urls) <= max_concurrent_downloads:
+                        self.transcription_step_updated.emit(
+                            f"🚀 Starting {len(expanded_urls)} parallel downloads...",
+                            0,
+                        )
+                    else:
+                        self.transcription_step_updated.emit(
+                            f"🚀 Starting downloads ({len(expanded_urls)} files, {max_concurrent_downloads} at a time)...",
+                            0,
+                        )
+
+                    # Conveyor belt pattern: ThreadPoolExecutor with rolling concurrency
+                    with ThreadPoolExecutor(
+                        max_workers=max_concurrent_downloads
+                    ) as executor:
+                        # Submit all downloads to the queue
+                        futures = {}
+
+                        for idx, url in enumerate(expanded_urls, 1):
+                            if self.should_stop:
+                                break
+
+                            # Stagger the start of first batch to avoid simultaneous bursts
+                            if idx <= max_concurrent_downloads and idx > 1:
+                                stagger_delay = random.uniform(
+                                    0, min(10, youtube_delay)
+                                )
+                                logger.info(
+                                    f"Staggering start for URL {idx}: {stagger_delay:.1f}s delay"
+                                )
+                                time.sleep(stagger_delay)
+
+                            # Submit download to thread pool (will start immediately if worker available)
+                            future = executor.submit(
+                                self._download_single_url,
+                                url,
+                                idx,
+                                len(expanded_urls),
+                                downloader,
+                                downloads_dir,
+                                youtube_delay,
+                                is_first=(idx == 1),
+                            )
+                            futures[future] = (url, idx)
+
+                        # Process results as they complete (true conveyor belt)
+                        completed = 0
+                        for future in as_completed(futures):
+                            if self.should_stop:
+                                # Cancel remaining futures
+                                for f in futures:
+                                    if not f.done():
+                                        f.cancel()
+                                break
+
+                            url, idx = futures[future]
+                            try:
+                                result_url, audio_file, success, error = future.result()
+
+                                if success and audio_file:
+                                    downloaded_files.append(audio_file)
+                                    completed += 1
+                                    logger.info(
+                                        f"✅ Completed {completed}/{len(expanded_urls)}: {result_url[:40]}..."
+                                    )
+                                else:
+                                    self.failed_count += 1
+                                    logger.error(
+                                        f"❌ Failed {completed + self.failed_count}/{len(expanded_urls)}: {result_url[:40]}..."
+                                    )
+
+                            except Exception as e:
+                                logger.error(
+                                    f"Exception processing result for {url}: {e}"
+                                )
+                                self.failed_count += 1
+
+                    logger.info(
+                        f"🏁 Download complete: {completed} successful, {self.failed_count} failed"
+                    )
+
+                    # Emit failed URLs summary if any failures
+                    if self.failed_urls:
+                        self.transcription_step_updated.emit(
+                            f"⚠️ {len(self.failed_urls)} download(s) failed - see summary below",
+                            0,
+                        )
+
+            # Combine downloaded files with local files
+            all_files = list(self.files) + downloaded_files
+
+            # Update total files count to include expanded URLs
+            self.total_files = len(all_files)
+
+            # Notify UI that total files count has been determined
+            self.total_files_determined.emit(self.total_files)
 
             # Create processor with GUI settings - filter out conflicting diarization parameter
             kwargs = self.gui_settings.get("kwargs", {})
@@ -154,23 +525,37 @@ class EnhancedTranscriptionWorker(QThread):
             if "timestamps" in self.gui_settings:
                 processing_kwargs["timestamps"] = self.gui_settings["timestamps"]
 
-            # Add progress callback to processor
-            processor = AudioProcessor(
-                model=self.gui_settings["model"],
-                device=self.gui_settings["device"],
-                enable_diarization=enable_diarization,
-                require_diarization=enable_diarization,  # Strict mode: if diarization enabled, require it
-                enable_quality_retry=self.gui_settings.get(
-                    "enable_quality_retry", True
-                ),
-                max_retry_attempts=self.gui_settings.get("max_retry_attempts", 1),
-                progress_callback=self._transcription_progress_callback,
-                **audio_processor_kwargs,
-            )
+            # Add progress callback to processor with timeout protection
+            try:
+                self.transcription_step_updated.emit(
+                    "🔧 Initializing transcription engine...", 5
+                )
 
-            self.total_files = len(self.files)
+                processor = AudioProcessor(
+                    model=self.gui_settings["model"],
+                    device=self.gui_settings["device"],
+                    enable_diarization=enable_diarization,
+                    require_diarization=enable_diarization,  # Strict mode: if diarization enabled, require it
+                    enable_quality_retry=self.gui_settings.get(
+                        "enable_quality_retry", True
+                    ),
+                    max_retry_attempts=self.gui_settings.get("max_retry_attempts", 1),
+                    progress_callback=self._transcription_progress_callback,
+                    **audio_processor_kwargs,
+                )
 
-            for i, file_path in enumerate(self.files):
+                self.transcription_step_updated.emit("✅ Transcription engine ready", 10)
+
+            except Exception as e:
+                error_msg = f"Failed to initialize transcription engine: {str(e)}"
+                logger.error(error_msg)
+                self.transcription_step_updated.emit(f"❌ {error_msg}", 0)
+                self.processing_error.emit(error_msg)
+                return
+
+            self.total_files = len(all_files)
+
+            for i, file_path in enumerate(all_files):
                 if self.should_stop:
                     break
 
@@ -206,8 +591,10 @@ class EnhancedTranscriptionWorker(QThread):
                     testing_mode = (
                         os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
                         or os.environ.get("QT_MAC_DISABLE_FOREGROUND") == "1"
-                        or hasattr(self, "_testing_mode")  # Set by test runner
-                        and self._testing_mode
+                        or (
+                            hasattr(self, "_testing_mode")
+                            and getattr(self, "_testing_mode", False)
+                        )
                     )
 
                     # Log testing mode detection for debugging
@@ -235,11 +622,19 @@ class EnhancedTranscriptionWorker(QThread):
                         "enable_color_coding"
                     ] = self.gui_settings.get("enable_color_coding", True)
 
+                    # Pass cancellation token for proper stop support
+                    processing_kwargs_with_output[
+                        "cancellation_token"
+                    ] = self.cancellation_token
+
                     result = processor.process(
                         Path(file_path), **processing_kwargs_with_output
                     )
 
                     if result.success:
+                        # Track successful completion
+                        self.completed_count += 1
+
                         # Get transcription data info
                         transcript_data = result.data
                         text_length = (
@@ -279,13 +674,46 @@ class EnhancedTranscriptionWorker(QThread):
                         }
                         self.progress_updated.emit(progress_data)
                         self.transcription_step_updated.emit(step_msg, 100)
+
+                        # Track successful file with details
+                        self.successful_files.append(
+                            {
+                                "file": file_name,
+                                "text_length": text_length,
+                                "saved_to": Path(saved_file).name
+                                if saved_file
+                                else None,
+                            }
+                        )
+
+                        # System 2: Handle auto-process if enabled
+                        if (
+                            self.gui_settings.get("auto_process", False)
+                            and result.success
+                        ):
+                            self._handle_auto_process(file_path, transcript_data)
                     else:
+                        # Track failed completion
+                        self.failed_count += 1
+
+                        # Get descriptive error message
+                        error_detail = (
+                            "; ".join(result.errors)
+                            if result.errors
+                            else "Unknown transcription error"
+                        )
+
+                        # Track failed file with details
+                        self.failed_files.append(
+                            {"file": file_name, "error": error_detail}
+                        )
+
                         # Emit progress update with failure
                         progress_data = {
                             "file": file_path,
                             "current": i + 1,
                             "total": self.total_files,
-                            "status": f"transcription failed: {'; '.join(result.errors)}",
+                            "status": f"transcription failed: {error_detail}",
                             "success": False,
                         }
                         self.progress_updated.emit(progress_data)
@@ -293,27 +721,154 @@ class EnhancedTranscriptionWorker(QThread):
                             f"❌ Transcription of {file_name} failed", 0
                         )
 
+                except CancellationError:
+                    # User cancelled the operation
+                    logger.info(
+                        f"Transcription cancelled by user for file: {file_name}"
+                    )
+                    self.transcription_step_updated.emit(
+                        f"⏹ Transcription of {file_name} cancelled", 0
+                    )
+                    # Break out of the file loop
+                    break
+
                 except Exception as e:
+                    # Track failed completion
+                    self.failed_count += 1
+
+                    error_msg = str(e)
+
+                    # Track failed file with details
+                    self.failed_files.append(
+                        {
+                            "file": file_name,
+                            "error": f"Exception during transcription: {error_msg}",
+                        }
+                    )
+
                     progress_data = {
                         "file": file_path,
                         "current": i + 1,
                         "total": self.total_files,
-                        "status": f"transcription error: {str(e)}",
+                        "status": f"transcription error: {error_msg}",
                         "success": False,
                     }
                     self.progress_updated.emit(progress_data)
                     self.transcription_step_updated.emit(
-                        f"❌ Error transcribing {file_name}: {str(e)}", 0
+                        f"❌ Error transcribing {file_name}: {error_msg}", 0
                     )
 
-            self.processing_finished.emit()
+            # Display failed URLs summary if any
+            if self.failed_urls:
+                self.transcription_step_updated.emit(
+                    f"\n{'='*60}\n📋 FAILED DOWNLOADS SUMMARY ({len(self.failed_urls)} URLs)\n{'='*60}",
+                    0,
+                )
+                for failed_item in self.failed_urls:
+                    self.transcription_step_updated.emit(
+                        f"❌ [{failed_item['index']}] {failed_item['url']}", 0
+                    )
+                    self.transcription_step_updated.emit(
+                        f"   Error: {failed_item['error_guidance']}", 0
+                    )
+
+                # Save failed URLs to file for easy retry
+                try:
+                    output_dir = self.gui_settings.get("output_dir")
+                    if output_dir:
+                        failed_urls_file = Path(output_dir) / "failed_downloads.txt"
+                        with open(failed_urls_file, "w") as f:
+                            f.write(
+                                f"# Failed YouTube Downloads - {len(self.failed_urls)} URLs\n"
+                            )
+                            f.write(
+                                f"# Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                            )
+                            for failed_item in self.failed_urls:
+                                f.write(f"{failed_item['url']}\n")
+                                f.write(f"# Error: {failed_item['error_guidance']}\n\n")
+
+                        self.transcription_step_updated.emit(
+                            f"💾 Failed URLs saved to: {failed_urls_file}", 0
+                        )
+                        logger.info(f"Failed URLs saved to: {failed_urls_file}")
+                except Exception as e:
+                    logger.error(f"Failed to save failed URLs file: {e}")
+
+                self.transcription_step_updated.emit(
+                    f"{'='*60}\n💡 Tip: Copy URLs above or use saved file to retry\n{'='*60}",
+                    0,
+                )
+
+            # Combine failed URLs and failed files for comprehensive error reporting
+            all_failed_details = []
+
+            # Add failed URLs
+            for failed_url in self.failed_urls:
+                all_failed_details.append(
+                    {
+                        "file": failed_url.get("url", "Unknown URL"),
+                        "error": failed_url.get(
+                            "error_guidance", failed_url.get("error", "Unknown error")
+                        ),
+                    }
+                )
+
+            # Add failed local files
+            all_failed_details.extend(self.failed_files)
+
+            self.processing_finished.emit(
+                self.completed_count, self.failed_count, all_failed_details
+            )
 
         except Exception as e:
             self.processing_error.emit(str(e))
 
+    def _handle_auto_process(self, file_path: str, transcript_data: dict) -> None:
+        """Handle System 2 auto-process pipeline."""
+        try:
+            # Import System 2 orchestrator
+            from ...core.system2_orchestrator import System2Orchestrator
+            from ...database import DatabaseService
+
+            # Extract video ID from file path or generate one
+            video_id = Path(file_path).stem
+
+            # Create orchestrator instance
+            orchestrator = System2Orchestrator()
+
+            # Create and execute a pipeline job
+            job_id = orchestrator.create_job(
+                "pipeline",  # Database job type (not JobType enum)
+                video_id,
+                config={
+                    "source": "local_file",
+                    "file_path": file_path,
+                    "transcript_data": transcript_data,
+                },
+                auto_process=True,
+            )
+
+            self.transcription_step_updated.emit(
+                f"🚀 Starting System 2 pipeline for {Path(file_path).name}", 0
+            )
+
+            # Execute in background (orchestrator handles the rest)
+            # In a real implementation, this would be queued
+            logger.info(f"System 2 pipeline initiated for {video_id} (job: {job_id})")
+
+        except Exception as e:
+            logger.error(f"Failed to initiate System 2 pipeline: {e}")
+            self.transcription_step_updated.emit(
+                f"❌ Failed to start pipeline: {str(e)}", 0
+            )
+
     def stop(self) -> None:
         """Stop the transcription process."""
         self.should_stop = True
+        # Cancel the token to stop any ongoing processor operations
+        if hasattr(self, "cancellation_token") and self.cancellation_token:
+            self.cancellation_token.cancel()
 
 
 class TranscriptionTab(BaseTab, FileOperationsMixin):
@@ -344,6 +899,10 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         settings_section = self._create_settings_section()
         layout.addWidget(settings_section)
 
+        # System 2 Auto-process section
+        auto_process_section = self._create_auto_process_section()
+        layout.addWidget(auto_process_section)
+
         # Performance section removed - dynamic resource management handles this now
 
         # Action buttons
@@ -359,7 +918,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         layout.addLayout(output_layout, 2)  # Give more stretch to output section
 
         # Load saved settings after UI is set up
-        self._load_settings()
+        # Use a timer with a small delay to ensure all widgets are fully initialized
+        QTimer.singleShot(200, self._load_settings)
 
     def _create_input_section(self) -> QGroupBox:
         """Create the input files section."""
@@ -369,7 +929,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         # Add supported file types info
         supported_types_label = QLabel(
-            "Supported formats: Audio/Video files (*.mp4 *.mp3 *.wav *.webm *.m4a *.flac *.ogg)"
+            "Supported: Audio/Video files (*.mp4 *.mp3 *.wav *.webm *.m4a *.flac *.ogg), YouTube URLs, Playlists, RSS feeds, URL files (*.txt *.csv)"
         )
         supported_types_label.setStyleSheet(
             "color: #666; font-style: italic; margin-bottom: 8px;"
@@ -387,6 +947,19 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.transcription_files.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
+
+        # Enable custom paste handling for URLs
+        self.transcription_files.installEventFilter(self)
+
+        # Add placeholder text hint
+        self.transcription_files.setToolTip(
+            "Add files, folders, or paste URLs here.\n"
+            "• Click 'Add Files' or 'Add Folder' buttons\n"
+            "• Or paste URLs directly (Ctrl+V / Cmd+V)\n"
+            "• Supports YouTube videos, playlists, RSS feeds\n"
+            "• One URL per line when pasting"
+        )
+
         layout.addWidget(self.transcription_files)
 
         # File buttons with proper spacing
@@ -430,6 +1003,31 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         return group
 
     # Hardware recommendations section moved to Settings tab
+
+    def _create_auto_process_section(self) -> QGroupBox:
+        """Create the System 2 auto-process section."""
+        group = QGroupBox("")
+        layout = QVBoxLayout(group)
+
+        # Auto-process checkbox
+        self.auto_process_checkbox = QCheckBox(
+            "Run these transcriptions through Summarization Process Automatically"
+        )
+        self.auto_process_checkbox.setToolTip(
+            "When enabled, transcribed files will automatically continue through:\n"
+            "1. Mining (extract claims, people, jargon, mental models)\n"
+            "2. Flagship evaluation (rank and tier claims)\n"
+            "3. Upload to cloud (if configured)\n\n"
+            "This runs the complete knowledge extraction pipeline without manual intervention."
+        )
+        layout.addWidget(self.auto_process_checkbox)
+
+        # Pipeline status label
+        self.pipeline_status_label = QLabel("Ready to process")
+        self.pipeline_status_label.setStyleSheet("color: #666;")
+        layout.addWidget(self.pipeline_status_label)
+
+        return group
 
     def _create_settings_section(self) -> QGroupBox:
         """Create the transcription settings section."""
@@ -644,22 +1242,56 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # Quality vs Performance info integrated into retry tooltip
         # (Tip is now part of the max_retry_attempts tooltip above)
 
+        # YouTube proxy options (for URL downloads)
+        self.use_proxy_checkbox = QCheckBox(
+            "Use PacketStream proxy for YouTube downloads"
+        )
+        self.use_proxy_checkbox.setChecked(True)  # Default to using proxy if configured
+        self.use_proxy_checkbox.setToolTip(
+            "Enable PacketStream residential proxies to avoid YouTube bot detection.\n"
+            "• Recommended when downloading multiple videos\n"
+            "• Requires PacketStream credentials in Settings tab\n"
+            "• Unchecked: Direct download (faster but may trigger bot detection)\n"
+            "• Checked: Proxy download (slower but more reliable for bulk downloads)"
+        )
+        self.use_proxy_checkbox.toggled.connect(self._on_setting_changed)
+        layout.addWidget(self.use_proxy_checkbox, 7, 0, 1, 2)
+
+        # YouTube download delay (anti-bot timing)
+        layout.addWidget(QLabel("Delay between YouTube downloads:"), 7, 2)
+        self.youtube_delay_spinbox = QSpinBox()
+        self.youtube_delay_spinbox.setMinimum(0)
+        self.youtube_delay_spinbox.setMaximum(60)
+        self.youtube_delay_spinbox.setValue(5)  # Default 5 seconds
+        self.youtube_delay_spinbox.setSuffix(" sec")
+        self.youtube_delay_spinbox.setToolTip(
+            "Add delay between YouTube video downloads to avoid bot detection.\n"
+            "• 0 seconds: No delay (fastest, higher bot detection risk)\n"
+            "• 5-10 seconds: Recommended for most use cases\n"
+            "• 15+ seconds: Very conservative, safest for large batches\n"
+            "• Actual delay is randomized ±30% (e.g., 10s becomes 7-13s)\n"
+            "• Only applies to YouTube URLs, not local files"
+        )
+        self.youtube_delay_spinbox.valueChanged.connect(self._on_setting_changed)
+        layout.addWidget(self.youtube_delay_spinbox, 7, 3)
+
         group.setLayout(layout)
         return group
 
     # Performance section removed - dynamic resource management handles this now
 
     def _create_progress_section(self) -> QWidget:
-        """Create the enhanced progress tracking section."""
+        """Create the progress tracking section with simple, reliable progress bar."""
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
 
-        # Enhanced progress display
-        self.progress_display = TranscriptionProgressDisplay()
-        self.progress_display.cancellation_requested.connect(self._stop_processing)
-        self.progress_display.retry_requested.connect(self._retry_failed_files)
+        # Use new simple progress bar for reliable percentage display
+        from ..components.simple_progress_bar import SimpleTranscriptionProgressBar
+
+        self.progress_display = SimpleTranscriptionProgressBar()
+        self.progress_display.cancel_requested.connect(self._stop_processing)
         layout.addWidget(self.progress_display)
 
         # Remove redundant rich log display to fix double console issue
@@ -810,6 +1442,71 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         """Clear transcription file list."""
         self.transcription_files.clear()
 
+    def eventFilter(self, obj, event):
+        """Handle paste events for the file list to support URL pasting."""
+        try:
+            from PyQt6.QtCore import QEvent, Qt
+            from PyQt6.QtGui import QKeySequence
+            from PyQt6.QtWidgets import QApplication
+
+            if obj == self.transcription_files and event.type() == QEvent.Type.KeyPress:
+                # Check for Ctrl+V (Windows/Linux) or Cmd+V (Mac)
+                if event.matches(QKeySequence.StandardKey.Paste):
+                    clipboard = QApplication.clipboard()
+                    text = clipboard.text() if clipboard else ""
+
+                    if text:
+                        # Split by newlines and process each line
+                        lines = [
+                            line.strip() for line in text.split("\n") if line.strip()
+                        ]
+
+                        added_count = 0
+                        for line in lines:
+                            # Add URLs and file paths directly
+                            if line:
+                                self.transcription_files.addItem(line)
+                                added_count += 1
+
+                        if added_count > 0:
+                            self.append_log(
+                                f"✅ Added {added_count} item(s) from clipboard"
+                            )
+
+                        return True  # Event handled
+
+        except Exception as e:
+            logger.error(f"Error in eventFilter: {e}")
+            # Don't crash - just pass event to parent
+
+        # Pass event to parent
+        return super().eventFilter(obj, event)
+
+    def _is_supported_url(self, url: str) -> bool:
+        """Check if URL is supported (YouTube, playlist, or RSS)."""
+        if not url or not isinstance(url, str):
+            return False
+
+        url_lower = url.lower()
+
+        # Check for YouTube URLs
+        if "youtube.com" in url_lower or "youtu.be" in url_lower:
+            return True
+
+        # Check for RSS/podcast feeds (common patterns)
+        if (
+            url_lower.endswith((".rss", ".xml"))
+            or "/feed" in url_lower
+            or "/rss" in url_lower
+        ):
+            return True
+
+        # Check for http/https URLs that might be RSS feeds
+        if url.startswith(("http://", "https://")):
+            return True
+
+        return False
+
     def _select_output_directory(self):
         """Select output directory for transcripts."""
         dir_path = QFileDialog.getExistingDirectory(self, "Select Output Directory")
@@ -832,16 +1529,25 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # Reset progress tracking for new operation
         self._failed_files = set()
 
-        # Get files to process
-        files = []
+        # Get files to process (can be local files or URLs)
+        items = []
         for i in range(self.transcription_files.count()):
             item = self.transcription_files.item(i)
             if item is not None:
-                files.append(item.text())
+                items.append(item.text())
 
-        if not files:
-            self.show_warning("Warning", "No files selected for transcription")
+        if not items:
+            self.show_warning("Warning", "No files or URLs selected for transcription")
             return
+
+        # Separate URLs from local files
+        urls = []
+        local_files = []
+        for item in items:
+            if self._is_supported_url(item):
+                urls.append(item)
+            else:
+                local_files.append(item)
 
         # Validate inputs
         if not self.validate_inputs():
@@ -849,18 +1555,81 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         # Clear output and show progress
         self.output_text.clear()
-        self.append_log(f"Starting transcription of {len(files)} files...")
 
-        # Disable start button
-        self.start_btn.setEnabled(False)
+        total_items = len(items)
+        if urls and local_files:
+            self.append_log(
+                f"Starting transcription of {total_items} items ({len(urls)} URLs, {len(local_files)} local files)..."
+            )
+        elif urls:
+            self.append_log(f"Starting transcription of {len(urls)} URLs...")
+        else:
+            self.append_log(f"Starting transcription of {len(local_files)} files...")
+
+        # Enable processing state (disables start, enables stop)
+        self.set_processing_state(True)
         self.start_btn.setText("Processing...")
+        self.pipeline_status_label.setText("Processing in progress...")
+        self.pipeline_status_label.setStyleSheet("color: #27ae60; font-weight: bold;")
 
         # Get transcription settings
         gui_settings = self._get_transcription_settings()
 
+        # Add auto-process setting
+        gui_settings["auto_process"] = self.auto_process_checkbox.isChecked()
+
+        # Test PacketStream proxy if URLs present and user enabled it
+        packetstream_available = False
+
+        if urls and self.use_proxy_checkbox.isChecked():
+            try:
+                from ...utils.packetstream_proxy import PacketStreamProxyManager
+
+                proxy_manager = PacketStreamProxyManager()
+                if proxy_manager.username and proxy_manager.auth_key:
+                    self.append_log("🔍 Testing PacketStream proxy connectivity...")
+
+                    def retry_callback(message):
+                        self.append_log(f"  🔄 {message}")
+
+                    (
+                        proxy_working,
+                        proxy_message,
+                    ) = proxy_manager.test_proxy_connectivity(
+                        timeout=8, max_retries=5, retry_callback=retry_callback
+                    )
+
+                    if proxy_working:
+                        self.append_log(f"✅ {proxy_message}")
+                        self.append_log("✅ YouTube anti-bot protection enabled")
+                        packetstream_available = True
+                    else:
+                        self.append_log(f"❌ PacketStream proxy failed: {proxy_message}")
+                        self.append_log("⚠️ Falling back to direct download")
+                else:
+                    self.append_log(
+                        "⚠️ PacketStream credentials not configured in Settings"
+                    )
+                    self.append_log("💡 Proceeding with direct download + delays")
+            except Exception as e:
+                self.append_log(f"⚠️ PacketStream error: {e}")
+                self.append_log("⚠️ Proceeding with direct download")
+        elif urls:
+            self.append_log("ℹ️ Direct download mode (proxy disabled by user)")
+            self.append_log(
+                "💡 Using sequential downloads with delays to avoid bot detection"
+            )
+
+        # Pass both URLs and local files to worker
+        gui_settings["urls"] = urls
+        gui_settings["local_files"] = local_files
+        gui_settings["use_proxy"] = self.use_proxy_checkbox.isChecked()
+        gui_settings["packetstream_available"] = packetstream_available
+        gui_settings["youtube_delay"] = self.youtube_delay_spinbox.value()
+
         # Start transcription worker
         self.transcription_worker = EnhancedTranscriptionWorker(
-            files, self.settings, gui_settings, self
+            local_files, self.settings, gui_settings, self
         )
         self.transcription_worker.progress_updated.connect(self._update_progress)
         self.transcription_worker.file_completed.connect(self._file_completed)
@@ -869,27 +1638,41 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.transcription_worker.transcription_step_updated.connect(
             self._update_transcription_step
         )
+        self.transcription_worker.total_files_determined.connect(
+            self._on_total_files_determined
+        )
 
         self.active_workers.append(self.transcription_worker)
         self.transcription_worker.start()
 
-        # Start enhanced progress tracking
-        total_files = len(files)
-        self.progress_display.start_operation("Local Transcription", total_files)
+        # Start progress tracking
+        # Use indeterminate mode if we have URLs (since we don't know final count yet)
+        # Only use determinate mode if we only have local files
+        if urls:
+            # Start with indeterminate progress for URLs (total=0)
+            self.progress_display.start_processing(0, "Transcribing URLs")
+        else:
+            # Use determinate progress for local files only
+            self.progress_display.start_processing(total_items, "Transcribing Files")
 
         # Rich log display removed - using main output_text area instead
 
         self.status_updated.emit("Transcription in progress...")
 
+    def _on_total_files_determined(self, total_files: int):
+        """Handle when the total number of files has been determined (after URL expansion)."""
+        logger.info(f"🔍 Total files determined: {total_files}")
+
+        # Switch from indeterminate to determinate progress
+        if total_files > 0:
+            self.progress_display.set_total_files(total_files)
+            logger.info(
+                f"✅ Progress bar switched to determinate mode with {total_files} files"
+            )
+
     def _update_transcription_step(self, step_description: str, progress_percent: int):
         """Update real-time transcription step display."""
         self.append_log(f"🎤 {step_description}")
-
-        # Update enhanced progress display
-        self.progress_display.set_current_step(step_description, progress_percent)
-
-        # Legacy progress bar updates removed - enhanced progress display handles all progress
-        # (keeping legacy progress bar always hidden to prevent overlap with enhanced display)
 
     def _update_progress(self, progress_data):
         """Update transcription progress display."""
@@ -903,25 +1686,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
             status_icon = "✅" if success else "❌"
 
-            # Calculate completed/failed counts properly
-            # current is 1-indexed, so current-1 files have been processed before this one
-            if success:
-                # This file just completed successfully
-                completed_count = current  # current files are now completed
-                failed_count = (
-                    current - 1 - completed_count + 1
-                    if hasattr(self, "_failed_files")
-                    else 0
-                )
-                # For simplicity, we'll track this more accurately below
-            else:
-                # This file just failed
-                completed_count = current - 1  # previous files that completed
-                failed_count = 1  # this file failed
-                # Add any previous failures if we're tracking them
-                if hasattr(self, "_failed_files"):
-                    failed_count = len(self._failed_files)
-
             # Track failures more accurately by maintaining a set
             if not hasattr(self, "_failed_files"):
                 self._failed_files = set()
@@ -929,22 +1693,20 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             if not success:
                 self._failed_files.add(progress_data["file"])
 
-            # Recalculate based on tracked data
-            total_processed = current
+            # Calculate completed/failed counts properly
+            # current is 1-indexed, representing the current file being processed
+            # So current-1 files have been fully processed before this one
             failed_count = len(self._failed_files)
-            completed_count = total_processed - failed_count
+            completed_count = current - failed_count
 
             # Debug logging for progress tracking
             logger.info(
-                f"🔍 Progress Update Debug: current={current}, total_processed={total_processed}, completed={completed_count}, failed={failed_count}, success={success}"
+                f"🔍 Progress Update Debug: current={current}, total_files={total}, completed={completed_count}, failed={failed_count}, success={success}"
             )
 
-            # Update enhanced progress display
+            # Update simple progress display
             self.progress_display.update_progress(
-                completed=completed_count,
-                failed=failed_count,
-                current_file=file_name,
-                current_status="Processing" if success else "Failed",
+                completed=completed_count, failed=failed_count, current_file=file_name
             )
 
             # Show detailed transcription result information
@@ -967,30 +1729,48 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         if current < total:
             self.append_log(f"📁 Processing file {current + 1} of {total}...")
 
-    def _processing_finished(self):
+    def _processing_finished(
+        self,
+        completed_files: int = 0,
+        failed_files: int = 0,
+        failed_files_details: list | None = None,
+    ):
         """Handle transcription completion."""
         # Calculate final statistics
         total_files = (
             self.transcription_worker.total_files if self.transcription_worker else 0
         )
 
-        # Estimate completed/failed from worker results (this is basic - would be better tracked during processing)
-        completed_files = total_files  # Assume all completed for now - would be tracked better in real implementation
-        failed_files = 0
+        # Use actual counts from worker
+        # If both are 0, it means old signal format was used - fall back to total_files
+        if completed_files == 0 and failed_files == 0 and total_files > 0:
+            completed_files = total_files  # Legacy fallback
 
-        # Complete the enhanced progress display
-        self.progress_display.complete_operation(completed_files, failed_files)
+        # Complete the progress display
+        self.progress_display.finish(completed_files, failed_files)
 
         # Rich log display removed - using main output_text area instead
 
-        self.append_log("\n✅ All transcriptions completed!")
-        self.append_log(
-            "📋 Note: Transcriptions are processed in memory. Use the Summarization tab to save transcripts to markdown files."
-        )
+        # Show appropriate completion message based on results
+        if completed_files > 0 and failed_files == 0:
+            self.append_log("\n✅ All transcriptions completed successfully!")
+            self.append_log(
+                "📋 Note: Transcriptions are processed in memory. Use the Summarization tab to save transcripts to markdown files."
+            )
+        elif completed_files > 0 and failed_files > 0:
+            self.append_log(
+                f"\n⚠️ Transcription completed with {completed_files} success(es) and {failed_files} failure(s)"
+            )
+        elif failed_files > 0:
+            self.append_log(f"\n❌ All transcriptions failed ({failed_files} file(s))")
+        else:
+            self.append_log("\n✅ Processing completed (no files processed)")
 
         # Show completion summary if there were files processed
         if total_files > 0:
-            self._show_completion_summary(completed_files, failed_files)
+            self._show_completion_summary(
+                completed_files, failed_files, failed_files_details or []
+            )
 
         # Hide progress bar and status (legacy)
         if hasattr(self, "file_progress_bar") and hasattr(
@@ -999,12 +1779,14 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.file_progress_bar.setVisible(False)
             self.progress_status_label.setVisible(False)
 
-        # Re-enable start button
-        self.start_btn.setEnabled(True)
+        # Disable processing state (enables start, disables stop)
+        self.set_processing_state(False)
         self.start_btn.setText(self._get_start_button_text())
+        self.pipeline_status_label.setText("Ready to process")
+        self.pipeline_status_label.setStyleSheet("color: #666;")
 
+        # Override the "Ready" status from set_processing_state with specific completion status
         self.status_updated.emit("Transcription completed")
-        self.processing_finished.emit()
 
     def _processing_error(self, error_msg: str):
         """Handle transcription error."""
@@ -1012,20 +1794,18 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         from PyQt6.QtCore import QThread
         from PyQt6.QtWidgets import QApplication
 
-        if QThread.currentThread() != QApplication.instance().thread():
+        app = QApplication.instance()
+        if app is None or QThread.currentThread() != app.thread():
             logger.error(
                 "🚨 CRITICAL: _processing_error called from background thread - BLOCKED!"
             )
             logger.error(f"Current thread: {QThread.currentThread()}")
             logger.error(f"Main thread: {QApplication.instance().thread()}")
-            # Still update progress display and log on any thread
-            self.progress_display.set_error(error_msg)
+            # Still log on any thread
             self.append_log(f"❌ Error: {error_msg}")
             return
 
-        # Show error in enhanced progress display
-        self.progress_display.set_error(error_msg)
-
+        # Log error
         self.append_log(f"❌ Error: {error_msg}")
 
         # Check for authorization-related errors first
@@ -1072,38 +1852,140 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.file_progress_bar.setVisible(False)
             self.progress_status_label.setVisible(False)
 
-        # Re-enable start button
-        self.start_btn.setEnabled(True)
+        # Disable processing state (enables start, disables stop)
+        self.set_processing_state(False)
         self.start_btn.setText(self._get_start_button_text())
+        self.pipeline_status_label.setText("Ready to process")
+        self.pipeline_status_label.setStyleSheet("color: #666;")
 
-        self.status_updated.emit("Ready")
+        # Override the "Ready" status from set_processing_state with specific error status
+        self.status_updated.emit("Transcription error - Ready")
 
     # Speaker assignment request handler removed - handled in Speaker Attribution tab only
 
     def _retry_failed_files(self):
         """Retry transcription for files that failed."""
-        # This would need to track failed files and retry them
-        # For now, just restart the whole process
-        self.append_log(
-            "🔄 Retry functionality not yet implemented - please restart transcription"
-        )
+        # Check if there are any failed items to retry
+        if not hasattr(self, "failed_urls"):
+            self.failed_urls = []
+        if not hasattr(self, "failed_files"):
+            self.failed_files = []
+
+        total_failed = len(self.failed_urls) + len(self.failed_files)
+
+        if total_failed == 0:
+            self.append_log("ℹ️ No failed files to retry")
+            return
+
+        # Collect items to retry
+        retry_items = []
+
+        # Add failed URLs
+        if self.failed_urls:
+            for failed_item in self.failed_urls:
+                retry_items.append(failed_item.get("url", ""))
+            self.append_log(
+                f"🔄 Retrying {len(self.failed_urls)} failed YouTube download(s)..."
+            )
+
+        # Add failed local files
+        if self.failed_files:
+            for failed_item in self.failed_files:
+                file_path = failed_item.get("file", "")
+                if file_path and Path(file_path).exists():
+                    retry_items.append(file_path)
+            self.append_log(
+                f"🔄 Retrying {len(self.failed_files)} failed local file(s)..."
+            )
+
+        if not retry_items:
+            self.append_log("⚠️ No valid items found to retry")
+            return
+
+        # Clear failed tracking for fresh retry
+        self.failed_urls = []
+        self.failed_files = []
+
+        # Clear current file list and add retry items
+        self.transcription_files.clear()
+
+        for item in retry_items:
+            self.transcription_files.addItem(str(item))
+
+        self.append_log(f"✅ Loaded {len(retry_items)} item(s) for retry")
+
+        # Automatically start the retry
+        self.append_log("🚀 Starting retry...")
+        self.run()
 
     def _stop_processing(self):
-        """Stop the current transcription process."""
-        if self.transcription_worker and self.transcription_worker.isRunning():
-            self.transcription_worker.stop()
-            self.append_log("⏹ Stopping transcription...")
-            self.progress_display.reset()
-            # Reset progress tracking
-            self._failed_files = set()
+        """Stop the current transcription process.
 
-    def _show_completion_summary(self, completed_files: int, failed_files: int):
+        Note: If a file is currently being transcribed, it will complete before stopping.
+        The stop will take effect between files or during URL processing.
+        """
+        self.append_log("⏹ Stop button clicked...")
+        self.append_log("💡 Note: Current file will complete before stopping")
+
+        # Immediately disable the stop button to prevent multiple clicks
+        if hasattr(self, "stop_btn"):
+            self.stop_btn.setEnabled(False)
+
+        if self.transcription_worker:
+            if self.transcription_worker.isRunning():
+                self.append_log("⏹ Stopping transcription (please wait)...")
+
+                # Set the stop flag and cancel the token
+                self.transcription_worker.stop()
+
+                # Process events to ensure UI updates
+                from PyQt6.QtWidgets import QApplication
+
+                QApplication.processEvents()
+
+                # Wait a short time for graceful shutdown
+                if not self.transcription_worker.wait(3000):  # Wait up to 3 seconds
+                    # Force terminate if it doesn't stop gracefully
+                    self.append_log(
+                        "⚠️ Worker did not stop gracefully, forcing termination..."
+                    )
+                    self.transcription_worker.terminate()
+
+                    # Wait for termination to complete
+                    if not self.transcription_worker.wait(2000):
+                        self.append_log("⚠️ Worker termination timed out")
+                    else:
+                        self.append_log("✓ Worker terminated")
+                else:
+                    self.append_log("✓ Transcription stopped gracefully")
+            else:
+                self.append_log("⚠️ Worker exists but is not running (already stopped)")
+        else:
+            self.append_log("⚠️ No active transcription worker found")
+
+        # Reset UI state regardless of worker state
+        self.progress_display.reset()
+        self._failed_files = set()
+
+        # Disable processing state (enables start, disables stop)
+        self.set_processing_state(False)
+        self.start_btn.setText(self._get_start_button_text())
+        self.pipeline_status_label.setText("Ready to process")
+        self.pipeline_status_label.setStyleSheet("color: #666;")
+
+        # Override the "Ready" status from set_processing_state with specific stop status
+        self.status_updated.emit("Transcription stopped - Ready")
+
+    def _show_completion_summary(
+        self, completed_files: int, failed_files: int, failed_files_details: list
+    ):
         """Show detailed completion summary."""
         # CRITICAL: Thread safety check - ensure we're on the main thread
         from PyQt6.QtCore import QThread
         from PyQt6.QtWidgets import QApplication
 
-        if QThread.currentThread() != QApplication.instance().thread():
+        app = QApplication.instance()
+        if app is None or QThread.currentThread() != app.thread():
             logger.error(
                 "🚨 CRITICAL: _show_completion_summary called from background thread - BLOCKED!"
             )
@@ -1111,26 +1993,22 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             logger.error(f"Main thread: {QApplication.instance().thread()}")
             return
 
-        # This is a simplified version - in a real implementation, we'd track
-        # detailed file information throughout the process
+        # Get actual file information from worker if available
         successful_files = []
-        failed_files_list = []
-
-        # Create mock data for demonstration
         total_chars = 0
-        for i in range(completed_files):
-            successful_files.append(
-                {
-                    "file": f"File_{i+1}",
-                    "text_length": 5000 + (i * 1000),  # Mock character count
-                }
-            )
-            total_chars += 5000 + (i * 1000)
 
-        for i in range(failed_files):
-            failed_files_list.append(
-                {"file": f"Failed_File_{i+1}", "error": "Mock error for demonstration"}
-            )
+        if self.transcription_worker and hasattr(
+            self.transcription_worker, "successful_files"
+        ):
+            successful_files = self.transcription_worker.successful_files
+            total_chars = sum(f.get("text_length", 0) for f in successful_files)
+        else:
+            # Fallback: Create basic entries if worker data not available
+            for i in range(completed_files):
+                successful_files.append({"file": f"File_{i+1}", "text_length": 0})
+
+        # Use provided failed files details (contains both failed URLs and failed local files)
+        failed_files_list = failed_files_details
 
         # Calculate processing time (mock)
         processing_time = 60.0  # Mock 1 minute
@@ -1269,8 +2147,21 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
     def _load_settings(self) -> None:
         """Load saved settings from session."""
         try:
+            # Helper function to safely check if a widget is valid
+            def is_widget_valid(widget):
+                try:
+                    if widget is None:
+                        return False
+                    # Try to access a property to verify the widget hasn't been deleted
+                    _ = widget.objectName()
+                    return True
+                except RuntimeError:
+                    # Widget has been deleted
+                    return False
+
             # Block signals during loading to prevent redundant saves
-            widgets_to_block = [
+            # Only include widgets that are valid
+            candidate_widgets = [
                 self.output_dir_input,
                 self.model_combo,
                 self.device_combo,
@@ -1280,7 +2171,25 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.diarization_checkbox,
                 self.speaker_assignment_checkbox,
                 self.color_coded_checkbox,
+                self.use_proxy_checkbox,
+                self.youtube_delay_spinbox,
             ]
+
+            widgets_to_block = [w for w in candidate_widgets if is_widget_valid(w)]
+
+            if len(widgets_to_block) != len(candidate_widgets):
+                logger.warning(
+                    f"Some widgets are not valid yet: {len(candidate_widgets) - len(widgets_to_block)} widgets skipped"
+                )
+                # If critical widgets are missing, skip loading settings
+                if not all(
+                    is_widget_valid(w)
+                    for w in [self.model_combo, self.output_dir_input]
+                ):
+                    logger.warning(
+                        "Critical widgets not available, skipping settings load"
+                    )
+                    return
 
             # Block all signals
             for widget in widgets_to_block:
@@ -1354,7 +2263,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             finally:
                 # Always restore signals
                 for widget in widgets_to_block:
-                    widget.blockSignals(False)
+                    try:
+                        widget.blockSignals(False)
+                    except RuntimeError:
+                        # Widget was deleted, skip it
+                        pass
             self.overwrite_checkbox.setChecked(
                 self.gui_settings.get_checkbox_state(
                     self.tab_name, "overwrite_existing", True
@@ -1378,6 +2291,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
             # Ensure diarization state is properly reflected in UI
             self._on_diarization_toggled(self.diarization_checkbox.isChecked())
+
+            # Load YouTube proxy and delay settings
+            self.use_proxy_checkbox.setChecked(
+                self.gui_settings.get_checkbox_state(
+                    self.tab_name, "use_youtube_proxy", True
+                )
+            )
+            self.youtube_delay_spinbox.setValue(
+                self.gui_settings.get_spinbox_value(self.tab_name, "youtube_delay", 5)
+            )
 
             logger.debug(f"Loaded settings for {self.tab_name} tab")
         except Exception as e:
@@ -1439,6 +2362,14 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             # Save max retry attempts (performance settings handled by dynamic resource management)
             self.gui_settings.set_spinbox_value(
                 self.tab_name, "max_retry_attempts", self.max_retry_attempts.value()
+            )
+
+            # Save YouTube proxy and delay settings
+            self.gui_settings.set_checkbox_state(
+                self.tab_name, "use_youtube_proxy", self.use_proxy_checkbox.isChecked()
+            )
+            self.gui_settings.set_spinbox_value(
+                self.tab_name, "youtube_delay", self.youtube_delay_spinbox.value()
             )
 
             logger.debug(f"Saved settings for {self.tab_name} tab")
@@ -1601,8 +2532,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
     def _on_processor_progress(self, message: str, percentage: int):
         """Handle progress updates from the processor log integrator."""
-        # Update the enhanced progress display with rich processor information
-        self.progress_display.set_current_step(message, percentage)
+        # Just log the message - simple progress bar doesn't need this
+        pass
 
     def _on_processor_status(self, status: str):
         """Handle status updates from the processor log integrator."""

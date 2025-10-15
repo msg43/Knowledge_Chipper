@@ -44,19 +44,13 @@ from .core.settings_manager import get_gui_settings_manager
 # Import dialogs
 from .dialogs.first_run_setup_dialog import FirstRunSetupDialog
 
-# Import modular tabs
-from .tabs import (
-    APIKeysTab,
-    ClaimSearchTab,
-    IntroductionTab,
-    ProcessTab,
-    SpeakerAttributionTab,
-    SummarizationTab,
-    SummaryCleanupTab,
-    TranscriptionTab,
-    WatcherTab,
-    YouTubeTab,
-)
+# Import modular tabs for System 2
+from .tabs import APIKeysTab  # Settings tab
+from .tabs import IntroductionTab  # Introduction tab
+from .tabs import MonitorTab  # Monitor tab (renamed from WatcherTab)
+from .tabs import PromptsTab  # Prompts tab
+from .tabs import SummarizationTab  # Summarize tab
+from .tabs import TranscriptionTab  # Transcribe tab
 
 logger = get_logger(__name__)
 
@@ -241,78 +235,54 @@ class MainWindow(QMainWindow):
         self._apply_dark_theme()
 
     def _create_tabs(self) -> None:
-        """Create all modular tabs."""
-        # Each tab handles its own business logic
+        """Create System 2 tabs per SYSTEM_2_IMPLEMENTATION_GUIDE.md specification."""
+        # System 2 has exactly 7 tabs in this order:
+        # 1. Introduction
+        # 2. Transcribe (includes auto-process checkbox)
+        # 3. Prompts (prompt and schema management)
+        # 4. Summarize
+        # 5. Review (spreadsheet editor with export options)
+        # 6. Monitor (renamed from File Watcher)
+        # 7. Settings (includes web authentication)
 
-        # Introduction tab - first tab for new users
+        # 1. Introduction tab
         introduction_tab = IntroductionTab(self)
         introduction_tab.navigate_to_tab.connect(self._navigate_to_tab)
         self.tabs.addTab(introduction_tab, "Introduction")
 
-        youtube_tab = YouTubeTab(self)
-        self.tabs.addTab(youtube_tab, "Cloud Transcription")
-
+        # 2. Transcribe tab (with auto-process checkbox)
         transcription_tab = TranscriptionTab(self)
         transcription_tab.navigate_to_tab.connect(self._navigate_to_tab)
-        self.tabs.addTab(transcription_tab, "Local Transcription")
+        self.tabs.addTab(transcription_tab, "Transcribe")
 
-        # Speaker attribution tab for managing speaker identification
-        speaker_attribution_tab = SpeakerAttributionTab(self)
-        self.tabs.addTab(speaker_attribution_tab, "🎙️ Speaker Attribution")
+        # 3. Prompts tab (prompt and schema management)
+        prompts_tab = PromptsTab(self)
+        self.tabs.addTab(prompts_tab, "Prompts")
 
+        # 4. Summarize tab
         summarization_tab = SummarizationTab(self)
-        self.tabs.addTab(summarization_tab, "Summarization")
+        self.tabs.addTab(summarization_tab, "Summarize")
 
-        # Claim search tab for exploring extracted claims
-        claim_search_tab = ClaimSearchTab(self)
-        self.tabs.addTab(claim_search_tab, "🔍 Claim Search")
-
-        # Summary cleanup tab for post-processing review
-        summary_cleanup_tab = SummaryCleanupTab(self)
-        self.tabs.addTab(summary_cleanup_tab, "✏️ Summary Cleanup")
-
-        # Only add Process Management tab if enabled in settings
-        settings = get_settings()
-        if settings.gui_features.show_process_management_tab:
-            process_tab = ProcessTab(self)
-            self.tabs.addTab(process_tab, "Process Management")
-
-        # Add Batch Processing tab (always available for advanced users)
+        # 5. Review tab (spreadsheet editor)
         try:
-            from .tabs.batch_processing_tab import BatchProcessingTab
+            from .tabs.review_tab_system2 import ReviewTabSystem2
 
-            batch_processing_tab = BatchProcessingTab(self)
-            self.tabs.addTab(batch_processing_tab, "🚀 Batch Processing")
+            review_tab = ReviewTabSystem2(self)
+            self.tabs.addTab(review_tab, "Review")
         except ImportError as e:
-            logger.warning(f"Batch processing tab not available: {e}")
+            logger.error(f"System 2 Review tab not available: {e}")
+            # Create placeholder
+            placeholder = QLabel("Review tab not available")
+            placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.tabs.addTab(placeholder, "Review")
 
-        # Only add File Watcher tab if enabled in settings
-        if settings.gui_features.show_file_watcher_tab:
-            watcher_tab = WatcherTab(self)
-            self.tabs.addTab(watcher_tab, "File Watcher")
+        # 6. Monitor tab (renamed from File Watcher)
+        monitor_tab = MonitorTab(self)
+        self.tabs.addTab(monitor_tab, "Monitor")
 
-        # Cloud uploads (manual) tab
-        try:
-            from .tabs import CloudUploadsTab
-
-            if CloudUploadsTab is not None:
-                cloud_uploads_tab = CloudUploadsTab(self)
-                self.tabs.addTab(cloud_uploads_tab, "☁️ Cloud Uploads")
-        except Exception as e:
-            logger.warning(f"Cloud Uploads tab disabled: {e}")
-
-        # Settings tab (far right)
+        # 7. Settings tab (includes web authentication)
         self.api_keys_tab = APIKeysTab(self)
-        self.tabs.addTab(self.api_keys_tab, "⚙️ Settings")
-
-        # Cloud sync status tab - DISABLED for redesign (saved for future re-tooling)
-        # TODO: Re-enable when bidirectional sync is needed
-        # if SyncStatusTab is not None:
-        #     try:
-        #         sync_status_tab = SyncStatusTab(self)
-        #         self.tabs.addTab(sync_status_tab, "☁️ Sync Status")
-        #     except Exception as e:
-        #         logger.warning(f"Sync Status tab disabled: {e}")
+        self.tabs.addTab(self.api_keys_tab, "Settings")
 
     def _navigate_to_tab(self, tab_name: str) -> None:
         """Navigate to a specific tab by name."""
@@ -911,13 +881,15 @@ class MainWindow(QMainWindow):
             # Always validate models on startup
             logger.info("🔍 Validating installed models...")
 
-            # Log detailed validation info
-            whisper_models = validator.check_whisper_models()
-            llm_models = validator.check_llm_models()
-            logger.info(f"Whisper models found: {whisper_models}")
-            logger.info(f"LLM models found: {llm_models}")
-
+            # Check for missing models (this internally checks both whisper and LLM)
             missing_models = validator.get_missing_models()
+
+            # Only log detailed info if needed for debugging
+            if missing_models:
+                whisper_models = validator.check_whisper_models()
+                llm_models = validator.check_llm_models()
+                logger.info(f"Whisper models found: {whisper_models}")
+                logger.info(f"LLM models found: {llm_models}")
 
             if missing_models:
                 logger.info(f"📥 Missing essential models: {missing_models}")

@@ -342,24 +342,7 @@ class APIKeysTab(BaseTab):
         )
         update_section.addWidget(self.update_btn)
 
-        # FFmpeg section
-        ffmpeg_btn = QPushButton("📥 Install/Update FFmpeg")
-        ffmpeg_btn.clicked.connect(self._install_ffmpeg)
-        ffmpeg_btn.setToolTip(
-            "Install FFmpeg for YouTube transcription features (no admin privileges required).\n\n"
-            "✅ Features enabled with FFmpeg:\n"
-            "• YouTube video downloads and transcription\n"
-            "• Audio format conversions (MP3, WAV, etc.)\n"
-            "• Video file audio extraction\n"
-            "• Audio metadata and duration detection\n\n"
-            "⚠️ Available without FFmpeg:\n"
-            "• PDF processing and summarization\n"
-            "• Text file processing\n"
-            "• Local transcription (compatible formats)\n"
-            "• All MOC generation features\n\n"
-            "Safe to install - creates a user-space binary that doesn't affect your system."
-        )
-        update_section.addWidget(ffmpeg_btn)
+        # FFmpeg installation section removed per user request
 
         # Auto-update checkbox
         self.auto_update_checkbox = QCheckBox(
@@ -423,220 +406,98 @@ class APIKeysTab(BaseTab):
         self.status_label = QLabel("")
         main_layout.addWidget(self.status_label)
 
-        # Admin Install link (lower right) - aligned with API key input fields
-        admin_layout = QGridLayout()
-        admin_layout.setColumnStretch(0, 0)  # Label column doesn't stretch
-        admin_layout.setColumnStretch(
-            1, 1
-        )  # Input column stretches to match API keys layout
+        # Sign In section - authentication for Skip The Podcast Web
+        auth_section = self._create_web_auth_section()
+        main_layout.addWidget(auth_section)
 
-        # Add empty label to match API keys layout structure
-        admin_layout.addWidget(QLabel(), 0, 0)
-
-        # Create horizontal layout matching the API key field structure
-        admin_widget_layout = QHBoxLayout()
-        admin_widget_layout.setContentsMargins(0, 0, 0, 0)
-        admin_widget_layout.setSpacing(8)
-
-        self.admin_install_btn = QPushButton("Admin Install")
-        self.admin_install_btn.setFlat(True)
-        self.admin_install_btn.setStyleSheet(
-            "QPushButton { color: #2196F3; background: transparent; border: none; font-weight: bold; }\n"
-            "QPushButton:hover { text-decoration: underline; }"
-        )
-        self.admin_install_btn.setToolTip(
-            "Install to /Applications (requires admin). Your macOS password will be requested in Terminal."
-        )
-        self.admin_install_btn.clicked.connect(self._admin_install)
-        admin_widget_layout.addWidget(self.admin_install_btn)
-
-        # Add spacing to match the info icon (16px) + spacing (8px) = 24px total
-        admin_widget_layout.addSpacing(24)
-        admin_widget_layout.addStretch()  # Push everything to the left, matching API key field layout
-
-        # Create container widget matching API key field structure
-        admin_container = QWidget()
-        admin_container.setLayout(admin_widget_layout)
-        admin_layout.addWidget(admin_container, 0, 1)
-        main_layout.addLayout(admin_layout)
-
-        # Settings Tests section - aligned with API key input fields
-        tests_layout = QGridLayout()
-        tests_layout.setColumnStretch(0, 0)  # Label column doesn't stretch
-        tests_layout.setColumnStretch(
-            1, 1
-        )  # Input column stretches to match API keys layout
-
-        # Add empty label to match API keys layout structure
-        tests_layout.addWidget(QLabel(), 0, 0)
-
-        # Create horizontal layout matching the API key field structure
-        tests_widget_layout = QHBoxLayout()
-        tests_widget_layout.setContentsMargins(0, 0, 0, 0)
-        tests_widget_layout.setSpacing(8)
-
-        # Create the tests group box
-        tests_group = QGroupBox("Settings Tests")
-        tests_group_layout = QVBoxLayout()
-
-        # Add description
-        tests_description = QLabel(
-            "Run comprehensive tests to validate your Skip the Podcast Desktop configuration and functionality:"
-        )
-        tests_description.setWordWrap(True)
-        tests_description.setStyleSheet("color: #666; margin-bottom: 10px;")
-        tests_group_layout.addWidget(tests_description)
-
-        # Test buttons in horizontal layout
-        test_buttons_layout = QHBoxLayout()
-
-        # Quick Tests button
-        self.quick_test_btn = QPushButton("🚀 Quick Tests (5-10 min)")
-        self.quick_test_btn.clicked.connect(self._run_quick_tests)
-        self.quick_test_btn.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                font-weight: bold;
-                padding: 8px 16px;
-                font-size: 12px;
-                border-radius: 4px;
-                min-width: 140px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-            QPushButton:pressed {
-                background-color: #0D47A1;
-            }
-        """
-        )
-        self.quick_test_btn.setToolTip(
-            "Quick validation tests (5-10 minutes)\n"
-            "• Smoke tests with small files\n"
-            "• Basic functionality verification\n"
-            "• Core feature validation\n"
-            "• Ideal for quick system health check"
-        )
-        test_buttons_layout.addWidget(self.quick_test_btn)
-
-        # Regular Tests button
-        self.regular_test_btn = QPushButton("🔧 Regular Tests (1-2 hrs)")
-        self.regular_test_btn.clicked.connect(self._run_regular_tests)
-        self.regular_test_btn.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                font-weight: bold;
-                padding: 8px 16px;
-                font-size: 12px;
-                border-radius: 4px;
-                min-width: 140px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-            QPushButton:pressed {
-                background-color: #0D47A1;
-            }
-        """
-        )
-        self.regular_test_btn.setToolTip(
-            "Comprehensive tests (1-2 hours)\n"
-            "• Full permutation testing\n"
-            "• All input types and operations\n"
-            "• Complete feature coverage\n"
-            "• Recommended for thorough validation"
-        )
-        test_buttons_layout.addWidget(self.regular_test_btn)
-
-        # Extended Tests button
-        self.extended_test_btn = QPushButton("⚡ Extended Tests (2+ hrs)")
-        self.extended_test_btn.clicked.connect(self._run_extended_tests)
-        self.extended_test_btn.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                font-weight: bold;
-                padding: 8px 16px;
-                font-size: 12px;
-                border-radius: 4px;
-                min-width: 140px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-            QPushButton:pressed {
-                background-color: #0D47A1;
-            }
-        """
-        )
-        self.extended_test_btn.setToolTip(
-            "Stress tests (2+ hours)\n"
-            "• Large file processing\n"
-            "• High-volume testing\n"
-            "• Performance validation\n"
-            "• Edge case scenarios"
-        )
-        test_buttons_layout.addWidget(self.extended_test_btn)
-
-        # Cancel Test button (initially hidden)
-        self.cancel_test_btn = QPushButton("❌ Cancel Test")
-        self.cancel_test_btn.clicked.connect(self._cancel_test)
-        self.cancel_test_btn.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #f44336;
-                color: white;
-                font-weight: bold;
-                padding: 8px 16px;
-                font-size: 12px;
-                border-radius: 4px;
-                min-width: 120px;
-            }
-            QPushButton:hover {
-                background-color: #d32f2f;
-            }
-            QPushButton:pressed {
-                background-color: #b71c1c;
-            }
-        """
-        )
-        self.cancel_test_btn.setToolTip(
-            "Cancel the currently running test\n"
-            "• Gracefully terminates test execution\n"
-            "• Stops test process in Terminal\n"
-            "• Cleans up test resources"
-        )
-        self.cancel_test_btn.setVisible(False)  # Hidden initially
-        test_buttons_layout.addWidget(self.cancel_test_btn)
-
-        # Add stretch to left-justify buttons
-        test_buttons_layout.addStretch()
-
-        tests_group_layout.addLayout(test_buttons_layout)
-        tests_group.setLayout(tests_group_layout)
-
-        # Add the tests group to the horizontal layout
-        tests_widget_layout.addWidget(tests_group)
-
-        # Add spacing to match the info icon (16px) + spacing (8px) = 24px total
-        tests_widget_layout.addSpacing(24)
-        tests_widget_layout.addStretch()  # Push everything to the left, matching API key field layout
-
-        # Create container widget matching API key field structure
-        tests_container = QWidget()
-        tests_container.setLayout(tests_widget_layout)
-        tests_layout.addWidget(tests_container, 0, 1)
-        main_layout.addLayout(tests_layout)
+        # Settings Tests section removed per user request
 
         # Hardware Recommendations section - moved from Local Transcription tab
         # Hardware recommendations removed - now handled automatically during installation
 
         main_layout.addStretch()
+
+    def _create_web_auth_section(self) -> QGroupBox:
+        """Create authentication section for Skip The Podcast Web."""
+        group = QGroupBox("Skip The Podcast Web Sign In")
+        layout = QVBoxLayout(group)
+
+        # Auth status
+        self.web_auth_status_label = QLabel("Not signed in")
+        self.web_auth_status_label.setStyleSheet("color: #666; font-style: italic;")
+        layout.addWidget(self.web_auth_status_label)
+
+        # Info text about OAuth flow
+        info_text = QLabel(
+            "🔐 Sign in via Skipthepodcast.com to enable web export functionality.\n"
+            "This will open your browser for secure authentication."
+        )
+        info_text.setWordWrap(True)
+        info_text.setStyleSheet(
+            "color: #666; font-style: italic; margin: 8px; padding: 8px; "
+            "background-color: #f5f5f5; border-radius: 4px;"
+        )
+        layout.addWidget(info_text)
+
+        # Button layout
+        button_layout = QHBoxLayout()
+
+        # OAuth authentication button
+        self.web_oauth_btn = QPushButton("🌐 Sign In via Skipthepodcast.com")
+        self.web_oauth_btn.setStyleSheet(
+            "QPushButton { padding: 10px; font-size: 14px; background-color: #2196F3; color: white; border: none; border-radius: 6px; }"
+            "QPushButton:hover { background-color: #1976D2; }"
+            "QPushButton:disabled { background-color: #cccccc; }"
+        )
+        self.web_oauth_btn.clicked.connect(self._web_sign_in_with_oauth)
+        button_layout.addWidget(self.web_oauth_btn)
+
+        # Sign out button
+        self.web_logout_btn = QPushButton("Sign Out")
+        self.web_logout_btn.setEnabled(False)
+        self.web_logout_btn.clicked.connect(self._web_sign_out)
+        button_layout.addWidget(self.web_logout_btn)
+
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+
+        # Initialize OAuth state
+        self._web_auth_user = None
+        self._web_uploader = None
+
+        # Note: OAuth authentication is handled in the Cloud Uploads tab
+        # This section is a placeholder for future direct OAuth integration
+        logger.info("Web auth UI initialized - OAuth handled via Cloud Uploads tab")
+        self.web_oauth_btn.setEnabled(False)
+        self.web_auth_status_label.setText("Use Cloud Uploads tab for authentication")
+
+        return group
+
+    def _refresh_web_auth_ui(self):
+        """Refresh web auth UI based on current auth state."""
+        # OAuth authentication is handled in the Cloud Uploads tab
+        # This is a placeholder for future direct integration
+        self.web_auth_status_label.setText("Use Cloud Uploads tab for authentication")
+        self.web_auth_status_label.setStyleSheet("color: #666; font-style: italic;")
+
+    def _web_sign_in_with_oauth(self):
+        """Sign in using OAuth flow."""
+        # OAuth authentication is handled in the Cloud Uploads tab
+        QMessageBox.information(
+            self,
+            "OAuth Authentication",
+            "Please use the 'Cloud Uploads' tab for OAuth authentication with Skipthepodcast.com.\n\n"
+            "The Cloud Uploads tab provides full OAuth sign-in and upload functionality.",
+        )
+
+    def _web_sign_out(self):
+        """Sign out of Skip The Podcast Web."""
+        # OAuth authentication is handled in the Cloud Uploads tab
+        QMessageBox.information(
+            self,
+            "OAuth Sign Out",
+            "Please use the 'Cloud Uploads' tab to sign out of Skipthepodcast.com.",
+        )
 
     def _show_hf_token_help(self) -> None:
         """Show a popup with instructions to obtain a free Hugging Face token."""

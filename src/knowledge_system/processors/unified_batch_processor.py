@@ -187,7 +187,8 @@ class UnifiedBatchProcessor:
     def _calculate_download_concurrency(self) -> int:
         """Calculate safe download concurrency based on proxy limits and system resources."""
         # Use optimized logic for high-end systems
-        base_download_limit = min(12, max(4, self.hardware_specs.cpu_cores // 2))
+        cpu_cores = self.hardware_specs.get("cpu_cores", 4)
+        base_download_limit = min(12, max(4, cpu_cores // 2))
 
         # Check current system load
         memory = psutil.virtual_memory()
@@ -292,15 +293,27 @@ class UnifiedBatchProcessor:
         Returns:
             Dictionary with processing results
         """
-        logger.info(f"Starting unified batch processing: {self.total_items} items")
+        logger.info(
+            f"🚀 DEBUG: process_all() CALLED - Starting unified batch processing: {self.total_items} items"
+        )
+        logger.info(
+            f"🚀 DEBUG: expanded_youtube_urls count: {len(self.expanded_youtube_urls)}"
+        )
+        logger.info(f"🚀 DEBUG: youtube_processing_mode: {self.youtube_processing_mode}")
+        logger.info(f"🚀 DEBUG: use_batch_processing: {self.use_batch_processing}")
 
         try:
             # Process YouTube videos if any
             if self.expanded_youtube_urls:
+                logger.info(f"🚀 DEBUG: Entering YouTube processing block")
                 if self.youtube_processing_mode == "download_all":
+                    logger.info(f"🚀 DEBUG: Calling _process_youtube_download_all()")
                     self._process_youtube_download_all()
                 else:
+                    logger.info(f"🚀 DEBUG: Calling _process_youtube_conveyor_belt()")
                     self._process_youtube_conveyor_belt()
+            else:
+                logger.info(f"🚀 DEBUG: No YouTube URLs to process")
 
             # Process local files if any
             if self.local_files:
@@ -401,34 +414,32 @@ class UnifiedBatchProcessor:
     def _download_single_youtube_audio(self, url: str) -> Path | None:
         """Download audio for a single YouTube URL."""
         try:
-            from ..processors.youtube_transcript import YouTubeTranscriptProcessor
+            from ..processors.youtube_download import YouTubeDownloadProcessor
 
             # Create processor for this download
-            processor = YouTubeTranscriptProcessor(
-                whisper_model=self.config.get("model", "base"),
-                use_whisper_cpp=self.config.get("use_whisper_cpp", False),
-                cancellation_token=self.cancellation_token,
-            )
-
-            # Extract video ID and create output filename
-            import hashlib
-
-            video_id = (
-                url.split("v=")[-1].split("&")[0]
-                if "v=" in url
-                else hashlib.md5(url.encode()).hexdigest()[:8]
+            # Keep original format - AudioProcessor will convert to WAV for transcription
+            processor = YouTubeDownloadProcessor(
+                download_thumbnails=False,
             )
 
             output_dir = Path(self.config.get("output_dir", "."))
-            audio_file = output_dir / f"{video_id}_audio.wav"
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Download audio only
-            success = processor._download_youtube_audio(url, audio_file)
+            # Download audio using the processor
+            result = processor.process(
+                input_data=url,
+                output_dir=output_dir,
+                progress_callback=None,  # Suppress individual progress for batch downloads
+            )
 
-            if success and audio_file.exists():
-                return audio_file
-            else:
-                return None
+            if result.success and result.data.get("downloaded_files"):
+                # Return first downloaded file path
+                downloaded_file = Path(result.data["downloaded_files"][0])
+                if downloaded_file.exists():
+                    return downloaded_file
+
+            logger.warning(f"Download failed for {url}: {result.errors}")
+            return None
 
         except Exception as e:
             logger.error(f"Error downloading {url}: {e}")

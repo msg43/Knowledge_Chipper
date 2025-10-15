@@ -40,7 +40,7 @@ def validate_hce_or_raise() -> None:
             "StageModelConfig",
         ],
         # LLM interface
-        "knowledge_system.processors.hce.models.llm_any": ["AnyLLM"],
+        "knowledge_system.processors.hce.models.llm_system2": ["System2LLM"],
         # Optional modules (if present)
         "knowledge_system.processors.hce.relations": ["RelationMiner"],
     }

@@ -1,12 +1,12 @@
 """
-Advanced YouTube Metadata Processor with Multi-Provider Support
+Advanced YouTube Metadata Processor with PacketStream-Only Support
 
 Priority System:
-1. PacketStream proxy with yt-dlp (PRIMARY)
-2. Direct yt-dlp for small batches ≤2 videos (FALLBACK)
-3. Bright Data API (CONSERVED but DISABLED)
+1. PacketStream proxy with yt-dlp (PRIMARY and ONLY method)
+2. Bright Data API (CONSERVED but DISABLED)
 
-Uses residential proxies to avoid bot detection while providing reliable metadata extraction.
+Always uses PacketStream residential proxies to avoid bot detection.
+Direct yt-dlp fallback removed to prevent triggering YouTube's anti-bot measures.
 """
 
 import json
@@ -144,7 +144,7 @@ class YouTubeMetadata(BaseModel):
 
 
 class YouTubeMetadataProcessor(BaseProcessor):
-    """YouTube metadata processor with dual extraction methods."""
+    """YouTube metadata processor using PacketStream proxy only to avoid bot detection."""
 
     def __init__(self, name: str | None = None) -> None:
         """Initialize the YouTube metadata processor."""
@@ -409,10 +409,12 @@ class YouTubeMetadataProcessor(BaseProcessor):
         self, url: str, total_urls: int = 1
     ) -> YouTubeMetadata | None:
         """
-        Extract metadata with priority system:
-        1. PacketStream (primary)
-        2. Direct yt-dlp (fallback for ≤2 videos)
-        3. Bright Data (conserved but disabled)
+        Extract metadata using PacketStream proxy only:
+        1. PacketStream (primary and only method)
+        2. Bright Data (conserved but disabled)
+
+        Direct yt-dlp fallback removed to prevent bot detection.
+        Always use PacketStream for all downloads regardless of count.
         """
         # Ensure URL is a plain string, not a list or other format
         if isinstance(url, list):
@@ -444,31 +446,14 @@ class YouTubeMetadataProcessor(BaseProcessor):
                 f"⚠️ PacketStream proxy error for {video_id}: {str(e)[:100]} - trying fallback methods"
             )
 
-        # Method 2: Try direct yt-dlp (FALLBACK for small batches ≤2 videos)
-        # NOTE: This fallback may be reducing PacketStream usage for single videos
-        if total_urls <= 2:
-            logger.info(
-                f"🔄 Attempting direct yt-dlp extraction for {video_id} (≤2 videos) - this reduces PacketStream usage"
-            )
-            try:
-                metadata = self._extract_metadata_direct_ytdlp(url)
-                if metadata:
-                    logger.info(
-                        f"✅ Direct yt-dlp extraction successful for {video_id} - PacketStream not used"
-                    )
-                    metadata.extraction_method = "direct_ytdlp"
-                    return metadata
-                else:
-                    logger.warning(f"⚠️ Direct yt-dlp extraction failed for {video_id}")
-            except Exception as e:
-                logger.warning(f"⚠️ Direct yt-dlp error for {video_id}: {str(e)[:100]}")
-        else:
-            logger.info(
-                f"🚫 Skipping direct yt-dlp for {video_id} (>2 videos, would trigger bot detection)"
-            )
-            logger.info(
-                "💡 For bulk operations, configure PacketStream credentials in Settings > API Keys"
-            )
+        # Method 2: Direct yt-dlp fallback REMOVED to prevent bot detection
+        # Always use PacketStream to avoid triggering YouTube's anti-bot measures
+        logger.info(
+            f"🚫 Skipping direct yt-dlp for {video_id} (always use PacketStream to avoid bot detection)"
+        )
+        logger.info(
+            "💡 Configure PacketStream credentials in Settings > API Keys to enable YouTube downloads"
+        )
 
         # Method 3: Bright Data (CONSERVED but DISABLED)
         # Note: This code is preserved for future use but currently disabled
@@ -506,57 +491,6 @@ class YouTubeMetadataProcessor(BaseProcessor):
             return None
         except Exception as e:
             logger.error(f"PacketStream extraction error: {str(e)[:200]}")
-            return None
-
-    def _extract_metadata_direct_ytdlp(self, url: str) -> YouTubeMetadata | None:
-        """Extract metadata using direct yt-dlp (no proxy) for small batches."""
-        try:
-            import yt_dlp
-        except ImportError:
-            logger.error("yt-dlp not available for direct extraction")
-            return None
-
-        # Ensure URL is a plain string, not a list or other format
-        if isinstance(url, list):
-            logger.debug(f"URL is a list: {url}, taking first element")
-            url = url[0] if url else ""
-        elif not isinstance(url, str):
-            logger.debug(f"URL is not a string: {type(url)}, converting to string")
-            url = str(url)
-
-        video_id = self._extract_video_id(url)
-        if not video_id:
-            return None
-
-        try:
-            # Configure yt-dlp for metadata-only extraction
-            ydl_opts = {
-                "quiet": True,
-                "no_warnings": True,
-                "extract_flat": False,
-                "skip_download": True,
-                "writeinfojson": False,
-                "writesubtitles": False,
-                "writeautomaticsub": False,
-                "ignoreerrors": True,
-            }
-
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                logger.debug(f"Extracting metadata with direct yt-dlp for {video_id}")
-                yt_info = ydl.extract_info(url, download=False)
-
-                if not yt_info:
-                    logger.error(f"No metadata returned by yt-dlp for {video_id}")
-                    return None
-
-                # Convert yt-dlp info to our YouTubeMetadata model
-                metadata = self._convert_ytdlp_to_metadata(yt_info, url)
-                return metadata
-
-        except Exception as e:
-            logger.error(
-                f"Direct yt-dlp extraction failed for {video_id}: {str(e)[:200]}"
-            )
             return None
 
     def _convert_ytdlp_to_metadata(self, yt_info: dict, url: str) -> YouTubeMetadata:
@@ -672,7 +606,7 @@ class YouTubeMetadataProcessor(BaseProcessor):
     def process(
         self, input_data: Any, dry_run: bool = False, **kwargs: Any
     ) -> ProcessorResult:
-        """Process YouTube URLs and extract metadata using priority system: PacketStream → Direct yt-dlp → Bright Data (disabled)."""
+        """Process YouTube URLs and extract metadata using PacketStream proxy only to avoid bot detection."""
         start_time = time.time()
 
         try:

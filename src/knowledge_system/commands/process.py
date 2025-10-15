@@ -152,11 +152,6 @@ from .transcribe import _generate_obsidian_link, format_transcript_content
     help="Override reranker model URI",
 )
 @click.option(
-    "--profile",
-    type=click.Choice(["fast", "balanced", "quality"]),
-    help="Prefill recommended options for speed/quality tradeoffs",
-)
-@click.option(
     "--flagship-max-claims-per-file",
     type=int,
     help="Cap the number of routed flagship claims per file",
@@ -196,7 +191,6 @@ def process(
     heavy_miner_model: str | None,
     embedder_model: str | None,
     reranker_model: str | None,
-    profile: str | None,
     use_skim: bool,
 ) -> None:
     """
@@ -304,50 +298,21 @@ def process(
 
         # Create processors
         audio_processor = AudioProcessor(device=device)
-        # Apply profile defaults (can be overridden explicitly)
-        profile_opts: dict[str, Any] = {}
-        if profile == "fast":
-            profile_opts.update(
-                {
-                    "use_skim": False,
-                    "router_uncertainty_threshold": 1.0,
-                    "flagship_judge_model": None,
-                }
-            )
-        elif profile == "balanced":
-            profile_opts.update(
-                {
-                    "use_skim": True,
-                    "router_uncertainty_threshold": 0.35,
-                }
-            )
-        elif profile == "quality":
-            profile_opts.update(
-                {
-                    "use_skim": True,
-                    "router_uncertainty_threshold": 0.25,
-                }
-            )
 
         summarizer_processor = SummarizerProcessor(
             provider=settings.llm.provider,
             model=summarization_model,
             max_tokens=settings.llm.max_tokens,
             hce_options={
-                "use_skim": profile_opts.get("use_skim", use_skim),
-                "router_uncertainty_threshold": profile_opts.get(
-                    "router_uncertainty_threshold", router_uncertainty_threshold
-                ),
+                "use_skim": use_skim,
+                "router_uncertainty_threshold": router_uncertainty_threshold,
                 "judge_model_override": judge_model,
-                "flagship_judge_model": profile_opts.get(
-                    "flagship_judge_model", flagship_judge_model
-                ),
+                "flagship_judge_model": flagship_judge_model,
                 "flagship_max_claims_per_file": flagship_max_claims_per_file,
                 "miner_model": miner_model,
                 "heavy_miner_model": heavy_miner_model,
                 "embedder_model": embedder_model,
                 "reranker_model": reranker_model,
-                **profile_opts,
             },
         )
         moc_processor = MOCProcessor()

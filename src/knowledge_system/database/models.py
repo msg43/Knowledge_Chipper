@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
@@ -122,6 +123,9 @@ class MediaSource(Base):
     )
     bright_data_sessions = relationship(
         "BrightDataSession", back_populates="video", cascade="all, delete-orphan"
+    )
+    episodes = relationship(
+        "Episode", back_populates="media_source", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
@@ -527,10 +531,436 @@ class QualityMetrics(Base):
         return f"<QualityMetrics(metric_id='{self.metric_id}', model_name='{self.model_name}', avg_user_rating={self.avg_user_rating})>"
 
 
+# ============================================================================
+# HCE (Hybrid Claim Extraction) Models
+# ============================================================================
+
+
+class Episode(Base):
+    """Episode extracted from a media source during HCE processing."""
+
+    __tablename__ = "episodes"
+    __table_args__ = {"extend_existing": True}
+
+    # Primary key
+    episode_id = Column(String, primary_key=True)
+
+    # Foreign key to media source
+    video_id = Column(String, ForeignKey("media_sources.media_id"), nullable=False)
+
+    # Episode metadata
+    title = Column(String, nullable=False)
+    subtitle = Column(String)
+    description = Column(Text)
+
+    # Processing metadata
+    recorded_at = Column(String)  # ISO format datetime string
+    processed_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    media_source = relationship("MediaSource", back_populates="episodes")
+    claims = relationship(
+        "Claim", back_populates="episode", cascade="all, delete-orphan"
+    )
+    people = relationship(
+        "Person", back_populates="episode", cascade="all, delete-orphan"
+    )
+    concepts = relationship(
+        "Concept", back_populates="episode", cascade="all, delete-orphan"
+    )
+    jargon = relationship(
+        "Jargon", back_populates="episode", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self):
+        return f"<Episode(episode_id='{self.episode_id}', title='{self.title}')>"
+
+
+class Claim(Base):
+    """Claim extracted from an episode."""
+
+    __tablename__ = "claims"
+    __table_args__ = {"extend_existing": True}
+
+    # Composite primary key
+    episode_id = Column(String, ForeignKey("episodes.episode_id"), primary_key=True)
+    claim_id = Column(String, primary_key=True)
+
+    # Claim content
+    canonical = Column(Text, nullable=False)  # The canonical form of the claim
+    original_text = Column(Text)  # Original text from transcript
+
+    # Claim metadata
+    claim_type = Column(String)  # factual, causal, normative, forecast, definition
+    tier = Column(String)  # A, B, C
+    first_mention_ts = Column(String)  # Timestamp of first mention
+
+    # Scores and evaluation
+    scores_json = Column(
+        JSON
+    )  # Dictionary of various scores (importance, novelty, etc.)
+    evaluator_notes = Column(Text)  # Notes from the evaluator
+
+    # Upload tracking
+    upload_status = Column(String, default="pending")  # pending, uploaded, failed
+    upload_timestamp = Column(DateTime)
+    upload_error = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    episode = relationship("Episode", back_populates="claims")
+
+    def __repr__(self):
+        return f"<Claim(claim_id='{self.claim_id}', tier='{self.tier}', type='{self.claim_type}')>"
+
+
+class Person(Base):
+    """Person mentioned in an episode."""
+
+    __tablename__ = "people"
+    __table_args__ = {"extend_existing": True}
+
+    # Composite primary key
+    episode_id = Column(String, ForeignKey("episodes.episode_id"), primary_key=True)
+    person_id = Column(String, primary_key=True)
+
+    # Person information
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    first_mention_ts = Column(String)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    episode = relationship("Episode", back_populates="people")
+
+    def __repr__(self):
+        return f"<Person(person_id='{self.person_id}', name='{self.name}')>"
+
+
+class Concept(Base):
+    """Mental model or concept extracted from an episode."""
+
+    __tablename__ = "concepts"
+    __table_args__ = {"extend_existing": True}
+
+    # Composite primary key
+    episode_id = Column(String, ForeignKey("episodes.episode_id"), primary_key=True)
+    concept_id = Column(String, primary_key=True)
+
+    # Concept information
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    first_mention_ts = Column(String)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    episode = relationship("Episode", back_populates="concepts")
+
+    def __repr__(self):
+        return f"<Concept(concept_id='{self.concept_id}', name='{self.name}')>"
+
+
+class Jargon(Base):
+    """Jargon term extracted from an episode."""
+
+    __tablename__ = "jargon"
+    __table_args__ = {"extend_existing": True}
+
+    # Composite primary key
+    episode_id = Column(String, ForeignKey("episodes.episode_id"), primary_key=True)
+    term_id = Column(String, primary_key=True)
+
+    # Jargon information
+    term = Column(String, nullable=False)
+    definition = Column(Text)
+    category = Column(String)  # Category of jargon term
+    first_mention_ts = Column(String)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    episode = relationship("Episode", back_populates="jargon")
+
+    def __repr__(self):
+        return f"<Jargon(term_id='{self.term_id}', term='{self.term}')>"
+
+
+# ============================================================================
+# Speaker Identification Models
+# ============================================================================
+
+
+class SpeakerVoice(Base):
+    """Database model for learned speaker voices and characteristics."""
+
+    __tablename__ = "speaker_voices"
+    __table_args__ = {"extend_existing": True}
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False, index=True)
+    voice_fingerprint = Column(Text)  # JSON string of audio characteristics
+    confidence_threshold = Column(Float, default=0.7)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    usage_count = Column(Integer, default=0)
+    last_used = Column(DateTime)
+
+    # Relationships
+    assignments = relationship("SpeakerAssignment", back_populates="voice")
+    learning_history = relationship("SpeakerLearningHistory", back_populates="voice")
+
+    def __repr__(self):
+        return f"<SpeakerVoice(id={self.id}, name='{self.name}', usage_count={self.usage_count})>"
+
+    @property
+    def fingerprint_data(self) -> dict[str, Any]:
+        """Get voice fingerprint as dictionary."""
+        if self.voice_fingerprint:
+            try:
+                return json.loads(self.voice_fingerprint)
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+    @fingerprint_data.setter
+    def fingerprint_data(self, data: dict[str, Any]):
+        """Set voice fingerprint from dictionary."""
+        self.voice_fingerprint = json.dumps(data)
+
+
+class SpeakerAssignment(Base):
+    """Database model for speaker assignments in recordings."""
+
+    __tablename__ = "speaker_assignments"
+    __table_args__ = {"extend_existing": True}
+
+    id = Column(Integer, primary_key=True)
+    recording_path = Column(String(500), nullable=False, index=True)
+    speaker_id = Column(String(50), nullable=False)  # Original ID like SPEAKER_00
+    assigned_name = Column(String(255), nullable=False, index=True)
+    confidence = Column(Float, default=1.0)
+    user_confirmed = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Enhanced columns for sidecar file migration
+    suggested_name = Column(String(255), nullable=True)  # AI suggested name
+    suggestion_confidence = Column(Float, default=0.0)  # AI confidence score
+    suggestion_method = Column(
+        String(100), nullable=True
+    )  # 'content_analysis', 'pattern_matching', 'manual'
+    sample_segments_json = Column(Text, nullable=True)  # JSON array of first 5 segments
+    total_duration = Column(Float, default=0.0)  # Total speaking time
+    segment_count = Column(Integer, default=0)  # Number of segments
+    processing_metadata_json = Column(Text, nullable=True)  # Additional metadata
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Foreign key to speaker voice (optional)
+    voice_id = Column(Integer, ForeignKey("speaker_voices.id"), nullable=True)
+    voice = relationship("SpeakerVoice", back_populates="assignments")
+
+    @property
+    def sample_segments(self) -> list[dict[str, Any]]:
+        """Get sample segments as list of dictionaries."""
+        if self.sample_segments_json:
+            try:
+                return json.loads(self.sample_segments_json)
+            except json.JSONDecodeError:
+                return []
+        return []
+
+    @sample_segments.setter
+    def sample_segments(self, data: list[dict[str, Any]]):
+        """Set sample segments from list of dictionaries."""
+        self.sample_segments_json = json.dumps(data)
+
+    @property
+    def processing_metadata(self) -> dict[str, Any]:
+        """Get processing metadata as dictionary."""
+        if self.processing_metadata_json:
+            try:
+                return json.loads(self.processing_metadata_json)
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+    @processing_metadata.setter
+    def processing_metadata(self, data: dict[str, Any]):
+        """Set processing metadata from dictionary."""
+        self.processing_metadata_json = json.dumps(data)
+
+    def __repr__(self):
+        return f"<SpeakerAssignment(id={self.id}, speaker_id='{self.speaker_id}', assigned_name='{self.assigned_name}')>"
+
+
+class SpeakerLearningHistory(Base):
+    """Database model for tracking learning from user corrections."""
+
+    __tablename__ = "speaker_learning_history"
+    __table_args__ = {"extend_existing": True}
+
+    id = Column(Integer, primary_key=True)
+    original_suggestion = Column(String(255))
+    user_correction = Column(String(255), nullable=False)
+    context_data = Column(Text)  # JSON string of context information
+    learning_weight = Column(Float, default=1.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Foreign key to speaker voice
+    voice_id = Column(Integer, ForeignKey("speaker_voices.id"), nullable=True)
+    voice = relationship("SpeakerVoice", back_populates="learning_history")
+
+    def __repr__(self):
+        return f"<SpeakerLearningHistory(id={self.id}, correction='{self.user_correction}')>"
+
+    @property
+    def context(self) -> dict[str, Any]:
+        """Get context data as dictionary."""
+        if self.context_data:
+            try:
+                return json.loads(self.context_data)
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+    @context.setter
+    def context(self, data: dict[str, Any]):
+        """Set context data from dictionary."""
+        self.context_data = json.dumps(data)
+
+
+class SpeakerSession(Base):
+    """Database model for tracking speaker sessions across recordings."""
+
+    __tablename__ = "speaker_sessions"
+    __table_args__ = {"extend_existing": True}
+
+    id = Column(Integer, primary_key=True)
+    session_name = Column(
+        String(255), nullable=False
+    )  # e.g., "Team Meeting 2024-01-15"
+    folder_path = Column(String(500))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<SpeakerSession(id={self.id}, name='{self.session_name}')>"
+
+
+class ChannelHostMapping(Base):
+    """Database model for storing channel-to-host name mappings."""
+
+    __tablename__ = "channel_host_mappings"
+    __table_args__ = {"extend_existing": True}
+
+    id = Column(Integer, primary_key=True)
+    channel_name = Column(String(255), nullable=False, index=True, unique=True)
+    host_name = Column(String(255), nullable=False)
+    confidence = Column(Float, default=1.0)  # How confident we are in this mapping
+    created_by = Column(
+        String(50), default="user_correction"
+    )  # 'user_correction', 'llm_suggestion', 'manual'
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    use_count = Column(Integer, default=1)  # How many times this mapping has been used
+
+    def __repr__(self):
+        return f"<ChannelHostMapping(id={self.id}, channel='{self.channel_name}', host='{self.host_name}')>"
+
+
+class SpeakerProcessingSession(Base):
+    """Database model for tracking speaker processing sessions and learning data."""
+
+    __tablename__ = "speaker_processing_sessions"
+    __table_args__ = {"extend_existing": True}
+
+    session_id = Column(String(50), primary_key=True)
+    recording_path = Column(String(500), nullable=False, index=True)
+    processing_method = Column(String(100))  # 'diarization', 'manual', 'imported'
+    total_speakers = Column(Integer)
+    total_duration = Column(Float)
+    ai_suggestions_json = Column(Text)  # All AI suggestions before user input
+    user_corrections_json = Column(Text)  # What user changed from AI suggestions
+    confidence_scores_json = Column(Text)  # Confidence in each assignment
+    created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime)
+
+    @property
+    def ai_suggestions(self) -> dict[str, Any]:
+        """Get AI suggestions as dictionary."""
+        if self.ai_suggestions_json:
+            try:
+                return json.loads(self.ai_suggestions_json)
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+    @ai_suggestions.setter
+    def ai_suggestions(self, data: dict[str, Any]):
+        """Set AI suggestions from dictionary."""
+        self.ai_suggestions_json = json.dumps(data)
+
+    @property
+    def user_corrections(self) -> dict[str, Any]:
+        """Get user corrections as dictionary."""
+        if self.user_corrections_json:
+            try:
+                return json.loads(self.user_corrections_json)
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+    @user_corrections.setter
+    def user_corrections(self, data: dict[str, Any]):
+        """Set user corrections from dictionary."""
+        self.user_corrections_json = json.dumps(data)
+
+    @property
+    def confidence_scores(self) -> dict[str, float]:
+        """Get confidence scores as dictionary."""
+        if self.confidence_scores_json:
+            try:
+                return json.loads(self.confidence_scores_json)
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+    @confidence_scores.setter
+    def confidence_scores(self, data: dict[str, float]):
+        """Set confidence scores from dictionary."""
+        self.confidence_scores_json = json.dumps(data)
+
+    def __repr__(self):
+        return f"<SpeakerProcessingSession(session_id='{self.session_id}', recording_path='{self.recording_path}')>"
+
+
 # Database initialization functions
 def create_database_engine(database_url: str = "sqlite:///knowledge_system.db"):
-    """Create SQLAlchemy engine for the database."""
-    return create_engine(database_url, echo=False)
+    """Create SQLAlchemy engine for the database with foreign key enforcement."""
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    engine = create_engine(database_url, echo=False)
+
+    # Enable foreign key constraints for SQLite
+    if database_url.startswith("sqlite"):
+
+        @event.listens_for(Engine, "connect")
+        def set_sqlite_pragma(dbapi_conn, connection_record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+    return engine
 
 
 def create_all_tables(engine):

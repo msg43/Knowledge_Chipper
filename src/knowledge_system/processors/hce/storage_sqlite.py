@@ -350,6 +350,166 @@ def store_segments(conn: sqlite3.Connection, episode_id: str, segments: list) ->
 # Common query utilities
 
 
+def episode_exists(conn: sqlite3.Connection, episode_id: str) -> bool:
+    """
+    Check if episode exists in HCE database.
+
+    Args:
+        conn: SQLite connection
+        episode_id: Episode ID to check
+
+    Returns:
+        True if episode exists, False otherwise
+    """
+    cur = conn.cursor()
+    result = cur.execute(
+        "SELECT 1 FROM episodes WHERE episode_id = ? LIMIT 1", (episode_id,)
+    )
+    return result.fetchone() is not None
+
+
+def update_speaker_names(
+    conn: sqlite3.Connection, episode_id: str, speaker_mappings: dict[str, str]
+) -> tuple[bool, str]:
+    """
+    Update speaker names throughout HCE database for an episode.
+
+    This function updates the speaker names in the segments table. Note that
+    claims, evidence spans, and other extracted data reference segments by ID,
+    not by speaker name, so those don't need updating. However, the segments
+    table is used for lookups and context display.
+
+    Args:
+        conn: SQLite connection
+        episode_id: Episode ID to update
+        speaker_mappings: Dict of {old_speaker_name: new_speaker_name}
+
+    Returns:
+        Tuple of (success: bool, message: str)
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        cur = conn.cursor()
+        cur.execute("BEGIN")
+
+        updated_count = 0
+        for old_speaker, new_speaker in speaker_mappings.items():
+            # Update segments table
+            cur.execute(
+                """
+                UPDATE segments
+                SET speaker = ?
+                WHERE episode_id = ? AND speaker = ?
+            """,
+                (new_speaker, episode_id, old_speaker),
+            )
+            rows_updated = cur.rowcount
+            updated_count += rows_updated
+
+            if rows_updated > 0:
+                logger.info(
+                    f"Updated {rows_updated} segments: '{old_speaker}' -> '{new_speaker}' "
+                    f"for episode {episode_id}"
+                )
+
+        conn.commit()
+
+        if updated_count == 0:
+            return (
+                True,
+                f"No segments found matching the old speaker names for episode {episode_id}",
+            )
+
+        return (
+            True,
+            f"Successfully updated {updated_count} segments with new speaker names",
+        )
+
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Failed to update speaker names for episode {episode_id}: {e}")
+        return (False, f"Failed to update speaker names: {str(e)}")
+
+
+def delete_episode_hce_data(
+    conn: sqlite3.Connection, episode_id: str
+) -> tuple[bool, str]:
+    """
+    Delete all HCE extracted data for an episode (claims, evidence, entities).
+
+    Keeps the episode and segments records, but removes all extracted analysis
+    so it can be reprocessed with updated speaker names.
+
+    Args:
+        conn: SQLite connection
+        episode_id: Episode ID to clear
+
+    Returns:
+        Tuple of (success: bool, message: str)
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        cur = conn.cursor()
+        cur.execute("BEGIN")
+
+        # Delete in order respecting foreign keys
+        # Evidence spans reference claims
+        cur.execute("DELETE FROM evidence_spans WHERE episode_id = ?", (episode_id,))
+        evidence_count = cur.rowcount
+
+        # Relations reference claims
+        cur.execute("DELETE FROM relations WHERE episode_id = ?", (episode_id,))
+        relations_count = cur.rowcount
+
+        # Delete main entity tables
+        cur.execute("DELETE FROM claims WHERE episode_id = ?", (episode_id,))
+        claims_count = cur.rowcount
+
+        cur.execute("DELETE FROM people WHERE episode_id = ?", (episode_id,))
+        people_count = cur.rowcount
+
+        cur.execute("DELETE FROM concepts WHERE episode_id = ?", (episode_id,))
+        concepts_count = cur.rowcount
+
+        cur.execute("DELETE FROM jargon WHERE episode_id = ?", (episode_id,))
+        jargon_count = cur.rowcount
+
+        cur.execute("DELETE FROM mental_models WHERE episode_id = ?", (episode_id,))
+        mental_models_count = cur.rowcount
+
+        # Delete milestones
+        cur.execute("DELETE FROM milestones WHERE episode_id = ?", (episode_id,))
+        milestones_count = cur.rowcount
+
+        # Delete FTS entries
+        cur.execute("DELETE FROM claims_fts WHERE episode_id = ?", (episode_id,))
+        cur.execute("DELETE FROM quotes_fts WHERE episode_id = ?", (episode_id,))
+
+        conn.commit()
+
+        message = (
+            f"Deleted HCE data for episode {episode_id}: "
+            f"{claims_count} claims, {evidence_count} evidence spans, "
+            f"{relations_count} relations, {people_count} people, "
+            f"{concepts_count} concepts, {jargon_count} jargon terms, "
+            f"{mental_models_count} mental models, {milestones_count} milestones"
+        )
+
+        logger.info(message)
+        return (True, message)
+
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Failed to delete HCE data for episode {episode_id}: {e}")
+        return (False, f"Failed to delete HCE data: {str(e)}")
+
+
 def get_top_claims(
     conn: sqlite3.Connection, episode_id: str, tier: str = "A", limit: int = 10
 ) -> list:

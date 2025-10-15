@@ -111,12 +111,15 @@ class PacketStreamProxyManager:
 
         return session
 
-    def get_proxy_url(self, use_socks5: bool = False) -> str | None:
+    def get_proxy_url(
+        self, use_socks5: bool = False, session_id: str = None
+    ) -> str | None:
         """
         Get proxy URL string for use with other libraries.
 
         Args:
             use_socks5: Whether to use SOCKS5 proxy (default: HTTP)
+            session_id: Optional session ID for sticky IP (same ID = same IP)
 
         Returns:
             Proxy URL string or None if credentials not available
@@ -124,12 +127,41 @@ class PacketStreamProxyManager:
         if not self.credentials_available:
             return None
 
+        # Add session parameter for sticky IP per URL
+        # PacketStream format: username:password_session-SESSIONID
+        auth = f"{self.username}:{self.auth_key}"
+        if session_id:
+            auth += f"_session-{session_id}"  # Use underscore not hyphen
+
         if use_socks5:
-            return (
-                f"socks5h://{self.username}:{self.auth_key}@proxy.packetstream.io:31113"
-            )
+            return f"socks5h://{auth}@proxy.packetstream.io:31113"
         else:
-            return f"http://{self.username}:{self.auth_key}@proxy.packetstream.io:31112"
+            return f"http://{auth}@proxy.packetstream.io:31112"
+
+    @staticmethod
+    def generate_session_id(url: str, video_id: str | None = None) -> str:
+        """
+        Generate consistent session ID from URL or video ID.
+
+        This ensures the same URL always gets the same session (and thus the same IP),
+        while different URLs get different sessions (and different IPs).
+
+        Args:
+            url: The URL being accessed
+            video_id: Optional video ID (for YouTube videos)
+
+        Returns:
+            Session identifier string
+        """
+        if video_id:
+            # Use video ID directly for YouTube content
+            return video_id
+        else:
+            # Hash URL for non-YouTube content (RSS feeds, other platforms)
+            import hashlib
+
+            url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
+            return f"url_{url_hash}"
 
     def get_session(self, session_id: str = None) -> requests.Session:
         """

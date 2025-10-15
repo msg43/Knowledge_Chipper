@@ -42,7 +42,17 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
     @property
     def supported_formats(self) -> list[str]:
-        return [".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".webm"]
+        return [
+            ".mp3",
+            ".wav",
+            ".m4a",
+            ".flac",
+            ".ogg",
+            ".aac",
+            ".mp4",
+            ".webm",
+            ".opus",
+        ]
 
     def validate_input(self, input_path: str | Path) -> bool:
         path = Path(input_path)
@@ -55,6 +65,39 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
     def can_process(self, input_path: str | Path) -> bool:
         return Path(input_path).suffix.lower() in self.supported_formats
 
+    def _validate_model_file(
+        self, model_path: Path, model_name: str
+    ) -> tuple[bool, str]:
+        """
+        Validate that a model file is not corrupted.
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not model_path.exists():
+            return False, "Model file does not exist"
+
+        # Expected minimum sizes (in MB) - corrupted files will be much smaller
+        expected_min_sizes = {
+            "tiny": 70,
+            "base": 135,
+            "small": 450,
+            "medium": 1400,
+            "large": 3000,
+        }
+
+        file_size_mb = model_path.stat().st_size / (1024 * 1024)
+        min_size = expected_min_sizes.get(model_name, 50)
+
+        if file_size_mb < min_size:
+            return (
+                False,
+                f"Model file appears corrupted: {file_size_mb:.1f}MB (expected >{min_size}MB)",
+            )
+
+        logger.debug(f"Model {model_name} validated: {file_size_mb:.1f}MB")
+        return True, ""
+
     def _download_model(self, model_name: str, progress_callback=None) -> Path:
         """Download the whisper.cpp model if not already present."""
         # First check local models directory
@@ -63,8 +106,17 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             model_filename = f"{self.model_sizes.get(model_name, 'ggml-base')}.bin"
             local_model_path = local_models_dir / model_filename
             if local_model_path.exists():
-                logger.info(f"Using local whisper.cpp model: {local_model_path}")
-                return local_model_path
+                # Validate the model file
+                is_valid, error_msg = self._validate_model_file(
+                    local_model_path, model_name
+                )
+                if is_valid:
+                    logger.info(f"Using local whisper.cpp model: {local_model_path}")
+                    return local_model_path
+                else:
+                    logger.warning(
+                        f"Local model invalid: {error_msg}. Will try cache directory."
+                    )
 
         # Fall back to cache directory
         models_dir = Path.home() / ".cache" / "whisper-cpp"
@@ -72,6 +124,21 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
         model_filename = f"{self.model_sizes.get(model_name, 'ggml-base')}.bin"
         model_path = models_dir / model_filename
+
+        # Check if file exists and validate it
+        if model_path.exists():
+            is_valid, error_msg = self._validate_model_file(model_path, model_name)
+            if is_valid:
+                logger.info(f"Using cached whisper.cpp model: {model_path}")
+                return model_path
+            else:
+                logger.warning(f"Cached model corrupted: {error_msg}")
+                logger.info(f"Deleting corrupted model file: {model_path}")
+                try:
+                    model_path.unlink()
+                    logger.info("Corrupted model deleted, will redownload")
+                except Exception as e:
+                    logger.error(f"Failed to delete corrupted model: {e}")
 
         if not model_path.exists():
             logger.info(f"Downloading whisper.cpp model: {model_name}")
@@ -89,7 +156,8 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             # Note: Expected size available in model_sizes_mb if needed for
             # validation
 
-            # Download with progress tracking
+            # Download with progress tracking and timeout
+            import threading
             import time
             import urllib.request
 
@@ -307,7 +375,10 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             "government",
             "company",
         }
-        english_word_count = sum(1 for word in words if word in common_english_words)
+        # Strip punctuation from words before checking against common words
+        english_word_count = sum(
+            1 for word in words if word.strip(".,!?;:\"'()[]{}") in common_english_words
+        )
         if len(words) > 50 and english_word_count / len(words) < 0.1:
             return {
                 "is_valid": False,
@@ -434,7 +505,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                         [bundled_path, "--help"],
                         capture_output=True,
                         check=True,
-                        timeout=5,
+                        timeout=3,
                     )
                     logger.info(f"Found bundled whisper binary: {bundled_path}")
                     return bundled_path
@@ -460,7 +531,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                             [str(potential_whisper), "--help"],
                             capture_output=True,
                             check=True,
-                            timeout=5,
+                            timeout=3,
                         )
                         logger.info(
                             f"Found app bundle whisper binary: {potential_whisper}"
@@ -682,10 +753,11 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 # Note: By default, whisper.cpp uses GPU when available unless -ng (--no-gpu) is specified
                 # We simply don't add the -ng flag to enable GPU acceleration
 
-                # Add flash attention for better performance on Apple Silicon
-                if platform.system() == "Darwin" and platform.machine() == "arm64":
-                    cmd.extend(["-fa"])  # Enable flash attention
-                    logger.info("🚀 Enabled flash attention for Apple Silicon")
+                # Note: Flash attention (-fa) causes exit code 3 errors on some whisper.cpp builds
+                # Disabled for now - GPU acceleration is still enabled by default
+                # if platform.system() == "Darwin" and platform.machine() == "arm64":
+                #     cmd.extend(["-fa"])  # Enable flash attention
+                #     logger.info("🚀 Enabled flash attention for Apple Silicon")
 
                 logger.info("🚀 GPU acceleration enabled (default whisper.cpp behavior)")
 
@@ -904,12 +976,31 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 )
 
         except Exception as e:
-            logger.error(f"Whisper.cpp subprocess error: {e}")
-            if self.progress_callback:
-                self.progress_callback(f"❌ Transcription failed: {str(e)}", 0)
-            return ProcessorResult(
-                success=False, errors=[f"Subprocess transcription failed: {e}"]
-            )
+            error_msg = str(e)
+
+            # Check for corrupted model indicators
+            if (
+                "exit status 3" in error_msg
+                or "failed to initialize whisper context" in error_msg
+            ):
+                logger.error(
+                    f"Whisper model file may be corrupted (exit code 3). "
+                    f"Automatic validation will trigger redownload on next attempt."
+                )
+                friendly_error = (
+                    "Corrupted model file detected. The model will be automatically "
+                    "redownloaded on the next transcription attempt. Please try again."
+                )
+                if self.progress_callback:
+                    self.progress_callback(f"❌ {friendly_error}", 0)
+                return ProcessorResult(success=False, errors=[friendly_error])
+            else:
+                logger.error(f"Whisper.cpp subprocess error: {e}")
+                if self.progress_callback:
+                    self.progress_callback(f"❌ Transcription failed: {str(e)}", 0)
+                return ProcessorResult(
+                    success=False, errors=[f"Subprocess transcription failed: {e}"]
+                )
         finally:
             if temp_wav and temp_wav.exists():
                 temp_wav.unlink(missing_ok=True)

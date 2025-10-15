@@ -7,7 +7,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Dict, List
 
-from .models.llm_any import AnyLLM
+from .model_uri_parser import parse_model_uri
+from .models.llm_system2 import System2LLM
 from .schema_validator import validate_miner_output
 from .types import EpisodeBundle, Segment
 
@@ -43,7 +44,7 @@ class UnifiedMiner:
     from content segments in a single LLM call per segment.
     """
 
-    def __init__(self, llm: AnyLLM, prompt_path: Path | None = None):
+    def __init__(self, llm: System2LLM, prompt_path: Path | None = None):
         self.llm = llm
 
         # Load prompt
@@ -87,9 +88,38 @@ class UnifiedMiner:
                 except Exception as e:
                     import logging
 
+                    # Import error classes from the correct location
+                    import sys
+                    import traceback
+
+                    sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+                    from knowledge_system.errors import ErrorCode, KnowledgeSystemError
+
                     logger = logging.getLogger(__name__)
+
+                    # If this is a critical error (like invalid provider), don't fall back - re-raise
+                    if (
+                        isinstance(e, KnowledgeSystemError)
+                        and hasattr(e, "error_code")
+                        and e.error_code == ErrorCode.INVALID_INPUT
+                    ):
+                        logger.error(
+                            f"Critical error in structured JSON generation: {e}"
+                        )
+                        raise
+
+                    # Safely convert exception to string (handle ErrorCode enums in exception args)
+                    try:
+                        error_msg = str(e)
+                    except Exception as format_error:
+                        # If even str(e) fails, use repr
+                        error_msg = f"<exception formatting failed: {type(e).__name__}>"
+                        logger.debug(f"Exception formatting error: {format_error}")
+                        logger.debug(f"Exception args: {e.args}")
+                        logger.debug(f"Full traceback: {traceback.format_exc()}")
+
                     logger.warning(
-                        f"Structured JSON generation failed, falling back: {e}"
+                        f"Structured JSON generation failed, falling back: {error_msg}"
                     )
 
             # Fall back to regular JSON generation if structured failed or not available
@@ -144,10 +174,20 @@ class UnifiedMiner:
 
         except Exception as e:
             import logging
+            import traceback
 
             logger = logging.getLogger(__name__)
+
+            # Safely convert exception to string (handle ErrorCode enums in exception args)
+            try:
+                error_msg = str(e)
+            except Exception as format_error:
+                error_msg = f"<exception formatting failed: {type(e).__name__}>"
+                logger.debug(f"Exception formatting error: {format_error}")
+                logger.debug(f"Exception args: {e.args}")
+
             logger.warning(
-                f"Unified mining failed for segment {segment.segment_id}: {e}"
+                f"Unified mining failed for segment {segment.segment_id}: {error_msg}"
             )
 
             # Return empty structure on failure
@@ -199,17 +239,21 @@ def mine_episode_unified(
 
     Args:
         episode: The episode to mine
-        miner_model_uri: URI for the miner LLM model
+        miner_model_uri: URI for the miner LLM model (format: "provider:model")
         max_workers: Number of parallel workers (None = auto, 1 = sequential)
         progress_callback: Optional progress reporting function
 
     Returns:
         List of UnifiedMinerOutput objects, one per segment
     """
-    llm = AnyLLM(miner_model_uri)
+    # Parse model URI with proper handling of local:// and other formats
+    provider, model = parse_model_uri(miner_model_uri)
+
+    # Create System2LLM instance
+    llm = System2LLM(provider=provider, model=model, temperature=0.3)
 
     # Use simplified prompt for Ollama models
-    if "ollama:" in miner_model_uri.lower():
+    if provider and provider.lower() == "ollama":
         prompt_path = Path(__file__).parent / "prompts" / "unified_miner_ollama.txt"
         if not prompt_path.exists():
             # Fall back to main prompt if Ollama version doesn't exist

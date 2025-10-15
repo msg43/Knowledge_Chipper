@@ -43,7 +43,7 @@ from ...core.batch_processor import (
 )
 from ...core.dynamic_parallelization import initialize_parallelization_manager
 from ...utils.hardware_detection import detect_hardware_specs
-from .base_tab import BaseTab
+from ..components.base_tab import BaseTab
 
 
 class BatchProcessingWorker(QThread):

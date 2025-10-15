@@ -3,7 +3,7 @@
 
 .PHONY: help install test test-quick test-full test-unit test-integration test-gui \
         lint format type-check security-check pre-commit-all clean build \
-        release-test smoke-test coverage dependencies-check
+        release-test smoke-test coverage dependencies-check update-ytdlp test-ytdlp-update check-ytdlp-releases
 
 # Default target
 help:
@@ -13,6 +13,11 @@ help:
 	@echo "Setup Commands:"
 	@echo "  make install          Install all dependencies and pre-commit hooks"
 	@echo "  make dependencies-check  Verify all dependencies are installed correctly"
+	@echo ""
+	@echo "yt-dlp Management:"
+	@echo "  make check-ytdlp-releases  Check for updates and assess risk"
+	@echo "  make update-ytdlp     Quick check and update yt-dlp version"
+	@echo "  make test-ytdlp-update   Full workflow: test, validate, and promote yt-dlp update"
 	@echo ""
 	@echo "Testing Commands:"
 	@echo "  make test            Run the most comprehensive test suite"
@@ -44,12 +49,15 @@ help:
 install:
 	@echo "🚀 Setting up Skipthepodcast.com development environment..."
 	python -m pip install --upgrade pip
-	pip install -r requirements.txt
+	@echo "📦 Installing development dependencies (allows testing updates)..."
 	pip install -r requirements-dev.txt
 	pip install -e ".[hce]"
 	@echo "📋 Installing pre-commit hooks..."
 	pre-commit install
 	@echo "✅ Setup complete!"
+	@echo ""
+	@echo "Note: Development uses flexible versions for testing."
+	@echo "      Production builds use pinned versions from requirements.txt"
 
 dependencies-check:
 	@echo "🔍 Checking critical dependencies..."
@@ -60,6 +68,20 @@ dependencies-check:
 	@python -c "import whisper; print('✅ Whisper available')" || echo "⚠️  Whisper not available (local transcription disabled)"
 	@python -c "import pyannote.audio; print('✅ pyannote.audio available')" || echo "⚠️  pyannote.audio not available (diarization disabled)"
 	@echo "✅ Dependency check complete"
+
+check-ytdlp-releases:
+	@echo "📋 Checking yt-dlp releases with risk assessment..."
+	@bash scripts/check_ytdlp_changelog.sh
+
+update-ytdlp:
+	@echo "📦 Quick yt-dlp version check and update..."
+	@echo "Note: For full testing workflow, use 'make test-ytdlp-update'"
+	@bash scripts/update_ytdlp.sh
+
+test-ytdlp-update:
+	@echo "🧪 Full yt-dlp update testing workflow..."
+	@echo "This will test, validate, and update production pins"
+	@bash scripts/test_ytdlp_update.sh
 
 # === TESTING COMMANDS ===
 

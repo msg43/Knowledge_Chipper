@@ -298,3 +298,7 @@ build_ai_models/
 build_ffmpeg/
 *.pkg
 dist/*.tar.gz
+config/packetstream.yaml
+
+# Staging area for files to delete
+_to_delete/

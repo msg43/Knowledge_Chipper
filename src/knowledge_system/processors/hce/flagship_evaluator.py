@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
-from .models.llm_any import AnyLLM
+from .model_uri_parser import parse_model_uri
+from .models.llm_system2 import System2LLM
 from .schema_validator import validate_flagship_output
 from .unified_miner import UnifiedMinerOutput
 
@@ -90,7 +91,7 @@ class FlagshipEvaluator:
     Flagship evaluator that reviews extracted claims and ranks them by importance.
     """
 
-    def __init__(self, llm: AnyLLM, prompt_path: Path | None = None):
+    def __init__(self, llm: System2LLM, prompt_path: Path | None = None):
         self.llm = llm
 
         # Load prompt
@@ -166,7 +167,26 @@ class FlagshipEvaluator:
                 except Exception as e:
                     import logging
 
+                    # Import error classes from the correct location
+                    import sys
+                    from pathlib import Path
+
+                    sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+                    from knowledge_system.errors import ErrorCode, KnowledgeSystemError
+
                     logger = logging.getLogger(__name__)
+
+                    # If this is a critical error (like invalid provider), don't fall back - re-raise
+                    if (
+                        isinstance(e, KnowledgeSystemError)
+                        and hasattr(e, "error_code")
+                        and e.error_code == ErrorCode.INVALID_INPUT
+                    ):
+                        logger.error(
+                            f"Critical error in structured JSON generation: {e}"
+                        )
+                        raise
+
                     logger.warning(
                         f"Structured JSON generation failed, falling back: {e}"
                     )
@@ -261,15 +281,19 @@ def evaluate_claims_flagship(
     Args:
         content_summary: High-level summary of the content
         miner_outputs: List of outputs from the unified miner
-        flagship_model_uri: URI for the flagship LLM model
+        flagship_model_uri: URI for the flagship LLM model (format: "provider:model")
 
     Returns:
         FlagshipEvaluationOutput with ranked and filtered claims
     """
-    llm = AnyLLM(flagship_model_uri)
+    # Parse model URI with proper handling of local:// and other formats
+    provider, model = parse_model_uri(flagship_model_uri)
+
+    # Create System2LLM instance
+    llm = System2LLM(provider=provider, model=model, temperature=0.3)
 
     # Use simplified prompt for Ollama models
-    if "ollama:" in flagship_model_uri.lower():
+    if provider and provider.lower() == "ollama":
         prompt_path = (
             Path(__file__).parent / "prompts" / "flagship_evaluator_ollama.txt"
         )

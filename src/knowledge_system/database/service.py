@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import desc, func, or_
+from sqlalchemy import desc, func, or_, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..logger import get_logger
@@ -59,15 +59,21 @@ class DatabaseService:
                 return Path.home() / ".knowledge_chipper"
 
         if database_url.startswith("sqlite:///"):
-            raw_path = Path(database_url[10:])  # after 'sqlite:///'
-            if not raw_path.is_absolute():
-                # Use per-user app data directory for relative defaults
-                db_path = _user_data_dir() / "knowledge_system.db"
-                db_path.parent.mkdir(parents=True, exist_ok=True)
-                resolved_url = f"sqlite:///{db_path}"
+            raw_path_str = database_url[10:]  # after 'sqlite:///'
+            # Special case: in-memory database
+            if raw_path_str == ":memory:":
+                resolved_url = database_url  # Keep as-is
+                db_path = None
             else:
-                db_path = raw_path
-                db_path.parent.mkdir(parents=True, exist_ok=True)
+                raw_path = Path(raw_path_str)
+                if not raw_path.is_absolute():
+                    # Use per-user app data directory for relative defaults
+                    db_path = _user_data_dir() / "knowledge_system.db"
+                    db_path.parent.mkdir(parents=True, exist_ok=True)
+                    resolved_url = f"sqlite:///{db_path}"
+                else:
+                    db_path = raw_path
+                    db_path.parent.mkdir(parents=True, exist_ok=True)
         elif database_url.startswith("sqlite://"):
             raw_path = Path(database_url[9:])  # after 'sqlite://'
             if not raw_path.is_absolute():
@@ -99,11 +105,38 @@ class DatabaseService:
         # Create tables if they don't exist
         create_all_tables(self.engine)
 
+        # Run System 2 migration if needed
+        self._run_system2_migration()
+
         logger.info(f"Database service initialized with {database_url}")
 
     def get_session(self) -> Session:
         """Get a new database session."""
         return self.Session()
+
+    def _run_system2_migration(self):
+        """Run System 2 migration if needed."""
+        try:
+            from .migrations.system2_migration import migrate_to_system2
+
+            with self.get_session() as session:
+                # Check if migration is needed by looking for new tables
+                result = session.execute(
+                    text(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name='job'"
+                    )
+                )
+                if not result.first():
+                    logger.info("Running System 2 migration...")
+                    migrate_to_system2(session)
+                else:
+                    # Ensure WAL mode is enabled even if tables exist
+                    session.execute(text("PRAGMA journal_mode=WAL"))
+                    session.commit()
+        except Exception as e:
+            logger.error(f"Failed to run System 2 migration: {e}")
+            # Don't fail initialization if migration fails
+            pass
 
     # =============================================================================
     # VIDEO OPERATIONS

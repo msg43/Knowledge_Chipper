@@ -7,7 +7,10 @@ Supports configurable output format (mp3/wav), error handling, and returns outpu
 """
 
 import os
+import sys
+from contextlib import contextmanager
 from datetime import datetime
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +25,21 @@ from .base import BaseProcessor, ProcessorResult
 logger = get_logger(__name__)
 
 
+@contextmanager
+def suppress_stderr():
+    """
+    Capture stderr output to prevent yt-dlp from printing internal errors,
+    but return the captured content for error analysis.
+    """
+    old_stderr = sys.stderr
+    captured = StringIO()
+    sys.stderr = captured
+    try:
+        yield captured
+    finally:
+        sys.stderr = old_stderr
+
+
 class YouTubeDownloadProcessor(BaseProcessor):
     """Processor for downloading audio and thumbnails from YouTube videos/playlists."""
 
@@ -34,18 +52,18 @@ class YouTubeDownloadProcessor(BaseProcessor):
     def __init__(
         self,
         name: str | None = None,
-        output_format: str = "webm",  # Default to WebM for best source quality (temp file only)
+        output_format: str = "best",  # Keep original format - will be converted to WAV for transcription
         download_thumbnails: bool = True,
     ) -> None:
         super().__init__(name or "youtube_download")
         self.output_format = output_format
         self.download_thumbnails = download_thumbnails
 
-        # Base options without cookies (cookies will be added dynamically)
+        # Base options without cookies (cookies will be added dynamically if needed)
         self.ydl_opts_base = {
             "quiet": True,
             "no_warnings": True,
-            "format": "250/249/140/worst",  # Prioritize lowest quality: 250 (70kbps Opus), 249 (50kbps Opus), 140 (128kbps AAC), or worst available
+            "format": "worstaudio[ext=webm]/worstaudio[ext=opus]/worstaudio[ext=m4a]/worstaudio/bestaudio[ext=webm][abr<=96]/bestaudio[ext=m4a][abr<=128]/bestaudio[abr<=128]/bestaudio/worst",  # Optimal cascade: smallest formats first, guaranteed audio-only fallback
             "outtmpl": "%(title)s.%(ext)s",
             "ignoreerrors": True,
             "noplaylist": False,
@@ -53,36 +71,23 @@ class YouTubeDownloadProcessor(BaseProcessor):
             "http_chunk_size": 524288,  # 512KB chunks - balance between efficiency and stability
             "no_check_formats": True,  # Skip format validation for faster processing
             "prefer_free_formats": True,  # Prefer formats that don't require fragmentation
-            "youtube_include_dash_manifest": False,  # Disable DASH (fragmented) formats
+            # Note: youtube_include_dash_manifest option removed (deprecated in yt-dlp 2025.9+)
             "no_part": False,  # Enable partial downloading/resuming for connection interruptions
             "retries": 3,  # Standard retries for connection issues
-            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "headers": {
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-us,en;q=0.5",
-                "Accept-Encoding": "gzip, deflate",
-                "Accept-Charset": "ISO-8859-1,utf-8;q=0.7,*;q=0.7",
-                "Keep-Alive": "timeout=5, max=100",
-                "Connection": "keep-alive",
-                # Additional headers to appear more like a regular browser
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "none",
-                "Sec-Fetch-User": "?1",
-                "Upgrade-Insecure-Requests": "1",
-            },
             "extractor_retries": 3,  # Standard retries for connection issues
             "socket_timeout": 45,  # Longer timeout for large file downloads through proxy
+            # NOTE: Do NOT use Android client with PacketStream - causes "Fixed to extract player response"
             "fragment_retries": 5,  # Moderate fragment retries for stability
             # Network tuning
             "nocheckcertificate": True,
-            "prefer_insecure": True,
             "http_chunk_retry": True,
             "keep_fragments": False,  # Don't keep fragments to save space
-            "concurrent_fragment_downloads": 8,  # Use multiple connections for parallel chunks
-            "postprocessors": [
-                {"key": "FFmpegAudioConvertor", "preferredcodec": "mp3"}
-            ],  # Default post-processor for audio conversion
+            # Additional options to help with YouTube anti-bot detection
+            "sleep_interval": 1,  # Add small delay between requests
+            "max_sleep_interval": 5,  # Maximum sleep interval
+            "sleep_interval_requests": 1,  # Sleep between requests
+            # NO postprocessors - keep original format to avoid double conversion
+            # Audio will be converted directly to 16kHz mono WAV by AudioProcessor
         }
 
     @property
@@ -236,13 +241,12 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
         # PROXY CONFIGURATION - PacketStream (optional)
         from ..config import get_settings
-        from ..utils.deduplication import VideoDeduplicationService
         from ..utils.packetstream_proxy import PacketStreamProxyManager
 
         settings = get_settings()
 
-        # Initialize deduplication service for cost optimization
-        dedup_service = VideoDeduplicationService()
+        # Note: VideoDeduplicationService already initialized at line 170
+        # No need to reinitialize here
 
         # PacketStream proxy (optional)
         use_proxy = False
@@ -298,43 +302,33 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     # Test proxy connectivity
                     import requests
 
-                    # SSL certificate path for restricted accounts
-                    ssl_cert_path = os.path.join(
-                        os.path.dirname(
-                            os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-                        ),
-                        "config",
-                        "brightdata_proxy_ca",
-                        "New SSL certifcate - MUST BE USED WITH PORT 33335",
-                        "BrightData SSL certificate (port 33335).crt",
-                    )
-
-                    # Use SSL certificate if available
-                    verify_param = (
-                        ssl_cert_path if os.path.exists(ssl_cert_path) else True
+                    # PacketStream proxies don't require SSL certificate verification
+                    # Use HTTP endpoint to avoid SSL certificate issues
+                    from ..utils.browser_fingerprint import (
+                        get_standard_requests_headers,
                     )
 
                     test_response = requests.get(
-                        "https://httpbin.org/ip",
+                        "http://httpbin.org/ip",
                         proxies={"http": proxy_url, "https": proxy_url},
                         timeout=15,
-                        verify=verify_param,
+                        headers=get_standard_requests_headers(),
                     )
                     if test_response.status_code == 200:
                         proxy_ip = test_response.json().get("origin", "unknown")
                         logger.info(
-                            f"✅ Bright Data proxy working - connected via IP: {proxy_ip}"
+                            f"✅ PacketStream proxy working - connected via IP: {proxy_ip}"
                         )
                         if progress_callback:
                             progress_callback(
-                                f"✅ Bright Data proxy working - IP: {proxy_ip}"
+                                f"✅ PacketStream proxy working - IP: {proxy_ip}"
                             )
                     else:
                         logger.warning(
-                            f"Bright Data proxy test returned status {test_response.status_code}"
+                            f"PacketStream proxy test returned status {test_response.status_code}"
                         )
                 else:
-                    logger.error("Failed to generate Bright Data proxy URL")
+                    logger.error("Failed to generate PacketStream proxy URL")
 
                     # Smart fallback: Allow single video downloads, block bulk downloads
                     if len(urls) == 1:
@@ -343,19 +337,19 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         )
                         if progress_callback:
                             progress_callback(
-                                "❌ Failed to generate Bright Data proxy URL"
+                                "❌ Failed to generate PacketStream proxy URL"
                             )
                             progress_callback(
                                 "⚠️ Single video: Proceeding with direct connection (low risk)"
                             )
-                        use_bright_data = False
+                        use_proxy = False
                     else:
                         logger.error(
                             f"Bulk download detected ({len(urls)} URLs) - blocking due to proxy URL failure"
                         )
                         if progress_callback:
                             progress_callback(
-                                "❌ Failed to generate Bright Data proxy URL"
+                                "❌ Failed to generate PacketStream proxy URL"
                             )
                             progress_callback(
                                 f"🚫 BLOCKED: Bulk download ({len(urls)} URLs) without proxy protection"
@@ -367,14 +361,14 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                 "💡 Tip: Single video downloads are still allowed without proxy"
                             )
                             progress_callback(
-                                "🔧 Please fix Bright Data configuration before bulk downloading"
+                                "🔧 Please fix PacketStream configuration before bulk downloading"
                             )
 
                         return ProcessorResult(
                             success=False,
                             data=None,
                             errors=[
-                                f"Failed to generate Bright Data proxy URL for bulk download ({len(urls)} URLs). "
+                                f"Failed to generate PacketStream proxy URL for bulk download ({len(urls)} URLs). "
                                 "Bulk downloads without proxy protection are blocked to prevent IP bans. "
                                 "Single video downloads are still allowed."
                             ],
@@ -388,7 +382,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
             except Exception as proxy_test_error:
                 error_msg = str(proxy_test_error)
-                logger.error(f"❌ Bright Data proxy test failed: {error_msg}")
+                logger.error(f"❌ PacketStream proxy test failed: {error_msg}")
 
                 # Smart fallback: Allow single video downloads, block bulk downloads
                 if len(urls) == 1:
@@ -397,22 +391,22 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     )
                     if progress_callback:
                         progress_callback(
-                            f"❌ Bright Data proxy test failed: {error_msg}"
+                            f"❌ PacketStream proxy test failed: {error_msg}"
                         )
                         progress_callback(
                             "⚠️ Single video: Proceeding with direct connection (low risk)"
                         )
                         progress_callback(
-                            "🔄 Consider fixing Bright Data for future bulk downloads..."
+                            "🔄 Consider fixing PacketStream for future bulk downloads..."
                         )
-                    use_bright_data = False
+                    use_proxy = False
                 else:
                     logger.error(
                         f"Bulk download detected ({len(urls)} URLs) - blocking direct connection to prevent IP ban"
                     )
                     if progress_callback:
                         progress_callback(
-                            f"❌ Bright Data proxy test failed: {error_msg}"
+                            f"❌ PacketStream proxy test failed: {error_msg}"
                         )
                         progress_callback(
                             f"🚫 BLOCKED: Bulk download ({len(urls)} URLs) without proxy protection"
@@ -424,14 +418,14 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             "💡 Tip: Single video downloads are still allowed without proxy"
                         )
                         progress_callback(
-                            "🔧 Please fix Bright Data configuration before bulk downloading"
+                            "🔧 Please fix PacketStream configuration before bulk downloading"
                         )
 
                     return ProcessorResult(
                         success=False,
                         data=None,
                         errors=[
-                            f"Bright Data proxy failed for bulk download ({len(urls)} URLs): {error_msg}. "
+                            f"PacketStream proxy failed for bulk download ({len(urls)} URLs): {error_msg}. "
                             "Bulk downloads without proxy protection are blocked to prevent IP bans. "
                             "Single video downloads are still allowed."
                         ],
@@ -443,37 +437,20 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         },
                     )
 
-        # Proxy usage requires Bright Data; no legacy WebShare fallback
+        # Proxy usage with PacketStream (optional); no legacy WebShare fallback
 
         # Configure base yt-dlp options
-        ydl_opts = {**self.ydl_opts_base}
+        import copy
 
-        # Dynamic concurrency based on expected file size and connection count
-        def calculate_optimal_concurrency(estimated_size_mb: float) -> int:
-            """Calculate optimal concurrent connections based on file size."""
-            if estimated_size_mb < 10:  # Small files: 2-4 connections
-                return min(4, max(2, int(estimated_size_mb / 3)))
-            elif estimated_size_mb < 50:  # Medium files: 4-8 connections
-                return min(8, max(4, int(estimated_size_mb / 8)))
-            elif estimated_size_mb < 200:  # Large files: 8-16 connections
-                return min(16, max(8, int(estimated_size_mb / 15)))
-            else:  # Very large files: 16-32 connections
-                return min(32, max(16, int(estimated_size_mb / 25)))
+        ydl_opts = copy.deepcopy(
+            self.ydl_opts_base
+        )  # Deep copy to avoid modifying base config
 
-        # Estimate file size for format 250 (70kbps Opus)
-        # Rough estimate: 70kbps ≈ 0.5MB per minute
-        estimated_duration_minutes = 60  # Default assumption for unknown duration
-        estimated_size_mb = estimated_duration_minutes * 0.5
-        optimal_concurrency = calculate_optimal_concurrency(estimated_size_mb)
+        # NOTE: Do NOT add custom user-agent or http_headers when using PacketStream
+        # PacketStream residential proxies work best with yt-dlp's default headers
+        # Custom headers can cause "Failed to parse JSON" errors through the proxy
 
-        # Override concurrent downloads with calculated value
-        ydl_opts["concurrent_fragment_downloads"] = optimal_concurrency
-
-        logger.info(
-            f"Configuring parallel downloads: {optimal_concurrency} connections (estimated {estimated_size_mb:.1f}MB file)"
-        )
-
-        # Add progress hook for real-time download progress in GUI with diagnostic info
+        # Add progress hook for real-time download progress in GUI
         if progress_callback:
             import time
 
@@ -510,19 +487,14 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         # Create single line progress message with all info
                         progress_msg = f"📥 Downloading: {clean_filename[:30]}{'...' if len(clean_filename) > 30 else ''} | {downloaded_mb:.1f}/{total_mb:.1f} MB ({percent:.1f}%)"
 
-                        # Enhanced diagnostics for parallel download performance
+                        # Add speed information if available
                         time_since_last = current_time - last_progress_time[0]
                         if speed_mbps > 0:
                             progress_msg += f" @ {speed_mbps:.1f} MB/s"
-                            # Show parallel connection info for higher speeds
-                            if speed_mbps > 2.0:  # Good parallel performance
-                                progress_msg += f" [{optimal_concurrency} connections]"
                         elif time_since_last > 10:  # No progress for 10+ seconds
-                            progress_msg += f" (stalled - retrying with {optimal_concurrency} connections)"
+                            progress_msg += " (stalled - retrying...)"
                         else:
-                            progress_msg += (
-                                f" (buffering {optimal_concurrency} streams...)"
-                            )
+                            progress_msg += " (buffering...)"
 
                         # Use single line update if message changed significantly
                         if (
@@ -562,14 +534,27 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
             ydl_opts["progress_hooks"] = [download_progress_hook]
 
-        ydl_opts["postprocessors"][0]["preferredcodec"] = output_format
+        # No postprocessor override needed - keeping original format
         ydl_opts["outtmpl"] = str(output_dir / "%(title)s.%(ext)s")
 
         all_files = []
         all_thumbnails = []
         errors = []
 
-        for i, url in enumerate(urls, 1):
+        # Smart retry system for bot detection
+        # Track URLs that hit bot detection and need retry with fresh IP
+        retry_queue = []
+        used_session_ids = {}  # Track session IDs to force new IPs on retry
+
+        # Convert to list for modification during iteration
+        urls_to_process = list(urls)
+        url_index = 0
+
+        while url_index < len(urls_to_process):
+            url = urls_to_process[url_index]
+            i = url_index + 1
+            video_id = None  # Initialize early for error handling
+
             try:
                 # Determine playlist context for progress display
                 playlist_context = ""
@@ -579,110 +564,121 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         playlist_context = f" [Playlist: {playlist['title'][:40]}{'...' if len(playlist['title']) > 40 else ''} - Video {playlist_position}/{playlist['total_videos']}]"
                         break
 
-                # Extract video ID for Bright Data session management
-                video_id = None
-                current_proxy_url = proxy_url  # Default to existing proxy_url
-                current_session_id = None
+                # Extract video ID for logging
+                import re
 
-                if use_bright_data:
-                    # Extract video ID from URL
-                    import re
+                youtube_id_match = re.search(
+                    r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url
+                )
+                if youtube_id_match:
+                    video_id = youtube_id_match.group(1)
 
-                    youtube_id_match = re.search(
-                        r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url
+                # Generate unique session ID for this video (sticky IP per URL)
+                # Each URL gets a consistent session ID, ensuring same IP for all requests
+                # (metadata, download chunks, thumbnail) while different URLs get different IPs
+                # SMART RETRY: If this URL previously hit bot detection, force a NEW session ID
+                current_proxy_url = None
+                if use_proxy and proxy_manager:
+                    from ..utils.packetstream_proxy import PacketStreamProxyManager
+
+                    # Generate base session ID from video
+                    base_session_id = PacketStreamProxyManager.generate_session_id(
+                        url, video_id
                     )
-                    if youtube_id_match:
-                        video_id = youtube_id_match.group(1)
 
-                        # Create specific session for this video
-                        current_session_id = session_manager.create_session_for_file(
-                            video_id, "audio_download"
+                    # If this URL was retried, append retry counter to force NEW IP
+                    if url in used_session_ids:
+                        retry_count = used_session_ids[url]
+                        session_id = f"{base_session_id}_retry{retry_count}"
+                        logger.info(
+                            f"🔄 Retry #{retry_count} for {video_id or 'URL'} - forcing NEW IP with session '{session_id}'"
                         )
-                        current_proxy_url = session_manager.get_proxy_url_for_file(
-                            video_id, "audio_download"
-                        )
+                    else:
+                        session_id = base_session_id
+                        used_session_ids[url] = 0  # Track first attempt
 
-                        if current_proxy_url:
-                            logger.info(
-                                f"Created Bright Data session {current_session_id} for video {video_id}"
-                            )
-                        else:
-                            logger.warning(
-                                f"Failed to create Bright Data session for {video_id}, using fallback"
-                            )
-                            current_proxy_url = proxy_url
+                    current_proxy_url = proxy_manager.get_proxy_url(
+                        session_id=session_id
+                    )
 
-                # First, extract metadata to get actual duration for better concurrency calculation
+                if current_proxy_url and video_id:
+                    logger.info(
+                        f"Using PacketStream proxy session '{video_id}' for video {video_id} ({i}/{len(urls)})"
+                    )
+                elif current_proxy_url:
+                    logger.info(f"Using PacketStream proxy for URL ({i}/{len(urls)})")
+                elif video_id:
+                    logger.info(
+                        f"Using direct connection for video {video_id} (no proxy configured)"
+                    )
+
+                # Extract metadata to verify video availability
                 if progress_callback:
                     progress_callback(f"🔍 Extracting video metadata for: {url}")
 
                 try:
-                    # Test proxy connectivity first
-                    test_opts = {
-                        "proxy": current_proxy_url,
-                        "quiet": True,
-                        "no_warnings": True,
-                        "extract_flat": True,
-                        "socket_timeout": 30,
-                    }
-
-                    proxy_type = (
-                        "Bright Data" if use_bright_data else "Direct (NO PROXY)"
+                    # Test proxy connectivity and extract metadata
+                    # IMPORTANT: Include full ydl_opts (cookies, Android client, etc)
+                    test_opts = {**ydl_opts, "proxy": current_proxy_url}
+                    test_opts.update(
+                        {
+                            "quiet": True,
+                            "no_warnings": True,
+                            "extract_flat": True,
+                            "socket_timeout": 30,
+                        }
                     )
+
+                    proxy_type = "PacketStream" if use_proxy else "Direct (NO PROXY)"
                     with yt_dlp.YoutubeDL(test_opts) as ydl_test:
                         logger.info(f"Testing {proxy_type} connectivity for: {url}")
-                        if progress_callback and not use_bright_data:
+                        if progress_callback and not use_proxy:
                             progress_callback(
                                 "⚠️ WARNING: Using direct connection (no proxy protection)"
                             )
                         if progress_callback:
-                            progress_callback(
-                                f"🔗 Testing {proxy_type} proxy connectivity..."
-                            )
+                            progress_callback(f"🔗 Testing {proxy_type} connectivity...")
 
                         # Quick connectivity test
                         test_info = ydl_test.extract_info(url, download=False)
                         if not test_info:
                             raise Exception(
-                                "Proxy connectivity test failed - no video info returned"
+                                "Connectivity test failed - no video info returned"
                             )
 
-                        logger.info(f"✅ {proxy_type} proxy connectivity test passed")
+                        logger.info(f"✅ {proxy_type} connectivity test passed")
                         if progress_callback:
                             progress_callback(
-                                f"✅ {proxy_type} proxy working - extracting full metadata..."
+                                f"✅ {proxy_type} working - extracting metadata..."
                             )
 
-                    # Now extract full metadata
-                    with yt_dlp.YoutubeDL(
-                        {**ydl_opts, "extract_flat": False}
-                    ) as ydl_info:
+                    # Extract full metadata (without format validation to avoid proxy issues)
+                    # IMPORTANT: Merge full ydl_opts (with cookies, Android client, etc)
+                    metadata_opts = {**ydl_opts, "proxy": current_proxy_url}
+                    metadata_opts.update(
+                        {
+                            "quiet": True,
+                            "no_warnings": True,
+                            "socket_timeout": 30,
+                        }
+                    )
+                    with yt_dlp.YoutubeDL(metadata_opts) as ydl_info:
                         info_only = ydl_info.extract_info(url, download=False)
-                        duration_seconds = info_only.get(
-                            "duration", 3600
-                        )  # Default to 1 hour if unknown
-                        duration_minutes = duration_seconds / 60
-                        video_title = info_only.get("title", "Unknown Title")
-
-                        # Recalculate optimal concurrency with actual duration
-                        estimated_size_mb = (
-                            duration_minutes * 0.5
-                        )  # 70kbps ≈ 0.5MB per minute
-                        optimal_concurrency = calculate_optimal_concurrency(
-                            estimated_size_mb
-                        )
-                        ydl_opts["concurrent_fragment_downloads"] = optimal_concurrency
-
-                        logger.info(
-                            f"✅ Video '{video_title}' - Duration: {duration_minutes:.1f}min, "
-                            f"estimated size: {estimated_size_mb:.1f}MB, "
-                            f"using {optimal_concurrency} concurrent connections"
-                        )
-
-                        if progress_callback:
-                            progress_callback(
-                                f"📊 '{video_title[:40]}...' - {duration_minutes:.1f}min → {optimal_concurrency} connections"
+                        if info_only:
+                            duration_seconds = info_only.get("duration", 0)
+                            duration_minutes = (
+                                duration_seconds / 60 if duration_seconds else 0
                             )
+                            video_title = info_only.get("title", "Unknown Title")
+
+                            logger.info(
+                                f"✅ Video '{video_title}' - Duration: {duration_minutes:.1f}min"
+                            )
+
+                            if progress_callback:
+                                progress_callback(
+                                    f"📊 '{video_title[:40]}...' - {duration_minutes:.1f} min"
+                                )
 
                 except Exception as e:
                     error_msg = str(e)
@@ -697,7 +693,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             progress_callback(f"❌ Video not found or private: {url}")
                         elif "timeout" in error_msg.lower():
                             progress_callback(
-                                "❌ Proxy connection timeout - Proxy service may have connectivity issues"
+                                "❌ Connection timeout - Proxy service may have connectivity issues"
                             )
                         elif "proxy" in error_msg.lower():
                             progress_callback(
@@ -710,177 +706,407 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                     # Continue with default settings if metadata extraction fails
                     logger.warning(
-                        "Continuing with default concurrency settings due to metadata failure"
+                        "Continuing with standard settings despite metadata failure"
                     )
                     if progress_callback:
-                        progress_callback(
-                            "⚠️ Using default settings - attempting download anyway..."
-                        )
+                        progress_callback("⚠️ Attempting download anyway...")
 
-                # Attempt the actual download with enhanced error handling
+                # Attempt the actual download
                 if progress_callback:
-                    progress_callback(
-                        f"🚀 Starting download with {optimal_concurrency} parallel connections..."
-                    )
+                    progress_callback("🚀 Starting download...")
 
                 # Configure yt-dlp options with the specific proxy for this video
                 final_ydl_opts = {**ydl_opts, "proxy": current_proxy_url}
 
-                with yt_dlp.YoutubeDL(final_ydl_opts) as ydl:
-                    logger.info(f"Downloading audio for: {url}{playlist_context}")
-                    if use_bright_data and video_id:
-                        logger.info(
-                            f"Using Bright Data session {current_session_id} for video {video_id}"
-                        )
+                # Suppress yt-dlp's stderr output to prevent spurious error messages like "ERROR: 'webm'"
+                # But capture it for error analysis
+                with suppress_stderr() as captured_stderr:
+                    with yt_dlp.YoutubeDL(final_ydl_opts) as ydl:
+                        logger.info(f"Downloading audio for: {url}{playlist_context}")
+                        if use_proxy and video_id:
+                            logger.info(
+                                f"Using PacketStream proxy for video {video_id}"
+                            )
 
-                    try:
-                        # Track download start time for cost calculation
-                        download_start_time = datetime.now()
+                        try:
+                            # Track download start time for cost calculation
+                            download_start_time = datetime.now()
 
-                        info = ydl.extract_info(url, download=True)
+                            info = ydl.extract_info(url, download=True)
 
-                        if info is None:
-                            logger.warning(f"No info extracted for {url}")
+                            # Track whether files were already added (for info is None case)
+                            files_already_tracked = False
+
+                            if info is None:
+                                # yt-dlp returned None - check if files were actually downloaded
+                                # Sometimes yt-dlp returns None after successful post-processing
+                                # Look for any common audio formats since the actual format depends on YouTube's availability
+                                logger.warning(
+                                    f"yt-dlp returned None for {url}, searching for downloaded files in {output_dir}"
+                                )
+                                downloaded_files = []
+                                for ext in ["m4a", "opus", "webm", "ogg", "mp3", "aac"]:
+                                    found = list(output_dir.glob(f"*.{ext}"))
+                                    logger.debug(
+                                        f"   Searching *.{ext}: found {len(found)} files"
+                                    )
+                                    # Only include files modified AFTER download started
+                                    for file_path in found:
+                                        file_mtime = datetime.fromtimestamp(
+                                            file_path.stat().st_mtime
+                                        )
+                                        if file_mtime >= download_start_time:
+                                            downloaded_files.append(file_path)
+                                            logger.debug(
+                                                f"   Found newly downloaded file: {file_path.name} (modified {file_mtime})"
+                                            )
+                                        else:
+                                            logger.debug(
+                                                f"   Skipping old file: {file_path.name} (modified {file_mtime}, before download start {download_start_time})"
+                                            )
+
+                                # Also check all files in directory for debugging
+                                all_dir_files = list(output_dir.glob("*"))
+                                logger.debug(
+                                    f"   Total files in {output_dir}: {[f.name for f in all_dir_files if f.is_file()]}"
+                                )
+
+                                if downloaded_files:
+                                    # Files exist! This is a false negative - download succeeded
+                                    logger.warning(
+                                        f"yt-dlp returned None but files were downloaded for {url}"
+                                    )
+                                    if progress_callback:
+                                        progress_callback(
+                                            "✅ Audio download completed successfully"
+                                        )
+                                    # Add files directly to results since we have them
+                                    for file_path in downloaded_files:
+                                        all_files.append(str(file_path))
+                                        logger.info(
+                                            f"   Found downloaded file: {file_path.name}"
+                                        )
+
+                                    # Mark files as already tracked to skip duplicate processing
+                                    files_already_tracked = True
+
+                                    # Create minimal info dict for database/thumbnail processing only
+                                    info = {
+                                        "title": downloaded_files[
+                                            0
+                                        ].stem,  # Use filename as title
+                                        "id": video_id or "unknown",
+                                        "ext": downloaded_files[0].suffix[
+                                            1:
+                                        ],  # Extension without dot
+                                    }
+                                else:
+                                    # No files found - this is a real error
+                                    # Check if we captured any stderr output from yt-dlp
+                                    stderr_output = (
+                                        captured_stderr.getvalue()
+                                        if captured_stderr
+                                        else ""
+                                    )
+                                    if stderr_output:
+                                        # Extract the actual error message from stderr
+                                        error_lines = [
+                                            line
+                                            for line in stderr_output.split("\n")
+                                            if line.strip()
+                                        ]
+                                        if error_lines:
+                                            error_msg = error_lines[
+                                                0
+                                            ]  # First non-empty line usually has the main error
+                                        else:
+                                            error_msg = "yt-dlp failed to download video (no error message captured)"
+                                    else:
+                                        error_msg = "Failed to extract any player response; please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U"
+
+                                    logger.error(
+                                        f"No info extracted for {url}: {error_msg}"
+                                    )
+
+                                    # Provide user-friendly error message
+                                    if progress_callback:
+                                        if (
+                                            "bot" in error_msg.lower()
+                                            or "sign in" in error_msg.lower()
+                                        ):
+                                            progress_callback(
+                                                "❌ YouTube bot detection - video blocked. Try again later or use different proxy."
+                                            )
+                                        elif (
+                                            "403" in error_msg
+                                            or "forbidden" in error_msg.lower()
+                                        ):
+                                            progress_callback(
+                                                "❌ Access denied - YouTube may be blocking this proxy IP"
+                                            )
+                                        else:
+                                            progress_callback(
+                                                f"❌ Failed to download: {error_msg[:100]}"
+                                            )
+                                    # Raise exception to be caught by outer handler which adds to errors list
+                                    raise Exception(error_msg)
+
+                            # Calculate download metrics for cost tracking
+                            download_end_time = datetime.now()
+                            download_duration = (
+                                download_end_time - download_start_time
+                            ).total_seconds()
+
+                            # PacketStream proxies do not require usage tracking (flat rate)
+
+                            # Register video in database for future deduplication
+                            if video_id and db_service:
+                                try:
+                                    video_title = (
+                                        info.get("title", "Unknown Title")
+                                        if info
+                                        else "Unknown Title"
+                                    )
+                                    db_service.create_video(
+                                        video_id=video_id,
+                                        title=video_title,
+                                        url=url,
+                                        status="completed",
+                                        extraction_method=(
+                                            "packetstream" if use_proxy else "direct"
+                                        ),
+                                    )
+                                    logger.debug(
+                                        f"Registered video {video_id} in database for deduplication"
+                                    )
+                                except Exception as db_error:
+                                    logger.warning(
+                                        f"Failed to register video in database: {db_error}"
+                                    )
+
+                            logger.info(f"✅ Successfully downloaded audio for: {url}")
                             if progress_callback:
                                 progress_callback(
-                                    "⚠️ No video information returned - video may be unavailable"
-                                )
-                            continue
-
-                        # Calculate download metrics for cost tracking
-                        download_end_time = datetime.now()
-                        download_duration = (
-                            download_end_time - download_start_time
-                        ).total_seconds()
-
-                        # Track usage for Bright Data sessions
-                        if use_bright_data and current_session_id and session_manager:
-                            try:
-                                # Estimate data downloaded (rough calculation based on duration)
-                                estimated_bytes = int(
-                                    estimated_size_mb * 1024 * 1024
-                                )  # Convert MB to bytes
-                                estimated_cost = 0.01 * (
-                                    estimated_size_mb / 100
-                                )  # Rough cost estimate
-
-                                # Update session usage in database
-                                session_manager.update_session_usage(
-                                    current_session_id,
-                                    requests_count=1,
-                                    data_downloaded_bytes=estimated_bytes,
-                                    cost=estimated_cost,
+                                    "✅ Audio download completed successfully"
                                 )
 
-                                logger.info(
-                                    f"Tracked Bright Data usage: {estimated_size_mb:.1f}MB, ~${estimated_cost:.4f}"
-                                )
-                            except Exception as cost_error:
-                                logger.warning(
-                                    f"Failed to track Bright Data costs: {cost_error}"
-                                )
+                            # Process entries (handle both playlists and single videos)
+                            # Skip file tracking if already done in the info is None case
+                            if not files_already_tracked:
+                                if "entries" in info and info["entries"]:
+                                    entries = info["entries"]
+                                else:
+                                    entries = [info]
 
-                        # Register video in database for future deduplication
-                        if video_id and db_service:
-                            try:
-                                video_title = (
-                                    info.get("title", "Unknown Title")
-                                    if info
-                                    else "Unknown Title"
-                                )
-                                db_service.create_video(
-                                    video_id=video_id,
-                                    title=video_title,
-                                    url=url,
-                                    status="completed",
-                                    extraction_method=(
-                                        "bright_data" if use_bright_data else "direct"
-                                    ),
-                                )
-                                logger.debug(
-                                    f"Registered video {video_id} in database for deduplication"
-                                )
-                            except Exception as db_error:
-                                logger.warning(
-                                    f"Failed to register video in database: {db_error}"
-                                )
+                                for entry in entries:
+                                    if entry and "title" in entry:
+                                        # Get actual filename from yt-dlp
+                                        filename = None
 
-                        logger.info(f"✅ Successfully downloaded audio for: {url}")
-                        if progress_callback:
-                            progress_callback("✅ Audio download completed successfully")
+                                        # Try to get filename from requested_downloads
+                                        if (
+                                            "requested_downloads" in entry
+                                            and entry["requested_downloads"]
+                                        ):
+                                            filename = entry["requested_downloads"][
+                                                0
+                                            ].get("filepath") or entry[
+                                                "requested_downloads"
+                                            ][
+                                                0
+                                            ].get(
+                                                "filename"
+                                            )
 
-                    except Exception as download_error:
-                        download_error_msg = str(download_error)
-                        logger.error(
-                            f"❌ Download failed for {url}: {download_error_msg}"
-                        )
+                                        # Try to get extension from entry
+                                        if not filename and "ext" in entry:
+                                            potential_filename = (
+                                                output_dir
+                                                / f"{entry['title']}.{entry['ext']}"
+                                            )
+                                            # Only use this filename if it actually exists
+                                            if potential_filename.exists():
+                                                filename = potential_filename
+                                            else:
+                                                logger.warning(
+                                                    f"Expected file not found: {potential_filename.name}"
+                                                )
 
-                        if progress_callback:
-                            if "HTTP Error 403" in download_error_msg:
-                                progress_callback(
-                                    "❌ Download blocked (403) - YouTube detected proxy"
-                                )
-                                progress_callback(
-                                    "   Try again later or check proxy IP rotation"
-                                )
-                            elif "HTTP Error 429" in download_error_msg:
-                                progress_callback(
-                                    "❌ Rate limited (429) - too many requests"
-                                )
-                                progress_callback(
-                                    "   YouTube is throttling this proxy IP"
-                                )
-                            elif "HTTP Error 404" in download_error_msg:
-                                progress_callback(
-                                    "❌ Video not found (404) - may be private or deleted"
-                                )
-                            elif "timeout" in download_error_msg.lower():
-                                progress_callback(
-                                    "❌ Download timeout - connection too slow"
-                                )
-                                progress_callback(
-                                    "   Try reducing concurrent connections or check proxy service status"
-                                )
-                            elif "proxy" in download_error_msg.lower():
-                                progress_callback("❌ Proxy connection failed")
-                                progress_callback(
-                                    "   Check proxy account status and credentials"
-                                )
-                            elif "certificate" in download_error_msg.lower():
-                                progress_callback("❌ SSL certificate issue with proxy")
-                            else:
-                                progress_callback(
-                                    f"❌ Download error: {download_error_msg}"
-                                )
+                                        # Last resort: search for any file with this title
+                                        if not filename:
+                                            title = entry["title"]
+                                            for ext in [
+                                                "m4a",
+                                                "opus",
+                                                "webm",
+                                                "ogg",
+                                                "mp3",
+                                                "aac",
+                                            ]:
+                                                potential_file = (
+                                                    output_dir / f"{title}.{ext}"
+                                                )
+                                                if potential_file.exists():
+                                                    filename = potential_file
+                                                    break
 
-                        # Re-raise the exception to be caught by outer try-catch
-                        raise download_error
+                                            # If still not found, search for any audio file in output_dir
+                                            if not filename:
+                                                logger.warning(
+                                                    f"Could not find file for title '{title}', searching all audio files in {output_dir}"
+                                                )
+                                                for ext in [
+                                                    "m4a",
+                                                    "opus",
+                                                    "webm",
+                                                    "ogg",
+                                                    "mp3",
+                                                    "aac",
+                                                ]:
+                                                    found_files = list(
+                                                        output_dir.glob(f"*.{ext}")
+                                                    )
+                                                    if found_files:
+                                                        filename = found_files[
+                                                            0
+                                                        ]  # Take first match
+                                                        logger.info(
+                                                            f"Found alternate file: {filename.name}"
+                                                        )
+                                                        break
 
-                    if "entries" in info and info["entries"]:
-                        entries = info["entries"]
-                    else:
-                        entries = [info]
+                                        # Clean up any .part files (incomplete downloads)
+                                        part_files = list(output_dir.glob("*.part"))
+                                        if part_files:
+                                            logger.warning(
+                                                f"Found {len(part_files)} incomplete download(s), cleaning up..."
+                                            )
+                                            for part_file in part_files:
+                                                try:
+                                                    part_file.unlink()
+                                                    logger.debug(
+                                                        f"Removed incomplete download: {part_file.name}"
+                                                    )
+                                                except Exception as e:
+                                                    logger.warning(
+                                                        f"Failed to remove {part_file.name}: {e}"
+                                                    )
 
-                    for entry in entries:
-                        if entry and "title" in entry:
-                            # Audio file
-                            filename = output_dir / f"{entry['title']}.{output_format}"
-                            all_files.append(str(filename))
+                                        if filename:
+                                            all_files.append(str(filename))
+                                        else:
+                                            # Check if we have .part files - indicates incomplete download
+                                            if part_files:
+                                                error_msg = f"Download incomplete for: {entry.get('title', 'Unknown')} - connection may have been interrupted or rate-limited"
+                                                logger.error(error_msg)
+                                                raise Exception(error_msg)
+                                            else:
+                                                logger.error(
+                                                    f"Failed to locate downloaded file for: {entry.get('title', 'Unknown')}"
+                                                )
 
-                            # Thumbnail - save to Thumbnails subdirectory
-                            if download_thumbnails:
+                                        # Thumbnail - save to Thumbnails subdirectory
+                                        if download_thumbnails:
+                                            thumbnail_path = (
+                                                self._download_thumbnail_from_url(
+                                                    url, thumbnails_dir
+                                                )
+                                            )
+                                            if thumbnail_path:
+                                                all_thumbnails.append(thumbnail_path)
+
+                            # Handle thumbnail download even if files were already tracked
+                            if files_already_tracked and download_thumbnails:
                                 thumbnail_path = self._download_thumbnail_from_url(
                                     url, thumbnails_dir
                                 )
                                 if thumbnail_path:
                                     all_thumbnails.append(thumbnail_path)
 
+                        except Exception as download_error:
+                            download_error_msg = str(download_error)
+                            logger.error(
+                                f"❌ Download failed for {url}: {download_error_msg}"
+                            )
+
+                            if progress_callback:
+                                if "HTTP Error 403" in download_error_msg:
+                                    progress_callback(
+                                        "❌ Download blocked (403) - YouTube detected proxy"
+                                    )
+                                    progress_callback(
+                                        "   Try again later or check proxy IP rotation"
+                                    )
+                                elif "HTTP Error 429" in download_error_msg:
+                                    progress_callback(
+                                        "❌ Rate limited (429) - too many requests"
+                                    )
+                                    progress_callback(
+                                        "   YouTube is throttling this proxy IP"
+                                    )
+                                elif "HTTP Error 404" in download_error_msg:
+                                    progress_callback(
+                                        "❌ Video not found (404) - may be private or deleted"
+                                    )
+                                elif "timeout" in download_error_msg.lower():
+                                    progress_callback(
+                                        "❌ Download timeout - connection too slow"
+                                    )
+                                    progress_callback(
+                                        "   Try reducing concurrent connections or check proxy service status"
+                                    )
+                                elif "proxy" in download_error_msg.lower():
+                                    progress_callback("❌ Proxy connection failed")
+                                    progress_callback(
+                                        "   Check proxy account status and credentials"
+                                    )
+                                elif "certificate" in download_error_msg.lower():
+                                    progress_callback(
+                                        "❌ SSL certificate issue with proxy"
+                                    )
+                                else:
+                                    progress_callback(
+                                        f"❌ Download error: {download_error_msg}"
+                                    )
+
+                            # Re-raise the exception to be caught by outer try-catch
+                            raise download_error
+
             except Exception as e:
                 error_msg = str(e)
                 logger.error(f"Error downloading audio for {url}: {error_msg}")
 
+                # Check for bot detection - add to retry queue for second pass
+                if (
+                    "bot" in error_msg.lower()
+                    or "sign in to confirm" in error_msg.lower()
+                ):
+                    # Check if this is already a retry
+                    current_retry_count = used_session_ids.get(url, 0)
+                    max_retries = 2  # Allow up to 2 retries (3 total attempts)
+
+                    if current_retry_count < max_retries:
+                        logger.warning(
+                            f"🤖 Bot detection for {video_id or url[:50]} - queueing for retry with fresh IP (attempt {current_retry_count + 1}/{max_retries + 1})"
+                        )
+                        retry_queue.append(url)
+                        used_session_ids[url] = current_retry_count + 1
+                        if progress_callback:
+                            progress_callback(
+                                f"🔄 Bot detection - will retry with fresh IP after processing other URLs"
+                            )
+                        # Don't add to errors yet - will retry
+                        url_index += 1
+                        continue
+                    else:
+                        logger.error(
+                            f"❌ Bot detection persists after {max_retries} retries for {video_id or url[:50]}"
+                        )
+                        errors.append(
+                            f"Failed to download {url} after {max_retries + 1} attempts with different IPs: {error_msg}"
+                        )
                 # Check for specific payment required error
-                if "402 Payment Required" in error_msg:
+                elif "402 Payment Required" in error_msg:
                     errors.append(
                         f"💰 Payment required for {url}: Your proxy account is out of funds. Please add payment to your proxy service account."
                     )
@@ -888,15 +1114,26 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     errors.append(f"Failed to download {url}: {error_msg}")
 
             finally:
-                # Clean up Bright Data session for this video
-                if use_bright_data and video_id and session_manager:
-                    try:
-                        session_manager.end_session_for_file(video_id)
-                        logger.debug(f"Ended Bright Data session for video {video_id}")
-                    except Exception as cleanup_error:
-                        logger.warning(
-                            f"Failed to cleanup session for {video_id}: {cleanup_error}"
-                        )
+                # PacketStream proxies do not require session cleanup (stateless)
+                pass
+
+            # Move to next URL
+            url_index += 1
+
+            # SMART RETRY SYSTEM: Check if we need to add retry URLs
+            # When we finish first pass, add retry queue to end
+            if url_index == len(urls) and retry_queue:
+                logger.info(
+                    f"🔄 First pass complete. Adding {len(retry_queue)} URLs to retry queue with fresh IPs"
+                )
+                if progress_callback:
+                    progress_callback(
+                        f"🔄 Retrying {len(retry_queue)} bot-detected URLs with fresh IPs..."
+                    )
+
+                # Add retry URLs to end of processing list
+                urls_to_process.extend(retry_queue)
+                retry_queue.clear()  # Clear queue to prevent duplicates
 
         return ProcessorResult(
             success=len(errors) == 0,

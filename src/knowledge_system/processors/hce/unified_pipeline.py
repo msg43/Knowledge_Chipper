@@ -1,13 +1,15 @@
 """
-Unified HCE Pipeline - Simplified 2-pass system using UnifiedMiner and FlagshipEvaluator.
+Unified HCE Pipeline - 4-pass system: Short Summary → Mining → Evaluation → Long Summary + Categories
 """
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import List
 
 from ...logger import get_logger
 from .config_flex import PipelineConfigFlex
 from .flagship_evaluator import FlagshipEvaluationOutput, evaluate_claims_flagship
+from .structured_categories import analyze_structured_categories
 from .types import (
     EpisodeBundle,
     EvidenceSpan,
@@ -16,6 +18,7 @@ from .types import (
     PersonMention,
     PipelineOutputs,
     ScoredClaim,
+    StructuredCategory,
 )
 from .unified_miner import UnifiedMinerOutput, mine_episode_unified
 
@@ -24,9 +27,12 @@ logger = get_logger(__name__)
 
 class UnifiedHCEPipeline:
     """
-    Simplified HCE pipeline with just 2 passes:
+    4-pass HCE pipeline:
+    0. Short Summary: Generate pre-mining contextual overview
     1. UnifiedMiner: Extract claims, jargon, people, mental models
     2. FlagshipEvaluator: Rank and filter claims
+    3. Long Summary: Generate comprehensive post-evaluation analysis
+    4. Categories: Analyze WikiData topic categories
     """
 
     def __init__(self, config: PipelineConfigFlex):
@@ -35,7 +41,7 @@ class UnifiedHCEPipeline:
     def process(
         self, episode: EpisodeBundle, progress_callback: Callable | None = None
     ) -> PipelineOutputs:
-        """Run the unified 2-pass HCE pipeline on an episode."""
+        """Run the unified 4-pass HCE pipeline on an episode."""
 
         # Report progress
         def report_progress(step: str, percent: float, details: str = ""):
@@ -50,12 +56,32 @@ class UnifiedHCEPipeline:
                     )
                 )
 
+        # Step 0: Short Summary (Pre-Mining)
+        report_progress(
+            "Generating overview",
+            10.0,
+            "Creating contextual summary for evaluation",
+        )
+
+        try:
+            short_summary = self._generate_short_summary(episode)
+            logger.info(f"Generated short summary: {len(short_summary)} characters")
+        except Exception as e:
+            logger.error(f"Short summary generation failed: {e}")
+            short_summary = f"Episode {episode.episode_id} content analysis."
+
         # Step 1: Unified Mining
         report_progress(
             "Extracting knowledge",
-            25.0,
+            30.0,
             "Mining claims, jargon, people, and mental models",
         )
+
+        # Initialize counters
+        total_claims = 0
+        total_jargon = 0
+        total_people = 0
+        total_mental_models = 0
 
         try:
             # Determine max_workers based on configuration
@@ -76,7 +102,7 @@ class UnifiedHCEPipeline:
                 self.config.models.miner,
                 max_workers=max_workers,
                 progress_callback=lambda msg: report_progress(
-                    "Mining segments", 30.0, msg
+                    "Mining segments", 40.0, msg
                 ),
             )
 
@@ -99,20 +125,20 @@ class UnifiedHCEPipeline:
 
         report_progress(
             "Knowledge extraction complete",
-            50.0,
+            55.0,
             f"Extracted {total_claims} claims and {total_jargon + total_people + total_mental_models} entities",
         )
 
-        # Step 2: Create content summary for flagship evaluation
+        # Step 2: Prepare content summary for flagship evaluation (using short summary)
         report_progress(
-            "Preparing evaluation", 60.0, "Creating content summary for flagship review"
+            "Preparing evaluation", 60.0, "Preparing content for flagship review"
         )
 
-        content_summary = self._create_content_summary(episode, miner_outputs)
+        content_summary = short_summary  # Use the pre-generated short summary
 
         # Step 3: Flagship Evaluation
         report_progress(
-            "Evaluating claims", 75.0, f"Flagship review of {total_claims} claims"
+            "Evaluating claims", 70.0, f"Flagship review of {total_claims} claims"
         )
 
         try:
@@ -146,58 +172,234 @@ class UnifiedHCEPipeline:
             )
 
         # Step 4: Convert to final output format
-        report_progress("Finalizing results", 90.0, "Converting to final output format")
+        report_progress("Converting results", 80.0, "Converting to final output format")
 
         final_outputs = self._convert_to_pipeline_outputs(
             episode, miner_outputs, evaluation_output
         )
 
+        # Step 5: Long Summary (Post-Evaluation)
+        report_progress(
+            "Generating comprehensive summary",
+            90.0,
+            "Creating final analysis integrating all insights",
+        )
+
+        try:
+            long_summary = self._generate_long_summary(
+                episode, miner_outputs, evaluation_output, short_summary, final_outputs
+            )
+            final_outputs.long_summary = long_summary
+            logger.info(f"Generated long summary: {len(long_summary)} characters")
+        except Exception as e:
+            logger.error(f"Long summary generation failed: {e}")
+            # Fallback to a basic summary
+            final_outputs.long_summary = (
+                f"{short_summary}\n\n"
+                f"Analysis extracted {len(final_outputs.claims)} claims, "
+                f"{len(final_outputs.people)} people mentioned, "
+                f"{len(final_outputs.concepts)} mental models, "
+                f"and {len(final_outputs.jargon)} technical terms."
+            )
+
+        # Step 6: Structured Categories (WikiData Topics)
+        report_progress(
+            "Analyzing topics",
+            95.0,
+            "Identifying WikiData category coverage",
+        )
+
+        try:
+            categories = self._analyze_structured_categories(final_outputs)
+            final_outputs.structured_categories = categories
+            logger.info(f"Identified {len(categories)} structured categories")
+        except Exception as e:
+            logger.error(f"Category analysis failed: {e}")
+            final_outputs.structured_categories = []
+
+        # Store short summary in outputs as well
+        final_outputs.short_summary = short_summary
+
         report_progress(
             "Processing complete",
             100.0,
-            f"Final: {len(final_outputs.claims)} claims, {len(final_outputs.jargon)} terms",
+            f"Final: {len(final_outputs.claims)} claims, {len(final_outputs.structured_categories)} topics",
         )
 
         logger.info(
             f"Pipeline complete: {len(final_outputs.claims)} final claims, "
             f"{len(final_outputs.people)} people, {len(final_outputs.concepts)} concepts, "
-            f"{len(final_outputs.jargon)} jargon terms"
+            f"{len(final_outputs.jargon)} jargon terms, {len(final_outputs.structured_categories)} categories"
         )
 
         return final_outputs
 
-    def _create_content_summary(
-        self, episode: EpisodeBundle, miner_outputs: list[UnifiedMinerOutput]
-    ) -> str:
-        """Create a high-level summary of the content for flagship evaluation."""
+    def _generate_short_summary(self, episode: EpisodeBundle) -> str:
+        """Generate pre-mining short summary of episode content."""
+        try:
+            # Load short summary prompt
+            prompt_path = Path(__file__).parent / "prompts" / "short_summary.txt"
 
-        # Basic summary from episode
-        total_segments = len(episode.segments)
-        total_text_length = sum(len(seg.text) for seg in episode.segments)
+            if not prompt_path.exists():
+                logger.warning(f"Short summary prompt not found at {prompt_path}")
+                return f"Episode {episode.episode_id}: Content analysis in progress."
 
-        # Extract key themes from miner outputs
-        all_claims = []
-        for output in miner_outputs:
-            all_claims.extend([claim.get("claim_text", "") for claim in output.claims])
+            prompt_template = prompt_path.read_text()
 
-        # Create summary
-        summary_parts = [
-            f"Content Analysis Summary:",
-            f"- Total segments: {total_segments}",
-            f"- Total text length: {total_text_length:,} characters",
-            f"- Claims extracted: {len(all_claims)}",
-        ]
+            # Concatenate all segment texts with speaker attribution
+            content_parts = []
+            for seg in episode.segments:
+                speaker_label = f"[{seg.speaker}] " if seg.speaker else ""
+                content_parts.append(f"{speaker_label}{seg.text}")
 
-        if all_claims:
-            # Add sample claims for context
-            sample_claims = all_claims[:3]
-            summary_parts.append("- Sample claims:")
-            for i, claim in enumerate(sample_claims, 1):
-                summary_parts.append(
-                    f"  {i}. {claim[:100]}{'...' if len(claim) > 100 else ''}"
+            full_content = "\n\n".join(content_parts)
+
+            # Create the full prompt
+            full_prompt = prompt_template.replace("{content}", full_content)
+
+            # Call LLM with miner model
+            from .models.llm_system2 import create_system2_llm
+
+            # Parse model URI: "provider:model" or just "model"
+            model_uri = self.config.models.miner
+            if ":" in model_uri:
+                provider, model = model_uri.split(":", 1)
+            else:
+                provider = "openai"
+                model = model_uri
+
+            llm = create_system2_llm(provider=provider, model=model)
+            response = llm.generate_json(full_prompt)
+
+            # Extract text from response (handle both string and dict)
+            if isinstance(response, str):
+                summary_text = response
+            elif isinstance(response, dict):
+                summary_text = response.get("summary", str(response))
+            elif isinstance(response, list) and len(response) > 0:
+                summary_text = (
+                    response[0] if isinstance(response[0], str) else str(response[0])
                 )
+            else:
+                summary_text = str(response)
 
-        return "\n".join(summary_parts)
+            return summary_text.strip()
+
+        except Exception as e:
+            logger.error(f"Failed to generate short summary: {e}")
+            return f"Episode {episode.episode_id}: {len(episode.segments)} segments of content."
+
+    def _generate_long_summary(
+        self,
+        episode: EpisodeBundle,
+        miner_outputs: list[UnifiedMinerOutput],
+        evaluation_output: FlagshipEvaluationOutput,
+        short_summary: str,
+        final_outputs: PipelineOutputs,
+    ) -> str:
+        """Generate post-evaluation comprehensive summary."""
+        try:
+            # Load long summary prompt
+            prompt_path = Path(__file__).parent / "prompts" / "long_summary.txt"
+
+            if not prompt_path.exists():
+                logger.warning(f"Long summary prompt not found at {prompt_path}")
+                return short_summary
+
+            prompt_template = prompt_path.read_text()
+
+            # Format top-ranked claims
+            top_claims_text = []
+            for i, claim in enumerate(final_outputs.claims[:10], 1):
+                importance = claim.scores.get("importance", 0) * 10
+                top_claims_text.append(f"{i}. [{importance:.1f}/10] {claim.canonical}")
+
+            # Format flagship assessment
+            flagship_themes = ", ".join(evaluation_output.key_themes)
+            flagship_text = (
+                f"Quality: {evaluation_output.overall_quality}\n"
+                f"Key Themes: {flagship_themes}\n"
+                f"Claims Processed: {evaluation_output.total_claims_processed}\n"
+                f"Accepted: {evaluation_output.claims_accepted}\n"
+                f"Rejected: {evaluation_output.claims_rejected}"
+            )
+
+            # Format people
+            people_text = ", ".join([p.surface for p in final_outputs.people[:15]])
+
+            # Format mental models
+            models_text = ", ".join([m.name for m in final_outputs.concepts[:10]])
+
+            # Format jargon
+            jargon_text = ", ".join([j.term for j in final_outputs.jargon[:15]])
+
+            # Format evaluation stats
+            eval_stats = (
+                f"Total Claims: {evaluation_output.total_claims_processed}\n"
+                f"Acceptance Rate: {evaluation_output.claims_accepted / max(evaluation_output.total_claims_processed, 1) * 100:.1f}%\n"
+                f"Recommendations: {evaluation_output.recommendations or 'None'}"
+            )
+
+            # Create the full prompt
+            full_prompt = (
+                prompt_template.replace("{short_summary}", short_summary)
+                .replace("{top_claims}", "\n".join(top_claims_text))
+                .replace("{flagship_assessment}", flagship_text)
+                .replace("{people}", people_text or "None identified")
+                .replace("{mental_models}", models_text or "None identified")
+                .replace("{jargon}", jargon_text or "None identified")
+                .replace("{evaluation_stats}", eval_stats)
+            )
+
+            # Call LLM with flagship model
+            from .model_uri_parser import parse_model_uri
+            from .models.llm_system2 import create_system2_llm
+
+            flagship_model_uri = getattr(
+                self.config.models, "flagship_judge", self.config.models.judge
+            )
+
+            # Parse model URI with proper handling of local:// and other formats
+            provider, model = parse_model_uri(flagship_model_uri)
+
+            llm = create_system2_llm(provider=provider, model=model)
+            response = llm.generate_json(full_prompt)
+
+            # Extract text from response
+            if isinstance(response, str):
+                summary_text = response
+            elif isinstance(response, dict):
+                summary_text = response.get("summary", str(response))
+            elif isinstance(response, list) and len(response) > 0:
+                summary_text = (
+                    response[0] if isinstance(response[0], str) else str(response[0])
+                )
+            else:
+                summary_text = str(response)
+
+            return summary_text.strip()
+
+        except Exception as e:
+            logger.error(f"Failed to generate long summary: {e}")
+            # Return enhanced short summary as fallback
+            return (
+                f"{short_summary}\n\n"
+                f"This analysis identified {len(final_outputs.claims)} significant claims, "
+                f"with {evaluation_output.claims_accepted} accepted by evaluation. "
+                f"Key participants include {len(final_outputs.people)} individuals, "
+                f"and {len(final_outputs.concepts)} mental models or frameworks were discussed."
+            )
+
+    def _analyze_structured_categories(
+        self, outputs: PipelineOutputs
+    ) -> list[StructuredCategory]:
+        """Analyze WikiData categories for the episode."""
+        try:
+            # Use the miner model for category analysis
+            return analyze_structured_categories(outputs, self.config.models.miner)
+        except Exception as e:
+            logger.error(f"Failed to analyze structured categories: {e}")
+            return []
 
     def _convert_to_pipeline_outputs(
         self,

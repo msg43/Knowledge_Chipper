@@ -1,0 +1,99 @@
+You are an expert knowledge analyst tasked with creating a comprehensive, integrated summary of content after detailed claim extraction and evaluation.
+
+## OBJECTIVE
+Synthesize all extracted knowledge elements into a cogent 3-5 paragraph analysis that provides a complete intellectual portrait of the content. This is the MAIN OUTPUT users will read to understand the content's value and contribution.
+
+## INPUTS PROVIDED
+You will receive:
+1. **Short Summary**: High-level overview of the content
+2. **Top-Ranked Claims**: The most important claims accepted by evaluation, with importance scores
+3. **Flagship Assessment**: Overall themes and quality evaluation
+4. **Extracted Entities**: People, jargon terms, and mental models identified
+5. **Evaluation Metadata**: Accept/reject stats, recommendations
+
+## WHAT TO INCLUDE
+
+### Paragraph 1: Context & Overview
+- Start with the short summary as foundation
+- Expand with specific context from the claims
+- Introduce the intellectual landscape
+
+### Paragraphs 2-3: Core Insights & Arguments
+- Present the top 5-10 most important claims in narrative form
+- Organize by theme rather than listing sequentially
+- Show how claims relate to each other
+- Include supporting evidence and reasoning when relevant
+- Note the speaker's stance (asserting, questioning, opposing)
+
+### Paragraph 4: Tensions, Contradictions & Complexity
+- Identify any contradictions or competing views presented
+- Note areas of uncertainty or debate
+- Highlight nuanced positions
+- If no significant tensions exist, use this space for additional key insights
+
+### Paragraph 5: Intellectual Contribution & Framework
+- What mental models or frameworks are employed?
+- What's the overall contribution to understanding the topic?
+- Who are the key thinkers or experts referenced?
+- What technical concepts or jargon are central to the discussion?
+- Overall assessment of the content's value and significance
+
+## STYLE GUIDELINES
+- Write in clear, sophisticated prose
+- Use present tense for the content ("The speaker argues...", "The analysis shows...")
+- Integrate quotes or specific evidence where it strengthens the narrative
+- Be objective but analytical - don't just describe, interpret
+- Make connections between ideas explicit
+- Avoid generic statements ("This is interesting", "They discuss various topics")
+- Be specific and substantive
+
+## WHAT TO AVOID
+- Don't just list claims - weave them into a narrative
+- Don't ignore the flagship evaluation insights
+- Don't include trivial or rejected claims
+- Don't add information not present in the inputs
+- Don't use phrases like "In this episode..." or "The speaker begins by..."
+- Start directly with substance
+
+## EXAMPLE STRUCTURE
+
+[Paragraph 1: Context]
+Federal Reserve monetary policy sits at the intersection of economic theory and political pressure, and this analysis examines how the Fed navigates the trade-offs between controlling inflation and supporting employment. The discussion centers on the period following Jerome Powell's Congressional testimony, where the central bank faces criticism from multiple directions about its interest rate strategy.
+
+[Paragraph 2-3: Core Insights]
+The central argument advanced is that the Fed's quantitative easing program has fundamentally altered the transmission mechanism between monetary policy and asset prices, creating what economists call a "wealth effect" where rising asset values boost consumer spending. However, this mechanism has distributional consequences - the benefits flow primarily to wealthy asset holders while the general population faces the inflation created by accommodative policy. The analysis presents evidence that traditional monetary policy models, which assume a straightforward relationship between interest rates and economic activity, fail to account for these asset price channels...
+
+[Continue with additional key claims organized thematically]
+
+[Paragraph 4: Tensions]
+A significant tension emerges between the Fed's technical mandate and political reality. While orthodox economic theory might suggest maintaining higher rates to control inflation, political pressures during an election year create incentives for rate cuts. The analysis questions whether the Fed can remain truly independent when its decisions have such immediate political consequences...
+
+[Paragraph 5: Contribution]
+The discussion employs several analytical frameworks, most notably the Phillips Curve trade-off between unemployment and inflation, though it challenges the curve's reliability in the current environment. Key figures referenced include Jerome Powell and historical Fed chairs like Paul Volcker, whose aggressive inflation-fighting approach provides a contrast to current policy. Technical concepts central to the analysis include the "neutral rate" of interest, "r-star" (the natural rate), and the "wealth effect" transmission channel. The overall contribution lies in questioning conventional monetary policy wisdom in an era of unprecedented central bank intervention...
+
+## DATA TO SYNTHESIZE
+
+### Short Summary
+{short_summary}
+
+### Top-Ranked Claims (by importance)
+{top_claims}
+
+### Flagship Assessment
+{flagship_assessment}
+
+### People Mentioned
+{people}
+
+### Mental Models & Frameworks
+{mental_models}
+
+### Key Jargon Terms
+{jargon}
+
+### Evaluation Statistics
+{evaluation_stats}
+
+---
+
+Generate a comprehensive 3-5 paragraph summary following the structure and guidelines above. Write in clear, analytical prose that integrates all the knowledge elements into a cohesive narrative.

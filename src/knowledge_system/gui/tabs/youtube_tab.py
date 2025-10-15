@@ -1045,6 +1045,26 @@ class YouTubeTab(BaseTab):
         )
         layout.addWidget(self.intelligent_pacing_checkbox, 5, 0, 1, 3)
 
+        # Auto-summarize checkbox - for one-button workflow
+        self.auto_summarize_checkbox = QCheckBox(
+            "🚀 Automatically summarize after transcription (one-button workflow)"
+        )
+        self.auto_summarize_checkbox.setChecked(False)  # Disabled by default
+        self.auto_summarize_checkbox.toggled.connect(self._on_setting_changed)
+        self.auto_summarize_checkbox.setToolTip(
+            "One-Button Workflow - Automatically process transcripts through summarization\n"
+            "• After transcription completes, automatically start summarization\n"
+            "• Uses the Advanced Per-stage Models configured in Summarization tab\n"
+            "• Creates summaries with HCE claim extraction\n"
+            "• Generates all configured outputs (summaries, MOCs, etc.)\n"
+            "• Perfect for end-to-end processing without manual intervention\n"
+            "• Progress will continue in the Summarization tab"
+        )
+        self.auto_summarize_checkbox.setStyleSheet(
+            "QCheckBox { font-weight: bold; color: #1976d2; }"
+        )
+        layout.addWidget(self.auto_summarize_checkbox, 6, 0, 1, 3)
+
         group.setLayout(layout)
         return group
 
@@ -2166,6 +2186,11 @@ class YouTubeTab(BaseTab):
             f"✅ Fully successful: {results['successful']} (extracted and saved)"
         )
 
+        # Check if auto-summarize is enabled
+        if self.auto_summarize_checkbox.isChecked() and success_count > 0:
+            self.append_log("\n🚀 Starting automatic summarization...")
+            self._start_auto_summarization(results)
+
         # Show skipped files if any
         skipped_count = results.get("skipped", 0)
         if skipped_count > 0:
@@ -2406,6 +2431,92 @@ class YouTubeTab(BaseTab):
                 self, "Retry Error", f"Could not load failed URLs for retry: {str(e)}"
             )
 
+    def _start_auto_summarization(self, extraction_results: dict[str, Any]) -> None:
+        """Start automatic summarization of extracted transcripts."""
+        try:
+            # Get the output directory where transcripts were saved
+            output_dir = self.output_dir_input.text().strip()
+            if not output_dir:
+                self.append_log(
+                    "❌ Cannot auto-summarize: No output directory specified"
+                )
+                return
+
+            # Get list of successfully extracted files
+            urls_processed = extraction_results.get("urls_processed", [])
+            if not urls_processed:
+                self.append_log(
+                    "❌ Cannot auto-summarize: No files were successfully processed"
+                )
+                return
+
+            # Collect markdown files that were created
+            md_files = []
+            output_path = Path(output_dir)
+
+            for url_info in urls_processed:
+                # Each url_info should have the filename that was created
+                if isinstance(url_info, dict) and "filename" in url_info:
+                    file_path = output_path / url_info["filename"]
+                    if file_path.exists() and file_path.suffix == ".md":
+                        md_files.append(str(file_path))
+
+            if not md_files:
+                # Fallback: look for all .md files in output directory
+                md_files = [str(f) for f in output_path.glob("*.md") if f.is_file()]
+
+            if not md_files:
+                self.append_log(
+                    "❌ Cannot auto-summarize: No markdown files found in output directory"
+                )
+                return
+
+            self.append_log(f"📋 Found {len(md_files)} files to summarize")
+
+            # Switch to summarization tab and start processing
+            from PyQt6.QtCore import QTimer
+
+            def switch_and_start():
+                try:
+                    # Get reference to main window
+                    main_window = self.window()
+                    if hasattr(main_window, "tabs"):
+                        # Find summarization tab
+                        for i in range(main_window.tabs.count()):
+                            if main_window.tabs.tabText(i) == "Summarization":
+                                # Switch to summarization tab
+                                main_window.tabs.setCurrentIndex(i)
+
+                                # Get the summarization tab widget
+                                summarization_tab = main_window.tabs.widget(i)
+                                if summarization_tab:
+                                    # Load files into summarization tab
+                                    summarization_tab.files_list.clear()
+                                    for file_path in md_files:
+                                        summarization_tab.files_list.addItem(file_path)
+
+                                    # Set output directory to same location
+                                    summarization_tab.output_edit.setText(output_dir)
+
+                                    # Start summarization
+                                    QTimer.singleShot(
+                                        500, summarization_tab._start_processing
+                                    )
+                                    self.append_log(
+                                        "✅ Switched to Summarization tab and started processing"
+                                    )
+                                break
+                except Exception as e:
+                    logger.error(f"Error switching to summarization tab: {e}")
+                    self.append_log(f"❌ Error starting auto-summarization: {str(e)}")
+
+            # Use timer to ensure UI updates properly
+            QTimer.singleShot(100, switch_and_start)
+
+        except Exception as e:
+            logger.error(f"Error in auto-summarization: {e}")
+            self.append_log(f"❌ Auto-summarization error: {str(e)}")
+
     def _show_payment_required_dialog(self):
         """Show popup dialog for 402 Payment Required error."""
 
@@ -2507,6 +2618,11 @@ class YouTubeTab(BaseTab):
                     self.tab_name, "enable_intelligent_pacing", True
                 )
             )
+            self.auto_summarize_checkbox.setChecked(
+                self.gui_settings.get_checkbox_state(
+                    self.tab_name, "auto_summarize", False
+                )
+            )
 
             # Load radio button state (use checkbox method for boolean values)
             url_radio_selected = self.gui_settings.get_checkbox_state(
@@ -2558,6 +2674,11 @@ class YouTubeTab(BaseTab):
                 self.tab_name,
                 "enable_intelligent_pacing",
                 self.intelligent_pacing_checkbox.isChecked(),
+            )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name,
+                "auto_summarize",
+                self.auto_summarize_checkbox.isChecked(),
             )
 
             # Save radio button state (use checkbox method for boolean values)

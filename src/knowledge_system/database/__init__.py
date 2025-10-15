@@ -30,6 +30,14 @@ from .models import (
     Transcript,
 )
 
+# System 2 models
+try:
+    from .system2_models import Job, JobRun, LLMRequest, LLMResponse
+
+    SYSTEM2_AVAILABLE = True
+except Exception:
+    SYSTEM2_AVAILABLE = False
+
 # Backward-compatibility: export legacy symbol `Video` even if models renamed
 Video = MediaSource
 from .service import DatabaseService
@@ -48,6 +56,10 @@ __all__ = [
     "Base",
     "DatabaseService",
 ]
+
+# Add System 2 models to exports if available
+if SYSTEM2_AVAILABLE:
+    __all__.extend(["Job", "JobRun", "LLMRequest", "LLMResponse"])
 
 # Add HCE models to exports if available
 if HCE_AVAILABLE:

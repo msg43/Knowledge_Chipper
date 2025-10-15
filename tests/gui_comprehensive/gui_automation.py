@@ -73,10 +73,11 @@ logger = get_logger(__name__)
 
 class GUIAutomation:
     """
-    High-level GUI automation for Knowledge Chipper testing.
+    High-level GUI automation for Knowledge Chipper testing with System 2 support.
 
     Provides methods for interacting with specific GUI components
-    and workflows in the Knowledge Chipper application.
+    and workflows in the Knowledge Chipper application, including
+    System 2 job tracking and orchestration features.
     """
 
     def __init__(self, main_window: Any, default_delay: int = 100):
@@ -89,6 +90,116 @@ class GUIAutomation:
         """
         self.main_window = main_window
         self.default_delay = default_delay
+
+        # System 2 support
+        self.db_service = None
+        try:
+            from knowledge_system.database import DatabaseService
+
+            self.db_service = DatabaseService()
+        except ImportError:
+            logger.warning("System 2 DatabaseService not available")
+
+    def get_current_jobs(self) -> list:
+        """
+        Get current System 2 jobs from database.
+
+        Returns:
+            List of active jobs
+        """
+        if not self.db_service:
+            return []
+
+        try:
+            from knowledge_system.database.system2_models import Job
+
+            with self.db_service.get_session() as session:
+                jobs = session.query(Job).all()
+                return [
+                    {
+                        "job_id": job.job_id,
+                        "job_type": job.job_type,
+                        "input_id": job.input_id,
+                        "auto_process": job.auto_process,
+                    }
+                    for job in jobs
+                ]
+        except Exception as e:
+            logger.error(f"Error getting jobs: {e}")
+            return []
+
+    def wait_for_job_completion(self, job_id: str, timeout: int = 300) -> bool:
+        """
+        Wait for a System 2 job to complete.
+
+        Args:
+            job_id: Job ID to wait for
+            timeout: Maximum time to wait in seconds
+
+        Returns:
+            True if job completed successfully, False otherwise
+        """
+        if not self.db_service:
+            return False
+
+        try:
+            from knowledge_system.database.system2_models import JobRun
+
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                with self.db_service.get_session() as session:
+                    job_runs = session.query(JobRun).filter_by(job_id=job_id).all()
+
+                    if not job_runs:
+                        time.sleep(1)
+                        continue
+
+                    latest_run = job_runs[-1]
+                    if latest_run.status in ["succeeded", "failed", "cancelled"]:
+                        return latest_run.status == "succeeded"
+
+                time.sleep(1)
+
+            return False
+        except Exception as e:
+            logger.error(f"Error waiting for job: {e}")
+            return False
+
+    def get_job_status(self, job_id: str) -> dict | None:
+        """
+        Get status of a System 2 job.
+
+        Args:
+            job_id: Job ID to check
+
+        Returns:
+            Dict with job status information
+        """
+        if not self.db_service:
+            return None
+
+        try:
+            from knowledge_system.database.system2_models import Job, JobRun
+
+            with self.db_service.get_session() as session:
+                job = session.query(Job).filter_by(job_id=job_id).first()
+                if not job:
+                    return None
+
+                job_runs = session.query(JobRun).filter_by(job_id=job_id).all()
+
+                latest_run = job_runs[-1] if job_runs else None
+
+                return {
+                    "job_id": job.job_id,
+                    "job_type": job.job_type,
+                    "input_id": job.input_id,
+                    "latest_status": latest_run.status if latest_run else "pending",
+                    "attempt_count": len(job_runs),
+                }
+        except Exception as e:
+            logger.error(f"Error getting job status: {e}")
+            return None
 
     def click_button(self, button_text: str, parent: QWidget | None = None) -> bool:
         """

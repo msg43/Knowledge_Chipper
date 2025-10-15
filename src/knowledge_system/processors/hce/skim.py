@@ -1,12 +1,12 @@
 from pathlib import Path
 
 from ...config import get_settings
-from .models.llm_any import AnyLLM
+from .models.llm_system2 import System2LLM
 from .types import EpisodeBundle, Milestone, Segment
 
 
 class Skimmer:
-    def __init__(self, llm: AnyLLM, prompt_path: Path):
+    def __init__(self, llm: System2LLM, prompt_path: Path):
         self.llm = llm
         self.template = prompt_path.read_text()
 
@@ -84,7 +84,7 @@ def skim_episode(
     if not resolved_model_uri:
         # Use the configured provider and model, not hardcoded OpenAI
         resolved_model_uri = f"{settings.llm.provider}://{settings.llm.local_model if settings.llm.provider == 'local' else settings.llm.model}"
-    llm = AnyLLM(resolved_model_uri)
+    llm = System2LLM(resolved_model_uri)
     prompt_path = Path(__file__).parent / "prompts" / "skim.txt"
     sk = Skimmer(llm, prompt_path)
     return sk.skim(episode.episode_id, episode.segments)

@@ -1,0 +1,121 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FlagshipInputV1",
+  "description": "Input schema for the Flagship Evaluator system that ranks and scores claims",
+  "type": "object",
+  "required": ["content_summary", "claims_to_evaluate"],
+  "properties": {
+    "content_summary": {
+      "type": "string",
+      "description": "Summary of the full content for context",
+      "minLength": 50
+    },
+    "episode_metadata": {
+      "type": "object",
+      "description": "Metadata about the episode",
+      "properties": {
+        "episode_id": {
+          "type": "string",
+          "description": "Unique identifier for the episode"
+        },
+        "title": {
+          "type": "string",
+          "description": "Episode title"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Total duration in HH:MM:SS format"
+        },
+        "speakers": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "List of speakers in the episode"
+        },
+        "key_topics": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Main topics discussed"
+        }
+      }
+    },
+    "claims_to_evaluate": {
+      "type": "array",
+      "description": "Claims extracted by the miner for evaluation",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["claim_text", "claim_type", "stance", "evidence_spans"],
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "description": "Unique identifier for the claim"
+          },
+          "claim_text": {
+            "type": "string",
+            "description": "The claim statement to evaluate",
+            "minLength": 10
+          },
+          "claim_type": {
+            "type": "string",
+            "enum": ["factual", "causal", "normative", "forecast", "definition"],
+            "description": "Type of claim"
+          },
+          "stance": {
+            "type": "string",
+            "enum": ["asserts", "questions", "opposes", "neutral"],
+            "description": "Speaker's stance"
+          },
+          "evidence_spans": {
+            "type": "array",
+            "description": "Supporting evidence from the transcript",
+            "items": {
+              "type": "object",
+              "required": ["quote", "t0", "t1"],
+              "properties": {
+                "quote": {
+                  "type": "string",
+                  "description": "Exact quote from transcript"
+                },
+                "t0": {
+                  "type": "string",
+                  "description": "Start timestamp in MM:SS or HH:MM:SS format",
+                  "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
+                },
+                "t1": {
+                  "type": "string",
+                  "description": "End timestamp in MM:SS or HH:MM:SS format",
+                  "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
+                }
+              }
+            }
+          },
+          "speaker": {
+            "type": "string",
+            "description": "Who made the claim"
+          },
+          "segment_id": {
+            "type": "string",
+            "description": "Source segment ID"
+          }
+        }
+      }
+    },
+    "evaluation_criteria": {
+      "type": "object",
+      "description": "Optional custom evaluation criteria",
+      "properties": {
+        "focus_areas": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Specific aspects to focus on"
+        },
+        "importance_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Minimum importance score to accept"
+        }
+      }
+    }
+  }
+}

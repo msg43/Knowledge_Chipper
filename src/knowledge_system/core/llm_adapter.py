@@ -1,0 +1,489 @@
+"""
+System 2 LLM Adapter
+
+Centralizes all LLM API calls with:
+- Hardware tier-specific concurrency limits
+- Memory-aware throttling (70% threshold)
+- Exponential backoff for rate limits
+- Request/response tracking
+- Cost estimation
+"""
+
+import asyncio
+import json
+import logging
+import time
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
+
+import psutil
+
+from ..database import DatabaseService
+from ..errors import ErrorCode, KnowledgeSystemError
+from ..utils.hardware_detection import detect_hardware_specs
+
+logger = logging.getLogger(__name__)
+
+
+class RateLimiter:
+    """Token bucket rate limiter with exponential backoff."""
+
+    def __init__(self, requests_per_minute: int = 60):
+        self.rpm = requests_per_minute
+        self.tokens = float(requests_per_minute)
+        self.last_update = time.time()
+        self.backoff_until = None
+        self.backoff_multiplier = 1
+
+    async def acquire(self):
+        """Acquire a token, waiting if necessary."""
+        while True:
+            # Check if we're in backoff
+            if self.backoff_until and datetime.now() < self.backoff_until:
+                wait_seconds = (self.backoff_until - datetime.now()).total_seconds()
+                logger.info(f"Rate limit backoff, waiting {wait_seconds:.1f}s")
+                await asyncio.sleep(wait_seconds)
+                self.backoff_until = None
+
+            # Update token bucket
+            now = time.time()
+            elapsed = now - self.last_update
+            self.tokens = min(self.rpm, self.tokens + elapsed * (self.rpm / 60))
+            self.last_update = now
+
+            # Check if we have tokens
+            if self.tokens >= 1:
+                self.tokens -= 1
+                self.backoff_multiplier = 1  # Reset on success
+                return
+
+            # Wait for tokens
+            wait_time = (1 - self.tokens) / (self.rpm / 60)
+            await asyncio.sleep(wait_time)
+
+    def trigger_backoff(self):
+        """Trigger exponential backoff on rate limit error."""
+        backoff_seconds = min(60 * self.backoff_multiplier, 300)  # Max 5 min
+        self.backoff_until = datetime.now() + timedelta(seconds=backoff_seconds)
+        self.backoff_multiplier = min(self.backoff_multiplier * 2, 8)
+        logger.warning(f"Rate limit hit, backing off for {backoff_seconds}s")
+
+
+class MemoryThrottler:
+    """Throttles requests when memory usage exceeds threshold."""
+
+    def __init__(self, threshold_percent: float = 70.0):
+        self.threshold = threshold_percent
+        self._last_check = 0
+        self._check_interval = 1.0  # Check every second
+
+    async def check_and_wait(self):
+        """Check memory and wait if above threshold."""
+        now = time.time()
+        if now - self._last_check < self._check_interval:
+            return
+
+        self._last_check = now
+        memory_percent = psutil.virtual_memory().percent
+
+        if memory_percent > self.threshold:
+            logger.warning(
+                f"Memory usage at {memory_percent:.1f}%, throttling LLM requests"
+            )
+            # Wait proportionally to how far over threshold we are
+            over_threshold = memory_percent - self.threshold
+            wait_time = min(over_threshold / 10, 5.0)  # Max 5s wait
+            await asyncio.sleep(wait_time)
+
+
+class LLMAdapter:
+    """
+    Centralized adapter for all LLM API calls with System 2 features.
+
+    Features:
+    - Hardware-aware concurrency limits
+    - Memory-based throttling
+    - Rate limiting with exponential backoff
+    - Request/response tracking in database
+    - Cost estimation
+    """
+
+    # Hardware tier concurrency limits
+    CONCURRENCY_LIMITS = {
+        "consumer": 2,  # M1/M2 base models
+        "prosumer": 4,  # M1/M2 Pro/Max
+        "enterprise": 8,  # M1/M2 Ultra, high-end x86
+    }
+
+    def __init__(
+        self,
+        db_service: DatabaseService | None = None,
+        hardware_specs: dict[str, Any] | None = None,
+    ):
+        """Initialize the LLM adapter."""
+        self.db_service = db_service or DatabaseService()
+
+        # Detect hardware tier
+        if hardware_specs is None:
+            hardware_specs = detect_hardware_specs()
+
+        self.hardware_tier = self._determine_hardware_tier(hardware_specs)
+        self.max_concurrent = self.CONCURRENCY_LIMITS.get(self.hardware_tier, 2)
+
+        logger.info(
+            f"LLM Adapter initialized for {self.hardware_tier} tier "
+            f"(max {self.max_concurrent} concurrent requests)"
+        )
+
+        # Concurrency control
+        self.semaphore = asyncio.Semaphore(self.max_concurrent)
+        self.active_requests = 0
+
+        # Rate limiters per provider
+        self.rate_limiters = {
+            "openai": RateLimiter(60),  # 60 RPM default
+            "anthropic": RateLimiter(50),  # 50 RPM default
+            "google": RateLimiter(60),  # 60 RPM default
+            "ollama": RateLimiter(1000),  # Local, no real limit
+        }
+
+        # Memory throttler
+        self.memory_throttler = MemoryThrottler(70.0)
+
+        # Cost tracking
+        self.cost_per_1k_tokens = {
+            "gpt-4": {"input": 0.03, "output": 0.06},
+            "gpt-3.5-turbo": {"input": 0.001, "output": 0.002},
+            "claude-3-opus": {"input": 0.015, "output": 0.075},
+            "claude-3-sonnet": {"input": 0.003, "output": 0.015},
+            "gemini-pro": {"input": 0.001, "output": 0.002},
+        }
+
+        # Request tracking
+        self._current_job_run_id: str | None = None
+
+    def set_job_run_id(self, job_run_id: str):
+        """Set the current job run ID for request tracking."""
+        self._current_job_run_id = job_run_id
+
+    def _determine_hardware_tier(self, specs: dict[str, Any]) -> str:
+        """Determine hardware tier from specs."""
+        # Check for Apple Silicon
+        if "apple" in specs.get("chip_type", "").lower():
+            if "ultra" in specs.get("chip_variant", "").lower():
+                return "enterprise"
+            elif any(
+                x in specs.get("chip_variant", "").lower() for x in ["pro", "max"]
+            ):
+                return "prosumer"
+            else:
+                return "consumer"
+
+        # Check x86 by core count and memory
+        cores = specs.get("performance_cores", 0) + specs.get("efficiency_cores", 0)
+        memory_gb = specs.get("total_memory_gb", 0)
+
+        if cores >= 16 and memory_gb >= 32:
+            return "enterprise"
+        elif cores >= 8 and memory_gb >= 16:
+            return "prosumer"
+        else:
+            return "consumer"
+
+    async def complete(
+        self,
+        provider: str,
+        model: str,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+        **kwargs,
+    ) -> dict[str, Any]:
+        """
+        Make an LLM completion request with all System 2 features.
+
+        Args:
+            provider: LLM provider (openai, anthropic, google, ollama)
+            model: Model name
+            messages: Chat messages
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+            **kwargs: Additional provider-specific parameters
+
+        Returns:
+            Response dictionary with 'content' and metadata
+        """
+        start_time = time.time()
+
+        # Validate provider
+        if provider not in self.rate_limiters:
+            raise KnowledgeSystemError(
+                f"Unknown provider: {provider}", ErrorCode.INVALID_INPUT
+            )
+
+        # Wait for rate limiter
+        rate_limiter = self.rate_limiters[provider]
+        await rate_limiter.acquire()
+
+        # Check memory throttling
+        await self.memory_throttler.check_and_wait()
+
+        # Acquire concurrency slot
+        async with self.semaphore:
+            self.active_requests += 1
+            logger.info(
+                f"LLM request starting ({self.active_requests}/{self.max_concurrent} active)"
+            )
+
+            try:
+                # Build request payload
+                request_payload = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    **kwargs,
+                }
+
+                # Track request in database
+                request_id = self._track_request(provider, model, request_payload)
+
+                # Make the actual API call
+                response = await self._call_provider(provider, model, request_payload)
+
+                # Track response
+                response_time_ms = int((time.time() - start_time) * 1000)
+                self._track_response(request_id, response, response_time_ms)
+
+                # Estimate cost
+                cost = self._estimate_cost(provider, model, response)
+                if cost > 0:
+                    logger.info(f"Estimated cost: ${cost:.4f}")
+
+                return response
+
+            except Exception as e:
+                # Handle rate limit errors
+                if "rate" in str(e).lower() or "429" in str(e):
+                    rate_limiter.trigger_backoff()
+
+                self.active_requests -= 1
+                raise KnowledgeSystemError(
+                    f"LLM request failed: {e}", ErrorCode.LLM_API_ERROR
+                ) from e
+
+            finally:
+                self.active_requests -= 1
+
+    async def _call_provider(
+        self, provider: str, model: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Make the actual API call to the provider."""
+        if provider == "ollama":
+            return await self._call_ollama(model, payload)
+        else:
+            raise KnowledgeSystemError(
+                f"Provider {provider} not implemented yet", ErrorCode.INVALID_INPUT
+            )
+
+    async def _call_ollama(self, model: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Call Ollama local API."""
+        import aiohttp
+
+        url = "http://localhost:11434/api/chat"
+
+        request_payload = {
+            "model": model,
+            "messages": payload["messages"],
+            "stream": False,
+            "options": {
+                "temperature": payload.get("temperature", 0.7),
+            },
+        }
+
+        if payload.get("format") == "json":
+            request_payload["format"] = "json"
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url, json=request_payload, timeout=aiohttp.ClientTimeout(total=300)
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise KnowledgeSystemError(
+                            f"Ollama API error: {error_text}", ErrorCode.LLM_API_ERROR
+                        )
+                    result = await response.json()
+
+            content = result["message"]["content"]
+            prompt_tokens = (
+                sum(len(m["content"].split()) for m in payload["messages"]) * 1.3
+            )
+            completion_tokens = len(content.split()) * 1.3
+
+            return {
+                "content": content,
+                "usage": {
+                    "prompt_tokens": int(prompt_tokens),
+                    "completion_tokens": int(completion_tokens),
+                    "total_tokens": int(prompt_tokens + completion_tokens),
+                },
+                "model": model,
+                "provider": "ollama",
+            }
+        except aiohttp.ClientError as e:
+            raise KnowledgeSystemError(
+                f"Ollama connection failed: {e}. Is Ollama running?",
+                ErrorCode.LLM_API_ERROR,
+            ) from e
+        except KeyError as e:
+            raise KnowledgeSystemError(
+                f"Unexpected Ollama response format: {e}", ErrorCode.LLM_API_ERROR
+            ) from e
+
+    def _track_request(self, provider: str, model: str, payload: dict[str, Any]) -> str:
+        """Track request in database."""
+        if not self._current_job_run_id:
+            return ""
+
+        try:
+            import uuid
+
+            from ..database.system2_models import LLMRequest
+
+            request_id = f"llm_req_{uuid.uuid4().hex[:8]}"
+
+            with self.db_service.get_session() as session:
+                llm_request = LLMRequest(
+                    request_id=request_id,
+                    job_run_id=self._current_job_run_id,
+                    provider=provider,
+                    model=model,
+                    endpoint=None,
+                    request_json=payload,
+                    prompt_tokens=payload.get("prompt_tokens"),
+                    max_tokens=payload.get("max_tokens"),
+                    temperature=payload.get("temperature"),
+                )
+                session.add(llm_request)
+                session.commit()
+
+            return request_id
+        except Exception as e:
+            logger.warning(f"Failed to track LLM request: {e}")
+            return ""
+
+    def _track_response(
+        self, request_id: str, response: dict[str, Any], response_time_ms: int
+    ):
+        """Track response in database."""
+        if not request_id:
+            return
+
+        try:
+            import uuid
+
+            from ..database.system2_models import LLMResponse
+
+            usage = response.get("usage", {})
+            response_id = f"llm_resp_{uuid.uuid4().hex[:8]}"
+
+            with self.db_service.get_session() as session:
+                llm_response = LLMResponse(
+                    response_id=response_id,
+                    request_id=request_id,
+                    response_json=response,
+                    completion_tokens=usage.get("completion_tokens", 0),
+                    total_tokens=usage.get("total_tokens", 0),
+                    latency_ms=response_time_ms,
+                )
+                session.add(llm_response)
+                session.commit()
+        except Exception as e:
+            logger.warning(f"Failed to track LLM response: {e}")
+
+    def _estimate_cost(
+        self, provider: str, model: str, response: dict[str, Any]
+    ) -> float:
+        """Estimate cost of the request."""
+        usage = response.get("usage", {})
+        input_tokens = usage.get("prompt_tokens", 0)
+        output_tokens = usage.get("completion_tokens", 0)
+
+        # Get cost rates
+        model_key = None
+        if "gpt-4" in model:
+            model_key = "gpt-4"
+        elif "gpt-3.5" in model:
+            model_key = "gpt-3.5-turbo"
+        elif "claude-3-opus" in model:
+            model_key = "claude-3-opus"
+        elif "claude-3-sonnet" in model:
+            model_key = "claude-3-sonnet"
+        elif "gemini" in model:
+            model_key = "gemini-pro"
+
+        if not model_key or model_key not in self.cost_per_1k_tokens:
+            return 0.0
+
+        rates = self.cost_per_1k_tokens[model_key]
+        input_cost = (input_tokens / 1000) * rates["input"]
+        output_cost = (output_tokens / 1000) * rates["output"]
+
+        return input_cost + output_cost
+
+    async def complete_with_retry(
+        self,
+        provider: str,
+        model: str,
+        messages: list[dict[str, str]],
+        max_retries: int = 3,
+        **kwargs,
+    ) -> dict[str, Any]:
+        """Complete with automatic retry on transient failures."""
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                return await self.complete(provider, model, messages, **kwargs)
+            except KnowledgeSystemError as e:
+                last_error = e
+                if (
+                    e.error_code == ErrorCode.LLM_API_ERROR.value
+                    and attempt < max_retries - 1
+                ):
+                    wait_time = 2**attempt  # Exponential backoff
+                    logger.warning(
+                        f"LLM request failed (attempt {attempt + 1}/{max_retries}), "
+                        f"retrying in {wait_time}s: {e}"
+                    )
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise
+
+        raise last_error
+
+    def get_stats(self) -> dict[str, Any]:
+        """Get adapter statistics."""
+        return {
+            "hardware_tier": self.hardware_tier,
+            "max_concurrent": self.max_concurrent,
+            "active_requests": self.active_requests,
+            "memory_usage": psutil.virtual_memory().percent,
+        }
+
+
+# Singleton instance
+_adapter: LLMAdapter | None = None
+
+
+def get_llm_adapter(
+    db_service: DatabaseService | None = None,
+    hardware_specs: dict[str, Any] | None = None,
+) -> LLMAdapter:
+    """Get the singleton LLM adapter instance."""
+    global _adapter
+    if _adapter is None:
+        _adapter = LLMAdapter(db_service, hardware_specs)
+    return _adapter

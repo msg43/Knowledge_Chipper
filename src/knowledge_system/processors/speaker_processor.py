@@ -1552,3 +1552,193 @@ class SpeakerProcessor(BaseProcessor):
         except Exception as e:
             logger.error(f"Speaker processing failed: {e}")
             return ProcessorResult(success=False, errors=[str(e)])
+
+    @staticmethod
+    def find_episode_id_for_video(video_id: str) -> str | None:
+        """
+        Find HCE episode_id associated with a video_id.
+
+        Queries HCE episodes table in knowledge_system.db for matching video_id.
+        Returns None if no HCE data exists yet.
+
+        Args:
+            video_id: Video ID to look up
+
+        Returns:
+            Episode ID if found, None otherwise
+        """
+        try:
+            from ..database.service import DatabaseService
+            from .hce.storage_sqlite import open_db
+
+            # Get database path from service
+            db_service = DatabaseService()
+            db_path = db_service.db_path
+
+            # Open HCE database
+            conn = open_db(db_path)
+            try:
+                cur = conn.cursor()
+                result = cur.execute(
+                    "SELECT episode_id FROM episodes WHERE video_id = ? LIMIT 1",
+                    (video_id,),
+                )
+                row = result.fetchone()
+                return row[0] if row else None
+            finally:
+                conn.close()
+
+        except Exception as e:
+            logger.warning(f"Failed to lookup episode_id for video {video_id}: {e}")
+            return None
+
+    @staticmethod
+    def reprocess_hce_with_updated_speakers(
+        episode_id: str,
+        video_id: str,
+        transcript_data: dict[str, Any],
+        hce_config: dict[str, Any] | None = None,
+        progress_callback: Any = None,
+    ) -> tuple[bool, str]:
+        """
+        Reprocess HCE pipeline with corrected speaker names.
+
+        Steps:
+        1. Delete existing HCE data for episode (claims, evidence, entities)
+        2. Reconstruct segments from updated transcript
+        3. Run HCE pipeline (mining + evaluation)
+        4. Save results back to database
+
+        Args:
+            episode_id: Episode ID to reprocess
+            video_id: Video ID for context
+            transcript_data: Updated transcript data with corrected speaker names
+            hce_config: Optional HCE configuration override
+            progress_callback: Optional progress reporting function
+
+        Returns:
+            Tuple of (success: bool, message: str)
+        """
+        try:
+            from ..database.service import DatabaseService
+            from .hce.config_flex import PipelineConfigFlex, StageModelConfig
+            from .hce.storage_sqlite import (
+                delete_episode_hce_data,
+                ensure_schema,
+                open_db,
+                store_segments,
+                upsert_pipeline_outputs,
+            )
+            from .hce.types import EpisodeBundle, Segment
+            from .hce.unified_pipeline import UnifiedHCEPipeline
+
+            logger.info(
+                f"Starting HCE reprocessing for episode {episode_id} with updated speakers"
+            )
+
+            # Get database path
+            db_service = DatabaseService()
+            db_path = db_service.db_path
+
+            # Open HCE database
+            conn = open_db(db_path)
+
+            try:
+                # Step 1: Delete existing HCE data
+                if progress_callback:
+                    progress_callback("Deleting existing HCE data...")
+
+                success, message = delete_episode_hce_data(conn, episode_id)
+                if not success:
+                    return (False, f"Failed to delete old HCE data: {message}")
+
+                logger.info(f"Deleted old HCE data: {message}")
+
+                # Step 2: Reconstruct segments from transcript
+                if progress_callback:
+                    progress_callback("Reconstructing segments...")
+
+                segments = []
+                transcript_segments = transcript_data.get("segments", [])
+
+                for i, seg in enumerate(transcript_segments):
+                    segment = Segment(
+                        episode_id=episode_id,
+                        segment_id=f"seg_{i:04d}",
+                        speaker=seg.get("speaker", "Unknown"),
+                        t0=str(seg.get("start", 0)),
+                        t1=str(seg.get("end", 0)),
+                        text=seg.get("text", ""),
+                    )
+                    segments.append(segment)
+
+                # Save updated segments to database
+                store_segments(conn, episode_id, segments)
+                logger.info(f"Stored {len(segments)} updated segments")
+
+                # Step 3: Run HCE pipeline
+                if progress_callback:
+                    progress_callback("Running HCE analysis...")
+
+                # Create episode bundle
+                episode = EpisodeBundle(episode_id=episode_id, segments=segments)
+
+                # Configure HCE pipeline
+                if hce_config:
+                    # Use provided config
+                    config = PipelineConfigFlex(**hce_config)
+                else:
+                    # Use default config
+                    from ..config import get_settings
+
+                    settings = get_settings()
+                    miner_model = getattr(settings, "default_miner_model", None)
+                    judge_model = getattr(settings, "default_judge_model", None)
+
+                    config = PipelineConfigFlex(
+                        models=StageModelConfig(
+                            miner=miner_model or "openai://gpt-4o-mini-2024-07-18",
+                            judge=judge_model or "openai://gpt-4o-mini-2024-07-18",
+                        )
+                    )
+
+                # Run pipeline
+                pipeline = UnifiedHCEPipeline(config)
+                outputs = pipeline.process(episode, progress_callback=progress_callback)
+
+                # Step 4: Save results
+                if progress_callback:
+                    progress_callback("Saving HCE results...")
+
+                # Get video title if available
+                video_title = None
+                try:
+                    video = db_service.get_video(video_id)
+                    if video:
+                        video_title = (
+                            str(video.title) if hasattr(video, "title") else None
+                        )
+                except Exception:
+                    pass
+
+                upsert_pipeline_outputs(
+                    conn, outputs, episode_title=video_title, video_id=video_id
+                )
+
+                logger.info(
+                    f"Successfully reprocessed HCE data for episode {episode_id}"
+                )
+
+                return (
+                    True,
+                    f"Successfully reprocessed HCE data: "
+                    f"{len(outputs.claims)} claims, {len(outputs.jargon)} jargon terms, "
+                    f"{len(outputs.people)} people, {len(outputs.concepts)} concepts",
+                )
+
+            finally:
+                conn.close()
+
+        except Exception as e:
+            logger.error(f"Failed to reprocess HCE for episode {episode_id}: {e}")
+            return (False, f"HCE reprocessing failed: {str(e)}")
