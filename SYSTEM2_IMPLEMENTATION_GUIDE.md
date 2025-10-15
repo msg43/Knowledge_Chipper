@@ -1712,4 +1712,3 @@ If you have questions while implementing:
 4. Use the database schema as the contract between components
 
 Good luck! 🚀
-

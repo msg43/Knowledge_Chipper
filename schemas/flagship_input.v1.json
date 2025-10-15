@@ -78,13 +78,13 @@
                 },
                 "t0": {
                   "type": "string",
-                  "description": "Start timestamp",
-                  "pattern": "^\\d{2}:\\d{2}$"
+                  "description": "Start timestamp in MM:SS or HH:MM:SS format",
+                  "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
                 },
                 "t1": {
                   "type": "string",
-                  "description": "End timestamp",
-                  "pattern": "^\\d{2}:\\d{2}$"
+                  "description": "End timestamp in MM:SS or HH:MM:SS format",
+                  "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
                 }
               }
             }

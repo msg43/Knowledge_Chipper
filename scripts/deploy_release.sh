@@ -40,17 +40,17 @@ else
     echo ""
     echo "What type of release?"
     echo "1) Patch (${CURRENT_VERSION} → increment last number)"
-    echo "2) Minor (${CURRENT_VERSION} → increment middle number)"  
+    echo "2) Minor (${CURRENT_VERSION} → increment middle number)"
     echo "3) Custom version"
     echo ""
     read -p "Choose (1/2/3): " choice
-    
+
     case $choice in
         1)
             # Increment patch version
             NEW_VERSION=$(echo $CURRENT_VERSION | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
             ;;
-        2) 
+        2)
             # Increment minor version, reset patch
             NEW_VERSION=$(echo $CURRENT_VERSION | awk -F. '{$(NF-1) = $(NF-1) + 1; $NF = 0;} 1' | sed 's/ /./g')
             ;;

@@ -30,8 +30,7 @@ class TestSystem2Orchestrator:
         orchestrator = System2Orchestrator(test_db_service)
 
         assert orchestrator.db_service is not None
-        assert orchestrator.hardware_specs is not None
-        assert orchestrator.llm_adapter is not None
+        assert orchestrator.coordinator is not None
 
     def test_create_job(self, test_db_service):
         """Test job creation."""

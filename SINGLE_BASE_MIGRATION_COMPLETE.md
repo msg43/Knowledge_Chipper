@@ -248,4 +248,3 @@ cp ~/Library/Application\ Support/KnowledgeChipper/knowledge_system.db.pre-singl
 The single base migration is **functionally complete**. All core functionality has been migrated and tested. The system now uses a unified SQLAlchemy Base, eliminating cross-base foreign key issues while maintaining backward compatibility.
 
 **Status**: ✅ MIGRATION SUCCESSFUL - Ready for comprehensive testing and validation.
-

@@ -204,4 +204,3 @@ The 24 remaining test failures are **NOT related to the migration**:
 **Status**: Single base migration is **production-ready** ✅  
 **Critical Fix**: Database `:memory:` handling is **essential** ✅  
 **Next Steps**: Address pre-existing test failures separately (optional)
-

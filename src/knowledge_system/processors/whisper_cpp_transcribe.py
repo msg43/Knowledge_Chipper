@@ -65,16 +65,18 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
     def can_process(self, input_path: str | Path) -> bool:
         return Path(input_path).suffix.lower() in self.supported_formats
 
-    def _validate_model_file(self, model_path: Path, model_name: str) -> tuple[bool, str]:
+    def _validate_model_file(
+        self, model_path: Path, model_name: str
+    ) -> tuple[bool, str]:
         """
         Validate that a model file is not corrupted.
-        
+
         Returns:
             Tuple of (is_valid, error_message)
         """
         if not model_path.exists():
             return False, "Model file does not exist"
-        
+
         # Expected minimum sizes (in MB) - corrupted files will be much smaller
         expected_min_sizes = {
             "tiny": 70,
@@ -83,13 +85,16 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             "medium": 1400,
             "large": 3000,
         }
-        
+
         file_size_mb = model_path.stat().st_size / (1024 * 1024)
         min_size = expected_min_sizes.get(model_name, 50)
-        
+
         if file_size_mb < min_size:
-            return False, f"Model file appears corrupted: {file_size_mb:.1f}MB (expected >{min_size}MB)"
-        
+            return (
+                False,
+                f"Model file appears corrupted: {file_size_mb:.1f}MB (expected >{min_size}MB)",
+            )
+
         logger.debug(f"Model {model_name} validated: {file_size_mb:.1f}MB")
         return True, ""
 
@@ -102,12 +107,16 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             local_model_path = local_models_dir / model_filename
             if local_model_path.exists():
                 # Validate the model file
-                is_valid, error_msg = self._validate_model_file(local_model_path, model_name)
+                is_valid, error_msg = self._validate_model_file(
+                    local_model_path, model_name
+                )
                 if is_valid:
                     logger.info(f"Using local whisper.cpp model: {local_model_path}")
                     return local_model_path
                 else:
-                    logger.warning(f"Local model invalid: {error_msg}. Will try cache directory.")
+                    logger.warning(
+                        f"Local model invalid: {error_msg}. Will try cache directory."
+                    )
 
         # Fall back to cache directory
         models_dir = Path.home() / ".cache" / "whisper-cpp"
@@ -130,7 +139,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                     logger.info("Corrupted model deleted, will redownload")
                 except Exception as e:
                     logger.error(f"Failed to delete corrupted model: {e}")
-        
+
         if not model_path.exists():
             logger.info(f"Downloading whisper.cpp model: {model_name}")
             url = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{model_filename}"
@@ -743,7 +752,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 # CRITICAL: Add GPU acceleration for Apple Silicon (remove -ng flag which DISABLES GPU)
                 # Note: By default, whisper.cpp uses GPU when available unless -ng (--no-gpu) is specified
                 # We simply don't add the -ng flag to enable GPU acceleration
-                
+
                 # Note: Flash attention (-fa) causes exit code 3 errors on some whisper.cpp builds
                 # Disabled for now - GPU acceleration is still enabled by default
                 # if platform.system() == "Darwin" and platform.machine() == "arm64":
@@ -968,9 +977,12 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
         except Exception as e:
             error_msg = str(e)
-            
+
             # Check for corrupted model indicators
-            if "exit status 3" in error_msg or "failed to initialize whisper context" in error_msg:
+            if (
+                "exit status 3" in error_msg
+                or "failed to initialize whisper context" in error_msg
+            ):
                 logger.error(
                     f"Whisper model file may be corrupted (exit code 3). "
                     f"Automatic validation will trigger redownload on next attempt."
@@ -981,9 +993,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 )
                 if self.progress_callback:
                     self.progress_callback(f"❌ {friendly_error}", 0)
-                return ProcessorResult(
-                    success=False, errors=[friendly_error]
-                )
+                return ProcessorResult(success=False, errors=[friendly_error])
             else:
                 logger.error(f"Whisper.cpp subprocess error: {e}")
                 if self.progress_callback:

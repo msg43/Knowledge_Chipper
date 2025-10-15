@@ -72,9 +72,10 @@ class EnhancedTranscriptionWorker(QThread):
         self.failed_urls = []  # Track failed URLs with details
         self.failed_files = []  # Track failed local files with details
         self.successful_files = []  # Track successful files with details
-        
+
         # Create cancellation token for proper stop support
         from ...utils.cancellation import CancellationToken
+
         self.cancellation_token = CancellationToken()
 
     def _transcription_progress_callback(
@@ -371,7 +372,9 @@ class EnhancedTranscriptionWorker(QThread):
                         f"🚀 Starting conveyor belt download: {len(expanded_urls)} URLs, max {max_concurrent_downloads} concurrent"
                     )
                     # Show actual number of files vs max concurrency
-                    actual_concurrent = min(len(expanded_urls), max_concurrent_downloads)
+                    actual_concurrent = min(
+                        len(expanded_urls), max_concurrent_downloads
+                    )
                     if len(expanded_urls) == 1:
                         self.transcription_step_updated.emit(
                             f"🚀 Starting download (1 file)...",
@@ -620,7 +623,9 @@ class EnhancedTranscriptionWorker(QThread):
                     ] = self.gui_settings.get("enable_color_coding", True)
 
                     # Pass cancellation token for proper stop support
-                    processing_kwargs_with_output["cancellation_token"] = self.cancellation_token
+                    processing_kwargs_with_output[
+                        "cancellation_token"
+                    ] = self.cancellation_token
 
                     result = processor.process(
                         Path(file_path), **processing_kwargs_with_output
@@ -718,7 +723,9 @@ class EnhancedTranscriptionWorker(QThread):
 
                 except CancellationError:
                     # User cancelled the operation
-                    logger.info(f"Transcription cancelled by user for file: {file_name}")
+                    logger.info(
+                        f"Transcription cancelled by user for file: {file_name}"
+                    )
                     self.transcription_step_updated.emit(
                         f"⏹ Transcription of {file_name} cancelled", 0
                     )
@@ -860,7 +867,7 @@ class EnhancedTranscriptionWorker(QThread):
         """Stop the transcription process."""
         self.should_stop = True
         # Cancel the token to stop any ongoing processor operations
-        if hasattr(self, 'cancellation_token') and self.cancellation_token:
+        if hasattr(self, "cancellation_token") and self.cancellation_token:
             self.cancellation_token.cancel()
 
 
@@ -1859,84 +1866,91 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
     def _retry_failed_files(self):
         """Retry transcription for files that failed."""
         # Check if there are any failed items to retry
-        if not hasattr(self, 'failed_urls'):
+        if not hasattr(self, "failed_urls"):
             self.failed_urls = []
-        if not hasattr(self, 'failed_files'):
+        if not hasattr(self, "failed_files"):
             self.failed_files = []
-            
+
         total_failed = len(self.failed_urls) + len(self.failed_files)
-        
+
         if total_failed == 0:
             self.append_log("ℹ️ No failed files to retry")
             return
-        
+
         # Collect items to retry
         retry_items = []
-        
+
         # Add failed URLs
         if self.failed_urls:
             for failed_item in self.failed_urls:
-                retry_items.append(failed_item.get('url', ''))
-            self.append_log(f"🔄 Retrying {len(self.failed_urls)} failed YouTube download(s)...")
-        
+                retry_items.append(failed_item.get("url", ""))
+            self.append_log(
+                f"🔄 Retrying {len(self.failed_urls)} failed YouTube download(s)..."
+            )
+
         # Add failed local files
         if self.failed_files:
             for failed_item in self.failed_files:
-                file_path = failed_item.get('file', '')
+                file_path = failed_item.get("file", "")
                 if file_path and Path(file_path).exists():
                     retry_items.append(file_path)
-            self.append_log(f"🔄 Retrying {len(self.failed_files)} failed local file(s)...")
-        
+            self.append_log(
+                f"🔄 Retrying {len(self.failed_files)} failed local file(s)..."
+            )
+
         if not retry_items:
             self.append_log("⚠️ No valid items found to retry")
             return
-        
+
         # Clear failed tracking for fresh retry
         self.failed_urls = []
         self.failed_files = []
-        
+
         # Clear current file list and add retry items
         self.transcription_files.clear()
-        
+
         for item in retry_items:
             self.transcription_files.addItem(str(item))
-        
+
         self.append_log(f"✅ Loaded {len(retry_items)} item(s) for retry")
-        
+
         # Automatically start the retry
         self.append_log("🚀 Starting retry...")
         self.run()
 
     def _stop_processing(self):
         """Stop the current transcription process.
-        
+
         Note: If a file is currently being transcribed, it will complete before stopping.
         The stop will take effect between files or during URL processing.
         """
         self.append_log("⏹ Stop button clicked...")
         self.append_log("💡 Note: Current file will complete before stopping")
-        
+
         # Immediately disable the stop button to prevent multiple clicks
         if hasattr(self, "stop_btn"):
             self.stop_btn.setEnabled(False)
-        
+
         if self.transcription_worker:
             if self.transcription_worker.isRunning():
                 self.append_log("⏹ Stopping transcription (please wait)...")
-                
+
                 # Set the stop flag and cancel the token
                 self.transcription_worker.stop()
-                
+
                 # Process events to ensure UI updates
                 from PyQt6.QtWidgets import QApplication
+
                 QApplication.processEvents()
 
                 # Wait a short time for graceful shutdown
                 if not self.transcription_worker.wait(3000):  # Wait up to 3 seconds
                     # Force terminate if it doesn't stop gracefully
-                    self.append_log("⚠️ Worker did not stop gracefully, forcing termination...")
+                    self.append_log(
+                        "⚠️ Worker did not stop gracefully, forcing termination..."
+                    )
                     self.transcription_worker.terminate()
-                    
+
                     # Wait for termination to complete
                     if not self.transcription_worker.wait(2000):
                         self.append_log("⚠️ Worker termination timed out")

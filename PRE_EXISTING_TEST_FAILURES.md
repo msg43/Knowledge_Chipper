@@ -696,4 +696,3 @@ grep -r "\\\\d{2}:\\\\d{2}" .
 - ✅ In-memory databases working correctly
 
 **Recommended Action**: Fix schema validation tests first (quick win), then tackle LLM adapter mocks, then orchestrator tests if needed.
-

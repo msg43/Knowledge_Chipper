@@ -208,4 +208,3 @@ python scripts/test_ollama_integration.py
 ```
 
 If this passes (5/5 tests), **System 2 is working correctly**. This is the most reliable indicator of system health.
-

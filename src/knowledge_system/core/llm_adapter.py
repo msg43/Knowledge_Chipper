@@ -283,13 +283,10 @@ class LLMAdapter:
             return await self._call_ollama(model, payload)
         else:
             raise KnowledgeSystemError(
-                f"Provider {provider} not implemented yet",
-                ErrorCode.INVALID_INPUT
+                f"Provider {provider} not implemented yet", ErrorCode.INVALID_INPUT
             )
 
-    async def _call_ollama(
-        self, model: str, payload: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _call_ollama(self, model: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Call Ollama local API."""
         import aiohttp
 
@@ -301,7 +298,7 @@ class LLMAdapter:
             "stream": False,
             "options": {
                 "temperature": payload.get("temperature", 0.7),
-            }
+            },
         }
 
         if payload.get("format") == "json":
@@ -310,20 +307,19 @@ class LLMAdapter:
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    url, 
-                    json=request_payload, 
-                    timeout=aiohttp.ClientTimeout(total=300)
+                    url, json=request_payload, timeout=aiohttp.ClientTimeout(total=300)
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         raise KnowledgeSystemError(
-                            f"Ollama API error: {error_text}",
-                            ErrorCode.LLM_API_ERROR
+                            f"Ollama API error: {error_text}", ErrorCode.LLM_API_ERROR
                         )
                     result = await response.json()
 
             content = result["message"]["content"]
-            prompt_tokens = sum(len(m["content"].split()) for m in payload["messages"]) * 1.3
+            prompt_tokens = (
+                sum(len(m["content"].split()) for m in payload["messages"]) * 1.3
+            )
             completion_tokens = len(content.split()) * 1.3
 
             return {
@@ -339,12 +335,11 @@ class LLMAdapter:
         except aiohttp.ClientError as e:
             raise KnowledgeSystemError(
                 f"Ollama connection failed: {e}. Is Ollama running?",
-                ErrorCode.LLM_API_ERROR
+                ErrorCode.LLM_API_ERROR,
             ) from e
         except KeyError as e:
             raise KnowledgeSystemError(
-                f"Unexpected Ollama response format: {e}",
-                ErrorCode.LLM_API_ERROR
+                f"Unexpected Ollama response format: {e}", ErrorCode.LLM_API_ERROR
             ) from e
 
     def _track_request(self, provider: str, model: str, payload: dict[str, Any]) -> str:
@@ -354,6 +349,7 @@ class LLMAdapter:
 
         try:
             import uuid
+
             from ..database.system2_models import LLMRequest
 
             request_id = f"llm_req_{uuid.uuid4().hex[:8]}"
@@ -387,6 +383,7 @@ class LLMAdapter:
 
         try:
             import uuid
+
             from ..database.system2_models import LLMResponse
 
             usage = response.get("usage", {})

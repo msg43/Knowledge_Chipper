@@ -352,8 +352,8 @@ class UnifiedHCEPipeline:
             )
 
             # Call LLM with flagship model
-            from .models.llm_system2 import create_system2_llm
             from .model_uri_parser import parse_model_uri
+            from .models.llm_system2 import create_system2_llm
 
             flagship_model_uri = getattr(
                 self.config.models, "flagship_judge", self.config.models.judge

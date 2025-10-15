@@ -765,4 +765,3 @@ def init_speaker_database(database_url: str = "sqlite:///knowledge_system.db"):
     global _db_service
     _db_service = SpeakerDatabaseService(database_url)
     return _db_service
-

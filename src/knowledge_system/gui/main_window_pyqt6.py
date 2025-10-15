@@ -883,7 +883,7 @@ class MainWindow(QMainWindow):
 
             # Check for missing models (this internally checks both whisper and LLM)
             missing_models = validator.get_missing_models()
-            
+
             # Only log detailed info if needed for debugging
             if missing_models:
                 whisper_models = validator.check_whisper_models()

@@ -395,20 +395,24 @@ SCHEMA_SNAPSHOT_DATA = {
     "miner_input.v1": {
         "valid": [
             {
-                "segment_id": "seg1",
-                "speaker": "John Doe",
-                "timestamp_start": "00:01:23",
-                "timestamp_end": "00:01:45",
-                "text": "This is the segment text.",
+                "segment": {
+                    "segment_id": "seg1",
+                    "speaker": "John Doe",
+                    "timestamp_start": "00:01:23",
+                    "timestamp_end": "00:01:45",
+                    "text": "This is the segment text.",
+                }
             }
         ],
         "invalid": [
             {
-                # Missing required field: segment_id
-                "speaker": "John Doe",
-                "timestamp_start": "00:01:23",
-                "timestamp_end": "00:01:45",
-                "text": "This is the segment text.",
+                "segment": {
+                    # Missing required field: segment_id
+                    "speaker": "John Doe",
+                    "timestamp_start": "00:01:23",
+                    "timestamp_end": "00:01:45",
+                    "text": "This is the segment text.",
+                }
             }
         ],
     },
@@ -426,7 +430,7 @@ SCHEMA_SNAPSHOT_DATA = {
     "flagship_input.v1": {
         "valid": [
             {
-                "content_summary": "A discussion about AI safety",
+                "content_summary": "A comprehensive discussion about AI safety and machine learning best practices",
                 "claims_to_evaluate": SAMPLE_MINER_OUTPUT["claims"],
             }
         ],

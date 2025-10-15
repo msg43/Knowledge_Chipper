@@ -17,30 +17,30 @@ env:
 jobs:
   build-and-sign:
     runs-on: macos-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-        
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
         pip install -e ".[hce]"
-        
+
     - name: Get version
       id: version
       run: |
         VERSION="3.3.2"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
-        
+
     - name: Import Apple certificates
       env:
         APPLE_CERTIFICATE_APPLICATION: ${{ secrets.APPLE_CERTIFICATE_APPLICATION }}
@@ -51,51 +51,51 @@ jobs:
         # Create temporary keychain
         KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
         KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-        
+
         # Create keychain
         security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
         security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-        
+
         # Import Application certificate
         echo "$APPLE_CERTIFICATE_APPLICATION" | base64 --decode > "$RUNNER_TEMP/app_cert.p12"
         security import "$RUNNER_TEMP/app_cert.p12" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/codesign_allocate
-        
-        # Import Installer certificate  
+
+        # Import Installer certificate
         echo "$DEVELOPER_ID_INSTALLER_P12" | base64 --decode > "$RUNNER_TEMP/installer_cert.p12"
         security import "$RUNNER_TEMP/installer_cert.p12" -k "$KEYCHAIN_PATH" -P "$INSTALLER_P12_PASSWORD" -T /usr/bin/productbuild -T /usr/bin/codesign
-        
+
         # Set partition list to allow access without prompting
         security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-        
+
         # Add to search list
         security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
-        
+
         # Verify certificates
         security find-identity -v -p codesigning "$KEYCHAIN_PATH"
-        
+
         # Make sure the keychain is set as default for searches
         security default-keychain -s "$KEYCHAIN_PATH"
-        
+
     - name: Build app bundle using native tools
       run: |
         echo "🔨 Building app bundle..."
         KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
         VERSION="${{ steps.version.outputs.VERSION }}"
-        
+
         # Get certificate identities
         DEVELOPER_ID_APPLICATION=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | awk '{print $2}')
         DEVELOPER_ID_INSTALLER=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Installer" | head -1 | awk '{print $2}')
-        
+
         echo "✅ Using Application Certificate: $DEVELOPER_ID_APPLICATION"
         echo "✅ Using Installer Certificate: $DEVELOPER_ID_INSTALLER"
-        
+
         # Create app bundle structure
         APP_NAME="Knowledge Chipper"
         BUNDLE_DIR="dist/${APP_NAME}.app"
         mkdir -p "$BUNDLE_DIR/Contents/MacOS"
         mkdir -p "$BUNDLE_DIR/Contents/Resources"
-        
+
         # Create Info.plist
         cat > "$BUNDLE_DIR/Contents/Info.plist" << EOF
         <?xml version="1.0" encoding="UTF-8"?>
@@ -121,23 +121,23 @@ jobs:
         </dict>
         </plist>
         EOF
-        
+
         # Create simple launcher script
         cat > "$BUNDLE_DIR/Contents/MacOS/knowledge_chipper" << 'EOF'
         #!/bin/bash
         cd "$(dirname "$0")/../Resources"
         python3 -m streamlit run src/knowledge_system/gui/main.py
         EOF
-        
+
         chmod +x "$BUNDLE_DIR/Contents/MacOS/knowledge_chipper"
-        
+
         # Copy application files
         cp -r src "$BUNDLE_DIR/Contents/Resources/"
         cp -r config "$BUNDLE_DIR/Contents/Resources/"
         cp requirements.txt "$BUNDLE_DIR/Contents/Resources/"
-        
+
         echo "✅ App bundle created at: $BUNDLE_DIR"
-        
+
     - name: Sign and notarize using native tools
       env:
         APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -149,11 +149,11 @@ jobs:
         VERSION="${{ steps.version.outputs.VERSION }}"
         APP_NAME="Knowledge Chipper"
         BUNDLE_DIR="dist/${APP_NAME}.app"
-        
+
         # Get certificate identities
         DEVELOPER_ID_APPLICATION=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | awk '{print $2}')
         DEVELOPER_ID_INSTALLER=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Installer" | head -1 | awk '{print $2}')
-        
+
         # Step 1: Sign the app bundle
         echo "🔏 Signing app bundle..."
         codesign --sign "$DEVELOPER_ID_APPLICATION" \
@@ -161,11 +161,11 @@ jobs:
                  --options runtime \
                  --verbose \
                  "$BUNDLE_DIR"
-        
+
         # Verify app signing
         echo "✅ Verifying app signature..."
         codesign --verify --verbose "$BUNDLE_DIR"
-        
+
         # Step 2: Create component PKG
         echo "📦 Creating component package..."
         pkgbuild --root "dist" \
@@ -173,18 +173,18 @@ jobs:
                  --version "$VERSION" \
                  --install-location "/Applications" \
                  "dist/KnowledgeChipper-component.pkg"
-        
-        # Step 3: Create distribution PKG  
+
+        # Step 3: Create distribution PKG
         echo "📦 Creating distribution package..."
         productbuild --package "dist/KnowledgeChipper-component.pkg" \
                      --sign "$DEVELOPER_ID_INSTALLER" \
                      --keychain "$KEYCHAIN_PATH" \
                      "dist/KnowledgeChipper-$VERSION.pkg"
-        
+
         # Verify PKG signing
         echo "✅ Verifying package signature..."
         pkgutil --check-signature "dist/KnowledgeChipper-$VERSION.pkg"
-        
+
         # Step 4: Notarize the PKG
         echo "📮 Submitting for notarization..."
         xcrun notarytool submit "dist/KnowledgeChipper-$VERSION.pkg" \
@@ -192,24 +192,24 @@ jobs:
                       --team-id "$APPLE_TEAM_ID" \
                       --password "$APPLE_APP_PASSWORD" \
                       --wait
-        
+
         # Step 5: Staple the notarization
         echo "📎 Stapling notarization..."
         xcrun stapler staple "dist/KnowledgeChipper-$VERSION.pkg"
-        
+
         # Final verification
         echo "✅ Final verification..."
         xcrun stapler validate "dist/KnowledgeChipper-$VERSION.pkg"
-        
+
         echo "🎉 Successfully created signed and notarized package: dist/KnowledgeChipper-$VERSION.pkg"
-        
+
     - name: Upload signed PKG as artifact
       uses: actions/upload-artifact@v4
       with:
         name: signed-pkg-${{ steps.version.outputs.VERSION }}
         path: dist/KnowledgeChipper-${{ steps.version.outputs.VERSION }}.pkg
         retention-days: 30
-        
+
     - name: Create GitHub Release
       if: startsWith(github.ref, 'refs/tags/')
       env:
@@ -217,45 +217,45 @@ jobs:
       run: |
         VERSION="${{ steps.version.outputs.VERSION }}"
         PKG_FILE="dist/KnowledgeChipper-${VERSION}.pkg"
-        
+
         # Create release notes
         cat > release_notes.md << EOF
         # Knowledge Chipper v${VERSION}
-        
+
         🍎 **macOS Application Release**
-        
+
         ## Installation
         1. Download the \`.pkg\` file below
         2. Double-click to run the installer
         3. Follow the installation prompts
         4. Launch from Applications folder
-        
+
         ## Features
         - ✅ **Code Signed & Notarized** - No security warnings
         - ✅ **Universal Binary** - Runs on Intel and Apple Silicon Macs
         - ✅ **Professional Installation** - Clean PKG installer
         - ✅ **Automatic Updates** - Built-in update checking
-        
+
         ## Release Info
         - **Version:** ${VERSION}
         - **Build Date:** $(date +"%Y-%m-%d")
         - **File Size:** $(du -h "$PKG_FILE" | cut -f1)
         - **Platform:** macOS 11.0+ (Universal)
-        
+
         ## What's New
         This release includes the latest features and improvements from the Knowledge Chipper development cycle.
-        
+
         ---
         *This release was automatically built and signed using GitHub Actions.*
         EOF
-        
+
         # Create release in the public repository
         gh release create "v${VERSION}" \
           --repo "msg43/skipthepodcast.com" \
           --title "Knowledge Chipper v${VERSION}" \
           --notes-file release_notes.md \
           "$PKG_FILE"
-          
+
     - name: Cleanup keychain
       if: always()
       run: |

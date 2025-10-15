@@ -22,7 +22,7 @@ Usage:
 
 Note: System 2 integration tests require Ollama running with qwen2.5:7b-instruct.
       Use --fast to skip integration tests that require Ollama.
-      
+
 Manual Test: python3 scripts/test_ollama_integration.py
 """
 
@@ -189,7 +189,7 @@ class TestRunner:
         success &= self.run_pytest_suite(
             "System 2 HCE Operations Tests",
             "tests/system2/test_hce_operations.py",
-            markers=["not integration"] if self.fast else None
+            markers=["not integration"] if self.fast else None,
         )
 
         # LLM Adapter tests (requires Ollama)
@@ -197,7 +197,7 @@ class TestRunner:
             success &= self.run_pytest_suite(
                 "System 2 LLM Adapter Tests (Integration)",
                 "tests/system2/test_llm_adapter_real.py",
-                markers=["integration"]
+                markers=["integration"],
             )
 
         # Mining tests (requires Ollama)
@@ -205,7 +205,7 @@ class TestRunner:
             success &= self.run_pytest_suite(
                 "System 2 Mining Tests (Integration)",
                 "tests/system2/test_mining_full.py",
-                markers=["integration"]
+                markers=["integration"],
             )
 
         # Orchestrator integration tests (requires Ollama)
@@ -213,7 +213,7 @@ class TestRunner:
             success &= self.run_pytest_suite(
                 "System 2 Orchestrator Integration Tests",
                 "tests/system2/test_orchestrator_integration.py",
-                markers=["integration"]
+                markers=["integration"],
             )
 
         # Legacy System 2 tests (if they still exist)
@@ -223,12 +223,11 @@ class TestRunner:
             ("tests/integration/test_llm_adapter.py", "LLM Adapter"),
             ("tests/integration/test_schema_validation.py", "Schema Validation"),
         ]
-        
+
         for test_path, test_name in legacy_tests:
             if Path(test_path).exists():
                 success &= self.run_pytest_suite(
-                    f"System 2 {test_name} Tests (Legacy)",
-                    test_path
+                    f"System 2 {test_name} Tests (Legacy)", test_path
                 )
 
         return success

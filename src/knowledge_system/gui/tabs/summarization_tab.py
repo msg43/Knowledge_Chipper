@@ -181,6 +181,7 @@ class EnhancedSummarizationWorker(QThread):
                 try:
                     # Execute the job (process_job is async, so we need to run it with asyncio)
                     import asyncio
+
                     result = asyncio.run(orchestrator.process_job(job_id))
 
                     if result.get("status") == "succeeded":
@@ -207,7 +208,9 @@ class EnhancedSummarizationWorker(QThread):
                             self.hce_analytics_updated.emit(analytics)
                     else:
                         failure_count += 1
-                        error_msg = result.get("error_message", result.get("error", "Processing failed"))
+                        error_msg = result.get(
+                            "error_message", result.get("error", "Processing failed")
+                        )
                         progress.status = "error"
                         progress.current_step = f"❌ Failed: {error_msg}"
                         self.progress_updated.emit(progress)

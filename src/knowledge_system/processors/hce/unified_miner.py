@@ -87,20 +87,27 @@ class UnifiedMiner:
                     )
                 except Exception as e:
                     import logging
-                    import traceback
-                    
+
                     # Import error classes from the correct location
                     import sys
+                    import traceback
+
                     sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
                     from knowledge_system.errors import ErrorCode, KnowledgeSystemError
 
                     logger = logging.getLogger(__name__)
-                    
+
                     # If this is a critical error (like invalid provider), don't fall back - re-raise
-                    if isinstance(e, KnowledgeSystemError) and hasattr(e, 'error_code') and e.error_code == ErrorCode.INVALID_INPUT:
-                        logger.error(f"Critical error in structured JSON generation: {e}")
+                    if (
+                        isinstance(e, KnowledgeSystemError)
+                        and hasattr(e, "error_code")
+                        and e.error_code == ErrorCode.INVALID_INPUT
+                    ):
+                        logger.error(
+                            f"Critical error in structured JSON generation: {e}"
+                        )
                         raise
-                    
+
                     # Safely convert exception to string (handle ErrorCode enums in exception args)
                     try:
                         error_msg = str(e)

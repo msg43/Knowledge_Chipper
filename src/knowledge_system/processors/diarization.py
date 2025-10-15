@@ -446,13 +446,11 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                             )
                             print(
                                 f"[DIARIZATION 80%] Device requested: {self.device}",
-                            flush=True,
-                        )
+                                flush=True,
+                            )
                         sys.stdout.flush()
 
-                        logger.debug(
-                            f"Preparing to move pipeline to {self.device}"
-                        )
+                        logger.debug(f"Preparing to move pipeline to {self.device}")
                         logger.debug(f"Pipeline type: {type(pipeline)}")
                         logger.debug(f"Device requested: {self.device}")
 
