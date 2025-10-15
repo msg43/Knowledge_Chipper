@@ -117,4 +117,3 @@ If claims reappear after deletion, it may be because:
 - **Claim Editing**: Double-click on a claim to edit its properties
 - **Export**: Export claims to CSV, Markdown, or JSON before deleting
 - **Episode Filter**: Filter claims by episode for easier management
-

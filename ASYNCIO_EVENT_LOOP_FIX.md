@@ -88,4 +88,3 @@ The fix allows:
 ## Files Modified
 
 - `src/knowledge_system/processors/hce/models/llm_system2.py` - Fixed event loop handling in sync wrapper methods
-
