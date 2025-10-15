@@ -9,7 +9,7 @@ that "Eurodollar University" channel = "Jeff Snider" host, for example.
 from sqlalchemy import text
 
 from ..service import DatabaseService
-from ..speaker_models import Base
+from ..models import Base
 
 
 class Migration004:
