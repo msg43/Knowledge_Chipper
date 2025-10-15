@@ -23,19 +23,10 @@ def test_db_service():
     """Create a test database service with in-memory database."""
     db_service = DatabaseService("sqlite:///:memory:")
     
-    # Create tables in correct order (MainBase first for media_sources, then HCE, then System2)
-    from src.knowledge_system.database.models import Base as MainBase, MediaSource
-    from src.knowledge_system.database.hce_models import Base as HCEBase
-    from src.knowledge_system.database.system2_models import Job, JobRun, LLMRequest, LLMResponse
+    # Create all tables from unified Base
+    from src.knowledge_system.database.models import Base
     
-    # Create main tables first (includes media_sources needed by episodes)
-    MainBase.metadata.create_all(db_service.engine)
-    
-    # Then HCE tables (episodes references media_sources)
-    HCEBase.metadata.create_all(db_service.engine)
-    
-    # Then System2 tables  
-    # Note: System2 models use same Base as main models, so already created
+    Base.metadata.create_all(db_service.engine)
     
     yield db_service
 

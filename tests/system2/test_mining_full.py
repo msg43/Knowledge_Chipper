@@ -21,13 +21,9 @@ def test_db_service():
     db_service = DatabaseService("sqlite:///:memory:")
     
     # Create all tables
-    from src.knowledge_system.database.models import Base as MainBase
-    from src.knowledge_system.database.hce_models import Base as HCEBase
-    from src.knowledge_system.database.system2_models import Base as System2Base
+    from src.knowledge_system.database.models import Base
     
-    MainBase.metadata.create_all(db_service.engine)
-    HCEBase.metadata.create_all(db_service.engine)
-    System2Base.metadata.create_all(db_service.engine)
+    Base.metadata.create_all(db_service.engine)
     
     yield db_service
 
