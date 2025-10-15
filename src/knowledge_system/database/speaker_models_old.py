@@ -1,9 +1,8 @@
 """
-Speaker models - Re-exports from unified models.py for backward compatibility.
+Database models for speaker identification and voice learning system.
 
-This module maintains the old import paths while using the unified Base.
-The database models now live in models.py, but the service class and Pydantic
-models remain here.
+This module defines the database schema and models for storing speaker
+voice patterns, assignments, and learning history.
 """
 
 import json
@@ -14,40 +13,282 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    create_engine,
+)
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import Session, relationship, sessionmaker
 
 from ..logger import get_logger
 
-# Re-export models from unified models.py
-from .models import (
-    Base,
-    ChannelHostMapping,
-    SpeakerAssignment,
-    SpeakerLearningHistory,
-    SpeakerProcessingSession,
-    SpeakerSession,
-    SpeakerVoice,
-)
-
 logger = get_logger(__name__)
 
-__all__ = [
-    "Base",
-    "SpeakerVoice",
-    "SpeakerAssignment",
-    "SpeakerLearningHistory",
-    "SpeakerSession",
-    "ChannelHostMapping",
-    "SpeakerProcessingSession",
-    "SpeakerVoiceModel",
-    "SpeakerAssignmentModel",
-    "SpeakerLearningModel",
-    "SpeakerProcessingSessionModel",
-    "SpeakerDatabaseService",
-    "get_speaker_db_service",
-    "init_speaker_database",
-]
+Base = declarative_base()
+
+
+class SpeakerVoice(Base):
+    """Database model for learned speaker voices and characteristics."""
+
+    __tablename__ = "speaker_voices"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False, index=True)
+    voice_fingerprint = Column(Text)  # JSON string of audio characteristics
+    confidence_threshold = Column(Float, default=0.7)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    usage_count = Column(Integer, default=0)
+    last_used = Column(DateTime)
+
+    # Relationships
+    assignments = relationship("SpeakerAssignment", back_populates="voice")
+    learning_history = relationship("SpeakerLearningHistory", back_populates="voice")
+
+    def __repr__(self):
+        return f"<SpeakerVoice(id={self.id}, name='{self.name}', usage_count={self.usage_count})>"
+
+    @property
+    def fingerprint_data(self) -> dict[str, Any]:
+        """Get voice fingerprint as dictionary."""
+        if self.voice_fingerprint:
+            try:
+                return json.loads(self.voice_fingerprint)
+            except json.JSONDecodeError:
+                logger.warning(
+                    f"Invalid JSON in voice fingerprint for speaker {self.name}"
+                )
+                return {}
+        return {}
+
+    @fingerprint_data.setter
+    def fingerprint_data(self, data: dict[str, Any]):
+        """Set voice fingerprint from dictionary."""
+        self.voice_fingerprint = json.dumps(data)
+
+
+class SpeakerAssignment(Base):
+    """Database model for speaker assignments in recordings."""
+
+    __tablename__ = "speaker_assignments"
+
+    id = Column(Integer, primary_key=True)
+    recording_path = Column(String(500), nullable=False, index=True)
+    speaker_id = Column(String(50), nullable=False)  # Original ID like SPEAKER_00
+    assigned_name = Column(String(255), nullable=False, index=True)
+    confidence = Column(Float, default=1.0)
+    user_confirmed = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Enhanced columns for sidecar file migration
+    suggested_name = Column(String(255), nullable=True)  # AI suggested name
+    suggestion_confidence = Column(Float, default=0.0)  # AI confidence score
+    suggestion_method = Column(
+        String(100), nullable=True
+    )  # 'content_analysis', 'pattern_matching', 'manual'
+    sample_segments_json = Column(Text, nullable=True)  # JSON array of first 5 segments
+    total_duration = Column(Float, default=0.0)  # Total speaking time
+    segment_count = Column(Integer, default=0)  # Number of segments
+    processing_metadata_json = Column(Text, nullable=True)  # Additional metadata
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Foreign key to speaker voice (optional)
+    voice_id = Column(Integer, ForeignKey("speaker_voices.id"), nullable=True)
+    voice = relationship("SpeakerVoice", back_populates="assignments")
+
+    @property
+    def sample_segments(self) -> list[dict[str, Any]]:
+        """Get sample segments as list of dictionaries."""
+        if self.sample_segments_json:
+            try:
+                return json.loads(self.sample_segments_json)
+            except json.JSONDecodeError:
+                logger.warning(
+                    f"Invalid JSON in sample_segments for assignment {self.id}"
+                )
+                return []
+        return []
+
+    @sample_segments.setter
+    def sample_segments(self, data: list[dict[str, Any]]):
+        """Set sample segments from list of dictionaries."""
+        self.sample_segments_json = json.dumps(data)
+
+    @property
+    def processing_metadata(self) -> dict[str, Any]:
+        """Get processing metadata as dictionary."""
+        if self.processing_metadata_json:
+            try:
+                return json.loads(self.processing_metadata_json)
+            except json.JSONDecodeError:
+                logger.warning(
+                    f"Invalid JSON in processing_metadata for assignment {self.id}"
+                )
+                return {}
+        return {}
+
+    @processing_metadata.setter
+    def processing_metadata(self, data: dict[str, Any]):
+        """Set processing metadata from dictionary."""
+        self.processing_metadata_json = json.dumps(data)
+
+    def __repr__(self):
+        return f"<SpeakerAssignment(id={self.id}, speaker_id='{self.speaker_id}', assigned_name='{self.assigned_name}')>"
+
+
+class SpeakerLearningHistory(Base):
+    """Database model for tracking learning from user corrections."""
+
+    __tablename__ = "speaker_learning_history"
+
+    id = Column(Integer, primary_key=True)
+    original_suggestion = Column(String(255))
+    user_correction = Column(String(255), nullable=False)
+    context_data = Column(Text)  # JSON string of context information
+    learning_weight = Column(Float, default=1.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Foreign key to speaker voice
+    voice_id = Column(Integer, ForeignKey("speaker_voices.id"), nullable=True)
+    voice = relationship("SpeakerVoice", back_populates="learning_history")
+
+    def __repr__(self):
+        return f"<SpeakerLearningHistory(id={self.id}, correction='{self.user_correction}')>"
+
+    @property
+    def context(self) -> dict[str, Any]:
+        """Get context data as dictionary."""
+        if self.context_data:
+            try:
+                return json.loads(self.context_data)
+            except json.JSONDecodeError:
+                logger.warning(
+                    f"Invalid JSON in context data for learning history {self.id}"
+                )
+                return {}
+        return {}
+
+    @context.setter
+    def context(self, data: dict[str, Any]):
+        """Set context data from dictionary."""
+        self.context_data = json.dumps(data)
+
+
+class SpeakerSession(Base):
+    """Database model for tracking speaker sessions across recordings."""
+
+    __tablename__ = "speaker_sessions"
+
+    id = Column(Integer, primary_key=True)
+    session_name = Column(
+        String(255), nullable=False
+    )  # e.g., "Team Meeting 2024-01-15"
+    folder_path = Column(String(500))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<SpeakerSession(id={self.id}, name='{self.session_name}')>"
+
+
+class ChannelHostMapping(Base):
+    """Database model for storing channel-to-host name mappings."""
+
+    __tablename__ = "channel_host_mappings"
+
+    id = Column(Integer, primary_key=True)
+    channel_name = Column(String(255), nullable=False, index=True, unique=True)
+    host_name = Column(String(255), nullable=False)
+    confidence = Column(Float, default=1.0)  # How confident we are in this mapping
+    created_by = Column(
+        String(50), default="user_correction"
+    )  # 'user_correction', 'llm_suggestion', 'manual'
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    use_count = Column(Integer, default=1)  # How many times this mapping has been used
+
+    def __repr__(self):
+        return f"<ChannelHostMapping(id={self.id}, channel='{self.channel_name}', host='{self.host_name}')>"
+
+
+class SpeakerProcessingSession(Base):
+    """Database model for tracking speaker processing sessions and learning data."""
+
+    __tablename__ = "speaker_processing_sessions"
+
+    session_id = Column(String(50), primary_key=True)
+    recording_path = Column(String(500), nullable=False, index=True)
+    processing_method = Column(String(100))  # 'diarization', 'manual', 'imported'
+    total_speakers = Column(Integer)
+    total_duration = Column(Float)
+    ai_suggestions_json = Column(Text)  # All AI suggestions before user input
+    user_corrections_json = Column(Text)  # What user changed from AI suggestions
+    confidence_scores_json = Column(Text)  # Confidence in each assignment
+    created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime)
+
+    @property
+    def ai_suggestions(self) -> dict[str, Any]:
+        """Get AI suggestions as dictionary."""
+        if self.ai_suggestions_json:
+            try:
+                return json.loads(self.ai_suggestions_json)
+            except json.JSONDecodeError:
+                logger.warning(
+                    f"Invalid JSON in ai_suggestions for session {self.session_id}"
+                )
+                return {}
+        return {}
+
+    @ai_suggestions.setter
+    def ai_suggestions(self, data: dict[str, Any]):
+        """Set AI suggestions from dictionary."""
+        self.ai_suggestions_json = json.dumps(data)
+
+    @property
+    def user_corrections(self) -> dict[str, Any]:
+        """Get user corrections as dictionary."""
+        if self.user_corrections_json:
+            try:
+                return json.loads(self.user_corrections_json)
+            except json.JSONDecodeError:
+                logger.warning(
+                    f"Invalid JSON in user_corrections for session {self.session_id}"
+                )
+                return {}
+        return {}
+
+    @user_corrections.setter
+    def user_corrections(self, data: dict[str, Any]):
+        """Set user corrections from dictionary."""
+        self.user_corrections_json = json.dumps(data)
+
+    @property
+    def confidence_scores(self) -> dict[str, float]:
+        """Get confidence scores as dictionary."""
+        if self.confidence_scores_json:
+            try:
+                return json.loads(self.confidence_scores_json)
+            except json.JSONDecodeError:
+                logger.warning(
+                    f"Invalid JSON in confidence_scores for session {self.session_id}"
+                )
+                return {}
+        return {}
+
+    @confidence_scores.setter
+    def confidence_scores(self, data: dict[str, float]):
+        """Set confidence scores from dictionary."""
+        self.confidence_scores_json = json.dumps(data)
+
+    def __repr__(self):
+        return f"<SpeakerProcessingSession(session_id='{self.session_id}', recording_path='{self.recording_path}')>"
 
 
 # Pydantic models for API/service layer
@@ -765,4 +1006,3 @@ def init_speaker_database(database_url: str = "sqlite:///knowledge_system.db"):
     global _db_service
     _db_service = SpeakerDatabaseService(database_url)
     return _db_service
-
