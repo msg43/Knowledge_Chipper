@@ -59,15 +59,21 @@ class DatabaseService:
                 return Path.home() / ".knowledge_chipper"
 
         if database_url.startswith("sqlite:///"):
-            raw_path = Path(database_url[10:])  # after 'sqlite:///'
-            if not raw_path.is_absolute():
-                # Use per-user app data directory for relative defaults
-                db_path = _user_data_dir() / "knowledge_system.db"
-                db_path.parent.mkdir(parents=True, exist_ok=True)
-                resolved_url = f"sqlite:///{db_path}"
+            raw_path_str = database_url[10:]  # after 'sqlite:///'
+            # Special case: in-memory database
+            if raw_path_str == ":memory:":
+                resolved_url = database_url  # Keep as-is
+                db_path = None
             else:
-                db_path = raw_path
-                db_path.parent.mkdir(parents=True, exist_ok=True)
+                raw_path = Path(raw_path_str)
+                if not raw_path.is_absolute():
+                    # Use per-user app data directory for relative defaults
+                    db_path = _user_data_dir() / "knowledge_system.db"
+                    db_path.parent.mkdir(parents=True, exist_ok=True)
+                    resolved_url = f"sqlite:///{db_path}"
+                else:
+                    db_path = raw_path
+                    db_path.parent.mkdir(parents=True, exist_ok=True)
         elif database_url.startswith("sqlite://"):
             raw_path = Path(database_url[9:])  # after 'sqlite://'
             if not raw_path.is_absolute():
