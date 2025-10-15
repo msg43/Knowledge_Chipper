@@ -144,7 +144,7 @@ def store_mining_results(
                         episode_id=episode_id,
                         concept_id=model_id,
                         name=model_data.get("name", ""),
-                        definition=model_data.get("definition", ""),
+                        description=model_data.get("definition") or model_data.get("description", ""),
                         first_mention_ts=model_data.get("timestamp") or model_data.get("t0"),
                     )
                     session.add(concept)
@@ -221,7 +221,7 @@ def load_mining_results(
                     "concept_id": c.concept_id,
                     "model_id": c.concept_id,
                     "name": c.name,
-                    "definition": c.definition,
+                    "definition": c.description,
                     "timestamp": c.first_mention_ts,
                     "t0": c.first_mention_ts,
                 }

@@ -160,7 +160,7 @@ class TestStoreMininingResults:
             
             concept = concepts[0]
             assert concept.name == "Deep Learning"
-            assert "neural networks" in concept.definition
+            assert "neural networks" in concept.description
     
     def test_store_mining_results_multiple_outputs(self, test_db_service):
         """Test storing multiple miner outputs for same episode."""
@@ -293,8 +293,20 @@ class TestStoreTranscript:
         """Test that storing transcript updates existing episode."""
         episode_id = "episode_existing"
         
-        # Create episode first
+        # Create media source and episode first
+        from src.knowledge_system.database.models import MediaSource
         with test_db_service.get_session() as session:
+            # Create media source
+            media_source = MediaSource(
+                media_id="existing",
+                source_type="youtube",
+                title="Existing Media",
+                url="https://youtube.com/watch?v=existing"
+            )
+            session.add(media_source)
+            session.flush()
+            
+            # Create episode
             episode = Episode(
                 episode_id=episode_id,
                 video_id="existing",
