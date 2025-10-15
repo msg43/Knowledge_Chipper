@@ -25,10 +25,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from .dynamic_parallelization import (
-    JobType,
-    initialize_parallelization_manager,
-)
+from .dynamic_parallelization import JobType, initialize_parallelization_manager
 from .parallel_processor import initialize_parallel_processor
 
 logger = logging.getLogger(__name__)
@@ -181,9 +178,8 @@ class IntelligentBatchProcessor:
         download_func: Callable[[str], str],
         mining_func: Callable[[str], dict[str, Any]],
         evaluation_func: Callable[[dict[str, Any]], dict[str, Any]],
-        progress_callback: None | (
-            Callable[[str, int, int, dict[str, Any]], None]
-        ) = None,
+        progress_callback: None
+        | (Callable[[str, int, int, dict[str, Any]], None]) = None,
     ) -> str:
         """
         Start a new batch processing operation.

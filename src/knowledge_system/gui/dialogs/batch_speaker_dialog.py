@@ -625,9 +625,9 @@ class BatchSpeakerAssignmentDialog(QDialog):
         for i, speaker_data in enumerate(recording.speaker_data_list):
             speaker_id = f"SPEAKER_{i:02d}"
             if speaker_id in self.consistent_speakers:
-                recording.assignments[speaker_data.speaker_id] = (
-                    self.consistent_speakers[speaker_id]
-                )
+                recording.assignments[
+                    speaker_data.speaker_id
+                ] = self.consistent_speakers[speaker_id]
 
         recording.processed = True
 

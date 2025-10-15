@@ -79,4 +79,3 @@ SELECT
 FROM media_sources
 WHERE max_retries_exceeded = 1
 ORDER BY last_retry_at DESC;
-

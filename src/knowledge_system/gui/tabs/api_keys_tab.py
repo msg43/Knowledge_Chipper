@@ -541,27 +541,27 @@ class APIKeysTab(BaseTab):
         """Load existing API key values from settings."""
         # Load OpenAI key
         if self.settings.api_keys.openai_api_key:
-            self._actual_api_keys["openai_api_key"] = (
-                self.settings.api_keys.openai_api_key
-            )
+            self._actual_api_keys[
+                "openai_api_key"
+            ] = self.settings.api_keys.openai_api_key
             self.openai_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
 
         # Load Anthropic key
         if self.settings.api_keys.anthropic_api_key:
-            self._actual_api_keys["anthropic_api_key"] = (
-                self.settings.api_keys.anthropic_api_key
-            )
+            self._actual_api_keys[
+                "anthropic_api_key"
+            ] = self.settings.api_keys.anthropic_api_key
             self.anthropic_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
 
         # Load HuggingFace token
         if self.settings.api_keys.huggingface_token:
-            self._actual_api_keys["huggingface_token"] = (
-                self.settings.api_keys.huggingface_token
-            )
+            self._actual_api_keys[
+                "huggingface_token"
+            ] = self.settings.api_keys.huggingface_token
             self.huggingface_token_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
@@ -571,9 +571,9 @@ class APIKeysTab(BaseTab):
             hasattr(self.settings.api_keys, "bright_data_api_key")
             and self.settings.api_keys.bright_data_api_key
         ):
-            self._actual_api_keys["bright_data_api_key"] = (
-                self.settings.api_keys.bright_data_api_key
-            )
+            self._actual_api_keys[
+                "bright_data_api_key"
+            ] = self.settings.api_keys.bright_data_api_key
             self.bright_data_api_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
@@ -583,9 +583,9 @@ class APIKeysTab(BaseTab):
             hasattr(self.settings.api_keys, "packetstream_username")
             and self.settings.api_keys.packetstream_username
         ):
-            self._actual_api_keys["packetstream_username"] = (
-                self.settings.api_keys.packetstream_username
-            )
+            self._actual_api_keys[
+                "packetstream_username"
+            ] = self.settings.api_keys.packetstream_username
             self.packetstream_username_edit.setText(
                 self.settings.api_keys.packetstream_username
             )
@@ -595,9 +595,9 @@ class APIKeysTab(BaseTab):
             hasattr(self.settings.api_keys, "packetstream_auth_key")
             and self.settings.api_keys.packetstream_auth_key
         ):
-            self._actual_api_keys["packetstream_auth_key"] = (
-                self.settings.api_keys.packetstream_auth_key
-            )
+            self._actual_api_keys[
+                "packetstream_auth_key"
+            ] = self.settings.api_keys.packetstream_auth_key
             self.packetstream_auth_key_edit.setText(
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )

@@ -203,18 +203,18 @@ class SystemCapabilityDetector:
 
         # Storage recommendations
         if storage_gb < 5:
-            recommendations["storage_note"] = (
-                f"❌ Very low storage ({storage_gb}GB). Consider freeing space first."
-            )
+            recommendations[
+                "storage_note"
+            ] = f"❌ Very low storage ({storage_gb}GB). Consider freeing space first."
             recommendations["warnings"].append("💾 Critically low storage space")
         elif storage_gb < 10:
-            recommendations["storage_note"] = (
-                f"⚠️ Limited storage ({storage_gb}GB). Base models recommended."
-            )
+            recommendations[
+                "storage_note"
+            ] = f"⚠️ Limited storage ({storage_gb}GB). Base models recommended."
         elif storage_gb >= 25:
-            recommendations["storage_note"] = (
-                f"✅ Plenty of storage ({storage_gb}GB) for any model tier."
-            )
+            recommendations[
+                "storage_note"
+            ] = f"✅ Plenty of storage ({storage_gb}GB) for any model tier."
         else:
             recommendations["storage_note"] = f"📦 {storage_gb}GB storage available."
 

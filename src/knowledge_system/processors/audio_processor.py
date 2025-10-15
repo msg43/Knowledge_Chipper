@@ -452,9 +452,7 @@ class AudioProcessor(BaseProcessor):
                     mvp_available = True
                     logger.info("✅ MVP LLM is ready - will use AI speaker suggestions")
                     if self.progress_callback:
-                        self.progress_callback(
-                            "🤖 Using AI-powered speaker suggestions"
-                        )
+                        self.progress_callback("🤖 Using AI-powered speaker suggestions")
                 else:
                     # LLM not ready - don't block to install it
                     logger.info(
@@ -1562,22 +1560,22 @@ class AudioProcessor(BaseProcessor):
                                     logger.info(
                                         f"Saved transcript to database: {transcript_record.transcript_id}"
                                     )
-                                    enhanced_metadata["database_transcript_id"] = (
-                                        transcript_record.transcript_id
-                                    )
+                                    enhanced_metadata[
+                                        "database_transcript_id"
+                                    ] = transcript_record.transcript_id
                                     enhanced_metadata["database_media_id"] = media_id
 
                                     # Handle speaker assignment after database save (non-blocking)
                                     if diarization_successful and diarization_segments:
                                         # Pass the transcript_id and media_id for speaker assignment
                                         kwargs_with_ids = kwargs.copy()
-                                        kwargs_with_ids["transcript_id"] = (
-                                            transcript_record.transcript_id
-                                        )
+                                        kwargs_with_ids[
+                                            "transcript_id"
+                                        ] = transcript_record.transcript_id
                                         kwargs_with_ids["video_id"] = media_id
-                                        kwargs_with_ids["database_transcript_id"] = (
-                                            transcript_record.transcript_id
-                                        )
+                                        kwargs_with_ids[
+                                            "database_transcript_id"
+                                        ] = transcript_record.transcript_id
                                         kwargs_with_ids["database_media_id"] = media_id
 
                                         # This will queue the assignment and return immediately

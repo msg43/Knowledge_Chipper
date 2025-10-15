@@ -644,9 +644,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                 "⚠️ WARNING: Using direct connection (no proxy protection)"
                             )
                         if progress_callback:
-                            progress_callback(
-                                f"🔗 Testing {proxy_type} connectivity..."
-                            )
+                            progress_callback(f"🔗 Testing {proxy_type} connectivity...")
 
                         # Quick connectivity test
                         test_info = ydl_test.extract_info(url, download=False)
@@ -695,9 +693,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 except Exception as e:
                     error_msg = str(e)
                     metadata_error = error_msg
-                    logger.error(
-                        f"❌ Metadata extraction failed for {url}: {error_msg}"
-                    )
+                    logger.error(f"❌ Metadata extraction failed for {url}: {error_msg}")
 
                     if progress_callback:
                         if "403" in error_msg or "forbidden" in error_msg.lower():

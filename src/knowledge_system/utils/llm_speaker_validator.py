@@ -323,9 +323,7 @@ Focus on accuracy and provide specific reasoning based on the speech content."""
     ) -> str:
         """Create a human-readable summary of the validation for the user interface."""
         if not validation_result.get("llm_available", False):
-            return (
-                "🤖 LLM validation not available. Please review assignments manually."
-            )
+            return "🤖 LLM validation not available. Please review assignments manually."
 
         overall_confidence = validation_result.get("overall_confidence", 0.5)
         summary = validation_result.get("validation_summary", "")
@@ -345,7 +343,9 @@ Focus on accuracy and provide specific reasoning based on the speech content."""
         confidence_emoji = (
             "🟢"
             if overall_confidence > 0.8
-            else "🟡" if overall_confidence > 0.6 else "🔴"
+            else "🟡"
+            if overall_confidence > 0.6
+            else "🔴"
         )
 
         summary_text = (

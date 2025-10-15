@@ -1464,9 +1464,7 @@ class SummarizationTab(BaseTab):
             # If download succeeded, continue processing
             dialog_result = dialog.result()
             if dialog_result == QDialog.DialogCode.Accepted:
-                self.append_log(
-                    f"✅ Model '{clean_model_name}' downloaded successfully"
-                )
+                self.append_log(f"✅ Model '{clean_model_name}' downloaded successfully")
                 self._continue_processing_after_model_check()
             else:
                 self.append_log("❌ Model download cancelled or failed")

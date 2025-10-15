@@ -758,9 +758,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 #     cmd.extend(["-fa"])  # Enable flash attention
                 #     logger.info("🚀 Enabled flash attention for Apple Silicon")
 
-                logger.info(
-                    "🚀 GPU acceleration enabled (default whisper.cpp behavior)"
-                )
+                logger.info("🚀 GPU acceleration enabled (default whisper.cpp behavior)")
 
                 # Add output options
                 cmd.extend(

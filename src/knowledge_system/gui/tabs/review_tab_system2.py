@@ -9,12 +9,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-from PyQt6.QtCore import (
-    QAbstractTableModel,
-    QModelIndex,
-    Qt,
-    QTimer,
-)
+from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt, QTimer
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -565,7 +560,7 @@ class ReviewTabSystem2(QWidget):
 
         # Enable double-click editing
         self.table_view.doubleClicked.connect(self._on_cell_double_clicked)
-        
+
         # Connect selection changed to update delete button state
         self.table_view.selectionModel().selectionChanged.connect(
             self._on_selection_changed
@@ -701,7 +696,7 @@ class ReviewTabSystem2(QWidget):
         """Delete selected claims from the database."""
         # Get selected rows
         selected_indexes = self.table_view.selectionModel().selectedRows()
-        
+
         if not selected_indexes:
             QMessageBox.information(
                 self,
@@ -709,13 +704,15 @@ class ReviewTabSystem2(QWidget):
                 "Please select one or more claims to delete.",
             )
             return
-        
+
         # Get unique rows (in case multiple cells in same row are selected)
-        selected_rows = sorted(set(index.row() for index in selected_indexes), reverse=True)
-        
+        selected_rows = sorted(
+            {index.row() for index in selected_indexes}, reverse=True
+        )
+
         # Get the claims to delete
         claims_to_delete = [self.model.claims[row] for row in selected_rows]
-        
+
         # Confirm deletion
         reply = QMessageBox.question(
             self,
@@ -725,10 +722,10 @@ class ReviewTabSystem2(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
-        
+
         if reply != QMessageBox.StandardButton.Yes:
             return
-        
+
         # Delete from database
         try:
             deleted_count = 0
@@ -740,22 +737,22 @@ class ReviewTabSystem2(QWidget):
                         .filter_by(episode_id=claim.episode_id, claim_id=claim.claim_id)
                         .first()
                     )
-                    
+
                     if db_claim:
                         session.delete(db_claim)
                         deleted_count += 1
-                
+
                 session.commit()
-            
+
             # Refresh the view
             self._refresh_data()
-            
+
             QMessageBox.information(
                 self,
                 "Deletion Complete",
                 f"Successfully deleted {deleted_count} claim(s) from the database.",
             )
-            
+
         except Exception as e:
             logger.error(f"Failed to delete claims: {e}")
             QMessageBox.critical(

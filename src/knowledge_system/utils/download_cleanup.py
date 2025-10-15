@@ -141,12 +141,12 @@ class DownloadCleanupService:
             with self.db_service.get_session() as session:
                 from ..database.models import Video
 
-                db_audio_paths = set(
+                db_audio_paths = {
                     row[0]
                     for row in session.query(Video.audio_file_path)
                     .filter(Video.audio_file_path.isnot(None))
                     .all()
-                )
+                }
 
             # Find orphans
             for audio_file in audio_files:

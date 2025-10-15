@@ -42,10 +42,10 @@ try:
 except ImportError:
     HAS_SPEECHBRAIN = False
 
-from ..database.speaker_models import (
+from ..database.speaker_models import (  # noqa: E402
     SpeakerDatabaseService,
     SpeakerVoiceModel,
-)  # noqa: E402
+)
 from ..logger import get_logger  # noqa: E402
 
 logger = get_logger(__name__)

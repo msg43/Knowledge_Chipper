@@ -207,9 +207,9 @@ class GetReceiptsExporter:
                     # Parse timestamp to seconds for YouTube link
                     timestamp_seconds = self._parse_timestamp_to_seconds(evidence.t0)
                     if timestamp_seconds is not None:
-                        evidence_item["youtube_link"] = (
-                            f"{video_url}&t={timestamp_seconds}s"
-                        )
+                        evidence_item[
+                            "youtube_link"
+                        ] = f"{video_url}&t={timestamp_seconds}s"
 
             evidence_list.append(evidence_item)
 

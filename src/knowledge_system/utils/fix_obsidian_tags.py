@@ -12,9 +12,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from knowledge_system.logger import get_logger  # noqa: E402
-from knowledge_system.utils.obsidian_tags import (
+from knowledge_system.utils.obsidian_tags import (  # noqa: E402
     add_obsidian_hashtags_to_content,
-)  # noqa: E402
+)
 
 logger = get_logger(__name__)
 

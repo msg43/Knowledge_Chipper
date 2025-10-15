@@ -28,9 +28,7 @@ from ..processors.hce.types import EpisodeBundle
 from ..processors.hce.unified_pipeline import UnifiedHCEPipeline
 from ..processors.youtube_download import YouTubeDownloadProcessor
 from ..utils.hardware_detection import detect_hardware_specs
-from .dynamic_parallelization import (
-    initialize_parallelization_manager,
-)
+from .dynamic_parallelization import initialize_parallelization_manager
 from .parallel_processor import initialize_parallel_processor
 
 logger = logging.getLogger(__name__)
@@ -208,9 +206,8 @@ class ConnectedProcessingCoordinator:
     async def process_with_audio_preservation(
         self,
         urls: list[str],
-        progress_callback: None | (
-            Callable[[str, int, int, dict[str, Any]], None]
-        ) = None,
+        progress_callback: None
+        | (Callable[[str, int, int, dict[str, Any]], None]) = None,
         resume_from_existing: bool = True,
     ) -> dict[str, Any]:
         """
@@ -379,8 +376,9 @@ class ConnectedProcessingCoordinator:
 
             # Process with YouTube downloader (with database service for tracking)
             from ..database.service import DatabaseService
+
             db_service = DatabaseService()
-            
+
             result = self.youtube_processor.process(
                 url,
                 output_dir=str(output_dir),

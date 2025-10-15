@@ -815,9 +815,7 @@ def summarize(
             console.print(
                 f"💰 Total cost: [yellow]${session_stats['total_cost']:.4f} USD[/yellow]"
             )
-            console.print(
-                f"⚡ Average speed: {avg_tokens_per_second:.1f} tokens/second"
-            )
+            console.print(f"⚡ Average speed: {avg_tokens_per_second:.1f} tokens/second")
 
             # Content statistics
             console.print("\n[bold]Summarization:[/bold]")

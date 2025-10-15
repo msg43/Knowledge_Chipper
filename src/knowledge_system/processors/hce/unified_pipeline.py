@@ -452,7 +452,9 @@ class UnifiedHCEPipeline:
                 tier=(
                     "A"
                     if eval_claim.importance >= 8
-                    else "B" if eval_claim.importance >= 5 else "C"
+                    else "B"
+                    if eval_claim.importance >= 5
+                    else "C"
                 ),
                 scores={
                     "importance": eval_claim.importance

@@ -445,19 +445,19 @@ class SpeakerProcessor(BaseProcessor):
 
         # Generate suggestion based on patterns
         if leadership_count > 2:
-            analysis_data["suggestion_reason"] = (
-                f"High leadership indicators: {leadership_count}"
-            )
+            analysis_data[
+                "suggestion_reason"
+            ] = f"High leadership indicators: {leadership_count}"
             return "Meeting Leader", 0.6
         elif formal_count > informal_count and formal_count > 1:
-            analysis_data["suggestion_reason"] = (
-                f"Formal speech: {formal_count} vs {informal_count} informal"
-            )
+            analysis_data[
+                "suggestion_reason"
+            ] = f"Formal speech: {formal_count} vs {informal_count} informal"
             return "Presenter", 0.5
         elif speaker_data.total_duration > 300:  # More than 5 minutes
-            analysis_data["suggestion_reason"] = (
-                f"Long speaking time: {speaker_data.total_duration:.1f}s"
-            )
+            analysis_data[
+                "suggestion_reason"
+            ] = f"Long speaking time: {speaker_data.total_duration:.1f}s"
             return "Main Speaker", 0.4
         else:
             analysis_data["suggestion_reason"] = "Default participant role"
@@ -1021,9 +1021,7 @@ class SpeakerProcessor(BaseProcessor):
             )
 
             if not contextual_mapping:
-                logger.info(
-                    "🧠 No contextual improvements found, using LLM suggestions"
-                )
+                logger.info("🧠 No contextual improvements found, using LLM suggestions")
                 return None
 
             # Apply contextual improvements to LLM suggestions
@@ -1354,9 +1352,9 @@ class SpeakerProcessor(BaseProcessor):
                     speaker_id = segment.get("speaker")
                     if speaker_id and speaker_id in assignments:
                         segment["speaker"] = assignments[speaker_id]
-                        segment["original_speaker_id"] = (
-                            speaker_id  # Keep original for reference
-                        )
+                        segment[
+                            "original_speaker_id"
+                        ] = speaker_id  # Keep original for reference
 
             # Add assignment metadata
             updated_data["speaker_assignments"] = assignments

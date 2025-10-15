@@ -155,13 +155,13 @@ class SummarizationProgress:
     batch_percent: float | None = None  # Overall batch progress (0.0-100.0)
 
     # Legacy compatibility (DEPRECATED - auto-calculated for backward compatibility)
-    percent: None | (float) = (
-        None  # DEPRECATED: Use file_percent instead (auto-calculated)
-    )
+    percent: None | (
+        float
+    ) = None  # DEPRECATED: Use file_percent instead (auto-calculated)
     status: str | None = None  # Current status/stage (still used)
-    batch_percent_characters: None | (float) = (
-        None  # DEPRECATED: Use batch_percent instead (auto-calculated)
-    )
+    batch_percent_characters: None | (
+        float
+    ) = None  # DEPRECATED: Use batch_percent instead (auto-calculated)
 
     # Performance metrics
     chars_per_second: float | None = None  # Character processing rate

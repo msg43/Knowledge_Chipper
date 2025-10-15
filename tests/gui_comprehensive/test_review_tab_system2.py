@@ -221,7 +221,7 @@ class TestReviewTabIntegration:
         if self.review_tab.model.rowCount() > 0:
             # Select first row
             self.review_tab.table_view.selectRow(0)
-            
+
             # Delete button should now be enabled
             assert self.review_tab.delete_btn.isEnabled() is True
 
@@ -232,10 +232,10 @@ class TestReviewTabIntegration:
             # Select first row
             self.review_tab.table_view.selectRow(0)
             assert self.review_tab.delete_btn.isEnabled() is True
-            
+
             # Clear selection
             self.review_tab.table_view.clearSelection()
-            
+
             # Delete button should now be disabled
             assert self.review_tab.delete_btn.isEnabled() is False
 

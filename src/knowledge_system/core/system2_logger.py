@@ -16,7 +16,6 @@ from contextvars import ContextVar
 from datetime import datetime
 from typing import Any
 
-
 # Context variables for correlation
 _job_run_id: ContextVar[str | None] = ContextVar("job_run_id", default=None)
 _request_id: ContextVar[str | None] = ContextVar("request_id", default=None)

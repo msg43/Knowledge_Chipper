@@ -36,9 +36,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from knowledge_system.processors.audio_processor import AudioProcessor  # noqa: E402
 from knowledge_system.processors.moc_processor import MOCProcessor  # noqa: E402
-from knowledge_system.processors.summarizer_processor import (
+from knowledge_system.processors.summarizer_processor import (  # noqa: E402
     SummarizerProcessor,
-)  # noqa: E402
+)
 from knowledge_system.utils.ipc_communication import IPCCommunicator  # noqa: E402
 from knowledge_system.utils.memory_monitor import MemoryMonitor  # noqa: E402
 from knowledge_system.utils.tracking import ProgressTracker  # noqa: E402
@@ -236,9 +236,9 @@ class BatchProcessor:
                         progress=100,
                     )
                 else:
-                    result["error"] = (
-                        f"Transcription failed: {transcription_result.get('error')}"
-                    )
+                    result[
+                        "error"
+                    ] = f"Transcription failed: {transcription_result.get('error')}"
                     return result
 
             # Summarization
@@ -262,9 +262,9 @@ class BatchProcessor:
                         progress=100,
                     )
                 else:
-                    result["error"] = (
-                        f"Summarization failed: {summary_result.get('error')}"
-                    )
+                    result[
+                        "error"
+                    ] = f"Summarization failed: {summary_result.get('error')}"
                     return result
 
             # MOC Generation
@@ -286,9 +286,9 @@ class BatchProcessor:
                         progress=100,
                     )
                 else:
-                    result["error"] = (
-                        f"MOC generation failed: {moc_result.get('error')}"
-                    )
+                    result[
+                        "error"
+                    ] = f"MOC generation failed: {moc_result.get('error')}"
                     return result
 
             result["success"] = True

@@ -299,9 +299,7 @@ class UnifiedBatchProcessor:
         logger.info(
             f"🚀 DEBUG: expanded_youtube_urls count: {len(self.expanded_youtube_urls)}"
         )
-        logger.info(
-            f"🚀 DEBUG: youtube_processing_mode: {self.youtube_processing_mode}"
-        )
+        logger.info(f"🚀 DEBUG: youtube_processing_mode: {self.youtube_processing_mode}")
         logger.info(f"🚀 DEBUG: use_batch_processing: {self.use_batch_processing}")
 
         try:
@@ -429,8 +427,9 @@ class UnifiedBatchProcessor:
 
             # Download audio using the processor (with database service for tracking)
             from ..database.service import DatabaseService
+
             db_service = DatabaseService()
-            
+
             result = processor.process(
                 input_data=url,
                 output_dir=output_dir,

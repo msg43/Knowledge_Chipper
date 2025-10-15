@@ -219,12 +219,11 @@ class EnhancedTranscriptionWorker(QThread):
 
                     # Import and pass database service for partial download tracking
                     from ...database.service import DatabaseService
+
                     db_service = DatabaseService()
-                    
+
                     result = downloader.process(
-                        url, 
-                        output_dir=downloads_dir,
-                        db_service=db_service
+                        url, output_dir=downloads_dir, db_service=db_service
                     )
 
                     if result.success and result.data.get("downloaded_files"):
@@ -569,9 +568,7 @@ class EnhancedTranscriptionWorker(QThread):
 
             testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
             if testing_mode:
-                logger.info(
-                    "🧪 Testing mode detected in worker - disabling diarization"
-                )
+                logger.info("🧪 Testing mode detected in worker - disabling diarization")
             # For local transcription, default to False to prevent unwanted speaker dialogs
             enable_diarization = kwargs.get("diarization", False) and not testing_mode
 
@@ -630,9 +627,7 @@ class EnhancedTranscriptionWorker(QThread):
                     **audio_processor_kwargs,
                 )
 
-                self.transcription_step_updated.emit(
-                    "✅ Transcription engine ready", 10
-                )
+                self.transcription_step_updated.emit("✅ Transcription engine ready", 10)
 
             except Exception as e:
                 error_msg = f"Failed to initialize transcription engine: {str(e)}"
@@ -706,14 +701,14 @@ class EnhancedTranscriptionWorker(QThread):
                     # Override diarization setting if in testing mode
                     if testing_mode:
                         processing_kwargs_with_output["diarization"] = False
-                    processing_kwargs_with_output["enable_color_coding"] = (
-                        self.gui_settings.get("enable_color_coding", True)
-                    )
+                    processing_kwargs_with_output[
+                        "enable_color_coding"
+                    ] = self.gui_settings.get("enable_color_coding", True)
 
                     # Pass cancellation token for proper stop support
-                    processing_kwargs_with_output["cancellation_token"] = (
-                        self.cancellation_token
-                    )
+                    processing_kwargs_with_output[
+                        "cancellation_token"
+                    ] = self.cancellation_token
 
                     result = processor.process(
                         Path(file_path), **processing_kwargs_with_output
@@ -1691,9 +1686,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                         self.append_log("✅ YouTube anti-bot protection enabled")
                         packetstream_available = True
                     else:
-                        self.append_log(
-                            f"❌ PacketStream proxy failed: {proxy_message}"
-                        )
+                        self.append_log(f"❌ PacketStream proxy failed: {proxy_message}")
                         self.append_log("⚠️ Falling back to direct download")
                 else:
                     self.append_log(

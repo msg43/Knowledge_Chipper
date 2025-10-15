@@ -89,10 +89,10 @@ class System2LLM:
                 loop = asyncio.get_running_loop()
                 # We're in an async context - create a task and run it
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor() as pool:
                     future = pool.submit(
-                        asyncio.run, 
-                        self._complete_async(prompt, **kwargs)
+                        asyncio.run, self._complete_async(prompt, **kwargs)
                     )
                     return future.result()
             except RuntimeError:
@@ -142,10 +142,10 @@ class System2LLM:
                 loop = asyncio.get_running_loop()
                 # We're in an async context - create a task and run it
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor() as pool:
                     future = pool.submit(
-                        asyncio.run, 
-                        self._generate_json_async(prompt, **kwargs)
+                        asyncio.run, self._generate_json_async(prompt, **kwargs)
                     )
                     return future.result()
             except RuntimeError:
@@ -188,10 +188,13 @@ class System2LLM:
                 loop = asyncio.get_running_loop()
                 # We're in an async context - create a task and run it
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor() as pool:
                     future = pool.submit(
                         asyncio.run,
-                        self._generate_structured_json_async(prompt, schema_name, **kwargs)
+                        self._generate_structured_json_async(
+                            prompt, schema_name, **kwargs
+                        ),
                     )
                     return future.result()
             except RuntimeError:

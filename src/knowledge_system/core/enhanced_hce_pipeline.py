@@ -260,9 +260,9 @@ class EnhancedHCEPipeline:
         """Get current resource utilization status"""
         resource_status = self.processor.get_resource_status()
         resource_status["processing_stats"] = self.processing_stats
-        resource_status["hardware_optimization"] = (
-            self._get_hardware_optimization_status()
-        )
+        resource_status[
+            "hardware_optimization"
+        ] = self._get_hardware_optimization_status()
         return resource_status
 
     def save_performance_data(self, filepath: Path):

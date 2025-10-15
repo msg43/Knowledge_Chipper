@@ -1294,9 +1294,7 @@ class YouTubeTab(BaseTab):
         """Handle the result of async diarization dependency check."""
         try:
             if success:
-                self.append_log(
-                    "✅ Diarization dependencies (pyannote.audio) available"
-                )
+                self.append_log("✅ Diarization dependencies (pyannote.audio) available")
 
                 # Check for HuggingFace token
                 hf_token = getattr(self.settings.api_keys, "huggingface_token", None)
@@ -1315,9 +1313,7 @@ class YouTubeTab(BaseTab):
                             "✅ Apple Silicon GPU (MPS) available for diarization"
                         )
                     elif backend == "cuda":
-                        self.append_log(
-                            "✅ NVIDIA GPU (CUDA) available for diarization"
-                        )
+                        self.append_log("✅ NVIDIA GPU (CUDA) available for diarization")
                     else:
                         self.append_log(
                             "ℹ️ Using CPU for diarization (slower but functional)"
@@ -1713,9 +1709,7 @@ class YouTubeTab(BaseTab):
                     "📥 Download-all mode: Will download all audio files first"
                 )
             else:
-                self.append_log(
-                    "🔄 Conveyor belt mode: Processing in optimized batches"
-                )
+                self.append_log("🔄 Conveyor belt mode: Processing in optimized batches")
             self.append_log("-" * 50)
             self._start_batch_processing(urls, config)
         else:
@@ -2226,7 +2220,9 @@ class YouTubeTab(BaseTab):
                 f"\n🎉 Successfully processed and saved {results['successful']} video(s)!"
             )
             self.append_log("📝 Check the output directory for .md transcript files")
-            self.append_log("🖼️  Check the Thumbnails subdirectory for thumbnail images")
+            self.append_log(
+                "🖼️  Check the Thumbnails subdirectory for thumbnail images"
+            )
 
         if skipped_count > 0:
             self.append_log(f"\n⏭️ Skipped {skipped_count} existing file(s):")
@@ -2303,9 +2299,7 @@ class YouTubeTab(BaseTab):
                     f"\n📊 Summary: {skipped_count} files already existed (no new files created)"
                 )
         else:
-            self.append_log(
-                "\n📊 Summary: No files were saved. Check the issues above."
-            )
+            self.append_log("\n📊 Summary: No files were saved. Check the issues above.")
 
         # Reset UI
         self.start_btn.setEnabled(True)

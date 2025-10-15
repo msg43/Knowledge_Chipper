@@ -14,10 +14,7 @@ from collections.abc import Callable
 from tkinter import filedialog, messagebox, ttk
 from typing import Any
 
-from ..core.batch_processor import (
-    BatchJobStatus,
-    IntelligentBatchProcessor,
-)
+from ..core.batch_processor import BatchJobStatus, IntelligentBatchProcessor
 
 
 class BatchProcessingWidget(ttk.Frame):

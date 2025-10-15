@@ -16,11 +16,7 @@ from sqlalchemy import desc, func, or_, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..logger import get_logger
-from .models import (
-    BrightDataSession,
-    ClaimTierValidation,
-    GeneratedFile,
-)
+from .models import BrightDataSession, ClaimTierValidation, GeneratedFile
 from .models import MediaSource as Video  # Back-compat alias
 from .models import (
     MOCExtraction,

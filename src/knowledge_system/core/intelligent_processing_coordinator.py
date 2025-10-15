@@ -21,10 +21,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..utils.hardware_detection import detect_hardware_specs
-from .dynamic_parallelization import (
-    JobType,
-    initialize_parallelization_manager,
-)
+from .dynamic_parallelization import JobType, initialize_parallelization_manager
 from .parallel_processor import initialize_parallel_processor
 
 logger = logging.getLogger(__name__)

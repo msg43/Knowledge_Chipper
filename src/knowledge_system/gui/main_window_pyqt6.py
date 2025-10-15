@@ -163,15 +163,16 @@ class MainWindow(QMainWindow):
     def _run_startup_cleanup(self) -> None:
         """Run startup cleanup and validation for partial downloads."""
         try:
+            from pathlib import Path
+
             from ..database.service import DatabaseService
             from ..utils.download_cleanup import DownloadCleanupService
-            from pathlib import Path
 
             logger.info("Running startup download cleanup and validation...")
 
             # Initialize database service
             db_service = DatabaseService()
-            
+
             # Get output directory from settings (Settings is a Pydantic model, not a dict)
             output_dir = Path(getattr(self.settings, "output_directory", "output"))
 
@@ -490,9 +491,9 @@ class MainWindow(QMainWindow):
 
             # Set Anthropic API key
             if self.settings.api_keys.anthropic_api_key:
-                os.environ["ANTHROPIC_API_KEY"] = (
-                    self.settings.api_keys.anthropic_api_key
-                )
+                os.environ[
+                    "ANTHROPIC_API_KEY"
+                ] = self.settings.api_keys.anthropic_api_key
 
             logger.debug("API keys loaded to environment variables")
 

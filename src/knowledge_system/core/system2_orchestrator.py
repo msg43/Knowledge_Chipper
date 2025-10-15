@@ -13,14 +13,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-
 from ..database import DatabaseService
 from ..database.system2_models import Job, JobRun, LLMRequest, LLMResponse
 from ..errors import ErrorCode, KnowledgeSystemError
 from ..utils.id_generation import create_deterministic_id
-from .intelligent_processing_coordinator import (
-    IntelligentProcessingCoordinator,
-)
+from .intelligent_processing_coordinator import IntelligentProcessingCoordinator
 
 logger = logging.getLogger(__name__)
 
