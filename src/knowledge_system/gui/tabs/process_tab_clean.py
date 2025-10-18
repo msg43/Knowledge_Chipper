@@ -234,7 +234,7 @@ class ProcessPipelineWorker(QProcess):
             self.processing_error.emit(error_msg)
 
     def stop_processing(self):
-        """Stop the processing pipeline."""
+        """Stop the processing pipeline (non-blocking)."""
         self.should_stop = True
 
         # Stop heartbeat monitoring
@@ -244,14 +244,11 @@ class ProcessPipelineWorker(QProcess):
         if self.state() == QProcess.ProcessState.Running:
             logger.info("Terminating worker process")
             self.terminate()
-
-            # Give it 10 seconds to terminate gracefully
-            if not self.waitForFinished(10000):
-                logger.warning(
-                    "Worker process did not terminate gracefully, killing it"
-                )
-                self.kill()
-                self.waitForFinished(5000)
+            
+            # Don't block on waitForFinished - QProcess will emit finished signal
+            # when it's done, and the signal handler will clean up
+            # The process will terminate in the background
+            logger.info("Worker process termination initiated (non-blocking)")
 
 
 class ProcessTab(BaseTab, FileOperationsMixin):

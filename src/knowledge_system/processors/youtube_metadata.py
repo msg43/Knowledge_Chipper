@@ -153,6 +153,9 @@ class YouTubeMetadataProcessor(BaseProcessor):
         self.settings = get_settings()
         self.use_proxy = False
         self.proxy_manager = None
+        
+        # Initialize Bright Data API key
+        self.bright_data_api_key = getattr(self.settings.api_keys, "bright_data_api_key", None)
 
         # Configure PacketStream proxy (optional)
         self._configure_packetstream_proxy()

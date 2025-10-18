@@ -2451,7 +2451,8 @@ class SummarizationTab(BaseTab):
         """Clean up worker threads."""
         if self.summarization_worker and self.summarization_worker.isRunning():
             self.summarization_worker.stop()  # Use the worker's stop method which handles cancellation token
-            self.summarization_worker.wait(3000)
+            # Don't wait synchronously - let the thread finish on its own
+            # The worker will clean up when it's done
         super().cleanup_workers()
 
     def _load_settings(self) -> None:
@@ -2978,14 +2979,24 @@ class SummarizationTab(BaseTab):
     def _get_model_override(
         self, provider_combo: QComboBox, model_combo: QComboBox
     ) -> str | None:
-        """Get model override string from provider and model combos."""
+        """Get model override string from provider and model combos.
+        
+        Returns a model URI in the format expected by parse_model_uri():
+        - "provider:model" for standard providers (openai, anthropic, etc.)
+        - "local://model" for local Ollama models
+        """
         provider = provider_combo.currentText().strip()
         model = model_combo.currentText().strip()
 
         if not provider or not model:
             return None
 
-        return f"{provider}/{model}"
+        # Map "local" provider to the local:// protocol format
+        if provider.lower() == "local":
+            return f"local://{model}"
+        
+        # Use colon separator for all other providers (NOT slash)
+        return f"{provider}:{model}"
 
     def _on_analysis_type_changed(self, analysis_type: str) -> None:
         """Called when analysis type changes to auto-populate template path."""

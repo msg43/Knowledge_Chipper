@@ -1073,11 +1073,12 @@ class TestOrchestrator:
         config_file = self.test_data_dir / "test_configs" / "comprehensive_config.yaml"
 
         # Default configuration if file doesn't exist
+        # Tab names MUST match actual GUI tab names from main_window_pyqt6.py
         self.test_config = {
             "timeout": 300,
             "file_size_limit_mb": 100,
             "operations": ["transcribe_only", "summarize_only", "full_pipeline"],
-            "tabs": ["Process Management", "Local Transcription", "Summarization"],
+            "tabs": ["Transcribe", "Summarize", "Monitor"],  # Actual GUI tab names
             "file_types": {
                 "audio": [".mp3", ".wav", ".m4a"],
                 "video": [".mp4", ".webm"],
@@ -1129,28 +1130,50 @@ class TestOrchestrator:
             "document": self.test_config["file_types"]["document"],
         }
 
+        # Map logical names to actual directory names
+        dir_name_mapping = {
+            "audio": "audio",
+            "video": "video",
+            "document": "documents",  # Directory is plural!
+        }
+
         for file_type, extensions in file_type_mapping.items():
-            type_dir = self.test_data_dir / "sample_files" / file_type
+            dir_name = dir_name_mapping.get(file_type, file_type)
+            type_dir = self.test_data_dir / "sample_files" / dir_name
             if type_dir.exists():
                 for ext in extensions:
                     for file_path in type_dir.glob(f"*{ext}"):
                         test_files.append((file_path, file_type))
+            else:
+                logger.warning(f"Test directory not found: {type_dir}")
 
+        logger.info(f"Found {len(test_files)} test files across all types")
         return test_files
 
     def _is_valid_combination(self, file_type: str, tab: str, operation: str) -> bool:
-        """Check if a file type, tab, and operation combination is valid."""
-        # Define valid combinations
+        """Check if a file type, tab, and operation combination is valid.
+        
+        Note: Tab names must match the actual GUI tab names from main_window_pyqt6.py:
+        - "Transcribe" (not "Local Transcription")
+        - "Summarize" (not "Summarization")
+        - "Monitor" (for batch processing)
+        """
+        # Define valid combinations using ACTUAL GUI tab names
         valid_combinations = {
-            ("audio", "Local Transcription", "transcribe_only"),
-            ("audio", "Process Management", "transcribe_only"),
-            ("audio", "Process Management", "full_pipeline"),
-            ("video", "Local Transcription", "transcribe_only"),
-            ("video", "Process Management", "transcribe_only"),
-            ("video", "Process Management", "full_pipeline"),
-            ("document", "Summarization", "summarize_only"),
-            ("document", "Process Management", "summarize_only"),
-            ("document", "Process Management", "full_pipeline"),
+            # Audio transcription combinations
+            ("audio", "Transcribe", "transcribe_only"),
+            ("audio", "Monitor", "transcribe_only"),
+            ("audio", "Monitor", "full_pipeline"),
+            
+            # Video transcription combinations
+            ("video", "Transcribe", "transcribe_only"),
+            ("video", "Monitor", "transcribe_only"),
+            ("video", "Monitor", "full_pipeline"),
+            
+            # Document summarization combinations
+            ("document", "Summarize", "summarize_only"),
+            ("document", "Monitor", "summarize_only"),
+            ("document", "Monitor", "full_pipeline"),
         }
 
         return (file_type, tab, operation) in valid_combinations

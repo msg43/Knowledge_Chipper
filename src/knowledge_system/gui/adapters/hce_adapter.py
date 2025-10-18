@@ -25,7 +25,7 @@ class HCEAdapter:
 
     def create_summarizer(
         self,
-        provider: str = "openai",
+        provider: str = "local",
         model: str = None,
         max_tokens: int = 500,
         **kwargs,

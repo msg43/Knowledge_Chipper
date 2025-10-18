@@ -280,6 +280,12 @@ class LLMAdapter:
         """Make the actual API call to the provider."""
         if provider == "ollama":
             return await self._call_ollama(model, payload)
+        elif provider == "openai":
+            return await self._call_openai(model, payload)
+        elif provider == "anthropic":
+            return await self._call_anthropic(model, payload)
+        elif provider == "google":
+            return await self._call_google(model, payload)
         else:
             raise KnowledgeSystemError(
                 f"Provider {provider} not implemented yet", ErrorCode.INVALID_INPUT
@@ -339,6 +345,187 @@ class LLMAdapter:
         except KeyError as e:
             raise KnowledgeSystemError(
                 f"Unexpected Ollama response format: {e}", ErrorCode.LLM_API_ERROR
+            ) from e
+
+    async def _call_openai(self, model: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Call OpenAI API."""
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            raise KnowledgeSystemError(
+                "OpenAI package not installed. Run: pip install openai",
+                ErrorCode.CONFIGURATION_ERROR,
+            )
+
+        try:
+            # Get API key from settings
+            from ..config import get_settings
+
+            settings = get_settings()
+            api_key = settings.api_keys.openai_api_key
+
+            if not api_key:
+                raise KnowledgeSystemError(
+                    "OpenAI API key not configured in settings.yaml",
+                    ErrorCode.CONFIGURATION_ERROR,
+                )
+
+            # Create async client with proper cleanup
+            async with AsyncOpenAI(api_key=api_key) as client:
+                # Make API call
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=payload["messages"],
+                    temperature=payload.get("temperature", 0.7),
+                    max_tokens=payload.get("max_tokens"),
+                )
+
+                # Extract response
+                content = response.choices[0].message.content
+                usage = response.usage
+
+                return {
+                    "content": content,
+                    "usage": {
+                        "prompt_tokens": usage.prompt_tokens,
+                        "completion_tokens": usage.completion_tokens,
+                        "total_tokens": usage.total_tokens,
+                    },
+                    "model": response.model,
+                    "provider": "openai",
+                }
+
+        except Exception as e:
+            if "rate" in str(e).lower() or "429" in str(e):
+                raise  # Let the retry logic handle rate limits
+            raise KnowledgeSystemError(
+                f"OpenAI API error: {e}", ErrorCode.LLM_API_ERROR
+            ) from e
+
+    async def _call_anthropic(self, model: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Call Anthropic API."""
+        try:
+            from anthropic import AsyncAnthropic
+        except ImportError:
+            raise KnowledgeSystemError(
+                "Anthropic package not installed. Run: pip install anthropic",
+                ErrorCode.CONFIGURATION_ERROR,
+            )
+
+        try:
+            # Get API key from settings
+            from ..config import get_settings
+
+            settings = get_settings()
+            api_key = settings.api_keys.anthropic_api_key
+
+            if not api_key:
+                raise KnowledgeSystemError(
+                    "Anthropic API key not configured in settings.yaml",
+                    ErrorCode.CONFIGURATION_ERROR,
+                )
+
+            # Create async client with proper cleanup
+            async with AsyncAnthropic(api_key=api_key) as client:
+                # Make API call
+                response = await client.messages.create(
+                    model=model,
+                    max_tokens=payload.get("max_tokens", 4000),
+                    temperature=payload.get("temperature", 0.7),
+                    messages=payload["messages"],
+                )
+
+                # Extract text from response
+                content = ""
+                for block in response.content:
+                    if hasattr(block, "text"):
+                        content += block.text
+
+                # Extract usage
+                usage = response.usage
+
+                return {
+                    "content": content,
+                    "usage": {
+                        "prompt_tokens": usage.input_tokens,
+                        "completion_tokens": usage.output_tokens,
+                        "total_tokens": usage.input_tokens + usage.output_tokens,
+                    },
+                    "model": response.model,
+                    "provider": "anthropic",
+                }
+
+        except Exception as e:
+            if "rate" in str(e).lower() or "429" in str(e):
+                raise  # Let the retry logic handle rate limits
+            raise KnowledgeSystemError(
+                f"Anthropic API error: {e}", ErrorCode.LLM_API_ERROR
+            ) from e
+
+    async def _call_google(self, model: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Call Google Gemini API."""
+        try:
+            import google.generativeai as genai
+        except ImportError:
+            raise KnowledgeSystemError(
+                "Google AI package not installed. Run: pip install google-generativeai",
+                ErrorCode.CONFIGURATION_ERROR,
+            )
+
+        try:
+            # Get API key from settings
+            from ..config import get_settings
+
+            settings = get_settings()
+            api_key = settings.api_keys.google_api_key
+
+            if not api_key:
+                raise KnowledgeSystemError(
+                    "Google API key not configured in settings.yaml",
+                    ErrorCode.CONFIGURATION_ERROR,
+                )
+
+            # Configure API
+            genai.configure(api_key=api_key)
+
+            # Create model
+            generation_config = {
+                "temperature": payload.get("temperature", 0.7),
+                "max_output_tokens": payload.get("max_tokens"),
+            }
+            model_instance = genai.GenerativeModel(
+                model_name=model, generation_config=generation_config
+            )
+
+            # Convert messages to Gemini format (concatenate for simplicity)
+            prompt = "\n\n".join([msg["content"] for msg in payload["messages"]])
+
+            # Make API call
+            response = await model_instance.generate_content_async(prompt)
+
+            # Extract content
+            content = response.text
+
+            # Estimate tokens (Gemini doesn't always provide usage)
+            prompt_tokens = len(prompt.split()) * 1.3
+            completion_tokens = len(content.split()) * 1.3
+
+            return {
+                "content": content,
+                "usage": {
+                    "prompt_tokens": int(prompt_tokens),
+                    "completion_tokens": int(completion_tokens),
+                    "total_tokens": int(prompt_tokens + completion_tokens),
+                },
+                "model": model,
+                "provider": "google",
+            }
+
+        except Exception as e:
+            if "rate" in str(e).lower() or "429" in str(e):
+                raise  # Let the retry logic handle rate limits
+            raise KnowledgeSystemError(
+                f"Google API error: {e}", ErrorCode.LLM_API_ERROR
             ) from e
 
     def _track_request(self, provider: str, model: str, payload: dict[str, Any]) -> str:

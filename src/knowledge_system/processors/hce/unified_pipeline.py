@@ -257,15 +257,12 @@ class UnifiedHCEPipeline:
             full_prompt = prompt_template.replace("{content}", full_content)
 
             # Call LLM with miner model
+            from .model_uri_parser import parse_model_uri
             from .models.llm_system2 import create_system2_llm
 
-            # Parse model URI: "provider:model" or just "model"
+            # Parse model URI using the centralized parser
             model_uri = self.config.models.miner
-            if ":" in model_uri:
-                provider, model = model_uri.split(":", 1)
-            else:
-                provider = "openai"
-                model = model_uri
+            provider, model = parse_model_uri(model_uri)
 
             llm = create_system2_llm(provider=provider, model=model)
             response = llm.generate_json(full_prompt)

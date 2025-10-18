@@ -14,7 +14,7 @@ from .summarizer import SummarizerProcessor
 # from .whisper_cpp_transcribe import WhisperCppTranscribeProcessor
 from .youtube_download import YouTubeDownloadProcessor
 from .youtube_metadata import YouTubeMetadataProcessor
-from .youtube_transcript import YouTubeTranscriptProcessor
+# YouTube transcript processor removed - use YouTubeDownloadProcessor + AudioProcessor instead
 
 __all__ = [
     "BaseProcessor",
@@ -23,7 +23,6 @@ __all__ = [
     # "WhisperCppTranscribeProcessor",  # Internal use only
     "DocumentProcessor",
     "YouTubeDownloadProcessor",
-    "YouTubeTranscriptProcessor",
     "YouTubeMetadataProcessor",
     "SummarizerProcessor",
     "MOCProcessor",

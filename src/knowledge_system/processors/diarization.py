@@ -605,7 +605,7 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                 )
 
             logger.info(
-                f"🎭 Starting diarization processing for '{filename}' {file_info}"
+                f"✅ Starting diarization processing for '{filename}' {file_info}"
             )
 
             # Create ETA calculator for progress tracking
@@ -1029,7 +1029,7 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                 )
 
             logger.info(
-                f"🎭 Diarization completed for '{filename}': {len(segments)} segments found in {total_time:.1f}s{speed_info}"
+                f"✅ Diarization completed for '{filename}': {len(segments)} segments found in {total_time:.1f}s{speed_info}"
             )
 
             return ProcessorResult(

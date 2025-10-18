@@ -259,10 +259,15 @@ class HCEUpdateConfirmationDialog(QDialog):
 
     def _on_progress_update(self, message: str):
         """Handle progress updates from worker."""
-        self.progress_text.append(message)
-        # Scroll to bottom
+        # Check if we should auto-scroll BEFORE appending
         scrollbar = self.progress_text.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        should_scroll = scrollbar and scrollbar.value() >= scrollbar.maximum() - 10
+        
+        self.progress_text.append(message)
+        
+        # Only auto-scroll if user was already at the bottom
+        if should_scroll and scrollbar:
+            scrollbar.setValue(scrollbar.maximum())
 
     def _on_processing_complete(self, success: bool, message: str):
         """Handle completion of reprocessing."""

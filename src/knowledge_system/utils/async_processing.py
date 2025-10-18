@@ -1,9 +1,15 @@
 """
-Async processing utilities for parallel transcription and diarization.
+Async processing utilities for parallel transcription and speaker detection.
 
-This module provides utilities to run transcription and diarization in parallel
-on Apple Silicon, taking advantage of the Neural Engine for transcription
-and GPU for diarization simultaneously.
+This module provides utilities to run transcription and speaker detection (diarization) 
+in parallel on Apple Silicon, taking advantage of the Neural Engine for transcription
+and GPU for speaker detection simultaneously.
+
+Both processes analyze the audio file independently:
+- Transcription: converts audio → text with timestamps
+- Speaker detection: identifies speakers and their time segments
+
+After both complete, a separate step assigns speakers to transcription segments.
 """
 
 from collections.abc import Callable
@@ -50,14 +56,21 @@ class AsyncTranscriptionManager:
         progress_callback: Callable | None = None,
     ) -> tuple[ProcessorResult, ProcessorResult | None]:
         """
-        Process transcription and diarization in parallel.
+        Process transcription and speaker detection in parallel.
+        
+        Both processes run simultaneously on the same audio file:
+        - Transcription: Converts speech to text with timestamps (Neural Engine)
+        - Speaker detection: Identifies who is speaking when (GPU)
+        
+        After both complete, a downstream step merges the results to create
+        speaker-attributed transcription segments.
 
         Args:
             audio_path: Path to audio file
             transcriber: Transcription processor instance
-            diarizer: Diarization processor instance
+            diarizer: Speaker detection processor instance
             transcription_kwargs: Arguments for transcription
-            diarization_kwargs: Arguments for diarization
+            diarization_kwargs: Arguments for speaker detection
             progress_callback: Optional callback for progress updates
 
         Returns:
@@ -68,7 +81,7 @@ class AsyncTranscriptionManager:
                 "AsyncTranscriptionManager not properly initialized. Use with context manager."
             )
 
-        logger.info("Starting parallel transcription and diarization")
+        logger.info("Starting parallel transcription and speaker detection")
 
         # Submit both tasks to the executor
         transcription_future = self.executor.submit(
@@ -88,8 +101,8 @@ class AsyncTranscriptionManager:
         )
 
         # Wait for both to complete
-        transcription_result = None
-        diarization_result = None
+        transcription_result: ProcessorResult | None = None
+        diarization_result: ProcessorResult | None = None
 
         try:
             # Use as_completed to handle whichever finishes first
@@ -103,16 +116,16 @@ class AsyncTranscriptionManager:
                         transcription_result = result
                         if progress_callback:
                             progress_callback(
-                                "Transcription completed, waiting for diarization..."
+                                "Transcription completed, waiting for speaker detection..."
                             )
                         logger.info("✅ Transcription completed")
                     elif future == diarization_future:
                         diarization_result = result
                         if progress_callback:
                             progress_callback(
-                                "Diarization completed, waiting for transcription..."
+                                "Speaker detection completed, waiting for transcription..."
                             )
-                        logger.info("✅ Diarization completed")
+                        logger.info("✅ Speaker detection completed")
                 except Exception as e:
                     logger.error(f"Task failed: {e}")
                     if future == transcription_future:
@@ -133,6 +146,12 @@ class AsyncTranscriptionManager:
                 success=False, errors=["Diarization timed out"]
             )
 
+        # Ensure we always have valid results (fallback to error if something went wrong)
+        if transcription_result is None:
+            transcription_result = ProcessorResult(
+                success=False, errors=["Transcription failed to complete"]
+            )
+        
         logger.info("Parallel processing completed")
         return transcription_result, diarization_result
 
@@ -194,9 +213,9 @@ class AsyncTranscriptionManager:
         import time
 
         try:
-            logger.info("🎭 Starting diarization (GPU)")
+            logger.info("✅ Starting speaker detection (GPU)")
             if progress_callback:
-                progress_callback("Running diarization on GPU...")
+                progress_callback("Running speaker detection on GPU...")
 
             # Add heartbeat mechanism for stuck detection
             last_heartbeat = threading.Event()
@@ -205,7 +224,7 @@ class AsyncTranscriptionManager:
                 while not last_heartbeat.is_set():
                     time.sleep(30)  # Heartbeat every 30 seconds
                     if not last_heartbeat.is_set():
-                        logger.debug("🎭 Diarization heartbeat - still processing...")
+                        logger.debug("✅ Speaker detection heartbeat - still processing...")
 
             heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
             heartbeat_thread.start()
@@ -217,15 +236,15 @@ class AsyncTranscriptionManager:
 
             if result.success:
                 logger.info(
-                    f"✅ Diarization successful: {len(result.data)} speaker segments"
+                    f"✅ Speaker detection successful: {len(result.data)} speaker segments"
                 )
             else:
-                logger.error(f"❌ Diarization failed: {result.errors}")
+                logger.error(f"❌ Speaker detection failed: {result.errors}")
 
             return result
 
         except Exception as e:
-            logger.error(f"Diarization error: {e}")
+            logger.error(f"Speaker detection error: {e}")
             return ProcessorResult(success=False, errors=[str(e)])
 
 

@@ -46,7 +46,7 @@ class SummarizerProcessor(BaseProcessor):
 
     def __init__(
         self,
-        provider: str = "openai",
+        provider: str = "local",
         model: str | None = None,
         max_tokens: int = 500,
         hce_options: dict[str, Any] | None = None,

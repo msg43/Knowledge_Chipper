@@ -226,7 +226,7 @@ class TranscriptionConfig(BaseModel):
 class LLMConfig(BaseModel):
     """LLM configuration."""
 
-    provider: str = Field(default="openai", pattern="^(openai|claude|local)$")
+    provider: str = Field(default="local", pattern="^(openai|claude|local)$")
     model: str = "gpt-4o-mini-2024-07-18"
     max_tokens: int = Field(default=10000, ge=1, le=32000)
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
@@ -313,6 +313,40 @@ class APIKeysConfig(BaseModel):
     packetstream_auth_key: str | None = Field(
         default=None,
         description="PacketStream authentication key for proxy authentication",
+    )
+
+    # AnyIP.io Proxy Credentials
+    anyip_api_key: str | None = Field(
+        default=None,
+        description="AnyIP.io API key (optional - only if using anyip provider)",
+    )
+    anyip_username: str | None = Field(
+        default=None,
+        description="AnyIP.io username (optional - only if using anyip provider)",
+    )
+    anyip_password: str | None = Field(
+        default=None,
+        description="AnyIP.io password (optional - only if using anyip provider)",
+    )
+
+    # Oxylabs.io Proxy Credentials
+    oxylabs_username: str | None = Field(
+        default=None,
+        description="Oxylabs.io username (optional - only if using oxylabs provider)",
+    )
+    oxylabs_password: str | None = Field(
+        default=None,
+        description="Oxylabs.io password (optional - only if using oxylabs provider)",
+    )
+
+    # GonzoProxy.com Proxy Credentials
+    gonzoproxy_api_key: str | None = Field(
+        default=None,
+        description="GonzoProxy.com API key (optional - only if using gonzoproxy provider)",
+    )
+    gonzoproxy_username: str | None = Field(
+        default=None,
+        description="GonzoProxy.com username (optional - only if using gonzoproxy provider)",
     )
 
     @field_validator("bright_data_api_key")
@@ -681,6 +715,16 @@ class Settings(BaseSettings):
     )
     gui_features: GUIFeaturesConfig = Field(default_factory=GUIFeaturesConfig)
     cloud: CloudConfig = Field(default_factory=CloudConfig)
+
+    # Proxy Configuration
+    proxy_provider: str = Field(
+        default="packetstream",
+        description="Preferred proxy provider: packetstream, anyip, oxylabs, gonzoproxy, brightdata, or direct",
+    )
+    proxy_failover_enabled: bool = Field(
+        default=True,
+        description="Enable automatic failover to other proxy providers if preferred fails",
+    )
 
     def __init__(self, config_path: str | Path | None = None, **kwargs) -> None:
         """Initialize settings from YAML file and environment variables."""

@@ -63,17 +63,17 @@ class TranscriptionService:
             hf_token=hf_token,
         )
         self.youtube_downloader = YouTubeDownloadProcessor()
-        # Lazy initialization of YouTube transcript processor to handle missing API keys gracefully
-        self._youtube_transcript_processor = None
+        # Lazy initialization of YouTube download processor
+        self._youtube_download_processor = None
 
     @property
-    def youtube_transcript_processor(self):
-        """Lazy initialization of YouTube transcript processor."""
-        if self._youtube_transcript_processor is None:
-            from ..processors.youtube_transcript import YouTubeTranscriptProcessor
+    def youtube_download_processor(self):
+        """Lazy initialization of YouTube download processor."""
+        if self._youtube_download_processor is None:
+            from ..processors.youtube_download import YouTubeDownloadProcessor
 
-            self._youtube_transcript_processor = YouTubeTranscriptProcessor()
-        return self._youtube_transcript_processor
+            self._youtube_download_processor = YouTubeDownloadProcessor()
+        return self._youtube_download_processor
 
     def set_progress_callback(self, callback):
         """Set a progress callback for model downloads and other progress updates."""
@@ -121,144 +121,87 @@ class TranscriptionService:
         require_diarization: bool = False,
         overwrite: bool = False,
     ) -> dict[str, Any]:
-        """Extract transcript from a YouTube URL."""
-        logger.info(f"Starting transcript extraction from YouTube URL: {url}")
+        """Download YouTube audio and transcribe it."""
+        logger.info(f"Starting YouTube download and transcription for: {url}")
 
         try:
-            # Require Bright Data credentials for YouTube processing
-            from ..config import get_settings
-
-            settings = get_settings()
-
-            # Bright Data API key is required for transcript extraction via Bright Data's API,
-            # but proxy credentials (BD_CUST/BD_ZONE/BD_PASS) are NOT required here.
-            # We only validate the presence/format of the API key and proceed.
-            bright_data_api_key = getattr(
-                settings.api_keys, "bright_data_api_key", None
+            # First download the audio
+            download_result = self.youtube_download_processor.process(
+                url,
+                output_dir=output_dir,
+                download_thumbnails=download_thumbnails,
             )
-            if not bright_data_api_key:
+
+            if not download_result.success:
                 return {
                     "success": False,
-                    "error": "Bright Data API key is required for YouTube processing. Please configure your Bright Data API Key in Settings.",
+                    "error": download_result.errors[0] if download_result.errors else "Download failed",
                     "source": url,
                 }
 
-            # If diarization is required, skip YouTube transcript API and use audio processing
-            if enable_diarization:
-                logger.info(
-                    f"Diarization requested - using audio processing instead of YouTube API for: {url}"
-                )
+            # Get the downloaded audio file path
+            downloaded_files = download_result.data.get("files", [])
+            if not downloaded_files:
+                return {
+                    "success": False,
+                    "error": "No audio file was downloaded",
+                    "source": url,
+                }
 
-                # Use YouTube transcript processor but force diarization mode
-                from ..processors.youtube_transcript import YouTubeTranscriptProcessor
+            audio_file = downloaded_files[0]
+            logger.info(f"Downloaded audio file: {audio_file}")
 
-                processor = YouTubeTranscriptProcessor(
-                    preferred_language="en",
-                    prefer_manual=True,
-                    fallback_to_auto=True,
-                    force_diarization=True,  # Force diarization mode
-                    require_diarization=require_diarization,  # Strict mode
-                )
-            else:
-                from ..processors.youtube_transcript import YouTubeTranscriptProcessor
-
-                processor = YouTubeTranscriptProcessor(
-                    preferred_language="en",
-                    prefer_manual=True,
-                    fallback_to_auto=True,
-                )
-
-            transcript_result = processor.process(
-                url,
+            # Now transcribe the audio file
+            transcribe_result = self.audio_processor.process(
+                audio_file,
                 output_dir=output_dir,
                 include_timestamps=include_timestamps,
-                include_analysis=True,
                 enable_diarization=enable_diarization,
-                overwrite=overwrite,
+                require_diarization=require_diarization,
             )
 
-            if transcript_result.success and transcript_result.data.get("transcripts"):
+            if transcribe_result.success:
                 # Success - extract data from result
-                transcripts = transcript_result.data["transcripts"]
-                output_files = transcript_result.data.get("output_files", [])
-                thumbnails = []
+                transcript_text = transcribe_result.data.get("text", "")
+                output_files = []
+                if transcribe_result.metadata.get("saved_markdown_file"):
+                    output_files.append(transcribe_result.metadata["saved_markdown_file"])
+                
+                # Get thumbnail info from download result
+                thumbnails = download_result.data.get("thumbnails", [])
+                
+                return {
+                    "success": True,
+                    "transcript": transcript_text,
+                    "language": transcribe_result.data.get("language", "unknown"),
+                    "duration": transcribe_result.data.get("duration"),
+                    "source": url,
+                    "output_files": output_files,
+                    "metadata": transcribe_result.metadata,
+                    "method": "download_and_transcribe",
+                    "thumbnails": thumbnails,
+                }
 
-                # Handle thumbnail download if requested - download for each video individually
-                if download_thumbnails and transcripts:
-                    from ..utils.youtube_utils import download_thumbnail
-
-                    output_path = Path(output_dir) if output_dir else Path.cwd()
-
-                    # Create Thumbnails subdirectory for consistent organization
-                    thumbnails_dir = output_path / "Thumbnails"
-                    thumbnails_dir.mkdir(exist_ok=True)
-
-                    for transcript in transcripts:
-                        video_url = transcript.get(
-                            "url", url
-                        )  # Use video URL if available, fallback to original
-                        thumbnail_url = transcript.get(
-                            "thumbnail_url"
-                        )  # Use thumbnail URL if available from metadata
-
-                        try:
-                            thumbnail_path = download_thumbnail(
-                                video_url, thumbnails_dir, thumbnail_url=thumbnail_url
-                            )
-                            if thumbnail_path:
-                                thumbnails.append(thumbnail_path)
-                                logger.info(
-                                    f"Downloaded thumbnail for video: {transcript.get('title', 'Unknown')}"
-                                )
-                            else:
-                                logger.warning(
-                                    f"Failed to download thumbnail for video: {transcript.get('title', 'Unknown')}"
-                                )
-                        except Exception as e:
-                            logger.warning(
-                                f"Error downloading thumbnail for {video_url}: {e}"
-                            )
-
-                    logger.info(
-                        f"Downloaded {len(thumbnails)} thumbnails out of {len(transcripts)} videos"
-                    )
-
-                if transcripts:
-                    transcript = transcripts[0]  # Use first transcript
-                    return {
-                        "success": True,
-                        "transcript": transcript.get("transcript_text", ""),
-                        "language": transcript.get("language", "unknown"),
-                        "is_manual": transcript.get("is_manual", False),
-                        "duration": transcript.get("duration"),
-                        "source": url,
-                        "output_files": output_files,
-                        "metadata": transcript_result.metadata,
-                        "method": "bright_data_proxy",
-                        "thumbnails": thumbnails,
-                    }
-
-            # If we get here, transcript extraction failed
-            errors = (
-                transcript_result.errors
-                if transcript_result.errors
-                else ["Unknown transcript extraction error"]
-            )
-            error_msg = "; ".join(errors)
-
-            proxy_service = "Bright Data"
-            return {
-                "success": False,
-                "error": f"YouTube transcript extraction failed with {proxy_service} proxy: {error_msg}.",
-                "source": url,
-            }
+            else:
+                # Transcription failed
+                errors = (
+                    transcribe_result.errors
+                    if transcribe_result.errors
+                    else ["Unknown transcription error"]
+                )
+                error_msg = "; ".join(errors)
+                
+                return {
+                    "success": False,
+                    "error": f"Transcription failed: {error_msg}",
+                    "source": url,
+                }
 
         except Exception as e:
-            logger.error(f"YouTube transcript extraction failed for {url}: {e}")
-            proxy_service = "Bright Data"
+            logger.error(f"YouTube download/transcription failed for {url}: {e}")
             return {
                 "success": False,
-                "error": f"YouTube processing error with {proxy_service} proxy: {str(e)}.",
+                "error": f"YouTube processing error: {str(e)}",
                 "source": url,
             }
 

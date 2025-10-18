@@ -24,6 +24,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         self.use_coreml = use_coreml
         self._model_path = None
         self.progress_callback = progress_callback
+        self._current_subprocess = None  # Track current subprocess for termination
 
         # Auto-detect Core ML usage based on platform
         if self.use_coreml is None:
@@ -233,7 +234,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         return model_path
 
     def _validate_transcription_quality(
-        self, text: str, audio_duration_seconds: float | None = None
+        self, text: str, audio_duration_seconds: float | None = None, language: str | None = None
     ) -> dict:
         """Validate transcription quality and detect common failure patterns."""
         if not text or len(text.strip()) < 10:
@@ -322,67 +323,77 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 "issue": f"Too many single-character words ({single_char_words}/{len(words)})",
             }
 
-        # Check for likely foreign language when expecting English
-        common_english_words = {
-            "the",
-            "and",
-            "a",
-            "an",
-            "is",
-            "are",
-            "was",
-            "were",
-            "have",
-            "has",
-            "had",
-            "will",
-            "would",
-            "could",
-            "should",
-            "can",
-            "may",
-            "might",
-            "do",
-            "does",
-            "did",
-            "get",
-            "got",
-            "go",
-            "went",
-            "come",
-            "came",
-            "see",
-            "saw",
-            "know",
-            "think",
-            "want",
-            "like",
-            "time",
-            "people",
-            "way",
-            "day",
-            "man",
-            "woman",
-            "year",
-            "work",
-            "life",
-            "hand",
-            "part",
-            "place",
-            "case",
-            "point",
-            "government",
-            "company",
-        }
-        # Strip punctuation from words before checking against common words
-        english_word_count = sum(
-            1 for word in words if word.strip(".,!?;:\"'()[]{}") in common_english_words
-        )
-        if len(words) > 50 and english_word_count / len(words) < 0.1:
-            return {
-                "is_valid": False,
-                "issue": f"Very few common English words detected ({english_word_count}/{len(words)}), possible language mismatch",
+        # Only check for English words if we're expecting English
+        # Skip this check for other languages or when language is unknown
+        if language in ["en", "english", None]:  # None means auto-detect, which might detect English
+            common_english_words = {
+                "the",
+                "and",
+                "a",
+                "an",
+                "is",
+                "are",
+                "was",
+                "were",
+                "have",
+                "has",
+                "had",
+                "will",
+                "would",
+                "could",
+                "should",
+                "can",
+                "may",
+                "might",
+                "do",
+                "does",
+                "did",
+                "get",
+                "got",
+                "go",
+                "went",
+                "come",
+                "came",
+                "see",
+                "saw",
+                "know",
+                "think",
+                "want",
+                "like",
+                "time",
+                "people",
+                "way",
+                "day",
+                "man",
+                "woman",
+                "year",
+                "work",
+                "life",
+                "hand",
+                "part",
+                "place",
+                "case",
+                "point",
+                "government",
+                "company",
             }
+            # Strip punctuation from words before checking against common words
+            english_word_count = sum(
+                1 for word in words if word.strip(".,!?;:\"'()[]{}") in common_english_words
+            )
+            # Only flag as error if we detected a language mismatch
+            if len(words) > 50 and english_word_count / len(words) < 0.1:
+                # Check if this might be a different language by looking for common patterns
+                # High frequency of certain characters might indicate non-English
+                non_english_indicators = any(
+                    char in text for char in "àâäçèéêëîïôùûüÿœæ"  # French accents
+                ) or text.count("ñ") > 2  # Spanish
+                
+                if non_english_indicators or english_word_count < 5:
+                    return {
+                        "is_valid": False,
+                        "issue": f"Language mismatch: Expected English but detected foreign language ({english_word_count}/{len(words)} English words)",
+                    }
 
         return {"is_valid": True, "issue": None}
 
@@ -743,10 +754,16 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 omp_threads = kwargs.get("omp_threads")
                 if omp_threads:
                     cmd.extend(["-t", str(omp_threads)])
+                else:
+                    # Default to 8 threads if not specified
+                    cmd.extend(["-t", "8"])
 
                 batch_size = kwargs.get("batch_size")
                 if batch_size:
                     cmd.extend(["-bs", str(batch_size)])
+                else:
+                    # Default batch size
+                    cmd.extend(["-bs", "8"])
 
                 # CRITICAL: Add GPU acceleration for Apple Silicon (remove -ng flag which DISABLES GPU)
                 # Note: By default, whisper.cpp uses GPU when available unless -ng (--no-gpu) is specified
@@ -761,14 +778,25 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 logger.info("🚀 GPU acceleration enabled (default whisper.cpp behavior)")
 
                 # Add output options
+                # CRITICAL: Always enable timestamps in whisper.cpp to prevent hallucinations
+                # Timestamps act as temporal anchors that keep the model synchronized with audio
+                # Without them, the model can "drift" and start hallucinating/repeating on longer files
+                # We can still choose whether to display timestamps in the formatted output
+                # Add output options
                 cmd.extend(
                     [
                         "--output-json",
-                        "--no-timestamps",
+                        # DO NOT use --no-timestamps - it causes hallucinations on long audio
                         "--output-file",
                         str(output_base),
+                        "--print-progress",  # Enable progress output
                     ]
                 )
+                
+                # Add language if specified (otherwise whisper will auto-detect)
+                language = kwargs.get("language")
+                if language and language != "auto":
+                    cmd.extend(["--language", language])
 
                 if self.progress_callback:
                     transcription_msg = (
@@ -910,8 +938,13 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                     }
 
                     # Validate transcription for common failure patterns
+                    # Get the language that was used for transcription
+                    detected_language = output_data.get("language", "unknown")
+                    requested_language = kwargs.get("language", "auto")
+                    
                     validation_result = self._validate_transcription_quality(
-                        full_text, audio_duration_seconds
+                        full_text, audio_duration_seconds, 
+                        language=requested_language if requested_language != "auto" else detected_language
                     )
                     if not validation_result["is_valid"]:
                         logger.warning(
@@ -945,8 +978,12 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                     }
 
                     # Validate transcription for common failure patterns
+                    # Since we couldn't get language from JSON, use the requested language
+                    requested_language = kwargs.get("language", "auto")
+                    
                     validation_result = self._validate_transcription_quality(
-                        full_text, audio_duration_seconds
+                        full_text, audio_duration_seconds,
+                        language=requested_language if requested_language != "auto" else None
                     )
                     if not validation_result["is_valid"]:
                         logger.warning(
@@ -1011,12 +1048,6 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         import queue
         import threading
         import time
-        from collections import namedtuple
-
-        # Create a simple result container
-        CompletedProcess = namedtuple(
-            "CompletedProcess", ["stdout", "stderr", "returncode"]
-        )
 
         start_time = time.time()
         progress_start = 50  # We start monitoring from 50%
@@ -1049,14 +1080,41 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             # Fallback to default if ffprobe fails
             logger.debug(f"Failed to get audio duration with ffprobe: {e}")
 
+        # Log full command for debugging
+        logger.info(f"Full whisper command: {' '.join(cmd)}")
+        
+        # Check if the whisper binary exists and is executable
+        import os
+        import shutil
+        
+        # If the command doesn't include a path, check if it's in PATH
+        whisper_binary = cmd[0]
+        if not os.path.isabs(whisper_binary) and os.sep not in whisper_binary:
+            # Look for the binary in PATH
+            full_path = shutil.which(whisper_binary)
+            if not full_path:
+                raise FileNotFoundError(f"Whisper binary not found in PATH: {whisper_binary}")
+            # Update the command with the full path for clarity
+            cmd[0] = full_path
+            whisper_binary = full_path
+        
+        # Now check if it exists and is executable
+        if not os.path.exists(whisper_binary):
+            raise FileNotFoundError(f"Whisper binary not found: {whisper_binary}")
+        if not os.access(whisper_binary, os.X_OK):
+            raise PermissionError(f"Whisper binary not executable: {whisper_binary}")
+        
         # Use Popen for real-time monitoring
+        # Note: Some versions of whisper.cpp may buffer output, so we use unbuffered mode
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,  # Prevent hanging on input prompts
             text=True,
-            bufsize=1,  # Line buffered
+            bufsize=0,  # Unbuffered for real-time output
             universal_newlines=True,
+            env={**os.environ, "PYTHONUNBUFFERED": "1"},  # Force unbuffered output
         )
 
         # Use queues to safely collect output from threads
@@ -1066,19 +1124,30 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         def read_stream(stream, output_queue, stream_name):
             """Read from a stream and put lines into a queue."""
             try:
-                for line in iter(stream.readline, ""):
-                    if line:
-                        output_queue.put(line)
-                        # Parse progress from the line
-                        if self.progress_callback:
-                            elapsed = time.time() - start_time
-                            self._parse_whisper_output_for_progress(
-                                line.strip(), elapsed
-                            )
+                while True:
+                    line = stream.readline()
+                    if not line:  # EOF
+                        break
+                    output_queue.put(line)
+                    # Log the output for debugging - use INFO for visibility
+                    line_stripped = line.strip()
+                    if line_stripped:  # Only log non-empty lines
+                        logger.info(f"[whisper.cpp {stream_name}] {line_stripped}")
+                    
+                    # Parse progress from the line (check both stdout and stderr)
+                    if self.progress_callback and line_stripped:
+                        # whisper.cpp may output progress to either stdout or stderr
+                        elapsed = time.time() - start_time
+                        self._parse_whisper_output_for_progress(
+                            line_stripped, elapsed
+                        )
             except Exception as e:
-                logger.debug(f"Error reading {stream_name}: {e}")
+                logger.error(f"Error reading {stream_name}: {e}", exc_info=True)
             finally:
-                stream.close()
+                try:
+                    stream.close()
+                except:
+                    pass
 
         # Start threads to read stdout and stderr
         stdout_thread = threading.Thread(
@@ -1094,10 +1163,78 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
         stdout_thread.start()
         stderr_thread.start()
+        
+        # Store subprocess reference for external termination
+        self._current_subprocess = process
+        
+        # Log process info
+        logger.info(f"Whisper process started with PID: {process.pid}")
+        
+        # Add a timeout mechanism
+        max_runtime = 3600  # 1 hour max for any transcription
+        check_interval = 0.5
+        elapsed_checks = 0
+        max_checks = int(max_runtime / check_interval)
+        last_output_time = time.time()
+        no_output_logged = False
 
         # Monitor progress while process runs
         while process.poll() is None:
             elapsed = time.time() - start_time
+            elapsed_checks += 1
+            
+            # Check for timeout
+            if elapsed_checks >= max_checks:
+                logger.error(f"Whisper.cpp process timed out after {elapsed:.0f}s")
+                process.terminate()
+                time.sleep(2)
+                if process.poll() is None:
+                    process.kill()
+                raise TimeoutError(f"Transcription timed out after {max_runtime}s")
+            
+            # Check if process is producing output
+            try:
+                current_queue_sizes = stdout_queue.qsize() + stderr_queue.qsize()
+                if current_queue_sizes > 0:
+                    last_output_time = time.time()
+                    no_output_logged = False
+                else:
+                    # Log periodic status if no output
+                    time_since_output = time.time() - last_output_time
+                    if not no_output_logged and time_since_output > 30:
+                        logger.info(f"Whisper process (PID {process.pid}) - no output for {time_since_output:.0f}s, still running...")
+                        no_output_logged = True
+                    
+                if time.time() - last_output_time > 300:  # 5 minutes without output
+                    logger.error("Whisper.cpp process appears stuck (no output for 5 minutes)")
+                    logger.error(f"Process state: returncode={process.poll()}, pid={process.pid}")
+                    
+                    # Try to get any partial output before terminating
+                    partial_stdout = []
+                    partial_stderr = []
+                    while not stdout_queue.empty():
+                        try:
+                            partial_stdout.append(stdout_queue.get_nowait())
+                        except:
+                            break
+                    while not stderr_queue.empty():
+                        try:
+                            partial_stderr.append(stderr_queue.get_nowait())
+                        except:
+                            break
+                    
+                    if partial_stdout:
+                        logger.error(f"Partial stdout: {''.join(partial_stdout[:10])}")
+                    if partial_stderr:
+                        logger.error(f"Partial stderr: {''.join(partial_stderr[:10])}")
+                    
+                    process.terminate()
+                    time.sleep(2)
+                    if process.poll() is None:
+                        process.kill()
+                    raise TimeoutError("Transcription stuck - no output for 5 minutes")
+            except Exception as e:
+                logger.error(f"Error checking output queues: {e}")
 
             # Estimate progress based on elapsed time
             # Estimate progress: assume processing takes 0.2x real-time on average
@@ -1121,9 +1258,10 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                             )
 
                     # Get file info for context
-                    # Extract filename from command (the input file is usually the last argument)
+                    # Extract filename from command (the input file is the last argument)
                     try:
-                        filename = Path(cmd[-5]).name if len(cmd) > 5 else "audio"
+                        # The audio file is always the last argument in the whisper command
+                        filename = Path(cmd[-1]).name if len(cmd) > 0 else "audio"
                     except Exception:
                         filename = "audio"
 
@@ -1132,7 +1270,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                         int(current_progress),
                     )
 
-            time.sleep(0.5)  # Check every 500ms
+            time.sleep(check_interval)  # Check every 500ms
 
         # Process has finished, wait for it
         return_code = process.wait()
@@ -1162,29 +1300,72 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 return_code, cmd, full_stdout, full_stderr
             )
 
-        return CompletedProcess(full_stdout, full_stderr, return_code)
+        # Clear subprocess reference
+        self._current_subprocess = None
+        
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=return_code,
+            stdout=full_stdout,
+            stderr=full_stderr
+        )
 
     def _parse_whisper_output_for_progress(self, line: str, elapsed_time: float):
         """Parse whisper.cpp output for progress indicators."""
-        line = line.strip().lower()
+        line_lower = line.strip().lower()
+        
+        # whisper.cpp with --print-progress outputs lines like:
+        # progress = 0%
+        # progress = 10%
+        # or potentially timestamped segments
+        if "progress" in line_lower and "%" in line:
+            # Extract percentage from "progress = X%"
+            import re
+            match = re.search(r'(\d+)%', line)
+            if match:
+                whisper_progress = int(match.group(1))
+                # Map whisper's 0-100% to our 50-80% range
+                mapped_progress = 50 + int(whisper_progress * 0.3)
+                self.progress_callback(
+                    f"🎯 Transcribing... {whisper_progress}%",
+                    mapped_progress
+                )
+                return
 
         # Look for common progress indicators in whisper.cpp output
-        if "processing" in line or "transcribing" in line:
+        if "processing" in line_lower or "transcribing" in line_lower:
             # Found processing indicator
             progress = 55 + min(
                 20, int(elapsed_time / 2)
             )  # Gradual increase from 55% to 75%
-            self.progress_callback(f"🎯 {line.capitalize()}", progress)
-        elif "segment" in line or "frame" in line:
+            self.progress_callback(f"🎯 {line.strip()}", progress)
+        elif "segment" in line_lower or "frame" in line_lower:
             # Processing segments/frames
             progress = 60 + min(
                 15, int(elapsed_time / 3)
             )  # Gradual increase from 60% to 75%
             self.progress_callback("🎯 Processing segments...", progress)
-        elif "done" in line or "finished" in line or "complete" in line:
+        elif "done" in line_lower or "finished" in line_lower or "complete" in line_lower:
             # Near completion
             self.progress_callback("🎯 Finalizing transcription...", 75)
 
+    def terminate_subprocess(self):
+        """Terminate any running subprocess."""
+        if self._current_subprocess:
+            try:
+                logger.info(f"Terminating whisper subprocess (PID: {self._current_subprocess.pid})")
+                self._current_subprocess.terminate()
+                # Give it a moment to terminate gracefully
+                import time
+                time.sleep(0.5)
+                if self._current_subprocess.poll() is None:
+                    # Force kill if still running
+                    logger.warning("Force killing whisper subprocess")
+                    self._current_subprocess.kill()
+                self._current_subprocess = None
+            except Exception as e:
+                logger.error(f"Error terminating subprocess: {e}")
+    
     def process_batch(
         self, inputs: list[Any], dry_run: bool = False, **kwargs: Any
     ) -> list[ProcessorResult]:

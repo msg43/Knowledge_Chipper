@@ -63,7 +63,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
             "quiet": True,
             "no_warnings": True,
             "format": "worstaudio[ext=webm]/worstaudio[ext=opus]/worstaudio[ext=m4a]/worstaudio/bestaudio[ext=webm][abr<=96]/bestaudio[ext=m4a][abr<=128]/bestaudio[abr<=128]/bestaudio/worst",  # Optimal cascade: smallest formats first, guaranteed audio-only fallback
-            "outtmpl": "%(title)s.%(ext)s",
+            "outtmpl": "%(title)s [%(id)s].%(ext)s",
             "ignoreerrors": True,
             "noplaylist": False,
             # Performance optimizations - optimized for stable proxy connections
@@ -508,7 +508,8 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             )
                             > 1
                         ):
-                            progress_callback(progress_msg)
+                            # Pass both message and percentage for progress bar updates
+                            progress_callback(progress_msg, int(percent))
                             last_progress_message = progress_msg
                         last_progress_time[0] = current_time
 
@@ -517,8 +518,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     import os
 
                     clean_filename = os.path.basename(filename)
+                    # Pass 100% to indicate download complete
                     progress_callback(
-                        f"✅ Download complete: {clean_filename[:50]}{'...' if len(clean_filename) > 50 else ''}"
+                        f"✅ Download complete: {clean_filename[:50]}{'...' if len(clean_filename) > 50 else ''}",
+                        100
                     )
                 elif d["status"] == "error":
                     error_msg = d.get("error", "Unknown error")
@@ -534,7 +537,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
             ydl_opts["progress_hooks"] = [download_progress_hook]
 
         # No postprocessor override needed - keeping original format
-        ydl_opts["outtmpl"] = str(output_dir / "%(title)s.%(ext)s")
+        ydl_opts["outtmpl"] = str(output_dir / "%(title)s [%(id)s].%(ext)s")
 
         all_files = []
         all_thumbnails = []
@@ -888,12 +891,21 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         else "Unknown Title"
                                     )
 
-                                    # Create or update video record
-                                    video = db_service.create_video(
-                                        video_id=video_id,
-                                        title=video_title,
-                                        url=url,
-                                        status=(
+                                    # Extract all available metadata from info dict
+                                    video_metadata = {
+                                        "uploader": info.get("uploader", ""),
+                                        "uploader_id": info.get("uploader_id", ""),
+                                        "upload_date": info.get("upload_date", ""),
+                                        "description": info.get("description", ""),
+                                        "duration_seconds": info.get("duration"),
+                                        "view_count": info.get("view_count"),
+                                        "like_count": info.get("like_count"),
+                                        "comment_count": info.get("comment_count"),
+                                        "tags_json": info.get("tags", []),
+                                        "categories_json": info.get("categories", []),
+                                        "thumbnail_url": info.get("thumbnail", ""),
+                                        "source_type": "youtube",
+                                        "status": (
                                             "completed"
                                             if (
                                                 audio_downloaded_successfully
@@ -901,9 +913,17 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                             )
                                             else "partial"
                                         ),
-                                        extraction_method=(
+                                        "extraction_method": (
                                             "packetstream" if use_proxy else "direct"
                                         ),
+                                    }
+                                    
+                                    # Create or update video record with full metadata
+                                    video = db_service.create_video(
+                                        video_id=video_id,
+                                        title=video_title,
+                                        url=url,
+                                        **video_metadata
                                     )
 
                                     if not video:

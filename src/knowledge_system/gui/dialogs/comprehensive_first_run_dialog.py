@@ -718,7 +718,12 @@ class ComprehensiveFirstRunDialog(QDialog):
 
     def _add_log_message(self, message: str):
         """Add a message to the log."""
-        self.log_text.append(message)
-        # Auto-scroll to bottom
+        # Check if we should auto-scroll BEFORE appending
         scrollbar = self.log_text.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        should_scroll = scrollbar and scrollbar.value() >= scrollbar.maximum() - 10
+        
+        self.log_text.append(message)
+        
+        # Only auto-scroll if user was already at the bottom
+        if should_scroll and scrollbar:
+            scrollbar.setValue(scrollbar.maximum())

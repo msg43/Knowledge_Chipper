@@ -66,6 +66,8 @@ class AudioProcessor(BaseProcessor):
         max_retry_attempts: int = 1,
         require_diarization: bool = False,
         speaker_assignment_callback=None,
+        preloaded_transcriber=None,
+        preloaded_diarizer=None,
     ) -> None:
         self.normalize_audio = normalize_audio
         self.target_format = target_format
@@ -80,11 +82,20 @@ class AudioProcessor(BaseProcessor):
         self.max_retry_attempts = max_retry_attempts
         self.speaker_assignment_callback = speaker_assignment_callback
         self.require_diarization = require_diarization
+        
+        # Store preloaded models
+        self.preloaded_diarizer = preloaded_diarizer
 
-        # Use whisper.cpp as the default transcriber with acceleration
-        self.transcriber = WhisperCppTranscribeProcessor(
-            model=model, use_coreml=True, progress_callback=progress_callback
-        )
+        # Use preloaded transcriber if available, otherwise create new one
+        if preloaded_transcriber:
+            self.transcriber = preloaded_transcriber
+            logger.info("✅ Using preloaded transcription model")
+        else:
+            # Use whisper.cpp as the default transcriber with acceleration
+            self.transcriber = WhisperCppTranscribeProcessor(
+                model=model, use_coreml=True, progress_callback=progress_callback
+            )
+            logger.info("🔄 Created new transcription model instance")
 
         # Model progression for retries (from smaller to larger for better accuracy)
         self.retry_models = {
@@ -439,7 +450,7 @@ class AudioProcessor(BaseProcessor):
                 logger.warning("No speaker data prepared for assignment")
                 return transcript_data
 
-            logger.info(f"🎭 Found {len(speaker_data_list)} speakers for assignment")
+            logger.info(f"✅ Found {len(speaker_data_list)} speakers for assignment")
 
             # Check if MVP LLM is already available (quick check, no downloads)
             mvp_available = False
@@ -470,6 +481,11 @@ class AudioProcessor(BaseProcessor):
             # Store MVP availability for speaker processor to use
             if mvp_available:
                 metadata["mvp_llm_available"] = True
+            
+            # CRITICAL: Store output_dir in metadata so speaker assignment can regenerate markdown
+            output_dir = kwargs.get("output_dir")
+            if output_dir:
+                metadata["output_dir"] = output_dir
 
             # Check if we're in GUI mode and can show dialog
             show_dialog = kwargs.get("show_speaker_dialog", True)
@@ -635,6 +651,12 @@ class AudioProcessor(BaseProcessor):
     ) -> dict | None:
         """
         Get automatic speaker assignments for non-GUI mode.
+        
+        Priority order:
+        1. Existing user-confirmed assignments from database
+        2. AI suggestions from previous processing sessions (stored in database)
+        3. AI suggestions from current speaker_data_list
+        4. Generic fallback names
 
         Args:
             speaker_data_list: List of SpeakerData objects
@@ -646,8 +668,9 @@ class AudioProcessor(BaseProcessor):
         try:
             from ..database.speaker_models import get_speaker_db_service
 
-            # Check for existing assignments in database
             db_service = get_speaker_db_service()
+            
+            # PRIORITY 1: Check for existing user-confirmed assignments in database
             existing_assignments = db_service.get_assignments_for_recording(
                 recording_path
             )
@@ -658,20 +681,66 @@ class AudioProcessor(BaseProcessor):
                 for assignment in existing_assignments:
                     assignments[assignment.speaker_id] = assignment.assigned_name
 
-                logger.info(f"Found existing speaker assignments: {assignments}")
+                logger.info(f"✅ Found existing speaker assignments: {assignments}")
                 return assignments
 
-            # Use AI suggestions as fallback
+            # PRIORITY 2: Check for AI suggestions from previous processing sessions
+            # This is the missing piece! AI suggestions are stored but not loaded
+            try:
+                import json
+                from sqlalchemy import desc
+                from ..database.speaker_models import SpeakerProcessingSession
+                
+                # Query for the most recent processing session for this recording
+                with db_service.session_scope() as session:
+                    latest_session = (
+                        session.query(SpeakerProcessingSession)
+                        .filter(SpeakerProcessingSession.recording_path == str(recording_path))
+                        .order_by(desc(SpeakerProcessingSession.created_at))
+                        .first()
+                    )
+                    
+                    if latest_session and latest_session.ai_suggestions_json:
+                        ai_suggestions = json.loads(latest_session.ai_suggestions_json)
+                        
+                        # Extract high-confidence suggestions
+                        assignments = {}
+                        for speaker_id, suggestion_data in ai_suggestions.items():
+                            if isinstance(suggestion_data, dict):
+                                suggested_name = suggestion_data.get("suggested_name")
+                                confidence = suggestion_data.get("confidence", 0)
+                                
+                                # Use high-confidence suggestions (>0.6)
+                                if suggested_name and confidence > 0.6:
+                                    assignments[speaker_id] = suggested_name
+                                    logger.info(
+                                        f"🤖 Using AI suggestion from database: {speaker_id} -> '{suggested_name}' "
+                                        f"(confidence: {confidence:.2f})"
+                                    )
+                        
+                        if assignments:
+                            logger.info(f"✅ Loaded {len(assignments)} AI suggestions from database")
+                            return assignments
+            
+            except Exception as e:
+                logger.debug(f"Could not load AI suggestions from database: {e}")
+
+            # PRIORITY 3: Use AI suggestions from current speaker_data_list
             assignments = {}
             for speaker_data in speaker_data_list:
                 if speaker_data.suggested_name and speaker_data.confidence_score > 0.6:
                     assignments[speaker_data.speaker_id] = speaker_data.suggested_name
+                    logger.info(
+                        f"🤖 Using AI suggestion from processing: {speaker_data.speaker_id} -> "
+                        f"'{speaker_data.suggested_name}' (confidence: {speaker_data.confidence_score:.2f})"
+                    )
                 else:
-                    # Generate generic name
+                    # PRIORITY 4: Generate generic name as fallback
                     speaker_num = speaker_data.speaker_id.replace("SPEAKER_", "")
                     try:
                         num = int(speaker_num) + 1
                         assignments[speaker_data.speaker_id] = f"Speaker {num}"
+                        logger.debug(f"Using generic name: {speaker_data.speaker_id} -> 'Speaker {num}'")
                     except ValueError:
                         assignments[speaker_data.speaker_id] = speaker_data.speaker_id
 
@@ -845,28 +914,114 @@ class AudioProcessor(BaseProcessor):
         audio_metadata: dict,
         model_metadata: dict,
         include_timestamps: bool = True,
+        video_metadata: dict | None = None,
     ) -> str:
         """Create markdown content from transcription data and metadata."""
         lines = []
 
         # YAML frontmatter
         lines.append("---")
-        lines.append(
-            f'title: "Local Transcription - {audio_metadata.get("filename", "Unknown")}"'
-        )
-        lines.append(f'source_file: "{audio_metadata.get("filename", "Unknown")}"')
-        lines.append(f'transcription_date: "{datetime.now().isoformat()}"')
-        lines.append(f'file_format: "{audio_metadata.get("file_format", "unknown")}"')
-        if audio_metadata.get("file_size_mb"):
-            lines.append(f'file_size_mb: {audio_metadata["file_size_mb"]}')
-        if audio_metadata.get("duration_formatted"):
-            lines.append(f'duration: "{audio_metadata["duration_formatted"]}"')
+        
+        # Determine source type
+        source_type = "Local Audio"  # Default
+        if video_metadata is not None:
+            # Check source_type in metadata
+            if "source_type" in video_metadata:
+                source_type_raw = video_metadata["source_type"]
+                # Map database values to display names
+                if source_type_raw == "youtube":
+                    source_type = "YouTube"
+                elif source_type_raw == "rss":
+                    source_type = "RSS"
+                elif source_type_raw == "upload":
+                    source_type = "Upload"
+                else:
+                    source_type = source_type_raw.title()
+            else:
+                # Default to YouTube if video metadata exists but no source_type
+                source_type = "YouTube"
+        
+        if video_metadata is not None:
+            # Use YouTube metadata for title and source info
+            safe_title = video_metadata.get("title", "Unknown").replace('"', '\\"')
+            lines.append(f'title: "{safe_title}"')
+            lines.append(f'source: "{video_metadata.get("url", "")}"')
+            lines.append(f'video_id: "{video_metadata.get("video_id", "")}"')
+            
+            # Add uploader info
+            if video_metadata.get("uploader"):
+                lines.append(f'uploader: "{video_metadata["uploader"]}"')
+            
+            # Add upload date
+            if video_metadata.get("upload_date"):
+                try:
+                    date_obj = datetime.strptime(video_metadata["upload_date"], "%Y%m%d")
+                    lines.append(f'upload_date: "{date_obj.strftime("%B %d, %Y")}"')
+                except (ValueError, TypeError):
+                    lines.append(f'upload_date: "{video_metadata["upload_date"]}"')
+            
+            # Add duration from video metadata if available
+            if video_metadata.get("duration"):
+                duration_seconds = video_metadata["duration"]
+                minutes = duration_seconds // 60
+                seconds = duration_seconds % 60
+                lines.append(f'duration: "{minutes}:{seconds:02d}"')
+            
+            # Add view count if available
+            if video_metadata.get("view_count"):
+                lines.append(f"view_count: {video_metadata['view_count']}")
+            
+            # Add tags if available
+            if video_metadata.get("tags"):
+                safe_tags = [tag.replace('"', '\\"') for tag in video_metadata["tags"]]
+                tags_yaml = "[" + ", ".join(f'"{tag}"' for tag in safe_tags) + "]"
+                lines.append(f"tags: {tags_yaml}")
+                lines.append(f"# Total tags: {len(video_metadata['tags'])}")
+            
+            # Add transcription date for YouTube videos too
+            trans_date = datetime.now()
+            lines.append(f'transcription_date: "{trans_date.strftime("%B %d, %Y")}"')
+            
+            # Note the transcription type based on source
+            lines.append(f'transcription_type: "{source_type}"')
+        else:
+            # Local audio file - use existing logic
+            raw_filename = audio_metadata.get("filename", "Unknown")
+            clean_title = raw_filename.rsplit(".", 1)[0] if "." in raw_filename else raw_filename
+            lines.append(f'title: "{clean_title}"')
+            
+            lines.append(f'source_file: "{raw_filename}"')
+            lines.append(f'source: "{source_type}"')
+            
+            # Format transcription date more nicely (like YouTube's "August 02, 2025")
+            trans_date = datetime.now()
+            lines.append(f'transcription_date: "{trans_date.strftime("%B %d, %Y")}"')
+            lines.append(f'transcription_type: "{source_type}"')
+            
+            lines.append(f'file_format: "{audio_metadata.get("file_format", "unknown")}"')
+            
+            if audio_metadata.get("file_size_mb"):
+                lines.append(f'file_size_mb: {audio_metadata["file_size_mb"]:.2f}')
+            
+            if audio_metadata.get("duration_formatted"):
+                lines.append(f'duration: "{audio_metadata["duration_formatted"]}"')
+        
+        # Language detection (try to get real language instead of "unknown")
+        language = transcription_data.get("language", "unknown")
+        if language == "unknown" and transcription_data.get("text"):
+            # Simple language hint based on common words
+            text_sample = transcription_data.get("text", "")[:500].lower()
+            if any(word in text_sample for word in [" the ", " and ", " is ", " are "]):
+                language = "en"
+        lines.append(f'language: "{language}"')
+        
         lines.append(f'transcription_model: "{model_metadata.get("model", "unknown")}"')
-        lines.append(f'language: "{transcription_data.get("language", "unknown")}"')
         lines.append(f'text_length: {len(transcription_data.get("text", ""))}')
         lines.append(f'segments_count: {len(transcription_data.get("segments", []))}')
+        
         if model_metadata.get("diarization_enabled"):
             lines.append("diarization_enabled: true")
+        
         lines.append(f"include_timestamps: {include_timestamps}")
         lines.append("---")
         lines.append("")
@@ -910,6 +1065,7 @@ class AudioProcessor(BaseProcessor):
         audio_path: Path,
         output_dir: str | Path | None = None,
         include_timestamps: bool = True,
+        video_metadata: dict | None = None,
     ) -> Path | None:
         """Save transcription result to a markdown file."""
         if not transcription_result.success:
@@ -946,12 +1102,13 @@ class AudioProcessor(BaseProcessor):
             audio_metadata = self._get_audio_metadata(audio_path)
             model_metadata = transcription_result.metadata or {}
 
-            # Create markdown content with timestamps preference
+            # Create markdown content with timestamps preference and video metadata if available
             markdown_content = self._create_markdown(
                 transcription_result.data,
                 audio_metadata,
                 model_metadata,
                 include_timestamps=include_timestamps,
+                video_metadata=video_metadata,
             )
 
             # Write file with detailed error handling
@@ -1215,11 +1372,17 @@ class AudioProcessor(BaseProcessor):
                             )
 
                         if is_diarization_available():
-                            diarizer = SpeakerDiarizationProcessor(
-                                hf_token=self.hf_token,
-                                device=self.device,
-                                progress_callback=self.progress_callback,
-                            )
+                            # Use preloaded diarizer if available, otherwise create new one
+                            if hasattr(self, 'preloaded_diarizer') and self.preloaded_diarizer:
+                                diarizer = self.preloaded_diarizer
+                                logger.info("✅ Using preloaded diarization model")
+                            else:
+                                diarizer = SpeakerDiarizationProcessor(
+                                    hf_token=self.hf_token,
+                                    device=self.device,
+                                    progress_callback=self.progress_callback,
+                                )
+                                logger.info("🔄 Created new diarization model instance")
 
                             # Run both in parallel
                             (
@@ -1452,11 +1615,14 @@ class AudioProcessor(BaseProcessor):
                             )
 
                             # Save regular markdown transcript
+                            # Extract video_metadata from kwargs if this is a YouTube video
+                            video_metadata = kwargs.get("video_metadata")
                             saved_file = self.save_transcript_to_markdown(
                                 temp_result,
                                 path,
                                 output_dir,
                                 include_timestamps=include_timestamps,
+                                video_metadata=video_metadata,
                             )
 
                             # Save color-coded transcript if speakers are identified and color coding is enabled
