@@ -159,6 +159,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
         # Extract optional services from kwargs
         session_manager = kwargs.get("session_manager")
         db_service = kwargs.get("db_service")
+        cancellation_token = kwargs.get("cancellation_token")
 
         urls = extract_urls(input_data)
         if not urls:
@@ -521,7 +522,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     # Pass 100% to indicate download complete
                     progress_callback(
                         f"✅ Download complete: {clean_filename[:50]}{'...' if len(clean_filename) > 50 else ''}",
-                        100
+                        100,
                     )
                 elif d["status"] == "error":
                     error_msg = d.get("error", "Unknown error")
@@ -543,16 +544,22 @@ class YouTubeDownloadProcessor(BaseProcessor):
         all_thumbnails = []
         errors = []
 
-        # Smart retry system for bot detection
-        # Track URLs that hit bot detection and need retry with fresh IP
-        retry_queue = []
-        used_session_ids = {}  # Track session IDs to force new IPs on retry
+        import random
+        import time
 
-        # Convert to list for modification during iteration
+        # Single-use IP strategy: Each video gets a unique IP with staggered delays
+        # No retries - fail fast and move to next video
         urls_to_process = list(urls)
         url_index = 0
 
         while url_index < len(urls_to_process):
+            # Check for cancellation at the start of each iteration
+            if cancellation_token and cancellation_token.is_cancelled():
+                logger.info("Download cancelled by user - stopping gracefully")
+                if progress_callback:
+                    progress_callback("⏹ Download cancelled by user")
+                break
+
             url = urls_to_process[url_index]
             i = url_index + 1
             video_id = None  # Initialize early for error handling
@@ -575,40 +582,38 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 if youtube_id_match:
                     video_id = youtube_id_match.group(1)
 
-                # Generate unique session ID for this video (sticky IP per URL)
-                # Each URL gets a consistent session ID, ensuring same IP for all requests
-                # (metadata, download chunks, thumbnail) while different URLs get different IPs
-                # SMART RETRY: If this URL previously hit bot detection, force a NEW session ID
+                # Single-use IP strategy: Generate unique session ID for each video
                 current_proxy_url = None
+                session_id = None  # Initialize session_id
                 if use_proxy and proxy_manager:
                     from ..utils.packetstream_proxy import PacketStreamProxyManager
 
-                    # Generate base session ID from video
-                    base_session_id = PacketStreamProxyManager.generate_session_id(
+                    # Generate unique session ID for this video (single-use IP)
+                    # Add timestamp and random component to ensure uniqueness
+                    session_id = PacketStreamProxyManager.generate_session_id(
                         url, video_id
                     )
-
-                    # If this URL was retried, append retry counter to force NEW IP
-                    if url in used_session_ids:
-                        retry_count = used_session_ids[url]
-                        session_id = f"{base_session_id}_retry{retry_count}"
-                        logger.info(
-                            f"🔄 Retry #{retry_count} for {video_id or 'URL'} - forcing NEW IP with session '{session_id}'"
-                        )
-                    else:
-                        session_id = base_session_id
-                        used_session_ids[url] = 0  # Track first attempt
+                    # Make it truly unique by adding timestamp
+                    session_id = (
+                        f"{session_id}_{int(time.time())}_{random.randint(1000, 9999)}"
+                    )
 
                     current_proxy_url = proxy_manager.get_proxy_url(
                         session_id=session_id
                     )
 
-                if current_proxy_url and video_id:
+                if current_proxy_url and video_id and session_id:
                     logger.info(
-                        f"Using PacketStream proxy session '{video_id}' for video {video_id} ({i}/{len(urls)})"
+                        f"Using PacketStream proxy session '{session_id}' for video {video_id} ({i}/{len(urls)})"
+                    )
+                    logger.info(
+                        f"Proxy URL format: {current_proxy_url.split('@')[0]}@***"
                     )
                 elif current_proxy_url:
                     logger.info(f"Using PacketStream proxy for URL ({i}/{len(urls)})")
+                    logger.info(
+                        f"Proxy URL format: {current_proxy_url.split('@')[0]}@***"
+                    )
                 elif video_id:
                     logger.info(
                         f"Using direct connection for video {video_id} (no proxy configured)"
@@ -917,13 +922,13 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                             "packetstream" if use_proxy else "direct"
                                         ),
                                     }
-                                    
+
                                     # Create or update video record with full metadata
                                     video = db_service.create_video(
                                         video_id=video_id,
                                         title=video_title,
                                         url=url,
-                                        **video_metadata
+                                        **video_metadata,
                                     )
 
                                     if not video:
@@ -1220,42 +1225,33 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 error_msg = str(e)
                 logger.error(f"Error downloading audio for {url}: {error_msg}")
 
-                # Check for bot detection - add to retry queue for second pass
+                # Fail-fast approach: Log error and move to next video
+                # Check for specific error types for better user feedback
                 if (
                     "bot" in error_msg.lower()
                     or "sign in to confirm" in error_msg.lower()
                 ):
-                    # Check if this is already a retry
-                    current_retry_count = used_session_ids.get(url, 0)
-                    max_retries = 2  # Allow up to 2 retries (3 total attempts)
-
-                    if current_retry_count < max_retries:
-                        logger.warning(
-                            f"🤖 Bot detection for {video_id or url[:50]} - queueing for retry with fresh IP (attempt {current_retry_count + 1}/{max_retries + 1})"
+                    logger.error(
+                        f"🤖 Bot detection for {video_id or url[:50]} - skipping (each video uses unique IP)"
+                    )
+                    errors.append(f"Bot detection for {url}: {error_msg}")
+                    if progress_callback:
+                        progress_callback(
+                            f"❌ Bot detection - skipping video (fresh IP will be used for next video)"
                         )
-                        retry_queue.append(url)
-                        used_session_ids[url] = current_retry_count + 1
-                        if progress_callback:
-                            progress_callback(
-                                f"🔄 Bot detection - will retry with fresh IP after processing other URLs"
-                            )
-                        # Don't add to errors yet - will retry
-                        url_index += 1
-                        continue
-                    else:
-                        logger.error(
-                            f"❌ Bot detection persists after {max_retries} retries for {video_id or url[:50]}"
-                        )
-                        errors.append(
-                            f"Failed to download {url} after {max_retries + 1} attempts with different IPs: {error_msg}"
-                        )
-                # Check for specific payment required error
                 elif "402 Payment Required" in error_msg:
+                    logger.error(f"💰 Payment required - proxy account out of funds")
                     errors.append(
                         f"💰 Payment required for {url}: Your proxy account is out of funds. Please add payment to your proxy service account."
                     )
+                    if progress_callback:
+                        progress_callback(
+                            f"❌ Proxy payment required - check account balance"
+                        )
                 else:
                     errors.append(f"Failed to download {url}: {error_msg}")
+                    if progress_callback:
+                        progress_callback(f"❌ Download failed: {error_msg[:100]}")
 
             finally:
                 # PacketStream proxies do not require session cleanup (stateless)
@@ -1264,20 +1260,21 @@ class YouTubeDownloadProcessor(BaseProcessor):
             # Move to next URL
             url_index += 1
 
-            # SMART RETRY SYSTEM: Check if we need to add retry URLs
-            # When we finish first pass, add retry queue to end
-            if url_index == len(urls) and retry_queue:
-                logger.info(
-                    f"🔄 First pass complete. Adding {len(retry_queue)} URLs to retry queue with fresh IPs"
-                )
-                if progress_callback:
-                    progress_callback(
-                        f"🔄 Retrying {len(retry_queue)} bot-detected URLs with fresh IPs..."
+            # Add staggered delay between downloads (3-8 seconds) to appear more human-like
+            # Skip delay for last URL or if cancelled
+            if url_index < len(urls_to_process):
+                if cancellation_token and cancellation_token.is_cancelled():
+                    logger.info("Download cancelled - skipping delay")
+                else:
+                    delay = random.uniform(3, 8)
+                    logger.info(
+                        f"⏱️ Pausing {delay:.1f}s before next download (organic pacing)"
                     )
-
-                # Add retry URLs to end of processing list
-                urls_to_process.extend(retry_queue)
-                retry_queue.clear()  # Clear queue to prevent duplicates
+                    if progress_callback:
+                        progress_callback(
+                            f"⏱️ Pausing {delay:.1f}s before next video..."
+                        )
+                    time.sleep(delay)
 
         return ProcessorResult(
             success=len(errors) == 0,

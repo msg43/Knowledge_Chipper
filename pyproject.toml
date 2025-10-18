@@ -49,7 +49,7 @@ dependencies = [
 
     # YouTube and video
     # PRODUCTION PIN: Match requirements.txt for consistent builds
-    "yt-dlp==2025.9.26",  # Last tested: 2025-10-11 - See docs/DEPENDENCY_UPDATE_STRATEGY.md
+    "yt-dlp==2025.10.14",  # Last tested: 2025-10-18 - See docs/YT_DLP_UPGRADE_PROCEDURE.md
     "requests>=2.31.0",
 
     # ML and transcription (core) - using whisper.cpp instead of openai-whisper to save ~400MB

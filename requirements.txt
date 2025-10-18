@@ -26,7 +26,7 @@ pydub>=0.25.1  # Audio processing and manipulation (required by pyproject.toml)
 # YouTube processing
 # PRODUCTION PIN: Exact version tested and verified
 # To test updates: use requirements-dev.txt, then update this pin after testing
-yt-dlp==2025.9.26  # Last tested: 2025-10-11 - format selection and signature extraction working
+yt-dlp==2025.10.14  # Last tested: 2025-10-18 - format selection and signature extraction working
 pytube>=15.0.0
 
 # HTTP requests

@@ -237,13 +237,13 @@ class EnhancedTranscriptionWorker(QThread):
                         if retry_count > 0
                         else ""
                     )
-                    
+
                     # Calculate progress range for this file
                     # Downloads occupy 20-90% of total progress
                     # Each file gets an equal portion of that range
                     download_range_start = 20 + ((idx - 1) / total) * 70
                     download_range_size = 70 / total
-                    
+
                     # Start at beginning of this file's range
                     self.transcription_step_updated.emit(
                         f"📥 [{idx}/{total}] Downloading{attempt_msg}...",
@@ -260,17 +260,24 @@ class EnhancedTranscriptionWorker(QThread):
                         """Map download progress (0-100%) to this file's allocated range."""
                         if percent > 0:
                             # Map 0-100% download progress to this file's range
-                            mapped_progress = download_range_start + (percent / 100 * download_range_size)
-                            self.transcription_step_updated.emit(message, int(mapped_progress))
+                            mapped_progress = download_range_start + (
+                                percent / 100 * download_range_size
+                            )
+                            self.transcription_step_updated.emit(
+                                message, int(mapped_progress)
+                            )
                         else:
                             # Just emit the message
-                            self.transcription_step_updated.emit(message, int(download_range_start))
+                            self.transcription_step_updated.emit(
+                                message, int(download_range_start)
+                            )
 
                     result = downloader.process(
-                        url, 
-                        output_dir=downloads_dir, 
+                        url,
+                        output_dir=downloads_dir,
                         db_service=db_service,
-                        progress_callback=download_progress_callback
+                        progress_callback=download_progress_callback,
+                        cancellation_token=self.cancellation_token,
                     )
 
                     if result.success and result.data.get("downloaded_files"):
@@ -483,7 +490,9 @@ class EnhancedTranscriptionWorker(QThread):
                         completed = 0
                         for future in as_completed(futures):
                             if self.should_stop:
-                                logger.info("Stop requested during downloads - cleaning up executor")
+                                logger.info(
+                                    "Stop requested during downloads - cleaning up executor"
+                                )
                                 # Cancel remaining futures
                                 for f in futures:
                                     if not f.done():
@@ -665,14 +674,14 @@ class EnhancedTranscriptionWorker(QThread):
             # Ensure all relevant GUI settings are passed to the process method
             gui_settings_to_pass = [
                 "timestamps",
-                "language", 
+                "language",
                 "format",
                 "overwrite",
                 "output_dir",
                 "enable_speaker_assignment",
-                "enable_color_coding"
+                "enable_color_coding",
             ]
-            
+
             for setting in gui_settings_to_pass:
                 if setting in self.gui_settings:
                     processing_kwargs[setting] = self.gui_settings[setting]
@@ -686,9 +695,12 @@ class EnhancedTranscriptionWorker(QThread):
                 # Get preloaded models from the tab if available
                 preloaded_transcriber = None
                 preloaded_diarizer = None
-                
-                if hasattr(self.parent(), 'model_preloader'):
-                    preloaded_transcriber, preloaded_diarizer = self.parent().model_preloader.get_preloaded_models()
+
+                if hasattr(self.parent(), "model_preloader"):
+                    (
+                        preloaded_transcriber,
+                        preloaded_diarizer,
+                    ) = self.parent().model_preloader.get_preloaded_models()
                     if preloaded_transcriber:
                         logger.info("🚀 Using preloaded transcription model")
                     if preloaded_diarizer:
@@ -709,7 +721,7 @@ class EnhancedTranscriptionWorker(QThread):
                     preloaded_diarizer=preloaded_diarizer,
                     **audio_processor_kwargs,
                 )
-                
+
                 # Store processor reference for subprocess termination
                 self.audio_processor = processor
 
@@ -752,17 +764,17 @@ class EnhancedTranscriptionWorker(QThread):
                         )
 
                     processing_kwargs_with_output["output_dir"] = output_dir
-                    
+
                     # Check if this is a YouTube video and retrieve metadata from database
                     # This enables rich metadata in the markdown output (tags, uploader, etc.)
                     try:
                         from ...database.service import DatabaseService
                         from ...utils.youtube_utils import extract_video_id
-                        
+
                         # Try to extract video_id from filename
                         file_path_obj = Path(file_path)
                         filename = file_path_obj.stem
-                        
+
                         # Try to get video_id - could be in brackets or part of filename
                         video_id = None
                         if "[" in filename and "]" in filename:
@@ -772,7 +784,8 @@ class EnhancedTranscriptionWorker(QThread):
                             # Check for underscore format: "Title_video_id"
                             # YouTube video IDs are 11 characters: [a-zA-Z0-9_-]{11}
                             import re
-                            match = re.search(r'_([a-zA-Z0-9_-]{11})$', filename)
+
+                            match = re.search(r"_([a-zA-Z0-9_-]{11})$", filename)
                             if match:
                                 video_id = match.group(1)
                             else:
@@ -781,11 +794,11 @@ class EnhancedTranscriptionWorker(QThread):
                                     video_id = extract_video_id(filename)
                                 except:
                                     pass
-                        
+
                         if video_id:
                             db_service = DatabaseService()
                             video_record = db_service.get_video(video_id)
-                            
+
                             if video_record:
                                 # Convert database record to metadata dict for audio processor
                                 video_metadata = {
@@ -796,17 +809,27 @@ class EnhancedTranscriptionWorker(QThread):
                                     "upload_date": video_record.upload_date,
                                     "duration": video_record.duration_seconds,
                                     "view_count": video_record.view_count,
-                                    "tags": video_record.tags_json if video_record.tags_json else [],
+                                    "tags": video_record.tags_json
+                                    if video_record.tags_json
+                                    else [],
                                     "description": video_record.description,
                                     "source_type": video_record.source_type,
                                 }
-                                processing_kwargs_with_output["video_metadata"] = video_metadata
-                                logger.info(f"✅ Retrieved YouTube metadata for {video_id}: {video_record.title}")
+                                processing_kwargs_with_output[
+                                    "video_metadata"
+                                ] = video_metadata
+                                logger.info(
+                                    f"✅ Retrieved YouTube metadata for {video_id}: {video_record.title}"
+                                )
                             else:
-                                logger.debug(f"No database record found for video_id: {video_id}")
+                                logger.debug(
+                                    f"No database record found for video_id: {video_id}"
+                                )
                         else:
-                            logger.debug(f"Could not extract video_id from filename: {filename}")
-                            
+                            logger.debug(
+                                f"Could not extract video_id from filename: {filename}"
+                            )
+
                     except Exception as e:
                         logger.debug(f"Could not retrieve video metadata: {e}")
                         # Not fatal - continue without metadata
@@ -1108,66 +1131,73 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.transcription_worker: EnhancedTranscriptionWorker | None = None
         self.gui_settings = get_gui_settings_manager()
         self.tab_name = "Local Transcription"
-        
+
         # MUST call super().__init__() first before creating child widgets
         super().__init__(parent)
-        
+
         # Initialize model preloader AFTER super init
         from ..components.model_preloader import ModelPreloader
+
         self.model_preloader = ModelPreloader(self)
         self._setup_model_preloader()
 
     def _setup_model_preloader(self):
         """Setup model preloader signals and configuration."""
         # Connect preloader signals
-        self.model_preloader.transcription_model_loading.connect(self._on_transcription_loading)
-        self.model_preloader.transcription_model_ready.connect(self._on_transcription_ready)
-        self.model_preloader.diarization_model_loading.connect(self._on_diarization_loading)
+        self.model_preloader.transcription_model_loading.connect(
+            self._on_transcription_loading
+        )
+        self.model_preloader.transcription_model_ready.connect(
+            self._on_transcription_ready
+        )
+        self.model_preloader.diarization_model_loading.connect(
+            self._on_diarization_loading
+        )
         self.model_preloader.diarization_model_ready.connect(self._on_diarization_ready)
         self.model_preloader.preloading_complete.connect(self._on_preloading_complete)
         self.model_preloader.preloading_error.connect(self._on_preloading_error)
-    
+
     def _start_model_preloading(self):
         """Start preloading models with current settings."""
         try:
             # Get current settings
             settings = self._get_transcription_settings()
-            
+
             # Configure preloader
             self.model_preloader.configure(
                 model=settings.get("model", "base"),
                 device=settings.get("device"),
                 hf_token=getattr(self.settings.api_keys, "huggingface_token", None),
-                enable_diarization=settings.get("diarization", True)
+                enable_diarization=settings.get("diarization", True),
             )
-            
+
             # Start preloading
             self.model_preloader.start_preloading()
             logger.info("🚀 Model preloading started")
-            
+
         except Exception as e:
             logger.error(f"Failed to start model preloading: {e}")
-    
+
     def _on_transcription_loading(self, message: str, progress: int):
         """Handle transcription model loading progress."""
         self.append_log(f"🔄 {message}")
-    
+
     def _on_transcription_ready(self):
         """Handle transcription model ready."""
         self.append_log("✅ Transcription model ready!")
-    
+
     def _on_diarization_loading(self, message: str, progress: int):
         """Handle diarization model loading progress."""
         self.append_log(f"✅ {message}")
-    
+
     def _on_diarization_ready(self):
         """Handle diarization model ready."""
         self.append_log("✅ Diarization model ready!")
-    
+
     def _on_preloading_complete(self):
         """Handle all models preloaded."""
         self.append_log("🎉 All models preloaded! Ready for transcription.")
-    
+
     def _on_preloading_error(self, error: str):
         """Handle preloading error."""
         self.append_log(f"⚠️ Model preloading warning: {error}")
@@ -1209,7 +1239,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # Load saved settings after UI is set up
         # Use a timer with a small delay to ensure all widgets are fully initialized
         QTimer.singleShot(200, self._load_settings)
-        
+
         # Start model preloading after UI is ready
         QTimer.singleShot(500, self._start_model_preloading)
 
@@ -1963,7 +1993,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             logger.info(
                 f"✅ Progress bar switched to determinate mode with {total_files} files"
             )
-    
+
     def _handle_speaker_assignment_request(
         self, speaker_data_list, recording_path, metadata, task_id
     ):
@@ -2026,10 +2056,10 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
     def _update_transcription_step(self, step_description: str, progress_percent: int):
         """Update real-time transcription step display."""
         self.append_log(f"🎤 {step_description}")
-        
+
         # Update intra-file progress in the progress bar
         # This provides smooth progress feedback during single file transcription
-        if hasattr(self, 'progress_display') and progress_percent > 0:
+        if hasattr(self, "progress_display") and progress_percent > 0:
             self.progress_display.update_current_file_progress(progress_percent)
 
     def _update_progress(self, progress_data):
@@ -2065,7 +2095,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             # Reset current file progress when a file completes
             # This ensures the progress bar shows the correct percentage for completed files
             self.progress_display.current_file_progress = 0
-            
+
             # Update simple progress display
             self.progress_display.update_progress(
                 completed=completed_count, failed=failed_count, current_file=file_name
@@ -2108,14 +2138,18 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # BUT only if we're not in a cancelled state
         if completed_files == 0 and failed_files == 0 and total_files > 0:
             # Check if this was a cancellation by looking at worker state
-            if (self.transcription_worker and 
-                hasattr(self.transcription_worker, 'cancellation_token') and 
-                self.transcription_worker.cancellation_token.is_cancelled):
+            if (
+                self.transcription_worker
+                and hasattr(self.transcription_worker, "cancellation_token")
+                and self.transcription_worker.cancellation_token.is_cancelled
+            ):
                 # This was a cancellation, not a successful completion
                 completed_files = 0
                 failed_files = 0
             else:
-                completed_files = total_files  # Legacy fallback for successful completion
+                completed_files = (
+                    total_files  # Legacy fallback for successful completion
+                )
 
         # Complete the progress display
         self.progress_display.finish(completed_files, failed_files)
@@ -2136,9 +2170,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.append_log(f"\n❌ All transcriptions failed ({failed_files} file(s))")
         elif completed_files == 0 and failed_files == 0 and total_files > 0:
             # Check if this was a cancellation
-            if (self.transcription_worker and 
-                hasattr(self.transcription_worker, 'cancellation_token') and 
-                self.transcription_worker.cancellation_token.is_cancelled):
+            if (
+                self.transcription_worker
+                and hasattr(self.transcription_worker, "cancellation_token")
+                and self.transcription_worker.cancellation_token.is_cancelled
+            ):
                 self.append_log("\n⏹️ Transcription cancelled by user")
             else:
                 self.append_log("\n✅ Processing completed (no files processed)")
@@ -2322,7 +2358,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
                 # Reset UI immediately to prevent user confusion
                 self._reset_ui_after_stop()
-                
+
                 # Start async cleanup that won't block the UI
                 QTimer.singleShot(100, lambda: self._async_cleanup_worker())
             else:
@@ -2367,27 +2403,27 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             return
 
         # Give it 5 seconds total for graceful shutdown, checking every 500ms
-        attempts_remaining = getattr(self, '_cleanup_attempts', 10)
-        
+        attempts_remaining = getattr(self, "_cleanup_attempts", 10)
+
         if attempts_remaining > 0:
             self._cleanup_attempts = attempts_remaining - 1
             # Still running, check again in 500ms
             QTimer.singleShot(500, lambda: self._async_cleanup_worker())
-            
+
             # Show countdown in UI
-            seconds_left = (attempts_remaining * 0.5)
+            seconds_left = attempts_remaining * 0.5
             self.pipeline_status_label.setText(f"Stopping... ({seconds_left:.1f}s)")
         else:
             # Timeout reached - force terminate
             self.append_log("⏹ Transcription in progress - forcing stop...")
             self.append_log("💡 Note: The current file's transcription was interrupted")
-            
+
             # First, try to terminate any subprocess
             self._terminate_subprocess()
-            
+
             # Then terminate the worker thread
             self.transcription_worker.terminate()
-            
+
             # Give termination a moment to complete, then check
             QTimer.singleShot(1000, lambda: self._finalize_stop())
 
@@ -2395,16 +2431,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         """Attempt to terminate any running subprocess."""
         try:
             # Access the audio processor through the worker
-            if hasattr(self.transcription_worker, 'audio_processor'):
+            if hasattr(self.transcription_worker, "audio_processor"):
                 processor = self.transcription_worker.audio_processor
-                if processor and hasattr(processor, 'transcriber'):
+                if processor and hasattr(processor, "transcriber"):
                     transcriber = processor.transcriber
-                    if transcriber and hasattr(transcriber, 'terminate_subprocess'):
+                    if transcriber and hasattr(transcriber, "terminate_subprocess"):
                         self.append_log("🛑 Terminating whisper subprocess...")
                         transcriber.terminate_subprocess()
         except Exception as e:
             logger.error(f"Error terminating subprocess: {e}")
-    
+
     def _finalize_stop(self):
         """Finalize the stop process after termination."""
         if self.transcription_worker:
@@ -2412,10 +2448,10 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.append_log("⚠️ Worker still running after termination attempt")
             else:
                 self.append_log("✓ Transcription stopped successfully")
-        
+
         # Reset cleanup counter for next time
         self._cleanup_attempts = 10
-        
+
         # Final UI state
         self.pipeline_status_label.setText("Ready to process")
         self.pipeline_status_label.setStyleSheet("color: #666;")
@@ -2459,8 +2495,10 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         processing_time = 60.0  # Mock 1 minute
 
         # Get output directory
-        output_dir = self.output_dir_input.text() if hasattr(self, 'output_dir_input') else None
-        
+        output_dir = (
+            self.output_dir_input.text() if hasattr(self, "output_dir_input") else None
+        )
+
         # If output directory is empty or None, try to get it from settings
         if not output_dir or not output_dir.strip():
             output_dir = self._get_transcription_settings().get("output_dir")
@@ -2470,7 +2508,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         # Connect the signal to switch to summarization tab and load files
         summary.switch_to_summarization.connect(
-            lambda: self._switch_to_summarization_with_files(summary.successful_files, output_dir)
+            lambda: self._switch_to_summarization_with_files(
+                summary.successful_files, output_dir
+            )
         )
 
         summary.show_summary(
@@ -2482,14 +2522,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             output_dir=output_dir,
         )
 
-    def _switch_to_summarization_with_files(self, successful_files: list[dict], output_dir: str | None):
+    def _switch_to_summarization_with_files(
+        self, successful_files: list[dict], output_dir: str | None
+    ):
         """Switch to summarization tab and load the transcribed files."""
         # First, switch to the summarization tab
         self.navigate_to_tab.emit("Summarize")
-        
+
         # Get the main window to access the summarization tab
         main_window = self.window()
-        if hasattr(main_window, 'tabs'):
+        if hasattr(main_window, "tabs"):
             # Find the summarization tab
             for i in range(main_window.tabs.count()):
                 if main_window.tabs.tabText(i) == "Summarize":
@@ -2502,7 +2544,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                         if saved_file_path and Path(saved_file_path).exists():
                             file_paths.append(str(saved_file_path))
                             continue
-                        
+
                         # Fallback: Try to reconstruct path from filename and output directory
                         file_path = file_info.get("file")
                         if file_path and output_dir:
@@ -2515,22 +2557,26 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                             if transcript_file.exists():
                                 file_paths.append(str(transcript_file))
                                 continue
-                            
+
                             # Try without _transcript suffix
                             transcript_file = output_path / f"{base_name}.md"
                             if transcript_file.exists():
                                 file_paths.append(str(transcript_file))
                                 continue
-                    
+
                     # Load the files into the summarization tab
-                    if file_paths and hasattr(summarization_tab, 'file_list'):
+                    if file_paths and hasattr(summarization_tab, "file_list"):
                         summarization_tab.file_list.clear()
                         for file_path in file_paths:
                             summarization_tab.file_list.addItem(file_path)
-                        if hasattr(summarization_tab, 'append_log'):
-                            summarization_tab.append_log(f"✅ Loaded {len(file_paths)} transcript files from transcription")
-                    elif hasattr(summarization_tab, 'append_log'):
-                        summarization_tab.append_log("⚠️ No transcript files found to load")
+                        if hasattr(summarization_tab, "append_log"):
+                            summarization_tab.append_log(
+                                f"✅ Loaded {len(file_paths)} transcript files from transcription"
+                            )
+                    elif hasattr(summarization_tab, "append_log"):
+                        summarization_tab.append_log(
+                            "⚠️ No transcript files found to load"
+                        )
                     break
 
     # Hardware recommendations methods moved to Settings tab
@@ -2720,9 +2766,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
                 # Load language selection
                 saved_language = self.gui_settings.get_combo_selection(
-                    self.tab_name, "language", "en"  # Default to English instead of auto
+                    self.tab_name,
+                    "language",
+                    "en",  # Default to English instead of auto
                 )
-                
+
                 # Safety check: warn if unusual language is loaded
                 if saved_language not in ["auto", "en", ""]:
                     logger.warning(
@@ -2730,7 +2778,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                         f"Transcriptions will be in {saved_language.upper()}. "
                         f"Change to 'auto' or 'en' for English transcription."
                     )
-                
+
                 index = self.language_combo.findText(saved_language)
                 if index >= 0:
                     self.language_combo.setCurrentIndex(index)
