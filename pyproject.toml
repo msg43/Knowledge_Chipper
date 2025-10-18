@@ -113,10 +113,9 @@ full = [
 ]
 
 [project.scripts]
-knowledge-system = "knowledge_system.cli:main"
-ks = "knowledge_system.cli:main"
-knowledge-system-gui = "knowledge_system.gui:main"
-ks-gui = "knowledge_system.gui:main"
+# CLI removed - GUI-only application
+knowledge-chipper = "knowledge_system.gui:main"
+kc = "knowledge_system.gui:main"
 
 [project.urls]
 "Homepage" = "https://github.com/msg43/skipthepodcast.com"

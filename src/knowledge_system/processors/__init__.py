@@ -8,13 +8,13 @@ from .html import HTMLProcessor
 from .moc import MOCProcessor
 from .pdf import PDFProcessor
 from .rss_processor import RSSProcessor
-from .summarizer import SummarizerProcessor
 
 # Keep WhisperCppTranscribeProcessor internal - users should use AudioProcessor
 # from .whisper_cpp_transcribe import WhisperCppTranscribeProcessor
 from .youtube_download import YouTubeDownloadProcessor
 from .youtube_metadata import YouTubeMetadataProcessor
 # YouTube transcript processor removed - use YouTubeDownloadProcessor + AudioProcessor instead
+# SummarizerProcessor removed - GUI uses System2Orchestrator instead
 
 __all__ = [
     "BaseProcessor",
@@ -24,8 +24,7 @@ __all__ = [
     "DocumentProcessor",
     "YouTubeDownloadProcessor",
     "YouTubeMetadataProcessor",
-    "SummarizerProcessor",
-    "MOCProcessor",
+    "MOCProcessor",  # Still used by GUI
     "PDFProcessor",
     "HTMLProcessor",
     "RSSProcessor",

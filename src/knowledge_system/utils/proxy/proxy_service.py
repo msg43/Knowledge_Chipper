@@ -1,0 +1,222 @@
+"""
+Proxy Service Manager
+
+Centralized proxy management service that handles provider selection, failover,
+and provides a unified interface for all YouTube data extraction operations.
+"""
+
+import logging
+from typing import Dict, Optional, Tuple
+
+from .anyip_provider import AnyIPProvider
+from .base_provider import BaseProxyProvider, ProxyType
+from .brightdata_provider import BrightDataProvider
+from .direct_provider import DirectConnectionProvider
+from .gonzoproxy_provider import GonzoProxyProvider
+from .oxylabs_provider import OxylabsProvider
+from .packetstream_provider import PacketStreamProvider
+
+logger = logging.getLogger(__name__)
+
+
+class ProxyService:
+    """
+    Centralized proxy management service.
+    
+    Handles provider selection, failover, and configuration for all proxy operations.
+    Acts as a facade that delegates to the active provider.
+    """
+
+    def __init__(self, preferred_provider: Optional[ProxyType] = None):
+        """
+        Initialize proxy service.
+        
+        Args:
+            preferred_provider: Optional provider preference, otherwise uses config
+        """
+        self.preferred_provider = preferred_provider or self._get_configured_provider()
+        self.providers = self._initialize_providers()
+        self.active_provider = self._select_active_provider()
+        
+        logger.info(f"Proxy service initialized with provider: {self.active_provider.provider_name}")
+
+    def _get_configured_provider(self) -> ProxyType:
+        """
+        Read preferred provider from config.
+        
+        Returns:
+            ProxyType enum value
+        """
+        try:
+            from ...config import get_settings
+            
+            settings = get_settings()
+            provider_name = getattr(settings, "proxy_provider", "packetstream").lower()
+            
+            # Map string to ProxyType enum
+            provider_map = {
+                "packetstream": ProxyType.PACKETSTREAM,
+                "anyip": ProxyType.ANYIP,
+                "oxylabs": ProxyType.OXYLABS,
+                "gonzoproxy": ProxyType.GONZOPROXY,
+                "brightdata": ProxyType.BRIGHTDATA,
+                "direct": ProxyType.DIRECT,
+            }
+            
+            return provider_map.get(provider_name, ProxyType.PACKETSTREAM)
+        except Exception as e:
+            logger.warning(f"Failed to load proxy provider config: {e}, defaulting to PacketStream")
+            return ProxyType.PACKETSTREAM
+
+    def _initialize_providers(self) -> Dict[ProxyType, BaseProxyProvider]:
+        """
+        Initialize all available proxy providers.
+        
+        Returns:
+            Dict mapping ProxyType to provider instance
+        """
+        return {
+            ProxyType.PACKETSTREAM: PacketStreamProvider(),
+            ProxyType.ANYIP: AnyIPProvider(),
+            ProxyType.OXYLABS: OxylabsProvider(),
+            ProxyType.GONZOPROXY: GonzoProxyProvider(),
+            ProxyType.BRIGHTDATA: BrightDataProvider(),
+            ProxyType.DIRECT: DirectConnectionProvider(),
+        }
+
+    def _select_active_provider(self) -> BaseProxyProvider:
+        """
+        Select which provider to use based on availability and configuration.
+        
+        Returns:
+            Active provider instance
+        """
+        # Try preferred provider first
+        preferred = self.providers[self.preferred_provider]
+        if preferred.is_configured():
+            logger.info(f"Using preferred proxy provider: {preferred.provider_name}")
+            return preferred
+        
+        # Check if failover is enabled
+        failover_enabled = self._is_failover_enabled()
+        
+        if failover_enabled:
+            # Fall back to any configured provider
+            for provider_type, provider in self.providers.items():
+                if provider_type == self.preferred_provider:
+                    continue  # Already tried
+                if provider_type == ProxyType.DIRECT:
+                    continue  # Save direct connection as last resort
+                if provider.is_configured():
+                    logger.info(
+                        f"Preferred provider not available, falling back to {provider.provider_name}"
+                    )
+                    return provider
+        
+        # Ultimate fallback: direct connection (no proxy)
+        logger.info("No proxy providers configured, using direct connection")
+        return self.providers[ProxyType.DIRECT]
+
+    def _is_failover_enabled(self) -> bool:
+        """
+        Check if proxy failover is enabled in config.
+        
+        Returns:
+            True if failover is enabled
+        """
+        try:
+            from ...config import get_settings
+            
+            settings = get_settings()
+            return getattr(settings, "proxy_failover_enabled", True)
+        except Exception:
+            return True  # Default to enabled
+
+    # Public API - delegates to active provider
+
+    def get_proxy_url(self, session_id: Optional[str] = None) -> Optional[str]:
+        """
+        Get proxy URL from active provider.
+        
+        Args:
+            session_id: Optional session identifier for sticky sessions
+            
+        Returns:
+            Proxy URL string or None
+        """
+        return self.active_provider.get_proxy_url(session_id)
+
+    def get_proxy_config(self) -> Dict[str, str]:
+        """
+        Get proxy config from active provider.
+        
+        Returns:
+            Dict with 'http' and 'https' keys, or empty dict
+        """
+        return self.active_provider.get_proxy_config()
+
+    def test_connectivity(self, timeout: int = 10) -> Tuple[bool, str]:
+        """
+        Test connectivity of active provider.
+        
+        Args:
+            timeout: Connection timeout in seconds
+            
+        Returns:
+            Tuple of (success: bool, message: str)
+        """
+        return self.active_provider.test_connectivity(timeout)
+
+    def is_configured(self) -> bool:
+        """
+        Check if active provider is configured.
+        
+        Returns:
+            True if active provider is configured
+        """
+        return self.active_provider.is_configured()
+
+    @property
+    def provider_name(self) -> str:
+        """
+        Get name of active provider.
+        
+        Returns:
+            Provider name string
+        """
+        return self.active_provider.provider_name
+
+    def get_provider(self, provider_type: ProxyType) -> BaseProxyProvider:
+        """
+        Get a specific provider instance.
+        
+        Args:
+            provider_type: Type of provider to get
+            
+        Returns:
+            Provider instance
+        """
+        return self.providers[provider_type]
+
+    def switch_provider(self, provider_type: ProxyType) -> bool:
+        """
+        Switch to a different proxy provider.
+        
+        Args:
+            provider_type: Type of provider to switch to
+            
+        Returns:
+            True if switch was successful, False otherwise
+        """
+        provider = self.providers[provider_type]
+        
+        if not provider.is_configured() and provider_type != ProxyType.DIRECT:
+            logger.warning(
+                f"Cannot switch to {provider.provider_name}: not configured"
+            )
+            return False
+        
+        self.active_provider = provider
+        logger.info(f"Switched to proxy provider: {provider.provider_name}")
+        return True
+
