@@ -1,5 +1,13 @@
 # Skipthepodcast.com (Skip the Podcast Desktop)
 
+
+## Application Type
+
+**Knowledge Chipper is a GUI-only application.** All functionality is available through the graphical interface.
+
+The CLI interface has been removed to maintain a single, well-tested code path. If you need automation/scripting capabilities, please use the GUI's batch processing and folder monitoring features.
+
+
 > Transform audio, video, and documents into structured knowledge with AI-powered analysis
 
 **Version 3.4.0** | **macOS Application** | **Offline-First Design**

@@ -20,7 +20,7 @@ class TestLLMAdapterAsyncCleanup:
     def db_service(self, tmp_path):
         """Create test database."""
         db_path = tmp_path / "test_llm.db"
-        return DatabaseService(str(db_path))
+        return DatabaseService(f"sqlite:///{db_path}")
     
     @pytest.fixture
     def adapter(self, db_service):
@@ -79,7 +79,7 @@ class TestLLMAdapterConcurrency:
     def db_service(self, tmp_path):
         """Create test database."""
         db_path = tmp_path / "test_concurrent_llm.db"
-        return DatabaseService(str(db_path))
+        return DatabaseService(f"sqlite:///{db_path}")
     
     @pytest.fixture
     def adapter(self, db_service):
@@ -141,7 +141,7 @@ class TestLLMAdapterFromSyncContext:
     def db_service(self, tmp_path):
         """Create test database."""
         db_path = tmp_path / "test_sync.db"
-        return DatabaseService(str(db_path))
+        return DatabaseService(f"sqlite:///{db_path}")
     
     @pytest.fixture
     def adapter(self, db_service):
@@ -173,7 +173,7 @@ class TestLLMAdapterMocking:
     def db_service(self, tmp_path):
         """Create test database."""
         db_path = tmp_path / "test_mock.db"
-        return DatabaseService(str(db_path))
+        return DatabaseService(f"sqlite:///{db_path}")
     
     @pytest.fixture
     def adapter(self, db_service):
@@ -216,7 +216,7 @@ class TestEventLoopRegressionPrevention:
     def db_service(self, tmp_path):
         """Create test database."""
         db_path = tmp_path / "test_regression.db"
-        return DatabaseService(str(db_path))
+        return DatabaseService(f"sqlite:///{db_path}")
     
     @pytest.fixture
     def adapter(self, db_service):

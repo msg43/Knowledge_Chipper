@@ -20,7 +20,7 @@ class TestSystem2OrchestratorBasics:
     def db_service(self, tmp_path):
         """Create test database."""
         db_path = tmp_path / "test.db"
-        return DatabaseService(str(db_path))
+        return DatabaseService(f"sqlite:///{db_path}")
     
     @pytest.fixture
     def orchestrator(self, db_service):
@@ -120,7 +120,7 @@ class TestSystem2OrchestratorConcurrency:
     def db_service(self, tmp_path):
         """Create test database."""
         db_path = tmp_path / "test_concurrent.db"
-        return DatabaseService(str(db_path))
+        return DatabaseService(f"sqlite:///{db_path}")
     
     @pytest.fixture
     def orchestrator(self, db_service):
@@ -174,7 +174,7 @@ class TestSystem2EventLoopManagement:
     def db_service(self, tmp_path):
         """Create test database."""
         db_path = tmp_path / "test_eventloop.db"
-        return DatabaseService(str(db_path))
+        return DatabaseService(f"sqlite:///{db_path}")
     
     @pytest.fixture
     def orchestrator(self, db_service):
@@ -233,7 +233,7 @@ class TestSystem2OrchestratorMocked:
     def db_service(self, tmp_path):
         """Create test database."""
         db_path = tmp_path / "test_mock.db"
-        return DatabaseService(str(db_path))
+        return DatabaseService(f"sqlite:///{db_path}")
     
     @pytest.fixture
     def orchestrator(self, db_service):
@@ -276,7 +276,7 @@ class TestSystem2OrchestratorLiveAPI:
     def db_service(self, tmp_path):
         """Create test database."""
         db_path = tmp_path / "test_live.db"
-        return DatabaseService(str(db_path))
+        return DatabaseService(f"sqlite:///{db_path}")
     
     @pytest.fixture
     def orchestrator(self, db_service):
