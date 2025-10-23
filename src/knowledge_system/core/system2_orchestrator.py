@@ -395,163 +395,17 @@ class System2Orchestrator:
         checkpoint: dict[str, Any] | None,
         run_id: str,
     ) -> dict[str, Any]:
-        """Process mining job with checkpoint support."""
-        try:
-            # 1. Load transcript
-            if self.progress_callback:
-                self.progress_callback("loading", 0, episode_id)
-            
-            file_path = config.get("file_path")
-            if not file_path:
-                raise KnowledgeSystemError(
-                    f"No file_path in config for episode {episode_id}",
-                    ErrorCode.INVALID_INPUT,
-                )
-
-            # 2. Parse transcript to segments
-            if self.progress_callback:
-                self.progress_callback("parsing", 5, episode_id)
-            
-            transcript_text = Path(file_path).read_text()
-            segments = self._parse_transcript_to_segments(transcript_text, episode_id)
-
-            if not segments:
-                logger.warning(f"No segments parsed from transcript for {episode_id}")
-                return {
-                    "status": "succeeded",
-                    "output_id": episode_id,
-                    "result": {
-                        "claims_extracted": 0,
-                        "jargon_extracted": 0,
-                        "people_extracted": 0,
-                        "mental_models_extracted": 0,
-                    },
-                }
-
-            # 3. Check checkpoint for resume
-            start_segment = checkpoint.get("last_segment", -1) + 1 if checkpoint else 0
-            logger.info(
-                f"Starting mining from segment {start_segment} of {len(segments)}"
-            )
-
-            # 4. Get miner model
-            miner_model = config.get("miner_model", "ollama:qwen2.5:7b-instruct")
-
-            # 5. Mine segments with progress tracking
-            miner_outputs = []
-            for i in range(start_segment, len(segments)):
-                output = await self._mine_single_segment(
-                    segments[i], miner_model, run_id
-                )
-                miner_outputs.append(output)
-
-                # Calculate progress (mining is 10-80% of total)
-                mining_progress = 10 + int((i + 1) / len(segments) * 70)
-                
-                # Emit progress callback with actual mining progress
-                if self.progress_callback:
-                    self.progress_callback("mining", mining_progress, episode_id, i + 1, len(segments))
-
-                # Save checkpoint every 5 segments
-                if (i + 1) % 5 == 0:
-                    self.save_checkpoint(
-                        run_id,
-                        {"last_segment": i, "partial_results": len(miner_outputs)},
-                    )
-                    logger.debug(f"Checkpoint saved at segment {i}")
-
-                # Update metrics
-                self.update_job_run_status(
-                    run_id,
-                    "running",
-                    metrics={
-                        "segments_processed": i + 1,
-                        "total_segments": len(segments),
-                        "progress_percent": ((i + 1) / len(segments)) * 100,
-                    },
-                )
-
-            # 6. Store HCE results to database
-            if self.progress_callback:
-                self.progress_callback("storing", 80, episode_id)
-            
-            from ..database.hce_operations import store_mining_results
-
-            # Calculate totals for logging
-            total_claims = sum(len(o.claims) for o in miner_outputs)
-            total_people = sum(len(o.people) for o in miner_outputs)
-            total_jargon = sum(len(o.jargon) for o in miner_outputs)
-            total_concepts = sum(len(o.mental_models) for o in miner_outputs)
-            
-            logger.info(
-                f"💾 Saving to database: {total_claims} claims, {total_people} people, "
-                f"{total_jargon} jargon terms, {total_concepts} concepts"
-            )
-            
-            try:
-                store_mining_results(self.db_service, episode_id, miner_outputs)
-                logger.info(f"✅ Database save completed for episode {episode_id}")
-            except Exception as e:
-                logger.error(f"❌ Database save failed: {e}")
-                raise  # Re-raise to fail the job
-
-            # 7. Create Summary record
-            if self.progress_callback:
-                self.progress_callback("generating_summary", 90, episode_id)
-            
-            video_id = episode_id.replace("episode_", "")
-            summary_id = self._create_summary_from_mining(
-                video_id, episode_id, miner_outputs, config
-            )
-            logger.info(f"📋 Summary record created: {summary_id}")
-
-            # 8. Generate summary markdown file
-            if self.progress_callback:
-                self.progress_callback("saving_file", 95, episode_id)
-            
-            summary_file_path = None
-            try:
-                from ..services.file_generation import FileGenerationService
-
-                # Get output directory from config (if provided by GUI)
-                output_dir = config.get("output_dir")
-                if output_dir:
-                    logger.info(f"📁 Writing summary to: {output_dir}")
-                    file_gen = FileGenerationService(output_dir=Path(output_dir))
-                else:
-                    logger.info("📁 Writing summary to default directory: output/summaries/")
-                    file_gen = FileGenerationService()
-                    
-                summary_file_path = file_gen.generate_summary_markdown(
-                    video_id, summary_id
-                )
-                if summary_file_path:
-                    logger.info(f"✅ Summary file written: {summary_file_path}")
-                else:
-                    logger.warning("⚠️ Summary file generation returned None (check database for summary record)")
-            except Exception as e:
-                logger.error(f"❌ Failed to generate summary markdown file: {e}")
-                # Don't re-raise - database save succeeded, just file generation failed
-
-            # 9. Return success
-            return {
-                "status": "succeeded",
-                "output_id": episode_id,
-                "summary_file": str(summary_file_path) if summary_file_path else None,
-                "result": {
-                    "claims_extracted": sum(len(o.claims) for o in miner_outputs),
-                    "jargon_extracted": sum(len(o.jargon) for o in miner_outputs),
-                    "people_extracted": sum(len(o.people) for o in miner_outputs),
-                    "mental_models_extracted": sum(
-                        len(o.mental_models) for o in miner_outputs
-                    ),
-                },
-            }
-        except Exception as e:
-            logger.error(f"Mining failed for {episode_id}: {e}")
-            raise KnowledgeSystemError(
-                f"Mining failed: {str(e)}", ErrorCode.PROCESSING_FAILED
-            ) from e
+        """
+        Process mining job using UnifiedHCEPipeline.
+        
+        This replaces the old sequential mining with parallel processing
+        and rich data capture (evidence, relations, categories).
+        """
+        from .system2_orchestrator_mining import process_mine_with_unified_pipeline
+        
+        return await process_mine_with_unified_pipeline(
+            self, episode_id, config, checkpoint, run_id
+        )
 
     def _create_summary_from_mining(
         self,
@@ -644,6 +498,110 @@ This content was analyzed using Hybrid Claim Extraction (HCE).
             session.commit()
             logger.info(f"Created summary record: {summary_id} for video {video_id}")
 
+        return summary_id
+
+    def _create_summary_from_pipeline_outputs(
+        self,
+        video_id: str,
+        episode_id: str,
+        pipeline_outputs: Any,  # PipelineOutputs
+        config: dict[str, Any],
+    ) -> str:
+        """
+        Create summary record from rich pipeline outputs.
+        
+        This replaces _create_summary_from_mining() to work with
+        PipelineOutputs instead of simple miner outputs.
+        """
+        from ..database.models import Summary
+        from ..utils.id_generation import create_deterministic_id
+        from datetime import datetime
+        import uuid
+        
+        # Generate summary ID
+        summary_id = f"summary_{uuid.uuid4().hex[:12]}"
+        
+        # Create summary text with rich data
+        summary_text = f"""# HCE Analysis Summary
+
+This content was analyzed using Hybrid Claim Extraction (HCE) with parallel processing.
+
+## Extraction Statistics
+- **Claims Extracted:** {len(pipeline_outputs.claims)}
+  - Tier A (High Importance): {len([c for c in pipeline_outputs.claims if c.tier == "A"])}
+  - Tier B (Medium Importance): {len([c for c in pipeline_outputs.claims if c.tier == "B"])}
+  - Tier C (Lower Importance): {len([c for c in pipeline_outputs.claims if c.tier == "C"])}
+- **Evidence Spans:** {sum(len(c.evidence) for c in pipeline_outputs.claims)}
+- **Jargon Terms:** {len(pipeline_outputs.jargon)}
+- **People Mentioned:** {len(pipeline_outputs.people)}
+- **Mental Models/Concepts:** {len(pipeline_outputs.concepts)}
+- **Relations:** {len(pipeline_outputs.relations)}
+- **Categories:** {len(pipeline_outputs.structured_categories)}
+
+## Top Claims (Tier A)
+"""
+        # Add top tier A claims
+        tier_a_claims = [c for c in pipeline_outputs.claims if c.tier == "A"]
+        for i, claim in enumerate(tier_a_claims[:10], 1):
+            summary_text += f"{i}. {claim.canonical}\n"
+        
+        # Prepare HCE data JSON with rich data
+        hce_data_json = {
+            "claims": [c.model_dump() if hasattr(c, 'model_dump') else c for c in pipeline_outputs.claims],
+            "jargon": [j.model_dump() if hasattr(j, 'model_dump') else j for j in pipeline_outputs.jargon],
+            "people": [p.model_dump() if hasattr(p, 'model_dump') else p for p in pipeline_outputs.people],
+            "mental_models": [m.model_dump() if hasattr(m, 'model_dump') else m for m in pipeline_outputs.concepts],
+            "relations": [r.model_dump() if hasattr(r, 'model_dump') else r for r in pipeline_outputs.relations],
+            "categories": [c.model_dump() if hasattr(c, 'model_dump') else c for c in pipeline_outputs.structured_categories],
+        }
+        
+        # Get LLM info from config
+        miner_model = config.get("miner_model", "ollama:qwen2.5:7b-instruct")
+        if ":" in miner_model:
+            provider, model = miner_model.split(":", 1)
+        else:
+            provider = "unknown"
+            model = miner_model
+        
+        with self.db_service.get_session() as session:
+            summary = Summary(
+                summary_id=summary_id,
+                video_id=video_id,
+                transcript_id=None,
+                summary_text=summary_text,
+                summary_metadata_json={
+                    "episode_id": episode_id,
+                    "mining_timestamp": datetime.utcnow().isoformat(),
+                    "tier_distribution": {
+                        "A": len([c for c in pipeline_outputs.claims if c.tier == "A"]),
+                        "B": len([c for c in pipeline_outputs.claims if c.tier == "B"]),
+                        "C": len([c for c in pipeline_outputs.claims if c.tier == "C"]),
+                    },
+                    "has_evidence_spans": sum(len(c.evidence) for c in pipeline_outputs.claims) > 0,
+                    "has_relations": len(pipeline_outputs.relations) > 0,
+                    "has_categories": len(pipeline_outputs.structured_categories) > 0,
+                },
+                processing_type="hce_unified",
+                hce_data_json=hce_data_json,
+                llm_provider=provider,
+                llm_model=model,
+                prompt_template_path=None,
+                focus_area=config.get("source", "manual_summarization"),
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                processing_cost=0.0,
+                input_length=len(str(pipeline_outputs)),
+                summary_length=len(summary_text),
+                compression_ratio=0.0,
+                processing_time_seconds=0.0,
+                created_at=datetime.utcnow(),
+                template_used="HCE Unified Pipeline",
+            )
+            session.add(summary)
+            session.commit()
+            logger.info(f"Created unified summary record: {summary_id} for video {video_id}")
+        
         return summary_id
 
     async def _process_flagship(
