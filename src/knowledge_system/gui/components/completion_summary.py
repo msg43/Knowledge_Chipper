@@ -71,8 +71,8 @@ class TranscriptionCompletionSummary(QDialog):
         stats_grid_layout = QHBoxLayout(stats_grid)
 
         # Files processed
-        files_widget = self._create_stat_widget("📁 Files", "0 processed", "#1976d2")
-        stats_grid_layout.addWidget(files_widget)
+        self.files_widget = self._create_stat_widget("📁 Files", "0 processed", "#1976d2")
+        stats_grid_layout.addWidget(self.files_widget)
 
         # Success rate
         self.success_widget = self._create_stat_widget(
@@ -376,6 +376,7 @@ class TranscriptionCompletionSummary(QDialog):
             )
 
         # Update statistics
+        self.files_widget.value_label.setText(f"{total_files}")
         self.success_widget.value_label.setText(f"{success_count}")
         self.failures_widget.value_label.setText(f"{failure_count}")
 

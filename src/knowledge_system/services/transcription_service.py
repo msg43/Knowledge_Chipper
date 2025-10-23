@@ -21,7 +21,7 @@ class TranscriptionService:
 
     def __init__(
         self,
-        whisper_model: str = "base",
+        whisper_model: str = "medium",
         normalize_audio: bool = True,
         download_thumbnails: bool = True,
         prefer_transcripts: bool = True,

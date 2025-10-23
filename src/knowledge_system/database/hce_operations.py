@@ -79,16 +79,21 @@ def store_mining_results(
                 )
 
                 if not existing_claim:
+                    # Get timestamp directly from claim data (flat schema)
+                    # Fallback: try evidence_spans[0].t0 for backward compatibility
+                    first_ts = claim_data.get("timestamp")
+                    if not first_ts:
+                        evidence_spans = claim_data.get("evidence_spans", [])
+                        first_ts = evidence_spans[0].get("t0") if evidence_spans else None
+                    
                     claim = Claim(
                         episode_id=episode_id,
                         claim_id=claim_id,
-                        canonical=claim_data.get("claim_text")
-                        or claim_data.get("text", ""),
-                        original_text=claim_data.get("original_text"),
+                        canonical=claim_data.get("claim_text", ""),
+                        original_text=claim_data.get("claim_text", ""),
                         claim_type=claim_data.get("claim_type", "factual"),
                         tier="C",  # Default tier, will be updated by flagship
-                        first_mention_ts=claim_data.get("timestamp")
-                        or claim_data.get("t0"),
+                        first_mention_ts=first_ts,
                         scores_json=claim_data.get("scores", {}),
                     )
                     session.add(claim)
@@ -110,8 +115,8 @@ def store_mining_results(
                         term=jargon_data.get("term", ""),
                         definition=jargon_data.get("definition", ""),
                         category=jargon_data.get("category", "general"),
-                        first_mention_ts=jargon_data.get("timestamp")
-                        or jargon_data.get("t0"),
+                        first_mention_ts=jargon_data.get("timestamp"),
+                        context_quote=jargon_data.get("context_quote"),
                     )
                     session.add(jargon)
 
@@ -133,11 +138,10 @@ def store_mining_results(
                     person = Person(
                         episode_id=episode_id,
                         person_id=person_id,
-                        name=person_data.get("name") or person_data.get("surface", ""),
-                        description=person_data.get("description")
-                        or person_data.get("normalized"),
-                        first_mention_ts=person_data.get("timestamp")
-                        or person_data.get("t0"),
+                        name=person_data.get("name", ""),
+                        description=person_data.get("role_or_description", ""),
+                        first_mention_ts=person_data.get("timestamp"),
+                        context_quote=person_data.get("context_quote"),
                     )
                     session.add(person)
 
@@ -160,10 +164,9 @@ def store_mining_results(
                         episode_id=episode_id,
                         concept_id=model_id,
                         name=model_data.get("name", ""),
-                        description=model_data.get("definition")
-                        or model_data.get("description", ""),
-                        first_mention_ts=model_data.get("timestamp")
-                        or model_data.get("t0"),
+                        description=model_data.get("description", ""),
+                        first_mention_ts=model_data.get("timestamp"),
+                        context_quote=model_data.get("context_quote"),
                     )
                     session.add(concept)
 

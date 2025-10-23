@@ -95,7 +95,8 @@ cuda = [
 diarization = [
     "torch>=2.1.0",
     "transformers>=4.35.0",
-    "pyannote.audio>=3.1.0",
+    "pyannote.audio>=4.0.0",  # v4.0+ fixes Python 3.13 syntax warnings
+    # NOTE: Do NOT install torchcodec - it segfaults with PyTorch 2.8.0
     "huggingface_hub>=0.20.0",  # Required for model downloads
     "librosa>=0.10.0",  # Required for voice fingerprinting
 ]

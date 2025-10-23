@@ -1,0 +1,81 @@
+# Core dependencies
+click>=8.1.0
+pydantic>=2.5.0
+pyyaml>=6.0
+loguru>=0.7.0
+rich>=13.0.0
+
+# GUI
+PyQt6>=6.6.0
+
+# Web UI
+streamlit>=1.28.0
+
+# File watching
+watchdog>=3.0.0
+
+# PDF processing
+pypdf2>=3.0.0
+pdfplumber>=0.9.0
+
+# Audio/Video processing
+pydub>=0.25.1  # Audio processing and manipulation (required by pyproject.toml)
+
+# ML and transcription (core)
+
+# YouTube processing
+# PRODUCTION PIN: Exact version tested and verified
+# To test updates: use requirements-dev.txt, then update this pin after testing
+yt-dlp==2025.9.26  # Last tested: 2025-10-11 - format selection and signature extraction working
+pytube>=15.0.0
+
+# HTTP requests
+requests>=2.31.0
+aiohttp>=3.8.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Database
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+
+# OAuth integration for GetReceipts.org
+supabase>=2.0.0
+
+# System monitoring
+psutil>=6.0.0
+
+# Web scraping and processing
+beautifulsoup4>=4.12.0
+youtube-transcript-api>=1.2.0
+feedparser>=6.0.0
+
+# Settings management
+pydantic-settings>=2.0.0
+
+# AI/ML APIs
+openai>=1.0.0
+huggingface_hub>=0.20.0  # For DMG model bundling
+
+# Utilities
+python-dotenv>=0.19.0
+tqdm>=4.65.0
+colorama>=0.4.6
+
+# Development
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# HCE (Hybrid Claim Extractor) - lightweight core only
+# Heavy ML dependencies moved to optional install: pip install -e ".[hce]"
+hdbscan>=0.8.33
+scipy>=1.10.0
+
+
+# Optional: Diarization dependencies (install with: pip install -e ".[diarization]")
+# pyannote.audio>=3.1.0
+# torch>=2.1.0
+# transformers>=4.35.0
+# sentence-transformers>=2.2.0

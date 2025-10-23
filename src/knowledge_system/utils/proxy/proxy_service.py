@@ -114,6 +114,13 @@ class ProxyService:
                     return provider
         
         # Ultimate fallback: direct connection (no proxy)
+        # Check if strict mode prevents this fallback
+        if self._is_strict_mode_enabled():
+            logger.warning("Proxy strict mode enabled - no configured proxy available")
+            # Return a placeholder that will raise errors when used
+            # We can't raise here because initialization happens early
+            return self.providers[ProxyType.DIRECT]
+        
         logger.info("No proxy providers configured, using direct connection")
         return self.providers[ProxyType.DIRECT]
 
@@ -131,6 +138,65 @@ class ProxyService:
             return getattr(settings, "proxy_failover_enabled", True)
         except Exception:
             return True  # Default to enabled
+
+    def _is_strict_mode_enabled(self) -> bool:
+        """
+        Check if proxy strict mode is enabled in config.
+        
+        Strict mode prevents direct connections when proxy fails,
+        protecting user IP from exposure to YouTube.
+        
+        Returns:
+            True if strict mode is enabled (default: True)
+        """
+        try:
+            from ...config import get_settings
+            
+            settings = get_settings()
+            # Check youtube_processing.proxy_strict_mode
+            youtube_config = getattr(settings, "youtube_processing", None)
+            if youtube_config:
+                return getattr(youtube_config, "proxy_strict_mode", True)
+            return True  # Default to strict mode for safety
+        except Exception:
+            return True  # Default to strict mode for safety
+
+    def is_using_direct_connection(self) -> bool:
+        """
+        Check if currently using direct connection (no proxy).
+        
+        Returns:
+            True if using direct connection
+        """
+        return isinstance(self.active_provider, DirectConnectionProvider)
+
+    def validate_for_youtube_operation(self) -> Tuple[bool, str]:
+        """
+        Validate that current proxy configuration is safe for YouTube operations.
+        
+        This should be called before any YouTube download/metadata operations
+        when strict mode is enabled.
+        
+        Returns:
+            Tuple of (is_valid: bool, error_message: str)
+        """
+        # If using direct connection, check if strict mode allows it
+        if self.is_using_direct_connection():
+            if self._is_strict_mode_enabled():
+                return (
+                    False,
+                    "Proxy strict mode enabled: Direct YouTube connections blocked. "
+                    "Configure a proxy (PacketStream/BrightData) or disable strict mode in Settings."
+                )
+            else:
+                # Strict mode disabled, but warn the user
+                logger.warning(
+                    "Using direct connection for YouTube - your IP may be exposed to rate limits"
+                )
+                return (True, "")
+        
+        # Using a proxy, validate it's working
+        return (True, "")
 
     # Public API - delegates to active provider
 

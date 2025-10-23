@@ -1,0 +1,28 @@
+{
+  "title": "Sample JSON Document for Testing",
+  "type": "article",
+  "content": {
+    "introduction": "This is a sample JSON document created for testing the summarization functionality of the Knowledge Chipper system. The document contains several sections of text that should be processed and summarized by the AI model.",
+    "main_sections": [
+      {
+        "heading": "Artificial Intelligence Overview",
+        "text": "Artificial intelligence has become increasingly important in modern software development. Large language models like GPT, Claude, and others are being used for a variety of tasks including code generation, documentation writing, and content summarization."
+      },
+      {
+        "heading": "Summarization Process",
+        "text": "The process of summarization involves taking longer text and extracting the key points and main ideas. This can be done extractively (selecting important sentences) or abstractively (generating new text that captures the essence)."
+      },
+      {
+        "heading": "Technical Implementation",
+        "text": "Modern summarization systems often use transformer-based architectures. These models are pre-trained on large corpora of text and then fine-tuned for specific tasks. The attention mechanism allows them to focus on the most relevant parts of the input."
+      }
+    ],
+    "conclusion": "Summarization technology continues to improve and find new applications across various domains including news, research, and business intelligence.",
+    "metadata": {
+      "author": "Test System",
+      "created_date": "2025-01-01",
+      "word_count": 150
+    }
+  }
+}
+

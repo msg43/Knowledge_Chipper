@@ -3,6 +3,9 @@ HCE Adapter for GUI Components
 
 Provides a compatibility layer between HCE processors and existing GUI components.
 Maintains backward compatibility while enabling HCE features.
+
+Note: This adapter is deprecated. GUI components should use System2Orchestrator directly.
+SummarizerProcessor has been removed - use System2Orchestrator instead.
 """
 
 from collections.abc import Callable
@@ -10,7 +13,6 @@ from typing import Any
 
 from ...logger import get_logger
 from ...processors.moc import MOCProcessor
-from ...processors.summarizer import SummarizerProcessor
 from ...utils.progress import SummarizationProgress
 
 logger = get_logger(__name__)
@@ -26,21 +28,22 @@ class HCEAdapter:
     def create_summarizer(
         self,
         provider: str = "local",
-        model: str = None,
+        model: str | None = None,
         max_tokens: int = 500,
         **kwargs,
-    ) -> SummarizerProcessor:
+    ):
         """
-        Create an HCE-based summarizer that maintains legacy API.
-
-        The returned processor extracts claims instead of generating summaries,
-        but formats output to match expected interface.
+        DEPRECATED: Use System2Orchestrator instead.
+        
+        SummarizerProcessor has been removed. GUI components should use
+        System2Orchestrator directly for all summarization operations.
+        
+        This method is kept for backward compatibility but will raise an error.
         """
-        processor = SummarizerProcessor(
-            provider=provider, model=model, max_tokens=max_tokens
+        raise NotImplementedError(
+            "SummarizerProcessor has been removed. "
+            "Use System2Orchestrator from knowledge_system.core.system2_orchestrator instead."
         )
-        self.current_processor = processor
-        return processor
 
     def create_moc_processor(self, **kwargs) -> MOCProcessor:
         """
@@ -78,44 +81,44 @@ class HCEAdapter:
                 self._current_stats.update(stats)
 
             if progress_callback:
-                if isinstance(processor, SummarizerProcessor):
-                    # Map HCE stages to summarization progress
-                    stage_mapping = {
-                        "skim": "Analyzing document structure...",
-                        "miner": "Extracting claims...",
-                        "evidence": "Linking evidence...",
-                        "dedupe": "Deduplicating claims...",
-                        "rerank": "Ranking claims...",
-                        "judge": "Validating claims...",
-                        "nli": "Checking contradictions...",
-                        "relations": "Finding relationships...",
-                        "people": "Identifying people...",
-                        "concepts": "Extracting concepts...",
-                        "glossary": "Building glossary...",
-                        "export": "Formatting output...",
-                    }
+                # Map HCE stages to progress updates
+                # Note: SummarizerProcessor removed - this handles MOCProcessor and other processors
+                stage_mapping = {
+                    "skim": "Analyzing document structure...",
+                    "miner": "Extracting claims...",
+                    "evidence": "Linking evidence...",
+                    "dedupe": "Deduplicating claims...",
+                    "rerank": "Ranking claims...",
+                    "judge": "Validating claims...",
+                    "nli": "Checking contradictions...",
+                    "relations": "Finding relationships...",
+                    "people": "Identifying people...",
+                    "concepts": "Extracting concepts...",
+                    "glossary": "Building glossary...",
+                    "export": "Formatting output...",
+                }
 
-                    status = stage_mapping.get(stage, f"Processing {stage}...")
+                status = stage_mapping.get(stage, f"Processing {stage}...")
 
-                    # Add statistics to status if available
-                    if self._current_stats:
-                        stat_parts = []
-                        if "claims" in self._current_stats:
-                            stat_parts.append(f"{self._current_stats['claims']} claims")
-                        if "tier1_claims" in self._current_stats:
-                            stat_parts.append(
-                                f"{self._current_stats['tier1_claims']} high-quality"
-                            )
-                        if stat_parts:
-                            status += f" ({', '.join(stat_parts)})"
+                # Add statistics to status if available
+                if self._current_stats:
+                    stat_parts = []
+                    if "claims" in self._current_stats:
+                        stat_parts.append(f"{self._current_stats['claims']} claims")
+                    if "tier1_claims" in self._current_stats:
+                        stat_parts.append(
+                            f"{self._current_stats['tier1_claims']} high-quality"
+                        )
+                    if stat_parts:
+                        status += f" ({', '.join(stat_parts)})"
 
-                    progress_obj = SummarizationProgress(
-                        chunk_number=int(progress * 100),
-                        total_chunks=100,
-                        status=status,
-                        current_step=f"HCE: {stage}",
-                    )
-                    progress_callback(progress_obj)
+                progress_obj = SummarizationProgress(
+                    chunk_number=int(progress * 100),
+                    total_chunks=100,
+                    status=status,
+                    current_step=f"HCE: {stage}",
+                )
+                progress_callback(progress_obj)
 
         # Inject progress wrapper if possible
         original_process = processor.process

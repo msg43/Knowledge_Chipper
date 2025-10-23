@@ -107,17 +107,27 @@ class LLMAdapter:
     - Cost estimation
     """
 
-    # Hardware tier concurrency limits
-    CONCURRENCY_LIMITS = {
+    # Hardware tier concurrency limits for CLOUD APIs (OpenAI, Anthropic, etc)
+    CLOUD_CONCURRENCY_LIMITS = {
         "consumer": 2,  # M1/M2 base models
         "prosumer": 4,  # M1/M2 Pro/Max
         "enterprise": 8,  # M1/M2 Ultra, high-end x86
+    }
+    
+    # Hardware tier concurrency limits for LOCAL APIs (Ollama)
+    # Each Ollama request spawns ~5 threads for Metal backend
+    # To avoid thread oversubscription: limit based on physical_cores / threads_per_request
+    LOCAL_CONCURRENCY_LIMITS = {
+        "consumer": 3,   # M1/M2 base (8 cores / ~3 = 2-3 workers)
+        "prosumer": 5,   # M1/M2 Pro/Max (12-16 cores / ~3 = 4-5 workers)
+        "enterprise": 8, # M1/M2 Ultra (24 cores / 5 = ~5 workers, cap at 8 for safety)
     }
 
     def __init__(
         self,
         db_service: DatabaseService | None = None,
         hardware_specs: dict[str, Any] | None = None,
+        provider: str | None = None,  # New: allow specifying primary provider
     ):
         """Initialize the LLM adapter."""
         self.db_service = db_service or DatabaseService()
@@ -127,15 +137,20 @@ class LLMAdapter:
             hardware_specs = detect_hardware_specs()
 
         self.hardware_tier = self._determine_hardware_tier(hardware_specs)
-        self.max_concurrent = self.CONCURRENCY_LIMITS.get(self.hardware_tier, 2)
+        
+        # Choose concurrency limit based on primary provider (default to cloud for safety)
+        # This can be overridden per-request using provider-specific semaphores
+        self.max_concurrent = self.CLOUD_CONCURRENCY_LIMITS.get(self.hardware_tier, 2)
+        self.max_concurrent_local = self.LOCAL_CONCURRENCY_LIMITS.get(self.hardware_tier, 4)
 
         logger.info(
             f"LLM Adapter initialized for {self.hardware_tier} tier "
-            f"(max {self.max_concurrent} concurrent requests)"
+            f"(max {self.max_concurrent} concurrent cloud / {self.max_concurrent_local} local requests)"
         )
 
-        # Concurrency control
-        self.semaphore = asyncio.Semaphore(self.max_concurrent)
+        # Concurrency control - separate semaphores for cloud and local
+        self.cloud_semaphore = asyncio.Semaphore(self.max_concurrent)
+        self.local_semaphore = asyncio.Semaphore(self.max_concurrent_local)
         self.active_requests = 0
 
         # Rate limiters per provider
@@ -168,19 +183,23 @@ class LLMAdapter:
     def _determine_hardware_tier(self, specs: dict[str, Any]) -> str:
         """Determine hardware tier from specs."""
         # Check for Apple Silicon
-        if "apple" in specs.get("chip_type", "").lower():
-            if "ultra" in specs.get("chip_variant", "").lower():
+        chip_type = specs.get("chip_type", "").lower()
+        if "apple" in chip_type or "m1" in chip_type or "m2" in chip_type or "m3" in chip_type:
+            # Check chip_type directly (contains full name like "apple m2 ultra")
+            if "ultra" in chip_type:
                 return "enterprise"
-            elif any(
-                x in specs.get("chip_variant", "").lower() for x in ["pro", "max"]
-            ):
+            elif "pro" in chip_type or "max" in chip_type:
                 return "prosumer"
             else:
                 return "consumer"
 
         # Check x86 by core count and memory
-        cores = specs.get("performance_cores", 0) + specs.get("efficiency_cores", 0)
-        memory_gb = specs.get("total_memory_gb", 0)
+        cores = specs.get("cpu_cores", 0)
+        if cores == 0:  # Fallback to alternative field names
+            cores = specs.get("performance_cores", 0) + specs.get("efficiency_cores", 0)
+        memory_gb = specs.get("memory_gb", 0)
+        if memory_gb == 0:  # Fallback
+            memory_gb = specs.get("total_memory_gb", 0)
 
         if cores >= 16 and memory_gb >= 32:
             return "enterprise"
@@ -227,11 +246,17 @@ class LLMAdapter:
         # Check memory throttling
         await self.memory_throttler.check_and_wait()
 
+        # Choose semaphore based on provider type (local vs cloud)
+        is_local = provider in ["ollama", "local"]
+        semaphore = self.local_semaphore if is_local else self.cloud_semaphore
+        max_concurrent = self.max_concurrent_local if is_local else self.max_concurrent
+
         # Acquire concurrency slot
-        async with self.semaphore:
+        async with semaphore:
             self.active_requests += 1
-            logger.info(
-                f"LLM request starting ({self.active_requests}/{self.max_concurrent} active)"
+            provider_type = "local" if is_local else "cloud"
+            logger.debug(
+                f"LLM request starting ({self.active_requests} active, {max_concurrent} max {provider_type})"
             )
 
             try:
@@ -257,7 +282,7 @@ class LLMAdapter:
                 # Estimate cost
                 cost = self._estimate_cost(provider, model, response)
                 if cost > 0:
-                    logger.info(f"Estimated cost: ${cost:.4f}")
+                    logger.debug(f"Estimated cost: ${cost:.4f}")
 
                 return response
 
@@ -306,8 +331,13 @@ class LLMAdapter:
             },
         }
 
-        if payload.get("format") == "json":
+        # Handle both "json" string and schema dict formats
+        format_param = payload.get("format")
+        if format_param == "json":
             request_payload["format"] = "json"
+        elif isinstance(format_param, dict):
+            # Full schema object for structured outputs
+            request_payload["format"] = format_param
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -322,10 +352,20 @@ class LLMAdapter:
                     result = await response.json()
 
             content = result["message"]["content"]
+            
+            # Warn if content is empty (might indicate schema is too restrictive)
+            if not content or not content.strip():
+                logger.warning(
+                    f"⚠️ Ollama returned empty content for model {model}. "
+                    f"This may indicate the schema is too restrictive or the prompt is unclear."
+                )
+                # Log more details for debugging
+                logger.debug(f"Empty response details - model: {model}, format: {type(format_param)}")
+            
             prompt_tokens = (
                 sum(len(m["content"].split()) for m in payload["messages"]) * 1.3
             )
-            completion_tokens = len(content.split()) * 1.3
+            completion_tokens = len(content.split()) * 1.3 if content else 0
 
             return {
                 "content": content,

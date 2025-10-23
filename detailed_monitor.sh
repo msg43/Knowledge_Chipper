@@ -16,10 +16,10 @@ ls -la output/ | grep -E "(What's happening|gold)" | while read line; do
 done
 
 echo -e "\n=== Database Check ==="
-if [ -f "/Users/matthewgreer/Library/Application Support/KnowledgeChipper/knowledge_system.db" ]; then
+if [ -f "/Users/matthewgreer/Library/Application Support/Knowledge Chipper/knowledge_system.db" ]; then
     echo "📊 Database exists"
-    echo "  Size: $(ls -lh "/Users/matthewgreer/Library/Application Support/KnowledgeChipper/knowledge_system.db" | awk '{print $5}')"
-    echo "  Modified: $(ls -l "/Users/matthewgreer/Library/Application Support/KnowledgeChipper/knowledge_system.db" | awk '{print $6, $7, $8}')"
+    echo "  Size: $(ls -lh "/Users/matthewgreer/Library/Application Support/Knowledge Chipper/knowledge_system.db" | awk '{print $5}')"
+    echo "  Modified: $(ls -l "/Users/matthewgreer/Library/Application Support/Knowledge Chipper/knowledge_system.db" | awk '{print $6, $7, $8}')"
 else
     echo "❌ Database not found"
 fi

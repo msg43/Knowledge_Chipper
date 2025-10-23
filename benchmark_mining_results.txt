@@ -1,0 +1,36 @@
+
+UNIFIED MINING BENCHMARK RESULTS
+Date: Tue Oct 21 22:46:00 EDT 2025
+System: Apple M2 Ultra
+Memory: 128 GB
+
+System Load During Test:
+  CPU Usage: 15.58% 12.21%
+  Memory Pressure: System-wide memory free percentage: 76%
+
+────────────────────────────────────────────────────────────────
+
+
+OLLAMA_NUM_PARALLEL=2
+  Segments processed: 20
+  Throughput:  segments/second
+  CPU during test: 16.20%
+
+
+OLLAMA_NUM_PARALLEL=4
+  Segments processed: 20
+  Throughput:  segments/second
+  CPU during test: 15.67%
+
+
+OLLAMA_NUM_PARALLEL=6
+  Segments processed: 20
+  Throughput:  segments/second
+  CPU during test: 14.87%
+
+
+OLLAMA_NUM_PARALLEL=7
+  Segments processed: 20
+  Throughput:  segments/second
+  CPU during test: 16.65%
+

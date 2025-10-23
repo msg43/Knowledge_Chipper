@@ -202,10 +202,14 @@ def upsert_pipeline_outputs(
 
         # Upsert people mentions
         for person in out.people:
+            # Extract context_quote from the person's surface text (as a fallback)
+            # In the future, this could be enhanced to include actual quote context
+            context_quote = person.normalized or person.surface
+            
             cur.execute(
                 """
-                INSERT INTO people(episode_id, mention_id, span_segment_id, t0, t1, surface, normalized, entity_type, external_ids_json, confidence)
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO people(episode_id, mention_id, span_segment_id, t0, t1, surface, normalized, entity_type, external_ids_json, confidence, context_quote)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(episode_id, mention_id) DO UPDATE SET
                     span_segment_id = excluded.span_segment_id,
                     t0 = excluded.t0,
@@ -214,7 +218,8 @@ def upsert_pipeline_outputs(
                     normalized = excluded.normalized,
                     entity_type = excluded.entity_type,
                     external_ids_json = excluded.external_ids_json,
-                    confidence = excluded.confidence
+                    confidence = excluded.confidence,
+                    context_quote = excluded.context_quote
             """,
                 (
                     out.episode_id,
@@ -227,22 +232,27 @@ def upsert_pipeline_outputs(
                     person.entity_type,
                     json.dumps(person.external_ids or {}),
                     person.confidence,
+                    context_quote,
                 ),
             )
 
         # Upsert concepts
         for concept in out.concepts:
             evidence_json = json.dumps([e.model_dump() for e in concept.evidence_spans])
+            # Extract context_quote from first evidence span if available
+            context_quote = concept.evidence_spans[0].quote if concept.evidence_spans else None
+            
             cur.execute(
                 """
-                INSERT INTO concepts(episode_id, model_id, name, definition, first_mention_ts, aliases_json, evidence_json)
-                VALUES(?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO concepts(episode_id, model_id, name, definition, first_mention_ts, aliases_json, evidence_json, context_quote)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(episode_id, model_id) DO UPDATE SET
                     name = excluded.name,
                     definition = excluded.definition,
                     first_mention_ts = excluded.first_mention_ts,
                     aliases_json = excluded.aliases_json,
-                    evidence_json = excluded.evidence_json
+                    evidence_json = excluded.evidence_json,
+                    context_quote = excluded.context_quote
             """,
                 (
                     out.episode_id,
@@ -252,21 +262,26 @@ def upsert_pipeline_outputs(
                     concept.first_mention_ts,
                     json.dumps(concept.aliases or []),
                     evidence_json,
+                    context_quote,
                 ),
             )
 
         # Upsert jargon
         for term in out.jargon:
             evidence_json = json.dumps([e.model_dump() for e in term.evidence_spans])
+            # Extract context_quote from first evidence span if available
+            context_quote = term.evidence_spans[0].quote if term.evidence_spans else None
+            
             cur.execute(
                 """
-                INSERT INTO jargon(episode_id, term_id, term, category, definition, evidence_json)
-                VALUES(?, ?, ?, ?, ?, ?)
+                INSERT INTO jargon(episode_id, term_id, term, category, definition, evidence_json, context_quote)
+                VALUES(?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(episode_id, term_id) DO UPDATE SET
                     term = excluded.term,
                     category = excluded.category,
                     definition = excluded.definition,
-                    evidence_json = excluded.evidence_json
+                    evidence_json = excluded.evidence_json,
+                    context_quote = excluded.context_quote
             """,
                 (
                     out.episode_id,
@@ -275,6 +290,7 @@ def upsert_pipeline_outputs(
                     term.category,
                     term.definition,
                     evidence_json,
+                    context_quote,
                 ),
             )
 

@@ -241,6 +241,38 @@ class APIKeysTab(BaseTab):
             0,
         )
 
+        # Add spacing between PacketStream fields and proxy strict mode
+        from PyQt6.QtWidgets import QSpacerItem, QSizePolicy
+        layout.addItem(QSpacerItem(20, 10, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed), 7, 0, 1, 2)
+
+        # Proxy Strict Mode checkbox
+        self.proxy_strict_mode_checkbox = QCheckBox("🛡️ Proxy Strict Mode (RECOMMENDED)")
+        self.proxy_strict_mode_checkbox.setChecked(True)  # Default to enabled for safety
+        self.proxy_strict_mode_checkbox.setStyleSheet("font-weight: bold;")
+        
+        proxy_strict_info = (
+            "Block YouTube operations when proxy fails to protect your IP address.\n\n"
+            "ENABLED (Recommended):\n"
+            "• Blocks all YouTube downloads if proxy fails\n"
+            "• Protects your IP from rate limits and bans\n"
+            "• Requires PacketStream to be working properly\n"
+            "• Safest option for your account\n\n"
+            "DISABLED (Risky):\n"
+            "• Falls back to direct connection if proxy fails\n"
+            "• Exposes your personal IP to YouTube\n"
+            "• May trigger rate limits or account bans\n"
+            "• Only use if you understand the risks"
+        )
+        
+        self._add_field_with_info(
+            layout,
+            "",  # No label needed, checkbox has its own text
+            self.proxy_strict_mode_checkbox,
+            proxy_strict_info,
+            8,
+            0,
+        )
+
         # Load existing values and set up change handlers
         self._load_existing_values()
         self._setup_change_handlers()
@@ -602,6 +634,18 @@ class APIKeysTab(BaseTab):
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
 
+        # Load Proxy Strict Mode setting
+        if (
+            hasattr(self.settings, "youtube_processing")
+            and hasattr(self.settings.youtube_processing, "proxy_strict_mode")
+        ):
+            self.proxy_strict_mode_checkbox.setChecked(
+                self.settings.youtube_processing.proxy_strict_mode
+            )
+        else:
+            # Default to True for safety
+            self.proxy_strict_mode_checkbox.setChecked(True)
+
     def _setup_change_handlers(self) -> None:
         """Set up change handlers for password/key fields."""
         self.openai_key_edit.textChanged.connect(
@@ -733,6 +777,11 @@ class APIKeysTab(BaseTab):
             if not packetstream_auth_key.startswith("••"):
                 self.settings.api_keys.packetstream_auth_key = packetstream_auth_key
 
+            # Save Proxy Strict Mode setting
+            strict_mode_enabled = self.proxy_strict_mode_checkbox.isChecked()
+            self.settings.youtube_processing.proxy_strict_mode = strict_mode_enabled
+            logger.info(f"Proxy strict mode set to: {strict_mode_enabled}")
+
             # PERSISTENT STORAGE: Save credentials to YAML file for persistence across sessions
             self._save_credentials_to_file()
 
@@ -791,6 +840,12 @@ class APIKeysTab(BaseTab):
                         self.settings.api_keys, "packetstream_auth_key", ""
                     )
                     or "",
+                },
+                # Persist YouTube processing settings
+                "youtube_processing": {
+                    "proxy_strict_mode": getattr(
+                        self.settings.youtube_processing, "proxy_strict_mode", True
+                    )
                 }
             }
 

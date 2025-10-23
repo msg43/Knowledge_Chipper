@@ -35,10 +35,9 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from knowledge_system.processors.audio_processor import AudioProcessor  # noqa: E402
-from knowledge_system.processors.moc_processor import MOCProcessor  # noqa: E402
-from knowledge_system.processors.summarizer_processor import (  # noqa: E402
-    SummarizerProcessor,
-)
+from knowledge_system.processors.moc import MOCProcessor  # noqa: E402
+# Note: SummarizerProcessor removed - use System2Orchestrator instead
+# This batch processor is deprecated and should be updated to use System2Orchestrator
 from knowledge_system.utils.ipc_communication import IPCCommunicator  # noqa: E402
 from knowledge_system.utils.memory_monitor import MemoryMonitor  # noqa: E402
 from knowledge_system.utils.tracking import ProgressTracker  # noqa: E402
@@ -74,7 +73,7 @@ class BatchProcessor:
 
         # Processing components (lazy loaded)
         self.audio_processor = None
-        self.summarizer_processor = None
+        self.summarizer_processor = None  # Deprecated - use System2Orchestrator
         self.moc_processor = None
 
         # Statistics
@@ -119,9 +118,13 @@ class BatchProcessor:
                 )
 
             if self.config.get("summarize") and not self.summarizer_processor:
-                self.ipc.send_message("info", "Initializing summarizer processor...")
-                self.summarizer_processor = SummarizerProcessor(
-                    progress_callback=self._summarizer_progress_callback
+                self.ipc.send_error(
+                    "SummarizerProcessor has been removed. "
+                    "Use System2Orchestrator instead. "
+                    "This batch processor needs to be updated."
+                )
+                raise NotImplementedError(
+                    "SummarizerProcessor removed - update to use System2Orchestrator"
                 )
 
             if self.config.get("create_moc") and not self.moc_processor:

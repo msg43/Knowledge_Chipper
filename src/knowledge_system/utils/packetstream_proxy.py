@@ -306,16 +306,12 @@ class PacketStreamProxyManager:
 
         for attempt in range(max_retries):
             try:
-                # Force IP rotation on retry attempts for better reliability
+                # Retry with exponential backoff
+                # Note: IP rotation is pointless here - if we can't reach the proxy server,
+                # the issue is network/DNS/firewall, not the residential IP assigned
                 if attempt > 0:
                     if retry_callback:
                         retry_callback(f"Retry attempt {attempt + 1}/{max_retries}...")
-                    # Rotate to fresh IP for better success chances
-                    self.rotate_session()
-                    # Regenerate proxy config with new session
-                    proxy_config = self._get_proxy_config(use_socks5=False)
-                    proxy_url = proxy_config["https"]
-                    proxies = {"http": proxy_url, "https": proxy_url}
 
                 # Test with a simple HTTP request - using more reliable endpoint
                 response = requests.get(

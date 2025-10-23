@@ -392,6 +392,12 @@ class ProcessingConfig(BaseModel):
 class YouTubeProcessingConfig(BaseModel):
     """YouTube processing configuration."""
 
+    # Proxy strict mode - prevents direct connections when proxy fails
+    proxy_strict_mode: bool = Field(
+        default=True,
+        description="Block YouTube operations when proxy fails (prevents IP exposure). Set to False to allow direct fallback.",
+    )
+
     # Delay settings for rate limiting
     disable_delays_with_proxy: bool = Field(
         default=False,
@@ -450,6 +456,44 @@ class YouTubeProcessingConfig(BaseModel):
         ge=1.0,
         le=5.0,
         description="Multiplier for delays when rate limiting is detected",
+    )
+
+    # Cookie authentication settings (file upload only - browser extraction disabled for security)
+    enable_cookies: bool = Field(
+        default=True,
+        description="Enable cookie-based authentication for YouTube downloads",
+    )
+
+    cookie_file_path: str | None = Field(
+        default=None,
+        description="Path to cookies.txt file (Netscape format). Browser extraction disabled to prevent accidentally using main account instead of throwaway.",
+    )
+
+    # Rate limiting for sequential downloads
+    sequential_download_delay_min: float = Field(
+        default=180.0,
+        ge=0.0,
+        le=600.0,
+        description="Minimum delay in seconds between sequential YouTube downloads (default 3 minutes)",
+    )
+
+    sequential_download_delay_max: float = Field(
+        default=300.0,
+        ge=0.0,
+        le=600.0,
+        description="Maximum delay in seconds between sequential YouTube downloads (default 5 minutes)",
+    )
+
+    delay_randomization_percent: float = Field(
+        default=25.0,
+        ge=0.0,
+        le=100.0,
+        description="Percentage of randomization for sleep times (e.g., 25 = ±25%)",
+    )
+
+    disable_proxies_with_cookies: bool = Field(
+        default=True,
+        description="Automatically disable proxies when cookies are enabled (recommended for home IP usage)",
     )
 
 

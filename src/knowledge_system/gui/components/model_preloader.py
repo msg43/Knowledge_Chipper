@@ -5,16 +5,24 @@ Pre-loads transcription and diarization models in the background to eliminate
 initialization delays when the user starts processing.
 """
 
+from __future__ import annotations
+
 import threading
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
+if TYPE_CHECKING:
+    from knowledge_system.processors.diarization import SpeakerDiarizationProcessor
+
 from knowledge_system.logger import get_logger
 from knowledge_system.processors.audio_processor import AudioProcessor
-from knowledge_system.processors.diarization import SpeakerDiarizationProcessor, is_diarization_available
 from knowledge_system.processors.whisper_cpp_transcribe import WhisperCppTranscribeProcessor
+
+# IMPORTANT: Import diarization lazily to avoid torchcodec segfault at GUI startup
+# torchcodec has ABI issues and crashes on import, so we only load it when actually needed
+# from knowledge_system.processors.diarization import SpeakerDiarizationProcessor, is_diarization_available
 
 logger = get_logger(__name__)
 
@@ -42,7 +50,7 @@ class ModelPreloader(QObject):
         
         # Model instances (None until loaded)
         self.transcriber: Optional[WhisperCppTranscribeProcessor] = None
-        self.diarizer: Optional[SpeakerDiarizationProcessor] = None
+        self.diarizer: Optional["SpeakerDiarizationProcessor"] = None
         
         # Loading state
         self.transcription_loading = False
@@ -129,6 +137,14 @@ class ModelPreloader(QObject):
     
     def _start_diarization_loading(self):
         """Start loading diarization model."""
+        # Safe to preload now - torchcodec has been completely removed
+        # Lazy import to avoid any potential startup issues
+        try:
+            from knowledge_system.processors.diarization import is_diarization_available
+        except Exception as e:
+            logger.warning(f"Could not import diarization module: {e}")
+            return
+            
         if not is_diarization_available():
             logger.warning("Diarization not available, skipping preload")
             return
@@ -150,6 +166,8 @@ class ModelPreloader(QObject):
     def _load_diarization_model(self):
         """Load diarization model in background thread."""
         try:
+            from knowledge_system.processors.diarization import SpeakerDiarizationProcessor
+            
             logger.info("🔄 Loading diarization model...")
             self.diarization_model_loading.emit("Loading diarization model...", 10)
             
@@ -193,7 +211,7 @@ class ModelPreloader(QObject):
         """Progress callback for diarization model loading."""
         self.diarization_model_loading.emit(message, progress)
     
-    def get_preloaded_models(self) -> tuple[Optional[WhisperCppTranscribeProcessor], Optional[SpeakerDiarizationProcessor]]:
+    def get_preloaded_models(self) -> tuple[Optional[WhisperCppTranscribeProcessor], Optional["SpeakerDiarizationProcessor"]]:
         """Get the preloaded model instances."""
         return self.transcriber, self.diarizer
     

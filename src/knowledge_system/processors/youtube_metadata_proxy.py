@@ -180,8 +180,19 @@ class YouTubeMetadataProxyProcessor(BaseProcessor):
 
                         current_ydl_opts["proxy"] = proxy_url
                     else:
-                        self.logger.info(
-                            f"🔗 Using direct connection for {video_id} (attempt {attempt + 1})"
+                        # No proxy available - check if strict mode prevents direct connection
+                        from ..config import get_settings
+                        settings = get_settings()
+                        strict_mode = getattr(settings.youtube_processing, "proxy_strict_mode", True)
+                        
+                        if strict_mode:
+                            self.logger.error(
+                                f"🚫 PROXY STRICT MODE: No proxy available for {video_id}, blocking direct connection"
+                            )
+                            return None
+                        
+                        self.logger.warning(
+                            f"🔗 Using direct connection for {video_id} (attempt {attempt + 1}) - strict mode disabled"
                         )
 
                     with yt_dlp.YoutubeDL(current_ydl_opts) as ydl:

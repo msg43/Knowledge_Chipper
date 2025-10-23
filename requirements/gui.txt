@@ -1,0 +1,13 @@
+# GUI Dependencies
+# Install with: pip install -r requirements/gui.txt
+# Or: pip install -e ".[gui]"
+
+-r base.txt
+
+# Qt GUI framework
+PyQt6>=6.6.0
+
+# Optional: Streamlit web UI (if still used)
+streamlit>=1.28.0
+streamlit-option-menu>=0.3.0
+

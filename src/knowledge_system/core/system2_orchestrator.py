@@ -31,11 +31,12 @@ class System2Orchestrator:
     - Tracks all LLM requests/responses
     """
 
-    def __init__(self, db_service: DatabaseService | None = None):
+    def __init__(self, db_service: DatabaseService | None = None, progress_callback=None):
         """Initialize the System 2 orchestrator."""
         self.db_service = db_service or DatabaseService()
         self.coordinator = IntelligentProcessingCoordinator()
         self._current_job_run_id: str | None = None
+        self.progress_callback = progress_callback  # Callback for real-time progress updates
 
     def create_job(
         self,
@@ -154,7 +155,7 @@ class System2Orchestrator:
                 job_run.metrics_json = metrics
 
             session.commit()
-            logger.info(f"Updated job run {run_id} status to {status}")
+            logger.debug(f"Updated job run {run_id} status to {status}")
 
     def save_checkpoint(self, run_id: str, checkpoint: dict[str, Any]):
         """Save checkpoint for a job run."""
@@ -397,6 +398,9 @@ class System2Orchestrator:
         """Process mining job with checkpoint support."""
         try:
             # 1. Load transcript
+            if self.progress_callback:
+                self.progress_callback("loading", 0, episode_id)
+            
             file_path = config.get("file_path")
             if not file_path:
                 raise KnowledgeSystemError(
@@ -405,6 +409,9 @@ class System2Orchestrator:
                 )
 
             # 2. Parse transcript to segments
+            if self.progress_callback:
+                self.progress_callback("parsing", 5, episode_id)
+            
             transcript_text = Path(file_path).read_text()
             segments = self._parse_transcript_to_segments(transcript_text, episode_id)
 
@@ -438,6 +445,13 @@ class System2Orchestrator:
                 )
                 miner_outputs.append(output)
 
+                # Calculate progress (mining is 10-80% of total)
+                mining_progress = 10 + int((i + 1) / len(segments) * 70)
+                
+                # Emit progress callback with actual mining progress
+                if self.progress_callback:
+                    self.progress_callback("mining", mining_progress, episode_id, i + 1, len(segments))
+
                 # Save checkpoint every 5 segments
                 if (i + 1) % 5 == 0:
                     self.save_checkpoint(
@@ -457,15 +471,73 @@ class System2Orchestrator:
                     },
                 )
 
-            # 6. Store results
+            # 6. Store HCE results to database
+            if self.progress_callback:
+                self.progress_callback("storing", 80, episode_id)
+            
             from ..database.hce_operations import store_mining_results
 
-            store_mining_results(self.db_service, episode_id, miner_outputs)
+            # Calculate totals for logging
+            total_claims = sum(len(o.claims) for o in miner_outputs)
+            total_people = sum(len(o.people) for o in miner_outputs)
+            total_jargon = sum(len(o.jargon) for o in miner_outputs)
+            total_concepts = sum(len(o.mental_models) for o in miner_outputs)
+            
+            logger.info(
+                f"💾 Saving to database: {total_claims} claims, {total_people} people, "
+                f"{total_jargon} jargon terms, {total_concepts} concepts"
+            )
+            
+            try:
+                store_mining_results(self.db_service, episode_id, miner_outputs)
+                logger.info(f"✅ Database save completed for episode {episode_id}")
+            except Exception as e:
+                logger.error(f"❌ Database save failed: {e}")
+                raise  # Re-raise to fail the job
 
-            # 7. Return success
+            # 7. Create Summary record
+            if self.progress_callback:
+                self.progress_callback("generating_summary", 90, episode_id)
+            
+            video_id = episode_id.replace("episode_", "")
+            summary_id = self._create_summary_from_mining(
+                video_id, episode_id, miner_outputs, config
+            )
+            logger.info(f"📋 Summary record created: {summary_id}")
+
+            # 8. Generate summary markdown file
+            if self.progress_callback:
+                self.progress_callback("saving_file", 95, episode_id)
+            
+            summary_file_path = None
+            try:
+                from ..services.file_generation import FileGenerationService
+
+                # Get output directory from config (if provided by GUI)
+                output_dir = config.get("output_dir")
+                if output_dir:
+                    logger.info(f"📁 Writing summary to: {output_dir}")
+                    file_gen = FileGenerationService(output_dir=Path(output_dir))
+                else:
+                    logger.info("📁 Writing summary to default directory: output/summaries/")
+                    file_gen = FileGenerationService()
+                    
+                summary_file_path = file_gen.generate_summary_markdown(
+                    video_id, summary_id
+                )
+                if summary_file_path:
+                    logger.info(f"✅ Summary file written: {summary_file_path}")
+                else:
+                    logger.warning("⚠️ Summary file generation returned None (check database for summary record)")
+            except Exception as e:
+                logger.error(f"❌ Failed to generate summary markdown file: {e}")
+                # Don't re-raise - database save succeeded, just file generation failed
+
+            # 9. Return success
             return {
                 "status": "succeeded",
                 "output_id": episode_id,
+                "summary_file": str(summary_file_path) if summary_file_path else None,
                 "result": {
                     "claims_extracted": sum(len(o.claims) for o in miner_outputs),
                     "jargon_extracted": sum(len(o.jargon) for o in miner_outputs),
@@ -480,6 +552,99 @@ class System2Orchestrator:
             raise KnowledgeSystemError(
                 f"Mining failed: {str(e)}", ErrorCode.PROCESSING_FAILED
             ) from e
+
+    def _create_summary_from_mining(
+        self,
+        video_id: str,
+        episode_id: str,
+        miner_outputs: list[Any],
+        config: dict[str, Any],
+    ) -> str:
+        """Create a Summary record from mining results."""
+        from datetime import datetime
+        import uuid
+        from ..database.models import Summary
+
+        # Generate summary ID
+        summary_id = f"summary_{uuid.uuid4().hex[:12]}"
+
+        # Aggregate mining results for summary text
+        total_claims = sum(len(o.claims) for o in miner_outputs)
+        total_jargon = sum(len(o.jargon) for o in miner_outputs)
+        total_people = sum(len(o.people) for o in miner_outputs)
+        total_concepts = sum(len(o.mental_models) for o in miner_outputs)
+
+        # Create summary text
+        summary_text = f"""# HCE Analysis Summary
+
+This content was analyzed using Hybrid Claim Extraction (HCE).
+
+## Extraction Statistics
+- **Claims Extracted:** {total_claims}
+- **Jargon Terms:** {total_jargon}
+- **People Mentioned:** {total_people}
+- **Mental Models/Concepts:** {total_concepts}
+
+## Key Claims
+"""
+        # Add top claims
+        all_claims = []
+        for output in miner_outputs:
+            all_claims.extend(output.claims)
+
+        for i, claim in enumerate(all_claims[:10], 1):  # Top 10 claims
+            claim_text = claim.get("claim_text") or claim.get("text", "")
+            summary_text += f"{i}. {claim_text}\n"
+
+        # Prepare HCE data JSON
+        hce_data_json = {
+            "claims": all_claims,
+            "jargon": [j for output in miner_outputs for j in output.jargon],
+            "people": [p for output in miner_outputs for p in output.people],
+            "mental_models": [m for output in miner_outputs for m in output.mental_models],
+        }
+
+        # Get LLM info from config
+        miner_model = config.get("miner_model", "ollama:qwen2.5:7b-instruct")
+        if ":" in miner_model:
+            provider, model = miner_model.split(":", 1)
+        else:
+            provider = "unknown"
+            model = miner_model
+
+        # Create Summary record
+        with self.db_service.get_session() as session:
+            summary = Summary(
+                summary_id=summary_id,
+                video_id=video_id,
+                transcript_id=None,  # Could link to transcript if available
+                summary_text=summary_text,
+                summary_metadata_json={
+                    "episode_id": episode_id,
+                    "mining_timestamp": datetime.utcnow().isoformat(),
+                },
+                processing_type="hce",
+                hce_data_json=hce_data_json,
+                llm_provider=provider,
+                llm_model=model,
+                prompt_template_path=None,
+                focus_area=config.get("source", "manual_summarization"),
+                prompt_tokens=0,  # Could be tracked if available
+                completion_tokens=0,
+                total_tokens=0,
+                processing_cost=0.0,
+                input_length=len(str(miner_outputs)),
+                summary_length=len(summary_text),
+                compression_ratio=0.0,
+                processing_time_seconds=0.0,  # Could be tracked
+                created_at=datetime.utcnow(),
+                template_used="HCE Mining",
+            )
+            session.add(summary)
+            session.commit()
+            logger.info(f"Created summary record: {summary_id} for video {video_id}")
+
+        return summary_id
 
     async def _process_flagship(
         self,

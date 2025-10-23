@@ -113,10 +113,10 @@ echo -e "${BLUE}📚 Installing Python dependencies...${NC}"
 echo "This may take several minutes..."
 
 # Install core requirements
-if [ -f "requirements.txt" ]; then
-    pip install -r requirements.txt
+if [ -f "requirements/base.txt" ]; then
+    pip install -r requirements/base.txt
 else
-    echo -e "${RED}❌ requirements.txt not found${NC}"
+    echo -e "${RED}❌ requirements/base.txt not found${NC}"
     exit 1
 fi
 

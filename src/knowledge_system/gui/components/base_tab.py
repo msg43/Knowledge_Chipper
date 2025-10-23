@@ -103,8 +103,8 @@ class BaseTab(QWidget):
         self.output_text = QTextEdit()
         self.output_text.setReadOnly(True)
         self.output_text.setMinimumHeight(
-            100
-        )  # Reduced minimum height to compensate for taller buttons
+            80
+        )  # Reduced minimum height to make room for settings section
         # Remove maximum height constraint to allow expansion
         # Use Expanding vertical policy to grow/shrink with window
         self.output_text.setSizePolicy(
@@ -650,6 +650,15 @@ class BaseTab(QWidget):
                                     "*youtube_extraction*.md",
                                     "*youtube_extraction*.log",
                                     "*youtube_extraction*.csv",
+                                ]
+                            )
+
+                        # Special patterns for Summarization tab
+                        if "summarization" in self.tab_type.lower():
+                            patterns.extend(
+                                [
+                                    "*session_report*.json",
+                                    "*summarization*.json",
                                 ]
                             )
 

@@ -1,0 +1,111 @@
+version: 2
+updates:
+  # Main pip dependencies - Base requirements
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      # Group patch and minor updates together for stable packages
+      minor-patches:
+        patterns:
+          - "requests"
+          - "pydantic"
+          - "sqlalchemy"
+          - "pandas"
+          - "numpy"
+          - "click"
+          - "loguru"
+          - "rich"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # Development tools can be grouped
+      dev-tools:
+        patterns:
+          - "pytest*"
+          - "black"
+          - "isort"
+          - "mypy"
+          - "pre-commit"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # ML dependencies (careful with breaking changes)
+      ml-dependencies:
+        patterns:
+          - "torch"
+          - "transformers"
+          - "librosa"
+          - "soundfile"
+        update-types:
+          - "patch"
+    
+    # NOTE: yt-dlp is NOT grouped - gets individual PRs for careful review
+    # Each yt-dlp update requires testing per docs/YT_DLP_UPGRADE_PROCEDURE.md
+    # Expect 1-2 yt-dlp PRs per week (high frequency, critical dependency)
+    
+    # Critical dependencies that need individual review
+    ignore:
+      # PyAnnote updates need careful testing for API changes
+      - dependency-name: "pyannote.audio"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      
+      # PyQt major versions need extensive testing
+      - dependency-name: "PyQt6"
+        update-types: ["version-update:semver-major"]
+      
+      # Torch major versions need GPU compatibility checks
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major"]
+    
+    labels:
+      - "dependencies"
+      - "automated"
+    
+    reviewers:
+      - "msg43"  # Replace with your GitHub username
+    
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+  
+  # GitHub Actions updates
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(ci)"
+
+# How this works:
+# 
+# 1. GROUPED UPDATES (auto-merge friendly):
+#    - minor-patches: Stable packages like requests, pydantic
+#    - dev-tools: Testing/linting tools
+#    - ml-dependencies: ML packages (patch only)
+#
+# 2. INDIVIDUAL UPDATES (need review):
+#    - pyannote.audio (major versions)
+#    - openai, anthropic (API changes)
+#    - PyQt6 (major versions)
+#
+# 3. IGNORED (manual management):
+#    - yt-dlp: Too critical, manual testing required
+#    - Major versions of ML libraries
+#
+# 4. SECURITY UPDATES:
+#    - Always created regardless of ignore rules
+#    - Labeled with "security" automatically
+#
+# To enable auto-merge for trusted updates:
+# gh repo set --enable-auto-merge
+# Then on PRs: gh pr merge --auto --merge
+

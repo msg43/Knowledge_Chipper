@@ -1,0 +1,41 @@
+Test Document for Summarization
+
+This is a plain text document for testing summarization capabilities.
+
+Introduction
+============
+
+This document contains sample content about software development best practices.
+
+Main Content
+============
+
+Version Control
+---------------
+Version control systems like Git help teams collaborate on code. They track changes, enable branching, and facilitate code reviews.
+
+Testing
+-------
+Automated testing ensures code quality. Unit tests verify individual components, integration tests check component interactions, and end-to-end tests validate complete workflows.
+
+Code Review
+-----------
+Peer code review improves quality and shares knowledge. Reviewers check for bugs, suggest improvements, and ensure adherence to coding standards.
+
+Continuous Integration
+---------------------
+CI/CD pipelines automate building, testing, and deploying code. They catch issues early and enable rapid iteration.
+
+Key Concepts
+============
+
+- Version Control: Git, branching strategies
+- Testing: Unit, integration, E2E tests
+- Code Review: Quality gates, knowledge sharing
+- CI/CD: Automation, continuous delivery
+
+Conclusion
+==========
+
+Following these best practices leads to higher quality software and more productive development teams.
+

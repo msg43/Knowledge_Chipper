@@ -56,6 +56,8 @@ Identify conceptual frameworks, ways of thinking, or models including:
 - Decision-making frameworks
 
 ## OUTPUT FORMAT
+**IMPORTANT: Return ONLY valid JSON. Your response must be parseable JSON with no additional text.**
+
 Return a JSON object with four arrays: "claims", "jargon", "people", and "mental_models".
 
 Each claim must include:

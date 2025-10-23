@@ -59,6 +59,13 @@ echo "Phase 4: Smoke Tests (GUI Launch Verification)"
 echo "================================================================"
 $PYTEST tests/gui_comprehensive/test_smoke_automated.py -v --timeout=60 || true
 
+# Phase 5: CLI Removal Verification
+echo ""
+echo "================================================================"
+echo "Phase 5: CLI Removal Verification"
+echo "================================================================"
+$PYTEST tests/test_cli_removal_verification.py -v --timeout=30 || true
+
 echo ""
 echo "================================================================"
 echo "All Automated Tests Complete!"

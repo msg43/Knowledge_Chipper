@@ -182,82 +182,72 @@ class SpeakerAssignmentQueue:
                 )
                 
                 # CRITICAL: Regenerate the markdown file with speaker names
-                # The original markdown was created with generic speaker IDs (SPEAKER_00, etc.)
-                # Now we need to recreate it with the actual assigned names
+                logger.info(f"Regenerating markdown with assigned speaker names for {task.video_id}")
+
                 try:
                     from pathlib import Path
-                    from ..processors.audio_processor import AudioProcessor
                     
-                    # Get the audio file path
-                    audio_path = Path(task.recording_path)
+                    # Get transcript record to access segments with speakers
+                    transcript = db_service.get_transcript(task.transcript_id) if hasattr(task, 'transcript_id') else None
                     
-                    # Determine output directory from metadata if available
-                    output_dir = task.metadata.get("output_dir")
-                    if not output_dir:
-                        # Try to find the existing markdown file
-                        possible_transcript_name = f"{audio_path.stem}_transcript.md"
-                        # Check common output locations
-                        for possible_dir in [Path("Output/Transcripts"), Path("output"), audio_path.parent]:
-                            possible_path = possible_dir / possible_transcript_name
-                            if possible_path.exists():
-                                output_dir = str(possible_dir)
-                                break
-                    
-                    if output_dir:
-                        # Create updated transcript data with speaker names
-                        transcript_data = {
-                            "text": transcript_text,
-                            "segments": updated_segments,
-                            "language": transcript.language,
-                        }
+                    if transcript and transcript.transcript_segments_json:
+                        # Apply speaker name assignments to segments
+                        updated_segments = []
+                        for seg in transcript.transcript_segments_json:
+                            seg_copy = seg.copy()
+                            speaker_id = seg.get("speaker")
+                            if speaker_id and speaker_id in assignments:
+                                seg_copy["speaker"] = assignments[speaker_id]
+                            updated_segments.append(seg_copy)
                         
-                        # Recreate the ProcessorResult with updated data
-                        from ..processors.base import ProcessorResult
-                        updated_result = ProcessorResult(
-                            success=True,
-                            data=transcript_data,
-                            metadata={
-                                "model": transcript.whisper_model or "unknown",
-                                "diarization_enabled": transcript.diarization_enabled,
+                        # Get the markdown file path
+                        file_path, video_metadata = db_service.get_transcript_path_for_regeneration(transcript.transcript_id)
+                        
+                        if file_path and file_path.exists():
+                            # Create updated transcript data
+                            transcript_data = {
+                                "text": transcript.transcript_text,
+                                "segments": updated_segments,
+                                "language": transcript.language,
                             }
-                        )
-                        
-                        # Get video metadata if this is a YouTube video
-                        video_metadata = None
-                        video = db_service.get_video(task.video_id)
-                        if video:
-                            video_metadata = {
-                                "video_id": video.video_id,
-                                "title": video.title,
-                                "url": video.url,
-                                "uploader": video.uploader,
-                                "upload_date": video.upload_date,
-                                "duration": video.duration_seconds,
-                                "view_count": video.view_count,
-                                "tags": video.tags_json if video.tags_json else [],
-                                "description": video.description,
-                            }
-                        
-                        # Save the updated markdown with speaker names
-                        audio_processor = AudioProcessor()
-                        saved_file = audio_processor.save_transcript_to_markdown(
-                            updated_result,
-                            audio_path,
-                            output_dir=output_dir,
-                            include_timestamps=bool(transcript.include_timestamps),
-                            video_metadata=video_metadata,
-                        )
-                        
-                        if saved_file:
-                            logger.info(f"✅ Regenerated markdown file with speaker names: {saved_file}")
+                            
+                            # Recreate the markdown with updated speaker names
+                            from ..processors.audio_processor import AudioProcessor
+                            from ..processors.base import ProcessorResult
+                            
+                            audio_processor = AudioProcessor()
+                            updated_result = ProcessorResult(
+                                success=True,
+                                data=transcript_data,
+                                metadata={
+                                    "model": transcript.whisper_model or "unknown",
+                                    "diarization_enabled": transcript.diarization_enabled,
+                                }
+                            )
+                            
+                            # Overwrite the existing markdown file
+                            audio_path = Path(task.recording_path)
+                            saved_file = audio_processor.save_transcript_to_markdown(
+                                updated_result,
+                                audio_path,
+                                file_path.parent,
+                                include_timestamps=True,
+                                video_metadata=video_metadata,
+                            )
+                            
+                            if saved_file:
+                                logger.info(f"✅ Successfully regenerated markdown with speaker names: {saved_file}")
+                            else:
+                                logger.warning("⚠️ Markdown regeneration returned None")
                         else:
-                            logger.warning("Failed to regenerate markdown file with speaker names")
+                            logger.warning(f"Markdown file not found for regeneration: {file_path}")
                     else:
-                        logger.warning(f"Could not determine output directory for {task.recording_path}")
+                        logger.warning("Could not retrieve transcript segments for regeneration")
                         
                 except Exception as e:
-                    logger.error(f"Failed to regenerate markdown file with speaker names: {e}")
-                    # Not fatal - database is already updated
+                    logger.error(f"Failed to regenerate markdown with speaker names: {e}")
+                    import traceback
+                    traceback.print_exc()
 
                 return True
 

@@ -315,6 +315,41 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                     "issue": f"Single word '{most_common_word}' dominates transcription ({most_common_count}/{len(words)} occurrences)",
                 }
 
+        # Check for repeated phrases (n-grams) that may have survived cleanup
+        # This catches scattered repetitions or cases where threshold was too lenient
+        if len(words) >= 20:  # Need enough words to detect patterns
+            from collections import Counter
+            
+            # Check n-grams of various sizes (longer phrases first)
+            for n in [10, 8, 6, 4, 3]:
+                if len(words) < n * 3:  # Need at least 3 occurrences to be meaningful
+                    continue
+                
+                # Build n-grams
+                ngrams = []
+                for i in range(len(words) - n + 1):
+                    ngram = tuple(words[i:i+n])
+                    ngrams.append(ngram)
+                
+                if not ngrams:
+                    continue
+                
+                # Count phrase frequencies
+                ngram_counts = Counter(ngrams)
+                
+                if ngram_counts:
+                    most_common_ngram, count = ngram_counts.most_common(1)[0]
+                    phrase_ratio = count / len(ngrams)
+                    
+                    # If a phrase appears frequently (>30% of content), flag it
+                    # Lower threshold than single words (50%) since phrases are more specific
+                    if count >= 5 and phrase_ratio > 0.3:
+                        phrase_text = ' '.join(most_common_ngram)
+                        return {
+                            "is_valid": False,
+                            "issue": f"Repeated {n}-word phrase detected: '{phrase_text[:80]}...' appears {count} times ({phrase_ratio*100:.1f}% of content)",
+                        }
+
         # Check for gibberish patterns (too many single-character words)
         single_char_words = sum(1 for word in words if len(word) == 1)
         if single_char_words / len(words) > 0.3:
@@ -396,6 +431,116 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                     }
 
         return {"is_valid": True, "issue": None}
+
+    def _remove_sequential_repetitions(
+        self, segments: list[dict], threshold: int = 3
+    ) -> tuple[list[dict], dict]:
+        """
+        Remove consecutive identical segments (Whisper hallucination cleanup).
+        
+        Large Whisper models sometimes get "stuck" repeating the same phrase
+        over and over, especially when encountering silence, background noise,
+        or content that's difficult to parse. This function detects and removes
+        these hallucinated repetitions.
+        
+        Args:
+            segments: List of transcript segments with 'text', 'start', 'end' fields
+            threshold: Number of consecutive identical segments to trigger removal (default: 3)
+        
+        Returns:
+            Tuple of (cleaned_segments, cleanup_stats)
+            
+        Example:
+            Input: [
+                {"text": "The Hungarian Central Bank...", "start": 725.0, "end": 726.0},
+                {"text": "The Hungarian Central Bank...", "start": 726.0, "end": 727.0},
+                {"text": "The Hungarian Central Bank...", "start": 727.0, "end": 728.0},
+                ... (38 times)
+            ]
+            Output: ([{"text": "The Hungarian Central Bank...", "start": 725.0, "end": 726.0}],
+                    {"removed_count": 37, "patterns_found": [...]})
+        """
+        if not segments or len(segments) < threshold:
+            return segments, {"removed_count": 0, "patterns_found": []}
+        
+        cleaned = []
+        removed_count = 0
+        patterns_found = []
+        i = 0
+        
+        while i < len(segments):
+            current_text = segments[i].get("text", "").strip().lower()
+            
+            # Skip empty segments
+            if not current_text:
+                cleaned.append(segments[i])
+                i += 1
+                continue
+            
+            # Look ahead to count consecutive identical segments
+            consecutive_count = 1
+            j = i + 1
+            
+            while j < len(segments):
+                next_text = segments[j].get("text", "").strip().lower()
+                
+                # Check if text is identical
+                if next_text == current_text:
+                    # Additional check: timestamps should be sequential (typically 1-second increments)
+                    # This helps distinguish hallucinations from legitimate repeated phrases
+                    current_end = segments[j - 1].get("end", 0)
+                    next_start = segments[j].get("start", 0)
+                    
+                    # Allow small gaps (up to 2 seconds) for timestamp rounding
+                    time_gap = abs(next_start - current_end)
+                    if time_gap <= 2.0:
+                        consecutive_count += 1
+                        j += 1
+                    else:
+                        # Timestamps not sequential - likely legitimate repetition
+                        break
+                else:
+                    break
+            
+            # If we found threshold+ repetitions, keep only the first occurrence
+            if consecutive_count >= threshold:
+                cleaned.append(segments[i])  # Keep first occurrence
+                removed_count += consecutive_count - 1
+                
+                # Record pattern for logging
+                pattern_info = {
+                    "text": current_text[:100] + "..." if len(current_text) > 100 else current_text,
+                    "repetitions": consecutive_count,
+                    "start_time": segments[i].get("start"),
+                    "end_time": segments[j - 1].get("end") if j > 0 else segments[i].get("end"),
+                }
+                patterns_found.append(pattern_info)
+                
+                logger.warning(
+                    f"🧹 Removed {consecutive_count - 1} consecutive repetitions of: "
+                    f"'{current_text[:50]}...' (from {pattern_info['start_time']:.1f}s to {pattern_info['end_time']:.1f}s)"
+                )
+                
+                i = j  # Skip past all the repetitions
+            else:
+                # No repetition pattern, keep segment
+                cleaned.append(segments[i])
+                i += 1
+        
+        cleanup_stats = {
+            "removed_count": removed_count,
+            "patterns_found": patterns_found,
+            "original_count": len(segments),
+            "cleaned_count": len(cleaned),
+        }
+        
+        if removed_count > 0:
+            logger.info(
+                f"✅ Hallucination cleanup: Removed {removed_count} repetitions across "
+                f"{len(patterns_found)} pattern(s), kept {len(cleaned)} segments"
+            )
+        
+        return cleaned, cleanup_stats
 
     def _load_model(self):
         """Download whisper.cpp model if needed (for subprocess usage)."""
@@ -797,6 +942,34 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 language = kwargs.get("language")
                 if language and language != "auto":
                     cmd.extend(["--language", language])
+                    logger.info(f"🌐 Transcribing in language: {language}")
+                else:
+                    logger.info(f"🌐 Auto-detecting language (may be unreliable, consider setting explicitly)")
+
+                # Add initial prompt with YouTube metadata to provide context
+                # This helps prevent hallucinations by giving the model domain knowledge
+                video_metadata = kwargs.get("video_metadata")
+                if video_metadata:
+                    # Build contextual prompt from YouTube tags/keywords
+                    prompt_parts = ["This is a video in English"]
+                    
+                    tags = video_metadata.get("tags", [])
+                    if tags and len(tags) > 0:
+                        # Use first 5-10 tags to provide context without overwhelming the model
+                        context_tags = tags[:10]
+                        keywords_str = ", ".join(context_tags)
+                        prompt_parts.append(f"about {keywords_str}")
+                        logger.info(f"📝 Using context prompt with {len(context_tags)} keywords")
+                    
+                    # Add title as additional context if available
+                    title = video_metadata.get("title")
+                    if title and not tags:
+                        # Only add title if we don't have tags (avoid redundancy)
+                        prompt_parts.append(f"titled '{title[:100]}'")
+                    
+                    prompt = " ".join(prompt_parts) + "."
+                    cmd.extend(["--prompt", prompt])
+                    logger.debug(f"Initial prompt: {prompt}")
 
                 if self.progress_callback:
                     transcription_msg = (
@@ -922,6 +1095,22 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                                         "text": segment.get("text", "").strip(),
                                     }
                                 )
+                            
+                            # Clean up sequential repetitions (hallucinations)
+                            if segments:
+                                segments, cleanup_stats = self._remove_sequential_repetitions(segments)
+                                
+                                # If we removed repetitions, rebuild full_text from cleaned segments
+                                if cleanup_stats["removed_count"] > 0:
+                                    text_segments = [seg["text"] for seg in segments if seg.get("text", "").strip()]
+                                    full_text = " ".join(text_segments)
+                                    logger.info(
+                                        f"Rebuilt text after cleanup: {len(text_segments)} segments, {len(full_text)} characters"
+                                    )
+                                    
+                                    # Store cleanup stats for later use in retry logic
+                                    if not hasattr(self, '_last_cleanup_stats'):
+                                        self._last_cleanup_stats = cleanup_stats
                         else:
                             # Simple text format
                             full_text = str(transcription).strip()
@@ -1050,35 +1239,52 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         import time
 
         start_time = time.time()
-        progress_start = 50  # We start monitoring from 50%
-        progress_end = 80  # We end monitoring at 80%
-        progress_range = progress_end - progress_start
+        
+        # Track actual whisper.cpp progress (0-100%) for accurate speed calculation
+        self._last_whisper_progress = 0  # Last reported progress from whisper.cpp
+        self._audio_duration = audio_duration_seconds  # Store for speed calculation
+        self._start_time = start_time  # Store for speed calculation
 
         # Get audio duration before starting the process to avoid subprocess in thread
-        estimated_duration = 120  # Default 2 minutes if unknown
-        try:
-            # Try to get actual audio duration using ffprobe
-            audio_file = cmd[cmd.index("-") + 1] if "-" in cmd else None
-            if audio_file:
-                probe_cmd = [
-                    "ffprobe",
-                    "-v",
-                    "quiet",
-                    "-show_entries",
-                    "format=duration",
-                    "-o",
-                    "csv=p=0",
-                    audio_file,
-                ]
-                probe_result = subprocess.run(
-                    probe_cmd, capture_output=True, text=True, timeout=5
-                )
-                if probe_result.returncode == 0 and probe_result.stdout.strip():
-                    estimated_duration = float(probe_result.stdout.strip())
-                    logger.debug(f"Audio duration: {estimated_duration}s")
-        except (subprocess.SubprocessError, ValueError, OSError) as e:
-            # Fallback to default if ffprobe fails
-            logger.debug(f"Failed to get audio duration with ffprobe: {e}")
+        # Use the passed audio_duration_seconds if available, otherwise probe
+        if audio_duration_seconds:
+            estimated_duration = audio_duration_seconds
+            logger.debug(f"Using provided audio duration: {estimated_duration}s")
+        else:
+            estimated_duration = 120  # Default 2 minutes if unknown
+            try:
+                # Try to get actual audio duration using ffprobe
+                # The audio file is typically at index 2 in whisper.cpp commands:
+                # cmd = [whisper_binary, "-m", model_path, audio_path, ...]
+                audio_file = None
+                if len(cmd) > 2:
+                    # Check if element at index 2 looks like a file path (not a flag)
+                    if not cmd[2].startswith("-"):
+                        audio_file = cmd[2]
+                
+                if audio_file:
+                    probe_cmd = [
+                        "ffprobe",
+                        "-v",
+                        "quiet",
+                        "-show_entries",
+                        "format=duration",
+                        "-o",
+                        "csv=p=0",
+                        audio_file,
+                    ]
+                    probe_result = subprocess.run(
+                        probe_cmd, capture_output=True, text=True, timeout=5
+                    )
+                    if probe_result.returncode == 0 and probe_result.stdout.strip():
+                        estimated_duration = float(probe_result.stdout.strip())
+                        logger.debug(f"Audio duration from ffprobe: {estimated_duration}s")
+            except (subprocess.SubprocessError, ValueError, OSError) as e:
+                # Fallback to default if ffprobe fails
+                logger.debug(f"Failed to get audio duration with ffprobe: {e}")
+        
+        # Store the duration for speed calculations
+        self._audio_duration = estimated_duration
 
         # Log full command for debugging
         logger.info(f"Full whisper command: {' '.join(cmd)}")
@@ -1120,9 +1326,15 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         # Use queues to safely collect output from threads
         stdout_queue = queue.Queue()
         stderr_queue = queue.Queue()
+        
+        # Track recent segments for repetition detection
+        recent_segments = []
+        repetition_warning_shown = False
 
         def read_stream(stream, output_queue, stream_name):
             """Read from a stream and put lines into a queue."""
+            nonlocal recent_segments, repetition_warning_shown
+            
             try:
                 while True:
                     line = stream.readline()
@@ -1133,6 +1345,36 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                     line_stripped = line.strip()
                     if line_stripped:  # Only log non-empty lines
                         logger.info(f"[whisper.cpp {stream_name}] {line_stripped}")
+                    
+                    # Real-time repetition detection for stdout segments
+                    # Format: [00:12:05.320 --> 00:12:06.320]   The Hungarian Central Bank...
+                    if stream_name == "stdout" and line_stripped and "-->" in line_stripped:
+                        # Extract the text portion after the timestamp
+                        try:
+                            parts = line_stripped.split("]", 1)
+                            if len(parts) == 2:
+                                segment_text = parts[1].strip().lower()
+                                
+                                # Track last 5 segments
+                                recent_segments.append(segment_text)
+                                if len(recent_segments) > 5:
+                                    recent_segments.pop(0)
+                                
+                                # Check if last 5 segments are all identical
+                                if len(recent_segments) == 5 and len(set(recent_segments)) == 1:
+                                    if not repetition_warning_shown:
+                                        logger.warning(
+                                            "⚠️ Repetition detected in transcription output - "
+                                            "will be automatically cleaned up"
+                                        )
+                                        if self.progress_callback:
+                                            self.progress_callback(
+                                                "⚠️ Repetition detected, will be cleaned automatically", 
+                                                None
+                                            )
+                                        repetition_warning_shown = True
+                        except Exception:
+                            pass  # Don't let parsing errors interrupt streaming
                     
                     # Parse progress from the line (check both stdout and stderr)
                     if self.progress_callback and line_stripped:
@@ -1236,40 +1478,11 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
             except Exception as e:
                 logger.error(f"Error checking output queues: {e}")
 
-            # Estimate progress based on elapsed time
-            # Estimate progress: assume processing takes 0.2x real-time on average
-            processing_speed = 0.2  # 20% of real-time
-            estimated_completion_time = estimated_duration * processing_speed
-
-            if estimated_completion_time > 0:
-                time_progress = min(1.0, elapsed / estimated_completion_time)
-                current_progress = progress_start + (time_progress * progress_range)
-
-                if self.progress_callback and elapsed > 2:  # Don't spam early progress
-                    # Calculate processing speed info
-                    speed_info = ""
-                    if audio_duration_seconds and elapsed > 5:
-                        processing_speed = audio_duration_seconds / elapsed
-                        if processing_speed > 1:
-                            speed_info = f", {processing_speed:.1f}x realtime"
-                        else:
-                            speed_info = (
-                                f", {1/processing_speed:.1f}x slower than realtime"
-                            )
-
-                    # Get file info for context
-                    # Extract filename from command (the input file is the last argument)
-                    try:
-                        # The audio file is always the last argument in the whisper command
-                        filename = Path(cmd[-1]).name if len(cmd) > 0 else "audio"
-                    except Exception:
-                        filename = "audio"
-
-                    self.progress_callback(
-                        f"🎯 Transcribing {filename} ({elapsed:.0f}s elapsed, ~{current_progress:.0f}% complete{speed_info})...",
-                        int(current_progress),
-                    )
-
+            # Note: We no longer provide time-based progress estimation here.
+            # Progress is now only reported when whisper.cpp outputs actual progress via
+            # _parse_whisper_output_for_progress(), which provides accurate percentages
+            # and realtime speed calculations based on actual audio processed.
+            
             time.sleep(check_interval)  # Check every 500ms
 
         # Process has finished, wait for it
@@ -1312,42 +1525,84 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
     def _parse_whisper_output_for_progress(self, line: str, elapsed_time: float):
         """Parse whisper.cpp output for progress indicators."""
-        line_lower = line.strip().lower()
+        import re
         
-        # whisper.cpp with --print-progress outputs lines like:
-        # progress = 0%
-        # progress = 10%
-        # or potentially timestamped segments
-        if "progress" in line_lower and "%" in line:
-            # Extract percentage from "progress = X%"
-            import re
-            match = re.search(r'(\d+)%', line)
+        line_stripped = line.strip()
+        line_lower = line_stripped.lower()
+        
+        # whisper.cpp with --print-progress outputs various formats:
+        # - "progress = 0%"
+        # - "[00:00:00.000 --> 00:00:05.000]" (timestamp-based progress)
+        # - Or just percentage indicators
+        
+        # Try to extract percentage from any line containing %
+        if "%" in line_stripped:
+            # Extract percentage from various formats: "progress = X%", "X%", etc.
+            match = re.search(r'(\d+)%', line_stripped)
             if match:
                 whisper_progress = int(match.group(1))
-                # Map whisper's 0-100% to our 50-80% range
-                mapped_progress = 50 + int(whisper_progress * 0.3)
-                self.progress_callback(
-                    f"🎯 Transcribing... {whisper_progress}%",
-                    mapped_progress
-                )
-                return
+                # Sanity check: progress should be 0-100
+                if 0 <= whisper_progress <= 100:
+                    self._last_whisper_progress = whisper_progress
+                    
+                    # Calculate realtime speed based on actual audio processed
+                    speed_info = ""
+                    if self._audio_duration and elapsed_time > 2:
+                        audio_processed_seconds = self._audio_duration * (whisper_progress / 100.0)
+                        if elapsed_time > 0:
+                            realtime_speed = audio_processed_seconds / elapsed_time
+                            if realtime_speed >= 1.0:
+                                speed_info = f" ({realtime_speed:.1f}x Realtime)"
+                            else:
+                                speed_info = f" ({1/realtime_speed:.1f}x slower than realtime)"
+                    
+                    # Report actual progress (0-100%) with accurate speed
+                    if self.progress_callback:
+                        self.progress_callback(
+                            f"Transcribing... {whisper_progress}%{speed_info}",
+                            whisper_progress
+                        )
+                    return
+        
+        # Check for timestamp-based progress (whisper.cpp outputs timestamps as it processes)
+        # Format: [00:00:00.000 --> 00:00:05.000]
+        timestamp_match = re.search(r'\[(\d{2}):(\d{2}):(\d{2})\.\d{3}\s*-->', line_stripped)
+        if timestamp_match and self._audio_duration:
+            # Calculate progress from timestamp
+            hours = int(timestamp_match.group(1))
+            minutes = int(timestamp_match.group(2))
+            seconds = int(timestamp_match.group(3))
+            current_seconds = hours * 3600 + minutes * 60 + seconds
+            
+            if self._audio_duration > 0:
+                timestamp_progress = int((current_seconds / self._audio_duration) * 100)
+                # Only report if it's a meaningful update (at least 5% increment)
+                if timestamp_progress > self._last_whisper_progress + 4:
+                    self._last_whisper_progress = timestamp_progress
+                    
+                    speed_info = ""
+                    if elapsed_time > 2:
+                        realtime_speed = current_seconds / elapsed_time
+                        if realtime_speed >= 1.0:
+                            speed_info = f" ({realtime_speed:.1f}x Realtime)"
+                        else:
+                            speed_info = f" ({1/realtime_speed:.1f}x slower than realtime)"
+                    
+                    if self.progress_callback:
+                        self.progress_callback(
+                            f"Transcribing... {timestamp_progress}%{speed_info}",
+                            timestamp_progress
+                        )
+                    return
 
-        # Look for common progress indicators in whisper.cpp output
-        if "processing" in line_lower or "transcribing" in line_lower:
-            # Found processing indicator
-            progress = 55 + min(
-                20, int(elapsed_time / 2)
-            )  # Gradual increase from 55% to 75%
-            self.progress_callback(f"🎯 {line.strip()}", progress)
-        elif "segment" in line_lower or "frame" in line_lower:
-            # Processing segments/frames
-            progress = 60 + min(
-                15, int(elapsed_time / 3)
-            )  # Gradual increase from 60% to 75%
-            self.progress_callback("🎯 Processing segments...", progress)
-        elif "done" in line_lower or "finished" in line_lower or "complete" in line_lower:
-            # Near completion
-            self.progress_callback("🎯 Finalizing transcription...", 75)
+        # Fallback: Look for other progress indicators (less precise)
+        if self.progress_callback:
+            if "processing" in line_lower or "transcribing" in line_lower:
+                # Found processing indicator without percentage
+                self.progress_callback(f"🎯 {line_stripped}", None)
+            elif "done" in line_lower or "finished" in line_lower or "complete" in line_lower:
+                # Completion indicator
+                self.progress_callback("🎯 Finalizing transcription...", 95)
 
     def terminate_subprocess(self):
         """Terminate any running subprocess."""

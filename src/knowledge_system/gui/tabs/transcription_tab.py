@@ -73,6 +73,7 @@ class EnhancedTranscriptionWorker(QThread):
         self.failed_urls = []  # Track failed URLs with details
         self.failed_files = []  # Track failed local files with details
         self.successful_files = []  # Track successful files with details
+        self.queue_for_retry = []  # Queue for smart retry logic with time-based decision making
 
         # Create cancellation token for proper stop support
         from ...utils.cancellation import CancellationToken
@@ -80,7 +81,7 @@ class EnhancedTranscriptionWorker(QThread):
         self.cancellation_token = CancellationToken()
 
     def _transcription_progress_callback(
-        self, step_description_or_dict: Any, progress_percent: int = 0
+        self, step_description_or_dict: Any, progress_percent: int | None = None
     ) -> None:
         """Callback to emit real-time transcription progress."""
         # Handle both string step descriptions and model download dictionaries
@@ -110,11 +111,12 @@ class EnhancedTranscriptionWorker(QThread):
             else:
                 # Generic progress message
                 message = progress_dict.get("message", f"Model {model}: {status}")
-                self.transcription_step_updated.emit(f"🔄 {message}", progress_percent)
+                self.transcription_step_updated.emit(f"🔄 {message}", progress_percent if progress_percent is not None else 0)
         else:
             # This is a regular string step description
+            # If progress is None, use -1 as a sentinel to indicate "progress unknown but working"
             self.transcription_step_updated.emit(
-                step_description_or_dict, progress_percent
+                step_description_or_dict, progress_percent if progress_percent is not None else -1
             )
 
     def _speaker_assignment_callback(
@@ -215,14 +217,29 @@ class EnhancedTranscriptionWorker(QThread):
         try:
             # Apply delay before download (except first in batch)
             if not is_first and youtube_delay > 0:
-                # Randomize ±30%
-                min_delay = youtube_delay * 0.7
-                max_delay = youtube_delay * 1.3
-                actual_delay = random.uniform(min_delay, max_delay)
+                # Get rate limiting settings from config
+                from ...config import get_settings
+                settings = get_settings()
+                yt_config = settings.youtube_processing
+                
+                # Use new rate limiting settings if available
+                min_delay = yt_config.sequential_download_delay_min
+                max_delay = yt_config.sequential_download_delay_max
+                randomization = yt_config.delay_randomization_percent / 100.0
+                
+                # Calculate base delay and apply randomization
+                base_delay = random.uniform(min_delay, max_delay)
+                jitter = base_delay * randomization
+                actual_delay = base_delay + random.uniform(-jitter, jitter)
+                actual_delay = max(0, actual_delay)  # Ensure non-negative
 
                 logger.info(
-                    f"[{idx}/{total}] Applying delay: {actual_delay:.1f}s before {url[:40]}..."
+                    f"⏱️ [{idx}/{total}] Rate limiting: waiting {actual_delay:.1f}s before {url[:40]}..."
                 )
+                self.progress_updated.emit({
+                    "message": f"⏱️ Rate limiting: waiting {actual_delay:.1f}s before next download...",
+                    "percent": 0
+                })
                 time.sleep(actual_delay)
 
             # Retry logic for this download
@@ -312,34 +329,83 @@ class EnhancedTranscriptionWorker(QThread):
                                     0,
                                 )
                                 time.sleep(backoff)
-                        elif (
-                            "Sign in to confirm" in last_error
-                            or "bot" in last_error.lower()
-                        ):
-                            # Bot detection - don't retry
-                            retry_count += 1
-                            logger.error(
-                                f"[{idx}/{total}] Bot detection for {url}: {last_error}"
-                            )
-                            self.transcription_step_updated.emit(
-                                f"❌ [{idx}/{total}] YouTube bot detection triggered", 0
-                            )
-                            break
-                        elif "Requested format is not available" in last_error:
-                            # Format issue - try once more then give up
+                        elif "502" in last_error or "Proxy Error" in last_error or "relay is offline" in last_error:
+                            # Proxy server issue (PacketStream relay offline/overloaded) - retry with new IP
                             retry_count += 1
                             if retry_count < max_retries:
+                                backoff = 2**retry_count
                                 self.transcription_step_updated.emit(
-                                    f"⚠️ [{idx}/{total}] Format issue, retrying...", 0
+                                    f"⚠️ [{idx}/{total}] Proxy relay offline, retrying with new IP in {backoff}s...",
+                                    0,
                                 )
-                                time.sleep(2)
-                        else:
-                            # Non-retryable error
+                                time.sleep(backoff)
+                            else:
+                                logger.error(
+                                    f"[{idx}/{total}] Proxy relay failed after {max_retries} attempts"
+                                )
+                                break
+                        elif (
+                            "Sign in to confirm" in last_error
+                            or ("bot" in last_error.lower() and "not a bot" in last_error.lower())
+                        ):
+                            # Bot detection - RETRY with different IP (might get clean IP)
+                            retry_count += 1
+                            if retry_count < max_retries:
+                                backoff = 2**retry_count
+                                logger.warning(
+                                    f"[{idx}/{total}] Bot detection (burned IP), retrying with new IP in {backoff}s..."
+                                )
+                                self.transcription_step_updated.emit(
+                                    f"⚠️ [{idx}/{total}] IP flagged by YouTube, retrying with new IP in {backoff}s...", 0
+                                )
+                                time.sleep(backoff)
+                            else:
+                                logger.error(
+                                    f"[{idx}/{total}] Bot detection on all {max_retries} IPs for {url}"
+                                )
+                                self.transcription_step_updated.emit(
+                                    f"❌ [{idx}/{total}] All IPs flagged by YouTube", 0
+                                )
+                                break
+                        elif "Requested format is not available" in last_error:
+                            # Format issue - not retryable
                             retry_count += 1
                             logger.error(
-                                f"[{idx}/{total}] Download failed for {url}: {last_error}"
+                                f"[{idx}/{total}] Format unavailable for {url}"
                             )
                             break
+                        elif "Unable to connect to proxy" in last_error or "Tunnel connection failed" in last_error:
+                            # Proxy connection issue - retry with new IP
+                            retry_count += 1
+                            if retry_count < max_retries:
+                                backoff = 2**retry_count
+                                self.transcription_step_updated.emit(
+                                    f"⚠️ [{idx}/{total}] Proxy connection failed, retrying with new IP in {backoff}s...",
+                                    0,
+                                )
+                                time.sleep(backoff)
+                            else:
+                                logger.error(
+                                    f"[{idx}/{total}] Proxy connection failed after {max_retries} attempts"
+                                )
+                                break
+                        else:
+                            # Unknown error - retry anyway (might be transient)
+                            retry_count += 1
+                            if retry_count < max_retries:
+                                backoff = 2**retry_count
+                                logger.warning(
+                                    f"[{idx}/{total}] Unknown error, retrying in {backoff}s: {last_error[:100]}"
+                                )
+                                self.transcription_step_updated.emit(
+                                    f"⚠️ [{idx}/{total}] Retrying in {backoff}s...", 0
+                                )
+                                time.sleep(backoff)
+                            else:
+                                logger.error(
+                                    f"[{idx}/{total}] Download failed for {url}: {last_error}"
+                                )
+                                break
 
                 except Exception as e:
                     last_error = str(e)
@@ -390,6 +456,170 @@ class EnhancedTranscriptionWorker(QThread):
 
             return (url, None, False, str(e))
 
+    def _handle_failed_url(self, url: str, error: str, db_service):
+        """
+        Handle a failed URL with sophisticated retry logic.
+        
+        Each URL gets up to 6 different residential IPs:
+        - Initial attempt: 3 IPs (worker-level retries)
+        - One requeue: 3 more IPs (kicked to back of queue)
+        - Total: 6 different IPs
+        
+        Decision tree:
+        1. If this is first failure (retry_count == 0 or no record):
+           - Record first_failure_at timestamp
+           - Add to end of queue for retry (retry_count = 1)
+           - When retried: Gets 3 NEW IPs
+        
+        2. If retry_count == 1 and time since first_failure_at < 10 minutes:
+           - Permanent failure (already tried 6 different IPs)
+           - Write to failed_urls_TIMESTAMP.txt
+        
+        3. If time since first_failure_at >= 10 minutes:
+           - Perform fresh 3-retry attempt with new IPs (already done by YouTubeDownloadProcessor)
+           - If still fails, write to failed_urls_TIMESTAMP.txt
+        
+        Returns:
+            str: "REQUEUE" if URL should be retried, "PERMANENT_FAILURE" if failed permanently
+        """
+        from datetime import datetime, timedelta
+        
+        try:
+            # Get or create video record from database
+            from ...utils.video_id_extractor import VideoIDExtractor
+            video_id = VideoIDExtractor.extract_video_id(url)
+            
+            if not video_id:
+                logger.warning(f"Could not extract video ID from {url} - treating as permanent failure")
+                self._write_to_failed_urls_file(url, error)
+                return "PERMANENT_FAILURE"
+            
+            video = db_service.get_video(video_id)
+            current_time = datetime.now()
+            
+            if not video or video.retry_count == 0:
+                # CASE 1: First failure - record timestamp and re-queue
+                if video:
+                    # Update existing record
+                    video.first_failure_at = current_time
+                    video.retry_count = 1
+                    video.last_retry_at = current_time
+                    video.failure_reason = error
+                    video.needs_metadata_retry = True
+                    db_service.update_video(video)
+                else:
+                    # Create new record for retry tracking
+                    db_service.create_video(
+                        video_id=video_id,
+                        title=f"Retry: {url[:50]}",
+                        source_url=url,
+                        source_type="youtube",
+                        status="failed",
+                        first_failure_at=current_time,
+                        retry_count=1,
+                        last_retry_at=current_time,
+                        failure_reason=error,
+                        needs_metadata_retry=True,
+                    )
+                
+                # Add to end of queue
+                self.queue_for_retry.append(url)
+                logger.info(f"📋 First failure for {url[:50]} - added to end of queue (retry_count=1)")
+                self.transcription_step_updated.emit(
+                    f"📋 Will retry {url[:40]}... later in queue", 0
+                )
+                return "REQUEUE"
+            
+            # Calculate time since first failure
+            time_since_first_failure_minutes = 0
+            if video.first_failure_at:
+                time_since_first_failure = current_time - video.first_failure_at
+                time_since_first_failure_minutes = time_since_first_failure.total_seconds() / 60
+            
+            if time_since_first_failure_minutes < 10:
+                # Still within 10 minute window
+                if video.retry_count == 1:
+                    # CASE 2: Second failure within 10 minutes - permanent failure
+                    # We've already tried with 3 IPs initially + 3 IPs on requeue = 6 total IPs
+                    logger.error(
+                        f"❌ Permanent failure for {url[:50]} after retry (6 total IP attempts, {time_since_first_failure_minutes:.1f}m since first)"
+                    )
+                    video.retry_count = 2
+                    video.max_retries_exceeded = True
+                    video.failure_reason = error
+                    db_service.update_video(video)
+                    
+                    self._write_to_failed_urls_file(url, error)
+                    self.transcription_step_updated.emit(
+                        f"❌ {url[:40]}... failed after 6 IP attempts", 0
+                    )
+                    return "PERMANENT_FAILURE"
+                else:
+                    # CASE 3: Should not reach here, but handle gracefully
+                    logger.error(
+                        f"❌ Unexpected retry state for {url[:50]} (retry_count={video.retry_count})"
+                    )
+                    video.max_retries_exceeded = True
+                    video.failure_reason = error
+                    db_service.update_video(video)
+                    
+                    self._write_to_failed_urls_file(url, error)
+                    self.transcription_step_updated.emit(
+                        f"❌ {url[:40]}... failed permanently", 0
+                    )
+                    return "PERMANENT_FAILURE"
+            else:
+                # CASE 4: More than 10 minutes - fresh 3-retry already attempted by YouTubeDownloadProcessor
+                # If we're here, it means the fresh retry also failed
+                logger.error(
+                    f"❌ Permanent failure for {url[:50]} after fresh retry ({time_since_first_failure_minutes:.1f}m since first failure)"
+                )
+                video.max_retries_exceeded = True
+                video.failure_reason = error
+                db_service.update_video(video)
+                
+                self._write_to_failed_urls_file(url, error)
+                self.transcription_step_updated.emit(
+                    f"❌ {url[:40]}... failed after fresh retry", 0
+                )
+                return "PERMANENT_FAILURE"
+                
+        except Exception as e:
+            logger.error(f"Error in _handle_failed_url for {url}: {e}")
+            # On error, treat as permanent failure
+            self._write_to_failed_urls_file(url, error)
+            return "PERMANENT_FAILURE"
+
+    def _write_to_failed_urls_file(self, url: str, error: str):
+        """
+        Write permanently failed URL to a timestamped file for manual retry later.
+        
+        Format: logs/failed_urls_TIMESTAMP.txt
+        """
+        try:
+            from datetime import datetime
+            from pathlib import Path
+            from ...config import get_settings
+            
+            settings = get_settings()
+            logs_dir = Path(settings.paths.logs).expanduser()
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Use timestamped filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            failed_file_path = logs_dir / f"failed_urls_{timestamp}.txt"
+            
+            # Append to file (or create if doesn't exist)
+            with open(failed_file_path, "a", encoding="utf-8") as f:
+                f.write(f"{url}\n")
+                f.write(f"# Error: {error}\n")
+                f.write(f"# Timestamp: {datetime.now().isoformat()}\n\n")
+            
+            logger.info(f"💾 Saved failed URL to: {failed_file_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to write failed URL to file: {e}")
+
     def run(self) -> None:
         """Run the transcription process with real-time progress tracking."""
         try:
@@ -419,42 +649,41 @@ class EnhancedTranscriptionWorker(QThread):
                     downloads_dir = Path(output_dir) / "downloads"
                     downloads_dir.mkdir(parents=True, exist_ok=True)
 
-                    # Use existing YouTubeDownloadProcessor
+                    # Use existing YouTubeDownloadProcessor with cookie settings from GUI
+                    # Get cookie settings from GUI state (not config file)
+                    enable_cookies = self.gui_settings.get("enable_cookies", True)
+                    cookie_file_path = self.gui_settings.get("cookie_file_path", "")
+                    
                     downloader = YouTubeDownloadProcessor(
-                        download_thumbnails=True
+                        download_thumbnails=True,
+                        enable_cookies=enable_cookies,
+                        cookie_file_path=cookie_file_path if cookie_file_path else None,
                     )  # Keep original format
 
                     # Get YouTube delay setting
                     youtube_delay = self.gui_settings.get("youtube_delay", 5)
 
-                    # Calculate optimal download concurrency (3-6 concurrent downloads recommended)
-                    max_concurrent_downloads = min(6, max(3, len(expanded_urls)))
+                    # Sequential downloads (1 at a time) to avoid bot detection
+                    # Parallel downloads from multiple IPs look suspicious to YouTube
+                    max_concurrent_downloads = 1
 
                     logger.info(
-                        f"🚀 Starting conveyor belt download: {len(expanded_urls)} URLs, max {max_concurrent_downloads} concurrent"
+                        f"🚀 Starting sequential downloads: {len(expanded_urls)} URLs (one at a time for safety)"
                     )
-                    # Show actual number of files vs max concurrency
-                    _actual_concurrent = min(
-                        len(expanded_urls), max_concurrent_downloads
-                    )
+                    
                     if len(expanded_urls) == 1:
                         self.transcription_step_updated.emit(
                             f"🚀 Starting download (1 file)...",
                             0,
                         )
-                    elif len(expanded_urls) <= max_concurrent_downloads:
-                        self.transcription_step_updated.emit(
-                            f"🚀 Starting {len(expanded_urls)} parallel downloads...",
-                            0,
-                        )
                     else:
                         self.transcription_step_updated.emit(
-                            f"🚀 Starting downloads ({len(expanded_urls)} files, {max_concurrent_downloads} at a time)...",
+                            f"🚀 Starting sequential downloads ({len(expanded_urls)} files, one at a time)...",
                             0,
                         )
 
-                    # Conveyor belt pattern: ThreadPoolExecutor with rolling concurrency
-                    executor = ThreadPoolExecutor(max_workers=max_concurrent_downloads)
+                    # Sequential pattern: Single worker to avoid bot detection
+                    executor = ThreadPoolExecutor(max_workers=1)
                     try:
                         # Submit all downloads to the queue
                         futures = {}
@@ -463,17 +692,10 @@ class EnhancedTranscriptionWorker(QThread):
                             if self.should_stop:
                                 break
 
-                            # Stagger the start of first batch to avoid simultaneous bursts
-                            if idx <= max_concurrent_downloads and idx > 1:
-                                stagger_delay = random.uniform(
-                                    0, min(10, youtube_delay)
-                                )
-                                logger.info(
-                                    f"Staggering start for URL {idx}: {stagger_delay:.1f}s delay"
-                                )
-                                time.sleep(stagger_delay)
+                            # No stagger delay needed - we're sequential (one worker)
+                            # The youtube_delay is applied within _download_single_url between videos
 
-                            # Submit download to thread pool (will start immediately if worker available)
+                            # Submit download to thread pool (sequential processing)
                             future = executor.submit(
                                 self._download_single_url,
                                 url,
@@ -511,10 +733,20 @@ class EnhancedTranscriptionWorker(QThread):
                                         f"✅ Completed {completed}/{len(expanded_urls)}: {result_url[:40]}..."
                                     )
                                 else:
-                                    self.failed_count += 1
-                                    logger.error(
-                                        f"❌ Failed {completed + self.failed_count}/{len(expanded_urls)}: {result_url[:40]}..."
-                                    )
+                                    # Handle failed URL with smart retry logic
+                                    from ...database.service import DatabaseService
+                                    db_service = DatabaseService()
+                                    
+                                    retry_result = self._handle_failed_url(result_url, error or "Unknown error", db_service)
+                                    
+                                    if retry_result == "REQUEUE":
+                                        logger.info(f"🔄 {result_url[:40]}... added to retry queue")
+                                    else:
+                                        # Permanent failure
+                                        self.failed_count += 1
+                                        logger.error(
+                                            f"❌ Permanently failed {completed + self.failed_count}/{len(expanded_urls)}: {result_url[:40]}..."
+                                        )
 
                             except Exception as e:
                                 logger.error(
@@ -533,6 +765,63 @@ class EnhancedTranscriptionWorker(QThread):
                     logger.info(
                         f"🏁 Download complete: {completed} successful, {self.failed_count} failed"
                     )
+
+                    # Process retry queue after initial downloads
+                    if self.queue_for_retry and not self.should_stop:
+                        logger.info(f"🔄 Processing retry queue: {len(self.queue_for_retry)} URLs")
+                        self.transcription_step_updated.emit(
+                            f"🔄 Processing {len(self.queue_for_retry)} retries...", 0
+                        )
+                        
+                        # Process retry queue URLs one by one
+                        retry_idx = 0
+                        while self.queue_for_retry and not self.should_stop:
+                            retry_url = self.queue_for_retry.pop(0)
+                            retry_idx += 1
+                            
+                            logger.info(f"🔄 Processing retry {retry_idx}: {retry_url[:40]}...")
+                            self.transcription_step_updated.emit(
+                                f"🔄 Retry {retry_idx}: {retry_url[:40]}...", 0
+                            )
+                            
+                            # Download with same logic as initial URLs
+                            try:
+                                result_url, audio_file, success, error = self._download_single_url(
+                                    retry_url,
+                                    idx=len(expanded_urls) + retry_idx,
+                                    total=len(expanded_urls) + len(self.queue_for_retry) + retry_idx,
+                                    downloader=downloader,
+                                    downloads_dir=downloads_dir,
+                                    youtube_delay=youtube_delay,
+                                    is_first=False,
+                                )
+                                
+                                if success and audio_file:
+                                    downloaded_files.append(audio_file)
+                                    completed += 1
+                                    logger.info(f"✅ Retry successful: {retry_url[:40]}...")
+                                    self.transcription_step_updated.emit(
+                                        f"✅ Retry successful: {retry_url[:40]}...", 0
+                                    )
+                                else:
+                                    # Retry failed - call _handle_failed_url again
+                                    from ...database.service import DatabaseService
+                                    db_service = DatabaseService()
+                                    
+                                    retry_result = self._handle_failed_url(
+                                        retry_url, error or "Retry failed", db_service
+                                    )
+                                    
+                                    if retry_result == "PERMANENT_FAILURE":
+                                        self.failed_count += 1
+                                        logger.error(f"❌ Retry failed permanently: {retry_url[:40]}...")
+                                    # If REQUEUE, it will be added to queue_for_retry again and processed later
+                                    
+                            except Exception as e:
+                                logger.error(f"Exception during retry for {retry_url}: {e}")
+                                self.failed_count += 1
+                        
+                        logger.info(f"🏁 Retry queue processing complete")
 
                     # Emit failed URLs summary if any failures
                     if self.failed_urls:
@@ -655,8 +944,6 @@ class EnhancedTranscriptionWorker(QThread):
                 "progress_callback",
                 "enable_diarization",
                 "hf_token",
-                "enable_quality_retry",
-                "max_retry_attempts",
                 "require_diarization",
             }
 
@@ -706,19 +993,20 @@ class EnhancedTranscriptionWorker(QThread):
                     if preloaded_diarizer:
                         logger.info("🚀 Using preloaded diarization model")
 
+                # Create DatabaseService once for all transcriptions in this batch
+                from ...database.service import DatabaseService
+                db_service = DatabaseService()
+
                 processor = AudioProcessor(
                     model=self.gui_settings["model"],
                     device=self.gui_settings["device"],
                     enable_diarization=enable_diarization,
                     require_diarization=enable_diarization,  # Strict mode: if diarization enabled, require it
-                    enable_quality_retry=self.gui_settings.get(
-                        "enable_quality_retry", True
-                    ),
-                    max_retry_attempts=self.gui_settings.get("max_retry_attempts", 1),
                     progress_callback=self._transcription_progress_callback,
                     speaker_assignment_callback=self._speaker_assignment_callback,
                     preloaded_transcriber=preloaded_transcriber,
                     preloaded_diarizer=preloaded_diarizer,
+                    db_service=db_service,
                     **audio_processor_kwargs,
                 )
 
@@ -818,9 +1106,14 @@ class EnhancedTranscriptionWorker(QThread):
                                 processing_kwargs_with_output[
                                     "video_metadata"
                                 ] = video_metadata
+                                
+                                # Debug logging for tags
+                                tags_count = len(video_metadata["tags"]) if video_metadata["tags"] else 0
                                 logger.info(
-                                    f"✅ Retrieved YouTube metadata for {video_id}: {video_record.title}"
+                                    f"✅ Retrieved YouTube metadata for {video_id}: {video_record.title} (tags: {tags_count})"
                                 )
+                                if tags_count > 0:
+                                    logger.debug(f"Tags: {video_metadata['tags'][:5]}...")  # Show first 5 tags
                             else:
                                 logger.debug(
                                     f"No database record found for video_id: {video_id}"
@@ -876,6 +1169,9 @@ class EnhancedTranscriptionWorker(QThread):
                     processing_kwargs_with_output[
                         "cancellation_token"
                     ] = self.cancellation_token
+                    
+                    # Pass database service for transcript storage
+                    processing_kwargs_with_output["db_service"] = db_service
 
                     result = processor.process(
                         Path(file_path), **processing_kwargs_with_output
@@ -953,6 +1249,147 @@ class EnhancedTranscriptionWorker(QThread):
                             if result.errors
                             else "Unknown transcription error"
                         )
+
+                        # Check if this is an audio corruption error that needs re-download
+                        needs_redownload = (
+                            result.metadata
+                            and result.metadata.get("needs_redownload", False)
+                        )
+                        
+                        if needs_redownload and "AUDIO_CORRUPTION_SUSPECTED" in error_detail:
+                            # Try to get source URL from database for re-download
+                            try:
+                                from ...database.service import DatabaseService
+                                from ...utils.youtube_utils import extract_video_id
+                                
+                                video_id = None
+                                file_path_obj = Path(file_path)
+                                filename = file_path_obj.stem
+                                
+                                # Extract video_id from filename
+                                if "[" in filename and "]" in filename:
+                                    video_id = filename.split("[")[-1].split("]")[0]
+                                else:
+                                    import re
+                                    match = re.search(r"_([a-zA-Z0-9_-]{11})$", filename)
+                                    if match:
+                                        video_id = match.group(1)
+                                
+                                if video_id:
+                                    db_service = DatabaseService()
+                                    video_record = db_service.get_video(video_id)
+                                    
+                                    if video_record and video_record.url:
+                                        # Re-download with fresh IP and transcribe with large model
+                                        logger.info(
+                                            f"🔄 Audio corruption detected for {video_id}, attempting re-download and transcription with large model"
+                                        )
+                                        self.transcription_step_updated.emit(
+                                            f"🔄 Re-downloading {file_name} with fresh IP...",
+                                            0,
+                                        )
+                                        
+                                        # Delete corrupted file
+                                        try:
+                                            file_path_obj.unlink(missing_ok=True)
+                                            logger.info(f"Deleted corrupted file: {file_path}")
+                                        except Exception as del_error:
+                                            logger.warning(f"Could not delete corrupted file: {del_error}")
+                                        
+                                        # Re-download
+                                        from ...processors.youtube_download import YouTubeDownloadProcessor
+                                        downloader = YouTubeDownloadProcessor()
+                                        
+                                        download_result = downloader.process(
+                                            video_record.url,
+                                            output_dir=self.gui_settings.get("output_dir"),
+                                            db_service=db_service,
+                                            progress_callback=lambda msg, pct=0: self.transcription_step_updated.emit(msg, pct),
+                                            cancellation_token=self.cancellation_token,
+                                        )
+                                        
+                                        if download_result.success and download_result.data.get("downloaded_files"):
+                                            new_audio_file = download_result.data["downloaded_files"][0]
+                                            logger.info(f"✅ Re-downloaded successfully: {new_audio_file}")
+                                            self.transcription_step_updated.emit(
+                                                f"✅ Re-downloaded, now transcribing with large model...",
+                                                0,
+                                            )
+                                            
+                                            # Create new processor with large model
+                                            from ...processors.audio_processor import AudioProcessor
+                                            large_processor = AudioProcessor(
+                                                model="large",  # Use large model for recovery
+                                                device=self.gui_settings["device"],
+                                                enable_diarization=enable_diarization,
+                                                require_diarization=enable_diarization,
+                                                progress_callback=self._transcription_progress_callback,
+                                                speaker_assignment_callback=self._speaker_assignment_callback,
+                                                preloaded_transcriber=None,  # Don't use preloaded model
+                                                preloaded_diarizer=preloaded_diarizer,
+                                                db_service=db_service,
+                                            )
+                                            
+                                            # Retry transcription with large model
+                                            retry_result = large_processor.process(
+                                                Path(new_audio_file), **processing_kwargs_with_output
+                                            )
+                                            
+                                            if retry_result.success:
+                                                # Success after recovery!
+                                                self.failed_count -= 1  # Undo the failed count
+                                                self.completed_count += 1
+                                                
+                                                transcript_data = retry_result.data
+                                                text_length = (
+                                                    len(transcript_data.get("text", ""))
+                                                    if transcript_data
+                                                    else 0
+                                                )
+                                                saved_file = (
+                                                    retry_result.metadata.get("saved_markdown_file")
+                                                    if retry_result.metadata
+                                                    else None
+                                                )
+                                                
+                                                self.successful_files.append(
+                                                    {
+                                                        "file": file_name,
+                                                        "text_length": text_length,
+                                                        "saved_to": (
+                                                            Path(saved_file).name if saved_file else None
+                                                        ),
+                                                        "saved_file_path": saved_file,
+                                                        "recovery_note": "Recovered after re-download with large model",
+                                                    }
+                                                )
+                                                
+                                                self.transcription_step_updated.emit(
+                                                    f"✅ {file_name} recovered successfully with large model!",
+                                                    100,
+                                                )
+                                                logger.info(
+                                                    f"🎉 Successfully recovered {file_name} after re-download and large model transcription"
+                                                )
+                                                continue  # Skip the failure tracking below
+                                            else:
+                                                # Still failed after recovery attempt
+                                                error_detail = f"Failed even after re-download and large model: {'; '.join(retry_result.errors)}"
+                                                logger.error(
+                                                    f"❌ Recovery failed for {file_name}: {error_detail}"
+                                                )
+                                        else:
+                                            # Re-download failed
+                                            error_detail = f"Re-download failed: {'; '.join(download_result.errors)}"
+                                            logger.error(f"❌ Re-download failed for {file_name}: {error_detail}")
+                                    else:
+                                        logger.warning(f"Could not find source URL for video_id {video_id} in database")
+                                else:
+                                    logger.warning(f"Could not extract video_id from filename: {filename}")
+                            
+                            except Exception as recovery_error:
+                                logger.error(f"Error during recovery attempt: {recovery_error}")
+                                error_detail = f"{error_detail} (recovery attempt failed: {str(recovery_error)})"
 
                         # Track failed file with details
                         self.failed_files.append(
@@ -1080,6 +1517,7 @@ class EnhancedTranscriptionWorker(QThread):
         try:
             # Import System 2 orchestrator
             from ...core.system2_orchestrator import System2Orchestrator
+            import asyncio
 
             # Extract video ID from file path or generate one
             video_id = Path(file_path).stem
@@ -1103,14 +1541,26 @@ class EnhancedTranscriptionWorker(QThread):
                 f"🚀 Starting System 2 pipeline for {Path(file_path).name}", 0
             )
 
-            # Execute in background (orchestrator handles the rest)
-            # In a real implementation, this would be queued
+            # Execute the job (process_job is async, so we need to run it with asyncio)
             logger.info(f"System 2 pipeline initiated for {video_id} (job: {job_id})")
+            result = asyncio.run(orchestrator.process_job(job_id))
+
+            if result.get("status") == "succeeded":
+                self.transcription_step_updated.emit(
+                    f"✅ System 2 pipeline completed for {Path(file_path).name}", 0
+                )
+                logger.info(f"System 2 pipeline succeeded for {video_id}")
+            else:
+                error_msg = result.get("error_message", "Unknown error")
+                self.transcription_step_updated.emit(
+                    f"⚠️ Pipeline completed with issues: {error_msg}", 0
+                )
+                logger.warning(f"System 2 pipeline had issues for {video_id}: {error_msg}")
 
         except Exception as e:
-            logger.error(f"Failed to initiate System 2 pipeline: {e}")
+            logger.error(f"Failed to execute System 2 pipeline: {e}")
             self.transcription_step_updated.emit(
-                f"❌ Failed to start pipeline: {str(e)}", 0
+                f"❌ Failed to run pipeline: {str(e)}", 0
             )
 
     def stop(self) -> None:
@@ -1214,9 +1664,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         input_section = self._create_input_section()
         layout.addWidget(input_section, 1)  # Give some stretch to input section
 
-        # Settings section
+        # Settings section - increased stretch to make cookie authentication visible
         settings_section = self._create_settings_section()
-        layout.addWidget(settings_section)
+        layout.addWidget(settings_section, 3)  # More stretch to show all settings including cookie auth
 
         # System 2 Auto-process section
         auto_process_section = self._create_auto_process_section()
@@ -1232,9 +1682,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         progress_section = self._create_progress_section()
         layout.addWidget(progress_section)
 
-        # Output section with proper stretch
+        # Output section - reduced stretch to make room for settings above
         output_layout = self._create_output_section()
-        layout.addLayout(output_layout, 2)  # Give more stretch to output section
+        layout.addLayout(output_layout, 1)  # Reduced stretch to keep console compact
 
         # Load saved settings after UI is set up
         # Use a timer with a small delay to ensure all widgets are fully initialized
@@ -1533,36 +1983,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.overwrite_checkbox.toggled.connect(self._on_setting_changed)
         layout.addWidget(self.overwrite_checkbox, 4, 0, 1, 2)
 
-        # Quality retry options
-        self.quality_retry_checkbox = QCheckBox("Enable automatic quality retry")
-        self.quality_retry_checkbox.setChecked(True)
-        self.quality_retry_checkbox.setToolTip(
-            "When enabled, failed transcriptions will automatically retry with a larger model. "
-            "Improves accuracy but may increase processing time."
-        )
-        self.quality_retry_checkbox.toggled.connect(self._on_setting_changed)
-        self.quality_retry_checkbox.toggled.connect(self._on_quality_retry_toggled)
-        layout.addWidget(self.quality_retry_checkbox, 4, 2, 1, 2)
-
-        # Max retry attempts
-        layout.addWidget(QLabel("Max Retry Attempts:"), 5, 0)
-        self.max_retry_attempts = QSpinBox()
-        self.max_retry_attempts.setMinimum(0)
-        self.max_retry_attempts.setMaximum(3)
-        self.max_retry_attempts.setValue(1)
-        self.max_retry_attempts.setMaximumWidth(50)  # Make 90% shorter
-        self.max_retry_attempts.setToolTip(
-            "Maximum number of retry attempts with larger models when quality validation fails.\n"
-            "• 0 = No retries (fastest processing)\n"
-            "• 1 = One retry (recommended balance)\n"
-            "• 2-3 = Multiple retries (slowest but highest quality)\n\n"
-            "💡 Tip: Disable retry for fastest processing, enable for best quality"
-        )
-        self.max_retry_attempts.valueChanged.connect(self._on_setting_changed)
-        layout.addWidget(self.max_retry_attempts, 5, 1)
-
-        # Quality vs Performance info integrated into retry tooltip
-        # (Tip is now part of the max_retry_attempts tooltip above)
+        # Note: Automatic quality recovery is now always enabled
+        # If transcription quality issues are detected, the system will:
+        # 1. Retry with next larger model
+        # 2. If still failing, re-download audio and use large model
+        # 3. If still failing, mark as permanent failure
 
         # YouTube proxy options (for URL downloads)
         self.use_proxy_checkbox = QCheckBox(
@@ -1596,6 +2021,102 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         )
         self.youtube_delay_spinbox.valueChanged.connect(self._on_setting_changed)
         layout.addWidget(self.youtube_delay_spinbox, 7, 3)
+
+        # Cookie Authentication Section
+        cookie_group = QGroupBox("Cookie Authentication (Throwaway Account)")
+        cookie_layout = QGridLayout()
+
+        self.enable_cookies_checkbox = QCheckBox("Enable cookie-based authentication")
+        self.enable_cookies_checkbox.setChecked(True)
+        self.enable_cookies_checkbox.setToolTip(
+            "Use cookies from a throwaway Google account to avoid bot detection.\n\n"
+            "HOW TO GET COOKIES:\n"
+            "1. Open incognito/private browser window\n"
+            "2. Log into throwaway Google account ONLY\n"
+            "3. Install cookie export extension (e.g., 'Get cookies.txt')\n"
+            "4. Export cookies to Netscape format (.txt file)\n"
+            "5. Upload the file below\n\n"
+            "⚠️ IMPORTANT: Only use throwaway accounts!\n"
+            "• Much higher success rate than anonymous access\n"
+            "• Recommended: Use with home IP (disable proxies below)\n"
+            "• Requires rate limiting to avoid account flags"
+        )
+        cookie_layout.addWidget(self.enable_cookies_checkbox, 0, 0, 1, 3)
+
+        # File path for manual upload (ONLY method supported)
+        cookie_layout.addWidget(QLabel("Cookie file (Netscape format):"), 1, 0)
+        self.cookie_file_input = QLineEdit()
+        self.cookie_file_input.setPlaceholderText("Path to cookies.txt file...")
+        self.cookie_file_input.setEnabled(False)
+        cookie_layout.addWidget(self.cookie_file_input, 1, 1)
+
+        self.cookie_file_browse_btn = QPushButton("Browse...")
+        self.cookie_file_browse_btn.setEnabled(False)
+        self.cookie_file_browse_btn.clicked.connect(self._browse_cookie_file)
+        cookie_layout.addWidget(self.cookie_file_browse_btn, 1, 2)
+
+        # Add helpful info label
+        info_label = QLabel(
+            "💡 Browser extraction disabled for security - prevents accidentally using main account.\n"
+            "   Manual file upload ensures you control which account's cookies are used."
+        )
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("QLabel { color: #666; font-size: 10px; }")
+        cookie_layout.addWidget(info_label, 2, 0, 1, 3)
+
+        # Connect enable checkbox to enable/disable controls
+        self.enable_cookies_checkbox.toggled.connect(self._on_cookies_toggled)
+
+        cookie_group.setLayout(cookie_layout)
+        layout.addWidget(cookie_group, 8, 0, 1, 4)
+
+        # Rate Limiting Section
+        rate_limit_group = QGroupBox("Rate Limiting (Anti-Bot Protection)")
+        rate_limit_layout = QGridLayout()
+
+        rate_limit_layout.addWidget(QLabel("Min delay between downloads:"), 0, 0)
+        self.min_delay_spinbox = QSpinBox()
+        self.min_delay_spinbox.setMinimum(0)
+        self.min_delay_spinbox.setMaximum(600)
+        self.min_delay_spinbox.setValue(180)  # 3 minutes default
+        self.min_delay_spinbox.setSuffix(" sec")
+        self.min_delay_spinbox.setToolTip("Minimum delay between YouTube downloads (seconds)")
+        self.min_delay_spinbox.valueChanged.connect(self._on_setting_changed)
+        rate_limit_layout.addWidget(self.min_delay_spinbox, 0, 1)
+
+        rate_limit_layout.addWidget(QLabel("Max delay between downloads:"), 1, 0)
+        self.max_delay_spinbox = QSpinBox()
+        self.max_delay_spinbox.setMinimum(0)
+        self.max_delay_spinbox.setMaximum(600)
+        self.max_delay_spinbox.setValue(300)  # 5 minutes default
+        self.max_delay_spinbox.setSuffix(" sec")
+        self.max_delay_spinbox.setToolTip("Maximum delay between YouTube downloads (seconds)")
+        self.max_delay_spinbox.valueChanged.connect(self._on_setting_changed)
+        rate_limit_layout.addWidget(self.max_delay_spinbox, 1, 1)
+
+        rate_limit_layout.addWidget(QLabel("Randomization:"), 2, 0)
+        self.randomization_spinbox = QSpinBox()
+        self.randomization_spinbox.setMinimum(0)
+        self.randomization_spinbox.setMaximum(100)
+        self.randomization_spinbox.setValue(25)  # ±25% default
+        self.randomization_spinbox.setSuffix(" %")
+        self.randomization_spinbox.setToolTip("Percentage of random variation in delays (e.g., 25 = ±25%)")
+        self.randomization_spinbox.valueChanged.connect(self._on_setting_changed)
+        rate_limit_layout.addWidget(self.randomization_spinbox, 2, 1)
+
+        self.disable_proxies_with_cookies_checkbox = QCheckBox(
+            "Disable proxies when cookies enabled (recommended)"
+        )
+        self.disable_proxies_with_cookies_checkbox.setChecked(True)
+        self.disable_proxies_with_cookies_checkbox.setToolTip(
+            "Automatically disable proxies when using cookies.\n"
+            "Recommended: Use cookies + home IP for best results."
+        )
+        self.disable_proxies_with_cookies_checkbox.toggled.connect(self._on_setting_changed)
+        rate_limit_layout.addWidget(self.disable_proxies_with_cookies_checkbox, 3, 0, 1, 2)
+
+        rate_limit_group.setLayout(rate_limit_layout)
+        layout.addWidget(rate_limit_group, 9, 0, 1, 4)
 
         group.setLayout(layout)
         return group
@@ -1876,6 +2397,10 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         if not self.validate_inputs():
             return
 
+        # Validate cookie settings if processing YouTube URLs
+        if urls and not self._validate_cookie_settings():
+            return
+
         # Clear output and show progress
         self.output_text.clear()
 
@@ -1902,7 +2427,39 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # Test PacketStream proxy if URLs present and user enabled it
         packetstream_available = False
 
-        if urls and self.use_proxy_checkbox.isChecked():
+        # Check strict mode setting
+        from ...config import get_settings
+        settings = get_settings()
+        strict_mode = getattr(settings.youtube_processing, "proxy_strict_mode", True)
+
+        # CRITICAL: If strict mode is enabled and proxy checkbox is NOT checked, block immediately
+        if urls and strict_mode and not self.use_proxy_checkbox.isChecked():
+            self.append_log("🚫 BLOCKED: Proxy strict mode is enabled")
+            self.append_log("⚠️ Proxy checkbox must be enabled when strict mode is on")
+            self.append_log("🛡️ Direct connections blocked to protect your IP from YouTube bans")
+            self.append_log("💡 Fix: Check the 'Use proxy for YouTube downloads' checkbox above")
+            self.append_log("💡 Alternative: Disable strict mode in Settings > YouTube Processing")
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                self,
+                "Proxy Required",
+                "Proxy strict mode is enabled but the proxy checkbox is not checked.\n\n"
+                "Direct YouTube connections are blocked to protect your IP address from rate limits and bans.\n\n"
+                "Please check the 'Use proxy for YouTube downloads' checkbox, "
+                "or disable strict mode in Settings > YouTube Processing (not recommended)."
+            )
+            return
+
+        # Check if we should skip proxy test (cookies enabled + disable proxies)
+        skip_proxy_test = (
+            self.enable_cookies_checkbox.isChecked() 
+            and self.disable_proxies_with_cookies_checkbox.isChecked()
+        )
+        
+        if skip_proxy_test:
+            self.append_log("🍪 Using cookies with home IP - proxies disabled as configured")
+            packetstream_available = False
+        elif urls and self.use_proxy_checkbox.isChecked():
             try:
                 from ...utils.packetstream_proxy import PacketStreamProxyManager
 
@@ -1926,20 +2483,94 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                         packetstream_available = True
                     else:
                         self.append_log(f"❌ PacketStream proxy failed: {proxy_message}")
-                        self.append_log("⚠️ Falling back to direct download")
+                        
+                        if strict_mode:
+                            self.append_log("🚫 BLOCKED: Proxy strict mode enabled")
+                            self.append_log("🛡️ Direct connections blocked to protect your IP from YouTube bans")
+                            self.append_log("💡 Fix: Check PacketStream configuration in Settings > API Keys")
+                            self.append_log("💡 Alternative: Disable strict mode in Settings (NOT RECOMMENDED)")
+                            from PyQt6.QtWidgets import QMessageBox
+                            QMessageBox.critical(
+                                self,
+                                "Proxy Required",
+                                "Proxy strict mode is enabled and the PacketStream proxy test failed.\n\n"
+                                "Direct YouTube connections are blocked to protect your IP address from rate limits and bans.\n\n"
+                                "Please fix your PacketStream configuration in Settings > API Keys, "
+                                "or disable strict mode in Settings > YouTube Processing (not recommended)."
+                            )
+                            return
+                        else:
+                            self.append_log("⚠️ Falling back to direct download (strict mode disabled)")
                 else:
-                    self.append_log(
-                        "⚠️ PacketStream credentials not configured in Settings"
-                    )
-                    self.append_log("💡 Proceeding with direct download + delays")
+                    if strict_mode:
+                        self.append_log("🚫 BLOCKED: Proxy strict mode enabled")
+                        self.append_log("⚠️ PacketStream credentials not configured in Settings")
+                        self.append_log("🛡️ Direct connections blocked to protect your IP from YouTube bans")
+                        self.append_log("💡 Fix: Configure PacketStream in Settings > API Keys")
+                        self.append_log("💡 Alternative: Disable strict mode in Settings (NOT RECOMMENDED)")
+                        from PyQt6.QtWidgets import QMessageBox
+                        QMessageBox.critical(
+                            self,
+                            "Proxy Required",
+                            "Proxy strict mode is enabled but PacketStream is not configured.\n\n"
+                            "Direct YouTube connections are blocked to protect your IP address from rate limits and bans.\n\n"
+                            "Please configure PacketStream in Settings > API Keys, "
+                            "or disable strict mode in Settings > YouTube Processing (not recommended)."
+                        )
+                        return
+                    else:
+                        self.append_log(
+                            "⚠️ PacketStream credentials not configured in Settings"
+                        )
+                        self.append_log("💡 Proceeding with direct download + delays")
             except Exception as e:
                 self.append_log(f"⚠️ PacketStream error: {e}")
-                self.append_log("⚠️ Proceeding with direct download")
+                
+                if strict_mode:
+                    self.append_log("🚫 BLOCKED: Proxy strict mode enabled")
+                    self.append_log("🛡️ Direct connections blocked to protect your IP from YouTube bans")
+                    self.append_log("💡 Fix: Check PacketStream configuration in Settings > API Keys")
+                    self.append_log("💡 Alternative: Disable strict mode in Settings (NOT RECOMMENDED)")
+                    from PyQt6.QtWidgets import QMessageBox
+                    QMessageBox.critical(
+                        self,
+                        "Proxy Error",
+                        f"Proxy strict mode is enabled and PacketStream encountered an error:\n{e}\n\n"
+                        "Direct YouTube connections are blocked to protect your IP address from rate limits and bans.\n\n"
+                        "Please fix your PacketStream configuration in Settings > API Keys, "
+                        "or disable strict mode in Settings > YouTube Processing (not recommended)."
+                    )
+                    return
+                else:
+                    self.append_log("⚠️ Proceeding with direct download (strict mode disabled)")
         elif urls:
-            self.append_log("ℹ️ Direct download mode (proxy disabled by user)")
-            self.append_log(
-                "💡 Using sequential downloads with delays to avoid bot detection"
-            )
+            if strict_mode and self.use_proxy_checkbox.isChecked():
+                # User wants proxy but it's not working - already handled above
+                pass
+            elif urls and not self.use_proxy_checkbox.isChecked():
+                if strict_mode:
+                    self.append_log("🚫 BLOCKED: Proxy strict mode enabled")
+                    self.append_log("⚠️ Proxy checkbox is disabled but strict mode requires proxy")
+                    self.append_log("🛡️ Direct connections blocked to protect your IP from YouTube bans")
+                    self.append_log("💡 Fix: Enable proxy checkbox OR disable strict mode in Settings")
+                    from PyQt6.QtWidgets import QMessageBox
+                    QMessageBox.critical(
+                        self,
+                        "Proxy Required",
+                        "Proxy strict mode is enabled but proxy usage is disabled.\n\n"
+                        "Direct YouTube connections are blocked to protect your IP address from rate limits and bans.\n\n"
+                        "Please enable the proxy checkbox or disable strict mode in Settings > YouTube Processing (not recommended)."
+                    )
+                    return
+                else:
+                    # Warn user about risks of direct download
+                    self.append_log("⚠️ WARNING: Direct download mode (proxy disabled)")
+                    self.append_log("⚠️ YouTube may flag your IP as a bot and block downloads")
+                    self.append_log("⚠️ This happens even for single videos without a proxy")
+                    self.append_log("💡 RECOMMENDATION: Enable the proxy checkbox above")
+                    self.append_log(
+                        "ℹ️ Proceeding with sequential downloads + delays (minimal protection)"
+                    )
 
         # Pass both URLs and local files to worker
         gui_settings["urls"] = urls
@@ -1947,6 +2578,10 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         gui_settings["use_proxy"] = self.use_proxy_checkbox.isChecked()
         gui_settings["packetstream_available"] = packetstream_available
         gui_settings["youtube_delay"] = self.youtube_delay_spinbox.value()
+        
+        # Pass cookie settings to worker
+        gui_settings["enable_cookies"] = self.enable_cookies_checkbox.isChecked()
+        gui_settings["cookie_file_path"] = self.cookie_file_input.text().strip()
 
         # Start transcription worker
         self.transcription_worker = EnhancedTranscriptionWorker(
@@ -1970,11 +2605,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.transcription_worker.start()
 
         # Start progress tracking
-        # Use indeterminate mode if we have URLs (since we don't know final count yet)
-        # Only use determinate mode if we only have local files
+        # Always start with at least 1 file to avoid indeterminate mode (rolling progress)
+        # If we have URLs, the count will be updated when downloads complete
         if urls:
-            # Start with indeterminate progress for URLs (total=0)
-            self.progress_display.start_processing(0, "Transcribing URLs")
+            # Start with 1 file minimum to show determinate progress
+            # Will be updated to actual count after downloads via total_files_determined signal
+            self.progress_display.start_processing(max(1, len(urls)), "Transcribing URLs")
         else:
             # Use determinate progress for local files only
             self.progress_display.start_processing(total_items, "Transcribing Files")
@@ -2055,12 +2691,81 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
     def _update_transcription_step(self, step_description: str, progress_percent: int):
         """Update real-time transcription step display."""
-        self.append_log(f"🎤 {step_description}")
+        # Log to both GUI console and terminal for visibility
+        log_message = step_description if step_description.startswith(("🎤", "📥", "✅", "⏱️", "🔗", "❌", "🍪", "🏠")) else f"🎤 {step_description}"
+        self.append_log(log_message)
+        
+        # Also print download progress to terminal/console for visibility
+        if "Downloading" in step_description or "Download" in step_description:
+            print(f"  {log_message}")
+        
+        # Handle unknown progress (-1 sentinel value)
+        # This happens when whisper.cpp is processing but doesn't report numeric progress yet
+        if progress_percent < 0:
+            # Don't update progress bars, just log the message
+            # The bars will keep showing their last known value
+            return
+        
+        # Detect current phase and map to overall progress
+        # Phase breakdown per file:
+        # - Download: 20% (0-20)
+        # - Audio Conversion: 5% (20-25)
+        # - Transcription: 50% (25-75)
+        # - Diarization: 20% (75-95)
+        # - Save/Finalize: 5% (95-100)
+        
+        phase_name = "Processing"
+        phase_progress = progress_percent  # Progress within this phase (0-100)
+        overall_contribution = 0  # Contribution to overall file progress (0-100)
+        
+        if "Downloading" in step_description or "Download" in step_description:
+            phase_name = "Downloading"
+            # Download is 0-20% of overall
+            overall_contribution = int(phase_progress * 0.20)
+            
+        elif "Converting audio" in step_description or "convert" in step_description.lower():
+            phase_name = "Converting Audio"
+            # Conversion is 20-25% of overall
+            overall_contribution = 20 + int(phase_progress * 0.05)
+            
+        elif "transcription" in step_description.lower() or "Transcribing" in step_description:
+            phase_name = "Transcribing"
+            # Transcription is 25-75% of overall
+            overall_contribution = 25 + int(phase_progress * 0.50)
+            
+        elif "diarization" in step_description.lower() or "speaker" in step_description.lower():
+            phase_name = "Speaker Diarization"
+            # Diarization is 75-95% of overall
+            overall_contribution = 75 + int(phase_progress * 0.20)
+            
+        elif "Saving" in step_description or "Writing" in step_description or "markdown" in step_description.lower():
+            phase_name = "Saving Files"
+            # Save is 95-100% of overall
+            overall_contribution = 95 + int(phase_progress * 0.05)
+            
+        elif "metadata" in step_description.lower():
+            phase_name = "Processing Metadata"
+            # Metadata extraction happens during download phase
+            overall_contribution = min(20, int(phase_progress * 0.20))
+            
+        elif "Testing" in step_description or "connectivity" in step_description:
+            phase_name = "Testing Connection"
+            overall_contribution = 0  # Setup doesn't count toward file progress
+            
+        elif "Using cookies" in step_description or "proxy" in step_description.lower():
+            phase_name = "Setup"
+            overall_contribution = 0  # Setup doesn't count toward file progress
+        
+        # Update phase progress bar (shows phase-specific progress)
+        if hasattr(self, "progress_display"):
+            self.progress_display.update_phase_progress(phase_name, phase_progress)
+            
+            # Update overall file progress based on phase contribution
+            if overall_contribution > 0:
+                self.progress_display.update_current_file_progress(overall_contribution)
 
-        # Update intra-file progress in the progress bar
-        # This provides smooth progress feedback during single file transcription
-        if hasattr(self, "progress_display") and progress_percent > 0:
-            self.progress_display.update_current_file_progress(progress_percent)
+        # Note: We no longer need to reset or directly update current_file_progress here
+        # because phase-based calculation above handles it correctly
 
     def _update_progress(self, progress_data):
         """Update transcription progress display."""
@@ -2599,8 +3304,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             "omp_threads": max(1, min(8, os.cpu_count() or 4)),  # Default threads
             "max_concurrent": 1,  # Default to sequential for safety
             "processing_mode": "Sequential",  # Default mode
-            "enable_quality_retry": self.quality_retry_checkbox.isChecked(),
-            "max_retry_attempts": self.max_retry_attempts.value(),
             "tokenizers_parallelism": False,  # Disabled: causes warnings and minimal benefit
             "mps_fallback": True,  # Enabled: MPS automatically falls back to CPU when needed
             "hf_token": getattr(
@@ -2719,6 +3422,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.color_coded_checkbox,
                 self.use_proxy_checkbox,
                 self.youtube_delay_spinbox,
+                self.enable_cookies_checkbox,
+                self.cookie_file_input,
+                self.min_delay_spinbox,
+                self.max_delay_spinbox,
+                self.randomization_spinbox,
+                self.disable_proxies_with_cookies_checkbox,
             ]
 
             widgets_to_block = [w for w in candidate_widgets if is_widget_valid(w)]
@@ -2830,22 +3539,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                     self.tab_name, "overwrite_existing", True
                 )
             )
-            self.quality_retry_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(
-                    self.tab_name, "enable_quality_retry", True
-                )
-            )
-
-            # Load max retry attempts (performance settings handled by dynamic resource management)
-            self.max_retry_attempts.setValue(
-                self.gui_settings.get_spinbox_value(
-                    self.tab_name, "max_retry_attempts", 1
-                )
-            )
-
-            # Ensure quality retry state is properly reflected in UI
-            self._on_quality_retry_toggled(self.quality_retry_checkbox.isChecked())
-
             # Ensure diarization state is properly reflected in UI
             self._on_diarization_toggled(self.diarization_checkbox.isChecked())
 
@@ -2858,6 +3551,40 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.youtube_delay_spinbox.setValue(
                 self.gui_settings.get_spinbox_value(self.tab_name, "youtube_delay", 5)
             )
+
+            # Load cookie authentication settings (file upload only - browser extraction disabled)
+            self.enable_cookies_checkbox.setChecked(
+                self.gui_settings.get_checkbox_state(
+                    self.tab_name, "enable_cookies", True
+                )
+            )
+            
+            # Load cookie path using standard settings hierarchy
+            cookie_file_path = self.gui_settings.get_line_edit_text(
+                self.tab_name, "cookie_file_path", ""
+            )
+            
+            logger.debug(f"📂 Loaded cookie file path: {cookie_file_path}")
+            self.cookie_file_input.setText(cookie_file_path)
+
+            # Load rate limiting settings
+            self.min_delay_spinbox.setValue(
+                self.gui_settings.get_spinbox_value(self.tab_name, "min_delay", 180)
+            )
+            self.max_delay_spinbox.setValue(
+                self.gui_settings.get_spinbox_value(self.tab_name, "max_delay", 300)
+            )
+            self.randomization_spinbox.setValue(
+                self.gui_settings.get_spinbox_value(self.tab_name, "randomization", 25)
+            )
+            self.disable_proxies_with_cookies_checkbox.setChecked(
+                self.gui_settings.get_checkbox_state(
+                    self.tab_name, "disable_proxies_with_cookies", True
+                )
+            )
+
+            # Trigger cookie toggle to set initial control states
+            self._on_cookies_toggled(self.enable_cookies_checkbox.isChecked())
 
             logger.debug(f"Loaded settings for {self.tab_name} tab")
         except Exception as e:
@@ -2910,16 +3637,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.gui_settings.set_checkbox_state(
                 self.tab_name, "overwrite_existing", self.overwrite_checkbox.isChecked()
             )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name,
-                "enable_quality_retry",
-                self.quality_retry_checkbox.isChecked(),
-            )
-
-            # Save max retry attempts (performance settings handled by dynamic resource management)
-            self.gui_settings.set_spinbox_value(
-                self.tab_name, "max_retry_attempts", self.max_retry_attempts.value()
-            )
 
             # Save YouTube proxy and delay settings
             self.gui_settings.set_checkbox_state(
@@ -2929,6 +3646,30 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.tab_name, "youtube_delay", self.youtube_delay_spinbox.value()
             )
 
+            # Save cookie authentication settings (file upload only - browser extraction disabled)
+            self.gui_settings.set_checkbox_state(
+                self.tab_name, "enable_cookies", self.enable_cookies_checkbox.isChecked()
+            )
+            # Save cookie path using standard settings hierarchy
+            self.gui_settings.set_line_edit_text(
+                self.tab_name, "cookie_file_path", self.cookie_file_input.text()
+            )
+
+            # Save rate limiting settings
+            self.gui_settings.set_spinbox_value(
+                self.tab_name, "min_delay", self.min_delay_spinbox.value()
+            )
+            self.gui_settings.set_spinbox_value(
+                self.tab_name, "max_delay", self.max_delay_spinbox.value()
+            )
+            self.gui_settings.set_spinbox_value(
+                self.tab_name, "randomization", self.randomization_spinbox.value()
+            )
+            self.gui_settings.set_checkbox_state(
+                self.tab_name, "disable_proxies_with_cookies", 
+                self.disable_proxies_with_cookies_checkbox.isChecked()
+            )
+
             logger.debug(f"Saved settings for {self.tab_name} tab")
         except Exception as e:
             logger.error(f"Failed to save settings for {self.tab_name} tab: {e}")
@@ -2936,6 +3677,95 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
     def _on_setting_changed(self):
         """Called when any setting changes to automatically save."""
         self._save_settings()
+
+    def _browse_cookie_file(self):
+        """Browse for cookies.txt file."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Cookies File",
+            str(Path.home()),
+            "Cookie Files (*.txt);;All Files (*)"
+        )
+        if file_path:
+            self.cookie_file_input.setText(file_path)
+            
+            # Save immediately - _on_setting_changed() will trigger save to both session and config
+            self._on_setting_changed()
+
+    def _on_cookies_toggled(self, checked: bool):
+        """Enable/disable cookie-related controls."""
+        # Only file upload supported (browser extraction disabled for security)
+        self.cookie_file_input.setEnabled(checked)
+        self.cookie_file_browse_btn.setEnabled(checked)
+        self._on_setting_changed()
+
+    def _validate_cookie_settings(self) -> bool:
+        """Validate cookie settings before starting YouTube downloads.
+        
+        Returns:
+            bool: True if validation passes or user acknowledges risk, False otherwise
+        """
+        from PyQt6.QtWidgets import QMessageBox
+        
+        # Check if cookies are enabled but no file is selected
+        if self.enable_cookies_checkbox.isChecked():
+            cookie_file = self.cookie_file_input.text().strip()
+            
+            if not cookie_file:
+                # Show warning about using default account
+                msg_box = QMessageBox(self)
+                msg_box.setIcon(QMessageBox.Icon.Warning)
+                msg_box.setWindowTitle("⚠️ Cookie File Not Selected")
+                msg_box.setText(
+                    "<b style='color: #d32f2f; font-size: 14pt;'>WARNING: No Cookie File Selected!</b>"
+                )
+                msg_box.setInformativeText(
+                    "<p>You have enabled cookie authentication but haven't selected a cookie file.</p>"
+                    "<p><b>This means YouTube downloads will use whatever account is logged into your default browser.</b></p>"
+                    "<p style='color: #d32f2f;'><b>⚠️ RISK: If your main Google account is logged in, you could get it flagged or banned for bulk downloads!</b></p>"
+                    "<br>"
+                    "<p><b>Recommended Actions:</b></p>"
+                    "<ul>"
+                    "<li><b>Option 1 (Safest):</b> Click 'Cancel', create a throwaway Google account, export cookies, and select the cookie file</li>"
+                    "<li><b>Option 2:</b> Uncheck 'Enable cookie-based authentication' to proceed without cookies (may hit rate limits)</li>"
+                    "<li><b>Option 3 (RISKY):</b> Click 'OK' below to proceed with your default browser account (NOT RECOMMENDED)</li>"
+                    "</ul>"
+                    "<br>"
+                    "<p><b>Click OK only if you understand the risk and want to proceed with your default account.</b></p>"
+                )
+                msg_box.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+                msg_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+                
+                # Style the message box
+                msg_box.setStyleSheet("""
+                    QMessageBox {
+                        background-color: #fff;
+                    }
+                    QLabel {
+                        color: #333;
+                    }
+                """)
+                
+                result = msg_box.exec()
+                
+                if result == QMessageBox.StandardButton.Cancel:
+                    logger.info("User cancelled YouTube download - no cookie file selected")
+                    return False
+                else:
+                    logger.warning("⚠️ User proceeding with YouTube downloads using default browser account (no cookie file)")
+                    return True
+            else:
+                # Cookie file is specified - verify it exists
+                from pathlib import Path
+                if not Path(cookie_file).exists():
+                    self.show_warning(
+                        "Cookie File Not Found",
+                        f"The specified cookie file does not exist:\n\n{cookie_file}\n\n"
+                        "Please select a valid cookie file or disable cookie authentication."
+                    )
+                    return False
+        
+        return True
 
     def _on_model_changed(self):
         """Called when the model selection changes - validate and potentially download model."""
@@ -3071,21 +3901,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self._model_validation_worker.deleteLater()
             del self._model_validation_worker
 
-    def _on_quality_retry_toggled(self, checked: bool):
-        """Handle toggling of quality retry checkbox."""
-        # Enable/disable max retry attempts based on quality retry setting
-        self.max_retry_attempts.setEnabled(checked)
-
-        # Update tooltip to clarify when disabled
-        if checked:
-            self.max_retry_attempts.setToolTip(
-                "Maximum number of retry attempts with larger models when quality validation fails. "
-                "0 = No retries (fastest), 1 = One retry (recommended), 2-3 = Multiple retries (slowest but highest quality)"
-            )
-        else:
-            self.max_retry_attempts.setToolTip(
-                "Disabled because automatic quality retry is turned of"
-            )
 
     def _on_processor_progress(self, message: str, percentage: int):
         """Handle progress updates from the processor log integrator."""

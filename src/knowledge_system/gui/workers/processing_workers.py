@@ -34,68 +34,92 @@ class EnhancedSummarizationWorker(QThread):
 
     def run(self):
         """Run the summarization process with progress tracking."""
+        logger.info("=" * 80)
+        logger.info("SUMMARIZATION WORKER STARTED")
+        logger.info(f"Files to process: {len(self.files)}")
+        logger.info(f"Provider: {self.gui_settings.get('provider')}")
+        logger.info(f"Model: {self.gui_settings.get('model')}")
+        logger.info("=" * 80)
+        
         try:
-            from ..adapters.hce_adapter import HCEAdapter
+            logger.info("Step 1: Importing System2Orchestrator...")
+            from ...core.system2_orchestrator import System2Orchestrator
+            logger.info("✅ System2Orchestrator imported successfully")
 
-            # Create HCE adapter for progress tracking
-            hce_adapter = HCEAdapter()
-
-            # Create processor with GUI settings via adapter
-            processor = hce_adapter.create_summarizer(
+            # Use System2Orchestrator instead of deprecated SummarizerProcessor
+            logger.info(f"Step 2: Creating System2Orchestrator with provider={self.gui_settings['provider']}, model={self.gui_settings['model']}")
+            orchestrator = System2Orchestrator(
                 provider=self.gui_settings["provider"],
                 model=self.gui_settings["model"],
-                max_tokens=self.gui_settings["max_tokens"],
+                max_tokens=self.gui_settings.get("max_tokens", 10000),
             )
+            logger.info("✅ System2Orchestrator created successfully")
 
             for i, file_path in enumerate(self.files):
+                logger.info(f"\n{'='*60}")
+                logger.info(f"Processing file {i+1}/{len(self.files)}: {file_path}")
+                logger.info(f"{'='*60}")
+                
                 try:
+                    logger.info(f"Step 3.{i+1}: Setting up progress callback for {file_path}")
+                    
+                    def progress_callback(progress_obj):
+                        """Progress callback that handles SummarizationProgress objects."""
+                        logger.debug(f"Progress update: {progress_obj.current_step} - {progress_obj.status}")
+                        self.progress_updated.emit(progress_obj)
 
-                    def progress_callback(stage: str, percentage: int):
-                        """HCE progress callback."""
-                        # Convert HCE progress to SummarizationProgress format
-                        progress = SummarizationProgress(
-                            current_file=str(file_path),
-                            current_step=stage,
-                            file_percent=float(percentage),
-                            status=f"{stage} ({percentage}%)",
-                        )
-                        self.progress_updated.emit(progress)
-
-                    # Process file with HCE progress tracking
-                    result = hce_adapter.process_with_progress(
-                        processor,
+                    logger.info(f"Step 4.{i+1}: Calling orchestrator.process_transcript() for {file_path}")
+                    
+                    # Process file with System2Orchestrator
+                    result = orchestrator.process_transcript(
                         file_path,
                         progress_callback=progress_callback,
-                        **self.gui_settings.get("kwargs", {}),
                     )
+                    
+                    logger.info(f"Step 5.{i+1}: Processing complete. Success: {result.get('success', False)}")
 
-                    if result.success:
-                        logger.info(f"Successfully summarized: {file_path}")
+                    if result.get('success'):
+                        logger.info(f"✅ Successfully summarized: {file_path}")
+                        logger.info(f"Result keys: {list(result.keys())}")
+                        
+                        # Emit file completed signal
+                        output_path = result.get("output_path")
+                        if output_path:
+                            logger.info(f"Output written to: {output_path}")
+                            self.file_completed.emit(str(file_path), str(output_path))
+                        
+                        # Extract HCE analytics if available
+                        hce_data = result.get("hce_data") or result.get("metadata", {}).get("hce_data")
+                        if hce_data:
+                            logger.info("Step 6: Emitting HCE analytics...")
+                            self.hce_analytics_updated.emit(hce_data)
 
                         # Export to GetReceipts if enabled and successful
-                        if self.gui_settings.get(
-                            "export_getreceipts", False
-                        ) and result.metadata.get("hce_data"):
+                        logger.info(f"Checking GetReceipts export: enabled={self.gui_settings.get('export_getreceipts', False)}, has_hce_data={hce_data is not None}")
+                        if self.gui_settings.get("export_getreceipts", False) and hce_data:
                             try:
                                 from ...config import get_settings
                                 from ...utils.getreceipts_exporter import (
                                     create_exporter_from_settings,
                                 )
 
+                                logger.info("Step 7: Setting up GetReceipts export...")
+                                
                                 # Create exporter from settings
                                 settings = get_settings()
                                 exporter = create_exporter_from_settings(settings)
 
-                                # Get HCE pipeline outputs from result metadata
-                                hce_data = result.metadata["hce_data"]
-
                                 # Build source info for the claim
+                                from pathlib import Path
+                                file_path_obj = Path(file_path)
                                 source_info = {
-                                    "title": file_path.stem,
-                                    "url": getattr(file_path, "url", None),
-                                    "date": result.metadata.get("timestamp"),
+                                    "title": file_path_obj.stem,
+                                    "url": getattr(file_path_obj, "url", None),
+                                    "date": result.get("timestamp"),
                                     "duration": None,
                                 }
+                                
+                                logger.info(f"Source info: {source_info}")
 
                                 # Emit GetReceipts export starting signal
                                 progress = SummarizationProgress(
@@ -168,24 +192,26 @@ class EnhancedSummarizationWorker(QThread):
                                 self.progress_updated.emit(progress)
 
                     else:
-                        logger.error(
-                            f"Failed to summarize {file_path}: {result.errors}"
-                        )
+                        error_msg = result.get("error", "Unknown error")
+                        logger.error(f"❌ Failed to summarize {file_path}: {error_msg}")
+                        self.processing_error.emit(f"Failed to summarize {file_path}: {error_msg}")
 
                 except Exception as e:
-                    logger.error(f"Error processing {file_path}: {e}")
-                    self.processing_error.emit(
-                        f"Error processing {file_path}: {str(e)}"
-                    )
+                    logger.error(f"❌ Exception processing {file_path}: {e}", exc_info=True)
+                    self.processing_error.emit(f"Error processing {file_path}: {str(e)}")
 
-                # Update overall progress
-                self.file_completed.emit(i + 1, len(self.files))
-
+            logger.info(f"\n{'='*80}")
+            logger.info("ALL FILES PROCESSED")
+            logger.info(f"Total files: {len(self.files)}")
+            logger.info(f"{'='*80}\n")
+            
             self.processing_finished.emit()
 
         except Exception as e:
-            logger.error(f"Summarization worker error: {e}")
-            self.processing_error.emit(str(e))
+            logger.error(f"❌ FATAL: Summarization worker error: {e}", exc_info=True)
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error details: {str(e)}")
+            self.processing_error.emit(f"Fatal error: {str(e)}")
 
 
 class EnhancedTranscriptionWorker(QThread):

@@ -27,6 +27,7 @@ from ...utils.model_registry import get_provider_models
 from ...utils.ollama_manager import get_ollama_manager
 from ..components.base_tab import BaseTab
 from ..components.rich_log_display import ProcessorLogIntegrator, RichLogDisplay
+from ..components.simple_progress_bar import SimpleTranscriptionProgressBar
 from ..core.settings_manager import get_gui_settings_manager
 from ..dialogs.claim_validation_dialog import ClaimValidationDialog
 from ..legacy_dialogs import ModelDownloadDialog, OllamaServiceDialog
@@ -135,14 +136,47 @@ class EnhancedSummarizationWorker(QThread):
             from ...core.system2_orchestrator import System2Orchestrator
             from ...utils.progress import SummarizationProgress
 
-            # Create orchestrator instance
-            orchestrator = System2Orchestrator()
+            # Define progress callback to receive real-time updates from orchestrator
+            def orchestrator_progress_callback(stage: str, percent: int, episode_id: str, current: int = 0, total: int = 0):
+                """Handle progress updates from the orchestrator."""
+                # Map stage to user-friendly phase names
+                phase_map = {
+                    "loading": "Loading Document",
+                    "parsing": "Parsing Content",
+                    "mining": "Unified Mining",
+                    "storing": "Storing Results",
+                    "generating_summary": "Generating Summary",
+                    "saving_file": "Saving Output",
+                }
+                phase_name = phase_map.get(stage, "Processing")
+                
+                # Emit progress update
+                progress = SummarizationProgress(
+                    current_file=self.files[self.current_file_index] if self.current_file_index < len(self.files) else "",
+                    total_files=len(self.files),
+                    completed_files=self.current_file_index,
+                    current_step=f"⚙️ {phase_name}",
+                    file_percent=percent,
+                    provider=self.gui_settings.get("provider", "openai"),
+                    model_name=self.gui_settings.get("model", "gpt-4o-mini-2024-07-18"),
+                )
+                
+                # Add segment info for mining phase
+                if stage == "mining" and total > 0:
+                    progress.current_step = f"⚙️ {phase_name}: segment {current}/{total}"
+                
+                self.progress_updated.emit(progress)
+
+            # Create orchestrator instance with progress callback
+            orchestrator = System2Orchestrator(progress_callback=orchestrator_progress_callback)
 
             success_count = 0
             failure_count = 0
             total_count = len(self.files)
+            self.current_file_index = 0
 
             for i, file_path in enumerate(self.files):
+                self.current_file_index = i
                 if self.should_stop:
                     self.processing_error.emit("Processing was cancelled by user")
                     return
@@ -165,25 +199,25 @@ class EnhancedSummarizationWorker(QThread):
                     auto_process=False,  # Manual job, don't chain
                 )
 
-                # Emit progress
-                progress = SummarizationProgress(
-                    current_file=file_path,
-                    total_files=total_count,
-                    completed_files=i,
-                    current_step=f"🚀 Processing {file_name} with System 2 orchestrator (job: {job_id})",
-                    percent=(i / total_count) * 100.0,
-                    provider=self.gui_settings.get("provider", "openai"),
-                    model_name=self.gui_settings.get("model", "gpt-4o-mini-2024-07-18"),
-                )
-                self.progress_updated.emit(progress)
-
                 try:
-                    # Execute the job (process_job is async, so we need to run it with asyncio)
+                    # Execute the job - orchestrator will emit real-time progress via callback
                     import asyncio
-
+                    
                     result = asyncio.run(orchestrator.process_job(job_id))
 
                     if result.get("status") == "succeeded":
+                        # Emit final 100% progress
+                        final_progress = SummarizationProgress(
+                            current_file=file_path,
+                            total_files=total_count,
+                            completed_files=i,
+                            current_step=f"✅ Completed {file_name}",
+                            file_percent=100,
+                            provider=self.gui_settings.get("provider", "openai"),
+                            model_name=self.gui_settings.get("model", "gpt-4o-mini-2024-07-18"),
+                        )
+                        self.progress_updated.emit(final_progress)
+                        
                         success_count += 1
                         self.file_completed.emit(i + 1, total_count)
 
@@ -210,16 +244,30 @@ class EnhancedSummarizationWorker(QThread):
                         error_msg = result.get(
                             "error_message", result.get("error", "Processing failed")
                         )
-                        progress.status = "error"
-                        progress.current_step = f"❌ Failed: {error_msg}"
-                        self.progress_updated.emit(progress)
+                        error_progress = SummarizationProgress(
+                            current_file=file_path,
+                            total_files=total_count,
+                            completed_files=i,
+                            current_step=f"❌ Failed: {error_msg}",
+                            status="error",
+                            provider=self.gui_settings.get("provider", "openai"),
+                            model_name=self.gui_settings.get("model", "gpt-4o-mini-2024-07-18"),
+                        )
+                        self.progress_updated.emit(error_progress)
 
                 except Exception as e:
                     failure_count += 1
                     logger.error(f"System 2 job failed for {file_path}: {e}")
-                    progress.status = "error"
-                    progress.current_step = f"❌ Error: {str(e)}"
-                    self.progress_updated.emit(progress)
+                    error_progress = SummarizationProgress(
+                        current_file=file_path,
+                        total_files=total_count,
+                        completed_files=i,
+                        current_step=f"❌ Error: {str(e)}",
+                        status="error",
+                        provider=self.gui_settings.get("provider", "openai"),
+                        model_name=self.gui_settings.get("model", "gpt-4o-mini-2024-07-18"),
+                    )
+                    self.progress_updated.emit(error_progress)
 
             self.processing_finished.emit(success_count, failure_count, total_count)
 
@@ -445,11 +493,16 @@ class SummarizationTab(BaseTab):
         self.gui_settings = get_gui_settings_manager()
         self.tab_name = "Summarization"
         super().__init__(parent)
-
-        # Connect thread-safe signal for dialog creation
-        self.show_ollama_service_dialog_signal.connect(
-            self._show_ollama_service_dialog_on_main_thread
-        )
+    
+    @property
+    def provider_combo(self):
+        """Redirect to miner_provider for backward compatibility."""
+        return getattr(self, 'miner_provider', None)
+    
+    @property
+    def model_combo(self):
+        """Redirect to miner_model for backward compatibility."""
+        return getattr(self, 'miner_model', None)
 
     def _load_analysis_types(self) -> list[str]:
         """Load analysis types from config file."""
@@ -541,40 +594,9 @@ class SummarizationTab(BaseTab):
         settings_group = QGroupBox("Settings")
         settings_layout = QGridLayout()
 
-        # Provider selection - REMOVED per user request
-        # Using Advanced Per-stage Models instead
-        self.provider_combo = QComboBox()
-        self.provider_combo.setVisible(False)  # Hidden
-        self.provider_combo.addItems(["openai", "anthropic", "local"])
-        self.provider_combo.currentTextChanged.connect(self._update_models)
-        self.provider_combo.currentTextChanged.connect(self._on_setting_changed)
-        self.provider_combo.setMinimumWidth(150)  # Make provider field longer
-        self.provider_combo.setMaximumWidth(200)  # Allow it to be wider
-        self.provider_combo.setMinimumHeight(40)  # Make 100% taller
-        # Left-justify the text in the dropdown
-        self.provider_combo.setStyleSheet("QComboBox { text-align: left; }")
-        # Provider field removed - using Advanced Per-stage Models instead
-        # self._add_field_with_info(
-        #     settings_layout,
-        #     "Provider:",
-        #     self.provider_combo,
-        #     "Choose AI provider: OpenAI (GPT models), Anthropic (Claude models), or Local (self-hosted models). Requires API keys in Settings.",
-        #     0,
-        #     0,
-        # )
-
-        # Model selection - REMOVED per user request
-        # Using Advanced Per-stage Models instead
-        self.model_combo = QComboBox()
-        self.model_combo.setVisible(False)  # Hidden
-        # Allow free-text model entry for newly released models
-        self.model_combo.setEditable(True)
-        self.model_combo.currentTextChanged.connect(self._on_model_changed)
-        self.model_combo.currentTextChanged.connect(self._on_setting_changed)
-        self.model_combo.setMinimumWidth(
-            300
-        )  # Make model field wider to accommodate long model names
-        self.model_combo.setMinimumHeight(40)  # Make 100% taller
+        # Provider selection - REMOVED (using Advanced Per-stage Models instead)
+        # provider_combo and model_combo are now properties that redirect to miner dropdowns
+        # This eliminates hidden dropdowns while maintaining backward compatibility
 
         # Model selection removed - using Advanced Per-stage Models instead
         # settings_layout.addWidget(QLabel("Model:"), 0, 2)
@@ -584,7 +606,7 @@ class SummarizationTab(BaseTab):
         model_layout.setContentsMargins(0, 0, 0, 0)
         model_layout.setSpacing(8)
 
-        model_layout.addWidget(self.model_combo)
+        # model_layout.addWidget(self.model_combo)  # REMOVED - model_combo is now None
 
         # Add tooltip info indicator between model combo and refresh button
         model_tooltip = "Select the specific AI model to use for summarization. Different models have different capabilities, costs, and speed."
@@ -627,7 +649,7 @@ class SummarizationTab(BaseTab):
         # )  # Span across multiple columns
 
         # Set tooltips for model combo as well
-        self.model_combo.setToolTip(formatted_model_tooltip)
+        # self.model_combo.setToolTip(formatted_model_tooltip)  # REMOVED - model_combo is now None
 
         # Prompt file
         prompt_label = QLabel("Prompt File:")
@@ -1093,11 +1115,9 @@ class SummarizationTab(BaseTab):
         action_layout = self._create_action_layout()
         layout.addLayout(action_layout)
 
-        # Rich log display for detailed processor information (like terminal)
-        self.rich_log_display = RichLogDisplay()
-        self.rich_log_display.setMinimumHeight(150)
-        self.rich_log_display.setMaximumHeight(300)
-        layout.addWidget(self.rich_log_display)
+        # Dual progress bars (phase + overall) - same as transcription tab
+        self.progress_display = SimpleTranscriptionProgressBar(self)
+        layout.addWidget(self.progress_display)
 
         # Processor log integrator for enhanced progress tracking
         self.log_integrator = ProcessorLogIntegrator()
@@ -1139,9 +1159,9 @@ class SummarizationTab(BaseTab):
             self.show_warning("No Files", "Please add files to summarize.")
             return
 
-        # Check if model is available for local provider
-        provider = self.provider_combo.currentText()
-        model = self.model_combo.currentText()
+        # Use miner provider/model as the primary provider/model
+        provider = self.miner_provider.currentText()
+        model = self.miner_model.currentText()
 
         logger.info(
             f"🔧 DEBUG: Starting summarization with provider='{provider}', model='{model}'"
@@ -1242,8 +1262,11 @@ class SummarizationTab(BaseTab):
             )
         self.append_log("=" * 50)
 
-        # Start rich log display to capture detailed processor information
-        self.rich_log_display.start_processing("Enhanced Summarization")
+        # Initialize dual progress bars
+        self.progress_display.start_processing(
+            total_files=file_count,
+            title="Summarization"
+        )
 
         # Initialize batch timing when processing actually starts (not when first progress arrives)
         import time
@@ -1964,30 +1987,72 @@ class SummarizationTab(BaseTab):
         """Handle progress updates with clean, informative status."""
         import time
 
+        # Update dual progress bars
+        if hasattr(self, "progress_display"):
+            # Determine current phase from the step description
+            current_step = getattr(progress, "current_step", "Processing")
+            file_percent = getattr(progress, "file_percent", 0) or 0
+            
+            # Map step to phase name
+            phase_name = "Processing"
+            if "miner" in current_step.lower() or "unified miner" in current_step.lower():
+                phase_name = "Unified Mining"
+            elif "evaluator" in current_step.lower() or "flagship" in current_step.lower():
+                phase_name = "Flagship Evaluation"
+            elif "generating" in current_step.lower() or "summary" in current_step.lower():
+                phase_name = "Generating Summary"
+            elif "saving" in current_step.lower() or "writing" in current_step.lower():
+                phase_name = "Saving Output"
+            elif "loading" in current_step.lower() or "reading" in current_step.lower():
+                phase_name = "Loading Document"
+            
+            # Update phase progress bar
+            self.progress_display.update_phase_progress(phase_name, file_percent)
+            
+            # Update overall file progress (0-100% for current file)
+            if file_percent > 0:
+                self.progress_display.update_current_file_progress(file_percent)
+
         # Update HCE progress dialog if it exists and we have step information
-        # Log HCE progress to console instead of popup dialog
+        # Log HCE progress to console instead of popup dialog (but throttled to avoid spam)
         if hasattr(progress, "current_step") and progress.current_step:
-            # Format progress information for console output
+            # Throttle console logging to avoid redundant messages
+            # Only log when progress changes significantly or when step changes
+            if not hasattr(self, "_last_logged_step"):
+                self._last_logged_step = None
+                self._last_logged_percent = -1
+            
+            current_step = progress.current_step
             file_percent = getattr(progress, "file_percent", 0)
             if file_percent is None:
                 file_percent = 0
-            status = getattr(progress, "status", "")
+            
+            # Only log if step changed OR percent increased by 10+ OR it's the first log
+            step_changed = current_step != self._last_logged_step
+            percent_jumped = abs(file_percent - self._last_logged_percent) >= 10
+            
+            if step_changed or percent_jumped or self._last_logged_step is None:
+                status = getattr(progress, "status", "")
 
-            # Create a detailed progress message
-            progress_msg = f"🔄 {progress.current_step}"
-            if file_percent > 0:
-                progress_msg += f" ({file_percent}%)"
-            if status:
-                progress_msg += f" - {status}"
+                # Create a detailed progress message
+                progress_msg = f"🔄 {current_step}"
+                if file_percent > 0:
+                    progress_msg += f" ({file_percent}%)"
+                if status:
+                    progress_msg += f" - {status}"
 
-            # Add file information if available
-            if hasattr(progress, "current_file") and progress.current_file:
-                from pathlib import Path
+                # Add file information if available
+                if hasattr(progress, "current_file") and progress.current_file:
+                    from pathlib import Path
 
-                filename = Path(progress.current_file).name
-                progress_msg += f" | File: {filename}"
+                    filename = Path(progress.current_file).name
+                    progress_msg += f" | File: {filename}"
 
-            self.append_log(progress_msg)
+                self.append_log(progress_msg)
+                
+                # Update tracking variables
+                self._last_logged_step = current_step
+                self._last_logged_percent = file_percent
 
         # Initialize timing tracking (batch time already set when worker starts)
         if not hasattr(self, "_last_progress_update"):
@@ -2239,6 +2304,11 @@ class SummarizationTab(BaseTab):
 
         progress_msg = f"Progress: {current}/{total} files completed ({percent:.0f}%){time_text}{batch_eta}"
         self.append_log(progress_msg)
+        
+        # Update progress display with completed files
+        if hasattr(self, "progress_display"):
+            # Assume all completed files were successful (failures tracked separately)
+            self.progress_display.update_progress(completed=current, failed=0)
 
         # Reset file timer for next file
         if current < total:
@@ -2251,6 +2321,10 @@ class SummarizationTab(BaseTab):
         import time
 
         self.set_processing_state(False)
+        
+        # Mark progress display as complete
+        if hasattr(self, "progress_display"):
+            self.progress_display.finish(completed=success_count, failed=failure_count)
 
         # Log final HCE statistics to console
         if hasattr(self, "_final_hce_stats") and self._final_hce_stats:
@@ -2297,12 +2371,16 @@ class SummarizationTab(BaseTab):
                 f"📊 Results: {success_count} succeeded, {failure_count} failed{total_time_text}"
             )
 
-        # Show output location information
+        # Show output location information with specific details
         output_dir = self.output_edit.text()
         if output_dir:
-            self.append_log(f"📁 Summary files saved to: {output_dir}")
+            self.append_log(f"\n💾 Data saved to:")
+            self.append_log(f"   • Database: knowledge_system.db (claims, people, concepts)")
+            self.append_log(f"   • Summary files: {output_dir}")
         else:
-            self.append_log("📁 Summary files saved next to original files")
+            self.append_log(f"\n💾 Data saved to:")
+            self.append_log(f"   • Database: knowledge_system.db (claims, people, concepts)")
+            self.append_log(f"   • Summary files: output/summaries/")
 
         # Enable report button if available
         if hasattr(self, "report_btn"):
@@ -2314,7 +2392,7 @@ class SummarizationTab(BaseTab):
                 success_count, failure_count, total_count, total_time_text
             )
             self.append_log(
-                "📋 Session report generated - click 'View Session Report' to see details"
+                "📋 Session report generated - click 'View Last Report' to see details"
             )
 
         # Show claim validation option if summaries were generated with HCE
@@ -2434,6 +2512,8 @@ class SummarizationTab(BaseTab):
                         f"      {tier_icon} {claim['text']} ({claim['type']})"
                     )
 
+            # Show save confirmation
+            self.append_log(f"   ✅ Saved to database: {total_claims} claims, {people_count} people, {concepts_count} concepts")
             self.append_log("")  # Add blank line for readability
 
     def _stop_processing(self):
@@ -2751,6 +2831,8 @@ class SummarizationTab(BaseTab):
                 self.gui_settings.set_output_directory(self.tab_name, output_text)
 
             # Save combo selections
+            # NOTE: provider_combo and model_combo are now properties that redirect to miner dropdowns
+            # This saves miner settings as the primary provider/model
             provider_text = safe_get_text(self.provider_combo, "provider_combo")
             if provider_text is not None:
                 self.gui_settings.set_combo_selection(
@@ -3080,8 +3162,9 @@ class SummarizationTab(BaseTab):
             with open(report_path, "w", encoding="utf-8") as f:
                 json.dump(report_data, f, indent=2, ensure_ascii=False)
 
-            # Store report path for viewing
+            # Store report path for viewing (both for legacy and base class)
             self._last_session_report = report_path
+            self.current_report = str(report_path)  # Base class uses this
 
             logger.info(f"Session report saved to: {report_path}")
 

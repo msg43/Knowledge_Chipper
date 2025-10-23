@@ -53,15 +53,20 @@ class YouTubeDownloadProcessor(BaseProcessor):
         name: str | None = None,
         output_format: str = "best",  # Keep original format - will be converted to WAV for transcription
         download_thumbnails: bool = True,
+        enable_cookies: bool = False,
+        cookie_file_path: str | None = None,
     ) -> None:
         super().__init__(name or "youtube_download")
         self.output_format = output_format
         self.download_thumbnails = download_thumbnails
+        self.enable_cookies = enable_cookies
+        self.cookie_file_path = cookie_file_path
 
         # Base options without cookies (cookies will be added dynamically if needed)
         self.ydl_opts_base = {
             "quiet": True,
             "no_warnings": True,
+            "noprogress": True,  # Disable yt-dlp's built-in progress to avoid parsing errors with "stalled" messages
             "format": "worstaudio[ext=webm]/worstaudio[ext=opus]/worstaudio[ext=m4a]/worstaudio/bestaudio[ext=webm][abr<=96]/bestaudio[ext=m4a][abr<=128]/bestaudio[abr<=128]/bestaudio/worst",  # Optimal cascade: smallest formats first, guaranteed audio-only fallback
             "outtmpl": "%(title)s [%(id)s].%(ext)s",
             "ignoreerrors": True,
@@ -72,11 +77,12 @@ class YouTubeDownloadProcessor(BaseProcessor):
             "prefer_free_formats": True,  # Prefer formats that don't require fragmentation
             # Note: youtube_include_dash_manifest option removed (deprecated in yt-dlp 2025.9+)
             "no_part": False,  # Enable partial downloading/resuming for connection interruptions
-            "retries": 3,  # Standard retries for connection issues
-            "extractor_retries": 3,  # Standard retries for connection issues
-            "socket_timeout": 45,  # Longer timeout for large file downloads through proxy
+            "retries": 10,  # Increased retries for connection issues
+            "extractor_retries": 5,  # Increased retries for connection issues
+            "socket_timeout": 60,  # Longer timeout to handle stalls
             # NOTE: Do NOT use Android client with PacketStream - causes "Fixed to extract player response"
-            "fragment_retries": 5,  # Moderate fragment retries for stability
+            "fragment_retries": 10,  # Increased fragment retries for stability
+            "file_access_retries": 5,  # Retry file access operations
             # Network tuning
             "nocheckcertificate": True,
             "http_chunk_retry": True,
@@ -244,198 +250,70 @@ class YouTubeDownloadProcessor(BaseProcessor):
         from ..utils.packetstream_proxy import PacketStreamProxyManager
 
         settings = get_settings()
+        yt_config = settings.youtube_processing
 
         # Note: VideoDeduplicationService already initialized at line 170
         # No need to reinitialize here
 
-        # PacketStream proxy (optional)
-        use_proxy = False
-        proxy_manager = None
-        proxy_url = None
+        # Check if we should disable proxies due to cookie usage
+        # Use instance variables if available, otherwise fall back to config
+        enable_cookies_check = self.enable_cookies if hasattr(self, 'enable_cookies') else yt_config.enable_cookies
+        disable_proxies_check = yt_config.disable_proxies_with_cookies
+        
+        if enable_cookies_check and disable_proxies_check:
+            use_proxy = False
+            proxy_manager = None
+            proxy_url = None
+            logger.info("🏠 Cookies enabled - using direct connection (home IP) as configured")
+            if progress_callback:
+                progress_callback("🏠 Using cookies with home IP (proxies disabled)")
+        else:
+            # PacketStream proxy (optional)
+            use_proxy = False
+            proxy_manager = None
+            proxy_url = None
 
-        try:
-            proxy_manager = PacketStreamProxyManager()
-            if proxy_manager.username and proxy_manager.auth_key:
-                use_proxy = True
-                logger.info(
-                    "Using PacketStream residential proxies for YouTube processing"
-                )
-                if progress_callback:
-                    progress_callback("🌐 Using PacketStream residential proxies...")
-            else:
-                logger.warning("⚠️ PACKETSTREAM CREDENTIALS NOT CONFIGURED")
+            try:
+                proxy_manager = PacketStreamProxyManager()
+                if proxy_manager.username and proxy_manager.auth_key:
+                    use_proxy = True
+                    logger.info(
+                        "Using PacketStream residential proxies for YouTube processing"
+                    )
+                    if progress_callback:
+                        progress_callback("🌐 Using PacketStream residential proxies...")
+                else:
+                    logger.warning("⚠️ PACKETSTREAM CREDENTIALS NOT CONFIGURED")
+                    logger.warning(
+                        "⚠️ Using direct access - YouTube may block bulk downloads!"
+                    )
+                    if progress_callback:
+                        progress_callback(
+                            "⚠️ PacketStream not configured - risk of YouTube blocking..."
+                        )
+            except Exception as e:
+                logger.warning(f"⚠️ PACKETSTREAM PROXY NOT AVAILABLE: {e}")
                 logger.warning(
-                    "⚠️ Using direct access - YouTube may block bulk downloads!"
+                    "⚠️ Using direct access - YouTube may trigger anti-bot detection for downloads!"
+                )
+                logger.warning(
+                    "⚠️ For reliable bulk downloads, configure PacketStream in Settings > API Keys"
                 )
                 if progress_callback:
                     progress_callback(
-                        "⚠️ PacketStream not configured - risk of YouTube blocking..."
+                        "⚠️ PacketStream proxy not configured - using direct access (may be blocked)..."
                     )
-        except Exception as e:
-            logger.warning(f"⚠️ PACKETSTREAM PROXY NOT AVAILABLE: {e}")
-            logger.warning(
-                "⚠️ Using direct access - YouTube may trigger anti-bot detection for downloads!"
-            )
-            logger.warning(
-                "⚠️ For reliable bulk downloads, configure PacketStream in Settings > API Keys"
-            )
-            if progress_callback:
-                progress_callback(
-                    "⚠️ PacketStream proxy not configured - using direct access (may be blocked)..."
-                )
 
         # Note: PacketStream is optional - we can proceed without it (but may get rate limited)
 
-        # PROXY TESTING AND CONFIGURATION
+        # PROXY CONFIGURATION
+        # Note: Proxy is configured and will be tested per-URL
+        # Each URL gets unique session ID for IP rotation
+        
         if use_proxy and proxy_manager:
-            # Test PacketStream proxy connectivity
-            logger.info("Testing PacketStream proxy connectivity...")
+            logger.info("✅ Using PacketStream proxy for downloads")
             if progress_callback:
-                progress_callback("🔐 Testing PacketStream proxy...")
-
-            try:
-                # Extract first video ID for session creation
-                test_video_id = "test_connection"  # We'll use a generic test ID
-                proxy_url = proxy_manager.get_proxy_url() if proxy_manager else None
-
-                if proxy_url:
-                    # Test proxy connectivity
-                    import requests
-
-                    # PacketStream proxies don't require SSL certificate verification
-                    # Use HTTP endpoint to avoid SSL certificate issues
-                    from ..utils.browser_fingerprint import (
-                        get_standard_requests_headers,
-                    )
-
-                    test_response = requests.get(
-                        "http://httpbin.org/ip",
-                        proxies={"http": proxy_url, "https": proxy_url},
-                        timeout=15,
-                        headers=get_standard_requests_headers(),
-                    )
-                    if test_response.status_code == 200:
-                        proxy_ip = test_response.json().get("origin", "unknown")
-                        logger.info(
-                            f"✅ PacketStream proxy working - connected via IP: {proxy_ip}"
-                        )
-                        if progress_callback:
-                            progress_callback(
-                                f"✅ PacketStream proxy working - IP: {proxy_ip}"
-                            )
-                    else:
-                        logger.warning(
-                            f"PacketStream proxy test returned status {test_response.status_code}"
-                        )
-                else:
-                    logger.error("Failed to generate PacketStream proxy URL")
-
-                    # Smart fallback: Allow single video downloads, block bulk downloads
-                    if len(urls) == 1:
-                        logger.warning(
-                            "Single video download - allowing fallback despite proxy URL failure"
-                        )
-                        if progress_callback:
-                            progress_callback(
-                                "❌ Failed to generate PacketStream proxy URL"
-                            )
-                            progress_callback(
-                                "⚠️ Single video: Proceeding with direct connection (low risk)"
-                            )
-                        use_proxy = False
-                    else:
-                        logger.error(
-                            f"Bulk download detected ({len(urls)} URLs) - blocking due to proxy URL failure"
-                        )
-                        if progress_callback:
-                            progress_callback(
-                                "❌ Failed to generate PacketStream proxy URL"
-                            )
-                            progress_callback(
-                                f"🚫 BLOCKED: Bulk download ({len(urls)} URLs) without proxy protection"
-                            )
-                            progress_callback(
-                                "🛡️ This prevents YouTube from banning your IP address"
-                            )
-                            progress_callback(
-                                "💡 Tip: Single video downloads are still allowed without proxy"
-                            )
-                            progress_callback(
-                                "🔧 Please fix PacketStream configuration before bulk downloading"
-                            )
-
-                        return ProcessorResult(
-                            success=False,
-                            data=None,
-                            errors=[
-                                f"Failed to generate PacketStream proxy URL for bulk download ({len(urls)} URLs). "
-                                "Bulk downloads without proxy protection are blocked to prevent IP bans. "
-                                "Single video downloads are still allowed."
-                            ],
-                            metadata={
-                                "proxy_required": True,
-                                "bulk_download_blocked": True,
-                                "urls_count": len(urls),
-                                "single_video_allowed": True,
-                            },
-                        )
-
-            except Exception as proxy_test_error:
-                error_msg = str(proxy_test_error)
-                logger.error(f"❌ PacketStream proxy test failed: {error_msg}")
-
-                # Smart fallback: Allow single video downloads, block bulk downloads
-                if len(urls) == 1:
-                    logger.warning(
-                        "Single video download - allowing fallback to direct connection"
-                    )
-                    if progress_callback:
-                        progress_callback(
-                            f"❌ PacketStream proxy test failed: {error_msg}"
-                        )
-                        progress_callback(
-                            "⚠️ Single video: Proceeding with direct connection (low risk)"
-                        )
-                        progress_callback(
-                            "🔄 Consider fixing PacketStream for future bulk downloads..."
-                        )
-                    use_proxy = False
-                else:
-                    logger.error(
-                        f"Bulk download detected ({len(urls)} URLs) - blocking direct connection to prevent IP ban"
-                    )
-                    if progress_callback:
-                        progress_callback(
-                            f"❌ PacketStream proxy test failed: {error_msg}"
-                        )
-                        progress_callback(
-                            f"🚫 BLOCKED: Bulk download ({len(urls)} URLs) without proxy protection"
-                        )
-                        progress_callback(
-                            "🛡️ This prevents YouTube from banning your IP address"
-                        )
-                        progress_callback(
-                            "💡 Tip: Single video downloads are still allowed without proxy"
-                        )
-                        progress_callback(
-                            "🔧 Please fix PacketStream configuration before bulk downloading"
-                        )
-
-                    return ProcessorResult(
-                        success=False,
-                        data=None,
-                        errors=[
-                            f"PacketStream proxy failed for bulk download ({len(urls)} URLs): {error_msg}. "
-                            "Bulk downloads without proxy protection are blocked to prevent IP bans. "
-                            "Single video downloads are still allowed."
-                        ],
-                        metadata={
-                            "proxy_required": True,
-                            "bulk_download_blocked": True,
-                            "urls_count": len(urls),
-                            "single_video_allowed": True,
-                        },
-                    )
+                progress_callback("✅ PacketStream proxy configured")
 
         # Proxy usage with PacketStream (optional); no legacy WebShare fallback
 
@@ -445,6 +323,19 @@ class YouTubeDownloadProcessor(BaseProcessor):
         ydl_opts = copy.deepcopy(
             self.ydl_opts_base
         )  # Deep copy to avoid modifying base config
+
+        # Add cookies if enabled (file upload only - browser extraction disabled for security)
+        # Use instance variables passed during initialization, not config file
+        if self.enable_cookies and self.cookie_file_path:
+            if Path(self.cookie_file_path).exists():
+                ydl_opts["cookiefile"] = self.cookie_file_path
+                logger.info(f"✅ Using cookies from file: {self.cookie_file_path}")
+                if progress_callback:
+                    progress_callback(f"🍪 Using cookies from throwaway account")
+            else:
+                logger.warning(f"⚠️ Cookie file not found: {self.cookie_file_path}")
+                if progress_callback:
+                    progress_callback(f"⚠️ Cookie file not found - proceeding without cookies")
 
         # NOTE: Do NOT add custom user-agent or http_headers when using PacketStream
         # PacketStream residential proxies work best with yt-dlp's default headers
@@ -465,19 +356,34 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 current_time = time.time()
 
                 if d["status"] == "downloading":
-                    # Extract progress information
-                    downloaded_bytes = d.get("downloaded_bytes", 0)
-                    total_bytes = d.get("total_bytes") or d.get(
-                        "total_bytes_estimate", 0
-                    )
-                    speed = d.get("speed", 0)
-                    filename = d.get("filename", "Unknown file")
+                    try:
+                        # Extract progress information with error handling for string values
+                        downloaded_bytes = d.get("downloaded_bytes", 0)
+                        total_bytes = d.get("total_bytes") or d.get(
+                            "total_bytes_estimate", 0
+                        )
+                        speed = d.get("speed", 0)
+                        filename = d.get("filename", "Unknown file")
+                        
+                        # Ensure values are numeric (yt-dlp sometimes returns strings like "stalled - retrying...")
+                        if not isinstance(downloaded_bytes, (int, float)):
+                            downloaded_bytes = 0
+                        if not isinstance(total_bytes, (int, float)):
+                            total_bytes = 0
+                        if not isinstance(speed, (int, float)):
+                            speed = 0
+                        
+                        # Initialize variables for progress display
+                        percent = 0
+                        downloaded_mb = 0
+                        total_mb = 0
+                        speed_mbps = 0
 
-                    if total_bytes > 0:
-                        percent = (downloaded_bytes / total_bytes) * 100
-                        downloaded_mb = downloaded_bytes / (1024 * 1024)
-                        total_mb = total_bytes / (1024 * 1024)
-                        speed_mbps = (speed / (1024 * 1024)) if speed else 0
+                        if total_bytes > 0:
+                            percent = (downloaded_bytes / total_bytes) * 100
+                            downloaded_mb = downloaded_bytes / (1024 * 1024)
+                            total_mb = total_bytes / (1024 * 1024)
+                            speed_mbps = (speed / (1024 * 1024)) if speed else 0
 
                         # Extract just the filename for cleaner display
                         import os
@@ -513,6 +419,11 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             progress_callback(progress_msg, int(percent))
                             last_progress_message = progress_msg
                         last_progress_time[0] = current_time
+                    
+                    except (TypeError, ValueError, ZeroDivisionError) as e:
+                        # Handle any parsing errors gracefully (e.g. when yt-dlp returns string values)
+                        logger.debug(f"Progress hook parsing error (non-critical): {e}")
+                        progress_callback("⏳ Downloading... (checking status)")
 
                 elif d["status"] == "finished":
                     filename = d.get("filename", "Unknown file")
@@ -703,13 +614,38 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     metadata_error = error_msg
                     logger.error(f"❌ Metadata extraction failed for {url}: {error_msg}")
 
+                    # Check for bot detection, blocking, or proxy errors - don't continue if detected
+                    is_bot_detection = any(keyword in error_msg.lower() for keyword in [
+                        "sign in to confirm you're not a bot",
+                        "bot",
+                        "captcha",
+                        "verify you're human"
+                    ])
+                    is_blocked = "403" in error_msg or "forbidden" in error_msg.lower()
+                    is_not_found = "404" in error_msg or "not found" in error_msg.lower()
+                    is_proxy_error = any(keyword in error_msg.lower() for keyword in [
+                        "502",
+                        "proxy error",
+                        "unable to connect to proxy",
+                        "tunnel connection failed",
+                        "relay is offline"
+                    ])
+
                     if progress_callback:
-                        if "403" in error_msg or "forbidden" in error_msg.lower():
+                        if is_bot_detection:
                             progress_callback(
-                                "❌ Access denied - YouTube may be blocking this proxy IP"
+                                "❌ Bot detection triggered - YouTube is blocking access"
                             )
-                        elif "404" in error_msg or "not found" in error_msg.lower():
+                        elif is_blocked:
+                            progress_callback(
+                                "❌ Access denied (403) - YouTube may be blocking this IP"
+                            )
+                        elif is_not_found:
                             progress_callback(f"❌ Video not found or private: {url}")
+                        elif is_proxy_error:
+                            progress_callback(
+                                "❌ Proxy relay offline/failed - will retry with different relay"
+                            )
                         elif "timeout" in error_msg.lower():
                             progress_callback(
                                 "❌ Connection timeout - Proxy service may have connectivity issues"
@@ -723,12 +659,19 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                 f"❌ Metadata extraction failed: {error_msg}"
                             )
 
-                    # Continue with default settings if metadata extraction fails
-                    logger.warning(
-                        "Continuing with standard settings despite metadata failure"
-                    )
-                    if progress_callback:
-                        progress_callback("⚠️ Attempting download anyway...")
+                    # Don't continue if bot detection, blocking, or proxy error occurred
+                    # These are retryable errors - let the GUI's retry logic handle them
+                    if is_bot_detection or is_blocked or is_proxy_error:
+                        logger.error(
+                            f"❌ Stopping download attempt - retryable error detected for {url}"
+                        )
+                        if progress_callback:
+                            progress_callback("🚫 Skipping download - will retry with new session/IP")
+                        
+                        # Mark as failed and skip to next URL
+                        errors.append(f"Retryable error for {url}: {error_msg}")
+                        url_index += 1
+                        continue  # Skip to next URL
 
                 # Attempt the actual download
                 if progress_callback:
@@ -897,6 +840,11 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     )
 
                                     # Extract all available metadata from info dict
+                                    tags = info.get("tags", []) or []
+                                    logger.debug(f"📝 Extracted {len(tags)} tags from YouTube for {video_id}")
+                                    if tags:
+                                        logger.debug(f"First 5 tags: {tags[:5]}")
+                                    
                                     video_metadata = {
                                         "uploader": info.get("uploader", ""),
                                         "uploader_id": info.get("uploader_id", ""),
@@ -906,7 +854,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         "view_count": info.get("view_count"),
                                         "like_count": info.get("like_count"),
                                         "comment_count": info.get("comment_count"),
-                                        "tags_json": info.get("tags", []),
+                                        "tags_json": tags,
                                         "categories_json": info.get("categories", []),
                                         "thumbnail_url": info.get("thumbnail", ""),
                                         "source_type": "youtube",

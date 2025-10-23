@@ -1,14 +1,18 @@
 """
 GUI Settings Manager
-GUI Settings Manager
 
 Manages GUI-specific settings and integrates with the session manager
 for persistent storage of user preferences.
+
+Settings Hierarchy:
+1. settings.yaml (source of truth for defaults)
+2. Session state (overrides for "last used" preferences)
 """
 
 from pathlib import Path
 from typing import Any
 
+from ...config import get_settings
 from ...logger import get_logger
 from .session_manager import get_session_manager, save_session
 
@@ -21,9 +25,23 @@ class GUISettingsManager:
     def __init__(self) -> None:
         """Initialize GUI settings manager."""
         self.session_manager = get_session_manager()
+        # Load system settings as source of truth for defaults
+        try:
+            self.system_settings = get_settings()
+        except Exception as e:
+            logger.warning(f"Could not load system settings: {e}")
+            self.system_settings = None
 
     def get_output_directory(self, tab_name: str, default: str | None = None) -> str:
-        """Get the saved output directory for a tab."""
+        """
+        Get the saved output directory for a tab.
+        
+        Priority:
+        1. Tab-specific session state
+        2. Global "last used" session state
+        3. settings.yaml paths
+        4. Provided default parameter
+        """
         # Try tab-specific directory first
         saved_dir = self.session_manager.get_tab_setting(
             tab_name, "output_directory", None
@@ -37,6 +55,15 @@ class GUISettingsManager:
             path = Path(saved_dir)
             if path.exists() or path.parent.exists():
                 return str(path)
+
+        # Fall back to settings.yaml paths
+        if not saved_dir and self.system_settings is not None:
+            if hasattr(self.system_settings, 'paths'):
+                saved_dir = str(self.system_settings.paths.output_dir)
+                # Expand ~ and check if path exists or is creatable
+                expanded = Path(saved_dir).expanduser()
+                if expanded.exists() or expanded.parent.exists():
+                    return str(expanded)
 
         # Return default (which should be empty string to require selection)
         return default or ""
@@ -52,8 +79,27 @@ class GUISettingsManager:
     def get_checkbox_state(
         self, tab_name: str, checkbox_name: str, default: bool = False
     ) -> bool:
-        """Get the saved state of a checkbox."""
-        return self.session_manager.get_tab_setting(tab_name, checkbox_name, default)
+        """
+        Get the saved state of a checkbox.
+        
+        Priority:
+        1. Session state (last used value)
+        2. settings.yaml (system default)
+        3. Provided default parameter
+        """
+        # Check session state first
+        saved_value = self.session_manager.get_tab_setting(tab_name, checkbox_name, None)
+        if saved_value is not None:
+            return saved_value
+        
+        # Fall back to settings.yaml
+        if self.system_settings is not None:
+            if tab_name == "Transcription" and checkbox_name == "diarization":
+                return self.system_settings.transcription.diarization
+            elif tab_name == "Transcription" and checkbox_name == "use_gpu":
+                return self.system_settings.transcription.use_gpu
+        
+        return default
 
     def set_checkbox_state(
         self, tab_name: str, checkbox_name: str, state: bool
@@ -64,8 +110,49 @@ class GUISettingsManager:
     def get_combo_selection(
         self, tab_name: str, combo_name: str, default: str = ""
     ) -> str:
-        """Get the saved selection of a combo box."""
-        return self.session_manager.get_tab_setting(tab_name, combo_name, default)
+        """
+        Get the saved selection of a combo box.
+        
+        Priority:
+        1. Session state (last used value)
+        2. settings.yaml (system default)
+        3. Provided default parameter
+        """
+        # First check session state
+        saved_value = self.session_manager.get_tab_setting(tab_name, combo_name, None)
+        if saved_value is not None:
+            return saved_value
+        
+        # Fall back to settings.yaml for defaults
+        if self.system_settings is not None:
+            # Transcription-specific settings (check first to avoid ambiguity)
+            if tab_name == "Transcription":
+                if combo_name == "model":
+                    return self.system_settings.transcription.whisper_model
+                elif combo_name == "device":
+                    return "auto" if self.system_settings.transcription.use_gpu else "cpu"
+                elif combo_name == "language":
+                    return "en"  # Default to English
+            
+            # LLM Provider/Model settings (Summarization, HCE, etc.)
+            if combo_name == "provider":
+                return self.system_settings.llm.provider
+            elif combo_name == "model":
+                # Return local_model if available, otherwise cloud model
+                if hasattr(self.system_settings.llm, 'local_model'):
+                    return self.system_settings.llm.local_model
+                return self.system_settings.llm.model
+            
+            # HCE-specific provider/model settings (miner, evaluator, judge, etc.)
+            elif combo_name.endswith("_provider"):
+                return self.system_settings.llm.provider
+            elif combo_name.endswith("_model"):
+                if hasattr(self.system_settings.llm, 'local_model'):
+                    return self.system_settings.llm.local_model
+                return self.system_settings.llm.model
+        
+        # Final fallback to provided default
+        return default
 
     def set_combo_selection(
         self, tab_name: str, combo_name: str, selection: str
@@ -76,8 +163,36 @@ class GUISettingsManager:
     def get_spinbox_value(
         self, tab_name: str, spinbox_name: str, default: int = 0
     ) -> int:
-        """Get the saved value of a spinbox."""
-        return self.session_manager.get_tab_setting(tab_name, spinbox_name, default)
+        """
+        Get the saved value of a spinbox.
+        
+        Priority:
+        1. Session state (last used value)
+        2. settings.yaml (system default)
+        3. Provided default parameter
+        """
+        saved_value = self.session_manager.get_tab_setting(tab_name, spinbox_name, None)
+        if saved_value is not None:
+            return saved_value
+        
+        # Fall back to settings.yaml
+        if self.system_settings is not None:
+            # Thread management settings
+            if spinbox_name == "max_concurrent_files":
+                if hasattr(self.system_settings, 'thread_management'):
+                    return self.system_settings.thread_management.max_concurrent_files
+            # Processing settings
+            elif spinbox_name == "concurrent_jobs":
+                if hasattr(self.system_settings, 'processing'):
+                    return self.system_settings.processing.concurrent_jobs
+            elif spinbox_name == "batch_size":
+                if hasattr(self.system_settings, 'processing'):
+                    return self.system_settings.processing.batch_size
+            # LLM settings
+            elif spinbox_name == "max_tokens":
+                return self.system_settings.llm.max_tokens
+        
+        return default
 
     def set_spinbox_value(self, tab_name: str, spinbox_name: str, value: int) -> None:
         """Save the value of a spinbox."""
@@ -86,8 +201,27 @@ class GUISettingsManager:
     def get_line_edit_text(
         self, tab_name: str, line_edit_name: str, default: str = ""
     ) -> str:
-        """Get the saved text of a line edit."""
-        return self.session_manager.get_tab_setting(tab_name, line_edit_name, default)
+        """
+        Get the saved text of a line edit.
+        
+        Priority:
+        1. Session state (last used value)
+        2. settings.yaml (system default)
+        3. Provided default parameter
+        """
+        saved_value = self.session_manager.get_tab_setting(tab_name, line_edit_name, None)
+        if saved_value is not None:
+            return saved_value
+        
+        # Fall back to settings.yaml
+        if self.system_settings is not None:
+            # Cookie file path for YouTube authentication
+            if line_edit_name == "cookie_file_path":
+                if hasattr(self.system_settings, 'youtube_processing'):
+                    cookie_path = self.system_settings.youtube_processing.cookie_file_path
+                    return cookie_path if cookie_path else ""
+        
+        return default
 
     def set_line_edit_text(self, tab_name: str, line_edit_name: str, text: str) -> None:
         """Save the text of a line edit."""
@@ -149,7 +283,7 @@ class GUISettingsManager:
         logger.info("Cleared all GUI settings")
 
     def get_list_setting(
-        self, tab_name: str, key: str, default: list[str] = None
+        self, tab_name: str, key: str, default: list[str] | None = None
     ) -> list[str]:
         """Get a list setting value."""
         if default is None:

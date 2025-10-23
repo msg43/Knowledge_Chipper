@@ -132,4 +132,4 @@ To validate these improvements:
 ## Related Files
 - `/src/knowledge_system/processors/hce/prompts/unified_miner.txt` - The improved prompt
 - `/src/knowledge_system/processors/hce/unified_miner.py` - Uses the prompt
-- `/src/knowledge_system/processors/hce/schemas/miner_output.json` - Output schema
+- `/schemas/miner_output.v1.json` - Output schema (single source of truth)

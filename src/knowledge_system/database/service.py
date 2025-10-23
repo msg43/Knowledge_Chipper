@@ -42,21 +42,27 @@ class DatabaseService:
         permission issues when launching from /Applications.
         """
         # Resolve default/writable database path for SQLite
+        # Allow tests to override DB via environment variable without impacting prod
+        try:
+            import os
+            test_db_url = os.environ.get("KNOWLEDGE_CHIPPER_TEST_DB_URL")
+            test_db_path = os.environ.get("KNOWLEDGE_CHIPPER_TEST_DB")
+            if test_db_url:
+                database_url = test_db_url
+            elif test_db_path:
+                # Accept absolute or relative path; treat as sqlite file path
+                database_url = f"sqlite:///{test_db_path}"
+        except Exception:
+            # Do not let env parsing affect normal startup
+            pass
+
         resolved_url = database_url
         db_path: Path | None = None
 
         def _user_data_dir() -> Path:
-            if sys.platform == "darwin":
-                return (
-                    Path.home() / "Library" / "Application Support" / "KnowledgeChipper"
-                )
-            elif os.name == "nt":
-                appdata = os.environ.get(
-                    "APPDATA", str(Path.home() / "AppData" / "Roaming")
-                )
-                return Path(appdata) / "KnowledgeChipper"
-            else:
-                return Path.home() / ".knowledge_chipper"
+            # Use the standard application support directory
+            from ..utils.macos_paths import get_application_support_dir
+            return get_application_support_dir()
 
         if database_url.startswith("sqlite:///"):
             raw_path_str = database_url[10:]  # after 'sqlite:///'
@@ -108,7 +114,7 @@ class DatabaseService:
         # Run System 2 migration if needed
         self._run_system2_migration()
 
-        logger.info(f"Database service initialized with {database_url}")
+        logger.info(f"Database service initialized with {self.database_url}")
 
     def get_session(self) -> Session:
         """Get a new database session."""
@@ -616,6 +622,54 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to update transcript {transcript_id}: {e}")
             return False
+
+    def get_transcript_path_for_regeneration(self, transcript_id: str) -> tuple[Path | None, dict | None]:
+        """Get file path and metadata needed to regenerate transcript markdown."""
+        try:
+            with self.get_session() as session:
+                transcript = session.query(Transcript).filter(
+                    Transcript.transcript_id == transcript_id
+                ).first()
+                
+                if not transcript:
+                    return None, None
+                
+                # Find the most recent generated markdown file
+                generated_file = (
+                    session.query(GeneratedFile)
+                    .filter(
+                        GeneratedFile.transcript_id == transcript_id,
+                        GeneratedFile.file_type == "transcript_md"
+                    )
+                    .order_by(GeneratedFile.created_at.desc())
+                    .first()
+                )
+                
+                if not generated_file:
+                    return None, None
+                
+                # Get video metadata for markdown generation
+                video = session.query(MediaSource).filter(
+                    MediaSource.media_id == transcript.video_id
+                ).first()
+                
+                video_metadata = None
+                if video:
+                    video_metadata = {
+                        "video_id": video.video_id,
+                        "title": video.title,
+                        "url": video.url,
+                        "uploader": video.uploader,
+                        "upload_date": video.upload_date,
+                        "duration": video.duration_seconds,
+                        "tags": video.tags_json or [],
+                    }
+                
+                return Path(generated_file.file_path), video_metadata
+                
+        except Exception as e:
+            logger.error(f"Failed to get transcript path: {e}")
+            return None, None
 
     # =============================================================================
     # SUMMARY OPERATIONS

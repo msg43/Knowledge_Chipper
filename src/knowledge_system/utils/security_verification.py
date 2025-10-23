@@ -110,9 +110,8 @@ class AuthorizationVerifier:
             issues.append(f"Python executable not accessible: {python_path}")
 
         # Check FFmpeg binaries
-        ffmpeg_bin_dir = (
-            macos_path / "Library" / "Application Support" / "Knowledge_Chipper" / "bin"
-        )
+        from .macos_paths import get_application_support_dir
+        ffmpeg_bin_dir = get_application_support_dir() / "bin"
         if ffmpeg_bin_dir.exists():
             for binary in ["ffmpeg", "ffprobe"]:
                 binary_path = ffmpeg_bin_dir / binary

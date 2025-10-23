@@ -6,6 +6,7 @@ cleaned up using async context managers, preventing "Event loop is closed" error
 All tests are fully automated with timeouts.
 """
 
+import os
 import pytest
 import asyncio
 from unittest.mock import Mock, patch, AsyncMock
@@ -28,7 +29,10 @@ class TestLLMAdapterAsyncCleanup:
         return LLMAdapter(db_service=db_service)
     
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires OpenAI API key")
+    @pytest.mark.skipif(
+        not os.getenv("OPENAI_API_KEY"),
+        reason="Requires OpenAI API key - set OPENAI_API_KEY environment variable to run"
+    )
     async def test_openai_async_client_cleanup(self, adapter):
         """Test that AsyncOpenAI client is properly cleaned up with context manager."""
         # Make a call using OpenAI
@@ -45,7 +49,10 @@ class TestLLMAdapterAsyncCleanup:
         # The async with block in llm_adapter.py properly closed the client
     
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires Anthropic API key")
+    @pytest.mark.skipif(
+        not os.getenv("ANTHROPIC_API_KEY"),
+        reason="Requires Anthropic API key - set ANTHROPIC_API_KEY environment variable to run"
+    )
     async def test_anthropic_async_client_cleanup(self, adapter):
         """Test that AsyncAnthropic client is properly cleaned up."""
         result = await adapter.complete(
@@ -58,7 +65,10 @@ class TestLLMAdapterAsyncCleanup:
         assert result["provider"] == "anthropic"
     
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires API keys")
+    @pytest.mark.skipif(
+        not os.getenv("OPENAI_API_KEY"),
+        reason="Requires OpenAI API key - set OPENAI_API_KEY environment variable to run"
+    )
     async def test_sequential_calls_no_loop_errors(self, adapter):
         """Test multiple sequential calls don't accumulate event loop errors."""
         for i in range(3):
@@ -87,7 +97,10 @@ class TestLLMAdapterConcurrency:
         return LLMAdapter(db_service=db_service)
     
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires OpenAI API key")
+    @pytest.mark.skipif(
+        not os.getenv("OPENAI_API_KEY"),
+        reason="Requires OpenAI API key - set OPENAI_API_KEY environment variable to run"
+    )
     async def test_concurrent_requests_with_proper_cleanup(self, adapter):
         """Test multiple concurrent LLM requests with proper client cleanup."""
         # This simulates what happens when GUI processes multiple files
@@ -110,7 +123,10 @@ class TestLLMAdapterConcurrency:
         # If all completed without event loop errors, concurrent cleanup works
     
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires OpenAI API key")
+    @pytest.mark.skipif(
+        not (os.getenv("OPENAI_API_KEY") and os.getenv("ANTHROPIC_API_KEY")),
+        reason="Requires both OpenAI and Anthropic API keys"
+    )
     async def test_mixed_provider_concurrent_requests(self, adapter):
         """Test concurrent requests to different providers."""
         tasks = [
@@ -148,7 +164,10 @@ class TestLLMAdapterFromSyncContext:
         """Create LLM adapter."""
         return LLMAdapter(db_service=db_service)
     
-    @pytest.mark.skip(reason="Requires OpenAI API key")
+    @pytest.mark.skipif(
+        not os.getenv("OPENAI_API_KEY"),
+        reason="Requires OpenAI API key - set OPENAI_API_KEY environment variable to run"
+    )
     def test_asyncio_run_from_sync_context(self, adapter):
         """Test using asyncio.run() from sync context (like GUI does)."""
         # This is what happens in the GUI's QThread worker
@@ -224,7 +243,10 @@ class TestEventLoopRegressionPrevention:
         return LLMAdapter(db_service=db_service)
     
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires OpenAI API key")
+    @pytest.mark.skipif(
+        not os.getenv("OPENAI_API_KEY"),
+        reason="Requires OpenAI API key - set OPENAI_API_KEY environment variable to run"
+    )
     async def test_rapid_create_destroy_cycle(self, adapter):
         """Test rapid client creation/destruction doesn't cause leaks."""
         # This tests the scenario where many short requests happen
@@ -239,7 +261,10 @@ class TestEventLoopRegressionPrevention:
             # Each request creates and destroys a client via async with
             # If cleanup is broken, this will accumulate errors
     
-    @pytest.mark.skip(reason="Requires OpenAI API key")
+    @pytest.mark.skipif(
+        not os.getenv("OPENAI_API_KEY"),
+        reason="Requires OpenAI API key - set OPENAI_API_KEY environment variable to run"
+    )
     def test_nested_event_loop_scenario(self, adapter):
         """Test the specific scenario that caused the original bug."""
         # This recreates the GUI scenario:

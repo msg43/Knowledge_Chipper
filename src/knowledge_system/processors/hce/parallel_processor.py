@@ -6,6 +6,7 @@ while respecting system memory constraints using the existing memory pressure
 monitoring infrastructure.
 """
 
+import asyncio
 import gc
 import logging
 import time
@@ -97,7 +98,15 @@ class ParallelHCEProcessor:
         self.active_tasks = 0
 
     def _calculate_optimal_workers(self) -> int:
-        """Calculate optimal number of workers based on system resources."""
+        """
+        Calculate optimal number of workers based on system resources.
+        
+        For local LLM inference (Ollama), each worker spawns multiple threads
+        for the Metal/GPU backend. To avoid thread oversubscription:
+        - Each Ollama request uses ~4-6 threads for Metal backend
+        - With N physical cores, optimal workers = cores / threads_per_worker
+        - For M2 Ultra (24 cores): 24 / 5 ≈ 5-6 workers is optimal
+        """
         memory = psutil.virtual_memory()
         available_gb = memory.available / (1024**3)
         cpu_cores = psutil.cpu_count(logical=False) or 4
@@ -109,26 +118,106 @@ class ParallelHCEProcessor:
         # Memory-based limit
         memory_based_max = int(available_gb / llm_memory_per_worker)
 
-        # CPU-based limit (conservative for LLM I/O bound tasks)
-        cpu_based_max = min(cpu_cores * 2, 12)  # Cap at 12 for stability
+        # CPU-based limit accounting for Metal backend thread usage
+        # Each Ollama worker spawns ~5 threads for Metal backend
+        # Target: 6-8 workers for high-end systems, with ~1.5x thread oversubscription
+        threads_per_worker = 5  # Metal backend threads per request
+        
+        # Allow ~1.5x thread oversubscription (reasonable with hyperthreading)
+        # This gives us: cores * 1.5 / threads_per_worker
+        ideal_workers = int((cpu_cores * 1.5) / threads_per_worker)
+        
+        # Clamp to reasonable range based on core count
+        if cpu_cores >= 20:  # High-end (M2 Ultra, Threadripper)
+            cpu_based_max = min(ideal_workers, 8)  # Cap at 8 for stability
+        elif cpu_cores >= 12:  # Mid-range (M2 Pro/Max, Ryzen)
+            cpu_based_max = min(ideal_workers, 6)  # Cap at 6
+        elif cpu_cores >= 8:  # Entry enthusiast
+            cpu_based_max = min(ideal_workers, 4)  # Cap at 4
+        else:  # Consumer
+            cpu_based_max = min(ideal_workers, 2)  # Cap at 2
+        
+        cpu_based_max = max(1, cpu_based_max)  # Minimum 1 worker
 
         # Use the more conservative limit
-        optimal = min(
-            memory_based_max, cpu_based_max, 3
-        )  # Cap at 3 for OpenAI API stability
+        optimal = min(memory_based_max, cpu_based_max)
 
         logger.info(
             f"Calculated optimal workers: {optimal} "
-            f"(memory_limit={memory_based_max}, cpu_limit={cpu_based_max}, available_gb={available_gb:.1f})"
+            f"(memory_limit={memory_based_max}, cpu_limit={cpu_based_max}, "
+            f"cores={cpu_cores}, threads_per_worker={threads_per_worker}, available_gb={available_gb:.1f})"
         )
 
         return max(1, optimal)
+
+    def _process_parallel_async(
+        self,
+        items: list[Any],
+        processor_func: Callable,
+        progress_callback: Callable = None,
+    ) -> list[Any]:
+        """
+        Process items in parallel using asyncio (for I/O-bound tasks like LLM calls).
+        
+        This is MUCH more efficient than ThreadPoolExecutor for async I/O operations
+        because it doesn't create nested thread pools.
+        """
+        async def process_all():
+            # Create semaphore to limit concurrency
+            semaphore = asyncio.Semaphore(self.max_workers)
+            
+            async def process_with_semaphore(item, index):
+                async with semaphore:
+                    try:
+                        # Call the processor function
+                        # If it's synchronous, run it in a thread pool
+                        # If it's async, await it directly
+                        if asyncio.iscoroutinefunction(processor_func):
+                            result = await processor_func(item)
+                        else:
+                            # Run sync function in thread pool to avoid blocking
+                            loop = asyncio.get_event_loop()
+                            result = await loop.run_in_executor(None, processor_func, item)
+                        
+                        if progress_callback:
+                            progress_callback(f"Processed item {index + 1}/{len(items)}")
+                        
+                        return index, result
+                    except Exception as e:
+                        logger.error(f"Error processing item {index}: {e}")
+                        return index, None
+            
+            # Create all tasks
+            tasks = [process_with_semaphore(item, i) for i, item in enumerate(items)]
+            
+            # Run all tasks concurrently
+            results_with_indices = await asyncio.gather(*tasks, return_exceptions=False)
+            
+            # Sort by index to preserve order
+            results = [None] * len(items)
+            for index, result in results_with_indices:
+                results[index] = result
+            
+            return results
+        
+        # Run the async function
+        try:
+            loop = asyncio.get_running_loop()
+            # Already in async context - this shouldn't happen, but handle it
+            logger.warning("Already in async context - using nest_asyncio")
+            import nest_asyncio
+            nest_asyncio.apply()
+            return asyncio.run(process_all())
+        except RuntimeError:
+            # No running loop - safe to use asyncio.run()
+            return asyncio.run(process_all())
 
     def process_parallel(
         self,
         items: list[Any],
         processor_func: Callable,
         progress_callback: Callable = None,
+        use_asyncio: bool = True,  # NEW: Use asyncio for I/O-bound tasks
     ) -> list[Any]:
         """
         Process items in parallel with memory pressure monitoring.
@@ -149,9 +238,14 @@ class ParallelHCEProcessor:
             return [processor_func(items[0])]
 
         logger.info(
-            f"Starting parallel processing of {len(items)} items with {self.max_workers} workers"
+            f"Starting parallel processing of {len(items)} items with {self.max_workers} workers (asyncio={use_asyncio})"
         )
 
+        # Use asyncio for I/O-bound LLM calls (much more efficient)
+        if use_asyncio:
+            return self._process_parallel_async(items, processor_func, progress_callback)
+        
+        # Fall back to ThreadPoolExecutor for CPU-bound tasks
         results = [None] * len(items)  # Preserve order
         completed_count = 0
 

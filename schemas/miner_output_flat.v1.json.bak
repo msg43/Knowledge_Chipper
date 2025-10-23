@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MinerOutputFlatV1",
+  "description": "Flattened schema for unified miner - no nested arrays, no regex",
+  "type": "object",
+  "required": ["claims", "jargon", "people", "mental_models"],
+  "additionalProperties": false,
+  "properties": {
+    "claims": {
+      "type": "array",
+      "description": "Extracted claims from the content",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["claim_text", "claim_type", "stance"],
+        "additionalProperties": false,
+        "properties": {
+          "claim_text": {
+            "type": "string",
+            "description": "The precise claim statement"
+          },
+          "claim_type": {
+            "type": "string",
+            "enum": ["factual", "causal", "normative", "forecast", "definition"]
+          },
+          "stance": {
+            "type": "string",
+            "enum": ["asserts", "questions", "opposes", "neutral"]
+          },
+          "evidence_quote": {
+            "type": "string",
+            "description": "Single supporting quote (optional)"
+          }
+        }
+      }
+    },
+    "jargon": {
+      "type": "array",
+      "description": "Technical terms",
+      "maxItems": 15,
+      "items": {
+        "type": "object",
+        "required": ["term", "definition"],
+        "additionalProperties": false,
+        "properties": {
+          "term": {
+            "type": "string"
+          },
+          "definition": {
+            "type": "string"
+          },
+          "context_quote": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "people": {
+      "type": "array",
+      "description": "People mentioned",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "role_or_description": {
+            "type": "string"
+          },
+          "context_quote": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "mental_models": {
+      "type": "array",
+      "description": "Frameworks and concepts",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "context_quote": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
+

@@ -1,279 +1,305 @@
-# GUI Comprehensive Testing Framework (System 2)
+# Comprehensive GUI Test Suite
 
-This framework provides automated comprehensive testing for the Knowledge Chipper GUI application with System 2 integration, covering all permutations of input types, GUI tabs, and processing operations with job tracking and orchestration.
+This directory contains a comprehensive, deterministic test suite for the Knowledge Chipper GUI that validates all major workflows end-to-end.
+
+## Overview
+
+The test suite exercises:
+- **Transcription workflows**: All input types (YouTube, RSS, local files, batch)
+- **Summarization workflows**: All supported document formats
+- **Database persistence**: Validates data written to SQLite
+- **File generation**: Validates .md files with YAML frontmatter
+- **Auto-process chains**: Tests connected workflows
+- **Error handling**: Invalid inputs, cancellation, edge cases
 
 ## Quick Start
 
-### 1. Setup Test Data
-
-First, generate the required test files:
-
+### Run All Tests (Fake Mode - Fast)
 ```bash
-cd tests/gui_comprehensive
-python3 main_test_runner.py setup
+./run_comprehensive_gui_tests.sh fake
 ```
 
-This creates audio, video, and document files in `tests/fixtures/sample_files/`.
-
-### 2. Run Tests
-
-**Option A: Interactive Script (Recommended)**
+### Run Smoke Tests (Real Processing)
 ```bash
-./run_gui_tests.sh
+./run_comprehensive_gui_tests.sh smoke
 ```
 
-**Option B: Direct Commands**
+### Run Full Real Processing Tests
 ```bash
-# From project root, using venv Python directly (recommended)
-cd /path/to/Knowledge_Chipper
-/path/to/Knowledge_Chipper/venv/bin/python3 tests/gui_comprehensive/main_test_runner.py smoke
-
-# Or from tests/gui_comprehensive directory
-cd tests/gui_comprehensive
-../../venv/bin/python3 main_test_runner.py smoke
-
-# Comprehensive tests (1-2 hours) 
-../../venv/bin/python3 main_test_runner.py comprehensive
-
-# All test suites
-../../venv/bin/python3 main_test_runner.py all
+# Requires Ollama installed and model downloaded
+./run_comprehensive_gui_tests.sh real
 ```
-
-**Note**: If you have pyenv or other Python version managers installed, they may interfere with virtual environment activation. In such cases, use the venv Python directly as shown above.
 
 ## Test Modes
 
-| Mode | Duration | Description |
-|------|----------|-------------|
-| `setup` | 2-5 min | Generate test data files |
-| `smoke` | 5-10 min | Quick validation tests |
-| `basic` | 30 min | Basic functionality tests |
-| `comprehensive` | 1-2 hours | Full permutation testing |
-| `stress` | 2+ hours | Large file stress testing |
-| `all` | 3+ hours | All test suites sequentially |
-
-## GUI Management
-
-The framework can automatically launch and manage the GUI application:
-
-### Auto-Launch (Default)
-```bash
-python3 main_test_runner.py smoke
-```
-- Automatically starts Knowledge Chipper GUI
-- Waits for GUI initialization
-- Runs tests against the GUI
-- Cleans up GUI process when done
-
-### Use Existing GUI
-```bash
-python3 main_test_runner.py smoke --no-gui-launch
-```
-- Assumes GUI is already running
-- Connects to existing GUI instance
-- Doesn't manage GUI lifecycle
-
-### Startup Timeout
-```bash
-python3 main_test_runner.py smoke --gui-startup-timeout 60
-```
-- Controls how long to wait for GUI startup (default: 30 seconds)
-
-## Command Line Options
+### Fake Mode (Recommended for CI)
+- **Speed**: ~10 minutes for full suite
+- **Requirements**: None (no external services needed)
+- **Behavior**: Monkeypatches workers to emit completion signals and write canonical test data
+- **Use case**: Fast validation of UI flows, DB persistence, file generation
 
 ```bash
-python3 main_test_runner.py [MODE] [OPTIONS]
-
-Options:
-  --test-data-dir DIR          Test data directory (default: tests/fixtures)
-  --output-dir DIR             Output directory (default: tests/reports)
-  --config CONFIG              Test configuration file
-  --timeout SECONDS           Override timeout per test
-  --verbose, -v                Enable verbose logging
-  --dry-run                    Show what would be tested
-  --no-gui-launch              Don't launch GUI automatically
-  --gui-startup-timeout SECS   GUI startup timeout (default: 30)
+export KNOWLEDGE_CHIPPER_FAKE_PROCESSING=1
+pytest tests/gui_comprehensive/ -v
 ```
 
-## Test Coverage
+### Real Mode
+- **Speed**: ~60+ minutes (model-dependent)
+- **Requirements**: Ollama running with qwen2.5:7b-instruct model
+- **Behavior**: Actual transcription and summarization
+- **Use case**: Integration testing, manual validation
 
-The framework tests all combinations of:
-
-### File Types
-- **Audio**: `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.aac`
-- **Video**: `.mp4`, `.webm`, `.mov`, `.avi`, `.mkv`
-- **Documents**: `.txt`, `.md`, `.html`, `.pdf`
-
-### GUI Tabs
-- Process Pipeline
-- Local Transcription
-- Summarization
-- YouTube
-- Monitor (System 2 - renamed from File Watcher)
-
-### Operations
-- Transcribe only
-- Summarize only  
-- Full pipeline
-- MOC generation
-- Batch processing
-
-## Test Data
-
-### Generated Files
-The setup creates comprehensive test files:
-
-**Audio Files:**
-- `short_speech_30s.mp3` - 30-second speech sample
-- `conversation_2min.wav` - Multi-speaker conversation
-- `music_with_speech.m4a` - Speech with background music
-- `interview_10min.flac` - Long-form interview
-- `conference_talk_30min.wav` - Full presentation
-- Plus additional formats and quality variants
-
-**Video Files:**
-- `tutorial_3min.mp4` - Educational content
-- `interview_5min.webm` - Interview video
-- `webinar_10min.mp4` - Presentation format
-- `conference_talk_15min.mov` - Professional recording
-- `full_lecture_45min.mp4` - Extended content
-
-**Document Files:**
-- `meeting_notes.txt` - Plain text meeting notes
-- `blog_post.md` - Markdown formatted content
-- `research_paper.txt` - Academic paper
-- `technical_spec.txt` - Technical documentation
-- `news_article.html` - HTML formatted content
-- `large_manual_100pages.txt` - Stress testing document
-
-### File Characteristics
-- **Size variety**: Small (KB), medium (MB), large (GB)
-- **Content variety**: Clean/noisy audio, single/multi-speaker
-- **Format variety**: All supported input formats
-- **Duration variety**: 30 seconds to 60+ minutes
-
-## Output and Reports
-
-### Test Results
-Results are saved to `tests/reports/` with timestamps:
-```
-tests/reports/
-├── test_report_20240115_143022.json
-├── validation_reports/
-├── screenshots/
-└── logs/
+```bash
+export KNOWLEDGE_CHIPPER_FAKE_PROCESSING=0
+pytest tests/gui_comprehensive/ -v --timeout=300
 ```
 
-### Report Contents
-- **Test Summary**: Pass/fail counts, success rates
-- **Detailed Results**: Per-test outcomes, timings, errors
-- **Validation Reports**: Output quality assessments
-- **Performance Metrics**: Processing times, resource usage
-- **Screenshots**: GUI state during testing (if available)
+### Smoke Mode
+- **Speed**: ~5-10 minutes
+- **Requirements**: Ollama running
+- **Behavior**: Runs 1-2 real tests to validate core functionality
+- **Use case**: Pre-commit checks, quick sanity testing
 
-## Validation
+```bash
+./run_comprehensive_gui_tests.sh smoke
+```
 
-The framework validates:
+## Test Structure
 
-### File Output
-- Expected files are created
-- File formats are correct
-- File sizes are reasonable
-- Content quality meets standards
+```
+tests/gui_comprehensive/
+├── README.md                      # This file
+├── fake_processing.py             # Fake mode implementation
+├── test_transcribe_inputs.py      # Parametrized transcription tests (12 cases)
+├── test_transcribe_workflows.py   # Workflow tests (complete, cancel, errors)
+├── test_summarize_inputs.py       # Parametrized summarization tests (7 cases)
+├── test_outputs_validation.py     # DB and .md validation tests
+└── utils/
+    ├── __init__.py
+    ├── test_utils.py              # UI helpers (switch tabs, find widgets)
+    ├── db_validator.py            # SQLite validation
+    └── fs_validator.py            # Markdown/YAML validation
+```
 
-### Content Quality
-- **Transcripts**: Minimum length, no error markers
-- **Summaries**: Required sections, appropriate length
-- **MOCs**: Structured content, key sections present
+## Test Matrix
 
-### Performance
-- Processing times within expected ranges
-- Memory usage reasonable
-- No crashes or hangs
+### Transcription (12 tests)
+| Input Type        | Auto-Process: Off | Auto-Process: On |
+|-------------------|-------------------|------------------|
+| YouTube URL       | ✓                 | ✓                |
+| YouTube Playlist  | ✓                 | ✓                |
+| RSS Feed          | ✓                 | ✓                |
+| Local Audio       | ✓                 | ✓                |
+| Local Video       | ✓                 | ✓                |
+| Batch Files       | ✓                 | ✓                |
+
+**Fixed settings**: whisper.cpp, medium model, diarization=on (conservative), language=English, cookies=yes, proxy=off
+
+### Summarization (7 tests)
+| Input Type | Provider | Model               |
+|------------|----------|---------------------|
+| .md        | Ollama   | qwen2.5:7b-instruct |
+| .pdf       | Ollama   | qwen2.5:7b-instruct |
+| .txt       | Ollama   | qwen2.5:7b-instruct |
+| .docx      | Ollama   | qwen2.5:7b-instruct |
+| .html      | Ollama   | qwen2.5:7b-instruct |
+| .json      | Ollama   | qwen2.5:7b-instruct |
+| .rtf       | Ollama   | qwen2.5:7b-instruct |
+
+## Validation Rules
+
+### Database Validation
+Tests verify that after processing:
+
+**For Transcriptions**:
+- `media_sources` table has video record with correct metadata
+- `transcripts` table has transcript with:
+  - transcript_id, video_id
+  - transcript_text (full text)
+  - transcript_segments_json (timestamped segments)
+  - language, whisper_model
+  - diarization_enabled flag
+  - created_at timestamp
+
+**For Summarizations**:
+- `summaries` table has summary with:
+  - summary_id, video_id
+  - summary_text
+  - llm_provider='ollama', llm_model='qwen2.5:7b-instruct'
+  - total_tokens, processing_cost
+  - template_used ('flagship' or 'mining')
+  - created_at timestamp
+
+**For Jobs**:
+- `processing_jobs` table has job record with:
+  - job_type, status='completed'
+  - input_file, output_file paths
+  - created_at, completed_at timestamps
+
+### File Validation
+Tests verify markdown output files:
+
+**Transcript .md files**:
+- Location: `output/transcripts/`
+- YAML frontmatter with: title, video_id, language, duration, processed_at
+- Body contains transcript text with proper formatting
+- If diarization enabled: speaker labels present
+
+**Summary .md files**:
+- Location: `output/summaries/`
+- YAML frontmatter with: title, video_id, model_name, provider, timestamp
+- Body contains summary content
+- For flagship: "Summary" section present
+- For mining: "Jargon", "People", "Mental Models" sections present
+
+## Environment Variables
+
+### Required (Always Set)
+```bash
+KNOWLEDGE_CHIPPER_TESTING_MODE=1    # Suppresses GUI dialogs
+QT_QPA_PLATFORM=offscreen           # Runs GUI without display
+```
+
+### Test Sandboxing
+```bash
+KNOWLEDGE_CHIPPER_TEST_DB=/path/to/test.sqlite      # Override DB location
+KNOWLEDGE_CHIPPER_TEST_OUTPUT_DIR=/path/to/output/  # Override output dir
+```
+
+### Processing Mode
+```bash
+KNOWLEDGE_CHIPPER_FAKE_PROCESSING=1   # Enable fake mode (fast)
+KNOWLEDGE_CHIPPER_FAKE_PROCESSING=0   # Use real processing
+```
+
+## Writing New Tests
+
+### 1. Use Test Fixtures
+```python
+@pytest.fixture
+def test_sandbox(tmp_path):
+    """Create isolated test sandbox."""
+    from .utils import create_sandbox
+    return create_sandbox(tmp_path / "sandbox")
+
+@pytest.fixture
+def gui_app(qapp, test_sandbox):
+    """Launch GUI with test sandbox."""
+    from knowledge_system.gui.main_window_pyqt6 import MainWindow
+    window = MainWindow()
+    window.show()
+    process_events_for(500)
+    yield window
+    window.close()
+```
+
+### 2. Switch Tabs and Find Widgets
+```python
+from .utils import switch_to_tab, find_button_by_text
+
+assert switch_to_tab(gui_app, "Transcribe")
+start_btn = find_button_by_text(gui_app, "Start")
+assert start_btn is not None
+```
+
+### 3. Validate Results
+```python
+from .utils import DBValidator, read_markdown_with_frontmatter
+
+# Check database
+db = DBValidator(test_sandbox.db_path)
+assert db.has_transcript_for_video("test_video_001")
+
+# Check markdown file
+md_path = test_sandbox.output_dir / "transcripts" / "test.md"
+frontmatter, body = read_markdown_with_frontmatter(md_path)
+assert frontmatter["video_id"] == "test_video_001"
+assert len(body) > 0
+```
+
+### 4. Use Wait Helpers
+```python
+from .utils import wait_until, process_events_for
+
+# Wait for condition
+success = wait_until(lambda: db.job_completed("transcription"), timeout_ms=5000)
+assert success
+
+# Process events
+process_events_for(200)  # Allow UI to update
+```
 
 ## Troubleshooting
 
-### Common Issues
+### Tests Hang
+- Check timeout settings (`--timeout=60` for fake, `--timeout=300` for real)
+- Verify `QT_QPA_PLATFORM=offscreen` is set
+- Look for blocking dialogs (should be suppressed by `KNOWLEDGE_CHIPPER_TESTING_MODE=1`)
 
-**"GUI process terminated unexpectedly"**
-- Check if Knowledge Chipper dependencies are installed
-- Verify PyQt6 is available: `python -c "import PyQt6"`
-- Check logs for specific error messages
+### Database Errors
+- Ensure `KNOWLEDGE_CHIPPER_TEST_DB` points to writable location
+- Check that test sandbox is properly created
+- Verify database migrations ran (tables exist)
 
-**"Test data directory not found"**
-- Run `python3 main_test_runner.py setup` first
-- Verify files exist in `tests/fixtures/sample_files/`
+### Import Errors
+- Activate virtual environment: `source venv/bin/activate`
+- Install requirements: `pip install -r requirements.txt -r requirements-dev.txt`
+- Check Python version (3.11+ required)
 
-**"Tab not found" errors**
-- GUI may not have loaded completely
-- Try increasing `--gui-startup-timeout`
-- Verify GUI is running correctly manually
+### Fake Mode Not Working
+- Verify `KNOWLEDGE_CHIPPER_FAKE_PROCESSING=1` is set
+- Check that `fake_processing.py` monkeypatches are installed
+- Look for "Fake processing mode enabled" message in logs
 
-**Tests timeout**
-- Large files may need longer processing times
-- Use `--timeout` to increase per-test timeout
-- Check system resources (CPU, memory, disk)
+### Real Mode Failures
+- Ensure Ollama is running: `curl http://localhost:11434/api/version`
+- Pull model: `ollama pull qwen2.5:7b-instruct`
+- Check model name matches exactly (case-sensitive)
+- Increase timeout for slow hardware
 
-### Debug Mode
-```bash
-python3 main_test_runner.py smoke --verbose --dry-run
-```
-- Shows what would be tested without execution
-- Displays detailed configuration
-- Helps identify setup issues
+## CI Integration
 
-### Manual Verification
-Before running automated tests:
-1. Launch GUI manually: `python -m knowledge_system.gui`
-2. Verify basic functionality works
-3. Check all expected tabs are present
-4. Test file loading manually
+Tests run automatically on:
+- Push to `main` or `develop`
+- Pull requests
+- Manual workflow dispatch
 
-## Development
+See `.github/workflows/comprehensive-gui-tests.yml` for CI configuration.
 
-### Framework Structure
-```
-gui_comprehensive/
-├── main_test_runner.py      # Entry point, CLI handling
-├── test_orchestrator.py     # Test coordination, GUI management
-├── test_framework.py        # Core testing infrastructure
-├── gui_automation.py        # GUI interaction utilities
-├── validation.py            # Output validation
-├── setup_test_data.sh       # Test data generation
-├── validate_setup.py        # Setup verification
-└── run_gui_tests.sh         # User-friendly runner
-```
+### CI Test Matrix
+- **Fake mode**: Ubuntu + macOS, Python 3.11 + 3.12
+- **Real smoke**: macOS only (manual trigger)
 
-### Adding New Tests
-1. Add test cases to `test_orchestrator.py`
-2. Update validation rules in `validation.py`
-3. Add file types to configuration
-4. Update documentation
+## Performance
 
-### Configuration
-Test behavior is controlled by:
-- `tests/fixtures/test_configs/comprehensive_config.yaml`
-- Command line arguments
-- Environment variables
+| Mode  | Duration | CPU    | Memory | Disk  |
+|-------|----------|--------|--------|-------|
+| Fake  | ~10 min  | Low    | ~500MB | ~50MB |
+| Smoke | ~10 min  | Medium | ~2GB   | ~1GB  |
+| Real  | ~60 min  | High   | ~4GB   | ~10GB |
 
-## Integration
+## Maintenance
 
-### CI/CD Integration
-```bash
-# In CI pipeline
-python3 main_test_runner.py setup
-python3 main_test_runner.py smoke --no-gui-launch
-```
+### Adding New Input Types
+1. Add test case to `test_transcribe_inputs.py` or `test_summarize_inputs.py`
+2. Update test matrix in this README
+3. Add sample file to `tests/fixtures/sample_files/` if needed
+4. Update fake mode to generate appropriate results
 
-### Custom Workflows
-The framework can be integrated into custom testing workflows by:
-- Using individual test orchestrator methods
-- Implementing custom validation rules
-- Extending automation capabilities
+### Updating Validation Rules
+1. Modify `utils/db_validator.py` for database checks
+2. Modify `utils/fs_validator.py` for file checks
+3. Update validation documentation in this README
 
----
+### Changing Models
+- Update `test_summarize_inputs.py` with new model identifier
+- Update fake mode results to match new model output format
+- Update documentation
 
-For more information, see the individual module documentation or run:
-```bash
-python3 main_test_runner.py --help
-```
+## Support
+
+For issues or questions:
+1. Check troubleshooting section above
+2. Review test logs in `tests/tmp/` and `test-results/`
+3. Run with verbose mode: `VERBOSE=1 ./run_comprehensive_gui_tests.sh fake`
+4. Check CI logs for similar failures

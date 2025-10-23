@@ -9,7 +9,7 @@ from typing import Any
 
 from .model_uri_parser import parse_model_uri
 from .models.llm_system2 import System2LLM
-from .schema_validator import validate_miner_output
+from .schema_validator import repair_and_validate_miner_output, validate_miner_output
 from .types import EpisodeBundle, Segment
 
 
@@ -82,7 +82,7 @@ class UnifiedMiner:
                     import logging
 
                     logger = logging.getLogger(__name__)
-                    logger.info(
+                    logger.debug(
                         "🔒 Using structured outputs with schema enforcement for miner"
                     )
                 except Exception as e:
@@ -153,14 +153,18 @@ class UnifiedMiner:
             if not isinstance(result, dict):
                 result = {}
 
-            # Validate against schema (still useful for non-Ollama providers)
-            is_valid, errors = validate_miner_output(result)
+            # Repair and validate against schema
+            # This will add missing required fields (claims, jargon, people, mental_models)
+            # if they're absent, preventing validation errors
+            repaired_result, is_valid, errors = repair_and_validate_miner_output(result)
             if not is_valid:
                 import logging
 
                 logger = logging.getLogger(__name__)
-                logger.warning(f"Miner output failed schema validation: {errors}")
-                # Continue with basic validation
+                logger.warning(f"Miner output failed schema validation after repair: {errors}")
+                # Use repaired result anyway - it will have the required structure
+            
+            result = repaired_result
 
             # Validate and return
             output = UnifiedMinerOutput(result)
@@ -203,8 +207,9 @@ class UnifiedMiner:
     ) -> list[UnifiedMinerOutput]:
         """Extract all entity types from all segments in an episode."""
 
-        # If max_workers is 1 or None, use sequential processing
-        if max_workers == 1 or max_workers is None:
+        # If max_workers is 1, use sequential processing
+        # If max_workers is None, auto-calculate optimal workers
+        if max_workers == 1:
             outputs = []
             for segment in episode.segments:
                 output = self.mine_segment(segment)
@@ -213,7 +218,7 @@ class UnifiedMiner:
                     progress_callback(f"Processed segment {segment.segment_id}")
             return outputs
 
-        # Use parallel processing for max_workers > 1
+        # Use parallel processing (max_workers=None means auto-calculate)
         from .parallel_processor import create_parallel_processor
 
         processor = create_parallel_processor(max_workers=max_workers)

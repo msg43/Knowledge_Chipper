@@ -179,17 +179,9 @@ class SpeakerDatabaseService:
         db_path: Path | None = None
 
         def _user_data_dir() -> Path:
-            if sys.platform == "darwin":
-                return (
-                    Path.home() / "Library" / "Application Support" / "KnowledgeChipper"
-                )
-            elif os.name == "nt":
-                appdata = os.environ.get(
-                    "APPDATA", str(Path.home() / "AppData" / "Roaming")
-                )
-                return Path(appdata) / "KnowledgeChipper"
-            else:
-                return Path.home() / ".knowledge_chipper"
+            # Use the standard application support directory
+            from ..utils.macos_paths import get_application_support_dir
+            return get_application_support_dir()
 
         if database_url.startswith("sqlite:///"):
             raw_path = Path(database_url[10:])  # after 'sqlite:///'

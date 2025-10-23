@@ -7,7 +7,7 @@ from knowledge_system.processors.html import HTMLProcessor
 from knowledge_system.processors.pdf import PDFProcessor
 from knowledge_system.processors.rss_processor import RSSProcessor
 from knowledge_system.processors.youtube_download import YouTubeDownloadProcessor
-from knowledge_system.processors.youtube_metadata import YouTubeMetadataProcessor
+# YouTubeMetadataProcessor removed - not used in transcription workflow
 
 # Registry maps extension or pattern to processor class
 _PROCESSOR_REGISTRY: list[dict] = []
@@ -68,11 +68,7 @@ def get_all_processor_stats() -> dict[str, dict]:
 
 
 # Register built-in processors
-register_processor(
-    YouTubeMetadataProcessor,
-    url_patterns=[r"https?://(www\.)?(youtube\.com|youtu\.be)/.*/?"],
-    name="YouTubeMetadataProcessor",
-)
+# YouTubeMetadataProcessor removed - YouTubeDownloadProcessor handles all metadata extraction
 register_processor(
     YouTubeDownloadProcessor,
     url_patterns=[r"https?://(www\.)?(youtube\.com|youtu\.be)/.*/?"],

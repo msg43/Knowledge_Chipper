@@ -6,6 +6,8 @@ This script systematically tests all combinations of extraction, transcription,
 and summarization using the System 2 orchestrator with job tracking and
 checkpoint persistence.
 
+Note: This is a GUI-only application. All tests use System2Orchestrator.
+
 Test Categories:
 1. Local Transcription - Tests Whisper transcription with/without diarization via System 2
 2. YouTube Cloud Transcription - Tests YouTube URL processing with job tracking
@@ -50,8 +52,7 @@ from knowledge_system.database.system2_models import (
     LLMResponse,
 )
 
-# CLI command base (for legacy tests)
-CLI_CMD = [sys.executable, "-m", "knowledge_system"]
+# Note: CLI removed - all tests use System2Orchestrator directly
 
 
 class TestResult:

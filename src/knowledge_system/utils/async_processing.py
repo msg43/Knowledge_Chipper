@@ -114,18 +114,34 @@ class AsyncTranscriptionManager:
                     result = future.result()
                     if future == transcription_future:
                         transcription_result = result
-                        if progress_callback:
-                            progress_callback(
-                                "Transcription completed, waiting for speaker detection..."
-                            )
-                        logger.info("✅ Transcription completed")
+                        # Check if transcription actually succeeded before claiming success
+                        if result.success:
+                            if progress_callback:
+                                progress_callback(
+                                    "Transcription completed, waiting for speaker detection..."
+                                )
+                            logger.info("✅ Transcription completed")
+                        else:
+                            logger.error(f"❌ Transcription failed: {result.errors}")
+                            if progress_callback:
+                                progress_callback(
+                                    f"Transcription failed: {result.errors}"
+                                )
                     elif future == diarization_future:
                         diarization_result = result
-                        if progress_callback:
-                            progress_callback(
-                                "Speaker detection completed, waiting for transcription..."
-                            )
-                        logger.info("✅ Speaker detection completed")
+                        # Check if diarization actually succeeded before claiming success
+                        if result.success:
+                            if progress_callback:
+                                progress_callback(
+                                    "Speaker detection completed, waiting for transcription..."
+                                )
+                            logger.info("✅ Speaker detection completed")
+                        else:
+                            logger.error(f"❌ Speaker detection failed: {result.errors}")
+                            if progress_callback:
+                                progress_callback(
+                                    f"Speaker detection failed: {result.errors}"
+                                )
                 except Exception as e:
                     logger.error(f"Task failed: {e}")
                     if future == transcription_future:

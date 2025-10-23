@@ -535,7 +535,7 @@ class DynamicParallelizationManager:
 
                 # Log resource status every minute
                 if len(self.job_metrics) % 12 == 0:  # Every 12 iterations (1 minute)
-                    logger.info(
+                    logger.debug(
                         f"Resource status - CPU: {cpu_percent:.1f}%, "
                         f"RAM: {memory.percent:.1f}% ({memory.available/(1024**3):.1f}GB available)"
                     )

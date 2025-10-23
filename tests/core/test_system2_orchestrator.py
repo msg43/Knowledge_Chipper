@@ -5,6 +5,7 @@ These tests validate the code path that the GUI actually uses, not the CLI path.
 All tests are fully automated with timeouts and error handling.
 """
 
+import os
 import pytest
 import asyncio
 from pathlib import Path
@@ -268,9 +269,12 @@ class TestSystem2OrchestratorMocked:
         assert any(j["job_id"] == job_id for j in jobs)
 
 
-@pytest.mark.skip(reason="Requires OpenAI API key - run manually")
+@pytest.mark.skipif(
+    not os.getenv("OPENAI_API_KEY"),
+    reason="Requires OpenAI API key - set OPENAI_API_KEY environment variable to run"
+)
 class TestSystem2OrchestratorLiveAPI:
-    """Tests that require actual API calls (skip in CI)."""
+    """Tests that require actual API calls - runs automatically when OPENAI_API_KEY is set."""
     
     @pytest.fixture
     def db_service(self, tmp_path):

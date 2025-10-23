@@ -133,9 +133,19 @@ class FileGenerationService:
         output_dir: Path | None = None,
     ):
         """Initialize file generation service."""
+        import os
+
         self.db = database_service or DatabaseService()
-        self.output_dir = Path(output_dir) if output_dir else Path("output")
-        self.output_dir.mkdir(exist_ok=True)
+
+        # Allow tests to override output directory via environment variable
+        if output_dir is not None:
+            base_output = Path(output_dir)
+        else:
+            test_output_env = os.environ.get("KNOWLEDGE_CHIPPER_TEST_OUTPUT_DIR")
+            base_output = Path(test_output_env) if test_output_env else Path("output")
+
+        self.output_dir = base_output
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Create standard subdirectories
         self.transcripts_dir = self.output_dir / "transcripts"
@@ -151,7 +161,7 @@ class FileGenerationService:
             self.exports_dir,
             self.thumbnails_dir,
         ]:
-            dir_path.mkdir(exist_ok=True)
+            dir_path.mkdir(parents=True, exist_ok=True)
 
     def generate_transcript_markdown(
         self,
@@ -337,9 +347,8 @@ class FileGenerationService:
 
             # Check if this is HCE-processed summary
             is_hce = summary.processing_type == "hce"
-            hce_data = (
-                json.loads(summary.hce_data_json) if summary.hce_data_json else None
-            )
+            # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
+            hce_data = summary.hce_data_json if summary.hce_data_json else None
 
             # Generate YAML frontmatter
             frontmatter = {
@@ -1161,7 +1170,8 @@ class FileGenerationService:
                 logger.error(f"HCE data not found for summary {summary_id}")
                 return None
 
-            hce_data = json.loads(summary.hce_data_json)
+            # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
+            hce_data = summary.hce_data_json
             claims = hce_data.get("claims", [])
 
             # Generate markdown content
@@ -1294,7 +1304,8 @@ class FileGenerationService:
             if not summary or not summary.hce_data_json:
                 return None
 
-            hce_data = json.loads(summary.hce_data_json)
+            # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
+            hce_data = summary.hce_data_json
             claims = hce_data.get("claims", [])
 
             # Find contradictions
@@ -1384,7 +1395,8 @@ class FileGenerationService:
             if not summary or not summary.hce_data_json:
                 return None
 
-            hce_data = json.loads(summary.hce_data_json)
+            # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
+            hce_data = summary.hce_data_json
             claims = hce_data.get("claims", [])
 
             # Generate evidence mapping

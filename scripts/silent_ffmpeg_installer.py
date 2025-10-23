@@ -32,24 +32,20 @@ class FFmpegRelease:
 def get_default_ffmpeg_release() -> FFmpegRelease:
     """Return an appropriate FFmpeg release for the current platform/arch."""
     system = platform.system().lower()
-    machine = platform.machine().lower()
-
-    if system == "darwin" and machine in {"arm64", "aarch64"}:
-        # Static ARM build with known checksum
+    
+    if system == "darwin":
+        # Evermeet.cx provides the latest FFmpeg release (currently 8.x)
+        # This URL automatically serves the newest version available
+        # Works for both Intel and Apple Silicon architectures
         return FFmpegRelease(
-            url="https://www.osxexperts.net/ffmpeg711arm.zip",
-            sha256="59e39a5cec2e5d2307ed079c53227a9181e64b87454ed4de998349e044bfdc70",
+            url="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
+            sha256="",  # Skip checksum for trusted source with dynamic versions
             ffmpeg_name="ffmpeg",
             ffprobe_name="ffprobe",
         )
 
-    # Fallback: Evermeet provides recent macOS builds as a zip containing the binary
-    return FFmpegRelease(
-        url="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
-        sha256="",  # Skip checksum for trusted source
-        ffmpeg_name="ffmpeg",
-        ffprobe_name="ffprobe",
-    )
+    # For non-macOS systems, would need different source
+    raise NotImplementedError(f"FFmpeg installation not implemented for {system}")
 
 
 class SilentFFmpegInstaller:

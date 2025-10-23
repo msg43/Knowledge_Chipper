@@ -40,25 +40,32 @@ def _check_diarization_dependencies() -> bool:
     if PIPELINE_AVAILABLE:
         return True
 
+    # CRITICAL: We cannot import pyannote.audio here because it imports torchcodec
+    # which segfaults with PyTorch 2.8.0. Instead, we check for the dependencies
+    # and defer the actual import until the pipeline is needed.
     try:
-        from pyannote.audio import Pipeline
-
-        PIPELINE = Pipeline
+        # Check for core dependencies without importing pyannote.audio
+        import torch  # noqa: F401
+        import torchaudio  # noqa: F401
+        import transformers  # noqa: F401
+        
+        # Mark as available but don't load Pipeline yet
         PIPELINE_AVAILABLE = True
-        logger.info("Diarization dependencies loaded successfully")
+        PIPELINE = None  # Will be loaded lazily
+        logger.info("Diarization dependencies available (deferred loading)")
         return True
-    except ImportError:
+    except ImportError as e:
         PIPELINE_AVAILABLE = False
         PIPELINE = None
         logger.warning(
-            "Diarization dependencies not available. "
+            f"Diarization dependencies not available: {e}. "
             "Install with: pip install -e '.[diarization]' or pip install torch transformers pyannote.audio"
         )
         return False
     except Exception as e:
         PIPELINE_AVAILABLE = False
         PIPELINE = None
-        logger.error(f"Error loading diarization dependencies: {e}")
+        logger.error(f"Error checking diarization dependencies: {e}")
         return False
 
 
@@ -224,14 +231,15 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                     try:
                         logger.info(f"Loading bundled model from: {bundled_model_path}")
                         # Load from bundled path without authentication
-                        if PIPELINE:
-                            pipeline = PIPELINE.from_pretrained(
-                                str(bundled_model_path), use_auth_token=None
+                        # Import pyannote.audio here to avoid torchcodec segfault on startup
+                        from pyannote.audio import Pipeline as PyannoteP
+                        
+                        if PyannoteP:
+                            pipeline = PyannoteP.from_pretrained(
+                                str(bundled_model_path)
                             )
                             logger.info("Bundled model loaded successfully")
                             return pipeline
-                        else:
-                            raise ImportError("PIPELINE not available")
                     except Exception as e:
                         logger.warning(f"Failed to load bundled model: {e}")
                         # Fall back to normal loading
@@ -253,103 +261,102 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                     )
 
                 try:
-                    if PIPELINE:
-                        # Set comprehensive offline mode for cached models
-                        if cached_models:
-                            logger.info(
-                                "Model is cached, setting comprehensive offline mode"
-                            )
-                            os.environ["HF_HUB_OFFLINE"] = "1"
-                            os.environ["TRANSFORMERS_OFFLINE"] = "1"
-                            os.environ["HF_DATASETS_OFFLINE"] = "1"
-                        else:
-                            logger.info("Model not cached, will download if needed")
-
+                    # Set comprehensive offline mode for cached models
+                    if cached_models:
                         logger.info(
-                            f"Calling PIPELINE.from_pretrained for {self.model}..."
+                            "Model is cached, setting comprehensive offline mode"
                         )
-                        logger.debug(
-                            f"HuggingFace token present: {bool(self.hf_token)}"
-                        )
-                        logger.debug(
-                            f"HF_HUB_OFFLINE: {os.environ.get('HF_HUB_OFFLINE', 'not set')}"
-                        )
-
-                        # Note: pyannote Pipeline doesn't support local_files_only parameter
-                        try:
-                            pipeline = PIPELINE.from_pretrained(
-                                self.model, use_auth_token=self.hf_token
-                            )
-                            logger.info(
-                                f"Successfully loaded pipeline for {self.model}"
-                            )
-                        except Exception as model_error:
-                            logger.error(
-                                f"Failed to load model {self.model}: {model_error}"
-                            )
-                            # Re-raise with more context
-                            raise Exception(
-                                f"Model loading failed for {self.model}: {model_error}"
-                            ) from model_error
-
-                        # Optimize clustering for CPU/MPS performance
-                        if self.device in ["cpu", "mps"]:
-                            logger.info(
-                                f"Optimizing diarization parameters for {self.device} with {self.sensitivity} sensitivity..."
-                            )
-                            # Use centroid clustering - works on both CPU and MPS
-                            # Avoid spectral clustering which fails on MPS due to eigenvalue decomposition
-                            if hasattr(pipeline, "clustering"):
-                                pipeline.clustering.method = (
-                                    "centroid"  # Works on MPS, faster than spectral
-                                )
-
-                                # Configure clustering based on sensitivity level
-                                if self.sensitivity == "aggressive":
-                                    pipeline.clustering.min_cluster_size = 8
-                                    threshold = 0.55  # Even lower threshold for maximum speaker detection
-                                    min_duration_on = 0.25
-                                elif self.sensitivity == "balanced":
-                                    # Optimized for interviews: better separation of questioner/answerer
-                                    pipeline.clustering.min_cluster_size = (
-                                        12  # Reduced from 15
-                                    )
-                                    threshold = 0.65  # Reduced from 0.7 for better speaker separation
-                                    min_duration_on = (
-                                        0.4  # Reduced from 0.5 for quicker exchanges
-                                    )
-                                else:  # conservative - now relies on voice fingerprinting for quality
-                                    pipeline.clustering.min_cluster_size = 20  # Moderate setting - let voice fingerprinting handle the rest
-                                    threshold = 0.75  # Reasonable threshold - voice fingerprinting will merge false splits
-                                    min_duration_on = 1.0  # Normal segments - voice fingerprinting will handle micro-segments
-
-                                # Apply threshold if supported
-                                if hasattr(pipeline.clustering, "threshold"):
-                                    pipeline.clustering.threshold = threshold
-
-                                logger.info(
-                                    f"Applied {self.sensitivity} clustering: min_cluster_size={pipeline.clustering.min_cluster_size}, threshold={threshold}"
-                                )
-
-                            if hasattr(pipeline, "segmentation"):
-                                pipeline.segmentation.min_duration_on = min_duration_on
-
-                                # Optimize silence detection based on sensitivity
-                                if self.sensitivity == "aggressive":
-                                    pipeline.segmentation.min_duration_off = (
-                                        0.2  # Very short silence detection
-                                    )
-                                elif self.sensitivity == "balanced":
-                                    pipeline.segmentation.min_duration_off = (
-                                        0.3  # Optimized for interview turn-taking
-                                    )
-                                else:  # conservative
-                                    pipeline.segmentation.min_duration_off = (
-                                        0.5  # Longer silence required
-                                    )
-                        logger.info("PIPELINE.from_pretrained completed successfully")
+                        os.environ["HF_HUB_OFFLINE"] = "1"
+                        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+                        os.environ["HF_DATASETS_OFFLINE"] = "1"
                     else:
-                        raise ImportError("PIPELINE not available")
+                        logger.info("Model not cached, will download if needed")
+
+                    logger.info(
+                        f"Calling pyannote.audio Pipeline.from_pretrained for {self.model}..."
+                    )
+                    logger.debug(
+                        f"HuggingFace token present: {bool(self.hf_token)}"
+                    )
+                    logger.debug(
+                        f"HF_HUB_OFFLINE: {os.environ.get('HF_HUB_OFFLINE', 'not set')}"
+                    )
+
+                    # Note: pyannote Pipeline doesn't support local_files_only parameter
+                    try:
+                        # Import pyannote.audio here to avoid torchcodec segfault on startup
+                        from pyannote.audio import Pipeline as PyannoteP
+                        
+                        # Use token parameter (replaces deprecated use_auth_token in pyannote.audio 4.0+)
+                        pipeline = PyannoteP.from_pretrained(
+                            self.model, token=self.hf_token  # type: ignore[call-arg]
+                        )
+                        logger.info(
+                            f"Successfully loaded pipeline for {self.model}"
+                        )
+                    except Exception as model_error:
+                        logger.error(
+                            f"Failed to load model {self.model}: {model_error}"
+                        )
+                        # Re-raise with more context
+                        raise Exception(
+                            f"Model loading failed for {self.model}: {model_error}"
+                        ) from model_error
+
+                    # Optimize clustering for CPU/MPS performance
+                    if self.device in ["cpu", "mps"]:
+                        logger.info(
+                            f"Optimizing diarization parameters for {self.device} with {self.sensitivity} sensitivity..."
+                        )
+                        
+                        # Configure parameters based on sensitivity level
+                        # Initialize variables that will be used across different pipeline components
+                        if self.sensitivity == "aggressive":
+                            threshold = 0.55  # Even lower threshold for maximum speaker detection
+                            min_duration_on = 0.25
+                            min_cluster_size = 8
+                        elif self.sensitivity == "balanced":
+                            threshold = 0.65  # Reduced from 0.7 for better speaker separation
+                            min_duration_on = 0.4  # Reduced from 0.5 for quicker exchanges
+                            min_cluster_size = 12  # Reduced from 15
+                        else:  # conservative - now relies on voice fingerprinting for quality
+                            threshold = 0.75  # Reasonable threshold - voice fingerprinting will merge false splits
+                            min_duration_on = 1.0  # Normal segments - voice fingerprinting will handle micro-segments
+                            min_cluster_size = 20  # Moderate setting - let voice fingerprinting handle the rest
+                        
+                        # Use centroid clustering - works on both CPU and MPS
+                        # Avoid spectral clustering which fails on MPS due to eigenvalue decomposition
+                        if hasattr(pipeline, "clustering"):
+                            pipeline.clustering.method = (
+                                "centroid"  # Works on MPS, faster than spectral
+                            )
+                            pipeline.clustering.min_cluster_size = min_cluster_size
+
+                            # Apply threshold if supported
+                            if hasattr(pipeline.clustering, "threshold"):
+                                pipeline.clustering.threshold = threshold
+
+                            logger.info(
+                                f"Applied {self.sensitivity} clustering: min_cluster_size={pipeline.clustering.min_cluster_size}, threshold={threshold}"
+                            )
+
+                        if hasattr(pipeline, "segmentation"):
+                            pipeline.segmentation.min_duration_on = min_duration_on
+
+                            # Optimize silence detection based on sensitivity
+                            if self.sensitivity == "aggressive":
+                                pipeline.segmentation.min_duration_off = (
+                                    0.2  # Very short silence detection
+                                )
+                            elif self.sensitivity == "balanced":
+                                pipeline.segmentation.min_duration_off = (
+                                    0.3  # Optimized for interview turn-taking
+                                )
+                            else:  # conservative
+                                pipeline.segmentation.min_duration_off = (
+                                    0.5  # Longer silence required
+                                )
+                    logger.info("PyannoteP.from_pretrained completed successfully")
                 except Exception as e:
                     # Provide more helpful error message
                     if "401" in str(e) or "authorization" in str(e).lower():
@@ -870,8 +877,27 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                     )
                     sys.stdout.flush()
 
+                    if self._pipeline is None:
+                        raise RuntimeError("Pipeline not loaded - cannot process audio")
+
                     try:
-                        result = self._pipeline(audio_path)
+                        # Preload audio using torchaudio to avoid torchcodec FFmpeg issues
+                        # See: https://github.com/pyannote/pyannote-audio/issues/1707
+                        import torchaudio
+                        
+                        print(f"[THREAD] Preloading audio with torchaudio...", flush=True)
+                        waveform, sample_rate = torchaudio.load(audio_path)
+                        
+                        # Pass as dictionary per pyannote.audio docs
+                        audio_input = {
+                            "waveform": waveform,
+                            "sample_rate": sample_rate
+                        }
+                        
+                        print(f"[THREAD] Audio preloaded: {waveform.shape}, {sample_rate}Hz", flush=True)
+                        print(f"[THREAD] Calling pipeline with preloaded audio...", flush=True)
+                        
+                        result = self._pipeline(audio_input)
                         print(f"[THREAD] Pipeline returned result", flush=True)
                         sys.stdout.flush()
                         return result
@@ -965,10 +991,28 @@ class SpeakerDiarizationProcessor(BaseProcessor):
             segment_count = 0
             total_segment_estimate = None  # Will be estimated as we process
 
+            # In pyannote.audio 4.0+, the pipeline returns a DiarizeOutput object
+            # which is a wrapper containing the actual annotation in the .speaker_diarization attribute
+            # See: https://github.com/pyannote/pyannote-audio/releases/tag/4.0.0
+            
+            # Access the actual Annotation object from DiarizeOutput
+            if hasattr(diarization, 'speaker_diarization'):
+                annotation = diarization.speaker_diarization
+                logger.info(f"✅ Accessed speaker_diarization attribute, type: {type(annotation)}")
+            else:
+                # Fallback for older versions or unexpected structure
+                logger.warning(f"⚠️ DiarizeOutput missing .speaker_diarization attribute. Type: {type(diarization)}")
+                public_attrs = [a for a in dir(diarization) if not a.startswith('_')]
+                logger.warning(f"⚠️ Available attributes: {public_attrs}")
+                raise AttributeError(
+                    f"DiarizeOutput object missing expected .speaker_diarization attribute. "
+                    f"Type: {type(diarization)}, Available: {public_attrs}"
+                )
+            
             # Process segments with progress updates
-            for turn, _, speaker in diarization.itertracks(yield_label=True):
+            for segment, speaker in annotation:
                 segments.append(
-                    {"start": turn.start, "end": turn.end, "speaker": speaker}
+                    {"start": segment.start, "end": segment.end, "speaker": speaker}
                 )
                 segment_count += 1
 

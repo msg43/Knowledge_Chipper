@@ -66,7 +66,8 @@ class ClaimSearchWorker(QThread):
 
                 for summary in hce_summaries:
                     try:
-                        hce_data = json.loads(summary.hce_data_json)
+                        # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
+                        hce_data = summary.hce_data_json
                         video = (
                             session.query(Video)
                             .filter(Video.video_id == summary.video_id)
@@ -537,7 +538,8 @@ class ClaimSearchTab(BaseTab):
                 if not summary or not summary.hce_data_json:
                     return []
 
-                hce_data = json.loads(summary.hce_data_json)
+                # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
+                hce_data = summary.hce_data_json
                 relations = hce_data.get("relations", [])
                 claims = hce_data.get("claims", [])
 

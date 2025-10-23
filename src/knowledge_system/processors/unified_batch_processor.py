@@ -578,7 +578,7 @@ class UnifiedBatchProcessor:
             from ..services.transcription_service import TranscriptionService
 
             service = TranscriptionService(
-                whisper_model=self.config.get("model", "base"),
+                whisper_model=self.config.get("model", "medium"),
                 download_thumbnails=self.config.get("download_thumbnails", False),
                 use_whisper_cpp=self.config.get("use_whisper_cpp", False),
             )
@@ -608,7 +608,7 @@ class UnifiedBatchProcessor:
             from ..services.transcription_service import TranscriptionService
 
             service = TranscriptionService(
-                whisper_model=self.config.get("model", "base"),
+                whisper_model=self.config.get("model", "medium"),
                 download_thumbnails=False,  # Not applicable for local files
                 use_whisper_cpp=self.config.get("use_whisper_cpp", False),
             )

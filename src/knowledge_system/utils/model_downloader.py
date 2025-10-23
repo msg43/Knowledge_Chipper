@@ -74,7 +74,8 @@ def pre_download_diarization_model(progress_callback=None) -> bool:
                 progress_callback("🔄 Loading model from HuggingFace...", 50)
 
             # This will download the model if not cached
-            pipeline = Pipeline.from_pretrained(model_name, use_auth_token=hf_token)
+            # Use token parameter (replaces deprecated use_auth_token in pyannote.audio 4.0+)
+            pipeline = Pipeline.from_pretrained(model_name, token=hf_token)  # type: ignore[call-arg]
 
             if pipeline:
                 logger.info("✅ Diarization model downloaded successfully")
