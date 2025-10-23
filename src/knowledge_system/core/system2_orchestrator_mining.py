@@ -103,10 +103,14 @@ async def process_mine_with_unified_pipeline(
         pipeline = UnifiedHCEPipeline(hce_config)
         
         # 6. Create progress callback wrapper
-        def progress_wrapper(step, percent, details=""):
+        def progress_wrapper(progress_obj):
             """Wrap pipeline progress to orchestrator format."""
             if orchestrator.progress_callback:
-                # Pipeline reports 0-100%, map to orchestrator's 10-95% range
+                # Pipeline reports SummarizationProgress objects
+                # Map to orchestrator's callback format
+                step = progress_obj.current_step if hasattr(progress_obj, 'current_step') else "processing"
+                percent = progress_obj.file_percent if hasattr(progress_obj, 'file_percent') else 0
+                # Map 0-100% to orchestrator's 10-95% range
                 adjusted_percent = 10 + int(percent * 0.85)
                 orchestrator.progress_callback(step, adjusted_percent, episode_id)
         
