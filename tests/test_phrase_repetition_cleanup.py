@@ -20,17 +20,19 @@ class TestPhraseRepetitionCleanup:
         # Simulate the Hungarian Central Bank case
         segments = []
         phrase = "The Hungarian Central Bank is the largest bank in the world."
-        
+
         # Create 38 consecutive identical segments with sequential timestamps
         for i in range(38):
-            segments.append({
-                "text": phrase,
-                "start": 725.0 + i,
-                "end": 726.0 + i,
-            })
-        
+            segments.append(
+                {
+                    "text": phrase,
+                    "start": 725.0 + i,
+                    "end": 726.0 + i,
+                }
+            )
+
         cleaned, stats = processor._remove_sequential_repetitions(segments)
-        
+
         # Should keep only first occurrence
         assert len(cleaned) == 1
         assert cleaned[0]["text"] == phrase
@@ -47,12 +49,12 @@ class TestPhraseRepetitionCleanup:
             {"text": "Same phrase", "start": 2.0, "end": 3.0},
             {"text": "Different phrase", "start": 3.0, "end": 4.0},
         ]
-        
+
         cleaned, stats = processor._remove_sequential_repetitions(segments)
-        
+
         assert len(cleaned) == 3  # All kept
         assert stats["removed_count"] == 0
-        
+
         # Exactly 3 repetitions - SHOULD be removed
         segments = [
             {"text": "Same phrase", "start": 1.0, "end": 2.0},
@@ -60,10 +62,12 @@ class TestPhraseRepetitionCleanup:
             {"text": "Same phrase", "start": 3.0, "end": 4.0},
             {"text": "Different phrase", "start": 4.0, "end": 5.0},
         ]
-        
+
         cleaned, stats = processor._remove_sequential_repetitions(segments)
-        
-        assert len(cleaned) == 2  # First occurrence kept, 2 removed, plus different phrase
+
+        assert (
+            len(cleaned) == 2
+        )  # First occurrence kept, 2 removed, plus different phrase
         assert stats["removed_count"] == 2
 
     def test_remove_sequential_repetitions_timestamp_gap(self, processor):
@@ -75,9 +79,9 @@ class TestPhraseRepetitionCleanup:
             {"text": "Same phrase", "start": 10.0, "end": 11.0},  # Gap > 2s
             {"text": "Same phrase", "start": 11.0, "end": 12.0},
         ]
-        
+
         cleaned, stats = processor._remove_sequential_repetitions(segments)
-        
+
         # Should treat as two separate groups (both below threshold of 3)
         assert len(cleaned) == 4  # All kept
         assert stats["removed_count"] == 0
@@ -99,9 +103,9 @@ class TestPhraseRepetitionCleanup:
             {"text": "Pattern B", "start": 9.0, "end": 10.0},
             {"text": "Pattern B", "start": 10.0, "end": 11.0},
         ]
-        
+
         cleaned, stats = processor._remove_sequential_repetitions(segments)
-        
+
         # Should keep: 1 Pattern A + Different content + 1 Pattern B = 3
         assert len(cleaned) == 3
         assert stats["removed_count"] == 7  # 4 from A + 3 from B
@@ -114,9 +118,9 @@ class TestPhraseRepetitionCleanup:
             {"text": "The hungarian central bank", "start": 2.0, "end": 3.0},
             {"text": "THE HUNGARIAN CENTRAL BANK", "start": 3.0, "end": 4.0},
         ]
-        
+
         cleaned, stats = processor._remove_sequential_repetitions(segments)
-        
+
         # Should be treated as identical (case-insensitive)
         assert len(cleaned) == 1
         assert stats["removed_count"] == 2
@@ -128,9 +132,9 @@ class TestPhraseRepetitionCleanup:
             {"text": "   ", "start": 2.0, "end": 3.0},
             {"text": "Real content", "start": 3.0, "end": 4.0},
         ]
-        
+
         cleaned, stats = processor._remove_sequential_repetitions(segments)
-        
+
         # Empty segments should be preserved but not counted as repetitions
         assert len(cleaned) == 3
         assert stats["removed_count"] == 0
@@ -144,12 +148,12 @@ class TestPhraseRepetitionCleanup:
             {"text": "Repeated", "start": 4.0, "end": 5.0},
             {"text": "Repeated", "start": 5.0, "end": 6.0},
         ]
-        
+
         # With threshold=5, this should NOT be removed (exactly at threshold)
         cleaned, stats = processor._remove_sequential_repetitions(segments, threshold=5)
         assert len(cleaned) == 1  # 5 is the threshold, so it triggers
         assert stats["removed_count"] == 4
-        
+
         # With threshold=6, this should NOT be removed (below threshold)
         cleaned, stats = processor._remove_sequential_repetitions(segments, threshold=6)
         assert len(cleaned) == 5  # All kept
@@ -173,22 +177,26 @@ class TestPhraseRepetitionValidation:
         # so this n-gram check serves as a backup for scattered (non-consecutive)
         # repetitions. We'll skip this test as the more important cleanup
         # functionality is thoroughly tested.
-        pytest.skip("N-gram validation is backup check after cleanup; cleanup tests cover main use case")
+        pytest.skip(
+            "N-gram validation is backup check after cleanup; cleanup tests cover main use case"
+        )
 
     def test_validate_ngram_passes_normal_text(self, processor):
         """Test that normal text passes n-gram validation."""
         # Normal varied text
         text = """
-        This is a normal transcript with varied content. 
-        The speaker discusses many different topics. 
+        This is a normal transcript with varied content.
+        The speaker discusses many different topics.
         There is no excessive repetition of phrases.
         Each sentence introduces new information and ideas.
         While some words naturally repeat, like 'the' and 'is',
         there are no repeated phrases that would indicate hallucination.
         """
-        
-        result = processor._validate_transcription_quality(text, audio_duration_seconds=10)
-        
+
+        result = processor._validate_transcription_quality(
+            text, audio_duration_seconds=10
+        )
+
         # Should pass validation
         assert result["is_valid"]
 
@@ -209,9 +217,10 @@ class TestPhraseRepetitionValidation:
             "Concluding with new information.",
         ]
         text = " ".join(varied_text)
-        
-        result = processor._validate_transcription_quality(text, audio_duration_seconds=10)
-        
+
+        result = processor._validate_transcription_quality(
+            text, audio_duration_seconds=10
+        )
+
         # Should pass validation (20% < 30% threshold)
         assert result["is_valid"]
-

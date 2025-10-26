@@ -17,14 +17,14 @@ from .base_provider import BaseProxyProvider
 class GonzoProxyProvider(BaseProxyProvider):
     """
     GonzoProxy.com proxy provider (stub implementation).
-    
+
     TODO: Implement based on GonzoProxy API documentation when credentials are available.
     """
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        username: Optional[str] = None,
+        api_key: str | None = None,
+        username: str | None = None,
     ):
         """
         Initialize GonzoProxy provider.
@@ -52,13 +52,13 @@ class GonzoProxyProvider(BaseProxyProvider):
             except Exception:
                 pass  # Config loading failed, use what we have
 
-    def get_proxy_url(self, session_id: Optional[str] = None) -> Optional[str]:
+    def get_proxy_url(self, session_id: str | None = None) -> str | None:
         """
         Get proxy URL for GonzoProxy.
-        
+
         Args:
             session_id: Optional session identifier
-            
+
         Returns:
             Proxy URL string or None
         """
@@ -73,26 +73,26 @@ class GonzoProxyProvider(BaseProxyProvider):
             "See gonzoproxy_provider.py for implementation instructions."
         )
 
-    def get_proxy_config(self) -> Dict[str, str]:
+    def get_proxy_config(self) -> dict[str, str]:
         """
         Get proxy configuration dict for requests library.
-        
+
         Returns:
             Dict with 'http' and 'https' keys, or empty dict
         """
         proxy_url = self.get_proxy_url()
         if not proxy_url:
             return {}
-        
+
         return {"http": proxy_url, "https": proxy_url}
 
-    def test_connectivity(self, timeout: int = 10) -> Tuple[bool, str]:
+    def test_connectivity(self, timeout: int = 10) -> tuple[bool, str]:
         """
         Test GonzoProxy connectivity.
-        
+
         Args:
             timeout: Connection timeout in seconds
-            
+
         Returns:
             Tuple of (success: bool, message: str)
         """
@@ -105,7 +105,7 @@ class GonzoProxyProvider(BaseProxyProvider):
     def is_configured(self) -> bool:
         """
         Check if GonzoProxy credentials are configured.
-        
+
         Returns:
             True if credentials available, False otherwise
         """
@@ -115,9 +115,8 @@ class GonzoProxyProvider(BaseProxyProvider):
     def provider_name(self) -> str:
         """
         Get human-readable provider name.
-        
+
         Returns:
             "GonzoProxy"
         """
         return "GonzoProxy"
-

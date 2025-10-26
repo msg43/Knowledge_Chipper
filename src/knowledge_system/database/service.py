@@ -45,6 +45,7 @@ class DatabaseService:
         # Allow tests to override DB via environment variable without impacting prod
         try:
             import os
+
             test_db_url = os.environ.get("KNOWLEDGE_CHIPPER_TEST_DB_URL")
             test_db_path = os.environ.get("KNOWLEDGE_CHIPPER_TEST_DB")
             if test_db_url:
@@ -62,6 +63,7 @@ class DatabaseService:
         def _user_data_dir() -> Path:
             # Use the standard application support directory
             from ..utils.macos_paths import get_application_support_dir
+
             return get_application_support_dir()
 
         if database_url.startswith("sqlite:///"):
@@ -114,6 +116,9 @@ class DatabaseService:
         # Run System 2 migration if needed
         self._run_system2_migration()
 
+        # Ensure unified HCE schema (tables, indexes, FTS) exists in main DB
+        self._ensure_unified_hce_schema()
+
         logger.info(f"Database service initialized with {self.database_url}")
 
     def get_session(self) -> Session:
@@ -142,6 +147,38 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to run System 2 migration: {e}")
             # Don't fail initialization if migration fails
+
+    def _ensure_unified_hce_schema(self) -> None:
+        """Apply the unified HCE schema SQL into the main SQLite DB if needed.
+
+        This executes the idempotent SQL at
+        `src/knowledge_system/database/migrations/unified_schema.sql` to create
+        the HCE tables (claims, evidence_spans, relations, people, concepts,
+        jargon, structured_categories), FTS virtual tables, views, and indexes.
+        """
+        try:
+            # Only applicable for SQLite
+            if not (
+                self.database_url.startswith("sqlite:///")
+                or self.database_url.startswith("sqlite://")
+            ):
+                return
+
+            schema_path = Path(__file__).parent / "migrations" / "unified_schema.sql"
+            if not schema_path.exists():
+                logger.warning(
+                    f"Unified HCE schema file not found at {schema_path}; skipping"
+                )
+                return
+
+            sql_text = schema_path.read_text()
+            with self.engine.connect() as conn:
+                # Execute as a single script; safe due to IF NOT EXISTS guards
+                conn.connection.executescript(sql_text)
+                conn.commit()
+            logger.info("Unified HCE schema ensured in main database")
+        except Exception as e:
+            logger.error(f"Failed to ensure unified HCE schema: {e}")
 
     # =============================================================================
     # VIDEO OPERATIONS
@@ -623,36 +660,42 @@ class DatabaseService:
             logger.error(f"Failed to update transcript {transcript_id}: {e}")
             return False
 
-    def get_transcript_path_for_regeneration(self, transcript_id: str) -> tuple[Path | None, dict | None]:
+    def get_transcript_path_for_regeneration(
+        self, transcript_id: str
+    ) -> tuple[Path | None, dict | None]:
         """Get file path and metadata needed to regenerate transcript markdown."""
         try:
             with self.get_session() as session:
-                transcript = session.query(Transcript).filter(
-                    Transcript.transcript_id == transcript_id
-                ).first()
-                
+                transcript = (
+                    session.query(Transcript)
+                    .filter(Transcript.transcript_id == transcript_id)
+                    .first()
+                )
+
                 if not transcript:
                     return None, None
-                
+
                 # Find the most recent generated markdown file
                 generated_file = (
                     session.query(GeneratedFile)
                     .filter(
                         GeneratedFile.transcript_id == transcript_id,
-                        GeneratedFile.file_type == "transcript_md"
+                        GeneratedFile.file_type == "transcript_md",
                     )
                     .order_by(GeneratedFile.created_at.desc())
                     .first()
                 )
-                
+
                 if not generated_file:
                     return None, None
-                
+
                 # Get video metadata for markdown generation
-                video = session.query(MediaSource).filter(
-                    MediaSource.media_id == transcript.video_id
-                ).first()
-                
+                video = (
+                    session.query(MediaSource)
+                    .filter(MediaSource.media_id == transcript.video_id)
+                    .first()
+                )
+
                 video_metadata = None
                 if video:
                     video_metadata = {
@@ -664,9 +707,9 @@ class DatabaseService:
                         "duration": video.duration_seconds,
                         "tags": video.tags_json or [],
                     }
-                
+
                 return Path(generated_file.file_path), video_metadata
-                
+
         except Exception as e:
             logger.error(f"Failed to get transcript path: {e}")
             return None, None

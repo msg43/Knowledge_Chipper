@@ -257,14 +257,20 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
         # Check if we should disable proxies due to cookie usage
         # Use instance variables if available, otherwise fall back to config
-        enable_cookies_check = self.enable_cookies if hasattr(self, 'enable_cookies') else yt_config.enable_cookies
+        enable_cookies_check = (
+            self.enable_cookies
+            if hasattr(self, "enable_cookies")
+            else yt_config.enable_cookies
+        )
         disable_proxies_check = yt_config.disable_proxies_with_cookies
-        
+
         if enable_cookies_check and disable_proxies_check:
             use_proxy = False
             proxy_manager = None
             proxy_url = None
-            logger.info("🏠 Cookies enabled - using direct connection (home IP) as configured")
+            logger.info(
+                "🏠 Cookies enabled - using direct connection (home IP) as configured"
+            )
             if progress_callback:
                 progress_callback("🏠 Using cookies with home IP (proxies disabled)")
         else:
@@ -309,7 +315,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
         # PROXY CONFIGURATION
         # Note: Proxy is configured and will be tested per-URL
         # Each URL gets unique session ID for IP rotation
-        
+
         if use_proxy and proxy_manager:
             logger.info("✅ Using PacketStream proxy for downloads")
             if progress_callback:
@@ -335,7 +341,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
             else:
                 logger.warning(f"⚠️ Cookie file not found: {self.cookie_file_path}")
                 if progress_callback:
-                    progress_callback(f"⚠️ Cookie file not found - proceeding without cookies")
+                    progress_callback(
+                        f"⚠️ Cookie file not found - proceeding without cookies"
+                    )
 
         # NOTE: Do NOT add custom user-agent or http_headers when using PacketStream
         # PacketStream residential proxies work best with yt-dlp's default headers
@@ -364,7 +372,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         )
                         speed = d.get("speed", 0)
                         filename = d.get("filename", "Unknown file")
-                        
+
                         # Ensure values are numeric (yt-dlp sometimes returns strings like "stalled - retrying...")
                         if not isinstance(downloaded_bytes, (int, float)):
                             downloaded_bytes = 0
@@ -372,7 +380,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             total_bytes = 0
                         if not isinstance(speed, (int, float)):
                             speed = 0
-                        
+
                         # Initialize variables for progress display
                         percent = 0
                         downloaded_mb = 0
@@ -419,7 +427,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             progress_callback(progress_msg, int(percent))
                             last_progress_message = progress_msg
                         last_progress_time[0] = current_time
-                    
+
                     except (TypeError, ValueError, ZeroDivisionError) as e:
                         # Handle any parsing errors gracefully (e.g. when yt-dlp returns string values)
                         logger.debug(f"Progress hook parsing error (non-critical): {e}")
@@ -615,21 +623,29 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     logger.error(f"❌ Metadata extraction failed for {url}: {error_msg}")
 
                     # Check for bot detection, blocking, or proxy errors - don't continue if detected
-                    is_bot_detection = any(keyword in error_msg.lower() for keyword in [
-                        "sign in to confirm you're not a bot",
-                        "bot",
-                        "captcha",
-                        "verify you're human"
-                    ])
+                    is_bot_detection = any(
+                        keyword in error_msg.lower()
+                        for keyword in [
+                            "sign in to confirm you're not a bot",
+                            "bot",
+                            "captcha",
+                            "verify you're human",
+                        ]
+                    )
                     is_blocked = "403" in error_msg or "forbidden" in error_msg.lower()
-                    is_not_found = "404" in error_msg or "not found" in error_msg.lower()
-                    is_proxy_error = any(keyword in error_msg.lower() for keyword in [
-                        "502",
-                        "proxy error",
-                        "unable to connect to proxy",
-                        "tunnel connection failed",
-                        "relay is offline"
-                    ])
+                    is_not_found = (
+                        "404" in error_msg or "not found" in error_msg.lower()
+                    )
+                    is_proxy_error = any(
+                        keyword in error_msg.lower()
+                        for keyword in [
+                            "502",
+                            "proxy error",
+                            "unable to connect to proxy",
+                            "tunnel connection failed",
+                            "relay is offline",
+                        ]
+                    )
 
                     if progress_callback:
                         if is_bot_detection:
@@ -666,8 +682,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             f"❌ Stopping download attempt - retryable error detected for {url}"
                         )
                         if progress_callback:
-                            progress_callback("🚫 Skipping download - will retry with new session/IP")
-                        
+                            progress_callback(
+                                "🚫 Skipping download - will retry with new session/IP"
+                            )
+
                         # Mark as failed and skip to next URL
                         errors.append(f"Retryable error for {url}: {error_msg}")
                         url_index += 1
@@ -841,10 +859,12 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                                     # Extract all available metadata from info dict
                                     tags = info.get("tags", []) or []
-                                    logger.debug(f"📝 Extracted {len(tags)} tags from YouTube for {video_id}")
+                                    logger.debug(
+                                        f"📝 Extracted {len(tags)} tags from YouTube for {video_id}"
+                                    )
                                     if tags:
                                         logger.debug(f"First 5 tags: {tags[:5]}")
-                                    
+
                                     video_metadata = {
                                         "uploader": info.get("uploader", ""),
                                         "uploader_id": info.get("uploader_id", ""),

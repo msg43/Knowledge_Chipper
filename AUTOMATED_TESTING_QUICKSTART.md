@@ -264,4 +264,3 @@ For detailed documentation, see:
 ---
 
 **Questions?** Check the documentation or run `./test_gui_auto.sh` and explore the options!
-

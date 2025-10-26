@@ -23,6 +23,7 @@ except Exception:
 
 from .monitor_tab import MonitorTab
 from .transcription_tab import TranscriptionTab
+
 # YouTube tab removed - use Transcription tab for YouTube URLs
 
 __all__ = [

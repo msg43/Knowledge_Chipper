@@ -222,4 +222,3 @@ The decision to update **both** storage paths was necessary and correct:
 - `storage_sqlite.py` → Batch processing and advanced features get context_quotes
 
 Both paths should be maintained until a deliberate architectural decision is made to unify or deprecate one of them.
-

@@ -70,16 +70,16 @@ run_test_phase() {
     local phase_name="$1"
     local test_path="$2"
     local timeout="$3"
-    
+
     CURRENT_PHASE=$((CURRENT_PHASE + 1))
-    
+
     echo ""
     echo "================================================================"
     echo -e "${BLUE}Phase $CURRENT_PHASE/$TOTAL_PHASES: $phase_name${NC}"
     echo "================================================================"
-    
+
     local report_file="$REPORTS_DIR/phase_${CURRENT_PHASE}_$(echo $phase_name | tr ' ' '_' | tr '[:upper:]' '[:lower:]').txt"
-    
+
     if $PYTEST "$test_path" -v --timeout="$timeout" --tb=short 2>&1 | tee "$report_file"; then
         echo -e "${GREEN}✅ Phase $CURRENT_PHASE passed${NC}"
         return 0
@@ -222,4 +222,3 @@ else
     echo -e "${RED}❌ Testing complete - Some issues found${NC}"
     exit 1
 fi
-

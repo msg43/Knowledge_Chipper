@@ -21,7 +21,7 @@ def get_vendor_dir() -> str:
     On Linux: ~/.knowledge_chipper/vendor/py{major}.{minor}
     """
     from .macos_paths import get_application_support_dir
-    
+
     major, minor = sys.version_info[:2]
     py_tag = f"py{major}.{minor}"
 

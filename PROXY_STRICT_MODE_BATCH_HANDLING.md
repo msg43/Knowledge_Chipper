@@ -190,4 +190,3 @@ https://youtube.com/watch?v=VIDEO_ID_2
 2. **Retry failed URLs**: Use the saved file to retry later when proxy is stable
 3. **Proxy health**: If seeing many failures, check proxy service status
 4. **Batch size**: Larger batches benefit more from per-URL resilience
-

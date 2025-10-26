@@ -6,13 +6,13 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 from PyQt6.QtCore import QObject
 from PyQt6.QtWidgets import QApplication, QComboBox, QLineEdit, QPushButton
-
 
 DEFAULT_WAIT_MS = 50
 DEFAULT_TRIES = 60  # 3 seconds at 50ms
@@ -53,14 +53,16 @@ def switch_to_tab(main_window: QObject, tab_name: str) -> bool:
     return False
 
 
-def find_button_by_text(main_window: QObject, text_substring: str) -> Optional[QPushButton]:
+def find_button_by_text(
+    main_window: QObject, text_substring: str
+) -> QPushButton | None:
     for btn in main_window.findChildren(QPushButton):
         if text_substring.lower() in btn.text().lower():
             return btn
     return None
 
 
-def find_first_combo(main_window: QObject) -> Optional[QComboBox]:
+def find_first_combo(main_window: QObject) -> QComboBox | None:
     combos = main_window.findChildren(QComboBox)
     return combos[0] if combos else None
 
@@ -85,5 +87,3 @@ def create_sandbox(base_dir: Path) -> Sandbox:
     output_dir = base_dir / "output" / run_id
     set_env_sandboxes(db_path, output_dir)
     return Sandbox(db_path=db_path, output_dir=output_dir)
-
-

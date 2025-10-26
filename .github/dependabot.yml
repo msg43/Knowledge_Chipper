@@ -22,7 +22,7 @@ updates:
         update-types:
           - "minor"
           - "patch"
-      
+
       # Development tools can be grouped
       dev-tools:
         patterns:
@@ -34,7 +34,7 @@ updates:
         update-types:
           - "minor"
           - "patch"
-      
+
       # ML dependencies (careful with breaking changes)
       ml-dependencies:
         patterns:
@@ -44,36 +44,36 @@ updates:
           - "soundfile"
         update-types:
           - "patch"
-    
+
     # NOTE: yt-dlp is NOT grouped - gets individual PRs for careful review
     # Each yt-dlp update requires testing per docs/YT_DLP_UPGRADE_PROCEDURE.md
     # Expect 1-2 yt-dlp PRs per week (high frequency, critical dependency)
-    
+
     # Critical dependencies that need individual review
     ignore:
       # PyAnnote updates need careful testing for API changes
       - dependency-name: "pyannote.audio"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
-      
+
       # PyQt major versions need extensive testing
       - dependency-name: "PyQt6"
         update-types: ["version-update:semver-major"]
-      
+
       # Torch major versions need GPU compatibility checks
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]
-    
+
     labels:
       - "dependencies"
       - "automated"
-    
+
     reviewers:
       - "msg43"  # Replace with your GitHub username
-    
+
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
-  
+
   # GitHub Actions updates
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -86,7 +86,7 @@ updates:
       prefix: "chore(ci)"
 
 # How this works:
-# 
+#
 # 1. GROUPED UPDATES (auto-merge friendly):
 #    - minor-patches: Stable packages like requests, pydantic
 #    - dev-tools: Testing/linting tools
@@ -108,4 +108,3 @@ updates:
 # To enable auto-merge for trusted updates:
 # gh repo set --enable-auto-merge
 # Then on PRs: gh pr merge --auto --merge
-

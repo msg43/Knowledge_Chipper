@@ -102,17 +102,17 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
-            
+
             // Find the most recent test report
             const reportsDir = 'tests/reports';
             let summary = '## Automated GUI Test Results\n\n';
-            
+
             try {
               const dirs = fs.readdirSync(reportsDir);
               if (dirs.length > 0) {
                 const latestDir = dirs.sort().reverse()[0];
                 const summaryPath = path.join(reportsDir, latestDir, 'SUMMARY.txt');
-                
+
                 if (fs.existsSync(summaryPath)) {
                   const summaryContent = fs.readFileSync(summaryPath, 'utf8');
                   summary += '```\n' + summaryContent + '\n```\n';
@@ -125,10 +125,10 @@ jobs:
             } catch (error) {
               summary += '⚠️ Error reading test results: ' + error.message + '\n';
             }
-            
+
             summary += `\n**OS**: ${{ matrix.os }}\n`;
             summary += `**Python**: ${{ matrix.python-version }}\n`;
-            
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -151,17 +151,17 @@ jobs:
         run: |
           echo "# Combined Test Summary" > summary.md
           echo "" >> summary.md
-          
+
           # Count artifacts
           TOTAL_RUNS=$(ls -1 all-reports | wc -l)
           echo "Total test runs: $TOTAL_RUNS" >> summary.md
           echo "" >> summary.md
-          
+
           # List all results
           for dir in all-reports/test-reports-*; do
             if [ -d "$dir" ]; then
               echo "## $(basename $dir)" >> summary.md
-              
+
               # Find and display summary
               SUMMARY_FILE=$(find "$dir" -name "SUMMARY.txt" | head -1)
               if [ -f "$SUMMARY_FILE" ]; then
@@ -172,7 +172,7 @@ jobs:
               echo "" >> summary.md
             fi
           done
-          
+
           cat summary.md
 
       - name: Upload combined summary
@@ -181,4 +181,3 @@ jobs:
           name: combined-test-summary
           path: summary.md
           retention-days: 90
-

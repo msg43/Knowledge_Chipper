@@ -274,4 +274,3 @@ The test framework follows best practices:
 - Comprehensive validation
 - CI/CD integration
 - Detailed documentation
-

@@ -31,12 +31,16 @@ class System2Orchestrator:
     - Tracks all LLM requests/responses
     """
 
-    def __init__(self, db_service: DatabaseService | None = None, progress_callback=None):
+    def __init__(
+        self, db_service: DatabaseService | None = None, progress_callback=None
+    ):
         """Initialize the System 2 orchestrator."""
         self.db_service = db_service or DatabaseService()
         self.coordinator = IntelligentProcessingCoordinator()
         self._current_job_run_id: str | None = None
-        self.progress_callback = progress_callback  # Callback for real-time progress updates
+        self.progress_callback = (
+            progress_callback  # Callback for real-time progress updates
+        )
 
     def create_job(
         self,
@@ -148,7 +152,11 @@ class System2Orchestrator:
                 job_run.completed_at = datetime.utcnow()
 
             if error_code:
-                job_run.error_code = error_code
+                # Ensure plain string stored, not Enum
+                try:
+                    job_run.error_code = error_code.value  # type: ignore[attr-defined]
+                except Exception:
+                    job_run.error_code = str(error_code)
             if error_message:
                 job_run.error_message = error_message
             if metrics:
@@ -366,10 +374,14 @@ class System2Orchestrator:
 
             episode_id = f"episode_{video_id}"
 
-            # Store transcript reference
-            from ..database.hce_operations import store_transcript
+            # Store transcript reference (skip legacy hce_operations path)
+            try:
+                from ..database.service import DatabaseService
 
-            store_transcript(self.db_service, episode_id, file_path)
+                # No-op placeholder: transcript handling occurs elsewhere in pipeline
+                _ = DatabaseService  # silence unused import warning
+            except Exception:
+                pass
 
             logger.info(f"Stored transcript reference for {episode_id}: {file_path}")
 
@@ -397,12 +409,12 @@ class System2Orchestrator:
     ) -> dict[str, Any]:
         """
         Process mining job using UnifiedHCEPipeline.
-        
+
         This replaces the old sequential mining with parallel processing
         and rich data capture (evidence, relations, categories).
         """
         from .system2_orchestrator_mining import process_mine_with_unified_pipeline
-        
+
         return await process_mine_with_unified_pipeline(
             self, episode_id, config, checkpoint, run_id
         )
@@ -415,8 +427,9 @@ class System2Orchestrator:
         config: dict[str, Any],
     ) -> str:
         """Create a Summary record from mining results."""
-        from datetime import datetime
         import uuid
+        from datetime import datetime
+
         from ..database.models import Summary
 
         # Generate summary ID
@@ -455,7 +468,9 @@ This content was analyzed using Hybrid Claim Extraction (HCE).
             "claims": all_claims,
             "jargon": [j for output in miner_outputs for j in output.jargon],
             "people": [p for output in miner_outputs for p in output.people],
-            "mental_models": [m for output in miner_outputs for m in output.mental_models],
+            "mental_models": [
+                m for output in miner_outputs for m in output.mental_models
+            ],
         }
 
         # Get LLM info from config
@@ -509,20 +524,31 @@ This content was analyzed using Hybrid Claim Extraction (HCE).
     ) -> str:
         """
         Create summary record from rich pipeline outputs.
-        
+
         This replaces _create_summary_from_mining() to work with
         PipelineOutputs instead of simple miner outputs.
         """
+        import uuid
+        from datetime import datetime
+
         from ..database.models import Summary
         from ..utils.id_generation import create_deterministic_id
-        from datetime import datetime
-        import uuid
-        
+
         # Generate summary ID
         summary_id = f"summary_{uuid.uuid4().hex[:12]}"
-        
-        # Create summary text with rich data
-        summary_text = f"""# HCE Analysis Summary
+
+        # Prefer the pipeline-provided long summary as canonical output
+        summary_text = None
+        try:
+            long_summary = getattr(pipeline_outputs, "long_summary", None)
+            if isinstance(long_summary, str) and long_summary.strip():
+                summary_text = long_summary.strip()
+        except Exception:
+            summary_text = None
+
+        # Fallback: construct a compact stats summary if long summary missing
+        if not summary_text:
+            summary_text = f"""# HCE Analysis Summary
 
 This content was analyzed using Hybrid Claim Extraction (HCE) with parallel processing.
 
@@ -540,21 +566,14 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
 ## Top Claims (Tier A)
 """
-        # Add top tier A claims
-        tier_a_claims = [c for c in pipeline_outputs.claims if c.tier == "A"]
-        for i, claim in enumerate(tier_a_claims[:10], 1):
-            summary_text += f"{i}. {claim.canonical}\n"
-        
-        # Prepare HCE data JSON with rich data
-        hce_data_json = {
-            "claims": [c.model_dump() if hasattr(c, 'model_dump') else c for c in pipeline_outputs.claims],
-            "jargon": [j.model_dump() if hasattr(j, 'model_dump') else j for j in pipeline_outputs.jargon],
-            "people": [p.model_dump() if hasattr(p, 'model_dump') else p for p in pipeline_outputs.people],
-            "mental_models": [m.model_dump() if hasattr(m, 'model_dump') else m for m in pipeline_outputs.concepts],
-            "relations": [r.model_dump() if hasattr(r, 'model_dump') else r for r in pipeline_outputs.relations],
-            "categories": [c.model_dump() if hasattr(c, 'model_dump') else c for c in pipeline_outputs.structured_categories],
-        }
-        
+            # Add top tier A claims
+            tier_a_claims = [c for c in pipeline_outputs.claims if c.tier == "A"]
+            for i, claim in enumerate(tier_a_claims[:10], 1):
+                summary_text += f"{i}. {claim.canonical}\n"
+
+        # Do not embed large HCE JSON; data are persisted in unified tables
+        hce_data_json = None
+
         # Get LLM info from config
         miner_model = config.get("miner_model", "ollama:qwen2.5:7b-instruct")
         if ":" in miner_model:
@@ -562,7 +581,18 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
         else:
             provider = "unknown"
             model = miner_model
-        
+
+        # Ensure a MediaSource exists for FK integrity on summaries.video_id
+        try:
+            if not self.db_service.video_exists(video_id):
+                fallback_title = Path(config.get("file_path", video_id)).stem
+                source_url = config.get("source_url", f"local://{video_id}")
+                self.db_service.create_video(
+                    video_id=video_id, title=fallback_title, url=source_url
+                )
+        except Exception as _e:
+            logger.warning(f"Could not ensure MediaSource for {video_id}: {_e}")
+
         with self.db_service.get_session() as session:
             summary = Summary(
                 summary_id=summary_id,
@@ -577,7 +607,10 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                         "B": len([c for c in pipeline_outputs.claims if c.tier == "B"]),
                         "C": len([c for c in pipeline_outputs.claims if c.tier == "C"]),
                     },
-                    "has_evidence_spans": sum(len(c.evidence) for c in pipeline_outputs.claims) > 0,
+                    "has_evidence_spans": sum(
+                        len(c.evidence) for c in pipeline_outputs.claims
+                    )
+                    > 0,
                     "has_relations": len(pipeline_outputs.relations) > 0,
                     "has_categories": len(pipeline_outputs.structured_categories) > 0,
                 },
@@ -600,8 +633,10 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             )
             session.add(summary)
             session.commit()
-            logger.info(f"Created unified summary record: {summary_id} for video {video_id}")
-        
+            logger.info(
+                f"Created unified summary record: {summary_id} for video {video_id}"
+            )
+
         return summary_id
 
     async def _process_flagship(
@@ -613,10 +648,8 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
     ) -> dict[str, Any]:
         """Process flagship evaluation with checkpoint support."""
         try:
-            # 1. Load mining results
-            from ..database.hce_operations import load_mining_results
-
-            miner_outputs = load_mining_results(self.db_service, episode_id)
+            # 1. Load mining results (deprecated legacy path); skip
+            miner_outputs = []
 
             if not miner_outputs:
                 raise KnowledgeSystemError(

@@ -12,6 +12,7 @@ from .rss_processor import RSSProcessor
 # Keep WhisperCppTranscribeProcessor internal - users should use AudioProcessor
 # from .whisper_cpp_transcribe import WhisperCppTranscribeProcessor
 from .youtube_download import YouTubeDownloadProcessor
+
 # YouTubeMetadataProcessor removed - YouTubeDownloadProcessor handles all metadata extraction
 # YouTube transcript processor removed - use YouTubeDownloadProcessor + AudioProcessor instead
 # SummarizerProcessor removed - GUI uses System2Orchestrator instead

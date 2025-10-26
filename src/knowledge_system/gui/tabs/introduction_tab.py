@@ -415,7 +415,9 @@ class IntroductionTab(BaseTab):
         youtube_text.setWordWrap(True)
         youtube_text.setTextFormat(Qt.TextFormat.RichText)
         youtube_text.setStyleSheet("line-height: 1.4;")
-        youtube_text.setOpenExternalLinks(True)  # Allow clicking the Google accounts link
+        youtube_text.setOpenExternalLinks(
+            True
+        )  # Allow clicking the Google accounts link
         parent_layout.addWidget(youtube_text)
 
     def _create_workflows_section(self, parent_layout: Any) -> None:

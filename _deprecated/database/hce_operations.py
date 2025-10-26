@@ -84,8 +84,10 @@ def store_mining_results(
                     first_ts = claim_data.get("timestamp")
                     if not first_ts:
                         evidence_spans = claim_data.get("evidence_spans", [])
-                        first_ts = evidence_spans[0].get("t0") if evidence_spans else None
-                    
+                        first_ts = (
+                            evidence_spans[0].get("t0") if evidence_spans else None
+                        )
+
                     claim = Claim(
                         episode_id=episode_id,
                         claim_id=claim_id,

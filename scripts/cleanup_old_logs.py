@@ -43,7 +43,13 @@ def main():
 
     # Process each file in logs directory
     for file_path in LOG_DIR.iterdir():
-        if file_path.is_file() and file_path.suffix in [".log", ".csv", ".json", ".txt", ".md"]:
+        if file_path.is_file() and file_path.suffix in [
+            ".log",
+            ".csv",
+            ".json",
+            ".txt",
+            ".md",
+        ]:
             if should_preserve(file_path.name):
                 # Move build/deployment logs to archive
                 if file_path.parent == LOG_DIR:  # Only move files in root logs dir
@@ -58,17 +64,21 @@ def main():
     # Create a cleanup summary
     summary_path = LOG_DIR / "CLEANUP_SUMMARY.txt"
     with open(summary_path, "w") as f:
-        f.write(f"Log Cleanup Summary - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(
+            f"Log Cleanup Summary - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        )
         f.write("=" * 60 + "\n\n")
-        
+
         f.write(f"Removed {len(removed_files)} outdated log files:\n")
         for name in sorted(removed_files):
             f.write(f"  - {name}\n")
-        
-        f.write(f"\nArchived {len(archived_files)} build/deployment logs to logs/archive/:\n")
+
+        f.write(
+            f"\nArchived {len(archived_files)} build/deployment logs to logs/archive/:\n"
+        )
         for name in sorted(archived_files):
             f.write(f"  - {name}\n")
-        
+
         f.write("\nNote: Runtime logs are now stored in the OS-appropriate location:\n")
         f.write("  - macOS: ~/Library/Logs/Knowledge Chipper/\n")
         f.write("  - Linux: ~/.local/share/knowledge_chipper/logs/\n")

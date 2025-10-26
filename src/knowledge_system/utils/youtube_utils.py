@@ -515,7 +515,10 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
 
 
 def download_thumbnail_direct(
-    url: str, output_dir: Path, thumbnail_url: str | None = None, proxy_url: str | None = None
+    url: str,
+    output_dir: Path,
+    thumbnail_url: str | None = None,
+    proxy_url: str | None = None,
 ) -> str | None:
     """
     Download thumbnail for YouTube video using direct URL access (no cookies needed).
@@ -578,7 +581,9 @@ def download_thumbnail_direct(
         proxies = None
         if proxy_url:
             proxies = {"http": proxy_url, "https": proxy_url}
-            logger.debug(f"Using proxy for thumbnail download: {proxy_url.split('@')[0] if '@' in proxy_url else 'configured'}")
+            logger.debug(
+                f"Using proxy for thumbnail download: {proxy_url.split('@')[0] if '@' in proxy_url else 'configured'}"
+            )
 
         for quality, thumbnail_image_url in thumbnail_configs:
             try:

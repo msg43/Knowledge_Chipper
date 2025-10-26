@@ -4,7 +4,7 @@
 file_path = "src/knowledge_system/processors/diarization.py"
 
 # Read the file
-with open(file_path, 'r') as f:
+with open(file_path) as f:
     lines = f.readlines()
 
 # Fix indentation for lines 311-358 (0-indexed, so 310-357)
@@ -14,7 +14,7 @@ for i in range(310, 358):
         lines[i] = lines[i][4:]
 
 # Write back
-with open(file_path, 'w') as f:
+with open(file_path, "w") as f:
     f.writelines(lines)
 
 print("Indentation fixed!")

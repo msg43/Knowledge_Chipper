@@ -40,14 +40,17 @@ class EnhancedSummarizationWorker(QThread):
         logger.info(f"Provider: {self.gui_settings.get('provider')}")
         logger.info(f"Model: {self.gui_settings.get('model')}")
         logger.info("=" * 80)
-        
+
         try:
             logger.info("Step 1: Importing System2Orchestrator...")
             from ...core.system2_orchestrator import System2Orchestrator
+
             logger.info("✅ System2Orchestrator imported successfully")
 
             # Use System2Orchestrator instead of deprecated SummarizerProcessor
-            logger.info(f"Step 2: Creating System2Orchestrator with provider={self.gui_settings['provider']}, model={self.gui_settings['model']}")
+            logger.info(
+                f"Step 2: Creating System2Orchestrator with provider={self.gui_settings['provider']}, model={self.gui_settings['model']}"
+            )
             orchestrator = System2Orchestrator(
                 provider=self.gui_settings["provider"],
                 model=self.gui_settings["model"],
@@ -59,44 +62,59 @@ class EnhancedSummarizationWorker(QThread):
                 logger.info(f"\n{'='*60}")
                 logger.info(f"Processing file {i+1}/{len(self.files)}: {file_path}")
                 logger.info(f"{'='*60}")
-                
+
                 try:
-                    logger.info(f"Step 3.{i+1}: Setting up progress callback for {file_path}")
-                    
+                    logger.info(
+                        f"Step 3.{i+1}: Setting up progress callback for {file_path}"
+                    )
+
                     def progress_callback(progress_obj):
                         """Progress callback that handles SummarizationProgress objects."""
-                        logger.debug(f"Progress update: {progress_obj.current_step} - {progress_obj.status}")
+                        logger.debug(
+                            f"Progress update: {progress_obj.current_step} - {progress_obj.status}"
+                        )
                         self.progress_updated.emit(progress_obj)
 
-                    logger.info(f"Step 4.{i+1}: Calling orchestrator.process_transcript() for {file_path}")
-                    
+                    logger.info(
+                        f"Step 4.{i+1}: Calling orchestrator.process_transcript() for {file_path}"
+                    )
+
                     # Process file with System2Orchestrator
                     result = orchestrator.process_transcript(
                         file_path,
                         progress_callback=progress_callback,
                     )
-                    
-                    logger.info(f"Step 5.{i+1}: Processing complete. Success: {result.get('success', False)}")
 
-                    if result.get('success'):
+                    logger.info(
+                        f"Step 5.{i+1}: Processing complete. Success: {result.get('success', False)}"
+                    )
+
+                    if result.get("success"):
                         logger.info(f"✅ Successfully summarized: {file_path}")
                         logger.info(f"Result keys: {list(result.keys())}")
-                        
+
                         # Emit file completed signal
                         output_path = result.get("output_path")
                         if output_path:
                             logger.info(f"Output written to: {output_path}")
                             self.file_completed.emit(str(file_path), str(output_path))
-                        
+
                         # Extract HCE analytics if available
-                        hce_data = result.get("hce_data") or result.get("metadata", {}).get("hce_data")
+                        hce_data = result.get("hce_data") or result.get(
+                            "metadata", {}
+                        ).get("hce_data")
                         if hce_data:
                             logger.info("Step 6: Emitting HCE analytics...")
                             self.hce_analytics_updated.emit(hce_data)
 
                         # Export to GetReceipts if enabled and successful
-                        logger.info(f"Checking GetReceipts export: enabled={self.gui_settings.get('export_getreceipts', False)}, has_hce_data={hce_data is not None}")
-                        if self.gui_settings.get("export_getreceipts", False) and hce_data:
+                        logger.info(
+                            f"Checking GetReceipts export: enabled={self.gui_settings.get('export_getreceipts', False)}, has_hce_data={hce_data is not None}"
+                        )
+                        if (
+                            self.gui_settings.get("export_getreceipts", False)
+                            and hce_data
+                        ):
                             try:
                                 from ...config import get_settings
                                 from ...utils.getreceipts_exporter import (
@@ -104,13 +122,14 @@ class EnhancedSummarizationWorker(QThread):
                                 )
 
                                 logger.info("Step 7: Setting up GetReceipts export...")
-                                
+
                                 # Create exporter from settings
                                 settings = get_settings()
                                 exporter = create_exporter_from_settings(settings)
 
                                 # Build source info for the claim
                                 from pathlib import Path
+
                                 file_path_obj = Path(file_path)
                                 source_info = {
                                     "title": file_path_obj.stem,
@@ -118,7 +137,7 @@ class EnhancedSummarizationWorker(QThread):
                                     "date": result.get("timestamp"),
                                     "duration": None,
                                 }
-                                
+
                                 logger.info(f"Source info: {source_info}")
 
                                 # Emit GetReceipts export starting signal
@@ -194,17 +213,23 @@ class EnhancedSummarizationWorker(QThread):
                     else:
                         error_msg = result.get("error", "Unknown error")
                         logger.error(f"❌ Failed to summarize {file_path}: {error_msg}")
-                        self.processing_error.emit(f"Failed to summarize {file_path}: {error_msg}")
+                        self.processing_error.emit(
+                            f"Failed to summarize {file_path}: {error_msg}"
+                        )
 
                 except Exception as e:
-                    logger.error(f"❌ Exception processing {file_path}: {e}", exc_info=True)
-                    self.processing_error.emit(f"Error processing {file_path}: {str(e)}")
+                    logger.error(
+                        f"❌ Exception processing {file_path}: {e}", exc_info=True
+                    )
+                    self.processing_error.emit(
+                        f"Error processing {file_path}: {str(e)}"
+                    )
 
             logger.info(f"\n{'='*80}")
             logger.info("ALL FILES PROCESSED")
             logger.info(f"Total files: {len(self.files)}")
             logger.info(f"{'='*80}\n")
-            
+
             self.processing_finished.emit()
 
         except Exception as e:

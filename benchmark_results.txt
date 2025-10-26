@@ -26,4 +26,3 @@ OLLAMA_NUM_PARALLEL=7:
   Total time: .043357000s
   Throughput: 230.643 req/sec
   Avg per request: 0s
-

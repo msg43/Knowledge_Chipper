@@ -30,7 +30,7 @@ except Exception as e:
         print(f"❌ Wrong error: {error_msg}")
         sys.exit(1)
 """
-    
+
     # Run the test script
     result = subprocess.run(
         [sys.executable, "-c", test_script],
@@ -38,7 +38,7 @@ except Exception as e:
         text=True,
         cwd=Path(__file__).parent.parent,  # Run from project root
     )
-    
+
     # Should have exited with code 0 (preflight failed correctly)
     assert result.returncode == 0, f"Test failed: {result.stdout}\n{result.stderr}"
     assert "Preflight correctly failed" in result.stdout
@@ -55,7 +55,7 @@ try:
     # Set testing mode to avoid actually launching GUI
     os.environ['KNOWLEDGE_CHIPPER_TESTING_MODE'] = '1'
     os.environ['QT_QPA_PLATFORM'] = 'offscreen'
-    
+
     from knowledge_system.gui import MainWindow
     print("✅ GUI imported successfully with valid dependencies")
 except Exception as e:
@@ -64,14 +64,14 @@ except Exception as e:
     traceback.print_exc()
     raise
 """
-    
+
     result = subprocess.run(
         [sys.executable, "-c", test_script],
         capture_output=True,
         text=True,
         cwd=Path(__file__).parent.parent,
     )
-    
+
     assert result.returncode == 0, f"Import failed: {result.stdout}\n{result.stderr}"
     assert "GUI imported successfully" in result.stdout
 
@@ -97,32 +97,31 @@ except Exception as e:
         print("✅ Error message provides solution")
     sys.exit(0)
 """
-    
+
     result = subprocess.run(
         [sys.executable, "-c", test_script],
         capture_output=True,
         text=True,
         cwd=Path(__file__).parent.parent,
     )
-    
+
     assert result.returncode == 0
     assert "Error message mentions FFmpeg" in result.stdout
 
 
 if __name__ == "__main__":
     print("Running preflight visibility tests...\n")
-    
+
     print("Test 1: Preflight failure stops app launch")
     test_preflight_failure_stops_app_launch()
     print("✅ PASS\n")
-    
+
     print("Test 2: Valid dependencies allow import")
     test_preflight_success_allows_import()
     print("✅ PASS\n")
-    
+
     print("Test 3: Error messages are helpful")
     test_preflight_error_message_is_helpful()
     print("✅ PASS\n")
-    
-    print("🎉 All preflight visibility tests passed!")
 
+    print("🎉 All preflight visibility tests passed!")

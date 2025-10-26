@@ -140,4 +140,3 @@ All JSON schemas are now in:
 ```
 
 Both the LLM (for Ollama structured outputs) and the SchemaValidator load schemas from this directory.
-

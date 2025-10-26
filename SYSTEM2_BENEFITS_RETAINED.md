@@ -413,4 +413,3 @@ The unified plan is **purely additive**:
 **You're not replacing System2Orchestrator - you're making it store richer data.**
 
 The orchestration layer (jobs, runs, progress, tracking) stays exactly the same. Only the "what gets mined and how it's stored" changes.
-

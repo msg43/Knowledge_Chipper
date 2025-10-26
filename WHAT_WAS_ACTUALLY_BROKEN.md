@@ -177,4 +177,3 @@ git show HEAD~1:src/knowledge_system/processors/hce/parallel_processor.py | grep
 - **Before:** 3 workers (hardcoded, wasting 87% of CPU)
 - **After:** 7 workers (dynamic, optimal utilization)
 - **Speedup:** ~10-15x faster mining
-

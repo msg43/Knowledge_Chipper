@@ -513,4 +513,3 @@ def get_spinbox_value(
 **Files to Modify:** 
 - `src/knowledge_system/gui/core/settings_manager.py` (enhance all getter methods)
 - Optionally: Add GUI controls for currently backend-only settings
-

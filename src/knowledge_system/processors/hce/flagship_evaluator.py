@@ -8,7 +8,10 @@ from typing import Any
 
 from .model_uri_parser import parse_model_uri
 from .models.llm_system2 import System2LLM
-from .schema_validator import repair_and_validate_flagship_output, validate_flagship_output
+from .schema_validator import (
+    repair_and_validate_flagship_output,
+    validate_flagship_output,
+)
 from .unified_miner import UnifiedMinerOutput
 
 
@@ -212,14 +215,18 @@ class FlagshipEvaluator:
 
             # Repair and validate against schema
             # This will add missing required fields if they're absent
-            repaired_result, is_valid, errors = repair_and_validate_flagship_output(result)
+            repaired_result, is_valid, errors = repair_and_validate_flagship_output(
+                result
+            )
             if not is_valid:
                 import logging
 
                 logger = logging.getLogger(__name__)
-                logger.warning(f"Flagship output failed schema validation after repair: {errors}")
+                logger.warning(
+                    f"Flagship output failed schema validation after repair: {errors}"
+                )
                 # Use repaired result anyway - it will have the required structure
-            
+
             result = repaired_result
 
             # Validate and return

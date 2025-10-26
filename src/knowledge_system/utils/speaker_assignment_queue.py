@@ -180,16 +180,22 @@ class SpeakerAssignmentQueue:
                     task.speaker_data_list,
                     assignments,
                 )
-                
+
                 # CRITICAL: Regenerate the markdown file with speaker names
-                logger.info(f"Regenerating markdown with assigned speaker names for {task.video_id}")
+                logger.info(
+                    f"Regenerating markdown with assigned speaker names for {task.video_id}"
+                )
 
                 try:
                     from pathlib import Path
-                    
+
                     # Get transcript record to access segments with speakers
-                    transcript = db_service.get_transcript(task.transcript_id) if hasattr(task, 'transcript_id') else None
-                    
+                    transcript = (
+                        db_service.get_transcript(task.transcript_id)
+                        if hasattr(task, "transcript_id")
+                        else None
+                    )
+
                     if transcript and transcript.transcript_segments_json:
                         # Apply speaker name assignments to segments
                         updated_segments = []
@@ -199,10 +205,15 @@ class SpeakerAssignmentQueue:
                             if speaker_id and speaker_id in assignments:
                                 seg_copy["speaker"] = assignments[speaker_id]
                             updated_segments.append(seg_copy)
-                        
+
                         # Get the markdown file path
-                        file_path, video_metadata = db_service.get_transcript_path_for_regeneration(transcript.transcript_id)
-                        
+                        (
+                            file_path,
+                            video_metadata,
+                        ) = db_service.get_transcript_path_for_regeneration(
+                            transcript.transcript_id
+                        )
+
                         if file_path and file_path.exists():
                             # Create updated transcript data
                             transcript_data = {
@@ -210,11 +221,11 @@ class SpeakerAssignmentQueue:
                                 "segments": updated_segments,
                                 "language": transcript.language,
                             }
-                            
+
                             # Recreate the markdown with updated speaker names
                             from ..processors.audio_processor import AudioProcessor
                             from ..processors.base import ProcessorResult
-                            
+
                             audio_processor = AudioProcessor()
                             updated_result = ProcessorResult(
                                 success=True,
@@ -222,9 +233,9 @@ class SpeakerAssignmentQueue:
                                 metadata={
                                     "model": transcript.whisper_model or "unknown",
                                     "diarization_enabled": transcript.diarization_enabled,
-                                }
+                                },
                             )
-                            
+
                             # Overwrite the existing markdown file
                             audio_path = Path(task.recording_path)
                             saved_file = audio_processor.save_transcript_to_markdown(
@@ -234,19 +245,28 @@ class SpeakerAssignmentQueue:
                                 include_timestamps=True,
                                 video_metadata=video_metadata,
                             )
-                            
+
                             if saved_file:
-                                logger.info(f"✅ Successfully regenerated markdown with speaker names: {saved_file}")
+                                logger.info(
+                                    f"✅ Successfully regenerated markdown with speaker names: {saved_file}"
+                                )
                             else:
                                 logger.warning("⚠️ Markdown regeneration returned None")
                         else:
-                            logger.warning(f"Markdown file not found for regeneration: {file_path}")
+                            logger.warning(
+                                f"Markdown file not found for regeneration: {file_path}"
+                            )
                     else:
-                        logger.warning("Could not retrieve transcript segments for regeneration")
-                        
+                        logger.warning(
+                            "Could not retrieve transcript segments for regeneration"
+                        )
+
                 except Exception as e:
-                    logger.error(f"Failed to regenerate markdown with speaker names: {e}")
+                    logger.error(
+                        f"Failed to regenerate markdown with speaker names: {e}"
+                    )
                     import traceback
+
                     traceback.print_exc()
 
                 return True

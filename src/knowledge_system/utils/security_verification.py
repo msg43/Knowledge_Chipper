@@ -111,6 +111,7 @@ class AuthorizationVerifier:
 
         # Check FFmpeg binaries
         from .macos_paths import get_application_support_dir
+
         ffmpeg_bin_dir = get_application_support_dir() / "bin"
         if ffmpeg_bin_dir.exists():
             for binary in ["ffmpeg", "ffprobe"]:

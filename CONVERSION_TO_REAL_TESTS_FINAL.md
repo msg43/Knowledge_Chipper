@@ -340,4 +340,3 @@ You got:
 - *Progress tracking*: `REAL_TESTS_PROGRESS.md`
 - *Implementation plan*: `REAL_GUI_TESTS_STATUS.md`
 - *Test runner*: `run_comprehensive_gui_tests.sh`
-

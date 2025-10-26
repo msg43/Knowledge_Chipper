@@ -242,14 +242,25 @@ class APIKeysTab(BaseTab):
         )
 
         # Add spacing between PacketStream fields and proxy strict mode
-        from PyQt6.QtWidgets import QSpacerItem, QSizePolicy
-        layout.addItem(QSpacerItem(20, 10, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed), 7, 0, 1, 2)
+        from PyQt6.QtWidgets import QSizePolicy, QSpacerItem
+
+        layout.addItem(
+            QSpacerItem(20, 10, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed),
+            7,
+            0,
+            1,
+            2,
+        )
 
         # Proxy Strict Mode checkbox
-        self.proxy_strict_mode_checkbox = QCheckBox("🛡️ Proxy Strict Mode (RECOMMENDED)")
-        self.proxy_strict_mode_checkbox.setChecked(True)  # Default to enabled for safety
+        self.proxy_strict_mode_checkbox = QCheckBox(
+            "🛡️ Proxy Strict Mode (RECOMMENDED)"
+        )
+        self.proxy_strict_mode_checkbox.setChecked(
+            True
+        )  # Default to enabled for safety
         self.proxy_strict_mode_checkbox.setStyleSheet("font-weight: bold;")
-        
+
         proxy_strict_info = (
             "Block YouTube operations when proxy fails to protect your IP address.\n\n"
             "ENABLED (Recommended):\n"
@@ -263,7 +274,7 @@ class APIKeysTab(BaseTab):
             "• May trigger rate limits or account bans\n"
             "• Only use if you understand the risks"
         )
-        
+
         self._add_field_with_info(
             layout,
             "",  # No label needed, checkbox has its own text
@@ -635,9 +646,8 @@ class APIKeysTab(BaseTab):
             )
 
         # Load Proxy Strict Mode setting
-        if (
-            hasattr(self.settings, "youtube_processing")
-            and hasattr(self.settings.youtube_processing, "proxy_strict_mode")
+        if hasattr(self.settings, "youtube_processing") and hasattr(
+            self.settings.youtube_processing, "proxy_strict_mode"
         ):
             self.proxy_strict_mode_checkbox.setChecked(
                 self.settings.youtube_processing.proxy_strict_mode
@@ -846,7 +856,7 @@ class APIKeysTab(BaseTab):
                     "proxy_strict_mode": getattr(
                         self.settings.youtube_processing, "proxy_strict_mode", True
                     )
-                }
+                },
             }
 
             logger.info(

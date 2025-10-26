@@ -1452,13 +1452,13 @@ class FileGenerationService:
     ) -> Path | None:
         """
         Generate summary markdown from rich PipelineOutputs.
-        
+
         This version includes evidence spans, relations, and categories
         that weren't available in the old simple format.
         """
         try:
             output_file = self.summaries_dir / f"{video_id}_summary.md"
-            
+
             # Build comprehensive markdown
             markdown_lines = [
                 f"# Summary: {episode_id}",
@@ -1476,27 +1476,33 @@ class FileGenerationService:
                 f"- **Categories:** {len(pipeline_outputs.structured_categories)}",
                 "",
             ]
-            
+
             # Add short summary if available
             if pipeline_outputs.short_summary:
-                markdown_lines.extend([
-                    "## Short Summary",
-                    "",
-                    pipeline_outputs.short_summary,
-                    "",
-                ])
-            
+                markdown_lines.extend(
+                    [
+                        "## Short Summary",
+                        "",
+                        pipeline_outputs.short_summary,
+                        "",
+                    ]
+                )
+
             # Add Tier A claims with evidence
             tier_a_claims = [c for c in pipeline_outputs.claims if c.tier == "A"]
             if tier_a_claims:
-                markdown_lines.extend([
-                    "## Top Claims (Tier A)",
-                    "",
-                ])
+                markdown_lines.extend(
+                    [
+                        "## Top Claims (Tier A)",
+                        "",
+                    ]
+                )
                 for claim in tier_a_claims[:20]:  # Top 20
                     markdown_lines.append(f"### {claim.canonical}")
-                    markdown_lines.append(f"**Type:** {claim.claim_type} | **Tier:** {claim.tier}")
-                    
+                    markdown_lines.append(
+                        f"**Type:** {claim.claim_type} | **Tier:** {claim.tier}"
+                    )
+
                     if claim.evidence:
                         markdown_lines.append("")
                         markdown_lines.append("**Evidence:**")
@@ -1505,83 +1511,111 @@ class FileGenerationService:
                                 timestamp = f"[{ev.t0}]" if ev.t0 else ""
                                 markdown_lines.append(f'- {timestamp} "{ev.quote}"')
                     markdown_lines.append("")
-            
+
             # Add people mentions
             if pipeline_outputs.people:
-                markdown_lines.extend([
-                    "## People Mentioned",
-                    "",
-                ])
+                markdown_lines.extend(
+                    [
+                        "## People Mentioned",
+                        "",
+                    ]
+                )
                 for person in pipeline_outputs.people[:30]:  # Top 30
                     name = person.normalized or person.surface or person.name
                     timestamp = f" [{person.t0}]" if person.t0 else ""
-                    context = f': "{person.context_quote}"' if person.context_quote else ""
+                    context = (
+                        f': "{person.context_quote}"' if person.context_quote else ""
+                    )
                     markdown_lines.append(f"- **{name}**{timestamp}{context}")
                 markdown_lines.append("")
-            
+
             # Add concepts/mental models
             if pipeline_outputs.concepts:
-                markdown_lines.extend([
-                    "## Mental Models & Concepts",
-                    "",
-                ])
+                markdown_lines.extend(
+                    [
+                        "## Mental Models & Concepts",
+                        "",
+                    ]
+                )
                 for concept in pipeline_outputs.concepts[:20]:  # Top 20
-                    timestamp = f" [{concept.first_mention_ts}]" if concept.first_mention_ts else ""
+                    timestamp = (
+                        f" [{concept.first_mention_ts}]"
+                        if concept.first_mention_ts
+                        else ""
+                    )
                     definition = f": {concept.definition}" if concept.definition else ""
-                    markdown_lines.append(f"- **{concept.name}**{timestamp}{definition}")
+                    markdown_lines.append(
+                        f"- **{concept.name}**{timestamp}{definition}"
+                    )
                 markdown_lines.append("")
-            
+
             # Add jargon
             if pipeline_outputs.jargon:
-                markdown_lines.extend([
-                    "## Jargon & Technical Terms",
-                    "",
-                ])
+                markdown_lines.extend(
+                    [
+                        "## Jargon & Technical Terms",
+                        "",
+                    ]
+                )
                 for term in pipeline_outputs.jargon[:30]:  # Top 30
                     definition = f": {term.definition}" if term.definition else ""
                     markdown_lines.append(f"- **{term.term}**{definition}")
                 markdown_lines.append("")
-            
+
             # Add relations
             if pipeline_outputs.relations:
-                markdown_lines.extend([
-                    "## Claim Relations",
-                    "",
-                ])
+                markdown_lines.extend(
+                    [
+                        "## Claim Relations",
+                        "",
+                    ]
+                )
                 for rel in pipeline_outputs.relations[:20]:  # Top 20
-                    markdown_lines.append(f"- {rel.source_claim_id} **{rel.type}** {rel.target_claim_id}")
+                    markdown_lines.append(
+                        f"- {rel.source_claim_id} **{rel.type}** {rel.target_claim_id}"
+                    )
                     if rel.rationale:
                         markdown_lines.append(f"  - {rel.rationale}")
                 markdown_lines.append("")
-            
+
             # Add categories
             if pipeline_outputs.structured_categories:
-                markdown_lines.extend([
-                    "## Categories",
-                    "",
-                ])
+                markdown_lines.extend(
+                    [
+                        "## Categories",
+                        "",
+                    ]
+                )
                 for cat in pipeline_outputs.structured_categories:
-                    confidence = f" (confidence: {cat.coverage_confidence:.2f})" if cat.coverage_confidence else ""
+                    confidence = (
+                        f" (confidence: {cat.coverage_confidence:.2f})"
+                        if cat.coverage_confidence
+                        else ""
+                    )
                     wikidata = f" [Q{cat.wikidata_qid}]" if cat.wikidata_qid else ""
-                    markdown_lines.append(f"- **{cat.category_name}**{wikidata}{confidence}")
+                    markdown_lines.append(
+                        f"- **{cat.category_name}**{wikidata}{confidence}"
+                    )
                 markdown_lines.append("")
-            
+
             # Add long summary if available
             if pipeline_outputs.long_summary:
-                markdown_lines.extend([
-                    "## Detailed Analysis",
-                    "",
-                    pipeline_outputs.long_summary,
-                    "",
-                ])
-            
+                markdown_lines.extend(
+                    [
+                        "## Detailed Analysis",
+                        "",
+                        pipeline_outputs.long_summary,
+                        "",
+                    ]
+                )
+
             # Write file
             markdown_content = "\n".join(markdown_lines)
             output_file.write_text(markdown_content, encoding="utf-8")
             logger.info(f"Generated rich summary: {output_file}")
-            
+
             return output_file
-            
+
         except Exception as e:
             logger.error(f"Failed to generate summary markdown: {e}")
             return None

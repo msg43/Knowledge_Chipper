@@ -276,4 +276,3 @@ The test framework successfully:
 **Next step**: Fill in the UI interaction TODOs in the test skeletons to make all 32 skipped tests executable. The hard work of infrastructure, sandboxing, monkeypatching, and framework design is complete.
 
 **You now have a production-ready GUI testing system that catches bugs early and runs fast in CI.**
-

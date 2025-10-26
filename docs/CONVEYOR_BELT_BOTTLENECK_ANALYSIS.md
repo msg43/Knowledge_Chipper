@@ -129,4 +129,3 @@ This error occurs because:
 - **Transcription speed correction:** User correctly identified that Whisper runs at ~10x realtime, not 0.5x. This changes the optimization priority significantly.
 - **Data integrity:** The flat schema discarded `timestamp` fields that the database expects. Nested schema must be preserved.
 - **Ollama limitations:** Structured outputs work great for simple schemas but fail on complex nested structures with regex patterns.
-

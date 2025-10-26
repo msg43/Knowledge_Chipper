@@ -212,9 +212,9 @@ class FFmpegSetupDialog(QDialog):
         scrollbar = self.progress_text.verticalScrollBar()
         # Check if we should auto-scroll BEFORE appending
         should_scroll = scrollbar and scrollbar.value() >= scrollbar.maximum() - 10
-        
+
         self.progress_text.append(message)
-        
+
         # Only auto-scroll if user was already at the bottom
         if should_scroll and scrollbar:
             scrollbar.setValue(scrollbar.maximum())

@@ -280,4 +280,3 @@ You don't need two paths. You need **one excellent path**.
 Your GUI just needs to **use it** instead of reimplementing a worse version.
 
 **Next Action:** Start with Phase 1 - update `_process_mine()` to use `UnifiedHCEPipeline`. Test with one transcript. If it works, continue with other phases.
-

@@ -15,20 +15,21 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from PyQt6.QtCore import QTimer, QThread
-from PyQt6.QtWidgets import QApplication
-from concurrent.futures import ThreadPoolExecutor
 import threading
+from concurrent.futures import ThreadPoolExecutor
+
+from PyQt6.QtCore import QThread, QTimer
+from PyQt6.QtWidgets import QApplication
 
 
 class MockWorker(QThread):
     """Mock worker that simulates long-running operation."""
-    
+
     def __init__(self):
         super().__init__()
         self.should_stop = False
         self.is_blocked = False
-        
+
     def run(self):
         """Simulate long-running operation."""
         print("Worker: Starting long operation...")
@@ -40,10 +41,10 @@ class MockWorker(QThread):
             if i == 5:
                 self.is_blocked = True
                 print("Worker: Simulating blocking operation...")
-        
+
         self.is_blocked = False
         print("Worker: Finished")
-    
+
     def stop(self):
         """Stop the worker."""
         self.should_stop = True
@@ -53,17 +54,17 @@ def test_blocking_stop():
     """Test the OLD blocking stop pattern (should freeze)."""
     print("\n=== Test 1: OLD Blocking Stop Pattern ===")
     print("This WOULD cause UI freeze...")
-    
+
     worker = MockWorker()
     worker.start()
-    
+
     # Wait a bit for worker to start
     time.sleep(2)
-    
+
     # OLD pattern - blocks UI thread
     print("Calling stop...")
     worker.stop()
-    
+
     print("Waiting for worker (BLOCKS UI)...")
     start = time.time()
     if not worker.wait(3000):  # Would block for 3 seconds
@@ -75,7 +76,7 @@ def test_blocking_stop():
             print("Worker terminated")
     else:
         print("Worker stopped gracefully")
-    
+
     elapsed = time.time() - start
     print(f"Total blocking time: {elapsed:.1f}s")
     print(f"Result: UI would be frozen for {elapsed:.1f} seconds\n")
@@ -85,57 +86,59 @@ def test_async_stop():
     """Test the NEW async stop pattern (should not freeze)."""
     print("\n=== Test 2: NEW Async Stop Pattern ===")
     print("This should NOT cause UI freeze...")
-    
+
     worker = MockWorker()
     worker.start()
-    
+
     # Wait a bit for worker to start
     time.sleep(2)
-    
+
     # NEW pattern - non-blocking
     print("Calling stop...")
     worker.stop()
-    
+
     print("Stop signal sent (non-blocking, UI stays responsive)")
-    
+
     # Simulate async polling with QTimer
     attempts = 0
     max_attempts = 10
-    
+
     def check_worker():
         nonlocal attempts
         attempts += 1
-        
+
         if not worker.isRunning():
             print(f"✓ Worker stopped gracefully after {attempts * 0.5}s")
             QApplication.instance().quit()
             return
-        
+
         if attempts < max_attempts:
-            print(f"Still stopping... ({(max_attempts - attempts) * 0.5:.1f}s remaining)")
+            print(
+                f"Still stopping... ({(max_attempts - attempts) * 0.5:.1f}s remaining)"
+            )
             QTimer.singleShot(500, check_worker)
         else:
             print("⚠️ Timeout reached, would force terminate")
             worker.terminate()
             QTimer.singleShot(1000, lambda: QApplication.instance().quit())
-    
+
     # Start polling
     QTimer.singleShot(100, check_worker)
-    
+
     print("UI would remain responsive during this process")
 
 
 def test_threadpool_cleanup():
     """Test ThreadPoolExecutor cleanup patterns."""
     print("\n=== Test 3: ThreadPoolExecutor Cleanup ===")
-    
+
     def long_task(n):
         """Simulate long task."""
         print(f"Task {n} started")
         time.sleep(10)
         print(f"Task {n} finished")
         return n
-    
+
     # OLD pattern - blocks on exit
     print("\nOLD pattern (blocks on context exit):")
     start = time.time()
@@ -149,7 +152,7 @@ def test_threadpool_cleanup():
         print("Would be stuck here...")
     elapsed = time.time() - start
     print(f"Old pattern time: {elapsed:.1f}s (would be ~10s)")
-    
+
     # NEW pattern - non-blocking shutdown
     print("\nNEW pattern (non-blocking shutdown):")
     start = time.time()
@@ -167,7 +170,7 @@ def test_threadpool_cleanup():
             # Python < 3.9 fallback
             executor.shutdown(wait=False)
             print("✓ Shutdown initiated (fallback, non-blocking)")
-    
+
     elapsed = time.time() - start
     print(f"New pattern time: {elapsed:.1f}s (immediate return)\n")
 
@@ -177,19 +180,19 @@ def main():
     print("=" * 60)
     print("Stop Button Fix Verification Tests")
     print("=" * 60)
-    
+
     # Test blocking stop (without actually running to avoid freeze)
     print("\nNOTE: Test 1 demonstrates the OLD pattern that causes freeze")
     print("We won't actually run it to avoid freezing this test script\n")
-    
+
     # Test async stop with QApplication
     app = QApplication(sys.argv)
     test_async_stop()
     app.exec()
-    
+
     # Test ThreadPool cleanup
     test_threadpool_cleanup()
-    
+
     print("\n" + "=" * 60)
     print("Summary:")
     print("✓ Async stop pattern returns immediately")
@@ -200,4 +203,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

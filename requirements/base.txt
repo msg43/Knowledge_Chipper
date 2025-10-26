@@ -56,4 +56,3 @@ feedparser>=6.0.0
 # HCE core (lightweight dependencies)
 hdbscan>=0.8.33
 scipy>=1.10.0
-

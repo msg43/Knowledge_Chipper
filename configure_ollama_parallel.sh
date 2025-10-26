@@ -30,19 +30,19 @@ cat << EOF > "$PLIST_PATH"
         <!-- NUM_PARALLEL=5 + 8 workers = 0.124 seg/sec (+18% vs baseline) -->
         <key>OLLAMA_NUM_PARALLEL</key>
         <string>5</string>
-        
+
         <!-- Number of threads per request (Metal backend) -->
         <key>OLLAMA_NUM_THREAD</key>
         <string>5</string>
-        
+
         <!-- Keep models loaded for 1 hour -->
         <key>OLLAMA_KEEP_ALIVE</key>
         <string>1h</string>
-        
+
         <!-- Max loaded models -->
         <key>OLLAMA_MAX_LOADED_MODELS</key>
         <string>2</string>
-        
+
         <!-- Enable flash attention for faster inference -->
         <key>OLLAMA_FLASH_ATTENTION</key>
         <string>1</string>

@@ -82,7 +82,7 @@ class AudioProcessor(BaseProcessor):
         self.require_diarization = require_diarization
         self.db_service = db_service
         self.remove_silence = remove_silence
-        
+
         # Store preloaded models
         self.preloaded_diarizer = preloaded_diarizer
 
@@ -105,7 +105,7 @@ class AudioProcessor(BaseProcessor):
             "medium": "large",
             "large": "large",  # No upgrade from large (already the best)
         }
-        
+
         # Track recovery attempts to prevent infinite loops
         self.recovery_attempt = 0
 
@@ -486,7 +486,7 @@ class AudioProcessor(BaseProcessor):
             # Store MVP availability for speaker processor to use
             if mvp_available:
                 metadata["mvp_llm_available"] = True
-            
+
             # CRITICAL: Store output_dir in metadata so speaker assignment can regenerate markdown
             output_dir = kwargs.get("output_dir")
             if output_dir:
@@ -656,7 +656,7 @@ class AudioProcessor(BaseProcessor):
     ) -> dict | None:
         """
         Get automatic speaker assignments for non-GUI mode.
-        
+
         Priority order:
         1. Existing user-confirmed assignments from database
         2. AI suggestions from previous processing sessions (stored in database)
@@ -674,7 +674,7 @@ class AudioProcessor(BaseProcessor):
             from ..database.speaker_models import get_speaker_db_service
 
             db_service = get_speaker_db_service()
-            
+
             # PRIORITY 1: Check for existing user-confirmed assignments in database
             existing_assignments = db_service.get_assignments_for_recording(
                 recording_path
@@ -693,28 +693,33 @@ class AudioProcessor(BaseProcessor):
             # This is the missing piece! AI suggestions are stored but not loaded
             try:
                 import json
+
                 from sqlalchemy import desc
+
                 from ..database.speaker_models import SpeakerProcessingSession
-                
+
                 # Query for the most recent processing session for this recording
                 with db_service.session_scope() as session:
                     latest_session = (
                         session.query(SpeakerProcessingSession)
-                        .filter(SpeakerProcessingSession.recording_path == str(recording_path))
+                        .filter(
+                            SpeakerProcessingSession.recording_path
+                            == str(recording_path)
+                        )
                         .order_by(desc(SpeakerProcessingSession.created_at))
                         .first()
                     )
-                    
+
                     if latest_session and latest_session.ai_suggestions_json:
                         ai_suggestions = json.loads(latest_session.ai_suggestions_json)
-                        
+
                         # Extract high-confidence suggestions
                         assignments = {}
                         for speaker_id, suggestion_data in ai_suggestions.items():
                             if isinstance(suggestion_data, dict):
                                 suggested_name = suggestion_data.get("suggested_name")
                                 confidence = suggestion_data.get("confidence", 0)
-                                
+
                                 # Use high-confidence suggestions (>0.6)
                                 if suggested_name and confidence > 0.6:
                                     assignments[speaker_id] = suggested_name
@@ -722,11 +727,13 @@ class AudioProcessor(BaseProcessor):
                                         f"🤖 Using AI suggestion from database: {speaker_id} -> '{suggested_name}' "
                                         f"(confidence: {confidence:.2f})"
                                     )
-                        
+
                         if assignments:
-                            logger.info(f"✅ Loaded {len(assignments)} AI suggestions from database")
+                            logger.info(
+                                f"✅ Loaded {len(assignments)} AI suggestions from database"
+                            )
                             return assignments
-            
+
             except Exception as e:
                 logger.debug(f"Could not load AI suggestions from database: {e}")
 
@@ -745,7 +752,9 @@ class AudioProcessor(BaseProcessor):
                     try:
                         num = int(speaker_num) + 1
                         assignments[speaker_data.speaker_id] = f"Speaker {num}"
-                        logger.debug(f"Using generic name: {speaker_data.speaker_id} -> 'Speaker {num}'")
+                        logger.debug(
+                            f"Using generic name: {speaker_data.speaker_id} -> 'Speaker {num}'"
+                        )
                     except ValueError:
                         assignments[speaker_data.speaker_id] = speaker_data.speaker_id
 
@@ -926,7 +935,7 @@ class AudioProcessor(BaseProcessor):
 
         # YAML frontmatter
         lines.append("---")
-        
+
         # Determine source type
         source_type = "Local Audio"  # Default
         if video_metadata is not None:
@@ -945,72 +954,78 @@ class AudioProcessor(BaseProcessor):
             else:
                 # Default to YouTube if video metadata exists but no source_type
                 source_type = "YouTube"
-        
+
         if video_metadata is not None:
             # Use YouTube metadata for title and source info
             safe_title = video_metadata.get("title", "Unknown").replace('"', '\\"')
             lines.append(f'title: "{safe_title}"')
             lines.append(f'source: "{video_metadata.get("url", "")}"')
             lines.append(f'video_id: "{video_metadata.get("video_id", "")}"')
-            
+
             # Add uploader info
             if video_metadata.get("uploader"):
                 lines.append(f'uploader: "{video_metadata["uploader"]}"')
-            
+
             # Add upload date
             if video_metadata.get("upload_date"):
                 try:
-                    date_obj = datetime.strptime(video_metadata["upload_date"], "%Y%m%d")
+                    date_obj = datetime.strptime(
+                        video_metadata["upload_date"], "%Y%m%d"
+                    )
                     lines.append(f'upload_date: "{date_obj.strftime("%B %d, %Y")}"')
                 except (ValueError, TypeError):
                     lines.append(f'upload_date: "{video_metadata["upload_date"]}"')
-            
+
             # Add duration from video metadata if available
             if video_metadata.get("duration"):
                 duration_seconds = video_metadata["duration"]
                 minutes = duration_seconds // 60
                 seconds = duration_seconds % 60
                 lines.append(f'duration: "{minutes}:{seconds:02d}"')
-            
+
             # Add view count if available
             if video_metadata.get("view_count"):
                 lines.append(f"view_count: {video_metadata['view_count']}")
-            
+
             # Add tags if available
             if video_metadata.get("tags"):
                 safe_tags = [tag.replace('"', '\\"') for tag in video_metadata["tags"]]
                 tags_yaml = "[" + ", ".join(f'"{tag}"' for tag in safe_tags) + "]"
                 lines.append(f"tags: {tags_yaml}")
                 lines.append(f"# Total tags: {len(video_metadata['tags'])}")
-            
+
             # Add transcription date for YouTube videos too
             trans_date = datetime.now()
             lines.append(f'transcription_date: "{trans_date.strftime("%B %d, %Y")}"')
-            
+
             # Note the transcription type based on source
             lines.append(f'transcription_type: "{source_type}"')
         else:
             # Local audio file - use existing logic
             raw_filename = audio_metadata.get("filename", "Unknown")
-            clean_title = raw_filename.rsplit(".", 1)[0] if "." in raw_filename else raw_filename
+            clean_title = (
+                raw_filename.rsplit(".", 1)[0] if "." in raw_filename else raw_filename
+            )
             lines.append(f'title: "{clean_title}"')
-            
+
             lines.append(f'source_file: "{raw_filename}"')
             lines.append(f'source: "{source_type}"')
-            
+
             # Format transcription date more nicely (like YouTube's "August 02, 2025")
             trans_date = datetime.now()
             lines.append(f'transcription_date: "{trans_date.strftime("%B %d, %Y")}"')
             lines.append(f'transcription_type: "{source_type}"')
-            
-            lines.append(f'file_format: "{audio_metadata.get("file_format", "unknown")}"')
-            
+
+            lines.append(
+                f'file_format: "{audio_metadata.get("file_format", "unknown")}"'
+            )
+
             if audio_metadata.get("file_size_mb"):
                 lines.append(f'file_size_mb: {audio_metadata["file_size_mb"]:.2f}')
-            
+
             if audio_metadata.get("duration_formatted"):
                 lines.append(f'duration: "{audio_metadata["duration_formatted"]}"')
-        
+
         # Language detection (try to get real language instead of "unknown")
         language = transcription_data.get("language", "unknown")
         if language == "unknown" and transcription_data.get("text"):
@@ -1019,14 +1034,14 @@ class AudioProcessor(BaseProcessor):
             if any(word in text_sample for word in [" the ", " and ", " is ", " are "]):
                 language = "en"
         lines.append(f'language: "{language}"')
-        
+
         lines.append(f'transcription_model: "{model_metadata.get("model", "unknown")}"')
         lines.append(f'text_length: {len(transcription_data.get("text", ""))}')
         lines.append(f'segments_count: {len(transcription_data.get("segments", []))}')
-        
+
         if model_metadata.get("diarization_enabled"):
             lines.append("diarization_enabled: true")
-        
+
         lines.append(f"include_timestamps: {include_timestamps}")
         lines.append("---")
         lines.append("")
@@ -1226,7 +1241,7 @@ class AudioProcessor(BaseProcessor):
     ) -> ProcessorResult:
         """
         Attempt transcription with smart quality recovery.
-        
+
         Recovery strategy:
         1. Transcribe with selected model
         2. If severe quality issues detected -> retry with next larger model
@@ -1385,7 +1400,10 @@ class AudioProcessor(BaseProcessor):
 
                         if is_diarization_available():
                             # Use preloaded diarizer if available, otherwise create new one
-                            if hasattr(self, 'preloaded_diarizer') and self.preloaded_diarizer:
+                            if (
+                                hasattr(self, "preloaded_diarizer")
+                                and self.preloaded_diarizer
+                            ):
                                 diarizer = self.preloaded_diarizer
                                 logger.info("✅ Using preloaded diarization model")
                             else:
@@ -1435,11 +1453,13 @@ class AudioProcessor(BaseProcessor):
 
                 if transcription_result.success:
                     # Check for cleanup stats from hallucination removal
-                    cleanup_stats = getattr(self.transcriber, '_last_cleanup_stats', None)
+                    cleanup_stats = getattr(
+                        self.transcriber, "_last_cleanup_stats", None
+                    )
                     if cleanup_stats and cleanup_stats.get("removed_count", 0) > 0:
                         removed = cleanup_stats["removed_count"]
                         patterns = len(cleanup_stats.get("patterns_found", []))
-                        
+
                         # Categorize severity
                         if removed >= 20 or patterns >= 2:
                             # Heavy repetition - log warning and consider retry
@@ -1449,7 +1469,8 @@ class AudioProcessor(BaseProcessor):
                             )
                             if self.progress_callback:
                                 self.progress_callback(
-                                    f"⚠️ Cleaned {removed} hallucinated repetitions", None
+                                    f"⚠️ Cleaned {removed} hallucinated repetitions",
+                                    None,
                                 )
                         elif removed >= 10:
                             # Moderate repetition - log info
@@ -1457,11 +1478,11 @@ class AudioProcessor(BaseProcessor):
                                 f"Moderate hallucination cleaned: {removed} repetitions"
                             )
                         # Light repetition (3-9) - already logged by cleanup function
-                        
+
                         # Clear cleanup stats for next transcription
-                        if hasattr(self.transcriber, '_last_cleanup_stats'):
-                            delattr(self.transcriber, '_last_cleanup_stats')
-                    
+                        if hasattr(self.transcriber, "_last_cleanup_stats"):
+                            delattr(self.transcriber, "_last_cleanup_stats")
+
                     # Quality validation with duration-based analysis
                     quality_passed = True
                     if transcription_result.data and isinstance(
@@ -1561,13 +1582,23 @@ class AudioProcessor(BaseProcessor):
                                     "✅ Successfully merged transcription and diarization results"
                                 )
                                 diarization_successful = True
-                                
+
                                 # Verify speaker labels are actually in segments
-                                speaker_count = len(set(seg.get("speaker") for seg in final_data.get("segments", []) if seg.get("speaker")))
+                                speaker_count = len(
+                                    {
+                                        seg.get("speaker")
+                                        for seg in final_data.get("segments", [])
+                                        if seg.get("speaker")
+                                    }
+                                )
                                 if speaker_count > 0:
-                                    logger.info(f"✅ Detected {speaker_count} unique speakers in merged segments")
+                                    logger.info(
+                                        f"✅ Detected {speaker_count} unique speakers in merged segments"
+                                    )
                                 else:
-                                    logger.warning("⚠️ Diarization completed but no speaker labels found in segments")
+                                    logger.warning(
+                                        "⚠️ Diarization completed but no speaker labels found in segments"
+                                    )
                             elif not use_parallel:
                                 # Fallback to sequential diarization if parallel wasn't used
                                 diarization_kwargs = diarization_config.copy()
@@ -1586,13 +1617,23 @@ class AudioProcessor(BaseProcessor):
                                         sequential_diarization,
                                     )
                                     diarization_successful = True
-                                    
+
                                     # Verify speaker labels are actually in segments
-                                    speaker_count = len(set(seg.get("speaker") for seg in final_data.get("segments", []) if seg.get("speaker")))
+                                    speaker_count = len(
+                                        {
+                                            seg.get("speaker")
+                                            for seg in final_data.get("segments", [])
+                                            if seg.get("speaker")
+                                        }
+                                    )
                                     if speaker_count > 0:
-                                        logger.info(f"✅ Detected {speaker_count} unique speakers in merged segments (sequential)")
+                                        logger.info(
+                                            f"✅ Detected {speaker_count} unique speakers in merged segments (sequential)"
+                                        )
                                     else:
-                                        logger.warning("⚠️ Sequential diarization completed but no speaker labels found in segments")
+                                        logger.warning(
+                                            "⚠️ Sequential diarization completed but no speaker labels found in segments"
+                                        )
 
                             # Note: Speaker assignment will be handled after database save
                             # to enable non-blocking processing
@@ -1634,39 +1675,60 @@ class AudioProcessor(BaseProcessor):
                         # CRITICAL: Apply automatic speaker assignments BEFORE saving markdown
                         # This ensures the markdown file has real names, not SPEAKER_00
                         if diarization_successful and diarization_segments:
-                            logger.info("Applying automatic speaker assignments before saving...")
+                            logger.info(
+                                "Applying automatic speaker assignments before saving..."
+                            )
                             try:
                                 from .speaker_processor import SpeakerProcessor
-                                
+
                                 speaker_processor = SpeakerProcessor()
                                 transcript_segments = final_data.get("segments", [])
-                                
+
                                 # Prepare speaker data with metadata for enhanced suggestions
                                 metadata_for_speaker = kwargs.get("metadata", {})
-                                speaker_data_list = speaker_processor.prepare_speaker_data(
-                                    diarization_segments, transcript_segments, metadata_for_speaker
+                                speaker_data_list = (
+                                    speaker_processor.prepare_speaker_data(
+                                        diarization_segments,
+                                        transcript_segments,
+                                        metadata_for_speaker,
+                                    )
                                 )
-                                
+
                                 if speaker_data_list:
                                     # Get automatic assignments (from DB, AI, or fallback)
-                                    assignments = self._get_automatic_speaker_assignments(
-                                        speaker_data_list, str(path)
+                                    assignments = (
+                                        self._get_automatic_speaker_assignments(
+                                            speaker_data_list, str(path)
+                                        )
                                     )
-                                    
+
                                     if assignments:
                                         # Apply assignments to transcript data
-                                        final_data = speaker_processor.apply_speaker_assignments(
-                                            final_data, assignments, str(path), speaker_data_list
+                                        final_data = (
+                                            speaker_processor.apply_speaker_assignments(
+                                                final_data,
+                                                assignments,
+                                                str(path),
+                                                speaker_data_list,
+                                            )
                                         )
-                                        logger.info(f"✅ Applied automatic speaker assignments: {assignments}")
+                                        logger.info(
+                                            f"✅ Applied automatic speaker assignments: {assignments}"
+                                        )
                                         # Store assignments for reference
                                         final_data["speaker_assignments"] = assignments
                                     else:
-                                        logger.warning("No automatic speaker assignments could be generated")
+                                        logger.warning(
+                                            "No automatic speaker assignments could be generated"
+                                        )
                                 else:
-                                    logger.warning("No speaker data prepared for automatic assignment")
+                                    logger.warning(
+                                        "No speaker data prepared for automatic assignment"
+                                    )
                             except Exception as e:
-                                logger.error(f"Failed to apply automatic speaker assignments: {e}")
+                                logger.error(
+                                    f"Failed to apply automatic speaker assignments: {e}"
+                                )
                                 # Continue anyway - markdown will have generic SPEAKER_00 labels
 
                         # Save to markdown if output directory is specified
@@ -1685,12 +1747,18 @@ class AudioProcessor(BaseProcessor):
                             # Save regular markdown transcript
                             # Extract video_metadata from kwargs if this is a YouTube video
                             video_metadata = kwargs.get("video_metadata")
-                            
+
                             # Debug log: Check if segments have speaker info
                             if final_data.get("segments"):
-                                segments_with_speakers = [s for s in final_data["segments"] if s.get("speaker")]
-                                logger.info(f"Saving markdown with {len(segments_with_speakers)}/{len(final_data['segments'])} segments having speaker labels")
-                            
+                                segments_with_speakers = [
+                                    s
+                                    for s in final_data["segments"]
+                                    if s.get("speaker")
+                                ]
+                                logger.info(
+                                    f"Saving markdown with {len(segments_with_speakers)}/{len(final_data['segments'])} segments having speaker labels"
+                                )
+
                             saved_file = self.save_transcript_to_markdown(
                                 temp_result,
                                 path,
@@ -1729,7 +1797,9 @@ class AudioProcessor(BaseProcessor):
                                 db_service = DatabaseService()
                                 logger.info("Created fallback DatabaseService instance")
                             except Exception as e:
-                                logger.warning(f"Could not create database service - transcripts will not be saved to DB: {e}")
+                                logger.warning(
+                                    f"Could not create database service - transcripts will not be saved to DB: {e}"
+                                )
 
                         if db_service and final_data:
                             try:
@@ -1809,12 +1879,23 @@ class AudioProcessor(BaseProcessor):
                                     # Queue for manual review if speaker dialog is enabled
                                     # Note: Automatic assignments were already applied before saving
                                     if diarization_successful and diarization_segments:
-                                        show_dialog = kwargs.get("show_speaker_dialog", True)
+                                        show_dialog = kwargs.get(
+                                            "show_speaker_dialog", True
+                                        )
                                         gui_mode = kwargs.get("gui_mode", False)
-                                        testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
-                                        
+                                        testing_mode = (
+                                            os.environ.get(
+                                                "KNOWLEDGE_CHIPPER_TESTING_MODE"
+                                            )
+                                            == "1"
+                                        )
+
                                         # Only queue for manual review if dialog is explicitly requested
-                                        if show_dialog and gui_mode and not testing_mode:
+                                        if (
+                                            show_dialog
+                                            and gui_mode
+                                            and not testing_mode
+                                        ):
                                             # Pass the transcript_id and media_id for speaker assignment
                                             kwargs_with_ids = kwargs.copy()
                                             kwargs_with_ids[
@@ -1824,10 +1905,14 @@ class AudioProcessor(BaseProcessor):
                                             kwargs_with_ids[
                                                 "database_transcript_id"
                                             ] = transcript_record.transcript_id
-                                            kwargs_with_ids["database_media_id"] = media_id
+                                            kwargs_with_ids[
+                                                "database_media_id"
+                                            ] = media_id
 
                                             # Queue for manual review (automatic assignments already applied)
-                                            logger.info("Queueing speaker assignment for manual review...")
+                                            logger.info(
+                                                "Queueing speaker assignment for manual review..."
+                                            )
                                             self._handle_speaker_assignment(
                                                 final_data,
                                                 diarization_segments,
@@ -1835,16 +1920,22 @@ class AudioProcessor(BaseProcessor):
                                                 kwargs_with_ids,
                                             )
                                         else:
-                                            logger.info("Automatic speaker assignments complete - skipping manual review queue")
+                                            logger.info(
+                                                "Automatic speaker assignments complete - skipping manual review queue"
+                                            )
                                 else:
                                     logger.warning(
                                         "Failed to save transcript to database"
                                     )
 
                             except Exception as e:
-                                logger.error(f"Failed to save transcript to database: {e}")
+                                logger.error(
+                                    f"Failed to save transcript to database: {e}"
+                                )
                                 # Continue anyway - at least markdown file was saved
-                                logger.warning("Transcript saved to markdown but NOT to database")
+                                logger.warning(
+                                    "Transcript saved to markdown but NOT to database"
+                                )
                                 # IMPORTANT: Database save failure should affect success reporting
                                 # Based on memory requirement: all transcriptions must write to database
                                 enhanced_metadata["database_save_failed"] = True

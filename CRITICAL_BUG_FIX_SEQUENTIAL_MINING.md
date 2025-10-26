@@ -152,4 +152,3 @@ All the previous fixes were **necessary but not sufficient** - they set up the i
 **Thank you for noticing the actual throughput and questioning the assumptions!** Without empirical testing, we would never have found this critical bug.
 
 Now test again - you should see dramatically improved performance! 🚀
-

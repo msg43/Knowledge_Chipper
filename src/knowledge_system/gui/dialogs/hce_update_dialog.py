@@ -262,9 +262,9 @@ class HCEUpdateConfirmationDialog(QDialog):
         # Check if we should auto-scroll BEFORE appending
         scrollbar = self.progress_text.verticalScrollBar()
         should_scroll = scrollbar and scrollbar.value() >= scrollbar.maximum() - 10
-        
+
         self.progress_text.append(message)
-        
+
         # Only auto-scroll if user was already at the bottom
         if should_scroll and scrollbar:
             scrollbar.setValue(scrollbar.maximum())

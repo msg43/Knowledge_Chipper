@@ -25,9 +25,9 @@ QUICK START
 ================================================================================
 
 1. Run the automated tests:
-   
+
    ./test_gui_auto.sh
-   
+
    (Choose option 2 or 3)
 
 2. Wait ~30-40 minutes
@@ -46,7 +46,7 @@ TESTING MODES
    Run before committing code
    Command: ./test_gui_auto.sh → option 1
 
-📋 COMPREHENSIVE (30 minutes)  
+📋 COMPREHENSIVE (30 minutes)
    Run before merging PRs
    Command: ./test_gui_auto.sh → option 2
 
@@ -193,9 +193,9 @@ NEXT STEPS
 ================================================================================
 
 1. Run tests right now:
-   
+
    ./test_gui_auto.sh
-   
+
 2. Choose option 2 (comprehensive tests)
 
 3. Wait ~30 minutes
@@ -268,4 +268,3 @@ Run this command to start:
 Your bugs will be caught automatically from now on!
 
 ================================================================================
-

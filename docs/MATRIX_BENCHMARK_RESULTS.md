@@ -239,4 +239,3 @@ The matrix benchmark revealed that **both** Ollama's parallel capacity and appli
 4. **Flat schema** ensures 100% validation success (no errors)
 
 **Bottom line:** Small paragraph analysis on M2 Ultra achieves **0.124 seg/sec** with proper tuning of both server and client parallelism.
-

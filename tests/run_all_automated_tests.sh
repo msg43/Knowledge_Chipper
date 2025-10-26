@@ -71,4 +71,3 @@ echo "================================================================"
 echo "All Automated Tests Complete!"
 echo "No human intervention was required."
 echo "================================================================"
-

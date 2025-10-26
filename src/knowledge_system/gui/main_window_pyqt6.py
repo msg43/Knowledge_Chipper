@@ -169,10 +169,10 @@ class MainWindow(QMainWindow):
             # SQLite connections must be created and used in the same thread
             from PyQt6.QtCore import QThread
             from PyQt6.QtWidgets import QApplication
-            
+
             current_thread = QThread.currentThread()
             main_thread = QApplication.instance().thread()
-            
+
             if current_thread != main_thread:
                 logger.error(
                     f"⚠️  THREAD SAFETY: Startup cleanup called from wrong thread! "
@@ -181,7 +181,7 @@ class MainWindow(QMainWindow):
                 # Reschedule on main thread
                 QTimer.singleShot(100, self._run_startup_cleanup)
                 return
-            
+
             from pathlib import Path
 
             from ..database.service import DatabaseService

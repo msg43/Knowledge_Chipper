@@ -178,4 +178,3 @@ OLLAMA_NUM_PARALLEL=4  ← More aggressive
 The bottleneck has been removed. Your unified mining should now run **~4-5x faster** with the conservative configuration, and potentially **6-8x faster** if you increase to `OLLAMA_NUM_PARALLEL=4`.
 
 **Next step:** Run an actual mining job and verify the real-world performance improvement!
-

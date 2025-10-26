@@ -122,4 +122,3 @@ When working with database models:
 1. Check if a field uses `JSONEncodedType` - if so, it's already a Python object
 2. Only use `json.loads()` on fields with plain `Text` type that store JSON strings
 3. Add comments to clarify when a field is already deserialized
-

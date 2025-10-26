@@ -48,7 +48,7 @@ def _check_diarization_dependencies() -> bool:
         import torch  # noqa: F401
         import torchaudio  # noqa: F401
         import transformers  # noqa: F401
-        
+
         # Mark as available but don't load Pipeline yet
         PIPELINE_AVAILABLE = True
         PIPELINE = None  # Will be loaded lazily
@@ -233,7 +233,7 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                         # Load from bundled path without authentication
                         # Import pyannote.audio here to avoid torchcodec segfault on startup
                         from pyannote.audio import Pipeline as PyannoteP
-                        
+
                         if PyannoteP:
                             pipeline = PyannoteP.from_pretrained(
                                 str(bundled_model_path)
@@ -275,9 +275,7 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                     logger.info(
                         f"Calling pyannote.audio Pipeline.from_pretrained for {self.model}..."
                     )
-                    logger.debug(
-                        f"HuggingFace token present: {bool(self.hf_token)}"
-                    )
+                    logger.debug(f"HuggingFace token present: {bool(self.hf_token)}")
                     logger.debug(
                         f"HF_HUB_OFFLINE: {os.environ.get('HF_HUB_OFFLINE', 'not set')}"
                     )
@@ -286,14 +284,12 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                     try:
                         # Import pyannote.audio here to avoid torchcodec segfault on startup
                         from pyannote.audio import Pipeline as PyannoteP
-                        
+
                         # Use token parameter (replaces deprecated use_auth_token in pyannote.audio 4.0+)
                         pipeline = PyannoteP.from_pretrained(
                             self.model, token=self.hf_token  # type: ignore[call-arg]
                         )
-                        logger.info(
-                            f"Successfully loaded pipeline for {self.model}"
-                        )
+                        logger.info(f"Successfully loaded pipeline for {self.model}")
                     except Exception as model_error:
                         logger.error(
                             f"Failed to load model {self.model}: {model_error}"
@@ -308,7 +304,7 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                         logger.info(
                             f"Optimizing diarization parameters for {self.device} with {self.sensitivity} sensitivity..."
                         )
-                        
+
                         # Configure parameters based on sensitivity level
                         # Initialize variables that will be used across different pipeline components
                         if self.sensitivity == "aggressive":
@@ -316,14 +312,18 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                             min_duration_on = 0.25
                             min_cluster_size = 8
                         elif self.sensitivity == "balanced":
-                            threshold = 0.65  # Reduced from 0.7 for better speaker separation
-                            min_duration_on = 0.4  # Reduced from 0.5 for quicker exchanges
+                            threshold = (
+                                0.65  # Reduced from 0.7 for better speaker separation
+                            )
+                            min_duration_on = (
+                                0.4  # Reduced from 0.5 for quicker exchanges
+                            )
                             min_cluster_size = 12  # Reduced from 15
                         else:  # conservative - now relies on voice fingerprinting for quality
                             threshold = 0.75  # Reasonable threshold - voice fingerprinting will merge false splits
                             min_duration_on = 1.0  # Normal segments - voice fingerprinting will handle micro-segments
                             min_cluster_size = 20  # Moderate setting - let voice fingerprinting handle the rest
-                        
+
                         # Use centroid clustering - works on both CPU and MPS
                         # Avoid spectral clustering which fails on MPS due to eigenvalue decomposition
                         if hasattr(pipeline, "clustering"):
@@ -884,19 +884,24 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                         # Preload audio using torchaudio to avoid torchcodec FFmpeg issues
                         # See: https://github.com/pyannote/pyannote-audio/issues/1707
                         import torchaudio
-                        
-                        print(f"[THREAD] Preloading audio with torchaudio...", flush=True)
+
+                        print(
+                            f"[THREAD] Preloading audio with torchaudio...", flush=True
+                        )
                         waveform, sample_rate = torchaudio.load(audio_path)
-                        
+
                         # Pass as dictionary per pyannote.audio docs
-                        audio_input = {
-                            "waveform": waveform,
-                            "sample_rate": sample_rate
-                        }
-                        
-                        print(f"[THREAD] Audio preloaded: {waveform.shape}, {sample_rate}Hz", flush=True)
-                        print(f"[THREAD] Calling pipeline with preloaded audio...", flush=True)
-                        
+                        audio_input = {"waveform": waveform, "sample_rate": sample_rate}
+
+                        print(
+                            f"[THREAD] Audio preloaded: {waveform.shape}, {sample_rate}Hz",
+                            flush=True,
+                        )
+                        print(
+                            f"[THREAD] Calling pipeline with preloaded audio...",
+                            flush=True,
+                        )
+
                         result = self._pipeline(audio_input)
                         print(f"[THREAD] Pipeline returned result", flush=True)
                         sys.stdout.flush()
@@ -994,21 +999,25 @@ class SpeakerDiarizationProcessor(BaseProcessor):
             # In pyannote.audio 4.0+, the pipeline returns a DiarizeOutput object
             # which is a wrapper containing the actual annotation in the .speaker_diarization attribute
             # See: https://github.com/pyannote/pyannote-audio/releases/tag/4.0.0
-            
+
             # Access the actual Annotation object from DiarizeOutput
-            if hasattr(diarization, 'speaker_diarization'):
+            if hasattr(diarization, "speaker_diarization"):
                 annotation = diarization.speaker_diarization
-                logger.info(f"✅ Accessed speaker_diarization attribute, type: {type(annotation)}")
+                logger.info(
+                    f"✅ Accessed speaker_diarization attribute, type: {type(annotation)}"
+                )
             else:
                 # Fallback for older versions or unexpected structure
-                logger.warning(f"⚠️ DiarizeOutput missing .speaker_diarization attribute. Type: {type(diarization)}")
-                public_attrs = [a for a in dir(diarization) if not a.startswith('_')]
+                logger.warning(
+                    f"⚠️ DiarizeOutput missing .speaker_diarization attribute. Type: {type(diarization)}"
+                )
+                public_attrs = [a for a in dir(diarization) if not a.startswith("_")]
                 logger.warning(f"⚠️ Available attributes: {public_attrs}")
                 raise AttributeError(
                     f"DiarizeOutput object missing expected .speaker_diarization attribute. "
                     f"Type: {type(diarization)}, Available: {public_attrs}"
                 )
-            
+
             # Process segments with progress updates
             for segment, speaker in annotation:
                 segments.append(

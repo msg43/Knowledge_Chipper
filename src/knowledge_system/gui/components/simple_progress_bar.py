@@ -4,13 +4,7 @@ Clean implementation focused on clarity and proper percentage display.
 """
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QProgressBar,
-    QVBoxLayout,
-)
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QProgressBar, QVBoxLayout
 
 
 class SimpleTranscriptionProgressBar(QFrame):
@@ -56,9 +50,11 @@ class SimpleTranscriptionProgressBar(QFrame):
 
         # Phase progress bar (current phase: download, transcription, diarization, etc.)
         self.phase_label = QLabel("Phase: Initializing")
-        self.phase_label.setStyleSheet("font-weight: normal; font-size: 11px; color: #b0b0b0;")
+        self.phase_label.setStyleSheet(
+            "font-weight: normal; font-size: 11px; color: #b0b0b0;"
+        )
         layout.addWidget(self.phase_label)
-        
+
         self.phase_progress_bar = QProgressBar()
         self.phase_progress_bar.setMinimum(0)
         self.phase_progress_bar.setMaximum(100)
@@ -85,15 +81,17 @@ class SimpleTranscriptionProgressBar(QFrame):
         """
         )
         layout.addWidget(self.phase_progress_bar)
-        
+
         # Add spacing
         layout.addSpacing(6)
-        
+
         # Overall progress bar (total file progress)
         self.overall_label = QLabel("Overall Progress")
-        self.overall_label.setStyleSheet("font-weight: normal; font-size: 11px; color: #b0b0b0;")
+        self.overall_label.setStyleSheet(
+            "font-weight: normal; font-size: 11px; color: #b0b0b0;"
+        )
         layout.addWidget(self.overall_label)
-        
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setMinimum(0)
         self.progress_bar.setMaximum(100)
@@ -172,17 +170,19 @@ class SimpleTranscriptionProgressBar(QFrame):
         if self.total_files > 0:
             # Base percentage from completed files
             base_percentage = (total_processed / self.total_files) * 100
-            
+
             # Add fractional progress from current file being processed
             if total_processed < self.total_files and self.current_file_progress > 0:
                 # Each file represents (100 / total_files)% of total
                 file_weight = 100 / self.total_files
                 # Add the portion of the current file that's done
-                current_file_contribution = (self.current_file_progress / 100) * file_weight
+                current_file_contribution = (
+                    self.current_file_progress / 100
+                ) * file_weight
                 percentage = int(base_percentage + current_file_contribution)
             else:
                 percentage = int(base_percentage)
-            
+
             self.progress_bar.setValue(percentage)
         else:
             percentage = 0
@@ -192,40 +192,42 @@ class SimpleTranscriptionProgressBar(QFrame):
 
     def update_current_file_progress(self, progress_percent: int):
         """Update progress within the current file being processed (0-100).
-        
+
         This allows showing smooth progress during single file transcription.
         """
         self.current_file_progress = max(0, min(100, progress_percent))
-        
+
         # Recalculate total progress including current file contribution
         if self.total_files > 0:
             total_processed = self.completed_files + self.failed_files
             base_percentage = (total_processed / self.total_files) * 100
-            
+
             # Add fractional progress from current file
             if total_processed < self.total_files and self.current_file_progress > 0:
                 file_weight = 100 / self.total_files
-                current_file_contribution = (self.current_file_progress / 100) * file_weight
+                current_file_contribution = (
+                    self.current_file_progress / 100
+                ) * file_weight
                 percentage = int(base_percentage + current_file_contribution)
             else:
                 percentage = int(base_percentage)
-            
+
             self.progress_bar.setValue(percentage)
-    
+
     def update_phase_progress(self, phase_name: str, phase_percent: int):
         """Update the current processing phase and its progress.
-        
+
         Args:
             phase_name: Name of the current phase (e.g., "Downloading", "Transcribing", "Diarization")
             phase_percent: Progress within this phase (0-100)
         """
         self.current_phase = phase_name
         self.phase_progress = max(0, min(100, phase_percent))
-        
+
         # Update phase label and progress bar
         self.phase_label.setText(f"Phase: {phase_name}")
         self.phase_progress_bar.setValue(self.phase_progress)
-    
+
     def set_total_files(self, total: int):
         """Set or update the total number of files (for when total is determined later)."""
         self.total_files = total
@@ -292,7 +294,7 @@ class SimpleTranscriptionProgressBar(QFrame):
 
         self.progress_bar.setValue(0)
         self.progress_bar.setMaximum(100)
-        
+
         self.phase_progress_bar.setValue(0)
         self.phase_label.setText("Phase: Initializing")
 

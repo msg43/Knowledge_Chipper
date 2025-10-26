@@ -166,4 +166,3 @@ All strict mode blocks include:
 
 ### Default Safety
 The system defaults to the safest option (strict mode enabled) to prevent accidental IP exposure, following the principle of "secure by default."
-

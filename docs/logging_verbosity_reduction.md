@@ -128,4 +128,3 @@ Status: ⚙️ Unified Mining: segment 14/23
 - GUI progress displays are unaffected
 - Segment mining progress is still clearly visible
 - Errors, warnings, and important events remain prominent
-

@@ -127,4 +127,3 @@ The remaining 8 workers queue up, but the queue moves 4x faster, so overall thro
 4. **Ollama lanes:** ⚠️ Run `./configure_ollama_parallel.sh` to fix
 
 After all fixes: **10-15x faster unified mining** 🚀
-

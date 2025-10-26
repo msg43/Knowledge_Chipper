@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from knowledge_system.processors.audio_processor import AudioProcessor  # noqa: E402
 from knowledge_system.processors.moc import MOCProcessor  # noqa: E402
+
 # Note: SummarizerProcessor removed - use System2Orchestrator instead
 # This batch processor is deprecated and should be updated to use System2Orchestrator
 from knowledge_system.utils.ipc_communication import IPCCommunicator  # noqa: E402

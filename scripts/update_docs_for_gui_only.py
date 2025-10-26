@@ -5,21 +5,21 @@ Automatically update documentation to remove CLI references.
 This script updates README and CHANGELOG to reflect GUI-only application.
 """
 
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 
 def update_readme():
     """Update README.md to remove CLI references."""
     readme = Path("README.md")
-    
+
     if not readme.exists():
         print("README.md not found, skipping")
         return
-    
+
     content = readme.read_text()
     original_content = content
-    
+
     # Add GUI-only notice at top if not present
     gui_notice = """
 ## Application Type
@@ -29,16 +29,16 @@ def update_readme():
 The CLI interface has been removed to maintain a single, well-tested code path. If you need automation/scripting capabilities, please use the GUI's batch processing and folder monitoring features.
 
 """
-    
+
     if "GUI-only application" not in content:
         # Insert after first heading
-        lines = content.split('\n')
+        lines = content.split("\n")
         for i, line in enumerate(lines):
-            if line.startswith('# '):
+            if line.startswith("# "):
                 lines.insert(i + 2, gui_notice)
                 break
-        content = '\n'.join(lines)
-    
+        content = "\n".join(lines)
+
     # Save if changed
     if content != original_content:
         readme.write_text(content)
@@ -50,13 +50,17 @@ The CLI interface has been removed to maintain a single, well-tested code path. 
 def update_changelog():
     """Update CHANGELOG.md with CLI removal entry."""
     changelog = Path("CHANGELOG.md")
-    
+
     if not changelog.exists():
         print("CHANGELOG.md not found, creating")
         changelog.touch()
-    
-    content = changelog.read_text() if changelog.exists() and changelog.stat().st_size > 0 else ""
-    
+
+    content = (
+        changelog.read_text()
+        if changelog.exists() and changelog.stat().st_size > 0
+        else ""
+    )
+
     # Create entry
     today = datetime.now().strftime("%Y-%m-%d")
     entry = f"""## [Unreleased] - {today}
@@ -92,7 +96,7 @@ def update_changelog():
 ---
 
 """
-    
+
     # Only add if not already present
     if "Removed CLI interface" not in content:
         content = entry + content
@@ -106,10 +110,10 @@ def main():
     """Run all documentation updates."""
     print("Updating documentation for GUI-only application...")
     print("")
-    
+
     update_readme()
     update_changelog()
-    
+
     print("")
     print("✅ Documentation updated successfully")
     print("   - README.md: Added GUI-only notice")
@@ -118,4 +122,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

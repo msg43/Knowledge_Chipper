@@ -17,15 +17,15 @@ from .base_provider import BaseProxyProvider
 class AnyIPProvider(BaseProxyProvider):
     """
     AnyIP.io proxy provider (stub implementation).
-    
+
     TODO: Implement based on AnyIP.io API documentation when credentials are available.
     """
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
+        api_key: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
     ):
         """
         Initialize AnyIP provider.
@@ -58,13 +58,13 @@ class AnyIPProvider(BaseProxyProvider):
             except Exception:
                 pass  # Config loading failed, use what we have
 
-    def get_proxy_url(self, session_id: Optional[str] = None) -> Optional[str]:
+    def get_proxy_url(self, session_id: str | None = None) -> str | None:
         """
         Get proxy URL for AnyIP.io.
-        
+
         Args:
             session_id: Optional session identifier
-            
+
         Returns:
             Proxy URL string or None
         """
@@ -79,26 +79,26 @@ class AnyIPProvider(BaseProxyProvider):
             "See anyip_provider.py for implementation instructions."
         )
 
-    def get_proxy_config(self) -> Dict[str, str]:
+    def get_proxy_config(self) -> dict[str, str]:
         """
         Get proxy configuration dict for requests library.
-        
+
         Returns:
             Dict with 'http' and 'https' keys, or empty dict
         """
         proxy_url = self.get_proxy_url()
         if not proxy_url:
             return {}
-        
+
         return {"http": proxy_url, "https": proxy_url}
 
-    def test_connectivity(self, timeout: int = 10) -> Tuple[bool, str]:
+    def test_connectivity(self, timeout: int = 10) -> tuple[bool, str]:
         """
         Test AnyIP.io proxy connectivity.
-        
+
         Args:
             timeout: Connection timeout in seconds
-            
+
         Returns:
             Tuple of (success: bool, message: str)
         """
@@ -111,7 +111,7 @@ class AnyIPProvider(BaseProxyProvider):
     def is_configured(self) -> bool:
         """
         Check if AnyIP.io credentials are configured.
-        
+
         Returns:
             True if credentials available, False otherwise
         """
@@ -122,9 +122,8 @@ class AnyIPProvider(BaseProxyProvider):
     def provider_name(self) -> str:
         """
         Get human-readable provider name.
-        
+
         Returns:
             "AnyIP.io"
         """
         return "AnyIP.io"
-

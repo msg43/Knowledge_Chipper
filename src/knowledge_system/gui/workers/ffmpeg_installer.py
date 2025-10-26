@@ -42,7 +42,7 @@ def get_default_ffmpeg_release() -> FFmpegRelease:
     - Works for both Intel and Apple Silicon architectures
     """
     system = platform.system().lower()
-    
+
     if system == "darwin":
         # Evermeet.cx provides the latest FFmpeg release (currently 8.x)
         # This URL automatically serves the newest version available

@@ -34,10 +34,10 @@ class HCEAdapter:
     ):
         """
         DEPRECATED: Use System2Orchestrator instead.
-        
+
         SummarizerProcessor has been removed. GUI components should use
         System2Orchestrator directly for all summarization operations.
-        
+
         This method is kept for backward compatibility but will raise an error.
         """
         raise NotImplementedError(

@@ -33,4 +33,3 @@ OLLAMA_NUM_PARALLEL=7
   Segments processed: 20
   Throughput:  segments/second
   CPU during test: 16.65%
-

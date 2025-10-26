@@ -29,7 +29,7 @@ if _os.getenv("KC_SKIP_PREFLIGHT", "0").lower() not in ("1", "true", "yes"):
         # Don't silently swallow preflight failures - they indicate real problems!
         import sys
         import traceback
-        
+
         print("\n" + "=" * 70)
         print("❌ PREFLIGHT CHECK FAILED - APP CANNOT START")
         print("=" * 70)
@@ -38,7 +38,7 @@ if _os.getenv("KC_SKIP_PREFLIGHT", "0").lower() not in ("1", "true", "yes"):
         print("The app cannot function without these components.\n")
         traceback.print_exc()
         print("\n" + "=" * 70)
-        
+
         # Re-raise to prevent broken app from launching
         raise
 

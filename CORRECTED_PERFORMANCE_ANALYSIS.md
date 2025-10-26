@@ -182,4 +182,3 @@ Your understanding of the Metal backend thread pools and CPU oversubscription is
 - **Expected: 8-12 segments/second** (not 15, but still 8-12x faster than before)
 
 This is a much more sophisticated and correct understanding of the performance characteristics!
-

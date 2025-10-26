@@ -7,6 +7,7 @@ from knowledge_system.processors.html import HTMLProcessor
 from knowledge_system.processors.pdf import PDFProcessor
 from knowledge_system.processors.rss_processor import RSSProcessor
 from knowledge_system.processors.youtube_download import YouTubeDownloadProcessor
+
 # YouTubeMetadataProcessor removed - not used in transcription workflow
 
 # Registry maps extension or pattern to processor class

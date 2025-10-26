@@ -148,4 +148,3 @@ From [Ollama blog](https://ollama.com/blog/structured-outputs):
 - [Ollama Structured Outputs Blog](https://ollama.com/blog/structured-outputs)
 - [Ollama API Documentation](https://github.com/ollama/ollama/blob/main/docs/api.md#generate-a-completion)
 - GitHub discussions on schema complexity limits
-

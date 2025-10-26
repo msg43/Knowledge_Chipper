@@ -17,14 +17,14 @@ from .base_provider import BaseProxyProvider
 class OxylabsProvider(BaseProxyProvider):
     """
     Oxylabs.io proxy provider (stub implementation).
-    
+
     TODO: Implement based on Oxylabs API documentation when credentials are available.
     """
 
     def __init__(
         self,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
+        username: str | None = None,
+        password: str | None = None,
     ):
         """
         Initialize Oxylabs provider.
@@ -52,13 +52,13 @@ class OxylabsProvider(BaseProxyProvider):
             except Exception:
                 pass  # Config loading failed, use what we have
 
-    def get_proxy_url(self, session_id: Optional[str] = None) -> Optional[str]:
+    def get_proxy_url(self, session_id: str | None = None) -> str | None:
         """
         Get proxy URL for Oxylabs.
-        
+
         Args:
             session_id: Optional session identifier
-            
+
         Returns:
             Proxy URL string or None
         """
@@ -73,26 +73,26 @@ class OxylabsProvider(BaseProxyProvider):
             "See oxylabs_provider.py for implementation instructions."
         )
 
-    def get_proxy_config(self) -> Dict[str, str]:
+    def get_proxy_config(self) -> dict[str, str]:
         """
         Get proxy configuration dict for requests library.
-        
+
         Returns:
             Dict with 'http' and 'https' keys, or empty dict
         """
         proxy_url = self.get_proxy_url()
         if not proxy_url:
             return {}
-        
+
         return {"http": proxy_url, "https": proxy_url}
 
-    def test_connectivity(self, timeout: int = 10) -> Tuple[bool, str]:
+    def test_connectivity(self, timeout: int = 10) -> tuple[bool, str]:
         """
         Test Oxylabs proxy connectivity.
-        
+
         Args:
             timeout: Connection timeout in seconds
-            
+
         Returns:
             Tuple of (success: bool, message: str)
         """
@@ -105,7 +105,7 @@ class OxylabsProvider(BaseProxyProvider):
     def is_configured(self) -> bool:
         """
         Check if Oxylabs credentials are configured.
-        
+
         Returns:
             True if credentials available, False otherwise
         """
@@ -115,9 +115,8 @@ class OxylabsProvider(BaseProxyProvider):
     def provider_name(self) -> str:
         """
         Get human-readable provider name.
-        
+
         Returns:
             "Oxylabs"
         """
         return "Oxylabs"
-

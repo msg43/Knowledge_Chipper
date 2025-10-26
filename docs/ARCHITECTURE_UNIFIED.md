@@ -370,4 +370,3 @@ cp knowledge_system.db.pre_unification.TIMESTAMP knowledge_system.db
 - `docs/guides/USER_GUIDE_UNIFIED.md` - User documentation
 - `src/knowledge_system/processors/hce/unified_pipeline.py` - Pipeline implementation
 - `src/knowledge_system/processors/hce/storage_sqlite.py` - Storage implementation
-

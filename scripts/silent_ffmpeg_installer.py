@@ -32,7 +32,7 @@ class FFmpegRelease:
 def get_default_ffmpeg_release() -> FFmpegRelease:
     """Return an appropriate FFmpeg release for the current platform/arch."""
     system = platform.system().lower()
-    
+
     if system == "darwin":
         # Evermeet.cx provides the latest FFmpeg release (currently 8.x)
         # This URL automatically serves the newest version available

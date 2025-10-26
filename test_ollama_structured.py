@@ -2,17 +2,15 @@
 """Test if Ollama's structured outputs work with different schema complexities."""
 
 import json
-import requests
 import time
+
+import requests
 
 # Simple schema (no nesting, no regex)
 SIMPLE_SCHEMA = {
     "type": "object",
     "required": ["name", "age"],
-    "properties": {
-        "name": {"type": "string"},
-        "age": {"type": "integer"}
-    }
+    "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
 }
 
 # Nested schema (like our miner_output.v1.json)
@@ -36,19 +34,19 @@ NESTED_SCHEMA = {
                                 "quote": {"type": "string"},
                                 "t0": {
                                     "type": "string",
-                                    "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
+                                    "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
                                 },
                                 "t1": {
                                     "type": "string",
-                                    "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+                                    "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
         }
-    }
+    },
 }
 
 # Flat schema with timestamps (no nested arrays, but has regex)
@@ -65,13 +63,13 @@ FLAT_WITH_TIMESTAMPS = {
                     "claim_text": {"type": "string"},
                     "timestamp": {
                         "type": "string",
-                        "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
+                        "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
                     },
-                    "evidence_quote": {"type": "string"}
-                }
-            }
+                    "evidence_quote": {"type": "string"},
+                },
+            },
         }
-    }
+    },
 }
 
 # Flat schema WITHOUT regex (just strings)
@@ -87,34 +85,35 @@ FLAT_NO_REGEX = {
                 "properties": {
                     "claim_text": {"type": "string"},
                     "timestamp": {"type": "string"},
-                    "evidence_quote": {"type": "string"}
-                }
-            }
+                    "evidence_quote": {"type": "string"},
+                },
+            },
         }
-    }
+    },
 }
+
 
 def test_schema(name, schema, prompt="Tell me a fact about AI."):
     """Test if Ollama can generate with a given schema."""
     print(f"\n{'='*60}")
     print(f"Testing: {name}")
     print(f"{'='*60}")
-    
+
     payload = {
         "model": "qwen2.5:7b-instruct",
         "messages": [{"role": "user", "content": prompt}],
         "format": schema,
         "stream": False,
-        "options": {
-            "temperature": 0.0
-        }
+        "options": {"temperature": 0.0},
     }
-    
+
     try:
         start = time.time()
-        response = requests.post("http://localhost:11434/api/chat", json=payload, timeout=30)
+        response = requests.post(
+            "http://localhost:11434/api/chat", json=payload, timeout=30
+        )
         elapsed = time.time() - start
-        
+
         if response.status_code == 200:
             result = response.json()
             content = result.get("message", {}).get("content", "")
@@ -129,39 +128,42 @@ def test_schema(name, schema, prompt="Tell me a fact about AI."):
         print(f"❌ EXCEPTION: {e}")
         return False, None
 
+
 def main():
     print("OLLAMA STRUCTURED OUTPUT COMPATIBILITY TEST")
     print(f"Testing different schema complexities...")
-    
+
     results = {}
-    
+
     # Test 1: Simple schema
-    results["simple"] = test_schema("Simple (no nesting)", SIMPLE_SCHEMA, "Give me your name and age.")
+    results["simple"] = test_schema(
+        "Simple (no nesting)", SIMPLE_SCHEMA, "Give me your name and age."
+    )
     time.sleep(2)
-    
+
     # Test 2: Flat with timestamps (regex)
     results["flat_regex"] = test_schema(
         "Flat with regex timestamps",
         FLAT_WITH_TIMESTAMPS,
-        "Extract one claim from this: 'AI will transform healthcare in the next 5 years.'"
+        "Extract one claim from this: 'AI will transform healthcare in the next 5 years.'",
     )
     time.sleep(2)
-    
+
     # Test 3: Flat without regex
     results["flat_no_regex"] = test_schema(
         "Flat without regex",
         FLAT_NO_REGEX,
-        "Extract one claim from this: 'AI will transform healthcare in the next 5 years.'"
+        "Extract one claim from this: 'AI will transform healthcare in the next 5 years.'",
     )
     time.sleep(2)
-    
+
     # Test 4: Nested schema (like miner_output.v1.json)
     results["nested"] = test_schema(
         "Nested with regex (miner_output.v1)",
         NESTED_SCHEMA,
-        "Extract one claim with evidence from this: 'Studies show AI improves diagnosis accuracy by 20%.'"
+        "Extract one claim with evidence from this: 'Studies show AI improves diagnosis accuracy by 20%.'",
     )
-    
+
     # Summary
     print(f"\n{'='*60}")
     print("SUMMARY")
@@ -170,7 +172,7 @@ def main():
         status = "✅ WORKS" if success else "❌ FAILS"
         time_str = f"({elapsed:.2f}s)" if elapsed else ""
         print(f"{name:20s}: {status} {time_str}")
-    
+
     # Conclusion
     print(f"\n{'='*60}")
     if results["nested"][0]:
@@ -183,6 +185,7 @@ def main():
             print("   ✅ But flat without regex works → regex is the problem")
         else:
             print("   ❌ All structured outputs fail → Ollama issue")
+
 
 if __name__ == "__main__":
     main()

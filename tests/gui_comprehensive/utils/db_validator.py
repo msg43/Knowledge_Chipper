@@ -48,56 +48,65 @@ class DBValidator:
             ft=file_type,
         )
         return rows[0] if rows else None
-    
+
     def get_all_videos(self) -> list[dict]:
         """Get all video/media records."""
         return self._fetchall("SELECT * FROM media_sources ORDER BY processed_at DESC")
-    
+
     def get_transcript_for_video(self, video_id: str) -> dict | None:
         """Get transcript for video with full validation."""
         rows = self._fetchall(
             "SELECT * FROM transcripts WHERE video_id = :vid ORDER BY created_at DESC LIMIT 1",
-            vid=video_id
+            vid=video_id,
         )
         return rows[0] if rows else None
-    
+
     def get_all_summaries(self) -> list[dict]:
         """Get all summary records."""
         return self._fetchall("SELECT * FROM summaries ORDER BY created_at DESC")
-    
+
     def validate_transcript_schema(self, transcript: dict) -> list[str]:
         """Validate transcript has all required fields. Returns list of errors."""
         errors = []
         required_fields = [
-            'transcript_id', 'video_id', 'language', 'transcript_text',
-            'transcript_segments_json', 'created_at'
+            "transcript_id",
+            "video_id",
+            "language",
+            "transcript_text",
+            "transcript_segments_json",
+            "created_at",
         ]
         for field in required_fields:
             if field not in transcript or transcript[field] is None:
                 errors.append(f"Missing required field: {field}")
-        
+
         # Validate data types
-        if 'transcript_segments_json' in transcript and transcript['transcript_segments_json']:
-            if not isinstance(transcript['transcript_segments_json'], (list, str)):
+        if (
+            "transcript_segments_json" in transcript
+            and transcript["transcript_segments_json"]
+        ):
+            if not isinstance(transcript["transcript_segments_json"], (list, str)):
                 errors.append("transcript_segments_json must be list or JSON string")
-        
+
         return errors
-    
+
     def validate_summary_schema(self, summary: dict) -> list[str]:
         """Validate summary has all required fields. Returns list of errors."""
         errors = []
         required_fields = [
-            'summary_id', 'video_id', 'summary_text', 'llm_provider',
-            'llm_model', 'created_at'
+            "summary_id",
+            "video_id",
+            "summary_text",
+            "llm_provider",
+            "llm_model",
+            "created_at",
         ]
         for field in required_fields:
             if field not in summary or summary[field] is None:
                 errors.append(f"Missing required field: {field}")
-        
+
         # Validate content
-        if 'summary_text' in summary and not summary['summary_text']:
+        if "summary_text" in summary and not summary["summary_text"]:
             errors.append("summary_text cannot be empty")
-        
+
         return errors
-
-

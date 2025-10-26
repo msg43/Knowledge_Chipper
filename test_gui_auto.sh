@@ -58,26 +58,26 @@ case $choice in
         cd "$SCRIPT_DIR/tests/gui_comprehensive"
         ../../venv/bin/python3 main_test_runner.py smoke
         ;;
-    
+
     2)
         echo -e "${GREEN}Running comprehensive workflow tests...${NC}"
         "$SCRIPT_DIR/tests/run_comprehensive_automated_tests.sh"
         ;;
-    
+
     3)
         echo -e "${GREEN}Running full test suite with analysis...${NC}"
-        
+
         # Run tests
         "$SCRIPT_DIR/tests/run_comprehensive_automated_tests.sh"
-        
+
         # Find most recent report directory
         REPORTS_DIR=$(ls -td "$SCRIPT_DIR/tests/reports/automated_"* 2>/dev/null | head -1)
-        
+
         if [ -n "$REPORTS_DIR" ]; then
             echo ""
             echo -e "${BLUE}Running bug detection...${NC}"
             "$SCRIPT_DIR/venv/bin/python3" "$SCRIPT_DIR/tests/tools/bug_detector.py" "$REPORTS_DIR"
-            
+
             # Show bug report location
             BUG_REPORT=$(ls -t "$REPORTS_DIR/bug_reports/"*.md 2>/dev/null | head -1)
             if [ -n "$BUG_REPORT" ]; then
@@ -85,42 +85,42 @@ case $choice in
                 echo -e "${GREEN}✅ Bug report generated:${NC}"
                 echo "   $BUG_REPORT"
                 echo ""
-                
+
                 read -p "Open bug report? [y/N]: " open_report
                 if [[ $open_report =~ ^[Yy]$ ]]; then
                     open "$BUG_REPORT" || cat "$BUG_REPORT"
                 fi
             fi
         fi
-        
+
         # Run coverage analysis
         echo ""
         echo -e "${BLUE}Running coverage analysis...${NC}"
         "$SCRIPT_DIR/venv/bin/python3" "$SCRIPT_DIR/tests/tools/coverage_analyzer.py"
-        
+
         COVERAGE_REPORT="$SCRIPT_DIR/tests/reports/coverage_analysis.md"
         if [ -f "$COVERAGE_REPORT" ]; then
             echo ""
             echo -e "${GREEN}✅ Coverage report generated:${NC}"
             echo "   $COVERAGE_REPORT"
             echo ""
-            
+
             read -p "Open coverage report? [y/N]: " open_coverage
             if [[ $open_coverage =~ ^[Yy]$ ]]; then
                 open "$COVERAGE_REPORT" || cat "$COVERAGE_REPORT"
             fi
         fi
         ;;
-    
+
     4)
         echo -e "${GREEN}Running coverage analysis...${NC}"
         "$SCRIPT_DIR/venv/bin/python3" "$SCRIPT_DIR/tests/tools/coverage_analyzer.py"
-        
+
         COVERAGE_REPORT="$SCRIPT_DIR/tests/reports/coverage_analysis.md"
         echo ""
         echo -e "${GREEN}✅ Coverage report generated:${NC}"
         echo "   $COVERAGE_REPORT"
-        
+
         if [ -f "$COVERAGE_REPORT" ]; then
             echo ""
             # Show summary
@@ -128,21 +128,21 @@ case $choice in
             grep -A 5 "^## Summary" "$COVERAGE_REPORT" || true
         fi
         ;;
-    
+
     5)
         echo -e "${GREEN}Analyzing existing test reports for bugs...${NC}"
-        
+
         # Find most recent report directory
         REPORTS_DIR=$(ls -td "$SCRIPT_DIR/tests/reports/automated_"* 2>/dev/null | head -1)
-        
+
         if [ -z "$REPORTS_DIR" ]; then
             echo -e "${YELLOW}⚠️  No test reports found. Run tests first.${NC}"
             exit 1
         fi
-        
+
         echo "Analyzing: $REPORTS_DIR"
         "$SCRIPT_DIR/venv/bin/python3" "$SCRIPT_DIR/tests/tools/bug_detector.py" "$REPORTS_DIR"
-        
+
         # Show bug report location
         BUG_REPORT=$(ls -t "$REPORTS_DIR/bug_reports/"*.md 2>/dev/null | head -1)
         if [ -n "$BUG_REPORT" ]; then
@@ -150,12 +150,12 @@ case $choice in
             echo -e "${GREEN}✅ Bug report generated:${NC}"
             echo "   $BUG_REPORT"
             echo ""
-            
+
             # Show summary
             echo -e "${BLUE}Bug Summary:${NC}"
             head -20 "$BUG_REPORT"
             echo ""
-            
+
             read -p "Open full report? [y/N]: " open_report
             if [[ $open_report =~ ^[Yy]$ ]]; then
                 open "$BUG_REPORT" || cat "$BUG_REPORT"
@@ -164,7 +164,7 @@ case $choice in
             echo -e "${GREEN}✅ No bugs detected!${NC}"
         fi
         ;;
-    
+
     6)
         echo "Custom testing options:"
         echo ""
@@ -177,7 +177,7 @@ case $choice in
         echo "Test modes: smoke, basic, comprehensive, stress, all"
         echo ""
         ;;
-    
+
     *)
         echo "Invalid choice"
         exit 1
@@ -195,4 +195,3 @@ echo "  📖 tests/gui_comprehensive/README.md"
 echo ""
 echo -e "${BLUE}════════════════════════════════════════════════════════${NC}"
 echo ""
-

@@ -100,7 +100,7 @@ class ParallelHCEProcessor:
     def _calculate_optimal_workers(self) -> int:
         """
         Calculate optimal number of workers based on system resources.
-        
+
         For local LLM inference (Ollama), each worker spawns multiple threads
         for the Metal/GPU backend. To avoid thread oversubscription:
         - Each Ollama request uses ~4-6 threads for Metal backend
@@ -122,11 +122,11 @@ class ParallelHCEProcessor:
         # Each Ollama worker spawns ~5 threads for Metal backend
         # Target: 6-8 workers for high-end systems, with ~1.5x thread oversubscription
         threads_per_worker = 5  # Metal backend threads per request
-        
+
         # Allow ~1.5x thread oversubscription (reasonable with hyperthreading)
         # This gives us: cores * 1.5 / threads_per_worker
         ideal_workers = int((cpu_cores * 1.5) / threads_per_worker)
-        
+
         # Clamp to reasonable range based on core count
         if cpu_cores >= 20:  # High-end (M2 Ultra, Threadripper)
             cpu_based_max = min(ideal_workers, 8)  # Cap at 8 for stability
@@ -136,7 +136,7 @@ class ParallelHCEProcessor:
             cpu_based_max = min(ideal_workers, 4)  # Cap at 4
         else:  # Consumer
             cpu_based_max = min(ideal_workers, 2)  # Cap at 2
-        
+
         cpu_based_max = max(1, cpu_based_max)  # Minimum 1 worker
 
         # Use the more conservative limit
@@ -158,14 +158,15 @@ class ParallelHCEProcessor:
     ) -> list[Any]:
         """
         Process items in parallel using asyncio (for I/O-bound tasks like LLM calls).
-        
+
         This is MUCH more efficient than ThreadPoolExecutor for async I/O operations
         because it doesn't create nested thread pools.
         """
+
         async def process_all():
             # Create semaphore to limit concurrency
             semaphore = asyncio.Semaphore(self.max_workers)
-            
+
             async def process_with_semaphore(item, index):
                 async with semaphore:
                     try:
@@ -177,40 +178,36 @@ class ParallelHCEProcessor:
                         else:
                             # Run sync function in thread pool to avoid blocking
                             loop = asyncio.get_event_loop()
-                            result = await loop.run_in_executor(None, processor_func, item)
-                        
+                            result = await loop.run_in_executor(
+                                None, processor_func, item
+                            )
+
                         if progress_callback:
-                            progress_callback(f"Processed item {index + 1}/{len(items)}")
-                        
+                            progress_callback(
+                                f"Processed item {index + 1}/{len(items)}"
+                            )
+
                         return index, result
                     except Exception as e:
                         logger.error(f"Error processing item {index}: {e}")
                         return index, None
-            
+
             # Create all tasks
             tasks = [process_with_semaphore(item, i) for i, item in enumerate(items)]
-            
+
             # Run all tasks concurrently
             results_with_indices = await asyncio.gather(*tasks, return_exceptions=False)
-            
+
             # Sort by index to preserve order
             results = [None] * len(items)
             for index, result in results_with_indices:
                 results[index] = result
-            
+
             return results
-        
-        # Run the async function
-        try:
-            loop = asyncio.get_running_loop()
-            # Already in async context - this shouldn't happen, but handle it
-            logger.warning("Already in async context - using nest_asyncio")
-            import nest_asyncio
-            nest_asyncio.apply()
-            return asyncio.run(process_all())
-        except RuntimeError:
-            # No running loop - safe to use asyncio.run()
-            return asyncio.run(process_all())
+
+        # Run the async function (only when no running loop exists)
+        # Caller should avoid invoking this path from within an active event loop.
+        return asyncio.run(process_all())
 
     def process_parallel(
         self,
@@ -243,8 +240,19 @@ class ParallelHCEProcessor:
 
         # Use asyncio for I/O-bound LLM calls (much more efficient)
         if use_asyncio:
-            return self._process_parallel_async(items, processor_func, progress_callback)
-        
+            # If we're already inside an event loop (e.g., orchestrator async context),
+            # avoid nested loops and fall back to ThreadPoolExecutor for safety.
+            try:
+                asyncio.get_running_loop()
+                logger.debug(
+                    "Event loop detected; falling back to ThreadPoolExecutor for parallel processing"
+                )
+            except RuntimeError:
+                # No running loop: safe to use asyncio path
+                return self._process_parallel_async(
+                    items, processor_func, progress_callback
+                )
+
         # Fall back to ThreadPoolExecutor for CPU-bound tasks
         results = [None] * len(items)  # Preserve order
         completed_count = 0

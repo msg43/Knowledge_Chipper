@@ -1,7 +1,7 @@
 """
 Async processing utilities for parallel transcription and speaker detection.
 
-This module provides utilities to run transcription and speaker detection (diarization) 
+This module provides utilities to run transcription and speaker detection (diarization)
 in parallel on Apple Silicon, taking advantage of the Neural Engine for transcription
 and GPU for speaker detection simultaneously.
 
@@ -57,11 +57,11 @@ class AsyncTranscriptionManager:
     ) -> tuple[ProcessorResult, ProcessorResult | None]:
         """
         Process transcription and speaker detection in parallel.
-        
+
         Both processes run simultaneously on the same audio file:
         - Transcription: Converts speech to text with timestamps (Neural Engine)
         - Speaker detection: Identifies who is speaking when (GPU)
-        
+
         After both complete, a downstream step merges the results to create
         speaker-attributed transcription segments.
 
@@ -167,7 +167,7 @@ class AsyncTranscriptionManager:
             transcription_result = ProcessorResult(
                 success=False, errors=["Transcription failed to complete"]
             )
-        
+
         logger.info("Parallel processing completed")
         return transcription_result, diarization_result
 
@@ -240,7 +240,9 @@ class AsyncTranscriptionManager:
                 while not last_heartbeat.is_set():
                     time.sleep(30)  # Heartbeat every 30 seconds
                     if not last_heartbeat.is_set():
-                        logger.debug("✅ Speaker detection heartbeat - still processing...")
+                        logger.debug(
+                            "✅ Speaker detection heartbeat - still processing..."
+                        )
 
             heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
             heartbeat_thread.start()

@@ -44,13 +44,13 @@ for NUM_PARALLEL in "${PARALLEL_VALUES[@]}"; do
     echo "════════════════════════════════════════════════════════════════"
     echo "🔧 Testing OLLAMA_NUM_PARALLEL=$NUM_PARALLEL"
     echo "════════════════════════════════════════════════════════════════"
-    
+
     # Update Ollama configuration
     echo "Step 1: Stopping Ollama..."
     killall Ollama 2>/dev/null || true
     launchctl unload "$PLIST_PATH" 2>/dev/null || true
     sleep 2
-    
+
     echo "Step 2: Setting OLLAMA_NUM_PARALLEL=$NUM_PARALLEL..."
     cat << EOF > "$PLIST_PATH"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -88,29 +88,29 @@ for NUM_PARALLEL in "${PARALLEL_VALUES[@]}"; do
 </dict>
 </plist>
 EOF
-    
+
     echo "Step 3: Starting Ollama with new config..."
     launchctl load "$PLIST_PATH"
     sleep 3
-    
+
     # Verify Ollama is running
     if ! curl -s http://localhost:11434/api/version > /dev/null 2>&1; then
         echo "❌ Error: Ollama failed to start"
         continue
     fi
-    
+
     echo "Step 4: Warming up model (ensuring it's loaded)..."
     curl -s http://localhost:11434/api/generate -d '{
         "model": "qwen2.5:7b-instruct",
         "prompt": "test",
         "stream": false
     }' > /dev/null
-    
+
     sleep 2
-    
+
     echo "Step 5: Running mining test with $TEST_SEGMENTS segments..."
     echo ""
-    
+
     # Create test Python script
     cat << 'PYTHON_EOF' > /tmp/test_mining_benchmark.py
 import sys
@@ -128,14 +128,14 @@ from knowledge_system.core.config import get_settings
 def create_test_segments(count: int) -> list[Segment]:
     """Create realistic test segments."""
     test_content = """
-    Machine learning models require careful optimization of hyperparameters 
-    to achieve optimal performance. The learning rate, batch size, and 
-    regularization parameters all interact in complex ways. Dr. Sarah Chen 
-    from Stanford found that adaptive learning rates can reduce training 
-    time by 40%. The concept of gradient descent forms the foundation of 
+    Machine learning models require careful optimization of hyperparameters
+    to achieve optimal performance. The learning rate, batch size, and
+    regularization parameters all interact in complex ways. Dr. Sarah Chen
+    from Stanford found that adaptive learning rates can reduce training
+    time by 40%. The concept of gradient descent forms the foundation of
     modern deep learning architectures.
     """
-    
+
     segments = []
     for i in range(count):
         segment = Segment(
@@ -150,38 +150,38 @@ def create_test_segments(count: int) -> list[Segment]:
 
 def main():
     num_segments = int(sys.argv[1]) if len(sys.argv) > 1 else 20
-    
+
     # Get settings for model URI
     settings = get_settings()
     model_uri = f"{settings.llm.provider}:{settings.llm.local_model}"
-    
+
     print(f"Creating {num_segments} test segments...")
     segments = create_test_segments(num_segments)
-    
+
     print(f"Initializing miner with model: {model_uri}")
     miner = UnifiedMiner(model_uri=model_uri)
-    
+
     print(f"Starting parallel mining of {num_segments} segments...")
     start_time = time.time()
-    
+
     # Create fake episode bundle
     class FakeEpisode:
         def __init__(self, segments):
             self.segments = segments
             self.episode_id = "benchmark_test"
-    
+
     episode = FakeEpisode(segments)
-    
+
     # Mine with auto-calculated workers (should be 7 for M2 Ultra)
     results = miner.mine_episode(
         episode=episode,
         max_workers=None,  # Auto-calculate
         progress_callback=lambda msg: print(f"  {msg}")
     )
-    
+
     elapsed = time.time() - start_time
     segments_per_sec = num_segments / elapsed
-    
+
     print(f"\n{'='*60}")
     print(f"RESULTS:")
     print(f"  Total segments: {num_segments}")
@@ -189,7 +189,7 @@ def main():
     print(f"  Throughput: {segments_per_sec:.2f} segments/second")
     print(f"  Avg time per segment: {elapsed/num_segments:.2f}s")
     print(f"{'='*60}\n")
-    
+
     return segments_per_sec
 
 if __name__ == "__main__":
@@ -197,7 +197,7 @@ if __name__ == "__main__":
     # Output just the number for parsing
     print(f"THROUGHPUT:{throughput:.3f}")
 PYTHON_EOF
-    
+
     # Run the benchmark and capture throughput
     THROUGHPUT=$(cd /Users/matthewgreer/Projects/Knowledge_Chipper && \
                  source .venv/bin/activate 2>/dev/null && \
@@ -205,7 +205,7 @@ PYTHON_EOF
                  tee /dev/tty | \
                  grep "THROUGHPUT:" | \
                  cut -d: -f2)
-    
+
     # Record results
     echo "" >> "$LOG_FILE"
     echo "OLLAMA_NUM_PARALLEL=$NUM_PARALLEL" >> "$LOG_FILE"
@@ -213,7 +213,7 @@ PYTHON_EOF
     echo "  Throughput: $THROUGHPUT segments/second" >> "$LOG_FILE"
     echo "  CPU during test: $(top -l 1 | grep "CPU usage" | awk '{print $3}')" >> "$LOG_FILE"
     echo "" >> "$LOG_FILE"
-    
+
     echo ""
     echo "✅ Test complete: $THROUGHPUT segments/second"
     echo ""
@@ -235,4 +235,3 @@ echo ""
 echo "📊 To apply the optimal setting, edit configure_ollama_parallel.sh"
 echo "   and set OLLAMA_NUM_PARALLEL to the value with highest throughput"
 echo ""
-

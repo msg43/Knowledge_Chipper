@@ -225,4 +225,3 @@ These changes provide a multi-layered defense against Whisper hallucinations:
 4. **Automatic cleanup** - catches any that slip through
 
 The combination provides ~95-99% hallucination prevention/remediation.
-

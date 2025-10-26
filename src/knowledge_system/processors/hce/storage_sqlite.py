@@ -205,7 +205,7 @@ def upsert_pipeline_outputs(
             # Extract context_quote from the person's surface text (as a fallback)
             # In the future, this could be enhanced to include actual quote context
             context_quote = person.normalized or person.surface
-            
+
             cur.execute(
                 """
                 INSERT INTO people(episode_id, mention_id, span_segment_id, t0, t1, surface, normalized, entity_type, external_ids_json, confidence, context_quote)
@@ -240,8 +240,10 @@ def upsert_pipeline_outputs(
         for concept in out.concepts:
             evidence_json = json.dumps([e.model_dump() for e in concept.evidence_spans])
             # Extract context_quote from first evidence span if available
-            context_quote = concept.evidence_spans[0].quote if concept.evidence_spans else None
-            
+            context_quote = (
+                concept.evidence_spans[0].quote if concept.evidence_spans else None
+            )
+
             cur.execute(
                 """
                 INSERT INTO concepts(episode_id, model_id, name, definition, first_mention_ts, aliases_json, evidence_json, context_quote)
@@ -270,8 +272,10 @@ def upsert_pipeline_outputs(
         for term in out.jargon:
             evidence_json = json.dumps([e.model_dump() for e in term.evidence_spans])
             # Extract context_quote from first evidence span if available
-            context_quote = term.evidence_spans[0].quote if term.evidence_spans else None
-            
+            context_quote = (
+                term.evidence_spans[0].quote if term.evidence_spans else None
+            )
+
             cur.execute(
                 """
                 INSERT INTO jargon(episode_id, term_id, term, category, definition, evidence_json, context_quote)

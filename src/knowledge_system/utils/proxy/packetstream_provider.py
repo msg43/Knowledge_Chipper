@@ -21,11 +21,11 @@ logger = logging.getLogger(__name__)
 class PacketStreamProvider(BaseProxyProvider):
     """
     PacketStream proxy provider implementation.
-    
+
     Manages PacketStream residential proxy connections with rotation and sticky sessions.
     """
 
-    def __init__(self, username: Optional[str] = None, auth_key: Optional[str] = None):
+    def __init__(self, username: str | None = None, auth_key: str | None = None):
         """
         Initialize PacketStream proxy provider.
 
@@ -59,18 +59,18 @@ class PacketStreamProvider(BaseProxyProvider):
         ]
 
         # Session management for sticky sessions
-        self.sessions: Dict[str, requests.Session] = {}
-        self.current_session_id: Optional[str] = None
+        self.sessions: dict[str, requests.Session] = {}
+        self.current_session_id: str | None = None
 
     # BaseProxyProvider interface implementation
-    
-    def get_proxy_url(self, session_id: Optional[str] = None) -> Optional[str]:
+
+    def get_proxy_url(self, session_id: str | None = None) -> str | None:
         """
         Get proxy URL string for use with yt-dlp and direct HTTP calls.
-        
+
         Args:
             session_id: Optional session ID for sticky IP (same ID = same IP)
-            
+
         Returns:
             Proxy URL string or None if credentials not available
         """
@@ -85,27 +85,27 @@ class PacketStreamProvider(BaseProxyProvider):
 
         # Use HTTP proxy by default (not SOCKS5)
         return f"http://{auth}@proxy.packetstream.io:31112"
-    
-    def get_proxy_config(self) -> Dict[str, str]:
+
+    def get_proxy_config(self) -> dict[str, str]:
         """
         Get proxy configuration dict for use with requests library.
-        
+
         Returns:
             Dict with 'http' and 'https' keys, or empty dict if not configured
         """
         proxy_url = self.get_proxy_url()
         if not proxy_url:
             return {}
-        
+
         return {"http": proxy_url, "https": proxy_url}
-    
-    def test_connectivity(self, timeout: int = 10) -> Tuple[bool, str]:
+
+    def test_connectivity(self, timeout: int = 10) -> tuple[bool, str]:
         """
         Test if PacketStream proxy is working.
-        
+
         Args:
             timeout: Connection timeout in seconds
-            
+
         Returns:
             Tuple of (success: bool, message: str)
         """
@@ -113,7 +113,7 @@ class PacketStreamProvider(BaseProxyProvider):
             return False, "PacketStream credentials not configured"
 
         proxy_config = self.get_proxy_config()
-        
+
         try:
             # Test with a simple HTTP request
             response = requests.get(
@@ -140,35 +140,35 @@ class PacketStreamProvider(BaseProxyProvider):
             return False, f"Network error: {str(e)}"
         except Exception as e:
             return False, f"Unexpected error: {str(e)}"
-    
+
     def is_configured(self) -> bool:
         """
         Check if PacketStream credentials are configured.
-        
+
         Returns:
             True if credentials are available, False otherwise
         """
         return bool(self.username and self.auth_key)
-    
+
     @property
     def provider_name(self) -> str:
         """
         Get human-readable provider name.
-        
+
         Returns:
             "PacketStream"
         """
         return "PacketStream"
 
     # Additional PacketStream-specific functionality
-    
-    def get_proxy_url_socks5(self, session_id: Optional[str] = None) -> Optional[str]:
+
+    def get_proxy_url_socks5(self, session_id: str | None = None) -> str | None:
         """
         Get SOCKS5 proxy URL (PacketStream-specific feature).
-        
+
         Args:
             session_id: Optional session ID for sticky IP
-            
+
         Returns:
             SOCKS5 proxy URL string or None
         """
@@ -182,7 +182,7 @@ class PacketStreamProvider(BaseProxyProvider):
         return f"socks5h://{auth}@proxy.packetstream.io:31113"
 
     def create_session(
-        self, session_id: Optional[str] = None, use_socks5: bool = False
+        self, session_id: str | None = None, use_socks5: bool = False
     ) -> requests.Session:
         """
         Create a new requests session with PacketStream proxy.
@@ -227,7 +227,7 @@ class PacketStreamProvider(BaseProxyProvider):
         return session
 
     @staticmethod
-    def generate_session_id(url: str, video_id: Optional[str] = None) -> str:
+    def generate_session_id(url: str, video_id: str | None = None) -> str:
         """
         Generate consistent session ID from URL or video ID.
 
@@ -251,7 +251,7 @@ class PacketStreamProvider(BaseProxyProvider):
             url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
             return f"url_{url_hash}"
 
-    def get_session(self, session_id: Optional[str] = None) -> requests.Session:
+    def get_session(self, session_id: str | None = None) -> requests.Session:
         """
         Get existing session or create new one.
 
@@ -266,7 +266,7 @@ class PacketStreamProvider(BaseProxyProvider):
 
         return self.create_session(session_id)
 
-    def rotate_session(self, use_socks5: Optional[bool] = None) -> requests.Session:
+    def rotate_session(self, use_socks5: bool | None = None) -> requests.Session:
         """
         Create a new session with a different IP (rotation).
 
@@ -287,7 +287,7 @@ class PacketStreamProvider(BaseProxyProvider):
         # Create new session (will get different residential IP)
         return self.create_session(use_socks5=use_socks5 or False)
 
-    def test_connection(self, session_id: Optional[str] = None) -> Tuple[bool, dict]:
+    def test_connection(self, session_id: str | None = None) -> tuple[bool, dict]:
         """
         Test proxy connection and get IP information.
 
@@ -316,7 +316,7 @@ class PacketStreamProvider(BaseProxyProvider):
         self,
         url: str,
         method: str = "GET",
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         retry_count: int = 5,
         **kwargs,
     ) -> requests.Response:
@@ -351,7 +351,9 @@ class PacketStreamProvider(BaseProxyProvider):
                     continue
                 elif response.status_code == 403:
                     # Potentially blocked, rotate IP and retry
-                    logger.warning(f"Access forbidden, rotating IP (attempt {attempt + 1})")
+                    logger.warning(
+                        f"Access forbidden, rotating IP (attempt {attempt + 1})"
+                    )
                     session = self.rotate_session()
                     continue
 
@@ -384,4 +386,3 @@ class PacketStreamProvider(BaseProxyProvider):
 
 # Maintain backward compatibility with old class name
 PacketStreamProxyManager = PacketStreamProvider
-

@@ -996,4 +996,3 @@ Time savings: 87 - 19 = 68 days
 ```
 
 **The performance gap represents 68 days of processing time for the 7000 podcast project.**
-

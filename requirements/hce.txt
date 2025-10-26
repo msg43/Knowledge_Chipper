@@ -10,4 +10,3 @@ torch>=2.1.0
 # NLP and transformers
 transformers>=4.35.0
 sentence-transformers>=2.2.0
-

@@ -17,4 +17,3 @@ pyannote.audio>=4.0.0  # v4.0+ fixes Python 3.13 syntax warnings
 # Audio processing for voice fingerprinting
 librosa>=0.10.0
 soundfile>=0.13.1
-

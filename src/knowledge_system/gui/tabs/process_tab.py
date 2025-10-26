@@ -244,7 +244,7 @@ class ProcessPipelineWorker(QProcess):
         if self.state() == QProcess.ProcessState.Running:
             logger.info("Terminating worker process")
             self.terminate()
-            
+
             # Don't block on waitForFinished - QProcess will emit finished signal
             # when it's done, and the signal handler will clean up
             # The process will terminate in the background

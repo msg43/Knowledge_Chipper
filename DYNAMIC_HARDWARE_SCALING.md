@@ -259,4 +259,3 @@ The system automatically:
 - Prevents CPU oversubscription (1.46x thread/core ratio)
 
 **No manual configuration needed** - it just works across all hardware from M1 Base to Threadripper! 🚀
-

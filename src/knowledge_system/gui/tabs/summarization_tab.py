@@ -137,7 +137,13 @@ class EnhancedSummarizationWorker(QThread):
             from ...utils.progress import SummarizationProgress
 
             # Define progress callback to receive real-time updates from orchestrator
-            def orchestrator_progress_callback(stage: str, percent: int, episode_id: str, current: int = 0, total: int = 0):
+            def orchestrator_progress_callback(
+                stage: str,
+                percent: int,
+                episode_id: str,
+                current: int = 0,
+                total: int = 0,
+            ):
                 """Handle progress updates from the orchestrator."""
                 # Map stage to user-friendly phase names
                 phase_map = {
@@ -149,10 +155,12 @@ class EnhancedSummarizationWorker(QThread):
                     "saving_file": "Saving Output",
                 }
                 phase_name = phase_map.get(stage, "Processing")
-                
+
                 # Emit progress update
                 progress = SummarizationProgress(
-                    current_file=self.files[self.current_file_index] if self.current_file_index < len(self.files) else "",
+                    current_file=self.files[self.current_file_index]
+                    if self.current_file_index < len(self.files)
+                    else "",
                     total_files=len(self.files),
                     completed_files=self.current_file_index,
                     current_step=f"⚙️ {phase_name}",
@@ -160,15 +168,19 @@ class EnhancedSummarizationWorker(QThread):
                     provider=self.gui_settings.get("provider", "openai"),
                     model_name=self.gui_settings.get("model", "gpt-4o-mini-2024-07-18"),
                 )
-                
+
                 # Add segment info for mining phase
                 if stage == "mining" and total > 0:
-                    progress.current_step = f"⚙️ {phase_name}: segment {current}/{total}"
-                
+                    progress.current_step = (
+                        f"⚙️ {phase_name}: segment {current}/{total}"
+                    )
+
                 self.progress_updated.emit(progress)
 
             # Create orchestrator instance with progress callback
-            orchestrator = System2Orchestrator(progress_callback=orchestrator_progress_callback)
+            orchestrator = System2Orchestrator(
+                progress_callback=orchestrator_progress_callback
+            )
 
             success_count = 0
             failure_count = 0
@@ -202,7 +214,7 @@ class EnhancedSummarizationWorker(QThread):
                 try:
                     # Execute the job - orchestrator will emit real-time progress via callback
                     import asyncio
-                    
+
                     result = asyncio.run(orchestrator.process_job(job_id))
 
                     if result.get("status") == "succeeded":
@@ -214,10 +226,12 @@ class EnhancedSummarizationWorker(QThread):
                             current_step=f"✅ Completed {file_name}",
                             file_percent=100,
                             provider=self.gui_settings.get("provider", "openai"),
-                            model_name=self.gui_settings.get("model", "gpt-4o-mini-2024-07-18"),
+                            model_name=self.gui_settings.get(
+                                "model", "gpt-4o-mini-2024-07-18"
+                            ),
                         )
                         self.progress_updated.emit(final_progress)
-                        
+
                         success_count += 1
                         self.file_completed.emit(i + 1, total_count)
 
@@ -251,7 +265,9 @@ class EnhancedSummarizationWorker(QThread):
                             current_step=f"❌ Failed: {error_msg}",
                             status="error",
                             provider=self.gui_settings.get("provider", "openai"),
-                            model_name=self.gui_settings.get("model", "gpt-4o-mini-2024-07-18"),
+                            model_name=self.gui_settings.get(
+                                "model", "gpt-4o-mini-2024-07-18"
+                            ),
                         )
                         self.progress_updated.emit(error_progress)
 
@@ -265,7 +281,9 @@ class EnhancedSummarizationWorker(QThread):
                         current_step=f"❌ Error: {str(e)}",
                         status="error",
                         provider=self.gui_settings.get("provider", "openai"),
-                        model_name=self.gui_settings.get("model", "gpt-4o-mini-2024-07-18"),
+                        model_name=self.gui_settings.get(
+                            "model", "gpt-4o-mini-2024-07-18"
+                        ),
                     )
                     self.progress_updated.emit(error_progress)
 
@@ -493,16 +511,16 @@ class SummarizationTab(BaseTab):
         self.gui_settings = get_gui_settings_manager()
         self.tab_name = "Summarization"
         super().__init__(parent)
-    
+
     @property
     def provider_combo(self):
         """Redirect to miner_provider for backward compatibility."""
-        return getattr(self, 'miner_provider', None)
-    
+        return getattr(self, "miner_provider", None)
+
     @property
     def model_combo(self):
         """Redirect to miner_model for backward compatibility."""
-        return getattr(self, 'miner_model', None)
+        return getattr(self, "miner_model", None)
 
     def _load_analysis_types(self) -> list[str]:
         """Load analysis types from config file."""
@@ -1264,8 +1282,7 @@ class SummarizationTab(BaseTab):
 
         # Initialize dual progress bars
         self.progress_display.start_processing(
-            total_files=file_count,
-            title="Summarization"
+            total_files=file_count, title="Summarization"
         )
 
         # Initialize batch timing when processing actually starts (not when first progress arrives)
@@ -1992,23 +2009,32 @@ class SummarizationTab(BaseTab):
             # Determine current phase from the step description
             current_step = getattr(progress, "current_step", "Processing")
             file_percent = getattr(progress, "file_percent", 0) or 0
-            
+
             # Map step to phase name
             phase_name = "Processing"
-            if "miner" in current_step.lower() or "unified miner" in current_step.lower():
+            if (
+                "miner" in current_step.lower()
+                or "unified miner" in current_step.lower()
+            ):
                 phase_name = "Unified Mining"
-            elif "evaluator" in current_step.lower() or "flagship" in current_step.lower():
+            elif (
+                "evaluator" in current_step.lower()
+                or "flagship" in current_step.lower()
+            ):
                 phase_name = "Flagship Evaluation"
-            elif "generating" in current_step.lower() or "summary" in current_step.lower():
+            elif (
+                "generating" in current_step.lower()
+                or "summary" in current_step.lower()
+            ):
                 phase_name = "Generating Summary"
             elif "saving" in current_step.lower() or "writing" in current_step.lower():
                 phase_name = "Saving Output"
             elif "loading" in current_step.lower() or "reading" in current_step.lower():
                 phase_name = "Loading Document"
-            
+
             # Update phase progress bar
             self.progress_display.update_phase_progress(phase_name, file_percent)
-            
+
             # Update overall file progress (0-100% for current file)
             if file_percent > 0:
                 self.progress_display.update_current_file_progress(file_percent)
@@ -2021,16 +2047,16 @@ class SummarizationTab(BaseTab):
             if not hasattr(self, "_last_logged_step"):
                 self._last_logged_step = None
                 self._last_logged_percent = -1
-            
+
             current_step = progress.current_step
             file_percent = getattr(progress, "file_percent", 0)
             if file_percent is None:
                 file_percent = 0
-            
+
             # Only log if step changed OR percent increased by 10+ OR it's the first log
             step_changed = current_step != self._last_logged_step
             percent_jumped = abs(file_percent - self._last_logged_percent) >= 10
-            
+
             if step_changed or percent_jumped or self._last_logged_step is None:
                 status = getattr(progress, "status", "")
 
@@ -2049,7 +2075,7 @@ class SummarizationTab(BaseTab):
                     progress_msg += f" | File: {filename}"
 
                 self.append_log(progress_msg)
-                
+
                 # Update tracking variables
                 self._last_logged_step = current_step
                 self._last_logged_percent = file_percent
@@ -2304,7 +2330,7 @@ class SummarizationTab(BaseTab):
 
         progress_msg = f"Progress: {current}/{total} files completed ({percent:.0f}%){time_text}{batch_eta}"
         self.append_log(progress_msg)
-        
+
         # Update progress display with completed files
         if hasattr(self, "progress_display"):
             # Assume all completed files were successful (failures tracked separately)
@@ -2321,7 +2347,7 @@ class SummarizationTab(BaseTab):
         import time
 
         self.set_processing_state(False)
-        
+
         # Mark progress display as complete
         if hasattr(self, "progress_display"):
             self.progress_display.finish(completed=success_count, failed=failure_count)
@@ -2375,11 +2401,15 @@ class SummarizationTab(BaseTab):
         output_dir = self.output_edit.text()
         if output_dir:
             self.append_log(f"\n💾 Data saved to:")
-            self.append_log(f"   • Database: knowledge_system.db (claims, people, concepts)")
+            self.append_log(
+                f"   • Database: knowledge_system.db (claims, people, concepts)"
+            )
             self.append_log(f"   • Summary files: {output_dir}")
         else:
             self.append_log(f"\n💾 Data saved to:")
-            self.append_log(f"   • Database: knowledge_system.db (claims, people, concepts)")
+            self.append_log(
+                f"   • Database: knowledge_system.db (claims, people, concepts)"
+            )
             self.append_log(f"   • Summary files: output/summaries/")
 
         # Enable report button if available
@@ -2513,7 +2543,9 @@ class SummarizationTab(BaseTab):
                     )
 
             # Show save confirmation
-            self.append_log(f"   ✅ Saved to database: {total_claims} claims, {people_count} people, {concepts_count} concepts")
+            self.append_log(
+                f"   ✅ Saved to database: {total_claims} claims, {people_count} people, {concepts_count} concepts"
+            )
             self.append_log("")  # Add blank line for readability
 
     def _stop_processing(self):
@@ -3062,7 +3094,7 @@ class SummarizationTab(BaseTab):
         self, provider_combo: QComboBox, model_combo: QComboBox
     ) -> str | None:
         """Get model override string from provider and model combos.
-        
+
         Returns a model URI in the format expected by parse_model_uri():
         - "provider:model" for standard providers (openai, anthropic, etc.)
         - "local://model" for local Ollama models
@@ -3076,7 +3108,7 @@ class SummarizationTab(BaseTab):
         # Map "local" provider to the local:// protocol format
         if provider.lower() == "local":
             return f"local://{model}"
-        
+
         # Use colon separator for all other providers (NOT slash)
         return f"{provider}:{model}"
 

@@ -309,4 +309,3 @@ For questions or issues, see:
 - `docs/ARCHITECTURE_UNIFIED.md` - Architecture details
 - `docs/guides/USER_GUIDE_UNIFIED.md` - Usage guide
 - `_deprecated/README.md` - Rollback instructions
-

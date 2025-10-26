@@ -173,4 +173,3 @@ From `schemas/miner_output.v1.json`:
 2. **Add context_quote to YAML output** - Include in generated MOC/summary YAML files
 3. **Full integration test** - Complete `test_context_quotes.py` after resolving remaining schema mismatches
 4. **UI Display** - Add context_quote display to any GUI components showing jargon/people/concepts
-

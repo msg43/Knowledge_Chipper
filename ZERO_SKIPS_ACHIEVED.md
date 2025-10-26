@@ -192,5 +192,3 @@ python -m pytest tests/gui_comprehensive/test_transcribe_inputs.py \
 ---
 
 *All available tests now implemented with real processing!*
-
-

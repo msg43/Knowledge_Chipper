@@ -429,4 +429,3 @@ For questions or issues, see:
 - `tests/README.md` - Testing framework overview
 - `tests/gui_comprehensive/README.md` - GUI testing details
 - `.github/workflows/automated-gui-tests.yml` - CI/CD configuration
-

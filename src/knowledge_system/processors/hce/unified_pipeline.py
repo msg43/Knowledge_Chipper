@@ -361,19 +361,33 @@ class UnifiedHCEPipeline:
             llm = create_system2_llm(provider=provider, model=model)
             response = llm.generate_json(full_prompt)
 
-            # Extract text from response
-            if isinstance(response, str):
-                summary_text = response
-            elif isinstance(response, dict):
-                summary_text = response.get("summary", str(response))
-            elif isinstance(response, list) and len(response) > 0:
-                summary_text = (
-                    response[0] if isinstance(response[0], str) else str(response[0])
-                )
-            else:
-                summary_text = str(response)
+            # Extract text from response robustly
+            try:
+                if isinstance(response, str):
+                    summary_text = response
+                elif isinstance(response, dict):
+                    # Prefer a 'summary' field; otherwise serialize compactly
+                    summary_text = response.get("summary")
+                    if summary_text is None:
+                        import json as _json
 
-            return summary_text.strip()
+                        summary_text = _json.dumps(response, ensure_ascii=False)
+                elif isinstance(response, list) and len(response) > 0:
+                    summary_text = (
+                        response[0]
+                        if isinstance(response[0], str)
+                        else str(response[0])
+                    )
+                else:
+                    summary_text = str(response)
+                return (
+                    summary_text.strip()
+                    if isinstance(summary_text, str)
+                    else str(summary_text)
+                )
+            except Exception:
+                # As a last resort, stringify the entire object
+                return str(response)
 
         except Exception as e:
             logger.error(f"Failed to generate long summary: {e}")

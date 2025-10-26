@@ -230,4 +230,3 @@ launchctl load ~/Library/LaunchAgents/com.ollama.server.plist
 **Perfect for your use case:** Small paragraph mining jobs with high throughput needs!
 
 The system is now configured to fully utilize your M2 Ultra's capabilities. Time to test with real mining jobs! 🎯
-

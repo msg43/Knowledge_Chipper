@@ -260,4 +260,3 @@ These changes are production-ready and include proper safeguards:
 - Memory pressure monitoring (throttles at 80% RAM usage)
 - Automatic worker adjustment based on system resources
 - Separate limits for cloud vs local APIs (maintains API stability)
-

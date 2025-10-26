@@ -204,4 +204,3 @@ The fix now uses **pattern matching** to cover:
 - ✅ Future settings following the same naming convention
 
 **Result:** No more hardcoded defaults in GUI. Everything falls back to `settings.yaml`.
-

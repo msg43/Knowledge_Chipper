@@ -50,7 +50,7 @@ Real GUI Test Runner - No Fake Mode
 
 This script runs comprehensive GUI tests with REAL processing:
 - Actual whisper.cpp transcription
-- Actual Ollama summarization  
+- Actual Ollama summarization
 - Real file I/O and database operations
 
 Options:
@@ -94,7 +94,7 @@ check_ollama() {
         return 1
     fi
     print_success "Ollama: $(ollama --version 2>&1 | head -1)"
-    
+
     # Check if Ollama is running
     print_info "Checking Ollama service..."
     if ! curl -s http://localhost:11434/api/version > /dev/null 2>&1; then
@@ -103,7 +103,7 @@ check_ollama() {
         return 1
     fi
     print_success "Ollama service: running"
-    
+
     # Check for available models
     print_info "Checking Ollama models..."
     if ! ollama list | grep -q ":"; then
@@ -112,78 +112,78 @@ check_ollama() {
         return 1
     fi
     print_success "Ollama models: $(ollama list | grep -c ':')"
-    
+
     return 0
 }
 
 check_requirements() {
     print_header "Checking Requirements"
-    
+
     # Check Python
     if ! command -v python3 &> /dev/null; then
         print_error "Python 3 not found"
         exit 1
     fi
     print_success "Python: $(python3 --version)"
-    
+
     # Check venv
     if [ ! -d "venv" ]; then
         print_warning "Virtual environment not found. Creating..."
         python3 -m venv venv
     fi
-    
+
     # Activate venv
     source venv/bin/activate
-    
+
     # Check pytest
     if ! python -m pytest --version &> /dev/null; then
         print_warning "pytest not found. Installing..."
         pip install pytest pytest-timeout pytest-xdist
     fi
     print_success "pytest: $(python -m pytest --version | head -1)"
-    
+
     # Check PyQt6
     if ! python -c "import PyQt6" 2>/dev/null; then
         print_error "PyQt6 not found. Install requirements: pip install -r requirements.txt"
         exit 1
     fi
     print_success "PyQt6 available"
-    
+
     # Check whisper.cpp
     if ! check_whisper_cpp; then
         exit 1
     fi
-    
+
     # Check Ollama
     if ! check_ollama; then
         exit 1
     fi
-    
+
     print_success "All requirements met"
 }
 
 setup_environment() {
     print_header "Setting Up Test Environment"
-    
+
     # Always set testing mode
     export KNOWLEDGE_CHIPPER_TESTING_MODE=1
     export QT_QPA_PLATFORM=offscreen
-    
+
     print_success "Testing mode: ENABLED"
     print_success "Offscreen rendering: ENABLED"
     print_warning "Real processing mode: Tests will take 60-90 minutes"
-    
+
     # Create test output directory
     mkdir -p tests/tmp
     mkdir -p test-results
-    
+
     print_success "Environment configured"
 }
 
 run_real_tests() {
     print_header "Running Real GUI Tests"
     print_warning "This will take 60-90 minutes with real processing"
-    
+
     local pytest_args=(
         "tests/gui_comprehensive/"
         "-v"
@@ -191,11 +191,11 @@ run_real_tests() {
         "--tb=short"
         "--junit-xml=test-results/gui-tests-real.xml"
     )
-    
+
     if [ "$VERBOSE" == "1" ]; then
         pytest_args+=("-s")
     fi
-    
+
     if python -m pytest "${pytest_args[@]}"; then
         print_success "All tests passed"
         return 0
@@ -209,10 +209,10 @@ main() {
     if [ "${1:-}" == "-h" ] || [ "${1:-}" == "--help" ]; then
         usage
     fi
-    
+
     print_header "Real GUI Test Runner"
     print_warning "Tests use REAL processing - no fake mode"
-    
+
     check_requirements
     setup_environment
     run_real_tests

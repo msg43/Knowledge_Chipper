@@ -113,14 +113,14 @@ class LLMAdapter:
         "prosumer": 4,  # M1/M2 Pro/Max
         "enterprise": 8,  # M1/M2 Ultra, high-end x86
     }
-    
+
     # Hardware tier concurrency limits for LOCAL APIs (Ollama)
     # Each Ollama request spawns ~5 threads for Metal backend
     # To avoid thread oversubscription: limit based on physical_cores / threads_per_request
     LOCAL_CONCURRENCY_LIMITS = {
-        "consumer": 3,   # M1/M2 base (8 cores / ~3 = 2-3 workers)
-        "prosumer": 5,   # M1/M2 Pro/Max (12-16 cores / ~3 = 4-5 workers)
-        "enterprise": 8, # M1/M2 Ultra (24 cores / 5 = ~5 workers, cap at 8 for safety)
+        "consumer": 3,  # M1/M2 base (8 cores / ~3 = 2-3 workers)
+        "prosumer": 5,  # M1/M2 Pro/Max (12-16 cores / ~3 = 4-5 workers)
+        "enterprise": 8,  # M1/M2 Ultra (24 cores / 5 = ~5 workers, cap at 8 for safety)
     }
 
     def __init__(
@@ -137,20 +137,38 @@ class LLMAdapter:
             hardware_specs = detect_hardware_specs()
 
         self.hardware_tier = self._determine_hardware_tier(hardware_specs)
-        
+
         # Choose concurrency limit based on primary provider (default to cloud for safety)
         # This can be overridden per-request using provider-specific semaphores
         self.max_concurrent = self.CLOUD_CONCURRENCY_LIMITS.get(self.hardware_tier, 2)
-        self.max_concurrent_local = self.LOCAL_CONCURRENCY_LIMITS.get(self.hardware_tier, 4)
+        self.max_concurrent_local = self.LOCAL_CONCURRENCY_LIMITS.get(
+            self.hardware_tier, 4
+        )
+
+        # Respect server/app caps for local concurrency
+        try:
+            import os
+
+            ollama_parallel = int(os.environ.get("OLLAMA_NUM_PARALLEL", "0"))
+            hce_effective = int(os.environ.get("HCE_EFFECTIVE_MAX_WORKERS", "0"))
+        except Exception:
+            ollama_parallel = 0
+            hce_effective = 0
+
+        effective_local = self.max_concurrent_local
+        if ollama_parallel > 0:
+            effective_local = min(effective_local, ollama_parallel)
+        if hce_effective > 0:
+            effective_local = min(effective_local, hce_effective)
 
         logger.info(
             f"LLM Adapter initialized for {self.hardware_tier} tier "
-            f"(max {self.max_concurrent} concurrent cloud / {self.max_concurrent_local} local requests)"
+            f"(max {self.max_concurrent} concurrent cloud / {effective_local} local requests)"
         )
 
         # Concurrency control - separate semaphores for cloud and local
         self.cloud_semaphore = asyncio.Semaphore(self.max_concurrent)
-        self.local_semaphore = asyncio.Semaphore(self.max_concurrent_local)
+        self.local_semaphore = asyncio.Semaphore(effective_local)
         self.active_requests = 0
 
         # Rate limiters per provider
@@ -184,7 +202,12 @@ class LLMAdapter:
         """Determine hardware tier from specs."""
         # Check for Apple Silicon
         chip_type = specs.get("chip_type", "").lower()
-        if "apple" in chip_type or "m1" in chip_type or "m2" in chip_type or "m3" in chip_type:
+        if (
+            "apple" in chip_type
+            or "m1" in chip_type
+            or "m2" in chip_type
+            or "m3" in chip_type
+        ):
             # Check chip_type directly (contains full name like "apple m2 ultra")
             if "ultra" in chip_type:
                 return "enterprise"
@@ -352,7 +375,7 @@ class LLMAdapter:
                     result = await response.json()
 
             content = result["message"]["content"]
-            
+
             # Warn if content is empty (might indicate schema is too restrictive)
             if not content or not content.strip():
                 logger.warning(
@@ -360,8 +383,10 @@ class LLMAdapter:
                     f"This may indicate the schema is too restrictive or the prompt is unclear."
                 )
                 # Log more details for debugging
-                logger.debug(f"Empty response details - model: {model}, format: {type(format_param)}")
-            
+                logger.debug(
+                    f"Empty response details - model: {model}, format: {type(format_param)}"
+                )
+
             prompt_tokens = (
                 sum(len(m["content"].split()) for m in payload["messages"]) * 1.3
             )
@@ -442,7 +467,9 @@ class LLMAdapter:
                 f"OpenAI API error: {e}", ErrorCode.LLM_API_ERROR
             ) from e
 
-    async def _call_anthropic(self, model: str, payload: dict[str, Any]) -> dict[str, Any]:
+    async def _call_anthropic(
+        self, model: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         """Call Anthropic API."""
         try:
             from anthropic import AsyncAnthropic

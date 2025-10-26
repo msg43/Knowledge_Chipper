@@ -5,7 +5,7 @@ This directory contains tests for the System 2 architecture implementation.
 ## Test Structure
 
 ### Unit Tests (Fast, No External Dependencies)
-- `test_hce_operations.py` - Database operations for HCE data
+- `test_unified_hce_operations.py` - Unified HCE storage via System2Orchestrator
 - Tests run with in-memory database
 - No external LLM required
 
@@ -49,7 +49,7 @@ This directory contains tests for the System 2 architecture implementation.
 
 ### Run All Unit Tests
 ```bash
-pytest tests/system2/test_hce_operations.py -v
+pytest tests/system2/test_unified_hce_operations.py -v
 ```
 
 ### Run Integration Tests (Requires Ollama)

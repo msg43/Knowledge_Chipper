@@ -73,4 +73,3 @@ Key settings:
 For more information, see:
 - `AUTOMATED_TESTING_QUICKSTART.md`
 - `docs/AUTOMATED_TESTING_GUIDE.md`
-

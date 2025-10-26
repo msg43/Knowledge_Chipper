@@ -79,20 +79,20 @@ class FFmpegAudioProcessor:
     ) -> bool:
         """
         Remove long silence periods from audio to prevent Whisper hallucinations.
-        
+
         This preprocesses audio by removing extended silence/dead air that can cause
         the Whisper model to "wander" and start hallucinating repetitive phrases.
-        
+
         Args:
             input_path: Input audio file path
             output_path: Output audio file path
             silence_threshold: Volume threshold for silence detection (default: -50dB)
             min_silence_duration: Minimum silence duration to remove in seconds (default: 2.0)
             progress_callback: Optional callback for progress updates
-            
+
         Returns:
             True if silence removal successful, False otherwise
-            
+
         Note:
             - Preserves natural pauses < min_silence_duration (breathing, speech gaps)
             - Only removes extended dead air that causes model drift
@@ -101,42 +101,41 @@ class FFmpegAudioProcessor:
         if not self._ffmpeg_path:
             logger.warning("FFmpeg not available for silence removal")
             return False
-            
+
         try:
             input_path = Path(input_path)
             output_path = Path(output_path)
-            
+
             if progress_callback:
                 progress_callback("🔇 Removing long silence periods...", None)
-            
+
             # FFmpeg silenceremove filter
             # stop_periods=-1: Process all silence
             # stop_duration: Minimum silence duration to remove
             # stop_threshold: Volume level considered as silence
             cmd = [
                 self._ffmpeg_path,
-                "-i", str(input_path),
-                "-af", f"silenceremove=stop_periods=-1:stop_duration={min_silence_duration}:stop_threshold={silence_threshold}",
+                "-i",
+                str(input_path),
+                "-af",
+                f"silenceremove=stop_periods=-1:stop_duration={min_silence_duration}:stop_threshold={silence_threshold}",
                 "-y",  # Overwrite output
-                str(output_path)
+                str(output_path),
             ]
-            
+
             logger.debug(f"Running silence removal: {' '.join(cmd)}")
-            
+
             result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minute timeout
+                cmd, capture_output=True, text=True, timeout=300  # 5 minute timeout
             )
-            
+
             if result.returncode == 0 and output_path.exists():
                 logger.info(f"✅ Silence removal completed: {output_path}")
                 return True
             else:
                 logger.error(f"Silence removal failed: {result.stderr}")
                 return False
-                
+
         except subprocess.TimeoutExpired:
             logger.error("Silence removal timed out after 5 minutes")
             return False
@@ -179,13 +178,19 @@ class FFmpegAudioProcessor:
             # If silence removal is requested, do it first in a temporary file
             temp_file = None
             if remove_silence:
-                temp_file = output_path.parent / f"temp_silence_removed_{output_path.name}"
-                if self.remove_silence(input_path, temp_file, progress_callback=progress_callback):
+                temp_file = (
+                    output_path.parent / f"temp_silence_removed_{output_path.name}"
+                )
+                if self.remove_silence(
+                    input_path, temp_file, progress_callback=progress_callback
+                ):
                     input_path = temp_file
                     logger.info("✅ Silence removal preprocessing completed")
                 else:
-                    logger.warning("⚠️ Silence removal failed, continuing with original audio")
-            
+                    logger.warning(
+                        "⚠️ Silence removal failed, continuing with original audio"
+                    )
+
             # Build FFmpeg command
             ffmpeg = self._ffmpeg_path or self._resolve_binary("ffmpeg") or "ffmpeg"
             cmd = [ffmpeg, "-i", str(input_path)]

@@ -696,13 +696,13 @@ Episodes: {stats.get('total_episodes', 0)}"""
     def _on_upload_progress(self, current: int, total: int, message: str) -> None:
         """Handle upload progress updates."""
         self.progress_bar.setValue(current)
-        
+
         # Check if we should auto-scroll BEFORE appending
         scrollbar = self.upload_log.verticalScrollBar()
         should_scroll = scrollbar and scrollbar.value() >= scrollbar.maximum() - 10
-        
+
         self.upload_log.append(f"[{current}/{total}] {message}")
-        
+
         # Only auto-scroll if user was already at the bottom
         if should_scroll and scrollbar:
             scrollbar.setValue(scrollbar.maximum())

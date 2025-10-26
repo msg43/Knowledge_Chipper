@@ -23,17 +23,17 @@ echo "" >> "$RESULTS_FILE"
 test_parallel_requests() {
     local num_parallel=$1
     local num_requests=$2
-    
+
     echo "────────────────────────────────────────────────────────────────"
     echo "Testing OLLAMA_NUM_PARALLEL=$num_parallel"
     echo "────────────────────────────────────────────────────────────────"
-    
+
     # Configure Ollama
     echo "  Reconfiguring Ollama..."
     killall Ollama 2>/dev/null || true
     launchctl unload "$PLIST_PATH" 2>/dev/null || true
     sleep 2
-    
+
     cat << PLIST_EOF > "$PLIST_PATH"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -70,16 +70,16 @@ test_parallel_requests() {
 </dict>
 </plist>
 PLIST_EOF
-    
+
     launchctl load "$PLIST_PATH"
     sleep 3
-    
+
     # Verify Ollama is running
     if ! curl -s http://localhost:11434/api/version > /dev/null 2>&1; then
         echo "  ❌ Ollama failed to start"
         return 1
     fi
-    
+
     # Warm up - ensure model is loaded
     echo "  Warming up model..."
     curl -s http://localhost:11434/api/generate -d "{
@@ -87,16 +87,16 @@ PLIST_EOF
         \"prompt\": \"test\",
         \"stream\": false
     }" > /dev/null
-    
+
     sleep 2
-    
+
     # Run benchmark with stream=false to ensure we wait for full response
     echo "  Sending $num_requests requests (waiting for full completion)..."
     start_time=$(date +%s.%N)
-    
+
     # Create temporary directory for responses
     TEMP_DIR=$(mktemp -d)
-    
+
     # Launch requests in background, each waits for full response
     for i in $(seq 1 $num_requests); do
         (
@@ -108,23 +108,23 @@ PLIST_EOF
             }" > "$TEMP_DIR/response_$i.json"
         ) &
     done
-    
+
     # Wait for all requests to actually complete
     wait
-    
+
     end_time=$(date +%s.%N)
     elapsed=$(echo "$end_time - $start_time" | bc)
     throughput=$(echo "scale=3; $num_requests / $elapsed" | bc)
     avg_per_request=$(echo "scale=2; $elapsed / $num_requests" | bc)
-    
+
     # Verify responses were actually received
     response_count=$(ls "$TEMP_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ')
-    
+
     echo "  ✅ Completed $response_count requests in ${elapsed}s"
     echo "  📊 Throughput: ${throughput} requests/second"
     echo "  ⏱️  Avg time per request: ${avg_per_request}s"
     echo ""
-    
+
     # Log results
     echo "OLLAMA_NUM_PARALLEL=$num_parallel:" >> "$RESULTS_FILE"
     echo "  Requests: $response_count/$num_requests" >> "$RESULTS_FILE"
@@ -132,10 +132,10 @@ PLIST_EOF
     echo "  Throughput: ${throughput} req/sec" >> "$RESULTS_FILE"
     echo "  Avg per request: ${avg_per_request}s" >> "$RESULTS_FILE"
     echo "" >> "$RESULTS_FILE"
-    
+
     # Cleanup
     rm -rf "$TEMP_DIR"
-    
+
     sleep 3
 }
 
@@ -160,4 +160,3 @@ echo "════════════════════════�
 echo "🎯 RECOMMENDATION:"
 echo "Use the OLLAMA_NUM_PARALLEL value with highest throughput (req/sec)"
 echo "════════════════════════════════════════════════════════════════"
-

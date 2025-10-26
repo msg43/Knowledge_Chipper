@@ -181,6 +181,7 @@ class SpeakerDatabaseService:
         def _user_data_dir() -> Path:
             # Use the standard application support directory
             from ..utils.macos_paths import get_application_support_dir
+
             return get_application_support_dir()
 
         if database_url.startswith("sqlite:///"):

@@ -360,4 +360,3 @@ pytest tests/gui_comprehensive/ --collect-only
 ---
 
 *End of Implementation Summary*
-

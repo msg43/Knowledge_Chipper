@@ -249,17 +249,17 @@ class BaseTab(QWidget):
 
     def _should_auto_scroll(self) -> bool:
         """Check if the output text widget should auto-scroll.
-        
+
         Only auto-scroll if the user is already at the bottom (within a small threshold).
         This prevents interrupting the user when they've scrolled up to read earlier logs.
         """
         if not hasattr(self, "output_text"):
             return False
-        
+
         scrollbar = self.output_text.verticalScrollBar()
         if not scrollbar:
             return False
-        
+
         # Consider "at bottom" if within 10 pixels of maximum
         # This accounts for rounding and gives a small buffer
         return scrollbar.value() >= scrollbar.maximum() - 10
@@ -269,7 +269,7 @@ class BaseTab(QWidget):
         if hasattr(self, "output_text"):
             # Check if we should auto-scroll BEFORE appending
             should_scroll = self._should_auto_scroll()
-            
+
             self.output_text.append(message)
 
             if force_update and should_scroll:
@@ -301,7 +301,7 @@ class BaseTab(QWidget):
         if hasattr(self, "output_text"):
             # Check if we should auto-scroll BEFORE updating
             should_scroll = self._should_auto_scroll()
-            
+
             # Get current content and remove the last line
             current_content = self.output_text.toPlainText()
             lines = current_content.split("\n")

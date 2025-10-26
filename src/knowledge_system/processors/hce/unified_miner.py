@@ -161,9 +161,11 @@ class UnifiedMiner:
                 import logging
 
                 logger = logging.getLogger(__name__)
-                logger.warning(f"Miner output failed schema validation after repair: {errors}")
+                logger.warning(
+                    f"Miner output failed schema validation after repair: {errors}"
+                )
                 # Use repaired result anyway - it will have the required structure
-            
+
             result = repaired_result
 
             # Validate and return

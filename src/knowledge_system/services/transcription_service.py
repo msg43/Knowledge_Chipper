@@ -135,7 +135,9 @@ class TranscriptionService:
             if not download_result.success:
                 return {
                     "success": False,
-                    "error": download_result.errors[0] if download_result.errors else "Download failed",
+                    "error": download_result.errors[0]
+                    if download_result.errors
+                    else "Download failed",
                     "source": url,
                 }
 
@@ -165,11 +167,13 @@ class TranscriptionService:
                 transcript_text = transcribe_result.data.get("text", "")
                 output_files = []
                 if transcribe_result.metadata.get("saved_markdown_file"):
-                    output_files.append(transcribe_result.metadata["saved_markdown_file"])
-                
+                    output_files.append(
+                        transcribe_result.metadata["saved_markdown_file"]
+                    )
+
                 # Get thumbnail info from download result
                 thumbnails = download_result.data.get("thumbnails", [])
-                
+
                 return {
                     "success": True,
                     "transcript": transcript_text,
@@ -190,7 +194,7 @@ class TranscriptionService:
                     else ["Unknown transcription error"]
                 )
                 error_msg = "; ".join(errors)
-                
+
                 return {
                     "success": False,
                     "error": f"Transcription failed: {error_msg}",

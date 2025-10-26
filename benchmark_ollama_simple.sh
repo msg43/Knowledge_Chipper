@@ -16,14 +16,14 @@ TEST_PROMPT='Extract claims and entities from: "Machine learning models require 
 test_parallel_requests() {
     local num_parallel=$1
     local num_requests=$2
-    
+
     echo "Testing OLLAMA_NUM_PARALLEL=$num_parallel with $num_requests requests..."
-    
+
     # Configure Ollama
     killall Ollama 2>/dev/null || true
     launchctl unload "$PLIST_PATH" 2>/dev/null || true
     sleep 2
-    
+
     cat << PLIST_EOF > "$PLIST_PATH"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -60,29 +60,29 @@ test_parallel_requests() {
 </dict>
 </plist>
 PLIST_EOF
-    
+
     launchctl load "$PLIST_PATH"
     sleep 3
-    
+
     # Verify Ollama is running
     if ! curl -s http://localhost:11434/api/version > /dev/null 2>&1; then
         echo "❌ Ollama failed to start"
         return 1
     fi
-    
+
     # Warm up
     curl -s http://localhost:11434/api/generate -d "{
         \"model\": \"qwen2.5:7b-instruct\",
         \"prompt\": \"test\",
         \"stream\": false
     }" > /dev/null
-    
+
     sleep 1
-    
+
     # Run benchmark
     echo "  Sending $num_requests requests in parallel..."
     start_time=$(date +%s.%N)
-    
+
     # Launch requests in background
     for i in $(seq 1 $num_requests); do
         (
@@ -94,18 +94,18 @@ PLIST_EOF
             }" > /dev/null
         ) &
     done
-    
+
     # Wait for all requests to complete
     wait
-    
+
     end_time=$(date +%s.%N)
     elapsed=$(echo "$end_time - $start_time" | bc)
     throughput=$(echo "scale=2; $num_requests / $elapsed" | bc)
-    
+
     echo "  ✅ Completed in ${elapsed}s"
     echo "  📊 Throughput: ${throughput} requests/second"
     echo ""
-    
+
     sleep 3
 }
 
@@ -121,4 +121,3 @@ test_parallel_requests 7 10
 echo "════════════════════════════════════════════════════════════════"
 echo "✅ BENCHMARK COMPLETE"
 echo "════════════════════════════════════════════════════════════════"
-

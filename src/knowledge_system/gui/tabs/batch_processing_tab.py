@@ -682,13 +682,13 @@ Recommended Settings:
     def _log_result(self, message: str):
         """Log a result message."""
         timestamp = time.strftime("%H:%M:%S")
-        
+
         # Check if we should auto-scroll BEFORE appending
         scrollbar = self.results_text.verticalScrollBar()
         should_scroll = False
         if scrollbar:
             should_scroll = scrollbar.value() >= scrollbar.maximum() - 10
-        
+
         self.results_text.append(f"[{timestamp}] {message}")
 
         # Only auto-scroll if user was already at the bottom

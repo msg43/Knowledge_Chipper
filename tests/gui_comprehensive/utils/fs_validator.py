@@ -10,7 +10,7 @@ from typing import Tuple
 import yaml
 
 
-def read_markdown_with_frontmatter(path: Path) -> Tuple[dict, str]:
+def read_markdown_with_frontmatter(path: Path) -> tuple[dict, str]:
     text = path.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
         return {}, text
@@ -28,5 +28,3 @@ def assert_markdown_has_sections(path: Path, sections: list[str]) -> bool:
     _, body = read_markdown_with_frontmatter(path)
     body_low = body.lower()
     return all(section.lower() in body_low for section in sections)
-
-

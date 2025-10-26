@@ -10,4 +10,3 @@ PyQt6>=6.6.0
 # Optional: Streamlit web UI (if still used)
 streamlit>=1.28.0
 streamlit-option-menu>=0.3.0
-

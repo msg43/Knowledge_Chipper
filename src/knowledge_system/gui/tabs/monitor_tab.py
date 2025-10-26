@@ -448,8 +448,8 @@ class MonitorTab(BaseTab, FileOperationsMixin):
                 return
 
             # Import processors
-            from ...processors.audio_processor import AudioProcessor
             from ...core.system2_orchestrator import System2Orchestrator
+            from ...processors.audio_processor import AudioProcessor
 
             success = False
             output_files = []
@@ -494,7 +494,7 @@ class MonitorTab(BaseTab, FileOperationsMixin):
                 try:
                     # Use System2Orchestrator for consistency with Summarization tab
                     orchestrator = System2Orchestrator()
-                    
+
                     # Create mining job
                     episode_id = file_path.stem
                     job_id = orchestrator.create_job(
@@ -507,11 +507,12 @@ class MonitorTab(BaseTab, FileOperationsMixin):
                         },
                         auto_process=False,
                     )
-                    
+
                     # Execute job synchronously
                     import asyncio
+
                     result = asyncio.run(orchestrator.process_job(job_id))
-                    
+
                     if result.get("status") == "succeeded":
                         self.append_log(f"✅ Summarized: {file_path}")
                         success = True

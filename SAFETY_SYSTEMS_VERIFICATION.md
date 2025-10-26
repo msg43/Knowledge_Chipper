@@ -234,4 +234,3 @@ emergency_threshold=97   # Default: 95
 - Recover to full capacity automatically
 
 No manual intervention required - it's all automatic! 🛡️
-

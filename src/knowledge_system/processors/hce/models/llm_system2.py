@@ -164,12 +164,12 @@ class System2LLM:
     ) -> dict[str, Any]:
         """
         Generate JSON using fast JSON mode + robust repair logic.
-        
+
         Strategy (optimized for speed):
         1. Use format="json" (5x faster than grammar mode)
         2. Parse + repair (fixes 95% of common LLM errors)
         3. If validation fails: log warning but return repaired version
-        
+
         Performance:
         - JSON mode: ~4s per segment (vs ~24s with grammar mode)
         - Parallel efficiency: 81% (4x speedup with 5 workers)
@@ -178,14 +178,14 @@ class System2LLM:
         """
         # Use JSON mode for speed (no schema constraint at generation time)
         logger.debug(f"Generating JSON for {schema_name} (JSON mode + repair)")
-        
+
         # Use temperature=0 for speed (greedy decoding, faster)
         # Repair logic will fix any errors from deterministic generation
         if "temperature" not in kwargs:
             kwargs["temperature"] = 0.0
-        
+
         raw_response = await self._generate_json_async(prompt, format="json", **kwargs)
-        
+
         # Parse response
         if isinstance(raw_response, str):
             try:
@@ -199,17 +199,20 @@ class System2LLM:
         else:
             logger.error(f"Unexpected response type: {type(raw_response)}")
             return {"claims": [], "jargon": [], "people": [], "mental_models": []}
-        
+
         # Validate and repair
         from ..schema_validator import repair_and_validate_miner_output
+
         repaired, is_valid, errors = repair_and_validate_miner_output(parsed)
-        
+
         if not is_valid:
-            logger.warning(f"Schema validation failed for {schema_name} (after repair): {errors[:200]}")
+            logger.warning(
+                f"Schema validation failed for {schema_name} (after repair): {errors[:200]}"
+            )
             # Continue with repaired version (95% of errors are fixed by repair)
         else:
             logger.debug(f"✓ {schema_name}: Valid JSON after repair")
-        
+
         return repaired
 
     def generate_structured_json(

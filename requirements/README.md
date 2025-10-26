@@ -90,4 +90,3 @@ pip-audit
 - **Dependabot** automatically creates PRs for updates (see `.github/dependabot.yml`)
 - **Critical pins**: `yt-dlp` is pinned to exact version (see docs/YT_DLP_UPGRADE_PROCEDURE.md)
 - **Version strategy**: Use `>=` for flexibility in base.txt, `==` for reproducibility in production.txt
-

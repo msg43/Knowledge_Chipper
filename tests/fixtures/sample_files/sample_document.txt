@@ -38,4 +38,3 @@ Conclusion
 ==========
 
 Following these best practices leads to higher quality software and more productive development teams.
-

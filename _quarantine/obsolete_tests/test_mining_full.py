@@ -12,7 +12,6 @@ import pytest
 from src.knowledge_system.core.system2_orchestrator import System2Orchestrator
 from src.knowledge_system.database import DatabaseService
 from src.knowledge_system.database.hce_models import Claim, Concept, Jargon, Person
-from src.knowledge_system.database.hce_operations import get_episode_summary
 
 
 @pytest.fixture
@@ -93,8 +92,16 @@ class TestMiningWithOllama:
         assert result["result"]["claims_extracted"] >= 0
 
         # Verify data was stored in database
-        summary = get_episode_summary(test_db_service, episode_id)
-        assert summary["total_extractions"] >= 0
+        # Query unified database directly for episode data
+        with test_db_service.get_session() as session:
+            from src.knowledge_system.database.hce_models import Episode
+
+            episode = session.query(Episode).filter_by(episode_id=episode_id).first()
+            assert episode is not None, "Episode should be stored in database"
+
+            # Check that some data was extracted
+            claims = session.query(Claim).filter_by(episode_id=episode_id).all()
+            assert len(claims) >= 0, "Should have extracted claims"
 
     @pytest.mark.asyncio
     async def test_checkpoint_save_and_resume(

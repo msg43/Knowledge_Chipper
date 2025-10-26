@@ -902,7 +902,3 @@ def generate_summary_markdown_from_pipeline(
 **PART 2 CONTINUES IN NEXT FILE** (hitting token limits)
 
 Let me create the second part:
-
-
-
-

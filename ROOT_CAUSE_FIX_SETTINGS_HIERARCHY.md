@@ -212,4 +212,3 @@ The architecture is now in place; just add more `if` clauses in `get_combo_selec
 **Status:** ✅ ROOT CAUSE FIXED
 **Files Changed:** 1 (`settings_manager.py`)
 **Testing Required:** Launch GUI and verify settings.yaml defaults are respected
-

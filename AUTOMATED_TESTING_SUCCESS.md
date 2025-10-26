@@ -220,4 +220,3 @@ Run `./test_gui_auto.sh` before every commit to catch bugs automatically!
 **Test Output**: All tests passing, no critical issues found.  
 **Recommendation**: Integrate into pre-commit hooks and CI/CD pipeline.  
 **Status**: ✅ **READY FOR USE**
-

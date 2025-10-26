@@ -126,7 +126,9 @@ class MediaSource(Base):
     needs_audio_retry = Column(Boolean, default=False)  # True if audio download failed
     retry_count = Column(Integer, default=0)  # Number of retry attempts
     last_retry_at = Column(DateTime)  # Timestamp of last retry attempt
-    first_failure_at = Column(DateTime)  # Timestamp of first failure for time-based retry logic
+    first_failure_at = Column(
+        DateTime
+    )  # Timestamp of first failure for time-based retry logic
 
     # Failure tracking (after max retries exceeded)
     max_retries_exceeded = Column(Boolean, default=False)  # True if retry limit reached

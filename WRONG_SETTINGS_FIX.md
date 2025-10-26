@@ -216,4 +216,3 @@ print("✅ Fixed: Session state now uses local provider")
 print("   Restart GUI to see changes")
 EOF
 ```
-

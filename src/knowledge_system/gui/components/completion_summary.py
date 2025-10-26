@@ -30,7 +30,7 @@ class TranscriptionCompletionSummary(QDialog):
         self.setWindowTitle("Transcription Complete - Summary")
         self.setMinimumSize(700, 500)
         self.setModal(True)
-        
+
         # Store output directory for opening folder
         self.output_dir = None
         # Store successful files for summarization
@@ -71,7 +71,9 @@ class TranscriptionCompletionSummary(QDialog):
         stats_grid_layout = QHBoxLayout(stats_grid)
 
         # Files processed
-        self.files_widget = self._create_stat_widget("📁 Files", "0 processed", "#1976d2")
+        self.files_widget = self._create_stat_widget(
+            "📁 Files", "0 processed", "#1976d2"
+        )
         stats_grid_layout.addWidget(self.files_widget)
 
         # Success rate
@@ -302,9 +304,10 @@ class TranscriptionCompletionSummary(QDialog):
         """Open the output folder in the system file browser."""
         import subprocess
         import sys
-        
+
         if not self.output_dir:
             from PyQt6.QtWidgets import QMessageBox
+
             QMessageBox.warning(
                 self,
                 "No Output Directory",
@@ -312,20 +315,21 @@ class TranscriptionCompletionSummary(QDialog):
                 "This may happen if:\n"
                 "• The transcription was processed without saving to disk\n"
                 "• The output directory was not configured\n"
-                "• The transcription was cancelled before completion"
+                "• The transcription was cancelled before completion",
             )
             return
-        
+
         output_path = Path(self.output_dir)
         if not output_path.exists():
             from PyQt6.QtWidgets import QMessageBox
+
             QMessageBox.warning(
                 self,
                 "Directory Not Found",
-                f"Output directory does not exist:\n{self.output_dir}"
+                f"Output directory does not exist:\n{self.output_dir}",
             )
             return
-        
+
         try:
             if sys.platform == "darwin":  # macOS
                 subprocess.run(["open", str(output_path)], check=True)
@@ -335,10 +339,9 @@ class TranscriptionCompletionSummary(QDialog):
                 subprocess.run(["xdg-open", str(output_path)], check=True)
         except Exception as e:
             from PyQt6.QtWidgets import QMessageBox
+
             QMessageBox.warning(
-                self,
-                "Cannot Open Folder",
-                f"Failed to open output folder:\n{str(e)}"
+                self, "Cannot Open Folder", f"Failed to open output folder:\n{str(e)}"
             )
 
     def show_summary(
@@ -354,7 +357,7 @@ class TranscriptionCompletionSummary(QDialog):
         # Store for later use
         self.successful_files = successful_files
         self.output_dir = output_dir
-        
+
         total_files = len(successful_files) + len(failed_files)
         success_count = len(successful_files)
         failure_count = len(failed_files)

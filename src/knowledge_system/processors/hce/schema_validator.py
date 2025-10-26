@@ -48,7 +48,7 @@ class SchemaValidator:
         schema_files = list(schema_dir.glob("*.json"))
         # Sort so _flat schemas are processed LAST (they override non-flat)
         schema_files.sort(key=lambda f: (0 if "_flat" in f.stem else 1, f.stem))
-        
+
         for schema_file in schema_files:
             try:
                 # Handle versioned schema names (e.g., miner_output.v1.json, miner_output_flat.v1.json)
@@ -63,15 +63,19 @@ class SchemaValidator:
                     base_name = schema_name.split(".")[0]
                     if base_name != schema_name:
                         self.schemas[base_name] = schema_content
-                    
+
                     # PRIORITY: If this is a _flat schema, use it as the DEFAULT for the base name
                     # e.g., "miner_output_flat.v1" -> also store as "miner_output" (overriding old schema)
                     if "_flat" in base_name:
                         default_name = base_name.replace("_flat", "")
                         self.schemas[default_name] = schema_content
-                        logger.info(f"✓ FLAT schema loaded: {schema_name} → default for '{default_name}'")
+                        logger.info(
+                            f"✓ FLAT schema loaded: {schema_name} → default for '{default_name}'"
+                        )
                     else:
-                        logger.debug(f"Loaded schema: {schema_name} (also as {base_name})")
+                        logger.debug(
+                            f"Loaded schema: {schema_name} (also as {base_name})"
+                        )
             except Exception as e:
                 logger.warning(f"Failed to load schema {schema_file}: {e}")
 
@@ -160,7 +164,7 @@ class SchemaValidator:
                     repaired[key] = []
                 elif not isinstance(repaired[key], list):
                     repaired[key] = []
-            
+
             # Repair incomplete items within arrays
             # Claims: ensure evidence_spans exists
             if "claims" in repaired and isinstance(repaired["claims"], list):
@@ -171,7 +175,13 @@ class SchemaValidator:
                             claim["evidence_spans"] = []
                         # Fix invalid claim types
                         if "claim_type" in claim:
-                            valid_types = ["factual", "causal", "normative", "forecast", "definition"]
+                            valid_types = [
+                                "factual",
+                                "causal",
+                                "normative",
+                                "forecast",
+                                "definition",
+                            ]
                             if claim["claim_type"] not in valid_types:
                                 # Map common alternatives
                                 type_map = {
@@ -180,13 +190,20 @@ class SchemaValidator:
                                     "descriptive": "factual",
                                     "analytical": "causal",
                                     "assertion": "factual",
-                                    "assumption": "normative"
+                                    "assumption": "normative",
                                 }
-                                claim["claim_type"] = type_map.get(claim["claim_type"], "factual")
-                        
+                                claim["claim_type"] = type_map.get(
+                                    claim["claim_type"], "factual"
+                                )
+
                         # Fix invalid stance values
                         if "stance" in claim:
-                            valid_stances = ["asserts", "questions", "opposes", "neutral"]
+                            valid_stances = [
+                                "asserts",
+                                "questions",
+                                "opposes",
+                                "neutral",
+                            ]
                             if claim["stance"] not in valid_stances:
                                 # Map common alternatives
                                 stance_map = {
@@ -199,10 +216,12 @@ class SchemaValidator:
                                     "inquires": "questions",
                                     "asks": "questions",
                                     "uncertain": "neutral",
-                                    "ambiguous": "neutral"
+                                    "ambiguous": "neutral",
                                 }
-                                claim["stance"] = stance_map.get(claim["stance"], "neutral")
-            
+                                claim["stance"] = stance_map.get(
+                                    claim["stance"], "neutral"
+                                )
+
             # People: ensure required fields exist
             if "people" in repaired and isinstance(repaired["people"], list):
                 for person in repaired["people"]:
@@ -213,7 +232,7 @@ class SchemaValidator:
                         if "timestamp" not in person:
                             # Add placeholder timestamp if missing
                             person["timestamp"] = "00:00"
-            
+
             # Jargon: ensure required fields exist
             if "jargon" in repaired and isinstance(repaired["jargon"], list):
                 for term in repaired["jargon"]:
@@ -222,9 +241,11 @@ class SchemaValidator:
                             term["context_quote"] = term.get("term", "")
                         if "timestamp" not in term:
                             term["timestamp"] = "00:00"
-            
+
             # Mental models: ensure required fields exist
-            if "mental_models" in repaired and isinstance(repaired["mental_models"], list):
+            if "mental_models" in repaired and isinstance(
+                repaired["mental_models"], list
+            ):
                 for model in repaired["mental_models"]:
                     if isinstance(model, dict):
                         if "context_quote" not in model:
