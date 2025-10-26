@@ -573,57 +573,65 @@ class UnifiedBatchProcessor:
     def _process_single_youtube_item(
         self, url: str, audio_file: Path
     ) -> tuple[bool, str]:
-        """Process a single YouTube URL using the transcription service."""
+        """Process a single YouTube item using AudioProcessor directly."""
         try:
-            from ..services.transcription_service import TranscriptionService
+            from ..processors.audio_processor import AudioProcessor
 
-            service = TranscriptionService(
-                whisper_model=self.config.get("model", "medium"),
-                download_thumbnails=self.config.get("download_thumbnails", False),
+            # Create AudioProcessor with settings
+            processor = AudioProcessor(
+                model=self.config.get("model", "medium"),
+                device=self.config.get("device", "cpu"),
                 use_whisper_cpp=self.config.get("use_whisper_cpp", False),
-            )
-
-            result = service.transcribe_youtube_url(
-                url,
-                download_thumbnails=self.config.get("download_thumbnails", False),
-                output_dir=self.config.get("output_dir"),
-                include_timestamps=self.config.get("timestamps", True),
                 enable_diarization=self.config.get("enable_diarization", False),
                 require_diarization=False,  # Allow fallback when diarization fails
+                temp_dir=self.config.get("temp_dir"),
+            )
+
+            # Process the downloaded audio file
+            result = processor.process(
+                audio_file,
+                output_dir=self.config.get("output_dir"),
+                include_timestamps=self.config.get("timestamps", True),
                 overwrite=self.config.get("overwrite", False),
             )
 
-            if result["success"]:
-                return True, "Successfully processed with diarization"
+            if result.success:
+                return True, "Successfully transcribed"
             else:
-                error_msg = result.get("error", "Unknown error")
+                error_msg = result.errors[0] if result.errors else "Unknown error"
                 return False, error_msg
 
         except Exception as e:
             return False, f"Processing exception: {str(e)}"
 
     def _process_single_local_file(self, file_path: Path) -> tuple[bool, str]:
-        """Process a single local file."""
+        """Process a single local file using AudioProcessor directly."""
         try:
-            from ..services.transcription_service import TranscriptionService
+            from ..processors.audio_processor import AudioProcessor
 
-            service = TranscriptionService(
-                whisper_model=self.config.get("model", "medium"),
-                download_thumbnails=False,  # Not applicable for local files
+            # Create AudioProcessor with settings
+            processor = AudioProcessor(
+                model=self.config.get("model", "medium"),
+                device=self.config.get("device", "cpu"),
                 use_whisper_cpp=self.config.get("use_whisper_cpp", False),
+                enable_diarization=self.config.get("enable_diarization", False),
+                require_diarization=False,
+                temp_dir=self.config.get("temp_dir"),
             )
 
-            result = service.transcribe_input(
+            # Process the local audio file
+            result = processor.process(
                 file_path,
-                download_thumbnails=False,
                 output_dir=self.config.get("output_dir"),
                 include_timestamps=self.config.get("timestamps", True),
+                overwrite=self.config.get("overwrite", False),
             )
 
-            if result["success"]:
+            if result.success:
                 return True, f"Successfully transcribed {file_path.name}"
             else:
-                return False, result.get("error", "Unknown error")
+                error_msg = result.errors[0] if result.errors else "Unknown error"
+                return False, error_msg
 
         except Exception as e:
             return False, f"Processing exception: {str(e)}"

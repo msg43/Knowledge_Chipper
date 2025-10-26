@@ -1,8 +1,8 @@
 """
 System 2 Orchestrator
 
-Extends the IntelligentProcessingCoordinator with job tracking, checkpoint persistence,
-and auto-process chaining per the System 2 architecture.
+Provides job tracking, checkpoint persistence, and auto-process chaining
+per the System 2 architecture for Knowledge System operations.
 """
 
 import asyncio
@@ -17,18 +17,17 @@ from ..database import DatabaseService
 from ..database.system2_models import Job, JobRun, LLMRequest, LLMResponse
 from ..errors import ErrorCode, KnowledgeSystemError
 from ..utils.id_generation import create_deterministic_id
-from .intelligent_processing_coordinator import IntelligentProcessingCoordinator
 
 logger = logging.getLogger(__name__)
 
 
 class System2Orchestrator:
     """
-    Orchestrator that wraps IntelligentProcessingCoordinator with System 2 features:
-    - Creates job and job_run records
+    Orchestrator that provides System 2 features for Knowledge System processing:
+    - Creates job and job_run records for tracking
     - Persists checkpoints for resumability
-    - Supports auto_process chaining
-    - Tracks all LLM requests/responses
+    - Supports auto_process chaining between stages
+    - Tracks all LLM requests/responses for cost accounting
     """
 
     def __init__(
@@ -36,7 +35,6 @@ class System2Orchestrator:
     ):
         """Initialize the System 2 orchestrator."""
         self.db_service = db_service or DatabaseService()
-        self.coordinator = IntelligentProcessingCoordinator()
         self._current_job_run_id: str | None = None
         self.progress_callback = (
             progress_callback  # Callback for real-time progress updates
@@ -357,45 +355,103 @@ class System2Orchestrator:
 
     async def _process_transcribe(
         self,
-        video_id: str,
+        media_id: str,
         config: dict[str, Any],
         checkpoint: dict[str, Any] | None,
         run_id: str,
     ) -> dict[str, Any]:
-        """Process transcription with checkpoint support."""
+        """
+        Process transcription job using AudioProcessor.
+
+        This method performs actual audio transcription with:
+        - Whisper.cpp Core ML acceleration
+        - Optional speaker diarization
+        - Database storage
+        - Markdown file generation
+        """
         try:
-            # For MVP: assume transcript already exists or use file_path
+            # Report progress
+            if self.progress_callback:
+                self.progress_callback("loading", 0, media_id)
+
+            # Get file path from config
             file_path = config.get("file_path")
             if not file_path:
                 raise KnowledgeSystemError(
-                    f"No file_path in config for video {video_id}",
+                    f"No file_path in config for media {media_id}",
                     ErrorCode.INVALID_INPUT,
                 )
 
-            episode_id = f"episode_{video_id}"
+            file_path = Path(file_path)
+            if not file_path.exists():
+                raise KnowledgeSystemError(
+                    f"Audio file not found: {file_path}",
+                    ErrorCode.INVALID_INPUT,
+                )
 
-            # Store transcript reference (skip legacy hce_operations path)
-            try:
-                from ..database.service import DatabaseService
+            logger.info(f"📄 Transcribing: {file_path.name}")
 
-                # No-op placeholder: transcript handling occurs elsewhere in pipeline
-                _ = DatabaseService  # silence unused import warning
-            except Exception:
-                pass
+            # Report progress
+            if self.progress_callback:
+                self.progress_callback("transcribing", 10, media_id)
 
-            logger.info(f"Stored transcript reference for {episode_id}: {file_path}")
+            # Create AudioProcessor
+            from ..processors.audio_processor import AudioProcessor
+
+            model = config.get("model", "base")
+            device = config.get("device", "cpu")
+            enable_diarization = config.get("enable_diarization", False)
+
+            processor = AudioProcessor(
+                model=model,
+                device=device,
+                use_whisper_cpp=True,
+                enable_diarization=enable_diarization,
+                require_diarization=enable_diarization,
+                db_service=self.db_service,
+            )
+
+            # Process audio file
+            result = processor.process(
+                file_path,
+                output_dir=config.get("output_dir"),
+                include_timestamps=config.get("include_timestamps", True),
+                video_metadata=config.get("video_metadata"),
+            )
+
+            if not result.success:
+                error_msg = (
+                    result.errors[0] if result.errors else "Transcription failed"
+                )
+                raise KnowledgeSystemError(error_msg, ErrorCode.PROCESSING_FAILED)
+
+            # Report progress
+            if self.progress_callback:
+                self.progress_callback("completed", 100, media_id)
+
+            # Extract output paths
+            transcript_path = result.metadata.get("transcript_file")
+            transcript_text = result.data.get("transcript", "")
+
+            logger.info(f"✅ Transcription complete: {file_path.name}")
 
             return {
                 "status": "succeeded",
-                "output_id": episode_id,
+                "output_id": media_id,
                 "result": {
-                    "transcript_path": str(file_path),
-                    "video_id": video_id,
-                    "episode_id": episode_id,
+                    "transcript_path": str(transcript_path)
+                    if transcript_path
+                    else None,
+                    "transcript_text": transcript_text,
+                    "language": result.data.get("language", "unknown"),
+                    "duration": result.data.get("duration"),
+                    "diarization_enabled": enable_diarization,
+                    "speaker_count": len(result.metadata.get("speakers", [])),
                 },
             }
+
         except Exception as e:
-            logger.error(f"Transcription failed for {video_id}: {e}")
+            logger.error(f"Transcription failed for {media_id}: {e}")
             raise KnowledgeSystemError(
                 f"Transcription failed: {str(e)}", ErrorCode.PROCESSING_FAILED
             ) from e
