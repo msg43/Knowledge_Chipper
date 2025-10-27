@@ -136,28 +136,41 @@ class UnifiedHCEPipeline:
 
         content_summary = short_summary  # Use the pre-generated short summary
 
-        # Step 3: Flagship Evaluation
+        # Step 3: Parallel Evaluation of ALL Entity Types
         report_progress(
-            "Evaluating claims", 70.0, f"Flagship review of {total_claims} claims"
+            "Evaluating all entities",
+            70.0,
+            f"Evaluating {total_claims} claims, {total_jargon} jargon, {total_people} people, {total_mental_models} concepts",
         )
 
         try:
             flagship_model_uri = getattr(
                 self.config.models, "flagship_judge", self.config.models.judge
             )
-            evaluation_output = evaluate_claims_flagship(
-                content_summary, miner_outputs, flagship_model_uri
+
+            # Evaluate all entity types in parallel
+            evaluation_results = self._evaluate_all_entities_parallel(
+                miner_outputs, content_summary, flagship_model_uri
             )
 
+            # Extract individual results
+            claims_evaluation = evaluation_results["claims"]
+            jargon_evaluation = evaluation_results["jargon"]
+            people_evaluation = evaluation_results["people"]
+            concepts_evaluation = evaluation_results["concepts"]
+
             logger.info(
-                f"Flagship evaluation: {evaluation_output.claims_accepted} accepted, "
-                f"{evaluation_output.claims_rejected} rejected from {evaluation_output.total_claims_processed} total"
+                f"Evaluation complete: "
+                f"Claims: {claims_evaluation.claims_accepted}/{claims_evaluation.total_claims_processed}, "
+                f"Jargon: {jargon_evaluation.terms_accepted}/{jargon_evaluation.total_terms_processed}, "
+                f"People: {people_evaluation.people_accepted}/{people_evaluation.total_mentions_processed}, "
+                f"Concepts: {concepts_evaluation.concepts_accepted}/{concepts_evaluation.total_concepts_processed}"
             )
 
         except Exception as e:
-            logger.error(f"Flagship evaluation failed: {e}")
-            # Create empty evaluation output
-            evaluation_output = FlagshipEvaluationOutput(
+            logger.error(f"Entity evaluation failed: {e}")
+            # Create fallback evaluation outputs
+            claims_evaluation = FlagshipEvaluationOutput(
                 {
                     "evaluated_claims": [],
                     "summary_assessment": {
@@ -170,12 +183,16 @@ class UnifiedHCEPipeline:
                     },
                 }
             )
+            # Use miner outputs as-is for other entities (no evaluation)
+            jargon_evaluation = None
+            people_evaluation = None
+            concepts_evaluation = None
 
-        # Step 4: Convert to final output format
+        # Step 4: Convert to final output format (using evaluated entities)
         report_progress("Converting results", 80.0, "Converting to final output format")
 
         final_outputs = self._convert_to_pipeline_outputs(
-            episode, miner_outputs, evaluation_output
+            episode, miner_outputs, claims_evaluation, jargon_evaluation, people_evaluation, concepts_evaluation
         )
 
         # Step 5: Long Summary (Post-Evaluation)
@@ -233,6 +250,76 @@ class UnifiedHCEPipeline:
         )
 
         return final_outputs
+
+    def _evaluate_all_entities_parallel(
+        self,
+        miner_outputs: list,
+        content_summary: str,
+        evaluator_model_uri: str,
+    ) -> dict:
+        """
+        Evaluate all entity types in parallel.
+
+        Returns dict with keys: claims, jargon, people, concepts
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        # Collect all entities by type
+        all_claims_raw = [c for output in miner_outputs for c in output.claims]
+        all_jargon_raw = [j for output in miner_outputs for j in output.jargon]
+        all_people_raw = [p for output in miner_outputs for p in output.people]
+        all_concepts_raw = [m for output in miner_outputs for m in output.mental_models]
+
+        logger.info(
+            f"Starting parallel evaluation: {len(all_claims_raw)} claims, "
+            f"{len(all_jargon_raw)} jargon, {len(all_people_raw)} people, {len(all_concepts_raw)} concepts"
+        )
+
+        # Import evaluators
+        from .evaluators.jargon_evaluator import evaluate_jargon
+        from .evaluators.people_evaluator import evaluate_people
+        from .evaluators.concepts_evaluator import evaluate_concepts
+
+        # Run all 4 evaluators in parallel
+        results = {}
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {
+                executor.submit(
+                    evaluate_claims_flagship,
+                    content_summary,
+                    miner_outputs,
+                    evaluator_model_uri,
+                ): "claims",
+                executor.submit(
+                    evaluate_jargon, content_summary, all_jargon_raw, evaluator_model_uri
+                ): "jargon",
+                executor.submit(
+                    evaluate_people, content_summary, all_people_raw, evaluator_model_uri
+                ): "people",
+                executor.submit(
+                    evaluate_concepts,
+                    content_summary,
+                    all_concepts_raw,
+                    evaluator_model_uri,
+                ): "concepts",
+            }
+
+            for future in as_completed(futures):
+                entity_type = futures[future]
+                try:
+                    results[entity_type] = future.result()
+                    logger.info(f"✅ {entity_type.capitalize()} evaluation complete")
+                except Exception as e:
+                    logger.error(f"❌ {entity_type.capitalize()} evaluation failed: {e}")
+                    # Create fallback for failed entity type
+                    if entity_type == "claims":
+                        results[entity_type] = FlagshipEvaluationOutput(
+                            {"evaluated_claims": [], "summary_assessment": {}}
+                        )
+                    # Other entity types will be handled in conversion
+
+        return results
 
     def _generate_short_summary(self, episode: EpisodeBundle) -> str:
         """Generate pre-mining short summary of episode content."""
