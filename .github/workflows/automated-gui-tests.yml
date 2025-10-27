@@ -1,0 +1,183 @@
+name: Automated GUI Tests
+
+# Run on pushes to main/develop and all PRs
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  automated-tests:
+    name: Run Automated GUI Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+        python-version: ['3.11', '3.12']
+      fail-fast: false  # Continue testing other combinations even if one fails
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-glx \
+            libegl1-mesa \
+            libxkbcommon-x11-0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-xinerama0 \
+            libxcb-xfixes0 \
+            x11-utils \
+            xvfb
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install portaudio
+
+      - name: Create virtual environment
+        run: |
+          python -m venv venv
+
+      - name: Install dependencies
+        run: |
+          source venv/bin/activate
+          pip install --upgrade pip setuptools wheel
+          pip install -e .
+          pip install pytest pytest-asyncio pytest-timeout pytest-xdist pytest-cov
+
+      - name: Set testing environment variables
+        run: |
+          echo "KNOWLEDGE_CHIPPER_TESTING_MODE=1" >> $GITHUB_ENV
+          echo "QT_QPA_PLATFORM=offscreen" >> $GITHUB_ENV
+          echo "PYTHONPATH=$PWD/src:$PYTHONPATH" >> $GITHUB_ENV
+
+      - name: Run automated tests (Ubuntu with Xvfb)
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a ./tests/run_comprehensive_automated_tests.sh
+
+      - name: Run automated tests (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          ./tests/run_comprehensive_automated_tests.sh
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: tests/reports/
+          retention-days: 30
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: htmlcov/
+          retention-days: 30
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // Find the most recent test report
+            const reportsDir = 'tests/reports';
+            let summary = '## Automated GUI Test Results\n\n';
+
+            try {
+              const dirs = fs.readdirSync(reportsDir);
+              if (dirs.length > 0) {
+                const latestDir = dirs.sort().reverse()[0];
+                const summaryPath = path.join(reportsDir, latestDir, 'SUMMARY.txt');
+
+                if (fs.existsSync(summaryPath)) {
+                  const summaryContent = fs.readFileSync(summaryPath, 'utf8');
+                  summary += '```\n' + summaryContent + '\n```\n';
+                } else {
+                  summary += '⚠️ Test summary not found\n';
+                }
+              } else {
+                summary += '⚠️ No test reports generated\n';
+              }
+            } catch (error) {
+              summary += '⚠️ Error reading test results: ' + error.message + '\n';
+            }
+
+            summary += `\n**OS**: ${{ matrix.os }}\n`;
+            summary += `**Python**: ${{ matrix.python-version }}\n`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: automated-tests
+    if: always()
+    steps:
+      - name: Download all test reports
+        uses: actions/download-artifact@v4
+        with:
+          path: all-reports
+
+      - name: Generate combined summary
+        run: |
+          echo "# Combined Test Summary" > summary.md
+          echo "" >> summary.md
+
+          # Count artifacts
+          TOTAL_RUNS=$(ls -1 all-reports | wc -l)
+          echo "Total test runs: $TOTAL_RUNS" >> summary.md
+          echo "" >> summary.md
+
+          # List all results
+          for dir in all-reports/test-reports-*; do
+            if [ -d "$dir" ]; then
+              echo "## $(basename $dir)" >> summary.md
+
+              # Find and display summary
+              SUMMARY_FILE=$(find "$dir" -name "SUMMARY.txt" | head -1)
+              if [ -f "$SUMMARY_FILE" ]; then
+                echo '```' >> summary.md
+                cat "$SUMMARY_FILE" >> summary.md
+                echo '```' >> summary.md
+              fi
+              echo "" >> summary.md
+            fi
+          done
+
+          cat summary.md
+
+      - name: Upload combined summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined-test-summary
+          path: summary.md
+          retention-days: 90

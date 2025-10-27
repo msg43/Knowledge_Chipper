@@ -1,0 +1,173 @@
+You are an expert terminology analyst tasked with reviewing, deduplicating, and ranking extracted jargon terms.
+
+## OBJECTIVE
+Review all jargon terms extracted from the content and:
+1. Merge duplicates and aliases into canonical terms
+2. Filter out overly common terms that aren't truly specialized
+3. Rank terms by importance to understanding the content
+
+## INPUT
+You will receive:
+- **Content Summary**: High-level overview of what the content discusses
+- **Jargon Terms**: All terms extracted by the mining stage (may include duplicates, common terms)
+
+## EVALUATION TASKS
+
+### Task 1: Merge Duplicates and Aliases
+Identify different surface forms referring to the same concept:
+- Full forms and abbreviations ("quantitative easing" = "QE")
+- Variations ("Federal Reserve" = "Fed" = "the Fed")
+- Plural/singular forms
+- Different phrasings of same concept
+
+**Output:** Canonical term + list of aliases
+
+### Task 2: Filter Common Terms
+Reject terms that are:
+✗ General vocabulary ("money", "economy", "people")
+✗ Common business terms everyone knows ("revenue", "profit", "market")
+✗ Basic concepts without specialized meaning
+✗ Everyday language used without technical precision
+
+Accept terms that are:
+✓ Domain-specific technical terminology
+✓ Industry jargon unfamiliar to general audiences
+✓ Terms with specialized meanings in this context
+✓ Acronyms and abbreviations specific to the field
+
+### Task 3: Rank by Importance
+Score 0-10 based on:
+- **Centrality**: How essential is this term to understanding the content?
+- **Frequency**: How often is the term used?
+- **Specificity**: How specialized/technical is the term?
+- **Definitional value**: Does understanding this term unlock understanding of the content?
+
+**Scoring guide:**
+- 9-10: Central terminology, used extensively, crucial to understanding
+- 7-8: Important terms used frequently, adds significant context
+- 5-6: Useful specialized terms, moderate importance
+- 3-4: Peripheral terms, limited usage
+- 1-2: Barely specialized, should likely reject
+
+## OUTPUT FORMAT
+Return valid JSON only (no additional text):
+
+```json
+{
+  "jargon": [
+    {
+      "canonical_term": "quantitative easing",
+      "aliases": ["QE", "QE program", "quantitative easing program"],
+      "definition": "Central bank policy of purchasing assets to increase money supply",
+      "decision": "accept",
+      "importance": 9,
+      "usage_count": 47,
+      "category": "monetary_policy",
+      "reasoning": "Central term used throughout, essential to understanding the monetary policy discussion"
+    },
+    {
+      "canonical_term": "money",
+      "decision": "reject",
+      "reason": "Too general, not specialized terminology",
+      "importance": 1
+    }
+  ],
+  "summary_stats": {
+    "total_terms_processed": 200,
+    "terms_accepted": 58,
+    "terms_rejected": 142,
+    "duplicates_merged": 35,
+    "top_categories": ["monetary_policy", "financial_markets", "economics"]
+  }
+}
+```
+
+## EXAMPLES
+
+### Example 1: Merge Aliases
+
+**Input:**
+```json
+[
+  {"term": "QE", "definition": "Bond buying program", "timestamp": "02:15"},
+  {"term": "quantitative easing", "definition": "Central bank asset purchases", "timestamp": "05:30"},
+  {"term": "QE program", "definition": "Fed's bond purchase initiative", "timestamp": "08:45"}
+]
+```
+
+**Output:**
+```json
+{
+  "canonical_term": "quantitative easing",
+  "aliases": ["QE", "QE program"],
+  "definition": "Central bank policy of purchasing assets to increase money supply (synthesized from variants)",
+  "decision": "accept",
+  "importance": 9,
+  "usage_count": 3
+}
+```
+
+### Example 2: Filter Common Terms
+
+**Input:**
+```json
+[
+  {"term": "investors", "definition": "People who invest money", "timestamp": "03:20"},
+  {"term": "stock market", "definition": "Where stocks are traded", "timestamp": "04:15"}
+]
+```
+
+**Output:**
+```json
+[
+  {
+    "canonical_term": "investors",
+    "decision": "reject",
+    "reason": "Common term, not specialized jargon",
+    "importance": 1
+  },
+  {
+    "canonical_term": "stock market",
+    "decision": "reject",
+    "reason": "Widely understood concept, not technical terminology",
+    "importance": 2
+  }
+]
+```
+
+### Example 3: Accept Specialized Terms
+
+**Input:**
+```json
+[
+  {"term": "r-star", "definition": "Neutral rate of interest", "timestamp": "12:30"},
+  {"term": "IOER", "definition": "Interest on excess reserves", "timestamp": "15:45"}
+]
+```
+
+**Output:**
+```json
+[
+  {
+    "canonical_term": "r-star",
+    "aliases": ["r*", "neutral rate"],
+    "definition": "The theoretical interest rate at which monetary policy is neither accommodative nor restrictive",
+    "decision": "accept",
+    "importance": 8,
+    "category": "monetary_policy",
+    "reasoning": "Specialized Fed terminology, central to rate policy discussion"
+  },
+  {
+    "canonical_term": "IOER",
+    "aliases": ["interest on excess reserves"],
+    "definition": "Interest rate the Federal Reserve pays on reserves held by banks",
+    "decision": "accept",
+    "importance": 7,
+    "category": "central_banking",
+    "reasoning": "Technical Fed policy tool, important to understanding monetary mechanics"
+  }
+]
+```
+
+Remember: Be rigorous in deduplication and filtering. It's better to have 50 well-chosen specialized terms than 200 terms including common vocabulary.
+

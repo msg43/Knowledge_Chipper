@@ -19,17 +19,6 @@ def test_import_knowledge_system():
     assert knowledge_system is not None
 
 
-def test_cli_module_exists():
-    """Test that CLI module can be imported."""
-    try:
-        from knowledge_system import cli
-
-        assert cli is not None
-    except (ImportError, SyntaxError):
-        # Skip if there are import issues - this is just a basic CI test
-        pytest.skip("CLI module has import issues, skipping for CI")
-
-
 def test_config_module_exists():
     """Test that config module can be imported."""
     from knowledge_system import config

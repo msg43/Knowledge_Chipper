@@ -1,0 +1,129 @@
+# Proxy Provider Configuration Example
+#
+# This file demonstrates how to configure different proxy providers for YouTube data extraction.
+# Copy this file to your config directory and rename to proxy.yaml, then fill in your credentials.
+
+# Proxy Provider Selection
+proxy_provider: packetstream  # Options: packetstream, anyip, oxylabs, gonzoproxy, brightdata, direct
+proxy_failover_enabled: true  # Automatically try other providers if preferred fails
+
+# ============================================================================
+# PacketStream Configuration (Default, Recommended)
+# ============================================================================
+# PacketStream provides residential proxies with IP rotation
+# Sign up at: https://packetstream.io
+#
+# Environment variables:
+#   PACKETSTREAM_USERNAME - Your PacketStream username
+#   PACKETSTREAM_AUTH_KEY - Your PacketStream authentication key
+#
+# Or set in credentials.yaml:
+api_keys:
+  packetstream_username: ${PACKETSTREAM_USERNAME}
+  packetstream_auth_key: ${PACKETSTREAM_AUTH_KEY}
+
+# ============================================================================
+# AnyIP.io Configuration (Not Yet Implemented)
+# ============================================================================
+# AnyIP.io proxy service - stub implementation
+# Sign up at: https://anyip.io
+#
+# Environment variables:
+#   ANYIP_API_KEY - Your AnyIP API key
+#   ANYIP_USERNAME - Your AnyIP username
+#   ANYIP_PASSWORD - Your AnyIP password
+#
+# To use this provider:
+# 1. Set proxy_provider: anyip
+# 2. Implement the provider in: src/knowledge_system/utils/proxy/anyip_provider.py
+# 3. Configure credentials below or via environment variables
+#
+# api_keys:
+#   anyip_api_key: ${ANYIP_API_KEY}
+#   anyip_username: ${ANYIP_USERNAME}
+#   anyip_password: ${ANYIP_PASSWORD}
+
+# ============================================================================
+# Oxylabs.io Configuration (Not Yet Implemented)
+# ============================================================================
+# Oxylabs proxy service - stub implementation
+# Sign up at: https://oxylabs.io
+#
+# Environment variables:
+#   OXYLABS_USERNAME - Your Oxylabs username
+#   OXYLABS_PASSWORD - Your Oxylabs password
+#
+# To use this provider:
+# 1. Set proxy_provider: oxylabs
+# 2. Implement the provider in: src/knowledge_system/utils/proxy/oxylabs_provider.py
+# 3. Configure credentials below or via environment variables
+#
+# api_keys:
+#   oxylabs_username: ${OXYLABS_USERNAME}
+#   oxylabs_password: ${OXYLABS_PASSWORD}
+
+# ============================================================================
+# GonzoProxy.com Configuration (Not Yet Implemented)
+# ============================================================================
+# GonzoProxy service - stub implementation
+# Sign up at: https://gonzoproxy.com
+#
+# Environment variables:
+#   GONZOPROXY_API_KEY - Your GonzoProxy API key
+#   GONZOPROXY_USERNAME - Your GonzoProxy username
+#
+# To use this provider:
+# 1. Set proxy_provider: gonzoproxy
+# 2. Implement the provider in: src/knowledge_system/utils/proxy/gonzoproxy_provider.py
+# 3. Configure credentials below or via environment variables
+#
+# api_keys:
+#   gonzoproxy_api_key: ${GONZOPROXY_API_KEY}
+#   gonzoproxy_username: ${GONZOPROXY_USERNAME}
+
+# ============================================================================
+# BrightData.com Configuration (Archived, Not Yet Re-Implemented)
+# ============================================================================
+# BrightData (formerly Luminati) proxy service - stub implementation
+# Sign up at: https://brightdata.com
+#
+# The legacy BrightData implementation has been archived to:
+#   docs/archive/providers/bright_data/
+#
+# To restore BrightData support, see:
+#   docs/archive/providers/bright_data/RESTORATION_GUIDE.md
+#
+# Environment variables:
+#   BRIGHT_DATA_API_KEY - Your BrightData API key
+#   BRIGHT_DATA_CUSTOMER_ID - Your BrightData customer ID
+#   BRIGHT_DATA_ZONE_ID - Your BrightData zone ID
+#   BRIGHT_DATA_PASSWORD - Your BrightData zone password
+#
+# api_keys:
+#   bright_data_api_key: ${BRIGHT_DATA_API_KEY}
+#   bright_data_customer_id: ${BRIGHT_DATA_CUSTOMER_ID}
+#   bright_data_zone_id: ${BRIGHT_DATA_ZONE_ID}
+#   bright_data_password: ${BRIGHT_DATA_PASSWORD}
+
+# ============================================================================
+# Direct Connection (No Proxy)
+# ============================================================================
+# Use this if you don't have any proxy service or want to test without proxies
+# Note: YouTube may rate-limit direct connections for bulk operations
+#
+# To use direct connection:
+#   proxy_provider: direct
+#
+# No credentials needed - direct connection is always available as fallback
+
+# ============================================================================
+# Testing Your Proxy Configuration
+# ============================================================================
+# After configuring your proxy, test it with:
+#
+#   python -m knowledge_system.utils.proxy.test_proxy
+#
+# This will verify:
+# - Credentials are correctly configured
+# - Proxy connection is working
+# - Your IP address when using the proxy

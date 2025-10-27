@@ -118,7 +118,8 @@ class HCEMigrationValidator:
                         continue
 
                     try:
-                        hce_data = json.loads(summary.hce_data_json)
+                        # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
+                        hce_data = summary.hce_data_json
 
                         # Validate required fields
                         required_fields = [

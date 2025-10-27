@@ -377,7 +377,7 @@ class LocalLLMProvider(BaseLLMProvider):
             if schema is not None:
                 # Use structured outputs with JSON schema enforcement
                 payload["format"] = schema
-                logger.info(
+                logger.debug(
                     f"🔒 Using structured outputs with schema enforcement for model: {self.model}"
                 )
             elif wants_json:

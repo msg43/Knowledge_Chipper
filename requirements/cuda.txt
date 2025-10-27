@@ -1,0 +1,8 @@
+# CUDA/GPU Dependencies
+# Install with: pip install -r requirements/cuda.txt
+# Or: pip install -e ".[cuda]"
+
+-r base.txt
+
+# NVIDIA GPU monitoring
+nvidia-ml-py>=12.550.0  # pynvml for detailed GPU info

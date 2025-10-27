@@ -340,7 +340,7 @@ class BatchSpeakerAssignmentDialog(QDialog):
         # Assignment actions
         actions_layout = QHBoxLayout()
 
-        self.assign_speakers_btn = QPushButton("🎭 Assign Speakers")
+        self.assign_speakers_btn = QPushButton("✅ Assign Speakers")
         self.assign_speakers_btn.clicked.connect(self._show_speaker_assignment_dialog)
         self.assign_speakers_btn.setStyleSheet(
             "background-color: #4caf50; font-weight: bold;"

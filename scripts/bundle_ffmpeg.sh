@@ -12,7 +12,7 @@ BUILD_DIR="$PROJECT_ROOT/build_ffmpeg"
 OUTPUT_DIR="$PROJECT_ROOT/dist"
 
 # FFmpeg configuration
-FFMPEG_VERSION="6.1.1"
+# Evermeet.cx automatically provides the latest version
 FFMPEG_URL="https://evermeet.cx/ffmpeg/getrelease/zip"
 
 # Colors for output

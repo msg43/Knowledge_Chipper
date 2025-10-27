@@ -69,6 +69,80 @@ class FFmpegAudioProcessor:
         )
         return False
 
+    def remove_silence(
+        self,
+        input_path: str | Path,
+        output_path: str | Path,
+        silence_threshold: str = "-50dB",
+        min_silence_duration: float = 2.0,
+        progress_callback: callable = None,
+    ) -> bool:
+        """
+        Remove long silence periods from audio to prevent Whisper hallucinations.
+
+        This preprocesses audio by removing extended silence/dead air that can cause
+        the Whisper model to "wander" and start hallucinating repetitive phrases.
+
+        Args:
+            input_path: Input audio file path
+            output_path: Output audio file path
+            silence_threshold: Volume threshold for silence detection (default: -50dB)
+            min_silence_duration: Minimum silence duration to remove in seconds (default: 2.0)
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            True if silence removal successful, False otherwise
+
+        Note:
+            - Preserves natural pauses < min_silence_duration (breathing, speech gaps)
+            - Only removes extended dead air that causes model drift
+            - Helps prevent hallucination during long silence periods
+        """
+        if not self._ffmpeg_path:
+            logger.warning("FFmpeg not available for silence removal")
+            return False
+
+        try:
+            input_path = Path(input_path)
+            output_path = Path(output_path)
+
+            if progress_callback:
+                progress_callback("🔇 Removing long silence periods...", None)
+
+            # FFmpeg silenceremove filter
+            # stop_periods=-1: Process all silence
+            # stop_duration: Minimum silence duration to remove
+            # stop_threshold: Volume level considered as silence
+            cmd = [
+                self._ffmpeg_path,
+                "-i",
+                str(input_path),
+                "-af",
+                f"silenceremove=stop_periods=-1:stop_duration={min_silence_duration}:stop_threshold={silence_threshold}",
+                "-y",  # Overwrite output
+                str(output_path),
+            ]
+
+            logger.debug(f"Running silence removal: {' '.join(cmd)}")
+
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=300  # 5 minute timeout
+            )
+
+            if result.returncode == 0 and output_path.exists():
+                logger.info(f"✅ Silence removal completed: {output_path}")
+                return True
+            else:
+                logger.error(f"Silence removal failed: {result.stderr}")
+                return False
+
+        except subprocess.TimeoutExpired:
+            logger.error("Silence removal timed out after 5 minutes")
+            return False
+        except Exception as e:
+            logger.error(f"Error during silence removal: {e}")
+            return False
+
     def convert_audio(
         self,
         input_path: str | Path,
@@ -78,6 +152,7 @@ class FFmpegAudioProcessor:
         sample_rate: int | None = None,
         channels: int | None = None,
         progress_callback: callable = None,
+        remove_silence: bool = False,
     ) -> bool:
         """
         Convert audio file to target format using FFmpeg with non-blocking execution.
@@ -90,6 +165,7 @@ class FFmpegAudioProcessor:
             sample_rate: Target sample rate (default: keep original)
             channels: Target number of channels (default: keep original)
             progress_callback: Optional callback for progress updates
+            remove_silence: Whether to remove long silence periods (helps prevent hallucinations)
 
         Returns:
             True if conversion successful, False otherwise
@@ -98,6 +174,22 @@ class FFmpegAudioProcessor:
         try:
             input_path = Path(input_path)
             output_path = Path(output_path)
+
+            # If silence removal is requested, do it first in a temporary file
+            temp_file = None
+            if remove_silence:
+                temp_file = (
+                    output_path.parent / f"temp_silence_removed_{output_path.name}"
+                )
+                if self.remove_silence(
+                    input_path, temp_file, progress_callback=progress_callback
+                ):
+                    input_path = temp_file
+                    logger.info("✅ Silence removal preprocessing completed")
+                else:
+                    logger.warning(
+                        "⚠️ Silence removal failed, continuing with original audio"
+                    )
 
             # Build FFmpeg command
             ffmpeg = self._ffmpeg_path or self._resolve_binary("ffmpeg") or "ffmpeg"
@@ -176,19 +268,31 @@ class FFmpegAudioProcessor:
             if process.returncode != 0:
                 logger.error(f"FFmpeg conversion failed with code {process.returncode}")
                 logger.error(f"FFmpeg stderr: {stderr}")
+                # Clean up temp file if it exists
+                if temp_file and temp_file.exists():
+                    temp_file.unlink()
                 return False
 
             if output_path.exists() and output_path.stat().st_size > 0:
                 logger.info(f"Successfully converted {input_path} to {output_path}")
+                # Clean up temp file if it exists
+                if temp_file and temp_file.exists():
+                    temp_file.unlink()
                 return True
             else:
                 logger.error(
                     "FFmpeg conversion failed: output file is empty or missing"
                 )
+                # Clean up temp file if it exists
+                if temp_file and temp_file.exists():
+                    temp_file.unlink()
                 return False
 
         except Exception as e:
             logger.error(f"Audio conversion error: {e}")
+            # Clean up temp file if it exists
+            if temp_file and temp_file.exists():
+                temp_file.unlink()
             return False
 
     def _get_audio_duration_quick(self, file_path: Path) -> float | None:
@@ -393,8 +497,9 @@ def convert_audio_file(
     sample_rate: int | None = None,
     channels: int | None = None,
     progress_callback: callable = None,
+    remove_silence: bool = False,
 ) -> bool:
-    """Convenience function for audio conversion."""
+    """Convenience function for audio conversion with optional silence removal."""
     return ffmpeg_processor.convert_audio(
         input_path,
         output_path,
@@ -403,6 +508,7 @@ def convert_audio_file(
         sample_rate,
         channels,
         progress_callback,
+        remove_silence,
     )
 
 

@@ -209,10 +209,15 @@ class FFmpegSetupDialog(QDialog):
             self.progress_bar.setRange(0, 0)  # Indeterminate
 
         # Add to progress text
+        scrollbar = self.progress_text.verticalScrollBar()
+        # Check if we should auto-scroll BEFORE appending
+        should_scroll = scrollbar and scrollbar.value() >= scrollbar.maximum() - 10
+
         self.progress_text.append(message)
-        self.progress_text.verticalScrollBar().setValue(
-            self.progress_text.verticalScrollBar().maximum()
-        )
+
+        # Only auto-scroll if user was already at the bottom
+        if should_scroll and scrollbar:
+            scrollbar.setValue(scrollbar.maximum())
 
     def _installation_finished(self, success: bool, message: str) -> None:
         """Handle installation completion."""

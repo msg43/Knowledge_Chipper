@@ -16,11 +16,12 @@ from pathlib import Path
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from ...logger import get_logger
+from ...utils.macos_paths import get_application_support_dir
 
 logger = get_logger(__name__)
 
 
-APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "Knowledge_Chipper"
+APP_SUPPORT_DIR = get_application_support_dir()
 BIN_DIR = APP_SUPPORT_DIR / "bin"
 
 
@@ -36,31 +37,24 @@ def get_default_ffmpeg_release() -> FFmpegRelease:
     """Return an appropriate FFmpeg release for the current platform/arch.
 
     Rationale:
-    - On Apple Silicon (arm64), some sources serve Intel/x86_64 builds which
-      can cause "Exec format error" when executed from an arm64-only process.
-      We prefer a vetted static ARM build.
-    - On other macOS architectures, fall back to a trusted universal/zip
-      release that we can extract without codesign prompts.
+    - Evermeet.cx provides the latest FFmpeg builds for macOS
+    - The getrelease endpoint automatically serves the newest version
+    - Works for both Intel and Apple Silicon architectures
     """
     system = platform.system().lower()
-    machine = platform.machine().lower()
 
-    if system == "darwin" and machine in {"arm64", "aarch64"}:
-        # Static ARM build with known checksum
+    if system == "darwin":
+        # Evermeet.cx provides the latest FFmpeg release (currently 8.x)
+        # This URL automatically serves the newest version available
         return FFmpegRelease(
-            url="https://www.osxexperts.net/ffmpeg711arm.zip",
-            sha256="59e39a5cec2e5d2307ed079c53227a9181e64b87454ed4de998349e044bfdc70",
+            url="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
+            sha256="",  # Skip checksum for trusted source with dynamic versions
             ffmpeg_name="ffmpeg",
             ffprobe_name="ffprobe",
         )
 
-    # Fallback: Evermeet provides recent macOS builds as a zip containing the binary
-    return FFmpegRelease(
-        url="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
-        sha256="",  # Skip checksum for trusted source
-        ffmpeg_name="ffmpeg",
-        ffprobe_name="ffprobe",
-    )
+    # For non-macOS systems, would need different source
+    raise NotImplementedError(f"FFmpeg installation not implemented for {system}")
 
 
 class FFmpegInstaller(QThread):

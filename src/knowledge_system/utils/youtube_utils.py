@@ -515,16 +515,19 @@ def expand_playlist_urls_with_metadata(urls: list[str]) -> dict[str, Any]:
 
 
 def download_thumbnail_direct(
-    url: str, output_dir: Path, thumbnail_url: str | None = None
+    url: str,
+    output_dir: Path,
+    thumbnail_url: str | None = None,
+    proxy_url: str | None = None,
 ) -> str | None:
     """
-    Download thumbnail for YouTube video using direct URL access (no cookies needed)
     Download thumbnail for YouTube video using direct URL access (no cookies needed).
 
     Args:
         url: YouTube video URL
         output_dir: Directory to save thumbnail (should be the exact directory to save to)
         thumbnail_url: Optional specific thumbnail URL from YouTube API
+        proxy_url: Optional proxy URL to use for the request (format: http://user:pass@host:port)
 
     Returns:
         Path to downloaded thumbnail file, or None if failed
@@ -574,13 +577,21 @@ def download_thumbnail_direct(
             "Upgrade-Insecure-Requests": "1",
         }
 
+        # Build proxy dict if proxy URL provided
+        proxies = None
+        if proxy_url:
+            proxies = {"http": proxy_url, "https": proxy_url}
+            logger.debug(
+                f"Using proxy for thumbnail download: {proxy_url.split('@')[0] if '@' in proxy_url else 'configured'}"
+            )
+
         for quality, thumbnail_image_url in thumbnail_configs:
             try:
                 # Add a small delay to avoid rate limiting
                 time.sleep(0.1)
 
                 response = requests.get(
-                    thumbnail_image_url, headers=headers, timeout=10
+                    thumbnail_image_url, headers=headers, timeout=10, proxies=proxies
                 )
                 if response.status_code == 200:
                     # Check if it's a valid image (not a placeholder)
@@ -625,9 +636,9 @@ def download_thumbnail(
     output_dir: Path,
     use_cookies: bool = False,
     thumbnail_url: str | None = None,
+    proxy_url: str | None = None,
 ) -> str | None:
     """
-    Download thumbnail for YouTube video using direct URL access (no bot detection risk)
     Download thumbnail for YouTube video using direct URL access (no bot detection risk).
 
     Args:
@@ -635,14 +646,13 @@ def download_thumbnail(
         output_dir: Directory to save thumbnail
         use_cookies: Ignored - kept for backward compatibility
         thumbnail_url: Optional specific thumbnail URL from YouTube API
+        proxy_url: Optional proxy URL to use for the request
 
     Returns:
         Path to downloaded thumbnail file, or None if failed
     """
     # Always use direct download method - no yt-dlp fallback to avoid bot detection
-
-    # Always use direct download method - no yt-dlp fallback to avoid bot detection
-    return download_thumbnail_direct(url, output_dir, thumbnail_url)
+    return download_thumbnail_direct(url, output_dir, thumbnail_url, proxy_url)
 
 
 def get_no_cookie_strategy() -> dict[str, Any]:

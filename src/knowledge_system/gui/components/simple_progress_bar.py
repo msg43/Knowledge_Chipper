@@ -3,31 +3,25 @@ Simple, reliable progress bar component for transcription operations.
 Clean implementation focused on clarity and proper percentage display.
 """
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QProgressBar,
-    QPushButton,
-    QVBoxLayout,
-)
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QProgressBar, QVBoxLayout
 
 
 class SimpleTranscriptionProgressBar(QFrame):
     """
     Simple, reliable progress bar for transcription operations.
     Focuses on clear percentage display and accurate progress tracking.
+    Cancel functionality is handled by the parent tab's 'Stop Processing' button.
     """
-
-    # Signals
-    cancel_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.total_files = 0
         self.completed_files = 0
         self.failed_files = 0
+        self.current_file_progress = 0  # Track progress within current file (0-100)
+        self.current_phase = "Initializing"  # Track current processing phase
+        self.phase_progress = 0  # Track progress within current phase (0-100)
 
         self._setup_ui()
 
@@ -41,7 +35,7 @@ class SimpleTranscriptionProgressBar(QFrame):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
 
-        # Title bar with cancel button
+        # Title bar without cancel button (handled by BaseTab's Stop Processing button)
         title_layout = QHBoxLayout()
 
         self.title_label = QLabel("Processing...")
@@ -52,29 +46,52 @@ class SimpleTranscriptionProgressBar(QFrame):
 
         title_layout.addStretch()
 
-        self.cancel_btn = QPushButton("⏹ Cancel")
-        self.cancel_btn.setFixedWidth(100)
-        self.cancel_btn.clicked.connect(self.cancel_requested.emit)
-        self.cancel_btn.setStyleSheet(
+        layout.addLayout(title_layout)
+
+        # Phase progress bar (current phase: download, transcription, diarization, etc.)
+        self.phase_label = QLabel("Phase: Initializing")
+        self.phase_label.setStyleSheet(
+            "font-weight: normal; font-size: 11px; color: #b0b0b0;"
+        )
+        layout.addWidget(self.phase_label)
+
+        self.phase_progress_bar = QProgressBar()
+        self.phase_progress_bar.setMinimum(0)
+        self.phase_progress_bar.setMaximum(100)
+        self.phase_progress_bar.setValue(0)
+        self.phase_progress_bar.setTextVisible(True)
+        self.phase_progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.phase_progress_bar.setFormat("%p%")
+        self.phase_progress_bar.setFixedHeight(22)
+        self.phase_progress_bar.setStyleSheet(
             """
-            QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                border: none;
-                padding: 6px 12px;
+            QProgressBar {
+                border: 1px solid #4c4c4c;
                 border-radius: 4px;
+                background-color: #2d2d2d;
+                text-align: center;
+                font-size: 14px;
                 font-weight: bold;
+                color: #ffffff;
             }
-            QPushButton:hover {
-                background-color: #c0392b;
+            QProgressBar::chunk {
+                background-color: #27ae60;
+                border-radius: 3px;
             }
         """
         )
-        title_layout.addWidget(self.cancel_btn)
+        layout.addWidget(self.phase_progress_bar)
 
-        layout.addLayout(title_layout)
+        # Add spacing
+        layout.addSpacing(6)
 
-        # Progress bar with percentage
+        # Overall progress bar (total file progress)
+        self.overall_label = QLabel("Overall Progress")
+        self.overall_label.setStyleSheet(
+            "font-weight: normal; font-size: 11px; color: #b0b0b0;"
+        )
+        layout.addWidget(self.overall_label)
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setMinimum(0)
         self.progress_bar.setMaximum(100)
@@ -130,8 +147,8 @@ class SimpleTranscriptionProgressBar(QFrame):
         self.title_label.setText(title)
 
         if total_files > 0:
-            # Determinate mode
-            self.progress_bar.setMaximum(total_files)
+            # Determinate mode - always use 0-100 scale for proper percentage display
+            self.progress_bar.setMaximum(100)
             self.progress_bar.setValue(0)
         else:
             # Indeterminate mode
@@ -141,10 +158,6 @@ class SimpleTranscriptionProgressBar(QFrame):
         self._update_status()
         self.show()
 
-        print(
-            f"🔍 [SimpleProgressBar] Started: total={total_files}, mode={'determinate' if total_files > 0 else 'indeterminate'}"
-        )
-
     def update_progress(self, completed: int, failed: int, current_file: str = ""):
         """Update progress with completed and failed counts."""
         self.completed_files = completed
@@ -152,36 +165,80 @@ class SimpleTranscriptionProgressBar(QFrame):
 
         total_processed = completed + failed
 
-        # Update progress bar value
+        # Calculate percentage and update progress bar (0-100 scale)
+        # Include current file progress if available
         if self.total_files > 0:
-            self.progress_bar.setValue(total_processed)
+            # Base percentage from completed files
+            base_percentage = (total_processed / self.total_files) * 100
+
+            # Add fractional progress from current file being processed
+            if total_processed < self.total_files and self.current_file_progress > 0:
+                # Each file represents (100 / total_files)% of total
+                file_weight = 100 / self.total_files
+                # Add the portion of the current file that's done
+                current_file_contribution = (
+                    self.current_file_progress / 100
+                ) * file_weight
+                percentage = int(base_percentage + current_file_contribution)
+            else:
+                percentage = int(base_percentage)
+
+            self.progress_bar.setValue(percentage)
+        else:
+            percentage = 0
 
         # Update status text
         self._update_status(current_file)
 
-        # Calculate percentage for logging
-        percentage = (
-            int((total_processed / self.total_files) * 100)
-            if self.total_files > 0
-            else 0
-        )
-        print(
-            f"🔍 [SimpleProgressBar] Updated: {total_processed}/{self.total_files} = {percentage}% (completed={completed}, failed={failed})"
-        )
+    def update_current_file_progress(self, progress_percent: int):
+        """Update progress within the current file being processed (0-100).
+
+        This allows showing smooth progress during single file transcription.
+        """
+        self.current_file_progress = max(0, min(100, progress_percent))
+
+        # Recalculate total progress including current file contribution
+        if self.total_files > 0:
+            total_processed = self.completed_files + self.failed_files
+            base_percentage = (total_processed / self.total_files) * 100
+
+            # Add fractional progress from current file
+            if total_processed < self.total_files and self.current_file_progress > 0:
+                file_weight = 100 / self.total_files
+                current_file_contribution = (
+                    self.current_file_progress / 100
+                ) * file_weight
+                percentage = int(base_percentage + current_file_contribution)
+            else:
+                percentage = int(base_percentage)
+
+            self.progress_bar.setValue(percentage)
+
+    def update_phase_progress(self, phase_name: str, phase_percent: int):
+        """Update the current processing phase and its progress.
+
+        Args:
+            phase_name: Name of the current phase (e.g., "Downloading", "Transcribing", "Diarization")
+            phase_percent: Progress within this phase (0-100)
+        """
+        self.current_phase = phase_name
+        self.phase_progress = max(0, min(100, phase_percent))
+
+        # Update phase label and progress bar
+        self.phase_label.setText(f"Phase: {phase_name}")
+        self.phase_progress_bar.setValue(self.phase_progress)
 
     def set_total_files(self, total: int):
         """Set or update the total number of files (for when total is determined later)."""
         self.total_files = total
 
         if total > 0:
-            # Switch to determinate mode
-            self.progress_bar.setMaximum(total)
+            # Switch to determinate mode - always use 0-100 scale
+            self.progress_bar.setMaximum(100)
             total_processed = self.completed_files + self.failed_files
-            self.progress_bar.setValue(total_processed)
+            percentage = int((total_processed / total) * 100) if total > 0 else 0
+            self.progress_bar.setValue(percentage)
             self._update_status()
-            print(
-                f"🔍 [SimpleProgressBar] Total set: {total}, switching to determinate mode"
-            )
 
     def _update_status(self, current_file: str = ""):
         """Update the status label with current file counts."""
@@ -223,22 +280,23 @@ class SimpleTranscriptionProgressBar(QFrame):
             )
 
         # Set progress bar to 100%
-        if self.total_files > 0:
-            self.progress_bar.setValue(self.total_files)
+        self.progress_bar.setValue(100)
 
         self._update_status()
-        self.cancel_btn.hide()
-
-        print(f"🔍 [SimpleProgressBar] Finished: completed={completed}, failed={failed}")
 
     def reset(self):
         """Reset the progress bar to initial state."""
         self.total_files = 0
         self.completed_files = 0
         self.failed_files = 0
+        self.current_phase = "Initializing"
+        self.phase_progress = 0
 
         self.progress_bar.setValue(0)
         self.progress_bar.setMaximum(100)
+
+        self.phase_progress_bar.setValue(0)
+        self.phase_label.setText("Phase: Initializing")
 
         self.title_label.setText("Processing...")
         self.title_label.setStyleSheet(
@@ -246,8 +304,5 @@ class SimpleTranscriptionProgressBar(QFrame):
         )
 
         self.status_label.setText("Ready")
-        self.cancel_btn.show()
 
         self.hide()
-
-        print("🔍 [SimpleProgressBar] Reset")

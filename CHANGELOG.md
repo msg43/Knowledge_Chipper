@@ -1,3 +1,35 @@
+## [Unreleased] - 2025-10-17
+
+### Breaking Changes
+- Removed CLI interface - application is now GUI-only
+- All functionality available through enhanced GUI with System2 architecture
+
+### Added
+- Comprehensive System2Orchestrator tests (async job processing)
+- LLM adapter async behavior tests (event loop cleanup validation)
+- GUI integration tests using automated workflows
+- Direct logic tests for complete coverage
+- Automated test suite with zero human intervention
+
+### Changed
+- Monitor tab now uses System2Orchestrator (consistent with Summarization tab)
+- Unified code path: all operations use System2Orchestrator architecture
+- Single implementation strategy eliminates CLI/GUI divergence
+
+### Removed
+- CLI commands (transcribe, summarize, moc, process, database, upload, voice_test)
+- CLI-specific processors (SummarizerProcessor, MOCProcessor, summarizer_legacy.py, summarizer_unified.py)
+- Duplicate implementation paths
+- commands/ directory
+- cli.py entry point
+
+### Fixed
+- Transcript files now load correctly in summarization tab after transcription
+- Event loop closure errors during async HTTP client cleanup
+- Monitor tab uses same tested code path as rest of GUI
+
+---
+
 # Skip the Podcast Desktop
 
 **Version:** 3.2.22 | **Build Date:** 2025-09-17 

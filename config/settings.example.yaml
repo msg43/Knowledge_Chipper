@@ -103,6 +103,11 @@ processing:
 
 # YouTube Processing Options
 youtube_processing:
+  # Proxy strict mode - protects your IP from YouTube rate limits/bans
+  # When true: Blocks YouTube operations if proxy fails (RECOMMENDED for account safety)
+  # When false: Falls back to direct connection if proxy fails (RISKY - may expose your IP)
+  proxy_strict_mode: true
+
   # Automatically disable delays when rotating proxies are available
   disable_delays_with_proxy: false
 

@@ -133,9 +133,19 @@ class FileGenerationService:
         output_dir: Path | None = None,
     ):
         """Initialize file generation service."""
+        import os
+
         self.db = database_service or DatabaseService()
-        self.output_dir = Path(output_dir) if output_dir else Path("output")
-        self.output_dir.mkdir(exist_ok=True)
+
+        # Allow tests to override output directory via environment variable
+        if output_dir is not None:
+            base_output = Path(output_dir)
+        else:
+            test_output_env = os.environ.get("KNOWLEDGE_CHIPPER_TEST_OUTPUT_DIR")
+            base_output = Path(test_output_env) if test_output_env else Path("output")
+
+        self.output_dir = base_output
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Create standard subdirectories
         self.transcripts_dir = self.output_dir / "transcripts"
@@ -151,7 +161,7 @@ class FileGenerationService:
             self.exports_dir,
             self.thumbnails_dir,
         ]:
-            dir_path.mkdir(exist_ok=True)
+            dir_path.mkdir(parents=True, exist_ok=True)
 
     def generate_transcript_markdown(
         self,
@@ -337,9 +347,8 @@ class FileGenerationService:
 
             # Check if this is HCE-processed summary
             is_hce = summary.processing_type == "hce"
-            hce_data = (
-                json.loads(summary.hce_data_json) if summary.hce_data_json else None
-            )
+            # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
+            hce_data = summary.hce_data_json if summary.hce_data_json else None
 
             # Generate YAML frontmatter
             frontmatter = {
@@ -1161,7 +1170,8 @@ class FileGenerationService:
                 logger.error(f"HCE data not found for summary {summary_id}")
                 return None
 
-            hce_data = json.loads(summary.hce_data_json)
+            # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
+            hce_data = summary.hce_data_json
             claims = hce_data.get("claims", [])
 
             # Generate markdown content
@@ -1294,7 +1304,8 @@ class FileGenerationService:
             if not summary or not summary.hce_data_json:
                 return None
 
-            hce_data = json.loads(summary.hce_data_json)
+            # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
+            hce_data = summary.hce_data_json
             claims = hce_data.get("claims", [])
 
             # Find contradictions
@@ -1384,7 +1395,8 @@ class FileGenerationService:
             if not summary or not summary.hce_data_json:
                 return None
 
-            hce_data = json.loads(summary.hce_data_json)
+            # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
+            hce_data = summary.hce_data_json
             claims = hce_data.get("claims", [])
 
             # Generate evidence mapping
@@ -1430,6 +1442,258 @@ class FileGenerationService:
 
         except Exception as e:
             logger.error(f"Failed to generate evidence mapping: {e}")
+            return None
+
+    def generate_summary_markdown_from_pipeline(
+        self,
+        video_id: str,
+        episode_id: str,
+        pipeline_outputs,  # PipelineOutputs
+    ) -> Path | None:
+        """
+        Generate summary markdown from rich PipelineOutputs with source metadata.
+
+        This version includes evidence spans, relations, categories, and
+        YouTube/source metadata for complete context.
+        """
+        try:
+            output_file = self.summaries_dir / f"{video_id}_summary.md"
+            
+            # Fetch source metadata
+            video_metadata = None
+            try:
+                source_id = video_id.replace("episode_", "")
+                with self.db_service.get_session() as session:
+                    from ..database.models import MediaSource
+                    source = session.query(MediaSource).filter_by(source_id=source_id).first()
+                    if source:
+                        video_metadata = {
+                            'title': source.title,
+                            'description': source.description,
+                            'uploader': source.uploader,
+                            'upload_date': source.upload_date,
+                            'duration_seconds': source.duration_seconds,
+                            'tags': source.tags_json,
+                            'chapters': source.video_chapters_json,
+                            'url': source.url,
+                        }
+            except Exception as e:
+                logger.warning(f"Could not fetch source metadata: {e}")
+
+            # Build comprehensive markdown
+            markdown_lines = [
+                f"# Summary: {episode_id}",
+                "",
+            ]
+            
+            # Add source metadata section if available
+            if video_metadata:
+                markdown_lines.extend([
+                    "## Source Information",
+                    f"- **Title:** {video_metadata.get('title', 'N/A')}",
+                    f"- **Author/Channel:** {video_metadata.get('uploader', 'N/A')}",
+                    f"- **Upload Date:** {video_metadata.get('upload_date', 'N/A')}",
+                    f"- **Duration:** {video_metadata.get('duration_seconds', 0) // 60} minutes",
+                    f"- **URL:** {video_metadata.get('url', 'N/A')}",
+                    "",
+                ])
+                
+                if desc := video_metadata.get('description'):
+                    markdown_lines.extend([
+                        "### Description",
+                        desc[:500] + ("..." if len(desc) > 500 else ""),
+                        "",
+                    ])
+                
+                if tags := video_metadata.get('tags'):
+                    markdown_lines.extend([
+                        "### Tags",
+                        ", ".join(tags[:20]),
+                        "",
+                    ])
+                
+                if chapters := video_metadata.get('chapters'):
+                    markdown_lines.extend([
+                        "### Chapters",
+                        "",
+                    ])
+                    for ch in chapters[:10]:  # Limit to 10 chapters
+                        start_time = ch.get('start_time', '0:00')
+                        ch_title = ch.get('title', 'Unknown')
+                        markdown_lines.append(f"- [{start_time}] {ch_title}")
+                    markdown_lines.append("")
+            
+            markdown_lines.extend([
+                "## Overview",
+                f"- **Claims:** {len(pipeline_outputs.claims)}",
+                f"  - Tier A: {len([c for c in pipeline_outputs.claims if c.tier == 'A'])}",
+                f"  - Tier B: {len([c for c in pipeline_outputs.claims if c.tier == 'B'])}",
+                f"  - Tier C: {len([c for c in pipeline_outputs.claims if c.tier == 'C'])}",
+                f"- **Evidence Spans:** {sum(len(c.evidence) for c in pipeline_outputs.claims)}",
+                f"- **People:** {len(pipeline_outputs.people)}",
+                f"- **Concepts:** {len(pipeline_outputs.concepts)}",
+                f"- **Jargon:** {len(pipeline_outputs.jargon)}",
+                f"- **Relations:** {len(pipeline_outputs.relations)}",
+                f"- **Categories:** {len(pipeline_outputs.structured_categories)}",
+                "",
+            ])
+
+            # Add short summary if available
+            if pipeline_outputs.short_summary:
+                markdown_lines.extend(
+                    [
+                        "## Short Summary",
+                        "",
+                        pipeline_outputs.short_summary,
+                        "",
+                    ]
+                )
+
+            # Add Tier A claims with evidence and metadata
+            tier_a_claims = [c for c in pipeline_outputs.claims if c.tier == "A"]
+            if tier_a_claims:
+                markdown_lines.extend(
+                    [
+                        "## Top Claims (Tier A)",
+                        "",
+                    ]
+                )
+                for claim in tier_a_claims[:20]:  # Top 20
+                    markdown_lines.append(f"### {claim.canonical}")
+                    
+                    # Enhanced metadata display
+                    metadata_parts = [f"**Type:** {claim.claim_type}", f"**Tier:** {claim.tier}"]
+                    
+                    # Add temporality info
+                    if hasattr(claim, 'temporality_score') and claim.temporality_score:
+                        temporal_labels = {1: "Immediate", 2: "Short-term", 3: "Medium-term", 4: "Long-term", 5: "Timeless"}
+                        temporal_label = temporal_labels.get(claim.temporality_score, "Unknown")
+                        conf = getattr(claim, 'temporality_confidence', 0.5)
+                        metadata_parts.append(f"**Temporality:** {temporal_label} (confidence: {conf:.2f})")
+                    
+                    # Add scores
+                    if hasattr(claim, 'scores') and claim.scores:
+                        score_str = ", ".join([f"{k}={v:.2f}" for k, v in claim.scores.items() if v is not None])
+                        if score_str:
+                            metadata_parts.append(f"**Scores:** {score_str}")
+                    
+                    markdown_lines.append(" | ".join(metadata_parts))
+
+                    if claim.evidence:
+                        markdown_lines.append("")
+                        markdown_lines.append("**Evidence:**")
+                        for ev in claim.evidence[:3]:  # Top 3 evidence spans
+                            if ev.quote:
+                                timestamp = f"[{ev.t0}]" if ev.t0 else ""
+                                markdown_lines.append(f'- {timestamp} "{ev.quote}"')
+                    markdown_lines.append("")
+
+            # Add people mentions
+            if pipeline_outputs.people:
+                markdown_lines.extend(
+                    [
+                        "## People Mentioned",
+                        "",
+                    ]
+                )
+                for person in pipeline_outputs.people[:30]:  # Top 30
+                    name = person.normalized or person.surface or person.name
+                    timestamp = f" [{person.t0}]" if person.t0 else ""
+                    context = (
+                        f': "{person.context_quote}"' if person.context_quote else ""
+                    )
+                    markdown_lines.append(f"- **{name}**{timestamp}{context}")
+                markdown_lines.append("")
+
+            # Add concepts/mental models
+            if pipeline_outputs.concepts:
+                markdown_lines.extend(
+                    [
+                        "## Mental Models & Concepts",
+                        "",
+                    ]
+                )
+                for concept in pipeline_outputs.concepts[:20]:  # Top 20
+                    timestamp = (
+                        f" [{concept.first_mention_ts}]"
+                        if concept.first_mention_ts
+                        else ""
+                    )
+                    definition = f": {concept.definition}" if concept.definition else ""
+                    markdown_lines.append(
+                        f"- **{concept.name}**{timestamp}{definition}"
+                    )
+                markdown_lines.append("")
+
+            # Add jargon
+            if pipeline_outputs.jargon:
+                markdown_lines.extend(
+                    [
+                        "## Jargon & Technical Terms",
+                        "",
+                    ]
+                )
+                for term in pipeline_outputs.jargon[:30]:  # Top 30
+                    definition = f": {term.definition}" if term.definition else ""
+                    markdown_lines.append(f"- **{term.term}**{definition}")
+                markdown_lines.append("")
+
+            # Add relations
+            if pipeline_outputs.relations:
+                markdown_lines.extend(
+                    [
+                        "## Claim Relations",
+                        "",
+                    ]
+                )
+                for rel in pipeline_outputs.relations[:20]:  # Top 20
+                    markdown_lines.append(
+                        f"- {rel.source_claim_id} **{rel.type}** {rel.target_claim_id}"
+                    )
+                    if rel.rationale:
+                        markdown_lines.append(f"  - {rel.rationale}")
+                markdown_lines.append("")
+
+            # Add categories
+            if pipeline_outputs.structured_categories:
+                markdown_lines.extend(
+                    [
+                        "## Categories",
+                        "",
+                    ]
+                )
+                for cat in pipeline_outputs.structured_categories:
+                    confidence = (
+                        f" (confidence: {cat.coverage_confidence:.2f})"
+                        if cat.coverage_confidence
+                        else ""
+                    )
+                    wikidata = f" [Q{cat.wikidata_qid}]" if cat.wikidata_qid else ""
+                    markdown_lines.append(
+                        f"- **{cat.category_name}**{wikidata}{confidence}"
+                    )
+                markdown_lines.append("")
+
+            # Add long summary if available
+            if pipeline_outputs.long_summary:
+                markdown_lines.extend(
+                    [
+                        "## Detailed Analysis",
+                        "",
+                        pipeline_outputs.long_summary,
+                        "",
+                    ]
+                )
+
+            # Write file
+            markdown_content = "\n".join(markdown_lines)
+            output_file.write_text(markdown_content, encoding="utf-8")
+            logger.info(f"Generated rich summary: {output_file}")
+
+            return output_file
+
+        except Exception as e:
+            logger.error(f"Failed to generate summary markdown: {e}")
             return None
 
 

@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS people (
   entity_type TEXT CHECK (entity_type IN ('person','org')) DEFAULT 'person',
   external_ids_json TEXT,           -- JSON: {"wikipedia":"...", "wikidata":"Q..."}
   confidence REAL,
+  context_quote TEXT,               -- Quote showing how the person is mentioned
   PRIMARY KEY (episode_id, mention_id),
   FOREIGN KEY (episode_id) REFERENCES episodes(episode_id) ON DELETE CASCADE
 );
@@ -124,6 +125,7 @@ CREATE TABLE IF NOT EXISTS concepts (
   first_mention_ts TEXT,
   aliases_json TEXT,                -- JSON array: ["barbell strategy", "barbell approach"]
   evidence_json TEXT,               -- JSON array of evidence spans
+  context_quote TEXT,               -- Quote illustrating the mental model
   PRIMARY KEY (episode_id, model_id),
   FOREIGN KEY (episode_id) REFERENCES episodes(episode_id) ON DELETE CASCADE
 );
@@ -136,6 +138,7 @@ CREATE TABLE IF NOT EXISTS jargon (
   category TEXT,                    -- e.g., "technical", "industry", "acronym"
   definition TEXT,
   evidence_json TEXT,               -- JSON array of evidence spans
+  context_quote TEXT,               -- Quote showing how the term is used
   PRIMARY KEY (episode_id, term_id),
   FOREIGN KEY (episode_id) REFERENCES episodes(episode_id) ON DELETE CASCADE
 );

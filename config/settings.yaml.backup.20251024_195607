@@ -1,0 +1,76 @@
+# Configuration to disable YouTube processing delays when using rotating proxies
+# This should significantly speed up YouTube URL processing
+
+youtube_processing:
+  # Disable all delays when using proxies
+  disable_delays_with_proxy: true
+
+  # Set delays to 0 to disable them completely
+  metadata_delay_min: 0.0
+  metadata_delay_max: 0.0
+  transcript_delay_min: 0.0
+  transcript_delay_max: 0.0
+  api_batch_delay_min: 0.0
+  api_batch_delay_max: 0.0
+
+  # Don't use delays even when proxies are configured
+  use_proxy_delays: false
+
+# Speaker identification and diarization settings
+speaker_identification:
+  # Change from "balanced" to "conservative" to reduce over-segmentation
+  diarization_sensitivity: "conservative"  # Options: aggressive, balanced, conservative
+
+  # Additional clustering improvements for interviews
+  min_speaker_duration: 1.0  # Longer minimum duration to reduce false splits
+  speaker_separation_threshold: 0.75  # Higher threshold = harder to separate speakers (reduces over-segmentation)
+
+# Thread Management & Resource Control - Optimized for M2 Ultra
+thread_management:
+  # Optimize for your 24-core M2 Ultra
+  omp_num_threads: 16  # Use performance cores for OpenMP
+
+  # Process multiple files simultaneously to utilize CPU cores
+  max_concurrent_files: 8  # Process 8 files at once
+
+  # Allow more threads per process given your massive RAM
+  per_process_thread_limit: 8
+
+  # Enable parallel processing
+  enable_parallel_processing: true
+  sequential_processing: false
+
+  # Enable tokenizer parallelism for better CPU utilization
+  tokenizers_parallelism: true
+
+  # MPS fallback for Apple Silicon
+  pytorch_enable_mps_fallback: true
+
+# LLM Settings - Default provider for summarization and HCE
+llm:
+  provider: "local"  # Options: openai, anthropic, local
+  model: "gpt-4o-mini-2024-07-18"  # Used when provider is openai/anthropic
+  local_model: "qwen2.5:7b-instruct"  # Used when provider is local - more reasonable size
+  max_tokens: 15000
+  temperature: 0.1
+
+# Local LLM Settings - Optimized for M2 Ultra
+local_config:
+  base_url: "http://localhost:11434"
+  model: "qwen2.5:7b-instruct"  # More reasonable model size
+  max_tokens: 15000  # Higher for your system
+  temperature: 0.1
+  timeout: 600  # Longer timeout for large models
+  backend: "ollama"
+  num_predict: 2000  # More tokens
+  num_ctx: 8192  # Larger context window
+  use_stream: true
+
+# Processing Options - Optimized for high-end hardware
+processing:
+  batch_size: 20  # Larger batches for your system
+  concurrent_jobs: 8  # Multiple concurrent jobs
+
+cloud:
+  supabase_url: "https://sdkxuiqcwlmbpjvjdpkj.supabase.co"
+  supabase_bucket: "user-uploads"

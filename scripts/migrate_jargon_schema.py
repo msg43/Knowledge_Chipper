@@ -98,7 +98,7 @@ if __name__ == "__main__":
         Path.home()
         / "Library"
         / "Application Support"
-        / "KnowledgeChipper"
+        / "Knowledge Chipper"
         / "knowledge_system.db"
     )
 

@@ -126,6 +126,9 @@ class MediaSource(Base):
     needs_audio_retry = Column(Boolean, default=False)  # True if audio download failed
     retry_count = Column(Integer, default=0)  # Number of retry attempts
     last_retry_at = Column(DateTime)  # Timestamp of last retry attempt
+    first_failure_at = Column(
+        DateTime
+    )  # Timestamp of first failure for time-based retry logic
 
     # Failure tracking (after max retries exceeded)
     max_retries_exceeded = Column(Boolean, default=False)  # True if retry limit reached
@@ -654,6 +657,7 @@ class Person(Base):
     name = Column(String, nullable=False)
     description = Column(Text)
     first_mention_ts = Column(String)
+    context_quote = Column(Text)  # Quote showing how the person is mentioned
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -680,6 +684,7 @@ class Concept(Base):
     name = Column(String, nullable=False)
     description = Column(Text)
     first_mention_ts = Column(String)
+    context_quote = Column(Text)  # Quote illustrating the mental model
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -707,6 +712,7 @@ class Jargon(Base):
     definition = Column(Text)
     category = Column(String)  # Category of jargon term
     first_mention_ts = Column(String)
+    context_quote = Column(Text)  # Quote showing how the term is used
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -1,5 +1,13 @@
 # Skipthepodcast.com (Skip the Podcast Desktop)
 
+
+## Application Type
+
+**Knowledge Chipper is a GUI-only application.** All functionality is available through the graphical interface.
+
+The CLI interface has been removed to maintain a single, well-tested code path. If you need automation/scripting capabilities, please use the GUI's batch processing and folder monitoring features.
+
+
 > Transform audio, video, and documents into structured knowledge with AI-powered analysis
 
 **Version 3.4.0** | **macOS Application** | **Offline-First Design**
@@ -70,10 +78,12 @@
 - **🔍 Schema Validation**: Guaranteed JSON output with comprehensive error handling
 - **📚 Enhanced Documentation**: Updated troubleshooting and configuration guides
 
-### Intelligent Download Pacing
-- **🤖 Smart Rate Limiting**: Automatically spaces YouTube downloads to avoid bot detection
-- **📊 Real-Time Monitoring**: Tracks processing pipeline status and adjusts download timing
-- **⚡ Pipeline Optimization**: Keeps downloads ahead of summarization without overwhelming servers
+### YouTube Bulk Downloads with Cookie Authentication
+- **🍪 Throwaway Account Support**: Use cookies from throwaway Google accounts for reliable downloads
+- **🏠 Home IP Recommended**: Disable proxies when using cookies for best results
+- **⏱️ Configurable Rate Limiting**: Min/max delays with randomization to mimic human behavior
+- **🔒 Manual Cookie Upload Only**: Browser extraction disabled to prevent accidentally using main account
+- **📊 Smart Sequential Processing**: Downloads one video at a time with intelligent pacing
 - **🔧 Large Scale Support**: Designed for processing 1000+ videos efficiently
 
 ---
@@ -489,6 +499,48 @@ Enable **"Check for updates on startup"** in the app settings to get the latest 
 1. Configure API keys for your preferred LLM provider
 2. Test with a short audio file
 3. Ready to process your content!
+
+### YouTube Bulk Downloads Setup
+
+For processing large batches of YouTube videos, the app supports cookie-based authentication with throwaway accounts:
+
+**Step 1: Create Throwaway Google Account**
+- Create a new Google account specifically for YouTube downloads
+- **Never use your main Google account** for bulk downloads
+
+**Step 2: Export Cookies**
+1. Open incognito/private browser window
+2. Log into throwaway Google account
+3. Install "Get cookies.txt" browser extension (or similar)
+4. Navigate to YouTube and export cookies to Netscape format (.txt file)
+
+**Step 3: Configure in App**
+1. Open "Transcribe" tab
+2. Check "Enable cookie-based authentication"
+3. Click "Browse..." and select your cookies.txt file
+4. Check "Disable proxies when cookies enabled" (recommended for home IP)
+5. Configure rate limiting:
+   - **Min delay**: 180 seconds (3 minutes) - default
+   - **Max delay**: 300 seconds (5 minutes) - default
+   - **Randomization**: 25% - adds ±25% jitter to delays
+
+**Step 4: Bulk Download**
+1. Paste YouTube URLs (one per line) or entire playlist URL
+2. Click "Start Transcription"
+3. Downloads proceed sequentially with randomized delays
+4. Processing continues automatically if "Process through entire pipeline" is checked
+
+**Security Notes:**
+- ✅ Browser extraction is **disabled** to prevent accidentally using main account
+- ✅ Only manual cookie file upload is supported
+- ✅ Cookies stay local - never transmitted except to YouTube
+- ✅ Rate limiting prevents account flags from YouTube
+- ✅ Sequential downloads mimic human behavior
+
+**Troubleshooting:**
+- **Bot detection errors**: Increase min/max delays (try 5-10 minutes)
+- **Cookie expiration**: Re-export cookies from throwaway account
+- **Account flags**: Stop downloads for 24 hours, then resume with longer delays
 
 ## Performance & Hardware
 

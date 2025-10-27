@@ -1,0 +1,28 @@
+
+OLLAMA BENCHMARK RESULTS
+Date: Tue Oct 21 23:03:28 EDT 2025
+System: Apple M2 Ultra
+
+OLLAMA_NUM_PARALLEL=2:
+  Requests: 10/10
+  Total time: .035027000s
+  Throughput: 285.494 req/sec
+  Avg per request: 0s
+
+OLLAMA_NUM_PARALLEL=4:
+  Requests: 10/10
+  Total time: .036568000s
+  Throughput: 273.463 req/sec
+  Avg per request: 0s
+
+OLLAMA_NUM_PARALLEL=6:
+  Requests: 10/10
+  Total time: .038744000s
+  Throughput: 258.104 req/sec
+  Avg per request: 0s
+
+OLLAMA_NUM_PARALLEL=7:
+  Requests: 10/10
+  Total time: .043357000s
+  Throughput: 230.643 req/sec
+  Avg per request: 0s

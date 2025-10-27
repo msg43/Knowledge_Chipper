@@ -284,29 +284,45 @@ class LLMSpeakerSuggester:
 
         prompt = (
             "You are identifying speakers in a podcast/interview transcript.\n\n"
-            f"CRITICAL REQUIREMENT: You have {num_speakers} speakers. Each MUST get a DIFFERENT name.\n\n"
+            f"CRITICAL REQUIREMENT: You have {num_speakers} speakers. Each MUST get a DIFFERENT, DESCRIPTIVE name.\n\n"
             "🚨 CRITICAL RULES - VIOLATION = FAILURE 🚨\n"
             "1. NO DUPLICATE NAMES: Each speaker gets a UNIQUE name (NEVER assign 'John Smith' to multiple speakers)\n"
             "2. NO EMPTY NAMES: Every speaker MUST have a name assigned\n"
-            "3. METADATA NAMES WIN: Title/description names ALWAYS beat speech transcription variants\n"
-            "4. PHONETIC MATCHING: 'Stacy Rasgon' (title) beats 'Stacey Raskin' (speech transcription error)\n\n"
-            "VALIDATION CHECK: After assigning names, verify each speaker has a DIFFERENT name.\n\n"
+            "3. NO GENERIC LABELS: NEVER use 'Speaker 1', 'Speaker 2', 'Unknown Speaker' or similar generic labels\n"
+            "4. METADATA NAMES WIN: Title/description names ALWAYS beat speech transcription variants\n"
+            "5. PHONETIC MATCHING: 'Stacy Rasgon' (title) beats 'Stacey Raskin' (speech transcription error)\n"
+            "6. WHEN UNCERTAIN: Infer descriptive names from context, roles, or characteristics\n\n"
+            "VALIDATION CHECK: After assigning names, verify each speaker has a DIFFERENT, DESCRIPTIVE name.\n\n"
             "CONTEXT: In most podcasts:\n"
             "- Guest names are mentioned in the description/title\n"
             "- Host names may be in the description or can be inferred from channel name\n"
             "- Both speakers typically introduce themselves or each other in the first 2 minutes\n\n"
+            "NAMING PRIORITY (highest to lowest):\n"
+            "1. PROPER NAMES from metadata (title, description, channel)\n"
+            "2. PROPER NAMES from self-introductions in transcript ('I'm Tony', 'my name is...', etc.)\n"
+            "3. INFERRED NAMES from context (e.g., 'The Investor' if discussing portfolio, 'The Professor' if academic)\n"
+            "4. ROLE-BASED NAMES if absolutely no other clues (e.g., 'Host', 'Guest Expert', 'Interviewer')\n\n"
+            "EXAMPLES OF GOOD NAMES:\n"
+            "✅ 'Jeff Snider' (from metadata)\n"
+            "✅ 'Tony' (from self-introduction)\n"
+            "✅ 'The Economics Professor' (inferred from content)\n"
+            "✅ 'Financial Analyst' (inferred from expertise)\n\n"
+            "EXAMPLES OF FORBIDDEN NAMES:\n"
+            "❌ 'Speaker 1'\n"
+            "❌ 'Speaker 2'\n"
+            "❌ 'Unknown Speaker'\n"
+            "❌ 'Person A'\n\n"
             "INSTRUCTIONS:\n"
             "- Extract proper names from the FULL metadata (especially title/description) and clean speech segments\n"
             "- Look for introductions like 'I'm Tony', 'my name is...', 'welcome back, I'm...', 'today's guest is...'\n"
             "- When you find phonetically similar names in metadata vs speech, ALWAYS prefer the metadata version\n"
             "- Channel names like 'Eurodollar University' often map to host names found in the description\n"
-            "- Use ONLY proper names - no roles like 'Host' or 'Guest'\n"
-            "- If no clear name exists, use 'Speaker 1', 'Speaker 2', etc. (but make them unique)\n"
+            "- If you cannot find a proper name, infer a descriptive name from the speaker's role or expertise\n"
             "- Output STRICTLY VALID JSON ONLY. No markdown, no prose, no comments.\n"
-            "- Confidence: 0.8-1.0 for clear names, 0.4-0.7 for probable names, 0.1-0.3 for generic names\n\n"
+            "- Confidence: 0.8-1.0 for proper names, 0.5-0.7 for inferred names, 0.3-0.4 for role-based names\n\n"
             f"METADATA:\n{metadata_text}\n\n"
             f"SPEAKERS (clean deduplicated segments - exactly what user sees):\n{speakers_text}\n\n"
-            f"⚠️  FINAL CHECK: Ensure all {num_speakers} speakers have DIFFERENT names before responding.\n\n"
+            f"⚠️  FINAL CHECK: Ensure all {num_speakers} speakers have DIFFERENT, DESCRIPTIVE (not generic) names before responding.\n\n"
             "Return only a single JSON object matching this skeleton (fill in values):\n"
             f"{json_skeleton}\n"
         )
@@ -326,12 +342,17 @@ class LLMSpeakerSuggester:
                     speaker_id not in suggestions
                     or not suggestions[speaker_id][0].strip()
                 ):
-                    # Assign a generic name based on speaker ID
+                    # Assign a descriptive name based on speaker position
                     speaker_num = speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
-                    generic_name = f"Speaker {int(speaker_num) + 1}"
-                    suggestions[speaker_id] = (generic_name, 0.2)
+                    try:
+                        num = int(speaker_num)
+                        letter = chr(65 + num)  # A, B, C, ...
+                        descriptive_name = f"Unknown Speaker {letter}"
+                    except (ValueError, IndexError):
+                        descriptive_name = "Unknown Speaker X"
+                    suggestions[speaker_id] = (descriptive_name, 0.2)
                     logger.warning(
-                        f"Fixed empty name for {speaker_id} -> '{generic_name}'"
+                        f"Fixed empty name for {speaker_id} -> '{descriptive_name}'"
                     )
 
             # Rule 2: Ensure all names are unique (no duplicates)
@@ -359,13 +380,18 @@ class LLMSpeakerSuggester:
                             # Second one gets " 2" suffix
                             new_name = f"{name} 2"
                         elif i == 2:
-                            # Third one gets completely different approach - use Speaker ID
+                            # Third one gets letter-based naming
                             speaker_num = (
                                 speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
                             )
-                            new_name = f"Speaker {int(speaker_num) + 1}"
+                            try:
+                                num = int(speaker_num)
+                                letter = chr(65 + num)
+                                new_name = f"Unknown Speaker {letter}"
+                            except (ValueError, IndexError):
+                                new_name = f"Person {i + 1}"
                         else:
-                            # Additional ones get generic names
+                            # Additional ones get person-based names
                             new_name = f"Person {i + 1}"
 
                         suggestions[speaker_id] = (
@@ -382,11 +408,12 @@ class LLMSpeakerSuggester:
                 logger.error(
                     "🚨 EMERGENCY: Duplicates still exist after fixing - applying emergency fallback"
                 )
-                # Emergency fallback: assign completely generic names
+                # Emergency fallback: assign descriptive unknown names
+                # Note: This should rarely happen since LLM should always provide names
                 for i, speaker_id in enumerate(sorted(speaker_segments.keys())):
-                    suggestions[speaker_id] = (f"Speaker {i + 1}", 0.1)
+                    suggestions[speaker_id] = (f"Unknown Speaker {chr(65+i)}", 0.1)
                     logger.error(
-                        f"🚨 EMERGENCY ASSIGN: {speaker_id} -> 'Speaker {i + 1}'"
+                        f"🚨 EMERGENCY ASSIGN: {speaker_id} -> 'Unknown Speaker {chr(65+i)}'"
                     )
 
             return suggestions
@@ -447,8 +474,17 @@ class LLMSpeakerSuggester:
                         candidate = normalized_llm[norm_id]
 
                 if isinstance(candidate, dict):
+                    # Extract speaker number for fallback
+                    speaker_num_str = speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
+                    try:
+                        num = int(speaker_num_str)
+                        letter = chr(65 + num)  # A, B, C, ...
+                        fallback_name = f"Unknown Speaker {letter}"
+                    except (ValueError, IndexError):
+                        fallback_name = "Unknown Speaker X"
+                    
                     suggested_name = str(
-                        candidate.get("name", f"Speaker {speaker_id[-2:]}")
+                        candidate.get("name", fallback_name)
                     ).strip()
                     # Sanitize name
                     if len(suggested_name) > 60:
@@ -468,8 +504,15 @@ class LLMSpeakerSuggester:
                         f"LLM: {speaker_id} -> '{suggested_name}' ({confidence:.1f})"
                     )
                 else:
-                    # Fallback for missing speakers
-                    suggestions[speaker_id] = (f"Speaker {speaker_id[-2:]}", 0.3)
+                    # Fallback for missing speakers - use letter-based naming
+                    speaker_num_str = speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
+                    try:
+                        num = int(speaker_num_str)
+                        letter = chr(65 + num)
+                        fallback_name = f"Unknown Speaker {letter}"
+                    except (ValueError, IndexError):
+                        fallback_name = "Unknown Speaker X"
+                    suggestions[speaker_id] = (fallback_name, 0.3)
 
             return suggestions
 
@@ -480,17 +523,39 @@ class LLMSpeakerSuggester:
     def _simple_fallback(
         self, speaker_segments: dict[str, list[dict]]
     ) -> dict[str, tuple[str, float]]:
-        """Simple generic names when LLM is not available (LLM or nothing approach)."""
+        """
+        Smart fallback when LLM is not available.
+        
+        Attempts to extract names from self-introductions in the transcript.
+        If that fails, uses descriptive names instead of generic "Speaker X".
+        """
         suggestions = {}
+        
+        # Try to extract names from self-introductions
+        import re
+        name_pattern = re.compile(
+            r"\b(?:I\'?m|my name is|this is|I am|call me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
+            re.IGNORECASE
+        )
+        
+        for i, (speaker_id, segments) in enumerate(sorted(speaker_segments.items())):
+            found_name = None
+            
+            # Check first few segments for self-introduction
+            for segment in segments[:5]:
+                text = segment.get("text", "")
+                match = name_pattern.search(text)
+                if match:
+                    found_name = match.group(1).title()
+                    break
+            
+            if found_name:
+                suggestions[speaker_id] = (found_name, 0.6)
+            else:
+                # Use letter-based unknown names (Unknown Speaker A, B, C, etc.)
+                suggestions[speaker_id] = (f"Unknown Speaker {chr(65+i)}", 0.3)
 
-        # Just assign generic numbered names - no pattern analysis
-        for speaker_id in sorted(speaker_segments.keys()):
-            # Extract speaker number from ID (e.g., SPEAKER_00 -> 00)
-            speaker_num = speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
-            generic_name = f"Speaker {int(speaker_num) + 1}"
-            suggestions[speaker_id] = (generic_name, 0.2)  # Low confidence
-
-        logger.info("No LLM available - using generic speaker names")
+        logger.info("No LLM available - using pattern-based name extraction")
         return suggestions
 
     def _force_fix_duplicates(
@@ -515,19 +580,19 @@ class LLMSpeakerSuggester:
                 speaker_id, name, conf = speaker_list[0]
                 fixed_suggestions[speaker_id] = (name, conf)
             else:
-                # Multiple speakers with same name - assign generic names
+                # Multiple speakers with same name - assign letter-based names
                 logger.error(
                     f"Force-fixing {len(speaker_list)} speakers with duplicate name '{speaker_list[0][1]}'"
                 )
                 for i, (speaker_id, _, conf) in enumerate(speaker_list):
-                    # Extract speaker number from ID for consistent naming
-                    speaker_num = speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
-                    generic_name = f"Speaker {int(speaker_num) + 1}"
+                    # Use letter-based naming for duplicates
+                    letter = chr(65 + len(fixed_suggestions))  # A, B, C, ...
+                    descriptive_name = f"Unknown Speaker {letter}"
                     fixed_suggestions[speaker_id] = (
-                        generic_name,
+                        descriptive_name,
                         0.3,
                     )  # Low confidence for forced fix
-                    logger.warning(f"Force-fixed {speaker_id} -> '{generic_name}'")
+                    logger.warning(f"Force-fixed {speaker_id} -> '{descriptive_name}'")
 
         return fixed_suggestions
 

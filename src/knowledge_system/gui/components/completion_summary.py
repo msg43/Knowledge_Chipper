@@ -31,6 +31,11 @@ class TranscriptionCompletionSummary(QDialog):
         self.setMinimumSize(700, 500)
         self.setModal(True)
 
+        # Store output directory for opening folder
+        self.output_dir = None
+        # Store successful files for summarization
+        self.successful_files = []
+
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -66,8 +71,10 @@ class TranscriptionCompletionSummary(QDialog):
         stats_grid_layout = QHBoxLayout(stats_grid)
 
         # Files processed
-        files_widget = self._create_stat_widget("📁 Files", "0 processed", "#1976d2")
-        stats_grid_layout.addWidget(files_widget)
+        self.files_widget = self._create_stat_widget(
+            "📁 Files", "0 processed", "#1976d2"
+        )
+        stats_grid_layout.addWidget(self.files_widget)
 
         # Success rate
         self.success_widget = self._create_stat_widget(
@@ -111,16 +118,17 @@ class TranscriptionCompletionSummary(QDialog):
         self.files_list.setStyleSheet(
             """
             QListWidget {
-                border: 1px solid #ddd;
+                border: 1px solid #555;
                 border-radius: 5px;
-                background-color: #fafafa;
+                background-color: #2b2b2b;
+                color: white;
             }
             QListWidget::item {
                 padding: 5px;
-                border-bottom: 1px solid #eee;
+                border-bottom: 1px solid #444;
             }
             QListWidget::item:selected {
-                background-color: #e3f2fd;
+                background-color: #1976d2;
             }
         """
         )
@@ -192,8 +200,9 @@ class TranscriptionCompletionSummary(QDialog):
         button_layout = QHBoxLayout()
 
         # View output folder
-        output_btn = QPushButton("📁 Open Output Folder")
-        output_btn.setStyleSheet(
+        self.output_btn = QPushButton("📁 Open Output Folder")
+        self.output_btn.clicked.connect(self._open_output_folder)
+        self.output_btn.setStyleSheet(
             """
             QPushButton {
                 background-color: #2196f3;
@@ -207,7 +216,7 @@ class TranscriptionCompletionSummary(QDialog):
             }
         """
         )
-        button_layout.addWidget(output_btn)
+        button_layout.addWidget(self.output_btn)
 
         # Go to summarization
         summarize_btn = QPushButton("📝 Summarize Transcripts")
@@ -291,6 +300,50 @@ class TranscriptionCompletionSummary(QDialog):
         self.accept()
         self.switch_to_summarization.emit()
 
+    def _open_output_folder(self):
+        """Open the output folder in the system file browser."""
+        import subprocess
+        import sys
+
+        if not self.output_dir:
+            from PyQt6.QtWidgets import QMessageBox
+
+            QMessageBox.warning(
+                self,
+                "No Output Directory",
+                "Output directory is not set. Cannot open folder.\n\n"
+                "This may happen if:\n"
+                "• The transcription was processed without saving to disk\n"
+                "• The output directory was not configured\n"
+                "• The transcription was cancelled before completion",
+            )
+            return
+
+        output_path = Path(self.output_dir)
+        if not output_path.exists():
+            from PyQt6.QtWidgets import QMessageBox
+
+            QMessageBox.warning(
+                self,
+                "Directory Not Found",
+                f"Output directory does not exist:\n{self.output_dir}",
+            )
+            return
+
+        try:
+            if sys.platform == "darwin":  # macOS
+                subprocess.run(["open", str(output_path)], check=True)
+            elif sys.platform == "win32":  # Windows
+                subprocess.run(["explorer", str(output_path)], check=True)
+            else:  # Linux and others
+                subprocess.run(["xdg-open", str(output_path)], check=True)
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+
+            QMessageBox.warning(
+                self, "Cannot Open Folder", f"Failed to open output folder:\n{str(e)}"
+            )
+
     def show_summary(
         self,
         successful_files: list[dict],
@@ -298,8 +351,13 @@ class TranscriptionCompletionSummary(QDialog):
         processing_time: float,
         total_characters: int = 0,
         operation_type: str = "transcription",
+        output_dir: str = None,
     ) -> None:
         """Show completion summary with results."""
+        # Store for later use
+        self.successful_files = successful_files
+        self.output_dir = output_dir
+
         total_files = len(successful_files) + len(failed_files)
         success_count = len(successful_files)
         failure_count = len(failed_files)
@@ -321,6 +379,7 @@ class TranscriptionCompletionSummary(QDialog):
             )
 
         # Update statistics
+        self.files_widget.value_label.setText(f"{total_files}")
         self.success_widget.value_label.setText(f"{success_count}")
         self.failures_widget.value_label.setText(f"{failure_count}")
 

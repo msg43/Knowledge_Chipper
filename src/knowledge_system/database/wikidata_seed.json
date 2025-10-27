@@ -1,0 +1,4173 @@
+{
+  "version": "merged_20251026",
+  "created": "2025-10-26",
+  "source": "WikiData + Manual Curation",
+  "description": "Merged vocabulary: 506 categories",
+  "categories": [
+    {
+      "wikidata_id": "Q8134",
+      "category_name": "Economics",
+      "description": "Social science studying production, distribution, and consumption of goods and services",
+      "level": "general",
+      "parent_id": null,
+      "aliases": [
+        "Economic science",
+        "Political economy"
+      ]
+    },
+    {
+      "wikidata_id": "Q7163",
+      "category_name": "Geopolitics",
+      "description": "Politics influenced by geographical factors",
+      "level": "general",
+      "parent_id": "Q7163",
+      "aliases": [
+        "Geostrategy",
+        "International politics"
+      ]
+    },
+    {
+      "wikidata_id": "Q11016",
+      "category_name": "Technology",
+      "description": "Application of scientific knowledge for practical purposes",
+      "level": "general",
+      "parent_id": null,
+      "aliases": [
+        "Tech",
+        "Applied science"
+      ]
+    },
+    {
+      "wikidata_id": "Q336",
+      "category_name": "Science",
+      "description": "Systematic study of the natural and social world",
+      "level": "general",
+      "parent_id": null,
+      "aliases": [
+        "Scientific research",
+        "Natural science"
+      ]
+    },
+    {
+      "wikidata_id": "Q24885",
+      "category_name": "Finance",
+      "description": "Management of money and investments",
+      "level": "general",
+      "parent_id": "Q8134",
+      "aliases": [
+        "Financial services",
+        "Financial sector"
+      ]
+    },
+    {
+      "wikidata_id": "Q11024",
+      "category_name": "Communication",
+      "description": "Exchange of information and meaning",
+      "level": "general",
+      "parent_id": null,
+      "aliases": [
+        "Communications"
+      ]
+    },
+    {
+      "wikidata_id": "Q8386",
+      "category_name": "Law",
+      "description": "System of rules created and enforced through institutions",
+      "level": "general",
+      "parent_id": null,
+      "aliases": [
+        "Legal system",
+        "Jurisprudence"
+      ]
+    },
+    {
+      "wikidata_id": "Q7397",
+      "category_name": "Software",
+      "description": "Non-tangible executable component of a computer",
+      "level": "specific",
+      "parent_id": "Q11016",
+      "aliases": [
+        "Computer software",
+        "Software systems"
+      ]
+    },
+    {
+      "wikidata_id": "Q11660",
+      "category_name": "Artificial intelligence",
+      "description": "Intelligence demonstrated by machines",
+      "level": "specific",
+      "parent_id": "Q11016",
+      "aliases": [
+        "AI",
+        "Machine intelligence"
+      ]
+    },
+    {
+      "wikidata_id": "Q186363",
+      "category_name": "Monetary policy",
+      "description": "Process by which monetary authority controls money supply",
+      "level": "specific",
+      "parent_id": "Q8134",
+      "aliases": [
+        "Central bank policy",
+        "Monetary policies"
+      ]
+    },
+    {
+      "wikidata_id": "Q53536",
+      "category_name": "Federal Reserve System",
+      "description": "Central banking system of the United States",
+      "level": "specific",
+      "parent_id": "Q186363",
+      "aliases": [
+        "The Fed",
+        "Federal Reserve",
+        "US Federal Reserve"
+      ]
+    },
+    {
+      "wikidata_id": "Q82580",
+      "category_name": "Interest rate",
+      "description": "Rate at which interest is paid by borrowers for the use of money",
+      "level": "specific",
+      "parent_id": "Q186363",
+      "aliases": [
+        "Interest rates",
+        "Rate of interest"
+      ]
+    },
+    {
+      "wikidata_id": "Q179289",
+      "category_name": "Inflation",
+      "description": "General increase in prices and fall in purchasing value of money",
+      "level": "specific",
+      "parent_id": "Q8134",
+      "aliases": [
+        "Price inflation",
+        "Monetary inflation"
+      ]
+    },
+    {
+      "wikidata_id": "Q185038",
+      "category_name": "Quantitative easing",
+      "description": "Monetary policy of purchasing government securities or other securities",
+      "level": "specific",
+      "parent_id": "Q186363",
+      "aliases": [
+        "QE",
+        "Asset purchase program"
+      ]
+    },
+    {
+      "wikidata_id": "Q159810",
+      "category_name": "International trade",
+      "description": "Exchange of goods and services across international borders",
+      "level": "specific",
+      "parent_id": "Q8134",
+      "aliases": [
+        "World trade",
+        "Global trade"
+      ]
+    },
+    {
+      "wikidata_id": "Q66344",
+      "category_name": "Central banking",
+      "description": "Institution that manages state's currency, money supply, and interest rates",
+      "level": "specific",
+      "parent_id": "Q24885",
+      "aliases": [
+        "Central bank",
+        "Reserve bank"
+      ]
+    },
+    {
+      "wikidata_id": "Q36236",
+      "category_name": "Ideology",
+      "description": "Set of beliefs or philosophies attributed to a person or group",
+      "level": "specific",
+      "parent_id": "Q7163",
+      "aliases": [
+        "Political ideology",
+        "Belief system"
+      ]
+    },
+    {
+      "wikidata_id": "Q7188",
+      "category_name": "Government",
+      "description": "System or group of people governing an organized community",
+      "level": "specific",
+      "parent_id": "Q7163",
+      "aliases": [
+        "Governance",
+        "Political system"
+      ]
+    },
+    {
+      "wikidata_id": "Q170509",
+      "category_name": "Cryptocurrency",
+      "description": "Digital currency secured by cryptography",
+      "level": "specific",
+      "parent_id": "Q24885",
+      "aliases": [
+        "Digital currency",
+        "Crypto"
+      ]
+    },
+    {
+      "wikidata_id": "Q20514253",
+      "category_name": "Blockchain",
+      "description": "Distributed ledger technology",
+      "level": "specific",
+      "parent_id": "Q11016",
+      "aliases": [
+        "Distributed ledger",
+        "Blockchain technology"
+      ]
+    },
+    {
+      "wikidata_id": "Q7942",
+      "category_name": "Climate change",
+      "description": "Current rise in Earth's average temperature",
+      "level": "specific",
+      "parent_id": "Q336",
+      "aliases": [
+        "Global warming",
+        "Climate crisis"
+      ]
+    },
+    {
+      "wikidata_id": "Q39680",
+      "category_name": "Macroeconomics",
+      "description": "Branch of economics studying entire economies",
+      "level": "specific",
+      "parent_id": "Q8134",
+      "aliases": [
+        "Macro economics"
+      ]
+    },
+    {
+      "wikidata_id": "Q39631",
+      "category_name": "Microeconomics",
+      "description": "Branch of economics studying individual and firm behavior",
+      "level": "specific",
+      "parent_id": "Q8134",
+      "aliases": [
+        "Micro economics"
+      ]
+    },
+    {
+      "wikidata_id": "Q8465",
+      "category_name": "Civil war",
+      "description": "War between organized groups within the same state",
+      "level": "specific",
+      "parent_id": "Q7163",
+      "aliases": [
+        "Internal conflict"
+      ]
+    },
+    {
+      "wikidata_id": "Q163082",
+      "category_name": "Fiscal policy",
+      "description": "Use of government revenue collection and expenditure",
+      "level": "specific",
+      "parent_id": "Q8134",
+      "aliases": [
+        "Tax policy",
+        "Budget policy"
+      ]
+    },
+    {
+      "wikidata_id": "Q9143",
+      "category_name": "Programming language",
+      "description": "Formal language for communicating instructions to computers",
+      "level": "specific",
+      "parent_id": "Q7397",
+      "aliases": [
+        "Computer language",
+        "Coding language"
+      ]
+    },
+    {
+      "wikidata_id": "Q47728",
+      "category_name": "Machine learning",
+      "description": "Field of study focused on algorithms that improve through experience",
+      "level": "specific",
+      "parent_id": "Q11660",
+      "aliases": [
+        "ML",
+        "Statistical learning"
+      ]
+    },
+    {
+      "wikidata_id": "Q638608",
+      "category_name": "Stock market",
+      "description": "Market for buying and selling stocks and derivatives",
+      "level": "specific",
+      "parent_id": "Q24885",
+      "aliases": [
+        "Equity market",
+        "Share market"
+      ]
+    },
+    {
+      "wikidata_id": "Q178651",
+      "category_name": "Supply and demand",
+      "description": "Economic model of price determination in a market",
+      "level": "specific",
+      "parent_id": "Q39631",
+      "aliases": [
+        "Market equilibrium"
+      ]
+    },
+    {
+      "wikidata_id": "Q43015",
+      "category_name": "Diplomacy",
+      "description": "Practice of conducting negotiations between representatives of states",
+      "level": "specific",
+      "parent_id": "Q7163",
+      "aliases": [
+        "International diplomacy",
+        "Foreign relations"
+      ]
+    },
+    {
+      "wikidata_id": "Q36539",
+      "category_name": "Democracy",
+      "description": "Form of government where citizens exercise power by voting",
+      "level": "specific",
+      "parent_id": "Q7188",
+      "aliases": [
+        "Democratic system"
+      ]
+    },
+    {
+      "wikidata_id": "Q7272",
+      "category_name": "Capitalism",
+      "description": "Economic system based on private ownership of means of production",
+      "level": "specific",
+      "parent_id": "Q8134",
+      "aliases": [
+        "Market economy",
+        "Free enterprise"
+      ]
+    },
+    {
+      "wikidata_id": "Q7264",
+      "category_name": "Marxism",
+      "description": "Economic and sociopolitical worldview based on works of Karl Marx",
+      "level": "specific",
+      "parent_id": "Q36236",
+      "aliases": [
+        "Marxist theory"
+      ]
+    },
+    {
+      "wikidata_id": "Q34178",
+      "category_name": "Health care",
+      "description": "Prevention, treatment, and management of illness",
+      "level": "general",
+      "parent_id": null,
+      "aliases": [
+        "Healthcare",
+        "Medical care"
+      ]
+    },
+    {
+      "wikidata_id": "Q11190",
+      "category_name": "Medicine",
+      "description": "Science and practice of diagnosis, treatment, and prevention of disease",
+      "level": "specific",
+      "parent_id": "Q34178",
+      "aliases": [
+        "Medical science"
+      ]
+    },
+    {
+      "wikidata_id": "Q12147",
+      "category_name": "Internet",
+      "description": "Global system of interconnected computer networks",
+      "level": "specific",
+      "parent_id": "Q11016",
+      "aliases": [
+        "World Wide Web",
+        "Net"
+      ]
+    },
+    {
+      "wikidata_id": "Q837866",
+      "category_name": "Cybersecurity",
+      "description": "Protection of computer systems from theft or damage",
+      "level": "specific",
+      "parent_id": "Q11016",
+      "aliases": [
+        "Information security",
+        "Computer security"
+      ]
+    },
+    {
+      "wikidata_id": "Q638",
+      "category_name": "Music",
+      "description": "Art form and cultural activity using sound organized in time",
+      "level": "general",
+      "parent_id": null,
+      "aliases": [
+        "Musical art"
+      ]
+    },
+    {
+      "wikidata_id": "Q25379",
+      "category_name": "Philosophy",
+      "description": "Study of general and fundamental questions",
+      "level": "general",
+      "parent_id": null,
+      "aliases": [
+        "Philosophical inquiry"
+      ]
+    },
+    {
+      "wikidata_id": "Q9129",
+      "category_name": "History",
+      "description": "Study of the past",
+      "level": "general",
+      "parent_id": null,
+      "aliases": [
+        "Historical studies"
+      ]
+    },
+    {
+      "wikidata_id": "Q21201",
+      "category_name": "sociology",
+      "description": "social science that studies human society and its development",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q34749",
+      "category_name": "social science",
+      "description": "academic disciplines concerned with society and the relationships between individuals in society",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q420",
+      "category_name": "biology",
+      "description": "scientific study of living things, especially their structure, function, growth, evolution, and distribution",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q8242",
+      "category_name": "literature",
+      "description": "polysemous term referring to a written art form, and the set of all literary works",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q9158",
+      "category_name": "email",
+      "description": "electronic changing digital messages between a network",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q735",
+      "category_name": "art",
+      "description": "general concept that creates expressive work for its beauty or emotional power (use Q838948 for the resulting work, use Q2018526 for the group of creative disciplines)",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q9134",
+      "category_name": "mythology",
+      "description": "collection of sacred stories or a set of beliefs belonging to a specific religious or cultural tradition. It is a system of narratives that typically explain the origin of the world, natural phenomena, human customs",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q395",
+      "category_name": "mathematics",
+      "description": "field of study",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2329",
+      "category_name": "chemistry",
+      "description": "branch of physical science concerned with the composition, structure and properties of matter",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q413",
+      "category_name": "physics",
+      "description": "study of matter and its motion, along with related concepts such as energy and force",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q11378",
+      "category_name": "Shiva",
+      "description": "one of the principal deities of Hinduism",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2357391",
+      "category_name": "structural science",
+      "description": "form of science",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5769133",
+      "category_name": "Factual science",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5769071",
+      "category_name": "Science in Mesoamerica",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q475023",
+      "category_name": "exact science",
+      "description": "sciences that admit of absolute precision in their results",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q861641",
+      "category_name": "educational sciences",
+      "description": "also often called pedagogy; seeks to describe, understand, and prescribe education policy and practice",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1872742",
+      "category_name": "Ancient Egyptian science",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1298380",
+      "category_name": "sports science",
+      "description": "interdisciplinary study of physical activity",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q130788",
+      "category_name": "chronology",
+      "description": "science of arranging events in order of occurrence",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2374463",
+      "category_name": "data science",
+      "description": "field of study to extract insights from data",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q287983",
+      "category_name": "koniology",
+      "description": "the study of atmospheric dust and its effects",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q495304",
+      "category_name": "forensic science",
+      "description": "application of science to criminal and civil laws",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q333",
+      "category_name": "astronomy",
+      "description": "scientific study of celestial objects and phenomena",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1420991",
+      "category_name": "Positive science",
+      "description": "for a general usage in humanities and social sciences referring to either",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2167061",
+      "category_name": "systems science",
+      "description": "interdisciplinary field that studies the nature of systems",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3053334",
+      "category_name": "nautical science",
+      "description": "branch of science behind the navigation in the ocean",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1162708",
+      "category_name": "praxeology",
+      "description": "deductive study of human action",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1071",
+      "category_name": "geography",
+      "description": "science that studies the terrestrial surface, the societies that inhabit it and the territories, landscapes, places or regions that form it when interacting with each other",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q207011",
+      "category_name": "neuroscience",
+      "description": "scientific study of the nervous system",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q474100",
+      "category_name": "pyrotechnics",
+      "description": "the science and craft of using self-contained and self-sustained exothermic chemical reactions to make heat, light, gas, smoke and/or sound",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4764988",
+      "category_name": "animal studies",
+      "description": "field in which animals are studied in a variety of cross-disciplinary ways",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2116070",
+      "category_name": "Psychotherapy Research",
+      "description": "scientific reflection and empiric validation of psychotherapy and its methods",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q785426",
+      "category_name": "science in the medieval Islamic world",
+      "description": "science developed and practised during the Islamic Golden Age",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q382995",
+      "category_name": "legal science",
+      "description": "academic discipline",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1605906",
+      "category_name": "post-normal science",
+      "description": "use of science on urgent issues involving uncertainty in facts and moral values",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q912169",
+      "category_name": "nanoscience",
+      "description": "study of the properties of matter at the nanoscale; in particular, it focuses on the unique, size-dependent properties of solid-state materials",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q944537",
+      "category_name": "Geisteswissenschaften",
+      "description": "set of human sciences that are traditional in German universities",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2422123",
+      "category_name": "historiography of science",
+      "description": "History of History of Science",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q620462",
+      "category_name": "thanatology",
+      "description": "scientific study of death",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2976619",
+      "category_name": "Brazilian science and technology",
+      "description": "industry in Brazil",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5769081",
+      "category_name": "experimental science",
+      "description": "type of science in which data are obtained from directed experimentation",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2563485",
+      "category_name": "value-freedom",
+      "description": "requirement of scientific theory that the truth of a sentence should be assessed regardless of its (normative) content",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2679909",
+      "category_name": "Antilleanism",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4070901",
+      "category_name": "architectural science",
+      "description": "study of design in architecture and styles of buildings in the built environment",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1595873",
+      "category_name": "domestic studies",
+      "description": "interdisciplinary research in geography, history, culture, politics, economy, ethnology and sociology, within a national, regional, or local context, in order to describe or explain its specificities",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q42250",
+      "category_name": "hydrology",
+      "description": "science that deals with the water above, on and below the land surface of the earth",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2145145",
+      "category_name": "Hellenistic science",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1517851",
+      "category_name": "parascience",
+      "description": "study of subjects outside the scope of the natural sciences",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2522419",
+      "category_name": "hard science",
+      "description": "scientific discipline",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1637030",
+      "category_name": "food science",
+      "description": "applied science devoted to the study of food",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1665984",
+      "category_name": "interdisciplinary science",
+      "description": "permanently established interdisciplinary field of science",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2516517",
+      "category_name": "transport sciences",
+      "description": "academic discipline about transcript vehicles",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q309823",
+      "category_name": "open science",
+      "description": "science that uses open practices",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1195766",
+      "category_name": "space sciences",
+      "description": "sciences of outer space",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2185393",
+      "category_name": "Gamma sciences",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q657632",
+      "category_name": "kinesiology",
+      "description": "study of anatomy, physiology, and mechanics of body movement, especially in humans",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q442321",
+      "category_name": "sustainability science",
+      "description": "research field studying sustainability aspects of human society",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2653879",
+      "category_name": "European science in the Middle Ages",
+      "description": "overview about the European science in the Middle Ages",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q6031108",
+      "category_name": "Information history",
+      "description": "academic discipline",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q637916",
+      "category_name": "universology",
+      "description": "the science of the universe",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4782809",
+      "category_name": "aquatic science",
+      "description": "multidisciplinary study of freshwater and marine ecosystems",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q192386",
+      "category_name": "military science",
+      "description": "theory, method, and practice of producing military capability",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2027981",
+      "category_name": "oral surgery",
+      "description": "surgery of the teeth and jaw bones",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2210589",
+      "category_name": "Occult science",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1196009",
+      "category_name": "Big Science",
+      "description": "term used by scientists and historians of science to describe a series of changes in science which occurred in industrial nations during and after World War II",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1999851",
+      "category_name": "normative science",
+      "description": "science consciously conducted on the basis of normative judgement",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1235196",
+      "category_name": "documentation science",
+      "description": "the study of the recording and retrieval of information",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1378328",
+      "category_name": "pure science",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q580234",
+      "category_name": "fundamental science",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4237587",
+      "category_name": "craniology",
+      "description": "study of the human skull",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1898432",
+      "category_name": "snow science",
+      "description": "interdisciplinary field of hydrology, mechanics and meteorology",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q28797",
+      "category_name": "applied science",
+      "description": "discipline that applies existing scientific knowledge to develop more practical applications",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q16387",
+      "category_name": "information science",
+      "description": "field primarily concerned with the analysis, collection, classification, manipulation, storage, retrieval and dissemination of information",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q7991",
+      "category_name": "natural science",
+      "description": "branch of science about the natural world",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q386319",
+      "category_name": "African literature",
+      "description": "literary works from Africa",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q193870",
+      "category_name": "tribology",
+      "description": "deals with the scientific description of friction, wear and lubrication",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q214781",
+      "category_name": "condensed matter physics",
+      "description": "branch of physics dealing with a property of matter",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q156495",
+      "category_name": "mathematical physics",
+      "description": "use of mathematics to solve physics problems",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q238499",
+      "category_name": "Spanish literature",
+      "description": "literature written in the Spanish language from Spain",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q156460",
+      "category_name": "degenerate art",
+      "description": "term used by the German Nazi regime to describe modern art",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q183252",
+      "category_name": "morphology",
+      "description": "study of external forms and structures of organisms",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q321355",
+      "category_name": "environmental chemistry",
+      "description": "scientific study of the chemical and biochemical phenomena that occur in natural places",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q338488",
+      "category_name": "metapolitics",
+      "description": "political discussion about politics itself",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q128406",
+      "category_name": "pharmacology",
+      "description": "branch of biology concerning drugs",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q350265",
+      "category_name": "high energy physics",
+      "description": "physics of elementary particles at high energies",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q422635",
+      "category_name": "action art",
+      "description": "art genre",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q184890",
+      "category_name": "Latin-language literature",
+      "description": "literature written in Latin, and the discipline that studies it",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q339557",
+      "category_name": "human biology",
+      "description": "interdisciplinary area of study",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q272737",
+      "category_name": "phenology",
+      "description": "study of periodic events in biological life cycles",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q82811",
+      "category_name": "acoustics",
+      "description": "science that deals with the study of all mechanical waves in gases, liquids, and solids including vibration, sound, ultrasound and infrasound",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q362098",
+      "category_name": "historical cost",
+      "description": "original monetary value of an item",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q437112",
+      "category_name": "Old English literature",
+      "description": "literature written in Old English in early medieval England from the 7th century to the decades after the Norman Conquest of 1066. Sometimes called 'Anglo-Saxon'.",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q214746",
+      "category_name": "biostatistics",
+      "description": "study of statistics application in biology",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q277510",
+      "category_name": "phenetics",
+      "description": "attempt to classify organisms based on overall similarity",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q190553",
+      "category_name": "sociobiology",
+      "description": "subdiscipline of biology regarding social behavior",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q162606",
+      "category_name": "endocrinology",
+      "description": "medical specialty; branch of science concerned with the study of hormones",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q74217",
+      "category_name": "Italian literature",
+      "description": "Italian regional literature",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q381392",
+      "category_name": "aerobiology",
+      "description": "branch of biology that studies organic particles, such as bacteria, fungal spores, very small insects, pollen grains and viruses, which are passively transported by the air",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q131683",
+      "category_name": "embryology",
+      "description": "branch of biology studying prenatal biology",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q131476",
+      "category_name": "graph theory",
+      "description": "study of graphs, which are mathematical structures used to model pairwise relations between objects",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q467054",
+      "category_name": "photonics",
+      "description": "branch of physics related to the technical applications of light",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q215198",
+      "category_name": "verismo",
+      "description": "Italian literary movement",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q396340",
+      "category_name": "agricultural economics",
+      "description": "applied field of economics that optimizes the production of food and fiber for agricultural development",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q397439",
+      "category_name": "agrophysics",
+      "description": "branch of science that mixes the fields of physics and agronomy",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q281108",
+      "category_name": "naïve art",
+      "description": "art movement",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q203209",
+      "category_name": "conceptual art",
+      "description": "contemporary art movement",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q282213",
+      "category_name": "ethnomathematics",
+      "description": "study of the relationship between mathematics and culture",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q177571",
+      "category_name": "decision theory",
+      "description": "branch of applied probability theory",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q116476",
+      "category_name": "Western literature",
+      "description": "literature written in the context of Western culture in the languages of Europe",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q189131",
+      "category_name": "bionics",
+      "description": "application of biological methods and systems found in nature to the study and design of engineering systems and modern technology",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q186579",
+      "category_name": "English literature",
+      "description": "literary works written in the English language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q321150",
+      "category_name": "theoretical chemistry",
+      "description": "branch of chemistry which develops and applies theoretical concepts",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q213156",
+      "category_name": "performance art",
+      "description": "art using the actions of an artist or other participants (not to be confused with performing arts)",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q213713",
+      "category_name": "developmental biology",
+      "description": "discipline that explores the processes by which individual organisms grow and develop (ontogeny)",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q440897",
+      "category_name": "Old High German literature",
+      "description": "type of literature",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q169505",
+      "category_name": "Ostpolitik",
+      "description": "normalization of relations between West Germany and Eastern Europe",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q287919",
+      "category_name": "atmospheric chemistry",
+      "description": "branch of atmospheric science",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q187097",
+      "category_name": "economic geography",
+      "description": "study of the location, distribution and spatial organization of economic activities",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q365585",
+      "category_name": "Persian literature",
+      "description": "oral compositions and written texts in the Persian language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q193606",
+      "category_name": "horror literature",
+      "description": "literary genre",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q174502",
+      "category_name": "bioelectronics",
+      "description": "field of research in the convergence of biology and electronics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q101929",
+      "category_name": "immunology",
+      "description": "branch of medicine studying the immune system",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q282445",
+      "category_name": "Czech literature",
+      "description": "the written works of the Czech Republic, including poetry, music, and prose",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q257085",
+      "category_name": "world literature",
+      "description": "circulation of literature beyond its country of origin",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q189594",
+      "category_name": "Islamic art",
+      "description": "artistic production that developed from the hegira (year 622) to the nineteenth century, from Spain to India among populations of Islamic culture",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q386853",
+      "category_name": "Finnish literature",
+      "description": "literature written in Finland",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q161764",
+      "category_name": "geochemistry",
+      "description": "science that applies chemistry to geological systems",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q128033",
+      "category_name": "Esperanto literature",
+      "description": "literature written in the Esperanto language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q367092",
+      "category_name": "Scandinavian literature",
+      "description": "literature in the languages of the Nordic countries of Northern Europe",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q375864",
+      "category_name": "ephemeral art",
+      "description": "impermanent inspiriation for art",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q149512",
+      "category_name": "Asian literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q136472",
+      "category_name": "historical prose literature",
+      "description": "fiction literature that is set in the past",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q376292",
+      "category_name": "Swedish literature",
+      "description": "literature written in Swedish",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q194380",
+      "category_name": "Arabic literature",
+      "description": "written literature in Arabic language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q177005",
+      "category_name": "computational biology",
+      "description": "data-analytical and theoretical methods, mathematical modeling and computational simulation techniques to the study of biological, behavioral, and social systems",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q258020",
+      "category_name": "critical accounting policy",
+      "description": "policy of a firm or industry",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q747483",
+      "category_name": "erotic literature",
+      "description": "comprises fictional and factual stories and accounts of human sexual relationships",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q747534",
+      "category_name": "mathematical economics",
+      "description": "application of mathematical methods to represent theories and analyze problems in economics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q677916",
+      "category_name": "statistical physics",
+      "description": "branch of physics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q541923",
+      "category_name": "ancient literature",
+      "description": "literature produced in ancient times",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q528130",
+      "category_name": "chemical oceanography",
+      "description": "study of ocean chemistry",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q634314",
+      "category_name": "calorimetry",
+      "description": "thermodynamic state measurement",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q647525",
+      "category_name": "behavioral economics",
+      "description": "discipline of economy studying the effects of psychological, cognitive, emotional, cultural and social factors on decisions",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q622237",
+      "category_name": "Indian literature",
+      "description": "regional literature",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q725361",
+      "category_name": "green chemistry",
+      "description": "area of chemistry and chemical engineering focused on minimizing hazardous substances",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q499500",
+      "category_name": "clinical pathology",
+      "description": "medical specialty that is concerned with the diagnosis of disease based on the laboratory analysis of bodily fluids",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q489328",
+      "category_name": "molecular physics",
+      "description": "branch of physics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q692327",
+      "category_name": "Polish literature",
+      "description": "Polish language literature",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q506874",
+      "category_name": "chronobiology",
+      "description": "field of biology that examines periodic (cyclic) phenomena in living organisms",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q684384",
+      "category_name": "Armenian literature",
+      "description": "literature written in the Armenian language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q473160",
+      "category_name": "energy economics",
+      "description": "broad scientific subject area which includes topics related to supply and use of energy in societies",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q628722",
+      "category_name": "labor economics",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q496647",
+      "category_name": "Modern Monetary Theory",
+      "description": "heterodox macroeconomic theory",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q658544",
+      "category_name": "modern physics",
+      "description": "aspects of physics, using 20th century theories such as quantum mechanics and relativity",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q660564",
+      "category_name": "transport economics",
+      "description": "branch of economics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q700919",
+      "category_name": "chemical ecology",
+      "description": "study of chemicals involved in the interactions of living organisms",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q623006",
+      "category_name": "family economics",
+      "description": "application of economic concepts to the study of the family",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q620737",
+      "category_name": "appeasement",
+      "description": "diplomatic policy of making political or material concessions to an aggressive power in order to avoid conflict",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q672832",
+      "category_name": "cryobiology",
+      "description": "study of effects of extreme low temperatures on life forms",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q538175",
+      "category_name": "Indonesian literature",
+      "description": "literature of Indonesia",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q541072",
+      "category_name": "Anglo-Irish literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q683732",
+      "category_name": "Irish literature",
+      "description": "writings from the island of Ireland",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q700151",
+      "category_name": "gunboat diplomacy",
+      "description": "pursuit of foreign policy objectives with the aid of conspicuous displays of naval power",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q696203",
+      "category_name": "apocalypse",
+      "description": "concept of a prophetic revelation, sometimes about eschatology",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q610859",
+      "category_name": "economic sociology",
+      "description": "study of the social cause and effect of various economic phenomena",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q690200",
+      "category_name": "radiobiology",
+      "description": "field of clinical and basic medical sciences that involves the study of the action of ionizing radiation on living things",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q567481",
+      "category_name": "shortage economy",
+      "description": "centrally-planned economies with chronic shortages of various goods",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q477756",
+      "category_name": "chick lit",
+      "description": "Term for popular women's fiction principally used in 1990s and 2000s, now usually regarded as sexist.",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q680555",
+      "category_name": "Berber literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q614304",
+      "category_name": "pharmacy",
+      "description": "science that studies the chemical, pharmacological and pharmaceutical properties of drugs",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q715396",
+      "category_name": "solid-state physics",
+      "description": "branch of physics focused on matter in the solid state",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q651935",
+      "category_name": "organoyttrium chemistry",
+      "description": "study of chemical compounds containing yttrium-carbon bonds",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q478859",
+      "category_name": "hydrogen economy",
+      "description": "a proposed system of delivering energy using hydrogen",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q936855",
+      "category_name": "New Zealand literature",
+      "description": "literature of New Zealand",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q837863",
+      "category_name": "pure mathematics",
+      "description": "mathematics independent of application",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q833495",
+      "category_name": "consumer choice",
+      "description": "academic discipline",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1030116",
+      "category_name": "Hungarian pharmaceutical literature in Romania",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q864714",
+      "category_name": "biosemiotics",
+      "description": "field of semiotics and biology that studies the production and interpretation of signs and codes in the biological realm",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q911801",
+      "category_name": "cosmochemistry",
+      "description": "study of the chemical composition of matter in the universe and the processes that led to those compositions",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q923592",
+      "category_name": "experimental mathematics",
+      "description": "approach to mathematics in which computation is used to investigate mathematical objects and identify properties and patterns",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1057172",
+      "category_name": "fantasy literature",
+      "description": "literary genre",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1069192",
+      "category_name": "chemical reaction network theory",
+      "description": "Area of applied mathematics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q900614",
+      "category_name": "carbochemistry",
+      "description": "branch of chemistry",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q875894",
+      "category_name": "politics of Sweden",
+      "description": "political system of Sweden",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q849175",
+      "category_name": "Danish literature",
+      "description": "literature of Denmark",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q847001",
+      "category_name": "Chicago school of economics",
+      "description": "neoclassical school of economic thought associated with the work of the faculty at the University of Chicago, some of whom have constructed and popularized its principles",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1080208",
+      "category_name": "production theory",
+      "description": "study of production, or the economic process of converting inputs into outputs",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q753291",
+      "category_name": "environmental economics",
+      "description": "sub-field of economics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q781919",
+      "category_name": "Australian literature",
+      "description": "literature by Australian writers",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q787931",
+      "category_name": "Babylonian mathematics",
+      "description": "mathematical system of Babylonia",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q919944",
+      "category_name": "Urdu literature",
+      "description": "literature in the Urdu language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q908902",
+      "category_name": "structural biology",
+      "description": "study of molecular structures in biology",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q898674",
+      "category_name": "neonatology",
+      "description": "medical care of newborns, especially the ill or premature",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q905377",
+      "category_name": "microwave chemistry",
+      "description": "science of applying microwave irradiation to chemical reactions",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q901098",
+      "category_name": "mechanochemistry",
+      "description": "study of chemical reactions influenced by mechanical phenomena",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q874429",
+      "category_name": "group theory",
+      "description": "branch of mathematics that studies the algebraic properties of groups",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1069216",
+      "category_name": "microscale chemistry",
+      "description": "analytical method and teaching method",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q864576",
+      "category_name": "biomechatronics",
+      "description": "term",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q782129",
+      "category_name": "fantastic art",
+      "description": "type of art that explores fantasy and imagination",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q910067",
+      "category_name": "chemometrics",
+      "description": "science of extracting information from chemical systems by data-driven means",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q771334",
+      "category_name": "auction theory",
+      "description": "theory on behaviour at auction markets",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q899212",
+      "category_name": "combinatorial chemistry",
+      "description": "chemical methods designed to rapidly synthesize large numbers of chemical compounds",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1078414",
+      "category_name": "food politics",
+      "description": "field of politics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q986539",
+      "category_name": "oral literature",
+      "description": "literary genre",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1049066",
+      "category_name": "ecological economics",
+      "description": "research field on the interdependence of human economies and natural ecosystems",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1041282",
+      "category_name": "cultural economics",
+      "description": "branch of economics that studies the relation of culture to economic outcomes",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q864896",
+      "category_name": "biotypology",
+      "description": "the study of biotypes",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q864512",
+      "category_name": "biocybernetics",
+      "description": "scientific discipline",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q822921",
+      "category_name": "youth politics",
+      "description": "area of politics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q756449",
+      "category_name": "supramolecular chemistry",
+      "description": "domain of chemistry beyond that of molecules that focuses on the chemical systems made up of a discrete number of assembled molecular subunits or components",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q909495",
+      "category_name": "interface and colloid science",
+      "description": "branch of chemistry and physics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q834293",
+      "category_name": "Flemish literature",
+      "description": "the literature of Flanders",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q764912",
+      "category_name": "British literature",
+      "description": "literary works published in Great Britain or by British writers",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1044484",
+      "category_name": "evolutionary developmental biology",
+      "description": "field of biology",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1051868",
+      "category_name": "Albanian literature",
+      "description": "literary texts and works written in Albanian",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q929304",
+      "category_name": "Elizabethan literature",
+      "description": "British literature from 1558 to 1603",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q909501",
+      "category_name": "crystal chemistry",
+      "description": "study of the principles of chemistry behind crystals",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q848763",
+      "category_name": "amateur chemistry",
+      "description": "pursuit of chemistry as a hobby",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q792357",
+      "category_name": "Belgian literature",
+      "description": "literature of Belgium",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q910164",
+      "category_name": "cheminformatics",
+      "description": "interdisciplinary science",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q910172",
+      "category_name": "food chemistry",
+      "description": "study of chemical processes and interactions of all biological and non-biological components of foods",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1073805",
+      "category_name": "Chinese American literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1059134",
+      "category_name": "postcolonial literature",
+      "description": "literature by people from formerly colonized countries",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q908692",
+      "category_name": "cryophysics",
+      "description": "branch of physics studying behaviors at low temperature",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1045712",
+      "category_name": "neuroeconomics",
+      "description": "interdisciplinary field",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q902120",
+      "category_name": "polymer physics",
+      "description": "branch of physics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q909554",
+      "category_name": "computational physics",
+      "description": "numerical simulations of physical problems via computers",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q963619",
+      "category_name": "medieval literature",
+      "description": "literature produced during the Middle Ages",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1121558",
+      "category_name": "politics of France",
+      "description": "political system of France",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q849186",
+      "category_name": "Brazilian literature",
+      "description": "subset of literature produced or related to Brazil",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1122491",
+      "category_name": "computational mathematics",
+      "description": "area of mathematics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q908917",
+      "category_name": "photobiology",
+      "description": "study of light interacting with living organisms",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1098652",
+      "category_name": "population biology",
+      "description": "study of biological populations",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1120908",
+      "category_name": "medical physics",
+      "description": "application of physics in medicine or healthcare",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q803880",
+      "category_name": "Hungarian biological literature in Romania",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q988402",
+      "category_name": "Hungarian medical literature in Romania",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1057314",
+      "category_name": "Hebrew literature",
+      "description": "writing in the Hebrew language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q865909",
+      "category_name": "development aid",
+      "description": "programs designed to improve the political, economic and social situation in developing countries",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q811978",
+      "category_name": "construction economics",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1006460",
+      "category_name": "federal politics of Germany",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q864269",
+      "category_name": "biodiversity informatics",
+      "description": "scholarly discipline",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q864601",
+      "category_name": "biomedicine",
+      "description": "branch of medical science that applies biological and physiological principles to clinical practice",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1832027",
+      "category_name": "suicide in literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1925986",
+      "category_name": "zythology",
+      "description": "science of beer production",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1496813",
+      "category_name": "national literature",
+      "description": "entirety of the literature of a nation",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1660049",
+      "category_name": "political communication",
+      "description": "subfield of communication and political science",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1476218",
+      "category_name": "war economy",
+      "description": "set of contingencies undertaken by a modern state to mobilize its economy for war production",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1766026",
+      "category_name": "network economics",
+      "description": "branch of economics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1567856",
+      "category_name": "pharmacoeconomics",
+      "description": "economics of pharmaceutical use in healthcare",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1886036",
+      "category_name": "spiritual literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1498333",
+      "category_name": "contemporary literature",
+      "description": "literary genre setting generally after World War II",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1908419",
+      "category_name": "mathematical geography",
+      "description": "deals with calculations or measurements on the Earth's surface",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1791932",
+      "category_name": "cultural economics",
+      "description": "branch of economics that studies the economics of creation, distribution, and the consumption of cultural products",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1783877",
+      "category_name": "solidarity economy",
+      "description": "type of economy",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1754768",
+      "category_name": "cost-effectiveness analysis",
+      "description": "comparison of costs and outcomes of different courses of action",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1523077",
+      "category_name": "infection biology",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1578310",
+      "category_name": "paleobiology",
+      "description": "science that studies the origin, evolution, way of life of animals and plants of past geological periods",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1647400",
+      "category_name": "South African literature",
+      "description": "literature of South Africa",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1793007",
+      "category_name": "Kurdish literature",
+      "description": "written and orally transmitted literature in Kurdish languages",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1337681",
+      "category_name": "physical oceanography",
+      "description": "study of physical conditions and physical processes within the ocean",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1756412",
+      "category_name": "social credit",
+      "description": "interdisciplinary distributive philosophy",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1660119",
+      "category_name": "real estate economics",
+      "description": "branch of economics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1422907",
+      "category_name": "politics of memory",
+      "description": "Organization of collective memory by political agents; the political means by which events are remembered and recorded, or discarded",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1908242",
+      "category_name": "materials physics",
+      "description": "use of physics to describe the physical properties of materials",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1851434",
+      "category_name": "morphometrics",
+      "description": "quantitative study of size and shape",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1440965",
+      "category_name": "object art",
+      "description": "art style",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1502822",
+      "category_name": "geobiology",
+      "description": "study of the interactions between the physical Earth and the biosphere",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1707766",
+      "category_name": "soil physics",
+      "description": "the study of soil's physical properties and processes",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1772875",
+      "category_name": "wildlife biology",
+      "description": "subfield of biology around the evolution of wildlife",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1423698",
+      "category_name": "mesoeconomics",
+      "description": "study of structural economics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1666161",
+      "category_name": "migrant literature",
+      "description": "literature written by or about migrants",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1394203",
+      "category_name": "information economics",
+      "description": "branch of microeconomic theory that studies how information affects economics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1382559",
+      "category_name": "evolutionary economics",
+      "description": "part of mainstream economics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1366712",
+      "category_name": "historical school of economics",
+      "description": "approach to academic economics and to public administration that emerged in the 19th century in Germany",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1384425",
+      "category_name": "experimental literature",
+      "description": "literary genre",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1383821",
+      "category_name": "Exilliteratur",
+      "description": "German literature written by dissenters of Nazi Germany",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1607177",
+      "category_name": "Sorbian literature",
+      "description": "literary texts written in the Sorbian language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1443081",
+      "category_name": "nanochemistry",
+      "description": "combination of chemistry and nanoscience",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1645590",
+      "category_name": "Angolan literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1683266",
+      "category_name": "political literature",
+      "description": "literary genre",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1842924",
+      "category_name": "prehistoric art",
+      "description": "art produced in preliterate cultures",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1411834",
+      "category_name": "Israeli literature",
+      "description": "literature written in Israel by Israelis",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1723523",
+      "category_name": "Canadian literature",
+      "description": "set of literary works from Canada",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1429339",
+      "category_name": "quantum biology",
+      "description": "application of quantum mechanics and theoretical chemistry to biological objects and problems",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1392782",
+      "category_name": "gnomonics",
+      "description": "science that studies sundials",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1357756",
+      "category_name": "mesology",
+      "description": "former term for ecology",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1916409",
+      "category_name": "media policy",
+      "description": "legislation concerning media",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1780384",
+      "category_name": "local politics",
+      "description": "political activity at the municipal level of government",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1414023",
+      "category_name": "Icelandic literature",
+      "description": "literature written in Iceland or by Icelandic people",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1735738",
+      "category_name": "Japanese mathematics",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1898509",
+      "category_name": "neontology",
+      "description": "branch of biology that studies living organisms",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1762091",
+      "category_name": "international politics",
+      "description": "study of politics, economics and law on a global level",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1400612",
+      "category_name": "art forgery",
+      "description": "creation of falsely credited art",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1647683",
+      "category_name": "party politics",
+      "description": "political processes and statements in a political party",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1781608",
+      "category_name": "Renaissance literature",
+      "description": "European literature influenced by the Renaissance",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1789149",
+      "category_name": "crystal plasticity",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1933509",
+      "category_name": "Slovene literature",
+      "description": "written in the Slovene language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1824165",
+      "category_name": "poverty reduction",
+      "description": "measures to reduce poverty permanently",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1424020",
+      "category_name": "cordel literature",
+      "description": "Brazilian literary genre",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2904159",
+      "category_name": "comparative biology",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2984189",
+      "category_name": "Nigerian literature",
+      "description": "literature of Nigeria",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3239427",
+      "category_name": "Egyptian literature",
+      "description": "from ancient Egypt to contemporary times",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2904150",
+      "category_name": "animal biology",
+      "description": "part of the life sciences which is more particularly interested in animals: zoology, animal physiology, neurosciences, ethology, zootechnics...",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2904237",
+      "category_name": "biopolitics",
+      "description": "intersectional field between biology and politics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2914650",
+      "category_name": "identity politics",
+      "description": "political position based on the interests and perspectives of social groups with which people identify",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2682613",
+      "category_name": "Frisian literature",
+      "description": "works written in Frisian language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3182860",
+      "category_name": "Slovak literature",
+      "description": "literary tradition of Slovakia",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2864738",
+      "category_name": "Art singulier",
+      "description": "art movement",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3062654",
+      "category_name": "extreme biology",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2585683",
+      "category_name": "bucket argument",
+      "description": "argument demonstrating that rotational motion cannot be defined as the relative rotation of the body with respect to the immediately surrounding bodies",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2466273",
+      "category_name": "immunochemistry",
+      "description": "branch of chemistry",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2394336",
+      "category_name": "interactive art",
+      "description": "art that involves the spectator",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2586126",
+      "category_name": "Serbian literature",
+      "description": "literature in Serbian language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3139891",
+      "category_name": "LGBT-related literature",
+      "description": "literary genre",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2494917",
+      "category_name": "West Indian literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3284266",
+      "category_name": "elementary mathematics",
+      "description": "areas of basic mathematics commonly taught in primary and secondary school",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3303826",
+      "category_name": "Mec Art",
+      "description": "20th-century art movement",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2511885",
+      "category_name": "chloro chemistry",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2695514",
+      "category_name": "crystal physics",
+      "description": "branch of physics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2469844",
+      "category_name": "geoeconomics",
+      "description": "study of the interrelations of economics, geography and politics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3082422",
+      "category_name": "francology",
+      "description": "academic discipline of France or francophone countries, and their history, culture and society",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3256824",
+      "category_name": "Mongolian literature",
+      "description": "literature of Mongolia",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3256758",
+      "category_name": "bourgeois literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3256763",
+      "category_name": "Burmese literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3256774",
+      "category_name": "Colombian literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2625249",
+      "category_name": "Abkhaz literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2626319",
+      "category_name": "24-hour economy",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2644091",
+      "category_name": "lactation science",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2633563",
+      "category_name": "Syriac literature",
+      "description": "literature composed in the Syriac language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3054625",
+      "category_name": "economic history of the world",
+      "description": "aspect of history",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3335729",
+      "category_name": "nanobiology",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2564160",
+      "category_name": "Samoan literature",
+      "description": "literature in Samoa, in either Samoan language or English",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2676333",
+      "category_name": "Surinamese literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3256759",
+      "category_name": "Breton literature",
+      "description": "literature in Breton language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2878974",
+      "category_name": "theoretical computer science",
+      "description": "subfield of computer science and mathematics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2703919",
+      "category_name": "zymology",
+      "description": "study of biochemical process of fermentation",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2904158",
+      "category_name": "biolinguistics",
+      "description": "study of the biology and evolution of language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3009579",
+      "category_name": "cytology",
+      "description": "branch of life science that deals with the study of cells in terms of structure, function and chemistry",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2740627",
+      "category_name": "heliophysics",
+      "description": "science studying the sun and the heliosphere",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2718603",
+      "category_name": "Senegalese literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2963660",
+      "category_name": "wet chemistry",
+      "description": "form of analytical chemistry where most analyzing is done in the liquid phase",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2467781",
+      "category_name": "protistology",
+      "description": "scientific discipline devoted to the study of protists",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3296256",
+      "category_name": "applied economics",
+      "description": "applied economic theory",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2963661",
+      "category_name": "synthetic chemistry",
+      "description": "branch of chemistry",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3238422",
+      "category_name": "science fiction literature",
+      "description": "literary genre",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2799233",
+      "category_name": "politics in The Simpsons",
+      "description": "political themes in The Simpsons",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2437902",
+      "category_name": "experience economy",
+      "description": "Sale of experiences to customers",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2478722",
+      "category_name": "Kannada literature",
+      "description": "written forms of the Kannada language, written in the Kannada script.",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3299050",
+      "category_name": "business mathematics",
+      "description": "practical mathematics used in business",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3299105",
+      "category_name": "mathematics of paper folding",
+      "description": "overview about the mathematics of paper folding",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3299701",
+      "category_name": "natural resource economics",
+      "description": "supply, demand, and allocation of the Earth's natural resources",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3232188",
+      "category_name": "biobased economy",
+      "description": "economic activity derived from scientific and research activity focused on biotechnology",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2864737",
+      "category_name": "religious art",
+      "description": "genre of art that is religious in theme",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2864753",
+      "category_name": "transgressive art",
+      "description": "art that intends to outrage or violate basic morals and sensibilities",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2728012",
+      "category_name": "neurobiology",
+      "description": "scientific study of the biology of the nervous system",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q3302930",
+      "category_name": "feminist economics",
+      "description": "critical gender-aware branch of economics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2419229",
+      "category_name": "theoretical biology",
+      "description": "branch of biology",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2642350",
+      "category_name": "Jewish literature",
+      "description": "literature written by Jews on Jewish themes",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q17652193",
+      "category_name": "nutritional science",
+      "description": "science that interprets the nutrients and other substances in food in relation to maintenance, growth, reproduction, health and disease of an organism",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q10296989",
+      "category_name": "soft science",
+      "description": "Wai Lin Oo",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2357355",
+      "category_name": "economic collapse",
+      "description": "severe and prolonged economic problems",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1144457",
+      "category_name": "quantum physics",
+      "description": "theories, models and concepts that go back to the quantum hypothesis of Max Planck",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2294553",
+      "category_name": "financial economics",
+      "description": "branch of economics concerned with financial or monetary transactions",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q103884376",
+      "category_name": "hearing science",
+      "description": "interdisciplinary study of the biological, physical, and cognitive processes involved in human hearing and sound perception",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1229559",
+      "category_name": "distribution theory",
+      "description": "field of economics that examines and explains the distribution of income and wealth",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2335069",
+      "category_name": "Tunisian literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2111686",
+      "category_name": "culinary art",
+      "description": "art of the preparation, cooking and presentation of food, usually in the form of meals",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q33122512",
+      "category_name": "social sciences and humanities",
+      "description": "area of scholarly activity",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q11961025",
+      "category_name": "Image Science",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1328366",
+      "category_name": "Turkish literature",
+      "description": "genre of literature",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1276062",
+      "category_name": "Ukrainian literature",
+      "description": "literary works written in Ukrainian language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q24067399",
+      "category_name": "finance science",
+      "description": "academic discipline",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2233575",
+      "category_name": "gift economy",
+      "description": "mode of exchange where valuables are given without rewards",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q7805877",
+      "category_name": "science in Poland",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q18420401",
+      "category_name": "mathematical, physical and natural sciences",
+      "description": "group of disciplines in Italian universities",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q106762611",
+      "category_name": "Complexity theory",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1245048",
+      "category_name": "Anglo-Norman literature",
+      "description": "literature composed in the Anglo-Norman language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1144248",
+      "category_name": "Bangla literature",
+      "description": "literature in Bengali language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2375831",
+      "category_name": "ethnobiology",
+      "description": "the scientific study of the way living things are treated or used by different human cultures",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1153484",
+      "category_name": "folk art",
+      "description": "art produced by artisans trained in a relevant skill working within a local client economy",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q12132621",
+      "category_name": "science in Ivano-Frankivsk",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1938781",
+      "category_name": "Misery lit",
+      "description": "biographical accounts of suffering",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q73145801",
+      "category_name": "camera scientist",
+      "description": "Scientist engaged in cameral science",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1130698",
+      "category_name": "hydrobiology",
+      "description": "science of life and life processes in water",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1965808",
+      "category_name": "Breton literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q59258895",
+      "category_name": "bioscience",
+      "description": "science related to life",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1189351",
+      "category_name": "cake decorating",
+      "description": "cake decoration",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1154078",
+      "category_name": "politics of Finland",
+      "description": "political system of Finland",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q73396824",
+      "category_name": "science and technology in Mexico",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q10527396",
+      "category_name": "home economics",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2277510",
+      "category_name": "ancient art",
+      "description": "art of the advanced cultures of ancient societies",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2315537",
+      "category_name": "ichnology",
+      "description": "branch of geology and biology that deals with traces of organismal behavior",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2115942",
+      "category_name": "psychobiology",
+      "description": "the study of mental functioning and behavior in relation to other biological processes",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q28021253",
+      "category_name": "Czech sience",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q7523823",
+      "category_name": "GCSE Science",
+      "description": "British educational qualification",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2364784",
+      "category_name": "Nepali literature",
+      "description": "literature of Nepali language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2350342",
+      "category_name": "Belarusian literature",
+      "description": "literature written in the Belarusian language, Yiddish and Russian and Polish",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q12352757",
+      "category_name": "modern science",
+      "description": "classification of facts and the formation of absolute judgments",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2043698",
+      "category_name": "solar physics",
+      "description": "branch of astrophysics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2154740",
+      "category_name": "boom",
+      "description": "growth period of the economic cycle",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1326500",
+      "category_name": "marriage policy",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q85866513",
+      "category_name": "Science in ancient Greece",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q98970243",
+      "category_name": "health metrics sciences",
+      "description": "science of using high-quality information to measure population health, its determinants, and the performance of health systems",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2382513",
+      "category_name": "hard power",
+      "description": "political influence through the use of economic and military force",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q30239589",
+      "category_name": "planetary phenomena",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1181689",
+      "category_name": "Acousto-optics",
+      "description": "study of sound and light interaction",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q18060904",
+      "category_name": "empirical science",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q72083407",
+      "category_name": "health and medicine",
+      "description": "study of human health, disease, and the treatment of illness, often through a combination of scientific, clinical, and public health approaches",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1145644",
+      "category_name": "biomimetics",
+      "description": "imitation of biological systems to understand underlying mechanisms and to obtain ideas from nature to benefit science, engineering, and medicine",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q30599095",
+      "category_name": "metascience",
+      "description": "use of scientific methodology to study science itself",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1279571",
+      "category_name": "Indian mathematics",
+      "description": "mathematics in a subcontinent",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2041973",
+      "category_name": "Benin literature",
+      "description": "former French colony in western Africa",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q7433483",
+      "category_name": "Science 2.0",
+      "description": "scientific Elementary Intermedia",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1201861",
+      "category_name": "planktology",
+      "description": "biological subfield dedicated to plankton",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q7433653",
+      "category_name": "science and technology in Colombia",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q43400663",
+      "category_name": "natural resource science",
+      "description": "part of science",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q72389425",
+      "category_name": "weights and measures",
+      "description": "measuring and weighing systems and processes",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q7102834",
+      "category_name": "orismology",
+      "description": "the science of defining technical terms",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2093624",
+      "category_name": "Middle English literature",
+      "description": "literature of the Middle English language",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q97008347",
+      "category_name": "interaction science",
+      "description": "scientific discipline",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1208422",
+      "category_name": "dialect literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2190468",
+      "category_name": "epic-didactic literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1168168",
+      "category_name": "erotic art",
+      "description": "artistic work that deals substantively with erotically stimulating or sexually arousing subject matter",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2197480",
+      "category_name": "pulp fiction",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q11663759",
+      "category_name": "nonlinear science",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1328688",
+      "category_name": "forensic biology",
+      "description": "forensic application of the study of biology",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1328737",
+      "category_name": "regional economics",
+      "description": "sub-discipline of economics",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2306075",
+      "category_name": "Dutch Ethical Policy",
+      "description": "Colonial government system",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2306124",
+      "category_name": "social physics",
+      "description": "field of science which uses mathematical tools inspired by physics to understand the behavior of human crowds",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2176367",
+      "category_name": "Caribbean literature",
+      "description": "literature of the Caribbean region",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q26438673",
+      "category_name": "stateman science",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q99485422",
+      "category_name": "rehabilitation science",
+      "description": "interdisciplinary field that focuses on human function and disability",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1130602",
+      "category_name": "toxinology",
+      "description": "area of science that deals specifically with animal, plant, and microbial toxins",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1267533",
+      "category_name": "mathematics in medieval Islam",
+      "description": "the body of mathematics preserved and advanced under the Islamic civilization between circa 622 and 1600",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1151533",
+      "category_name": "Atomic, molecular, and optical physics",
+      "description": "study of matter-light interactions at small scales",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q105277236",
+      "category_name": "watershed science",
+      "description": "study of the interactions among the physical, chemical, and biological factors that affect watersheds and wetlands",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1971225",
+      "category_name": "general biology",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1231396",
+      "category_name": "Quechua literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1232729",
+      "category_name": "Tibetan literature",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q11790198",
+      "category_name": "auxiliary science",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2178188",
+      "category_name": "Gaelic literature",
+      "description": "Literature in Gaelic languages",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q29382517",
+      "category_name": "Structural Characterization of Organic Compounds",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q1127188",
+      "category_name": "development economics",
+      "description": "economics of developing economies",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5197829",
+      "category_name": "cyberpolitics",
+      "description": "use of the Internet for political activity",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4914895",
+      "category_name": "biohistory",
+      "description": "the interdisciplinary application of biology to the study of history and vice versa",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4915164",
+      "category_name": "biomusicology",
+      "description": "field of Musical Study",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4785356",
+      "category_name": "archaeobiology",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4797221",
+      "category_name": "art manifesto",
+      "description": "public declaration of the intentions, motives, or views of an artist or artistic movement",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4810170",
+      "category_name": "associative economics",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4811702",
+      "category_name": "politics of outer space",
+      "description": "political considerations of space policy",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4694222",
+      "category_name": "agrobiology",
+      "description": "science of plant nutrition and growth in relation to soil conditions",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5240628",
+      "category_name": "speculative fiction literature",
+      "description": "literary genre that includes science fiction, horror, fantasy, alternate history, etc",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5157268",
+      "category_name": "Computable topology",
+      "description": "discipline in mathematics that studies the topological and algebraic structure of computation",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5197753",
+      "category_name": "Cyberarts",
+      "description": "art genre",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q6030572",
+      "category_name": "informal mathematics",
+      "description": "any informal mathematical practices used in everyday life",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4709196",
+      "category_name": "Albanian folk poetry",
+      "description": "form of epic poetry",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5205179",
+      "category_name": "DIY biology",
+      "description": "biotechnological social movement",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5333576",
+      "category_name": "economics education",
+      "description": "field within economics that focuses on the economics curriculum at all educational levels; and on research into factors that influence the level of economic literacy",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5333598",
+      "category_name": "economics of science",
+      "description": "aims to understand the impact of science on the advance of technology, to explain the behavior of scientists, and to understand the efficiency or inefficiency of scientific institutions.",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5333595",
+      "category_name": "economics of new nuclear power plants",
+      "description": "energy from nuclear power from an economic standpoint",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5128339",
+      "category_name": "classical mathematics",
+      "description": "mainstream approach to mathematics, which is based on classical logic and ZFC set theory",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5384482",
+      "category_name": "equilibrium chemistry",
+      "description": "subdiscipline of chemistry concerned with chemical equilibrium",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4676968",
+      "category_name": "actinology",
+      "description": "the study of the effect of light on chemicals",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5385815",
+      "category_name": "ergodic literature",
+      "description": "neologism describing a form of literature",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q5862903",
+      "category_name": "probability theory",
+      "description": "branch of mathematics concerning probability",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q4998216",
+      "category_name": "Burchnall–Chaundy theory",
+      "description": "",
+      "level": "specific",
+      "parent_id": null,
+      "aliases": []
+    }
+  ],
+  "metadata": {
+    "total_categories": 506,
+    "from_curated": 40,
+    "from_wikidata": 466,
+    "general_categories": 22,
+    "specific_categories": 484
+  }
+}

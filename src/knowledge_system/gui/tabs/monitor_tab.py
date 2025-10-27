@@ -448,8 +448,8 @@ class MonitorTab(BaseTab, FileOperationsMixin):
                 return
 
             # Import processors
+            from ...core.system2_orchestrator import System2Orchestrator
             from ...processors.audio_processor import AudioProcessor
-            from ...processors.summarizer import SummarizerProcessor
 
             success = False
             output_files = []
@@ -489,30 +489,36 @@ class MonitorTab(BaseTab, FileOperationsMixin):
                 except Exception as e:
                     self.append_log(f"❌ Transcription error: {e}")
 
-            # Summarization for text files (automatic)
+            # Summarization for text files (automatic) - NOW USES SYSTEM2
             elif file_path.suffix.lower() in [".md", ".txt"]:
                 try:
-                    processor = SummarizerProcessor(
-                        provider=self.settings.llm.provider,
-                        model="gpt-4o-mini-2024-07-18",  # Use default model
-                        max_tokens=self.settings.llm.max_tokens,
-                    )
-                    result = processor.process(file_path)
+                    # Use System2Orchestrator for consistency with Summarization tab
+                    orchestrator = System2Orchestrator()
 
-                    if result.success:
+                    # Create mining job
+                    episode_id = file_path.stem
+                    job_id = orchestrator.create_job(
+                        job_type="mine",
+                        input_id=episode_id,
+                        config={
+                            "source": "monitor_tab_auto",
+                            "file_path": str(file_path),
+                            "miner_model": f"{self.settings.llm.provider}:gpt-4o-mini-2024-07-18",
+                        },
+                        auto_process=False,
+                    )
+
+                    # Execute job synchronously
+                    import asyncio
+
+                    result = asyncio.run(orchestrator.process_job(job_id))
+
+                    if result.get("status") == "succeeded":
                         self.append_log(f"✅ Summarized: {file_path}")
                         success = True
-                        # Check for output files in result data
-                        if hasattr(result, "data") and result.data:
-                            if (
-                                isinstance(result.data, dict)
-                                and "output_file" in result.data
-                            ):
-                                output_files.append(str(result.data["output_file"]))
                     else:
-                        self.append_log(
-                            f"❌ Summarization failed: {'; '.join(result.errors)}"
-                        )
+                        error_msg = result.get("error_message", "Unknown error")
+                        self.append_log(f"❌ Summarization failed: {error_msg}")
 
                 except Exception as e:
                     self.append_log(f"❌ Summarization error: {e}")

@@ -1,0 +1,19 @@
+# Speaker Diarization Dependencies (Heavy ML - ~377MB)
+# Install with: pip install -r requirements/diarization.txt
+# Or: pip install -e ".[diarization]"
+
+-r base.txt
+
+# Deep learning framework
+torch>=2.1.0
+torchaudio>=2.8.0
+
+# NLP and transformers
+transformers>=4.35.0
+
+# Speaker diarization
+pyannote.audio>=4.0.0  # v4.0+ fixes Python 3.13 syntax warnings
+
+# Audio processing for voice fingerprinting
+librosa>=0.10.0
+soundfile>=0.13.1

@@ -226,7 +226,7 @@ class TranscriptionConfig(BaseModel):
 class LLMConfig(BaseModel):
     """LLM configuration."""
 
-    provider: str = Field(default="openai", pattern="^(openai|claude|local)$")
+    provider: str = Field(default="local", pattern="^(openai|claude|local)$")
     model: str = "gpt-4o-mini-2024-07-18"
     max_tokens: int = Field(default=10000, ge=1, le=32000)
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
@@ -315,6 +315,40 @@ class APIKeysConfig(BaseModel):
         description="PacketStream authentication key for proxy authentication",
     )
 
+    # AnyIP.io Proxy Credentials
+    anyip_api_key: str | None = Field(
+        default=None,
+        description="AnyIP.io API key (optional - only if using anyip provider)",
+    )
+    anyip_username: str | None = Field(
+        default=None,
+        description="AnyIP.io username (optional - only if using anyip provider)",
+    )
+    anyip_password: str | None = Field(
+        default=None,
+        description="AnyIP.io password (optional - only if using anyip provider)",
+    )
+
+    # Oxylabs.io Proxy Credentials
+    oxylabs_username: str | None = Field(
+        default=None,
+        description="Oxylabs.io username (optional - only if using oxylabs provider)",
+    )
+    oxylabs_password: str | None = Field(
+        default=None,
+        description="Oxylabs.io password (optional - only if using oxylabs provider)",
+    )
+
+    # GonzoProxy.com Proxy Credentials
+    gonzoproxy_api_key: str | None = Field(
+        default=None,
+        description="GonzoProxy.com API key (optional - only if using gonzoproxy provider)",
+    )
+    gonzoproxy_username: str | None = Field(
+        default=None,
+        description="GonzoProxy.com username (optional - only if using gonzoproxy provider)",
+    )
+
     @field_validator("bright_data_api_key")
     @classmethod
     def validate_bright_data_api_key(cls, v: str | None) -> str | None:
@@ -357,6 +391,12 @@ class ProcessingConfig(BaseModel):
 
 class YouTubeProcessingConfig(BaseModel):
     """YouTube processing configuration."""
+
+    # Proxy strict mode - prevents direct connections when proxy fails
+    proxy_strict_mode: bool = Field(
+        default=True,
+        description="Block YouTube operations when proxy fails (prevents IP exposure). Set to False to allow direct fallback.",
+    )
 
     # Delay settings for rate limiting
     disable_delays_with_proxy: bool = Field(
@@ -416,6 +456,69 @@ class YouTubeProcessingConfig(BaseModel):
         ge=1.0,
         le=5.0,
         description="Multiplier for delays when rate limiting is detected",
+    )
+
+    # Cookie authentication settings (file upload only - browser extraction disabled for security)
+    enable_cookies: bool = Field(
+        default=True,
+        description="Enable cookie-based authentication for YouTube downloads",
+    )
+
+    cookie_file_path: str | None = Field(
+        default=None,
+        description="Path to cookies.txt file (Netscape format). Browser extraction disabled to prevent accidentally using main account instead of throwaway.",
+    )
+
+    # Rate limiting for sequential downloads
+    sequential_download_delay_min: float = Field(
+        default=180.0,
+        ge=0.0,
+        le=600.0,
+        description="Minimum delay in seconds between sequential YouTube downloads (default 3 minutes)",
+    )
+
+    sequential_download_delay_max: float = Field(
+        default=300.0,
+        ge=0.0,
+        le=600.0,
+        description="Maximum delay in seconds between sequential YouTube downloads (default 5 minutes)",
+    )
+
+    delay_randomization_percent: float = Field(
+        default=25.0,
+        ge=0.0,
+        le=100.0,
+        description="Percentage of randomization for sleep times (e.g., 25 = ±25%)",
+    )
+
+    disable_proxies_with_cookies: bool = Field(
+        default=True,
+        description="Automatically disable proxies when cookies are enabled (recommended for home IP usage)",
+    )
+
+    # Sleep period settings (Option B: Light sleep for human-like behavior)
+    enable_sleep_period: bool = Field(
+        default=True,
+        description="Enable daily sleep period to mimic human behavior (recommended for large batches)",
+    )
+
+    sleep_start_hour: int = Field(
+        default=0,
+        ge=0,
+        le=23,
+        description="Hour to start sleep period (0-23, local time). Default 0 = midnight",
+    )
+
+    sleep_end_hour: int = Field(
+        default=6,
+        ge=0,
+        le=23,
+        description="Hour to end sleep period (0-23, local time). Default 6 = 6am",
+    )
+
+    sleep_timezone: str = Field(
+        default="America/Los_Angeles",
+        description="Timezone for sleep period (e.g., 'America/New_York', 'Europe/London')",
     )
 
 
@@ -681,6 +784,16 @@ class Settings(BaseSettings):
     )
     gui_features: GUIFeaturesConfig = Field(default_factory=GUIFeaturesConfig)
     cloud: CloudConfig = Field(default_factory=CloudConfig)
+
+    # Proxy Configuration
+    proxy_provider: str = Field(
+        default="packetstream",
+        description="Preferred proxy provider: packetstream, anyip, oxylabs, gonzoproxy, brightdata, or direct",
+    )
+    proxy_failover_enabled: bool = Field(
+        default=True,
+        description="Enable automatic failover to other proxy providers if preferred fails",
+    )
 
     def __init__(self, config_path: str | Path | None = None, **kwargs) -> None:
         """Initialize settings from YAML file and environment variables."""

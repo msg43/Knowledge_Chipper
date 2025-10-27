@@ -1,0 +1,9 @@
+# Sample URLs for testing (short public domain or educational content)
+# YouTube single video (short, public domain)
+youtube_url=https://www.youtube.com/watch?v=jNQXAC9IVRw
+
+# YouTube playlist (2-3 short videos)
+youtube_playlist=https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf
+
+# RSS feed (sample podcast or video feed)
+rss_feed=https://www.youtube.com/feeds/videos.xml?channel_id=UCsooa4yRKGN_zEE8iknghZA

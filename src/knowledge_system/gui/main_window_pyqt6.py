@@ -147,7 +147,9 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(500, self._delayed_first_run_setup)
 
         # Run startup cleanup/validation for partial downloads
-        QTimer.singleShot(1000, self._run_startup_cleanup)
+        # CRITICAL: Delay longer to ensure model preloading thread completes
+        # to avoid SQLite threading violations (segfault on macOS)
+        QTimer.singleShot(3000, self._run_startup_cleanup)
 
     def _delayed_first_run_setup(self) -> None:
         """Delayed first-run setup to ensure GUI is fully initialized before creating dialogs."""
@@ -163,6 +165,23 @@ class MainWindow(QMainWindow):
     def _run_startup_cleanup(self) -> None:
         """Run startup cleanup and validation for partial downloads."""
         try:
+            # CRITICAL: Ensure we're on main thread before database access
+            # SQLite connections must be created and used in the same thread
+            from PyQt6.QtCore import QThread
+            from PyQt6.QtWidgets import QApplication
+
+            current_thread = QThread.currentThread()
+            main_thread = QApplication.instance().thread()
+
+            if current_thread != main_thread:
+                logger.error(
+                    f"⚠️  THREAD SAFETY: Startup cleanup called from wrong thread! "
+                    f"Current: {current_thread}, Main: {main_thread}"
+                )
+                # Reschedule on main thread
+                QTimer.singleShot(100, self._run_startup_cleanup)
+                return
+
             from pathlib import Path
 
             from ..database.service import DatabaseService

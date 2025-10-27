@@ -179,17 +179,10 @@ class SpeakerDatabaseService:
         db_path: Path | None = None
 
         def _user_data_dir() -> Path:
-            if sys.platform == "darwin":
-                return (
-                    Path.home() / "Library" / "Application Support" / "KnowledgeChipper"
-                )
-            elif os.name == "nt":
-                appdata = os.environ.get(
-                    "APPDATA", str(Path.home() / "AppData" / "Roaming")
-                )
-                return Path(appdata) / "KnowledgeChipper"
-            else:
-                return Path.home() / ".knowledge_chipper"
+            # Use the standard application support directory
+            from ..utils.macos_paths import get_application_support_dir
+
+            return get_application_support_dir()
 
         if database_url.startswith("sqlite:///"):
             raw_path = Path(database_url[10:])  # after 'sqlite:///'
@@ -285,21 +278,97 @@ class SpeakerDatabaseService:
             logger.error(f"Error getting speaker voice by name: {e}")
             return None
 
-    def find_matching_voices(
-        self, audio_features: dict[str, Any], threshold: float = 0.7
-    ) -> list[SpeakerVoice]:
-        """Find speaker voices matching given audio features."""
+    def get_all_voices(self) -> list[SpeakerVoice]:
+        """Get all speaker voice profiles."""
         try:
             with self.get_session() as session:
-                voices = (
-                    session.query(SpeakerVoice)
-                    .filter(SpeakerVoice.confidence_threshold <= threshold)
-                    .all()
-                )
+                return session.query(SpeakerVoice).all()
+        except Exception as e:
+            logger.error(f"Error getting all voices: {e}")
+            return []
 
-                # TODO: Implement actual audio feature matching
-                # For now, return all voices as potential matches
-                return voices
+    def find_matching_voices(
+        self, audio_features: dict[str, Any], threshold: float = 0.7
+    ) -> list[tuple[SpeakerVoice, float]]:
+        """
+        Find speaker voices matching given audio features.
+        
+        Args:
+            audio_features: Voice fingerprint dictionary with feature types
+            threshold: Minimum similarity threshold for matching
+            
+        Returns:
+            List of tuples (SpeakerVoice, similarity_score) sorted by similarity
+        """
+        try:
+            from scipy.spatial.distance import cosine
+            import numpy as np
+            
+            with self.get_session() as session:
+                all_voices = session.query(SpeakerVoice).all()
+                
+                if not all_voices:
+                    return []
+                
+                matches = []
+                
+                # Calculate similarity for each stored voice profile
+                for voice in all_voices:
+                    try:
+                        stored_features = voice.fingerprint_data
+                        if not stored_features:
+                            continue
+                        
+                        # Calculate weighted similarity across feature types
+                        similarities = []
+                        weights = {
+                            "mfcc": 0.2,
+                            "spectral": 0.1,
+                            "prosodic": 0.1,
+                            "wav2vec2": 0.3,
+                            "ecapa": 0.3,
+                        }
+                        
+                        for feature_type, weight in weights.items():
+                            if (
+                                feature_type in audio_features
+                                and feature_type in stored_features
+                                and audio_features[feature_type]
+                                and stored_features[feature_type]
+                            ):
+                                try:
+                                    vec1 = np.array(audio_features[feature_type])
+                                    vec2 = np.array(stored_features[feature_type])
+                                    
+                                    # Ensure same dimensionality
+                                    if vec1.shape == vec2.shape:
+                                        # Use cosine similarity
+                                        similarity = 1 - cosine(vec1, vec2)
+                                        similarities.append((similarity, weight))
+                                except Exception as e:
+                                    logger.debug(f"Error comparing {feature_type}: {e}")
+                                    continue
+                        
+                        if similarities:
+                            # Weighted average similarity
+                            total_weight = sum(weight for _, weight in similarities)
+                            if total_weight > 0:
+                                weighted_similarity = (
+                                    sum(sim * weight for sim, weight in similarities) / total_weight
+                                )
+                                # Clamp to [0, 1]
+                                weighted_similarity = max(0.0, min(1.0, weighted_similarity))
+                                
+                                if weighted_similarity >= threshold:
+                                    matches.append((voice, weighted_similarity))
+                    
+                    except Exception as e:
+                        logger.debug(f"Error processing voice {voice.name}: {e}")
+                        continue
+                
+                # Sort by similarity score (highest first)
+                matches.sort(key=lambda x: x[1], reverse=True)
+                return matches
 
         except Exception as e:
             logger.error(f"Error finding matching voices: {e}")

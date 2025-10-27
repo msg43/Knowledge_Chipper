@@ -1,0 +1,287 @@
+{
+  "results": {
+    "parallel_2_workers_2": {
+      "num_parallel": 2,
+      "workers": 2,
+      "elapsed": 135.80902981758118,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.10308592896072384
+    },
+    "parallel_2_workers_4": {
+      "num_parallel": 2,
+      "workers": 4,
+      "elapsed": 131.24639582633972,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.10666959585331602
+    },
+    "parallel_2_workers_6": {
+      "num_parallel": 2,
+      "workers": 6,
+      "elapsed": 132.35236501693726,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.10577823825217182
+    },
+    "parallel_2_workers_7": {
+      "num_parallel": 2,
+      "workers": 7,
+      "elapsed": 131.15822505950928,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.10674130420450492
+    },
+    "parallel_2_workers_8": {
+      "num_parallel": 2,
+      "workers": 8,
+      "elapsed": 131.17354893684387,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.10672883453615012
+    },
+    "parallel_3_workers_2": {
+      "num_parallel": 3,
+      "workers": 2,
+      "elapsed": 133.55289006233215,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.10482738331956638
+    },
+    "parallel_3_workers_4": {
+      "num_parallel": 3,
+      "workers": 4,
+      "elapsed": 128.43310594558716,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.1090061623669783
+    },
+    "parallel_3_workers_6": {
+      "num_parallel": 3,
+      "workers": 6,
+      "elapsed": 128.37282800674438,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.10905734661594021
+    },
+    "parallel_3_workers_7": {
+      "num_parallel": 3,
+      "workers": 7,
+      "elapsed": 128.40100502967834,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.10903341447182652
+    },
+    "parallel_3_workers_8": {
+      "num_parallel": 3,
+      "workers": 8,
+      "elapsed": 128.87018299102783,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.10863645627766902
+    },
+    "parallel_4_workers_2": {
+      "num_parallel": 4,
+      "workers": 2,
+      "elapsed": 131.896231174469,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.10614404881274549
+    },
+    "parallel_4_workers_4": {
+      "num_parallel": 4,
+      "workers": 4,
+      "elapsed": 116.33908796310425,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.12033788681960406
+    },
+    "parallel_4_workers_6": {
+      "num_parallel": 4,
+      "workers": 6,
+      "elapsed": 118.50264024734497,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.11814082767083046
+    },
+    "parallel_4_workers_7": {
+      "num_parallel": 4,
+      "workers": 7,
+      "elapsed": 117.30618000030518,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.11934580087735853
+    },
+    "parallel_4_workers_8": {
+      "num_parallel": 4,
+      "workers": 8,
+      "elapsed": 120.05665802955627,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.11661160846700726
+    },
+    "parallel_5_workers_2": {
+      "num_parallel": 5,
+      "workers": 2,
+      "elapsed": 133.64543175697327,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.1047547964486973
+    },
+    "parallel_5_workers_4": {
+      "num_parallel": 5,
+      "workers": 4,
+      "elapsed": 117.00923299789429,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.1196486776411221
+    },
+    "parallel_5_workers_6": {
+      "num_parallel": 5,
+      "workers": 6,
+      "elapsed": 113.89804410934448,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.12291694830650217
+    },
+    "parallel_5_workers_7": {
+      "num_parallel": 5,
+      "workers": 7,
+      "elapsed": 113.77545714378357,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.12304938473951829
+    },
+    "parallel_5_workers_8": {
+      "num_parallel": 5,
+      "workers": 8,
+      "elapsed": 112.80144381523132,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.12411188657240939
+    },
+    "parallel_6_workers_2": {
+      "num_parallel": 6,
+      "workers": 2,
+      "elapsed": 133.21794271469116,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.10509094882198697
+    },
+    "parallel_6_workers_4": {
+      "num_parallel": 6,
+      "workers": 4,
+      "elapsed": 117.10778784751892,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.11954798444514045
+    },
+    "parallel_6_workers_6": {
+      "num_parallel": 6,
+      "workers": 6,
+      "elapsed": 119.69695472717285,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.11696203994421095
+    },
+    "parallel_6_workers_7": {
+      "num_parallel": 6,
+      "workers": 7,
+      "elapsed": 118.4998459815979,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.11814361347080646
+    },
+    "parallel_6_workers_8": {
+      "num_parallel": 6,
+      "workers": 8,
+      "elapsed": 118.48599195480347,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.11815742746484585
+    },
+    "parallel_7_workers_2": {
+      "num_parallel": 7,
+      "workers": 2,
+      "elapsed": 133.34775114059448,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.10498864720439999
+    },
+    "parallel_7_workers_4": {
+      "num_parallel": 7,
+      "workers": 4,
+      "elapsed": 116.47428107261658,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.12019820917608083
+    },
+    "parallel_7_workers_6": {
+      "num_parallel": 7,
+      "workers": 6,
+      "elapsed": 116.63729572296143,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.12003021772086521
+    },
+    "parallel_7_workers_7": {
+      "num_parallel": 7,
+      "workers": 7,
+      "elapsed": 120.02695822715759,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.11664046316581841
+    },
+    "parallel_7_workers_8": {
+      "num_parallel": 7,
+      "workers": 8,
+      "elapsed": 121.18993210792542,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.11552114731389017
+    },
+    "parallel_8_workers_2": {
+      "num_parallel": 8,
+      "workers": 2,
+      "elapsed": 132.13984489440918,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.10594836108054444
+    },
+    "parallel_8_workers_4": {
+      "num_parallel": 8,
+      "workers": 4,
+      "elapsed": 117.14672708511353,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.11950824703645567
+    },
+    "parallel_8_workers_6": {
+      "num_parallel": 8,
+      "workers": 6,
+      "elapsed": 117.60099411010742,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.11904661270883547
+    },
+    "parallel_8_workers_7": {
+      "num_parallel": 8,
+      "workers": 7,
+      "elapsed": 115.98413920402527,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.12070615944627475
+    },
+    "parallel_8_workers_8": {
+      "num_parallel": 8,
+      "workers": 8,
+      "elapsed": 124.88425803184509,
+      "success": 14,
+      "total": 14,
+      "throughput": 0.11210380091644573
+    }
+  },
+  "timestamp": "2025-10-22 16:01:20",
+  "model": "ollama:qwen2.5:7b-instruct",
+  "segment_count": 14
+}

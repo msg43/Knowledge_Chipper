@@ -107,17 +107,27 @@ class LLMAdapter:
     - Cost estimation
     """
 
-    # Hardware tier concurrency limits
-    CONCURRENCY_LIMITS = {
+    # Hardware tier concurrency limits for CLOUD APIs (OpenAI, Anthropic, etc)
+    CLOUD_CONCURRENCY_LIMITS = {
         "consumer": 2,  # M1/M2 base models
         "prosumer": 4,  # M1/M2 Pro/Max
         "enterprise": 8,  # M1/M2 Ultra, high-end x86
+    }
+
+    # Hardware tier concurrency limits for LOCAL APIs (Ollama)
+    # Each Ollama request spawns ~5 threads for Metal backend
+    # To avoid thread oversubscription: limit based on physical_cores / threads_per_request
+    LOCAL_CONCURRENCY_LIMITS = {
+        "consumer": 3,  # M1/M2 base (8 cores / ~3 = 2-3 workers)
+        "prosumer": 5,  # M1/M2 Pro/Max (12-16 cores / ~3 = 4-5 workers)
+        "enterprise": 8,  # M1/M2 Ultra (24 cores / 5 = ~5 workers, cap at 8 for safety)
     }
 
     def __init__(
         self,
         db_service: DatabaseService | None = None,
         hardware_specs: dict[str, Any] | None = None,
+        provider: str | None = None,  # New: allow specifying primary provider
     ):
         """Initialize the LLM adapter."""
         self.db_service = db_service or DatabaseService()
@@ -127,15 +137,38 @@ class LLMAdapter:
             hardware_specs = detect_hardware_specs()
 
         self.hardware_tier = self._determine_hardware_tier(hardware_specs)
-        self.max_concurrent = self.CONCURRENCY_LIMITS.get(self.hardware_tier, 2)
+
+        # Choose concurrency limit based on primary provider (default to cloud for safety)
+        # This can be overridden per-request using provider-specific semaphores
+        self.max_concurrent = self.CLOUD_CONCURRENCY_LIMITS.get(self.hardware_tier, 2)
+        self.max_concurrent_local = self.LOCAL_CONCURRENCY_LIMITS.get(
+            self.hardware_tier, 4
+        )
+
+        # Respect server/app caps for local concurrency
+        try:
+            import os
+
+            ollama_parallel = int(os.environ.get("OLLAMA_NUM_PARALLEL", "0"))
+            hce_effective = int(os.environ.get("HCE_EFFECTIVE_MAX_WORKERS", "0"))
+        except Exception:
+            ollama_parallel = 0
+            hce_effective = 0
+
+        effective_local = self.max_concurrent_local
+        if ollama_parallel > 0:
+            effective_local = min(effective_local, ollama_parallel)
+        if hce_effective > 0:
+            effective_local = min(effective_local, hce_effective)
 
         logger.info(
             f"LLM Adapter initialized for {self.hardware_tier} tier "
-            f"(max {self.max_concurrent} concurrent requests)"
+            f"(max {self.max_concurrent} concurrent cloud / {effective_local} local requests)"
         )
 
-        # Concurrency control
-        self.semaphore = asyncio.Semaphore(self.max_concurrent)
+        # Concurrency control - separate semaphores for cloud and local
+        self.cloud_semaphore = asyncio.Semaphore(self.max_concurrent)
+        self.local_semaphore = asyncio.Semaphore(effective_local)
         self.active_requests = 0
 
         # Rate limiters per provider
@@ -168,19 +201,28 @@ class LLMAdapter:
     def _determine_hardware_tier(self, specs: dict[str, Any]) -> str:
         """Determine hardware tier from specs."""
         # Check for Apple Silicon
-        if "apple" in specs.get("chip_type", "").lower():
-            if "ultra" in specs.get("chip_variant", "").lower():
+        chip_type = specs.get("chip_type", "").lower()
+        if (
+            "apple" in chip_type
+            or "m1" in chip_type
+            or "m2" in chip_type
+            or "m3" in chip_type
+        ):
+            # Check chip_type directly (contains full name like "apple m2 ultra")
+            if "ultra" in chip_type:
                 return "enterprise"
-            elif any(
-                x in specs.get("chip_variant", "").lower() for x in ["pro", "max"]
-            ):
+            elif "pro" in chip_type or "max" in chip_type:
                 return "prosumer"
             else:
                 return "consumer"
 
         # Check x86 by core count and memory
-        cores = specs.get("performance_cores", 0) + specs.get("efficiency_cores", 0)
-        memory_gb = specs.get("total_memory_gb", 0)
+        cores = specs.get("cpu_cores", 0)
+        if cores == 0:  # Fallback to alternative field names
+            cores = specs.get("performance_cores", 0) + specs.get("efficiency_cores", 0)
+        memory_gb = specs.get("memory_gb", 0)
+        if memory_gb == 0:  # Fallback
+            memory_gb = specs.get("total_memory_gb", 0)
 
         if cores >= 16 and memory_gb >= 32:
             return "enterprise"
@@ -227,11 +269,17 @@ class LLMAdapter:
         # Check memory throttling
         await self.memory_throttler.check_and_wait()
 
+        # Choose semaphore based on provider type (local vs cloud)
+        is_local = provider in ["ollama", "local"]
+        semaphore = self.local_semaphore if is_local else self.cloud_semaphore
+        max_concurrent = self.max_concurrent_local if is_local else self.max_concurrent
+
         # Acquire concurrency slot
-        async with self.semaphore:
+        async with semaphore:
             self.active_requests += 1
-            logger.info(
-                f"LLM request starting ({self.active_requests}/{self.max_concurrent} active)"
+            provider_type = "local" if is_local else "cloud"
+            logger.debug(
+                f"LLM request starting ({self.active_requests} active, {max_concurrent} max {provider_type})"
             )
 
             try:
@@ -257,7 +305,7 @@ class LLMAdapter:
                 # Estimate cost
                 cost = self._estimate_cost(provider, model, response)
                 if cost > 0:
-                    logger.info(f"Estimated cost: ${cost:.4f}")
+                    logger.debug(f"Estimated cost: ${cost:.4f}")
 
                 return response
 
@@ -280,6 +328,12 @@ class LLMAdapter:
         """Make the actual API call to the provider."""
         if provider == "ollama":
             return await self._call_ollama(model, payload)
+        elif provider == "openai":
+            return await self._call_openai(model, payload)
+        elif provider == "anthropic":
+            return await self._call_anthropic(model, payload)
+        elif provider == "google":
+            return await self._call_google(model, payload)
         else:
             raise KnowledgeSystemError(
                 f"Provider {provider} not implemented yet", ErrorCode.INVALID_INPUT
@@ -300,8 +354,13 @@ class LLMAdapter:
             },
         }
 
-        if payload.get("format") == "json":
+        # Handle both "json" string and schema dict formats
+        format_param = payload.get("format")
+        if format_param == "json":
             request_payload["format"] = "json"
+        elif isinstance(format_param, dict):
+            # Full schema object for structured outputs
+            request_payload["format"] = format_param
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -316,10 +375,22 @@ class LLMAdapter:
                     result = await response.json()
 
             content = result["message"]["content"]
+
+            # Warn if content is empty (might indicate schema is too restrictive)
+            if not content or not content.strip():
+                logger.warning(
+                    f"⚠️ Ollama returned empty content for model {model}. "
+                    f"This may indicate the schema is too restrictive or the prompt is unclear."
+                )
+                # Log more details for debugging
+                logger.debug(
+                    f"Empty response details - model: {model}, format: {type(format_param)}"
+                )
+
             prompt_tokens = (
                 sum(len(m["content"].split()) for m in payload["messages"]) * 1.3
             )
-            completion_tokens = len(content.split()) * 1.3
+            completion_tokens = len(content.split()) * 1.3 if content else 0
 
             return {
                 "content": content,
@@ -339,6 +410,189 @@ class LLMAdapter:
         except KeyError as e:
             raise KnowledgeSystemError(
                 f"Unexpected Ollama response format: {e}", ErrorCode.LLM_API_ERROR
+            ) from e
+
+    async def _call_openai(self, model: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Call OpenAI API."""
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            raise KnowledgeSystemError(
+                "OpenAI package not installed. Run: pip install openai",
+                ErrorCode.CONFIGURATION_ERROR,
+            )
+
+        try:
+            # Get API key from settings
+            from ..config import get_settings
+
+            settings = get_settings()
+            api_key = settings.api_keys.openai_api_key
+
+            if not api_key:
+                raise KnowledgeSystemError(
+                    "OpenAI API key not configured in settings.yaml",
+                    ErrorCode.CONFIGURATION_ERROR,
+                )
+
+            # Create async client with proper cleanup
+            async with AsyncOpenAI(api_key=api_key) as client:
+                # Make API call
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=payload["messages"],
+                    temperature=payload.get("temperature", 0.7),
+                    max_tokens=payload.get("max_tokens"),
+                )
+
+                # Extract response
+                content = response.choices[0].message.content
+                usage = response.usage
+
+                return {
+                    "content": content,
+                    "usage": {
+                        "prompt_tokens": usage.prompt_tokens,
+                        "completion_tokens": usage.completion_tokens,
+                        "total_tokens": usage.total_tokens,
+                    },
+                    "model": response.model,
+                    "provider": "openai",
+                }
+
+        except Exception as e:
+            if "rate" in str(e).lower() or "429" in str(e):
+                raise  # Let the retry logic handle rate limits
+            raise KnowledgeSystemError(
+                f"OpenAI API error: {e}", ErrorCode.LLM_API_ERROR
+            ) from e
+
+    async def _call_anthropic(
+        self, model: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Call Anthropic API."""
+        try:
+            from anthropic import AsyncAnthropic
+        except ImportError:
+            raise KnowledgeSystemError(
+                "Anthropic package not installed. Run: pip install anthropic",
+                ErrorCode.CONFIGURATION_ERROR,
+            )
+
+        try:
+            # Get API key from settings
+            from ..config import get_settings
+
+            settings = get_settings()
+            api_key = settings.api_keys.anthropic_api_key
+
+            if not api_key:
+                raise KnowledgeSystemError(
+                    "Anthropic API key not configured in settings.yaml",
+                    ErrorCode.CONFIGURATION_ERROR,
+                )
+
+            # Create async client with proper cleanup
+            async with AsyncAnthropic(api_key=api_key) as client:
+                # Make API call
+                response = await client.messages.create(
+                    model=model,
+                    max_tokens=payload.get("max_tokens", 4000),
+                    temperature=payload.get("temperature", 0.7),
+                    messages=payload["messages"],
+                )
+
+                # Extract text from response
+                content = ""
+                for block in response.content:
+                    if hasattr(block, "text"):
+                        content += block.text
+
+                # Extract usage
+                usage = response.usage
+
+                return {
+                    "content": content,
+                    "usage": {
+                        "prompt_tokens": usage.input_tokens,
+                        "completion_tokens": usage.output_tokens,
+                        "total_tokens": usage.input_tokens + usage.output_tokens,
+                    },
+                    "model": response.model,
+                    "provider": "anthropic",
+                }
+
+        except Exception as e:
+            if "rate" in str(e).lower() or "429" in str(e):
+                raise  # Let the retry logic handle rate limits
+            raise KnowledgeSystemError(
+                f"Anthropic API error: {e}", ErrorCode.LLM_API_ERROR
+            ) from e
+
+    async def _call_google(self, model: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Call Google Gemini API."""
+        try:
+            import google.generativeai as genai
+        except ImportError:
+            raise KnowledgeSystemError(
+                "Google AI package not installed. Run: pip install google-generativeai",
+                ErrorCode.CONFIGURATION_ERROR,
+            )
+
+        try:
+            # Get API key from settings
+            from ..config import get_settings
+
+            settings = get_settings()
+            api_key = settings.api_keys.google_api_key
+
+            if not api_key:
+                raise KnowledgeSystemError(
+                    "Google API key not configured in settings.yaml",
+                    ErrorCode.CONFIGURATION_ERROR,
+                )
+
+            # Configure API
+            genai.configure(api_key=api_key)
+
+            # Create model
+            generation_config = {
+                "temperature": payload.get("temperature", 0.7),
+                "max_output_tokens": payload.get("max_tokens"),
+            }
+            model_instance = genai.GenerativeModel(
+                model_name=model, generation_config=generation_config
+            )
+
+            # Convert messages to Gemini format (concatenate for simplicity)
+            prompt = "\n\n".join([msg["content"] for msg in payload["messages"]])
+
+            # Make API call
+            response = await model_instance.generate_content_async(prompt)
+
+            # Extract content
+            content = response.text
+
+            # Estimate tokens (Gemini doesn't always provide usage)
+            prompt_tokens = len(prompt.split()) * 1.3
+            completion_tokens = len(content.split()) * 1.3
+
+            return {
+                "content": content,
+                "usage": {
+                    "prompt_tokens": int(prompt_tokens),
+                    "completion_tokens": int(completion_tokens),
+                    "total_tokens": int(prompt_tokens + completion_tokens),
+                },
+                "model": model,
+                "provider": "google",
+            }
+
+        except Exception as e:
+            if "rate" in str(e).lower() or "429" in str(e):
+                raise  # Let the retry logic handle rate limits
+            raise KnowledgeSystemError(
+                f"Google API error: {e}", ErrorCode.LLM_API_ERROR
             ) from e
 
     def _track_request(self, provider: str, model: str, payload: dict[str, Any]) -> str:

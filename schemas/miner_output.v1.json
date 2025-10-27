@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "MinerOutputV1",
-  "description": "Output schema for the Unified Miner system extracting claims, jargon, people, and mental models",
+  "description": "Output schema for the Unified Miner system - flat structure optimized for Ollama structured outputs",
   "type": "object",
   "required": ["claims", "jargon", "people", "mental_models"],
   "properties": {
@@ -10,7 +10,7 @@
       "description": "Extracted claims from the content",
       "items": {
         "type": "object",
-        "required": ["claim_text", "claim_type", "stance", "evidence_spans"],
+        "required": ["claim_text", "claim_type", "stance"],
         "properties": {
           "claim_text": {
             "type": "string",
@@ -27,29 +27,17 @@
             "enum": ["asserts", "questions", "opposes", "neutral"],
             "description": "Speaker's stance toward the claim"
           },
-          "evidence_spans": {
-            "type": "array",
-            "description": "Supporting evidence from the text",
-            "items": {
-              "type": "object",
-              "required": ["quote", "t0", "t1"],
-              "properties": {
-                "quote": {
-                  "type": "string",
-                  "description": "Exact quote from the text"
-                },
-                "t0": {
-                  "type": "string",
-                  "description": "Start timestamp in MM:SS or HH:MM:SS format",
-                  "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
-                },
-                "t1": {
-                  "type": "string",
-                  "description": "End timestamp in MM:SS or HH:MM:SS format",
-                  "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
-                }
-              }
-            }
+          "timestamp": {
+            "type": "string",
+            "description": "Timestamp of when the claim was first mentioned (MM:SS or HH:MM:SS)"
+          },
+          "evidence_quote": {
+            "type": "string",
+            "description": "Supporting quote from the text (optional)"
+          },
+          "evidence_timestamp": {
+            "type": "string",
+            "description": "Timestamp of the evidence_quote for jump-to navigation (MM:SS or HH:MM:SS)"
           }
         }
       }
@@ -59,7 +47,7 @@
       "description": "Technical terms and domain-specific vocabulary",
       "items": {
         "type": "object",
-        "required": ["term", "definition", "context_quote", "timestamp"],
+        "required": ["term", "definition"],
         "properties": {
           "term": {
             "type": "string",
@@ -75,8 +63,7 @@
           },
           "timestamp": {
             "type": "string",
-            "description": "Timestamp in MM:SS or HH:MM:SS format",
-            "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
+            "description": "Timestamp in MM:SS or HH:MM:SS format (NO REGEX)"
           }
         }
       }
@@ -86,7 +73,7 @@
       "description": "People mentioned in the content",
       "items": {
         "type": "object",
-        "required": ["name", "context_quote", "timestamp"],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
@@ -102,8 +89,7 @@
           },
           "timestamp": {
             "type": "string",
-            "description": "Timestamp in MM:SS or HH:MM:SS format",
-            "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
+            "description": "Timestamp in MM:SS or HH:MM:SS format (NO REGEX)"
           }
         }
       }
@@ -113,7 +99,7 @@
       "description": "Frameworks, concepts, or approaches discussed",
       "items": {
         "type": "object",
-        "required": ["name", "description", "context_quote", "timestamp"],
+        "required": ["name", "description"],
         "properties": {
           "name": {
             "type": "string",
@@ -129,8 +115,7 @@
           },
           "timestamp": {
             "type": "string",
-            "description": "Timestamp in MM:SS or HH:MM:SS format",
-            "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
+            "description": "Timestamp in MM:SS or HH:MM:SS format (NO REGEX)"
           }
         }
       }

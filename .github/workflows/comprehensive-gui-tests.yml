@@ -1,0 +1,68 @@
+name: Comprehensive GUI Tests (Real Mode)
+
+on:
+  workflow_dispatch:  # Manual trigger only - real tests take 60-90 minutes
+
+jobs:
+  real-gui-tests:
+    name: Real GUI Tests
+    runs-on: macos-latest  # macOS for better compatibility
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Install whisper.cpp
+        run: |
+          brew install whisper-cpp
+
+      - name: Setup Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve > /dev/null 2>&1 &
+          sleep 5
+          ollama pull qwen2.5:7b-instruct
+
+      - name: Verify requirements
+        run: |
+          whisper-cli --version || whisper --version
+          ollama --version
+          curl http://localhost:11434/api/version
+
+      - name: Run real GUI tests
+        env:
+          KNOWLEDGE_CHIPPER_TESTING_MODE: "1"
+          QT_QPA_PLATFORM: "offscreen"
+        run: |
+          pytest tests/gui_comprehensive/ \
+            -v \
+            --timeout=300 \
+            --tb=short \
+            --junit-xml=test-results/gui-tests-real.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-real
+          path: test-results/
+
+      - name: Upload test logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-logs-real
+          path: |
+            tests/tmp/
+            logs/

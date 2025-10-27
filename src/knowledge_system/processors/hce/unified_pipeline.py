@@ -103,6 +103,7 @@ class UnifiedHCEPipeline:
                 progress_callback=lambda msg: report_progress(
                     "Mining segments", 40.0, msg
                 ),
+                selectivity=self.config.miner_selectivity,  # NEW: Pass selectivity
             )
 
             # Count total extractions
@@ -135,28 +136,41 @@ class UnifiedHCEPipeline:
 
         content_summary = short_summary  # Use the pre-generated short summary
 
-        # Step 3: Flagship Evaluation
+        # Step 3: Parallel Evaluation of ALL Entity Types
         report_progress(
-            "Evaluating claims", 70.0, f"Flagship review of {total_claims} claims"
+            "Evaluating all entities",
+            70.0,
+            f"Evaluating {total_claims} claims, {total_jargon} jargon, {total_people} people, {total_mental_models} concepts",
         )
 
         try:
             flagship_model_uri = getattr(
                 self.config.models, "flagship_judge", self.config.models.judge
             )
-            evaluation_output = evaluate_claims_flagship(
-                content_summary, miner_outputs, flagship_model_uri
+
+            # Evaluate all entity types in parallel
+            evaluation_results = self._evaluate_all_entities_parallel(
+                miner_outputs, content_summary, flagship_model_uri
             )
 
+            # Extract individual results
+            claims_evaluation = evaluation_results["claims"]
+            jargon_evaluation = evaluation_results["jargon"]
+            people_evaluation = evaluation_results["people"]
+            concepts_evaluation = evaluation_results["concepts"]
+
             logger.info(
-                f"Flagship evaluation: {evaluation_output.claims_accepted} accepted, "
-                f"{evaluation_output.claims_rejected} rejected from {evaluation_output.total_claims_processed} total"
+                f"Evaluation complete: "
+                f"Claims: {claims_evaluation.claims_accepted}/{claims_evaluation.total_claims_processed}, "
+                f"Jargon: {jargon_evaluation.terms_accepted}/{jargon_evaluation.total_terms_processed}, "
+                f"People: {people_evaluation.people_accepted}/{people_evaluation.total_mentions_processed}, "
+                f"Concepts: {concepts_evaluation.concepts_accepted}/{concepts_evaluation.total_concepts_processed}"
             )
 
         except Exception as e:
-            logger.error(f"Flagship evaluation failed: {e}")
-            # Create empty evaluation output
-            evaluation_output = FlagshipEvaluationOutput(
+            logger.error(f"Entity evaluation failed: {e}")
+            # Create fallback evaluation outputs
+            claims_evaluation = FlagshipEvaluationOutput(
                 {
                     "evaluated_claims": [],
                     "summary_assessment": {
@@ -169,12 +183,16 @@ class UnifiedHCEPipeline:
                     },
                 }
             )
+            # Use miner outputs as-is for other entities (no evaluation)
+            jargon_evaluation = None
+            people_evaluation = None
+            concepts_evaluation = None
 
-        # Step 4: Convert to final output format
+        # Step 4: Convert to final output format (using evaluated entities)
         report_progress("Converting results", 80.0, "Converting to final output format")
 
         final_outputs = self._convert_to_pipeline_outputs(
-            episode, miner_outputs, evaluation_output
+            episode, miner_outputs, claims_evaluation, jargon_evaluation, people_evaluation, concepts_evaluation
         )
 
         # Step 5: Long Summary (Post-Evaluation)
@@ -186,7 +204,7 @@ class UnifiedHCEPipeline:
 
         try:
             long_summary = self._generate_long_summary(
-                episode, miner_outputs, evaluation_output, short_summary, final_outputs
+                episode, miner_outputs, claims_evaluation, short_summary, final_outputs
             )
             final_outputs.long_summary = long_summary
             logger.info(f"Generated long summary: {len(long_summary)} characters")
@@ -233,6 +251,76 @@ class UnifiedHCEPipeline:
 
         return final_outputs
 
+    def _evaluate_all_entities_parallel(
+        self,
+        miner_outputs: list,
+        content_summary: str,
+        evaluator_model_uri: str,
+    ) -> dict:
+        """
+        Evaluate all entity types in parallel.
+
+        Returns dict with keys: claims, jargon, people, concepts
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        # Collect all entities by type
+        all_claims_raw = [c for output in miner_outputs for c in output.claims]
+        all_jargon_raw = [j for output in miner_outputs for j in output.jargon]
+        all_people_raw = [p for output in miner_outputs for p in output.people]
+        all_concepts_raw = [m for output in miner_outputs for m in output.mental_models]
+
+        logger.info(
+            f"Starting parallel evaluation: {len(all_claims_raw)} claims, "
+            f"{len(all_jargon_raw)} jargon, {len(all_people_raw)} people, {len(all_concepts_raw)} concepts"
+        )
+
+        # Import evaluators
+        from .evaluators.jargon_evaluator import evaluate_jargon
+        from .evaluators.people_evaluator import evaluate_people
+        from .evaluators.concepts_evaluator import evaluate_concepts
+
+        # Run all 4 evaluators in parallel
+        results = {}
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {
+                executor.submit(
+                    evaluate_claims_flagship,
+                    content_summary,
+                    miner_outputs,
+                    evaluator_model_uri,
+                ): "claims",
+                executor.submit(
+                    evaluate_jargon, content_summary, all_jargon_raw, evaluator_model_uri
+                ): "jargon",
+                executor.submit(
+                    evaluate_people, content_summary, all_people_raw, evaluator_model_uri
+                ): "people",
+                executor.submit(
+                    evaluate_concepts,
+                    content_summary,
+                    all_concepts_raw,
+                    evaluator_model_uri,
+                ): "concepts",
+            }
+
+            for future in as_completed(futures):
+                entity_type = futures[future]
+                try:
+                    results[entity_type] = future.result()
+                    logger.info(f"✅ {entity_type.capitalize()} evaluation complete")
+                except Exception as e:
+                    logger.error(f"❌ {entity_type.capitalize()} evaluation failed: {e}")
+                    # Create fallback for failed entity type
+                    if entity_type == "claims":
+                        results[entity_type] = FlagshipEvaluationOutput(
+                            {"evaluated_claims": [], "summary_assessment": {}}
+                        )
+                    # Other entity types will be handled in conversion
+
+        return results
+
     def _generate_short_summary(self, episode: EpisodeBundle) -> str:
         """Generate pre-mining short summary of episode content."""
         try:
@@ -257,15 +345,12 @@ class UnifiedHCEPipeline:
             full_prompt = prompt_template.replace("{content}", full_content)
 
             # Call LLM with miner model
+            from .model_uri_parser import parse_model_uri
             from .models.llm_system2 import create_system2_llm
 
-            # Parse model URI: "provider:model" or just "model"
+            # Parse model URI using the centralized parser
             model_uri = self.config.models.miner
-            if ":" in model_uri:
-                provider, model = model_uri.split(":", 1)
-            else:
-                provider = "openai"
-                model = model_uri
+            provider, model = parse_model_uri(model_uri)
 
             llm = create_system2_llm(provider=provider, model=model)
             response = llm.generate_json(full_prompt)
@@ -292,11 +377,11 @@ class UnifiedHCEPipeline:
         self,
         episode: EpisodeBundle,
         miner_outputs: list[UnifiedMinerOutput],
-        evaluation_output: FlagshipEvaluationOutput,
+        claims_evaluation: FlagshipEvaluationOutput,
         short_summary: str,
         final_outputs: PipelineOutputs,
     ) -> str:
-        """Generate post-evaluation comprehensive summary."""
+        """Generate post-evaluation comprehensive summary with source context."""
         try:
             # Load long summary prompt
             prompt_path = Path(__file__).parent / "prompts" / "long_summary.txt"
@@ -306,6 +391,21 @@ class UnifiedHCEPipeline:
                 return short_summary
 
             prompt_template = prompt_path.read_text()
+            
+            # Add source metadata context if available
+            context_parts = []
+            if episode.video_metadata:
+                if title := episode.video_metadata.get('title'):
+                    context_parts.append(f"Source Title: {title}")
+                if uploader := episode.video_metadata.get('uploader'):
+                    context_parts.append(f"Author/Channel: {uploader}")
+                if desc := episode.video_metadata.get('description'):
+                    context_parts.append(f"Description: {desc[:300]}...")
+                if chapters := episode.video_metadata.get('chapters'):
+                    chapter_titles = [c.get('title', 'Unknown') for c in chapters[:5]]
+                    context_parts.append(f"Topics Covered: {', '.join(chapter_titles)}")
+            
+            source_context = "\n".join(context_parts) if context_parts else "No source metadata available"
 
             # Format top-ranked claims
             top_claims_text = []
@@ -314,13 +414,13 @@ class UnifiedHCEPipeline:
                 top_claims_text.append(f"{i}. [{importance:.1f}/10] {claim.canonical}")
 
             # Format flagship assessment
-            flagship_themes = ", ".join(evaluation_output.key_themes)
+            flagship_themes = ", ".join(claims_evaluation.key_themes)
             flagship_text = (
-                f"Quality: {evaluation_output.overall_quality}\n"
+                f"Quality: {claims_evaluation.overall_quality}\n"
                 f"Key Themes: {flagship_themes}\n"
-                f"Claims Processed: {evaluation_output.total_claims_processed}\n"
-                f"Accepted: {evaluation_output.claims_accepted}\n"
-                f"Rejected: {evaluation_output.claims_rejected}"
+                f"Claims Processed: {claims_evaluation.total_claims_processed}\n"
+                f"Accepted: {claims_evaluation.claims_accepted}\n"
+                f"Rejected: {claims_evaluation.claims_rejected}"
             )
 
             # Format people
@@ -334,14 +434,15 @@ class UnifiedHCEPipeline:
 
             # Format evaluation stats
             eval_stats = (
-                f"Total Claims: {evaluation_output.total_claims_processed}\n"
-                f"Acceptance Rate: {evaluation_output.claims_accepted / max(evaluation_output.total_claims_processed, 1) * 100:.1f}%\n"
-                f"Recommendations: {evaluation_output.recommendations or 'None'}"
+                f"Total Claims: {claims_evaluation.total_claims_processed}\n"
+                f"Acceptance Rate: {claims_evaluation.claims_accepted / max(claims_evaluation.total_claims_processed, 1) * 100:.1f}%\n"
+                f"Recommendations: {claims_evaluation.recommendations or 'None'}"
             )
 
-            # Create the full prompt
+            # Create the full prompt with source context
             full_prompt = (
                 prompt_template.replace("{short_summary}", short_summary)
+                .replace("{source_context}", source_context)
                 .replace("{top_claims}", "\n".join(top_claims_text))
                 .replace("{flagship_assessment}", flagship_text)
                 .replace("{people}", people_text or "None identified")
@@ -364,19 +465,33 @@ class UnifiedHCEPipeline:
             llm = create_system2_llm(provider=provider, model=model)
             response = llm.generate_json(full_prompt)
 
-            # Extract text from response
-            if isinstance(response, str):
-                summary_text = response
-            elif isinstance(response, dict):
-                summary_text = response.get("summary", str(response))
-            elif isinstance(response, list) and len(response) > 0:
-                summary_text = (
-                    response[0] if isinstance(response[0], str) else str(response[0])
-                )
-            else:
-                summary_text = str(response)
+            # Extract text from response robustly
+            try:
+                if isinstance(response, str):
+                    summary_text = response
+                elif isinstance(response, dict):
+                    # Prefer a 'summary' field; otherwise serialize compactly
+                    summary_text = response.get("summary")
+                    if summary_text is None:
+                        import json as _json
 
-            return summary_text.strip()
+                        summary_text = _json.dumps(response, ensure_ascii=False)
+                elif isinstance(response, list) and len(response) > 0:
+                    summary_text = (
+                        response[0]
+                        if isinstance(response[0], str)
+                        else str(response[0])
+                    )
+                else:
+                    summary_text = str(response)
+                return (
+                    summary_text.strip()
+                    if isinstance(summary_text, str)
+                    else str(summary_text)
+                )
+            except Exception:
+                # As a last resort, stringify the entire object
+                return str(response)
 
         except Exception as e:
             logger.error(f"Failed to generate long summary: {e}")
@@ -384,7 +499,7 @@ class UnifiedHCEPipeline:
             return (
                 f"{short_summary}\n\n"
                 f"This analysis identified {len(final_outputs.claims)} significant claims, "
-                f"with {evaluation_output.claims_accepted} accepted by evaluation. "
+                f"with {claims_evaluation.claims_accepted} accepted by evaluation. "
                 f"Key participants include {len(final_outputs.people)} individuals, "
                 f"and {len(final_outputs.concepts)} mental models or frameworks were discussed."
             )
@@ -404,13 +519,16 @@ class UnifiedHCEPipeline:
         self,
         episode: EpisodeBundle,
         miner_outputs: list[UnifiedMinerOutput],
-        evaluation_output: FlagshipEvaluationOutput,
+        claims_evaluation,  # FlagshipEvaluationOutput
+        jargon_evaluation,  # JargonEvaluationOutput | None
+        people_evaluation,  # PeopleEvaluationOutput | None
+        concepts_evaluation,  # ConceptsEvaluationOutput | None
     ) -> PipelineOutputs:
-        """Convert unified pipeline results to the standard PipelineOutputs format."""
+        """Convert unified pipeline results to the standard PipelineOutputs format using evaluated entities."""
 
         # Convert accepted claims to ScoredClaim format
         scored_claims = []
-        accepted_claims = evaluation_output.get_claims_by_rank()
+        accepted_claims = claims_evaluation.get_claims_by_rank()
 
         for eval_claim in accepted_claims:
             # Find the original claim data to get evidence
@@ -471,73 +589,91 @@ class UnifiedHCEPipeline:
 
             scored_claims.append(scored_claim)
 
-        # Convert other entities from miner outputs to proper Pydantic models
-
+        # Convert EVALUATED entities (with deduplication and filtering)
         all_jargon = []
         all_people = []
         all_mental_models = []
 
-        for output in miner_outputs:
-            # Convert jargon terms
-            for i, jargon_data in enumerate(output.jargon):
-                if isinstance(jargon_data, dict):
-                    jargon_term = JargonTerm(
-                        episode_id=episode.episode_id,
-                        term_id=f"jargon_{len(all_jargon):04d}",
-                        term=jargon_data.get("term", ""),
-                        definition=jargon_data.get("definition"),
-                        evidence_spans=(
-                            [
-                                EvidenceSpan(
-                                    t0=jargon_data.get("timestamp", "00:00"),
-                                    t1=jargon_data.get("timestamp", "00:00"),
-                                    quote=jargon_data.get("context_quote", ""),
-                                    segment_id=None,
-                                )
-                            ]
-                            if jargon_data.get("context_quote")
-                            else []
-                        ),
-                    )
-                    all_jargon.append(jargon_term)
+        # Process evaluated jargon (if evaluation succeeded)
+        if jargon_evaluation:
+            for eval_jargon in jargon_evaluation.get_accepted_jargon():
+                jargon_term = JargonTerm(
+                    episode_id=episode.episode_id,
+                    term_id=f"jargon_{len(all_jargon):04d}",
+                    term=eval_jargon.canonical_term,
+                    definition=eval_jargon.definition,
+                    category=eval_jargon.category if hasattr(eval_jargon, 'category') else None,
+                )
+                all_jargon.append(jargon_term)
+        else:
+            # Fallback: Use raw miner outputs (no deduplication)
+            for output in miner_outputs:
+                for jargon_data in output.jargon:
+                    if isinstance(jargon_data, dict):
+                        jargon_term = JargonTerm(
+                            episode_id=episode.episode_id,
+                            term_id=f"jargon_{len(all_jargon):04d}",
+                            term=jargon_data.get("term", ""),
+                            definition=jargon_data.get("definition"),
+                        )
+                        all_jargon.append(jargon_term)
 
-            # Convert people mentions
-            for i, person_data in enumerate(output.people):
-                if isinstance(person_data, dict):
-                    person_mention = PersonMention(
-                        episode_id=episode.episode_id,
-                        mention_id=f"person_{len(all_people):04d}",
-                        span_segment_id="unknown",
-                        t0=person_data.get("timestamp", "00:00"),
-                        t1=person_data.get("timestamp", "00:00"),
-                        surface=person_data.get("name", ""),
-                        normalized=person_data.get("name", ""),
-                    )
-                    all_people.append(person_mention)
+        # Process evaluated people (if evaluation succeeded)
+        if people_evaluation:
+            for eval_person in people_evaluation.get_accepted_people():
+                person_mention = PersonMention(
+                    episode_id=episode.episode_id,
+                    mention_id=f"person_{len(all_people):04d}",
+                    span_segment_id="unknown",
+                    t0="00:00",
+                    t1="00:00",
+                    surface=eval_person.canonical_name,
+                    normalized=eval_person.canonical_name,
+                    entity_type="person",
+                    role_description=eval_person.role if hasattr(eval_person, 'role') else None,
+                )
+                all_people.append(person_mention)
+        else:
+            # Fallback: Use raw miner outputs (no deduplication)
+            for output in miner_outputs:
+                for person_data in output.people:
+                    if isinstance(person_data, dict):
+                        person_mention = PersonMention(
+                            episode_id=episode.episode_id,
+                            mention_id=f"person_{len(all_people):04d}",
+                            span_segment_id="unknown",
+                            t0=person_data.get("timestamp", "00:00"),
+                            t1=person_data.get("timestamp", "00:00"),
+                            surface=person_data.get("name", ""),
+                            normalized=person_data.get("name", ""),
+                        )
+                        all_people.append(person_mention)
 
-            # Convert mental models
-            for i, model_data in enumerate(output.mental_models):
-                if isinstance(model_data, dict):
-                    mental_model = MentalModel(
-                        episode_id=episode.episode_id,
-                        model_id=f"model_{len(all_mental_models):04d}",
-                        name=model_data.get("name", ""),
-                        definition=model_data.get("description"),
-                        first_mention_ts=model_data.get("timestamp", "00:00"),
-                        evidence_spans=(
-                            [
-                                EvidenceSpan(
-                                    t0=model_data.get("timestamp", "00:00"),
-                                    t1=model_data.get("timestamp", "00:00"),
-                                    quote=model_data.get("context_quote", ""),
-                                    segment_id=None,
-                                )
-                            ]
-                            if model_data.get("context_quote")
-                            else []
-                        ),
-                    )
-                    all_mental_models.append(mental_model)
+        # Process evaluated concepts (if evaluation succeeded)
+        if concepts_evaluation:
+            for eval_concept in concepts_evaluation.get_accepted_concepts():
+                mental_model = MentalModel(
+                    episode_id=episode.episode_id,
+                    model_id=f"concept_{len(all_mental_models):04d}",
+                    name=eval_concept.canonical_name,
+                    definition=eval_concept.description,
+                    first_mention_ts="00:00",
+                    aliases=[],
+                )
+                all_mental_models.append(mental_model)
+        else:
+            # Fallback: Use raw miner outputs (no deduplication)
+            for output in miner_outputs:
+                for model_data in output.mental_models:
+                    if isinstance(model_data, dict):
+                        mental_model = MentalModel(
+                            episode_id=episode.episode_id,
+                            model_id=f"concept_{len(all_mental_models):04d}",
+                            name=model_data.get("name", ""),
+                            definition=model_data.get("description"),
+                            first_mention_ts=model_data.get("timestamp", "00:00"),
+                        )
+                        all_mental_models.append(mental_model)
 
         # Create final pipeline outputs
         return PipelineOutputs(

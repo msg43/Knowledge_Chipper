@@ -248,10 +248,12 @@ class RichLogDisplay(QFrame):
         cursor.insertText(f"{level:8} ", format_level)
         cursor.insertText(f"| {log_entry['message']}\n", format_normal)
 
-        # Auto-scroll to bottom
-        self.log_text.verticalScrollBar().setValue(
-            self.log_text.verticalScrollBar().maximum()
-        )
+        # Only auto-scroll if user is already at the bottom
+        scrollbar = self.log_text.verticalScrollBar()
+        if scrollbar:
+            # Consider "at bottom" if within 10 pixels of maximum
+            if scrollbar.value() >= scrollbar.maximum() - 10:
+                scrollbar.setValue(scrollbar.maximum())
 
     def update_current_file(self, file_path: str):
         """Update the current file being processed."""

@@ -16,30 +16,17 @@ from pathlib import Path
 def get_vendor_dir() -> str:
     """Return per-user vendor site-packages directory.
 
-    On macOS/Linux: ~/Library/Application Support/KnowledgeChipper/vendor/py{major}.{minor}
-    On other platforms, fall back to ~/.knowledge_chipper/vendor/py{major}.{minor}
+    On macOS: ~/Library/Application Support/Knowledge Chipper/vendor/py{major}.{minor}
+    On Windows: %APPDATA%/Knowledge Chipper/vendor/py{major}.{minor}
+    On Linux: ~/.knowledge_chipper/vendor/py{major}.{minor}
     """
+    from .macos_paths import get_application_support_dir
+
     major, minor = sys.version_info[:2]
     py_tag = f"py{major}.{minor}"
 
-    base: Path
-    if sys.platform == "darwin":
-        base = (
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "KnowledgeChipper"
-            / "vendor"
-            / py_tag
-        )
-    elif os.name == "nt":
-        # Windows: %APPDATA%\KnowledgeChipper\vendor\pyX.Y
-        appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
-        base = Path(appdata) / "KnowledgeChipper" / "vendor" / py_tag
-    else:
-        # Linux/other
-        base = Path.home() / ".knowledge_chipper" / "vendor" / py_tag
-
+    # Use the standard application support directory
+    base = get_application_support_dir() / "vendor" / py_tag
     base.mkdir(parents=True, exist_ok=True)
     return str(base)
 

@@ -62,10 +62,12 @@ class AudioProcessor(BaseProcessor):
         progress_callback=None,
         enable_diarization: bool = False,
         hf_token: str | None = None,
-        enable_quality_retry: bool = True,
-        max_retry_attempts: int = 1,
         require_diarization: bool = False,
         speaker_assignment_callback=None,
+        preloaded_transcriber=None,
+        preloaded_diarizer=None,
+        db_service=None,
+        remove_silence: bool = True,
     ) -> None:
         self.normalize_audio = normalize_audio
         self.target_format = target_format
@@ -76,17 +78,26 @@ class AudioProcessor(BaseProcessor):
         self.progress_callback = progress_callback
         self.enable_diarization = enable_diarization
         self.hf_token = hf_token
-        self.enable_quality_retry = enable_quality_retry
-        self.max_retry_attempts = max_retry_attempts
         self.speaker_assignment_callback = speaker_assignment_callback
         self.require_diarization = require_diarization
+        self.db_service = db_service
+        self.remove_silence = remove_silence
 
-        # Use whisper.cpp as the default transcriber with acceleration
-        self.transcriber = WhisperCppTranscribeProcessor(
-            model=model, use_coreml=True, progress_callback=progress_callback
-        )
+        # Store preloaded models
+        self.preloaded_diarizer = preloaded_diarizer
 
-        # Model progression for retries (from smaller to larger for better accuracy)
+        # Use preloaded transcriber if available, otherwise create new one
+        if preloaded_transcriber:
+            self.transcriber = preloaded_transcriber
+            logger.info("✅ Using preloaded transcription model")
+        else:
+            # Use whisper.cpp as the default transcriber with acceleration
+            self.transcriber = WhisperCppTranscribeProcessor(
+                model=model, use_coreml=True, progress_callback=progress_callback
+            )
+            logger.info("🔄 Created new transcription model instance")
+
+        # Model progression for smart recovery (from smaller to larger for better accuracy)
         self.retry_models = {
             "tiny": "base",
             "base": "small",
@@ -94,6 +105,9 @@ class AudioProcessor(BaseProcessor):
             "medium": "large",
             "large": "large",  # No upgrade from large (already the best)
         }
+
+        # Track recovery attempts to prevent infinite loops
+        self.recovery_attempt = 0
 
     @property
     def supported_formats(self) -> list[str]:
@@ -134,6 +148,7 @@ class AudioProcessor(BaseProcessor):
                 )
 
             # Convert audio to 16kHz mono - optimal for both whisper and pyannote
+            # Also remove long silence periods to prevent hallucinations
             success = convert_audio_file(
                 input_path=input_path,
                 output_path=output_path,
@@ -142,6 +157,7 @@ class AudioProcessor(BaseProcessor):
                 sample_rate=16000,  # 16kHz for both whisper and pyannote
                 channels=1,  # Mono for both processors
                 progress_callback=self.progress_callback,
+                remove_silence=self.remove_silence,  # Prevent hallucinations from long silence
             )
 
             if success:
@@ -432,14 +448,14 @@ class AudioProcessor(BaseProcessor):
             # Prepare speaker data with metadata for enhanced suggestions
             metadata = kwargs.get("metadata", {})
             speaker_data_list = speaker_processor.prepare_speaker_data(
-                diarization_segments, transcript_segments, metadata
+                diarization_segments, transcript_segments, metadata, recording_path
             )
 
             if not speaker_data_list:
                 logger.warning("No speaker data prepared for assignment")
                 return transcript_data
 
-            logger.info(f"🎭 Found {len(speaker_data_list)} speakers for assignment")
+            logger.info(f"✅ Found {len(speaker_data_list)} speakers for assignment")
 
             # Check if MVP LLM is already available (quick check, no downloads)
             mvp_available = False
@@ -470,6 +486,11 @@ class AudioProcessor(BaseProcessor):
             # Store MVP availability for speaker processor to use
             if mvp_available:
                 metadata["mvp_llm_available"] = True
+
+            # CRITICAL: Store output_dir in metadata so speaker assignment can regenerate markdown
+            output_dir = kwargs.get("output_dir")
+            if output_dir:
+                metadata["output_dir"] = output_dir
 
             # Check if we're in GUI mode and can show dialog
             show_dialog = kwargs.get("show_speaker_dialog", True)
@@ -636,6 +657,12 @@ class AudioProcessor(BaseProcessor):
         """
         Get automatic speaker assignments for non-GUI mode.
 
+        Priority order:
+        1. Existing user-confirmed assignments from database
+        2. AI suggestions from previous processing sessions (stored in database)
+        3. AI suggestions from current speaker_data_list
+        4. Generic fallback names
+
         Args:
             speaker_data_list: List of SpeakerData objects
             recording_path: Path to the recording file
@@ -646,8 +673,9 @@ class AudioProcessor(BaseProcessor):
         try:
             from ..database.speaker_models import get_speaker_db_service
 
-            # Check for existing assignments in database
             db_service = get_speaker_db_service()
+
+            # PRIORITY 1: Check for existing user-confirmed assignments in database
             existing_assignments = db_service.get_assignments_for_recording(
                 recording_path
             )
@@ -658,21 +686,85 @@ class AudioProcessor(BaseProcessor):
                 for assignment in existing_assignments:
                     assignments[assignment.speaker_id] = assignment.assigned_name
 
-                logger.info(f"Found existing speaker assignments: {assignments}")
+                logger.info(f"✅ Found existing speaker assignments: {assignments}")
                 return assignments
 
-            # Use AI suggestions as fallback
+            # PRIORITY 2: Check for AI suggestions from previous processing sessions
+            # This is the missing piece! AI suggestions are stored but not loaded
+            try:
+                import json
+
+                from sqlalchemy import desc
+
+                from ..database.speaker_models import SpeakerProcessingSession
+
+                # Query for the most recent processing session for this recording
+                with db_service.session_scope() as session:
+                    latest_session = (
+                        session.query(SpeakerProcessingSession)
+                        .filter(
+                            SpeakerProcessingSession.recording_path
+                            == str(recording_path)
+                        )
+                        .order_by(desc(SpeakerProcessingSession.created_at))
+                        .first()
+                    )
+
+                    if latest_session and latest_session.ai_suggestions_json:
+                        ai_suggestions = json.loads(latest_session.ai_suggestions_json)
+
+                        # Extract high-confidence suggestions
+                        assignments = {}
+                        for speaker_id, suggestion_data in ai_suggestions.items():
+                            if isinstance(suggestion_data, dict):
+                                suggested_name = suggestion_data.get("suggested_name")
+                                confidence = suggestion_data.get("confidence", 0)
+
+                                # Use high-confidence suggestions (>0.6)
+                                if suggested_name and confidence > 0.6:
+                                    assignments[speaker_id] = suggested_name
+                                    logger.info(
+                                        f"🤖 Using AI suggestion from database: {speaker_id} -> '{suggested_name}' "
+                                        f"(confidence: {confidence:.2f})"
+                                    )
+
+                        if assignments:
+                            logger.info(
+                                f"✅ Loaded {len(assignments)} AI suggestions from database"
+                            )
+                            return assignments
+
+            except Exception as e:
+                logger.debug(f"Could not load AI suggestions from database: {e}")
+
+            # PRIORITY 3: Use AI suggestions from current speaker_data_list
+            # 🚨 ALWAYS use LLM suggestions regardless of confidence
+            # The LLM provides best-guess names even with low confidence
             assignments = {}
             for speaker_data in speaker_data_list:
-                if speaker_data.suggested_name and speaker_data.confidence_score > 0.6:
+                if speaker_data.suggested_name:
                     assignments[speaker_data.speaker_id] = speaker_data.suggested_name
+                    confidence_indicator = "✅" if speaker_data.confidence_score > 0.7 else "⚠️"
+                    logger.info(
+                        f"{confidence_indicator} Using LLM suggestion: {speaker_data.speaker_id} -> "
+                        f"'{speaker_data.suggested_name}' (confidence: {speaker_data.confidence_score:.2f})"
+                    )
                 else:
-                    # Generate generic name
+                    # This should never happen - LLM must always provide a name
+                    logger.error(
+                        f"❌ CRITICAL: No LLM suggestion for {speaker_data.speaker_id} - LLM failed to provide name"
+                    )
+                    # Emergency fallback only if LLM completely failed
+                    # Use letter-based naming
                     speaker_num = speaker_data.speaker_id.replace("SPEAKER_", "")
                     try:
-                        num = int(speaker_num) + 1
-                        assignments[speaker_data.speaker_id] = f"Speaker {num}"
-                    except ValueError:
+                        num = int(speaker_num)
+                        letter = chr(65 + num)  # A, B, C, ...
+                        assignments[speaker_data.speaker_id] = f"Unknown Speaker {letter}"
+                        logger.error(
+                            f"Emergency fallback: {speaker_data.speaker_id} -> 'Unknown Speaker {letter}'"
+                        )
+                    except (ValueError, IndexError):
                         assignments[speaker_data.speaker_id] = speaker_data.speaker_id
 
             if assignments:
@@ -845,28 +937,120 @@ class AudioProcessor(BaseProcessor):
         audio_metadata: dict,
         model_metadata: dict,
         include_timestamps: bool = True,
+        video_metadata: dict | None = None,
     ) -> str:
         """Create markdown content from transcription data and metadata."""
         lines = []
 
         # YAML frontmatter
         lines.append("---")
-        lines.append(
-            f'title: "Local Transcription - {audio_metadata.get("filename", "Unknown")}"'
-        )
-        lines.append(f'source_file: "{audio_metadata.get("filename", "Unknown")}"')
-        lines.append(f'transcription_date: "{datetime.now().isoformat()}"')
-        lines.append(f'file_format: "{audio_metadata.get("file_format", "unknown")}"')
-        if audio_metadata.get("file_size_mb"):
-            lines.append(f'file_size_mb: {audio_metadata["file_size_mb"]}')
-        if audio_metadata.get("duration_formatted"):
-            lines.append(f'duration: "{audio_metadata["duration_formatted"]}"')
+
+        # Determine source type
+        source_type = "Local Audio"  # Default
+        if video_metadata is not None:
+            # Check source_type in metadata
+            if "source_type" in video_metadata:
+                source_type_raw = video_metadata["source_type"]
+                # Map database values to display names
+                if source_type_raw == "youtube":
+                    source_type = "YouTube"
+                elif source_type_raw == "rss":
+                    source_type = "RSS"
+                elif source_type_raw == "upload":
+                    source_type = "Upload"
+                else:
+                    source_type = source_type_raw.title()
+            else:
+                # Default to YouTube if video metadata exists but no source_type
+                source_type = "YouTube"
+
+        if video_metadata is not None:
+            # Use YouTube metadata for title and source info
+            safe_title = video_metadata.get("title", "Unknown").replace('"', '\\"')
+            lines.append(f'title: "{safe_title}"')
+            lines.append(f'source: "{video_metadata.get("url", "")}"')
+            lines.append(f'video_id: "{video_metadata.get("video_id", "")}"')
+
+            # Add uploader info
+            if video_metadata.get("uploader"):
+                lines.append(f'uploader: "{video_metadata["uploader"]}"')
+
+            # Add upload date
+            if video_metadata.get("upload_date"):
+                try:
+                    date_obj = datetime.strptime(
+                        video_metadata["upload_date"], "%Y%m%d"
+                    )
+                    lines.append(f'upload_date: "{date_obj.strftime("%B %d, %Y")}"')
+                except (ValueError, TypeError):
+                    lines.append(f'upload_date: "{video_metadata["upload_date"]}"')
+
+            # Add duration from video metadata if available
+            if video_metadata.get("duration"):
+                duration_seconds = video_metadata["duration"]
+                minutes = duration_seconds // 60
+                seconds = duration_seconds % 60
+                lines.append(f'duration: "{minutes}:{seconds:02d}"')
+
+            # Add view count if available
+            if video_metadata.get("view_count"):
+                lines.append(f"view_count: {video_metadata['view_count']}")
+
+            # Add tags if available
+            if video_metadata.get("tags"):
+                safe_tags = [tag.replace('"', '\\"') for tag in video_metadata["tags"]]
+                tags_yaml = "[" + ", ".join(f'"{tag}"' for tag in safe_tags) + "]"
+                lines.append(f"tags: {tags_yaml}")
+                lines.append(f"# Total tags: {len(video_metadata['tags'])}")
+
+            # Add transcription date for YouTube videos too
+            trans_date = datetime.now()
+            lines.append(f'transcription_date: "{trans_date.strftime("%B %d, %Y")}"')
+
+            # Note the transcription type based on source
+            lines.append(f'transcription_type: "{source_type}"')
+        else:
+            # Local audio file - use existing logic
+            raw_filename = audio_metadata.get("filename", "Unknown")
+            clean_title = (
+                raw_filename.rsplit(".", 1)[0] if "." in raw_filename else raw_filename
+            )
+            lines.append(f'title: "{clean_title}"')
+
+            lines.append(f'source_file: "{raw_filename}"')
+            lines.append(f'source: "{source_type}"')
+
+            # Format transcription date more nicely (like YouTube's "August 02, 2025")
+            trans_date = datetime.now()
+            lines.append(f'transcription_date: "{trans_date.strftime("%B %d, %Y")}"')
+            lines.append(f'transcription_type: "{source_type}"')
+
+            lines.append(
+                f'file_format: "{audio_metadata.get("file_format", "unknown")}"'
+            )
+
+            if audio_metadata.get("file_size_mb"):
+                lines.append(f'file_size_mb: {audio_metadata["file_size_mb"]:.2f}')
+
+            if audio_metadata.get("duration_formatted"):
+                lines.append(f'duration: "{audio_metadata["duration_formatted"]}"')
+
+        # Language detection (try to get real language instead of "unknown")
+        language = transcription_data.get("language", "unknown")
+        if language == "unknown" and transcription_data.get("text"):
+            # Simple language hint based on common words
+            text_sample = transcription_data.get("text", "")[:500].lower()
+            if any(word in text_sample for word in [" the ", " and ", " is ", " are "]):
+                language = "en"
+        lines.append(f'language: "{language}"')
+
         lines.append(f'transcription_model: "{model_metadata.get("model", "unknown")}"')
-        lines.append(f'language: "{transcription_data.get("language", "unknown")}"')
         lines.append(f'text_length: {len(transcription_data.get("text", ""))}')
         lines.append(f'segments_count: {len(transcription_data.get("segments", []))}')
+
         if model_metadata.get("diarization_enabled"):
             lines.append("diarization_enabled: true")
+
         lines.append(f"include_timestamps: {include_timestamps}")
         lines.append("---")
         lines.append("")
@@ -910,6 +1094,7 @@ class AudioProcessor(BaseProcessor):
         audio_path: Path,
         output_dir: str | Path | None = None,
         include_timestamps: bool = True,
+        video_metadata: dict | None = None,
     ) -> Path | None:
         """Save transcription result to a markdown file."""
         if not transcription_result.success:
@@ -946,12 +1131,13 @@ class AudioProcessor(BaseProcessor):
             audio_metadata = self._get_audio_metadata(audio_path)
             model_metadata = transcription_result.metadata or {}
 
-            # Create markdown content with timestamps preference
+            # Create markdown content with timestamps preference and video metadata if available
             markdown_content = self._create_markdown(
                 transcription_result.data,
                 audio_metadata,
                 model_metadata,
                 include_timestamps=include_timestamps,
+                video_metadata=video_metadata,
             )
 
             # Write file with detailed error handling
@@ -1062,18 +1248,25 @@ class AudioProcessor(BaseProcessor):
     def _transcribe_with_retry(
         self, path: Path, audio_metadata: dict, device: str | None, **kwargs: Any
     ) -> ProcessorResult:
-        """Attempt transcription with automatic retry using better model if quality validation fails."""
+        """
+        Attempt transcription with smart quality recovery.
+
+        Recovery strategy:
+        1. Transcribe with selected model
+        2. If severe quality issues detected -> retry with next larger model
+        3. If still failing -> return special error code for re-download + large model
+        4. If still failing after re-download -> permanent failure
+        """
         current_model = self.model
         audio_duration = audio_metadata.get("duration_seconds")
         output_path = None  # Track temp file for cleanup
-
-        # Determine max attempts based on settings
-        max_attempts = self.max_retry_attempts + 1 if self.enable_quality_retry else 1
 
         # Initialize diarization variables at function scope to avoid scope issues
         diarization_segments = None
         diarization_successful = False
 
+        # Smart recovery: try current model, then one upgrade
+        max_attempts = 2
         for attempt in range(max_attempts):
             try:
                 # Update transcriber model for this attempt
@@ -1215,11 +1408,20 @@ class AudioProcessor(BaseProcessor):
                             )
 
                         if is_diarization_available():
-                            diarizer = SpeakerDiarizationProcessor(
-                                hf_token=self.hf_token,
-                                device=self.device,
-                                progress_callback=self.progress_callback,
-                            )
+                            # Use preloaded diarizer if available, otherwise create new one
+                            if (
+                                hasattr(self, "preloaded_diarizer")
+                                and self.preloaded_diarizer
+                            ):
+                                diarizer = self.preloaded_diarizer
+                                logger.info("✅ Using preloaded diarization model")
+                            else:
+                                diarizer = SpeakerDiarizationProcessor(
+                                    hf_token=self.hf_token,
+                                    device=self.device,
+                                    progress_callback=self.progress_callback,
+                                )
+                                logger.info("🔄 Created new diarization model instance")
 
                             # Run both in parallel
                             (
@@ -1259,6 +1461,37 @@ class AudioProcessor(BaseProcessor):
                 # Cleanup will happen after all processing is complete
 
                 if transcription_result.success:
+                    # Check for cleanup stats from hallucination removal
+                    cleanup_stats = getattr(
+                        self.transcriber, "_last_cleanup_stats", None
+                    )
+                    if cleanup_stats and cleanup_stats.get("removed_count", 0) > 0:
+                        removed = cleanup_stats["removed_count"]
+                        patterns = len(cleanup_stats.get("patterns_found", []))
+
+                        # Categorize severity
+                        if removed >= 20 or patterns >= 2:
+                            # Heavy repetition - log warning and consider retry
+                            logger.warning(
+                                f"⚠️ Heavy hallucination detected: {removed} repetitions across "
+                                f"{patterns} pattern(s) - cleaned automatically"
+                            )
+                            if self.progress_callback:
+                                self.progress_callback(
+                                    f"⚠️ Cleaned {removed} hallucinated repetitions",
+                                    None,
+                                )
+                        elif removed >= 10:
+                            # Moderate repetition - log info
+                            logger.info(
+                                f"Moderate hallucination cleaned: {removed} repetitions"
+                            )
+                        # Light repetition (3-9) - already logged by cleanup function
+
+                        # Clear cleanup stats for next transcription
+                        if hasattr(self.transcriber, "_last_cleanup_stats"):
+                            delattr(self.transcriber, "_last_cleanup_stats")
+
                     # Quality validation with duration-based analysis
                     quality_passed = True
                     if transcription_result.data and isinstance(
@@ -1280,9 +1513,14 @@ class AudioProcessor(BaseProcessor):
                                     f"Transcription quality issue for {path} (attempt {attempt + 1}): {failure_reason}"
                                 )
 
-                                if (
-                                    attempt == 0 and self.enable_quality_retry
-                                ):  # First attempt failed, retry enabled
+                                # Smart recovery logic
+                                if attempt == 0:
+                                    # First attempt failed - try next larger model
+                                    if self.progress_callback:
+                                        self.progress_callback(
+                                            f"⚠️ Quality issue detected, retrying with better model...",
+                                            0,
+                                        )
                                     logger.info(
                                         "Attempting retry with better model due to quality issues..."
                                     )
@@ -1290,67 +1528,38 @@ class AudioProcessor(BaseProcessor):
                                     if output_path and output_path.exists():
                                         output_path.unlink(missing_ok=True)
                                     continue
-                                else:  # Last attempt failed OR retries disabled
-                                    if not self.enable_quality_retry:
-                                        logger.info(
-                                            "Quality retry disabled - returning failed transcription with warning"
+                                else:
+                                    # Second attempt also failed - signal need for re-download
+                                    logger.error(
+                                        f"Quality issues persist after model upgrade: {failure_reason}"
+                                    )
+                                    if self.progress_callback:
+                                        self.progress_callback(
+                                            f"⚠️ Audio may be corrupted, attempting re-download...",
+                                            0,
                                         )
-                                        # Still log as failure but return the result with quality warning
-                                        enhanced_metadata = {
-                                            "original_format": path.suffix,
-                                            "transcription_model": current_model,
-                                            "quality_warning": failure_reason,
-                                            "retry_disabled": True,
-                                            "retry_count": 0,
-                                            "duration_seconds": audio_duration,
-                                        }
-                                        # Clean up temporary file before returning
-                                        if output_path and output_path.exists():
-                                            output_path.unlink(missing_ok=True)
+                                    self._log_transcription_failure(
+                                        path,
+                                        failure_reason,
+                                        current_model,
+                                        audio_duration,
+                                    )
+                                    # Clean up temporary file before returning
+                                    if output_path and output_path.exists():
+                                        output_path.unlink(missing_ok=True)
 
-                                        # Check if database save failed - affects success status even with quality warning
-                                        database_save_failed = enhanced_metadata.get(
-                                            "database_save_failed", False
-                                        )
-
-                                        if database_save_failed:
-                                            return ProcessorResult(
-                                                success=False,
-                                                errors=[
-                                                    "Transcription completed but database save failed"
-                                                ],
-                                                data=transcription_result.data,
-                                                metadata=enhanced_metadata,
-                                            )
-                                        else:
-                                            return ProcessorResult(
-                                                success=True,  # Mark as success but with quality warning
-                                                data=transcription_result.data,
-                                                metadata=enhanced_metadata,
-                                                errors=[
-                                                    f"Quality warning (retry disabled): {failure_reason}"
-                                                ],
-                                            )
-                                    else:
-                                        logger.error(
-                                            f"Final transcription attempt failed quality validation: {failure_reason}"
-                                        )
-                                        self._log_transcription_failure(
-                                            path,
-                                            failure_reason,
-                                            current_model,
-                                            audio_duration,
-                                        )
-                                        # Clean up temporary file before returning
-                                        if output_path and output_path.exists():
-                                            output_path.unlink(missing_ok=True)
-
-                                        return ProcessorResult(
-                                            success=False,
-                                            errors=[
-                                                f"Transcription quality validation failed: {failure_reason}"
-                                            ],
-                                        )
+                                    # Return special error code to trigger re-download
+                                    return ProcessorResult(
+                                        success=False,
+                                        errors=[
+                                            f"AUDIO_CORRUPTION_SUSPECTED: {failure_reason}"
+                                        ],
+                                        metadata={
+                                            "needs_redownload": True,
+                                            "failure_reason": failure_reason,
+                                            "models_tried": [self.model, current_model],
+                                        },
+                                    )
 
                     # Quality validation passed, proceed with result processing
                     if quality_passed:
@@ -1382,6 +1591,23 @@ class AudioProcessor(BaseProcessor):
                                     "✅ Successfully merged transcription and diarization results"
                                 )
                                 diarization_successful = True
+
+                                # Verify speaker labels are actually in segments
+                                speaker_count = len(
+                                    {
+                                        seg.get("speaker")
+                                        for seg in final_data.get("segments", [])
+                                        if seg.get("speaker")
+                                    }
+                                )
+                                if speaker_count > 0:
+                                    logger.info(
+                                        f"✅ Detected {speaker_count} unique speakers in merged segments"
+                                    )
+                                else:
+                                    logger.warning(
+                                        "⚠️ Diarization completed but no speaker labels found in segments"
+                                    )
                             elif not use_parallel:
                                 # Fallback to sequential diarization if parallel wasn't used
                                 diarization_kwargs = diarization_config.copy()
@@ -1400,6 +1626,23 @@ class AudioProcessor(BaseProcessor):
                                         sequential_diarization,
                                     )
                                     diarization_successful = True
+
+                                    # Verify speaker labels are actually in segments
+                                    speaker_count = len(
+                                        {
+                                            seg.get("speaker")
+                                            for seg in final_data.get("segments", [])
+                                            if seg.get("speaker")
+                                        }
+                                    )
+                                    if speaker_count > 0:
+                                        logger.info(
+                                            f"✅ Detected {speaker_count} unique speakers in merged segments (sequential)"
+                                        )
+                                    else:
+                                        logger.warning(
+                                            "⚠️ Sequential diarization completed but no speaker labels found in segments"
+                                        )
 
                             # Note: Speaker assignment will be handled after database save
                             # to enable non-blocking processing
@@ -1438,6 +1681,66 @@ class AudioProcessor(BaseProcessor):
                             "duration_seconds": audio_duration,
                         }
 
+                        # CRITICAL: Apply automatic speaker assignments BEFORE saving markdown
+                        # This ensures the markdown file has real names, not SPEAKER_00
+                        if diarization_successful and diarization_segments:
+                            logger.info(
+                                "Applying automatic speaker assignments before saving..."
+                            )
+                            try:
+                                from .speaker_processor import SpeakerProcessor
+
+                                speaker_processor = SpeakerProcessor()
+                                transcript_segments = final_data.get("segments", [])
+
+                                # Prepare speaker data with metadata for enhanced suggestions
+                                metadata_for_speaker = kwargs.get("metadata", {})
+                                speaker_data_list = (
+                                    speaker_processor.prepare_speaker_data(
+                                        diarization_segments,
+                                        transcript_segments,
+                                        metadata_for_speaker,
+                                        str(path),  # Pass audio path for voice fingerprinting
+                                    )
+                                )
+
+                                if speaker_data_list:
+                                    # Get automatic assignments (from DB, AI, or fallback)
+                                    assignments = (
+                                        self._get_automatic_speaker_assignments(
+                                            speaker_data_list, str(path)
+                                        )
+                                    )
+
+                                    if assignments:
+                                        # Apply assignments to transcript data
+                                        final_data = (
+                                            speaker_processor.apply_speaker_assignments(
+                                                final_data,
+                                                assignments,
+                                                str(path),
+                                                speaker_data_list,
+                                            )
+                                        )
+                                        logger.info(
+                                            f"✅ Applied automatic speaker assignments: {assignments}"
+                                        )
+                                        # Store assignments for reference
+                                        final_data["speaker_assignments"] = assignments
+                                    else:
+                                        logger.warning(
+                                            "No automatic speaker assignments could be generated"
+                                        )
+                                else:
+                                    logger.warning(
+                                        "No speaker data prepared for automatic assignment"
+                                    )
+                            except Exception as e:
+                                logger.error(
+                                    f"Failed to apply automatic speaker assignments: {e}"
+                                )
+                                # Continue anyway - markdown will have generic SPEAKER_00 labels
+
                         # Save to markdown if output directory is specified
                         output_dir = kwargs.get("output_dir")
                         include_timestamps = kwargs.get("timestamps", True)
@@ -1452,11 +1755,26 @@ class AudioProcessor(BaseProcessor):
                             )
 
                             # Save regular markdown transcript
+                            # Extract video_metadata from kwargs if this is a YouTube video
+                            video_metadata = kwargs.get("video_metadata")
+
+                            # Debug log: Check if segments have speaker info
+                            if final_data.get("segments"):
+                                segments_with_speakers = [
+                                    s
+                                    for s in final_data["segments"]
+                                    if s.get("speaker")
+                                ]
+                                logger.info(
+                                    f"Saving markdown with {len(segments_with_speakers)}/{len(final_data['segments'])} segments having speaker labels"
+                                )
+
                             saved_file = self.save_transcript_to_markdown(
                                 temp_result,
                                 path,
                                 output_dir,
                                 include_timestamps=include_timestamps,
+                                video_metadata=video_metadata,
                             )
 
                             # Save color-coded transcript if speakers are identified and color coding is enabled
@@ -1487,8 +1805,11 @@ class AudioProcessor(BaseProcessor):
                                 from ..database.service import DatabaseService
 
                                 db_service = DatabaseService()
+                                logger.info("Created fallback DatabaseService instance")
                             except Exception as e:
-                                logger.debug(f"Could not create database service: {e}")
+                                logger.warning(
+                                    f"Could not create database service - transcripts will not be saved to DB: {e}"
+                                )
 
                         if db_service and final_data:
                             try:
@@ -1565,33 +1886,66 @@ class AudioProcessor(BaseProcessor):
                                     ] = transcript_record.transcript_id
                                     enhanced_metadata["database_media_id"] = media_id
 
-                                    # Handle speaker assignment after database save (non-blocking)
+                                    # Queue for manual review if speaker dialog is enabled
+                                    # Note: Automatic assignments were already applied before saving
                                     if diarization_successful and diarization_segments:
-                                        # Pass the transcript_id and media_id for speaker assignment
-                                        kwargs_with_ids = kwargs.copy()
-                                        kwargs_with_ids[
-                                            "transcript_id"
-                                        ] = transcript_record.transcript_id
-                                        kwargs_with_ids["video_id"] = media_id
-                                        kwargs_with_ids[
-                                            "database_transcript_id"
-                                        ] = transcript_record.transcript_id
-                                        kwargs_with_ids["database_media_id"] = media_id
-
-                                        # This will queue the assignment and return immediately
-                                        self._handle_speaker_assignment(
-                                            final_data,
-                                            diarization_segments,
-                                            str(path),
-                                            kwargs_with_ids,
+                                        show_dialog = kwargs.get(
+                                            "show_speaker_dialog", True
                                         )
+                                        gui_mode = kwargs.get("gui_mode", False)
+                                        testing_mode = (
+                                            os.environ.get(
+                                                "KNOWLEDGE_CHIPPER_TESTING_MODE"
+                                            )
+                                            == "1"
+                                        )
+
+                                        # Only queue for manual review if dialog is explicitly requested
+                                        if (
+                                            show_dialog
+                                            and gui_mode
+                                            and not testing_mode
+                                        ):
+                                            # Pass the transcript_id and media_id for speaker assignment
+                                            kwargs_with_ids = kwargs.copy()
+                                            kwargs_with_ids[
+                                                "transcript_id"
+                                            ] = transcript_record.transcript_id
+                                            kwargs_with_ids["video_id"] = media_id
+                                            kwargs_with_ids[
+                                                "database_transcript_id"
+                                            ] = transcript_record.transcript_id
+                                            kwargs_with_ids[
+                                                "database_media_id"
+                                            ] = media_id
+
+                                            # Queue for manual review (automatic assignments already applied)
+                                            logger.info(
+                                                "Queueing speaker assignment for manual review..."
+                                            )
+                                            self._handle_speaker_assignment(
+                                                final_data,
+                                                diarization_segments,
+                                                str(path),
+                                                kwargs_with_ids,
+                                            )
+                                        else:
+                                            logger.info(
+                                                "Automatic speaker assignments complete - skipping manual review queue"
+                                            )
                                 else:
                                     logger.warning(
                                         "Failed to save transcript to database"
                                     )
 
                             except Exception as e:
-                                logger.error(f"Error saving to database: {e}")
+                                logger.error(
+                                    f"Failed to save transcript to database: {e}"
+                                )
+                                # Continue anyway - at least markdown file was saved
+                                logger.warning(
+                                    "Transcript saved to markdown but NOT to database"
+                                )
                                 # IMPORTANT: Database save failure should affect success reporting
                                 # Based on memory requirement: all transcriptions must write to database
                                 enhanced_metadata["database_save_failed"] = True

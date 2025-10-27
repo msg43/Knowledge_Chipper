@@ -49,7 +49,7 @@ dependencies = [
 
     # YouTube and video
     # PRODUCTION PIN: Match requirements.txt for consistent builds
-    "yt-dlp==2025.9.26",  # Last tested: 2025-10-11 - See docs/DEPENDENCY_UPDATE_STRATEGY.md
+    "yt-dlp==2025.10.14",  # Last tested: 2025-10-18 - See docs/YT_DLP_UPGRADE_PROCEDURE.md
     "requests>=2.31.0",
 
     # ML and transcription (core) - using whisper.cpp instead of openai-whisper to save ~400MB
@@ -95,7 +95,8 @@ cuda = [
 diarization = [
     "torch>=2.1.0",
     "transformers>=4.35.0",
-    "pyannote.audio>=3.1.0",
+    "pyannote.audio>=4.0.0",  # v4.0+ fixes Python 3.13 syntax warnings
+    # NOTE: Do NOT install torchcodec - it segfaults with PyTorch 2.8.0
     "huggingface_hub>=0.20.0",  # Required for model downloads
     "librosa>=0.10.0",  # Required for voice fingerprinting
 ]
@@ -113,10 +114,9 @@ full = [
 ]
 
 [project.scripts]
-knowledge-system = "knowledge_system.cli:main"
-ks = "knowledge_system.cli:main"
-knowledge-system-gui = "knowledge_system.gui:main"
-ks-gui = "knowledge_system.gui:main"
+# CLI removed - GUI-only application
+knowledge-chipper = "knowledge_system.gui:main"
+kc = "knowledge_system.gui:main"
 
 [project.urls]
 "Homepage" = "https://github.com/msg43/skipthepodcast.com"

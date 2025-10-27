@@ -86,7 +86,7 @@ class UserPreferences(BaseModel):
     show_progress: bool = True
 
     # Processing Preferences
-    default_whisper_model: str = "base"
+    default_whisper_model: str = "medium"
     default_device: str = "auto"
     default_output_format: str = "md"
     auto_transcribe: bool = True

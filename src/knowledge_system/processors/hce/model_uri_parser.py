@@ -29,13 +29,13 @@ def parse_model_uri(model_uri: str) -> tuple[str, str]:
         ("openai", "gpt-4o-mini")
 
         >>> parse_model_uri("gpt-4o-mini")
-        ("openai", "gpt-4o-mini")
+        ("ollama", "gpt-4o-mini")
 
         >>> parse_model_uri("local://qwen2.5:7b (Installed)")
         ("ollama", "qwen2.5:7b")
     """
     if not model_uri:
-        return ("openai", "gpt-3.5-turbo")  # Default fallback
+        return ("ollama", "qwen2.5:7b-instruct")  # Default fallback to local
 
     # Strip whitespace and display suffixes like " (Installed)"
     model_uri = model_uri.strip()
@@ -58,8 +58,8 @@ def parse_model_uri(model_uri: str) -> tuple[str, str]:
 
         return (provider, model)
 
-    # No provider specified, assume OpenAI
-    return ("openai", model_uri)
+    # No provider specified, assume local Ollama
+    return ("ollama", model_uri)
 
 
 def clean_model_uri(model_uri: str | None) -> str | None:

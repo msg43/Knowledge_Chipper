@@ -23,13 +23,13 @@ except Exception:
 
 from .monitor_tab import MonitorTab
 from .transcription_tab import TranscriptionTab
-from .youtube_tab import YouTubeTab
+
+# YouTube tab removed - use Transcription tab for YouTube URLs
 
 __all__ = [
     "IntroductionTab",
     "ProcessTab",
     "MonitorTab",
-    "YouTubeTab",
     "TranscriptionTab",
     "SummarizationTab",
     "ClaimSearchTab",

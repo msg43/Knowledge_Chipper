@@ -185,10 +185,10 @@ class TestRunner:
         """Run System 2 specific tests."""
         success = True
 
-        # HCE Operations tests (unit tests)
+        # Unified HCE Operations tests (unit tests)
         success &= self.run_pytest_suite(
-            "System 2 HCE Operations Tests",
-            "tests/system2/test_hce_operations.py",
+            "System 2 Unified HCE Tests",
+            "tests/system2/test_unified_hce_operations.py",
             markers=["not integration"] if self.fast else None,
         )
 

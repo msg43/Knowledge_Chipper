@@ -46,6 +46,9 @@ class IntroductionTab(BaseTab):
         # Tab navigation guide
         self._create_tab_guide_section(content_layout)
 
+        # YouTube bulk downloads guide
+        self._create_youtube_guide_section(content_layout)
+
         # Common workflows
         self._create_workflows_section(content_layout)
 
@@ -79,8 +82,8 @@ class IntroductionTab(BaseTab):
 
             <br><br><b>🎯 What You Can Process:</b>
             <br>• <b>YouTube:</b> Single videos or entire playlists (1000+ videos)
-            <br>• <b>Audio Files:</b> Podcasts, interviews, lectures (MP3, WAV, M4A)
-            <br>• <b>Video Files:</b> Local recordings, screen captures (MP4, MOV)
+            <br>• <b>Audio Files:</b> Podcasts, interviews, lectures (MP3, WAV, M4A, FLAC, OGG, AAC, OPUS)
+            <br>• <b>Video Files:</b> Local recordings, screen captures (MP4, WEBM, MOV, AVI, MKV)
             <br>• <b>Documents:</b> Research papers, articles, reports (PDF, Word, Markdown)
             <br>• <b>RSS Feeds:</b> Automatically monitor and process new episodes
 
@@ -123,9 +126,10 @@ class IntroductionTab(BaseTab):
             <br>• <b>Hybrid:</b> Use local models for transcription and cloud models for analysis
 
             <br><br><b>Step 2: Optional - Enable YouTube Access</b>
-            <br>If you want to process YouTube videos (optional):
-            <br>• Add your PacketStream credentials in <b>Settings</b> (username and auth key)
-            <br>• Skip this if you're only processing local files, PDFs, or RSS feeds
+            <br>If you want to process YouTube videos (optional), you have two approaches:
+            <br>• <b>Small Scale (1-10 videos):</b> Works without any setup - may hit rate limits
+            <br>• <b>Bulk Downloads (10+ videos):</b> Use cookie authentication with throwaway Google account (see detailed guide below)
+            <br>• Skip this entirely if you're only processing local files, PDFs, or RSS feeds
 
             <br><br><b>Step 3: Process Your First Item</b>
             <br>Navigate through the tabs from left to right:
@@ -253,6 +257,168 @@ class IntroductionTab(BaseTab):
         tabs_text.setTextFormat(Qt.TextFormat.RichText)
         tabs_text.setStyleSheet("line-height: 1.4;")
         parent_layout.addWidget(tabs_text)
+
+    def _create_youtube_guide_section(self, parent_layout: Any) -> None:
+        """Create YouTube bulk downloads guide section."""
+        # Section header
+        header_label = QLabel("📹 YouTube Bulk Downloads - Complete Setup Guide")
+        header_font = QFont()
+        header_font.setPointSize(14)
+        header_font.setBold(True)
+        header_label.setFont(header_font)
+        header_label.setStyleSheet(
+            "margin-top: 20px; margin-bottom: 10px; color: #007acc;"
+        )
+        parent_layout.addWidget(header_label)
+
+        youtube_text = QLabel(
+            """
+            <b>⚠️ IMPORTANT: This is for processing 10+ YouTube videos. Skip this section if you only need 1-5 videos.</b>
+
+            <br><br><b>Why You Need This:</b>
+            <br>YouTube has bot detection that blocks bulk downloads from anonymous requests. The solution is to use
+            cookies from a <b>throwaway Google account</b> to authenticate downloads, combined with smart rate limiting
+            to avoid account flags.
+
+            <br><br><b style="color: #d32f2f;">🔒 Security First - Read This!</b>
+            <br><b style="color: #d32f2f;">NEVER use your main Google account for this!</b> YouTube may flag accounts doing
+            bulk downloads. Always create a dedicated throwaway account.
+
+            <br><br><b>The Complete Setup Process:</b>
+
+            <br><br><b style="color: #007acc;">Step 1: Create Throwaway Google Account</b>
+            <br>1. Go to <a href="https://accounts.google.com">accounts.google.com</a> and create a new Google account
+            <br>2. Use a name like "YouTube Downloader" or "Research Account" - doesn't matter
+            <br>3. <b>Write down the email and password</b> - you'll need them again when cookies expire
+            <br>4. Log in to YouTube with this account (visit youtube.com)
+            <br>5. This is your dedicated download account - <b>never use it for anything personal</b>
+
+            <br><br><b style="color: #007acc;">Step 2: Export Cookies from Throwaway Account</b>
+            <br>1. <b>Open incognito/private browsing window</b> (this is crucial!)
+            <br>   • Chrome: Ctrl+Shift+N (Windows) or Cmd+Shift+N (Mac)
+            <br>   • Firefox: Ctrl+Shift+P (Windows) or Cmd+Shift+P (Mac)
+            <br>   • Safari: File → New Private Window
+            <br>2. In the private window, go to YouTube and log in with your <b>throwaway account only</b>
+            <br>3. Install a cookie export extension in your browser:
+            <br>   • Chrome: "<b>Get cookies.txt LOCALLY</b>" extension (search Chrome Web Store)
+            <br>   • Firefox: "<b>cookies.txt</b>" add-on (search Firefox Add-ons)
+            <br>   • Make sure it's a reputable extension with good reviews
+            <br>4. With YouTube still open, click the extension icon
+            <br>5. Click "Export" or "Download" to save cookies as a <b>.txt file</b> (Netscape format)
+            <br>6. Save the file somewhere safe (e.g., Documents/youtube-cookies.txt)
+            <br>7. Close the incognito window
+
+            <br><br><b style="color: #007acc;">Step 3: Configure Cookie Authentication in Skip the Podcast</b>
+            <br>1. Open Skip the Podcast Desktop → go to <b>Transcribe</b> tab
+            <br>2. Scroll down to find "<b>Cookie Authentication (Throwaway Account)</b>" section
+            <br>3. Check the box: <b>"Enable cookie-based authentication"</b>
+            <br>4. Click the <b>"Browse..."</b> button next to "Cookie file"
+            <br>5. Navigate to and select your youtube-cookies.txt file
+            <br>6. You should see the file path appear in the text box
+
+            <br><br><b style="color: #007acc;">Step 4: Configure Rate Limiting (Anti-Bot Protection)</b>
+            <br>In the same Transcribe tab, scroll to "<b>Rate Limiting (Anti-Bot Protection)</b>" section:
+            <br>• <b>Min delay:</b> 180 seconds (3 minutes) - <i>recommended default</i>
+            <br>• <b>Max delay:</b> 300 seconds (5 minutes) - <i>recommended default</i>
+            <br>• <b>Randomization:</b> 25% - <i>adds natural variation, keep this</i>
+            <br>• Check <b>"Disable proxies when cookies enabled"</b> - <i>highly recommended</i>
+            <br><br><b>What these settings mean:</b>
+            <br>The app will wait 3-5 minutes between each download (randomly varied by ±25%). This mimics human
+            behavior and prevents YouTube from flagging your throwaway account.
+
+            <br><br><b style="color: #007acc;">Step 5: Start Bulk Downloads</b>
+            <br>1. In the <b>Transcribe</b> tab, paste your YouTube URLs (one per line) or a playlist URL
+            <br>2. Check <b>"Process automatically through entire pipeline"</b> if you want automatic analysis
+            <br>3. Check <b>"Enable Speaker Diarization"</b> if the videos have multiple speakers
+            <br>4. Click <b>"Start Transcription"</b>
+            <br>5. Sit back and let it run - downloads will proceed one at a time with delays between them
+            <br><br><b>Time estimates for bulk downloads:</b>
+            <br>• 10 videos: 30-50 minutes (download time) + processing time
+            <br>• 50 videos: 2.5-4 hours (download time) + processing time
+            <br>• 100 videos: 5-8 hours (download time) + processing time
+            <br>These are just download times - add transcription and analysis time on top
+
+            <br><br><b style="color: #ffa000;">⚡ Troubleshooting Common Issues</b>
+
+            <br><br><b>Issue: "Sign in to confirm you're not a bot" errors even with cookies</b>
+            <br><b>Solution:</b> Your cookies may have expired. Repeat Step 2 to export fresh cookies from your throwaway account.
+
+            <br><br><b>Issue: Downloads work for a while then start failing</b>
+            <br><b>Solution:</b> YouTube flagged your usage. Stop downloads for 24 hours, then:
+            <br>• Increase delays: Try min=300 (5 min), max=600 (10 min)
+            <br>• Export fresh cookies
+            <br>• Resume downloads slowly
+
+            <br><br><b>Issue: "Cookie file not found" error</b>
+            <br><b>Solution:</b> Check the file path in the text box. Click Browse again and make sure you select the
+            .txt file you exported.
+
+            <br><br><b>Issue: Some videos fail with "Video unavailable"</b>
+            <br><b>Solution:</b> The video may be age-restricted, private, or region-locked. Your throwaway account needs to
+            verify age or the video may simply not be accessible.
+
+            <br><br><b>Issue: Want to download faster (smaller delays)</b>
+            <br><b>⚠️ Not recommended!</b> But if you must:
+            <br>• Min=60 seconds (1 min), Max=120 (2 min) - <b>high risk of account flags</b>
+            <br>• Only use for small batches (5-10 videos max)
+            <br>• Be prepared to get blocked and need to wait 24 hours
+
+            <br><br><b style="color: #388e3c;">✅ Best Practices for Bulk Downloads</b>
+            <br>• <b>Keep the defaults:</b> 3-5 minute delays work great and rarely get flagged
+            <br>• <b>Run overnight:</b> Start a batch before bed, check results in the morning
+            <br>• <b>Multiple accounts:</b> If you need to download thousands, create 2-3 throwaway accounts and rotate them
+            <br>• <b>Refresh cookies weekly:</b> Export fresh cookies every 7-10 days to avoid expiration issues
+            <br>• <b>Monitor first batch:</b> Watch the first 5-10 downloads to make sure everything works
+            <br>• <b>Split large batches:</b> Instead of 500 videos at once, do 5 batches of 100
+            <br>• <b>Use "Process automatically":</b> Transcription and analysis happen while downloads continue
+
+            <br><br><b style="color: #007acc;">🎯 Real-World Example: Processing a 100-Video Playlist</b>
+
+            <br><b>Scenario:</b> You found a lecture series with 100 videos and want to extract all key claims.
+
+            <br><br><b>Your approach:</b>
+            <br>1. Create throwaway Google account (5 minutes)
+            <br>2. Export cookies following steps above (5 minutes)
+            <br>3. Configure app with cookies and rate limiting (2 minutes)
+            <br>4. Paste the playlist URL in Transcribe tab
+            <br>5. Check "Process automatically through entire pipeline"
+            <br>6. Click Start → go to bed 😴
+            <br>7. Wake up → 100 videos transcribed, analyzed, and searchable in Review tab
+
+            <br><br><b>What you get:</b>
+            <br>• All videos downloaded with 3-5 minute delays (total: 5-8 hours)
+            <br>• All transcripts with speaker labels
+            <br>• All claims extracted and scored
+            <br>• Searchable database in Review tab
+            <br>• Can now find "What did the professor say about machine learning?" across all 100 lectures in seconds
+
+            <br><br><b>Total time investment:</b>
+            <br>• Your time: 12 minutes of setup
+            <br>• Computer time: ~10-12 hours running unattended
+            <br>• Result: 100 hours of lectures → searchable knowledge base
+
+            <br><br><b style="color: #007acc;">📝 Summary Checklist</b>
+            <br>✅ Created throwaway Google account (not main account!)
+            <br>✅ Exported cookies in incognito window from throwaway account only
+            <br>✅ Saved cookies.txt file somewhere accessible
+            <br>✅ Enabled cookie authentication in Transcribe tab
+            <br>✅ Selected cookie file using Browse button
+            <br>✅ Set rate limiting to 3-5 minute delays
+            <br>✅ Checked "Disable proxies when cookies enabled"
+            <br>✅ Ready to paste YouTube URLs and start bulk downloads!
+
+            <br><br><b>🎓 Remember:</b> This setup is one-time. After initial configuration, you just paste URLs and
+            click Start. Cookies last 7-10 days before needing refresh. The system handles everything else automatically!
+            """
+        )
+
+        youtube_text.setWordWrap(True)
+        youtube_text.setTextFormat(Qt.TextFormat.RichText)
+        youtube_text.setStyleSheet("line-height: 1.4;")
+        youtube_text.setOpenExternalLinks(
+            True
+        )  # Allow clicking the Google accounts link
+        parent_layout.addWidget(youtube_text)
 
     def _create_workflows_section(self, parent_layout: Any) -> None:
         """Create common workflows section."""
