@@ -381,7 +381,7 @@ class UnifiedHCEPipeline:
         short_summary: str,
         final_outputs: PipelineOutputs,
     ) -> str:
-        """Generate post-evaluation comprehensive summary."""
+        """Generate post-evaluation comprehensive summary with source context."""
         try:
             # Load long summary prompt
             prompt_path = Path(__file__).parent / "prompts" / "long_summary.txt"
@@ -391,6 +391,21 @@ class UnifiedHCEPipeline:
                 return short_summary
 
             prompt_template = prompt_path.read_text()
+            
+            # Add source metadata context if available
+            context_parts = []
+            if episode.video_metadata:
+                if title := episode.video_metadata.get('title'):
+                    context_parts.append(f"Source Title: {title}")
+                if uploader := episode.video_metadata.get('uploader'):
+                    context_parts.append(f"Author/Channel: {uploader}")
+                if desc := episode.video_metadata.get('description'):
+                    context_parts.append(f"Description: {desc[:300]}...")
+                if chapters := episode.video_metadata.get('chapters'):
+                    chapter_titles = [c.get('title', 'Unknown') for c in chapters[:5]]
+                    context_parts.append(f"Topics Covered: {', '.join(chapter_titles)}")
+            
+            source_context = "\n".join(context_parts) if context_parts else "No source metadata available"
 
             # Format top-ranked claims
             top_claims_text = []
@@ -424,9 +439,10 @@ class UnifiedHCEPipeline:
                 f"Recommendations: {claims_evaluation.recommendations or 'None'}"
             )
 
-            # Create the full prompt
+            # Create the full prompt with source context
             full_prompt = (
                 prompt_template.replace("{short_summary}", short_summary)
+                .replace("{source_context}", source_context)
                 .replace("{top_claims}", "\n".join(top_claims_text))
                 .replace("{flagship_assessment}", flagship_text)
                 .replace("{people}", people_text or "None identified")

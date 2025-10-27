@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -148,6 +148,11 @@ class EpisodeBundle(BaseModel):
     episode_id: str
     segments: list[Segment]
     milestones: list[Milestone] | None = None
+    
+    # Source metadata (for evaluator and summary generation context)
+    # NOT used by miner (which extracts atomic claims from segments)
+    # Used by: evaluator (contextual ranking), long_summary (informed synthesis)
+    video_metadata: dict[str, Any] | None = None
 
 
 class PipelineOutputs(BaseModel):

@@ -78,4 +78,6 @@ scipy>=1.10.0
 # pyannote.audio>=3.1.0
 # torch>=2.1.0
 # transformers>=4.35.0
-# sentence-transformers>=2.2.0
+sentence-transformers>=2.2.0  # For WikiData category embedding matching
+python-Levenshtein>=0.21.0  # For fuzzy string matching (fuzzywuzzy backend)
+fuzzywuzzy>=0.18.0  # For hybrid WikiData matching validation

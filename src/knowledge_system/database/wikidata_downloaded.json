@@ -1,0 +1,182 @@
+{
+  "version": "2.0.0",
+  "created": "2025-10-26",
+  "source": "WikiData SPARQL",
+  "description": "Downloaded WikiData taxonomy with 21 categories",
+  "categories": [
+    {
+      "wikidata_id": "Q21201",
+      "category_name": "sociology",
+      "description": "social science that studies human society and its development",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q25379",
+      "category_name": "play",
+      "description": "theatrical dramatic work intended to be performed by actors (in theatre, radio or recorded for TV)",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q34749",
+      "category_name": "social science",
+      "description": "academic disciplines concerned with society and the relationships between individuals in society",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q336",
+      "category_name": "science",
+      "description": "systematic endeavor that builds and organizes knowledge, and the set of knowledge produced by this system",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q420",
+      "category_name": "biology",
+      "description": "scientific study of living things, especially their structure, function, growth, evolution, and distribution",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q8242",
+      "category_name": "literature",
+      "description": "polysemous term referring to a written art form, and the set of all literary works",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q34178",
+      "category_name": "theology",
+      "description": "study of the nature of deities and religious beliefs",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q8134",
+      "category_name": "economics",
+      "description": "social science that studies the production, distribution, and consumption of goods and services",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q638",
+      "category_name": "music",
+      "description": "art using sound",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q9158",
+      "category_name": "email",
+      "description": "electronic changing digital messages between a network",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q735",
+      "category_name": "art",
+      "description": "general concept that creates expressive work for its beauty or emotional power (use Q838948 for the resulting work, use Q2018526 for the group of creative disciplines)",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q9134",
+      "category_name": "mythology",
+      "description": "collection of sacred stories or a set of beliefs belonging to a specific religious or cultural tradition. It is a system of narratives that typically explain the origin of the world, natural phenomena, human customs",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q7163",
+      "category_name": "politics",
+      "description": "activities associated with group decisions",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q395",
+      "category_name": "mathematics",
+      "description": "field of study",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q8386",
+      "category_name": "drug",
+      "description": "chemical substance having an effect on the body",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q9129",
+      "category_name": "Greek",
+      "description": "Indo-European language",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q2329",
+      "category_name": "chemistry",
+      "description": "branch of physical science concerned with the composition, structure and properties of matter",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q413",
+      "category_name": "physics",
+      "description": "study of matter and its motion, along with related concepts such as energy and force",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q11016",
+      "category_name": "technology",
+      "description": "making, modification, usage, and knowledge of tools, machines, techniques, crafts, systems, and methods of organization, or tools and techniques so created",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q11024",
+      "category_name": "communication",
+      "description": "act of conveying intended meaning",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q11378",
+      "category_name": "Shiva",
+      "description": "one of the principal deities of Hinduism",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    }
+  ],
+  "metadata": {
+    "total_categories": 21,
+    "general_categories": 21,
+    "specific_categories": 0,
+    "subcategory_depth": 2
+  }
+}

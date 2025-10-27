@@ -377,6 +377,38 @@ class PersonExternalId(Base):
     person = relationship("Person", back_populates="external_ids")
 
 
+class PersonEvidence(Base):
+    """All mentions of a person with timestamps (not just first mention)."""
+    
+    __tablename__ = "person_evidence"
+    
+    # Composite primary key
+    person_id = Column(String, ForeignKey("people.person_id", ondelete="CASCADE"), primary_key=True)
+    claim_id = Column(String, ForeignKey("claims.claim_id", ondelete="CASCADE"), primary_key=True)
+    sequence = Column(Integer, primary_key=True)  # Order of mentions
+    
+    # Timing
+    start_time = Column(String, nullable=False)
+    end_time = Column(String, nullable=False)
+    
+    # Content
+    quote = Column(Text, nullable=False)  # How they were mentioned
+    surface_form = Column(String)  # Exact text used
+    segment_id = Column(String)
+    
+    # Context (extended window)
+    context_start_time = Column(String)
+    context_end_time = Column(String)
+    context_text = Column(Text)
+    context_type = Column(String, default='exact')
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    person = relationship("Person")
+    claim = relationship("Claim")
+
+
 class Concept(Base):
     """Concepts / Mental Models catalog."""
     
@@ -428,6 +460,37 @@ class ConceptAlias(Base):
     concept = relationship("Concept", back_populates="aliases")
 
 
+class ConceptEvidence(Base):
+    """All mentions of a concept with timestamps (not just first mention)."""
+    
+    __tablename__ = "concept_evidence"
+    
+    # Composite primary key
+    concept_id = Column(String, ForeignKey("concepts.concept_id", ondelete="CASCADE"), primary_key=True)
+    claim_id = Column(String, ForeignKey("claims.claim_id", ondelete="CASCADE"), primary_key=True)
+    sequence = Column(Integer, primary_key=True)  # Order of mentions
+    
+    # Timing
+    start_time = Column(String, nullable=False)
+    end_time = Column(String, nullable=False)
+    
+    # Content
+    quote = Column(Text, nullable=False)  # Example/usage of the concept
+    segment_id = Column(String)
+    
+    # Context (extended window)
+    context_start_time = Column(String)
+    context_end_time = Column(String)
+    context_text = Column(Text)
+    context_type = Column(String, default='exact')
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    concept = relationship("Concept")
+    claim = relationship("Claim")
+
+
 class JargonTerm(Base):
     """Jargon terms catalog."""
     
@@ -463,6 +526,37 @@ class ClaimJargon(Base):
     # Relationships
     claim = relationship("Claim", back_populates="jargon")
     jargon_term = relationship("JargonTerm", back_populates="claim_mentions")
+
+
+class JargonEvidence(Base):
+    """All usages of jargon with timestamps (not just first mention)."""
+    
+    __tablename__ = "jargon_evidence"
+    
+    # Composite primary key
+    jargon_id = Column(String, ForeignKey("jargon_terms.jargon_id", ondelete="CASCADE"), primary_key=True)
+    claim_id = Column(String, ForeignKey("claims.claim_id", ondelete="CASCADE"), primary_key=True)
+    sequence = Column(Integer, primary_key=True)  # Order of mentions
+    
+    # Timing
+    start_time = Column(String, nullable=False)
+    end_time = Column(String, nullable=False)
+    
+    # Content
+    quote = Column(Text, nullable=False)  # Usage of the jargon term
+    segment_id = Column(String)
+    
+    # Context (extended window)
+    context_start_time = Column(String)
+    context_end_time = Column(String)
+    context_text = Column(Text)
+    context_type = Column(String, default='exact')
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    jargon_term = relationship("JargonTerm")
+    claim = relationship("Claim")
 
 
 # ============================================================================

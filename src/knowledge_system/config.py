@@ -496,6 +496,31 @@ class YouTubeProcessingConfig(BaseModel):
         description="Automatically disable proxies when cookies are enabled (recommended for home IP usage)",
     )
 
+    # Sleep period settings (Option B: Light sleep for human-like behavior)
+    enable_sleep_period: bool = Field(
+        default=True,
+        description="Enable daily sleep period to mimic human behavior (recommended for large batches)",
+    )
+
+    sleep_start_hour: int = Field(
+        default=0,
+        ge=0,
+        le=23,
+        description="Hour to start sleep period (0-23, local time). Default 0 = midnight",
+    )
+
+    sleep_end_hour: int = Field(
+        default=6,
+        ge=0,
+        le=23,
+        description="Hour to end sleep period (0-23, local time). Default 6 = 6am",
+    )
+
+    sleep_timezone: str = Field(
+        default="America/Los_Angeles",
+        description="Timezone for sleep period (e.g., 'America/New_York', 'Europe/London')",
+    )
+
 
 class MOCConfig(BaseModel):
     """MOC (Maps of Content) configuration."""

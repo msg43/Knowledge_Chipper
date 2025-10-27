@@ -23,11 +23,15 @@ from .claim_models import (
     ClaimTag,
     Concept,
     ConceptAlias,
+    ConceptEvidence,
     Episode,
     EvidenceSpan,
+    JargonEvidence,
     JargonTerm,
     MediaSource,
+    Milestone,
     Person,
+    PersonEvidence,
     PersonExternalId,
     Segment,
     WikiDataCategory,
@@ -108,7 +112,68 @@ class ClaimStore:
                 
                 session.flush()
             
-            # 3. Store claims (claims are the fundamental unit)
+            # 3. Store milestones (chapter/section markers with timestamps)
+            if hasattr(outputs, 'milestones') and outputs.milestones:
+                for milestone_data in outputs.milestones:
+                    # Check if milestone exists
+                    milestone = session.query(Milestone).filter_by(
+                        episode_id=episode_id,
+                        milestone_id=milestone_data.milestone_id,
+                    ).first()
+                    
+                    if not milestone:
+                        milestone = Milestone(
+                            episode_id=episode_id,
+                            milestone_id=milestone_data.milestone_id,
+                            start_time=milestone_data.t0,
+                            end_time=milestone_data.t1,
+                            summary=milestone_data.summary,
+                        )
+                        session.add(milestone)
+                    else:
+                        # Update existing
+                        milestone.start_time = milestone_data.t0
+                        milestone.end_time = milestone_data.t1
+                        milestone.summary = milestone_data.summary
+                
+                session.flush()
+                logger.info(f"Stored {len(outputs.milestones)} milestones")
+            
+            # 4. Clear FTS indexes for this source (for clean re-indexing)
+            # Using raw connection for FTS operations
+            conn = self.db_service.engine.raw_connection()
+            try:
+                cur = conn.cursor()
+                
+                # Clear old FTS entries for this source
+                if source_type == 'episode' and episode_id:
+                    cur.execute(
+                        "DELETE FROM claims_fts WHERE episode_id = ?", 
+                        (episode_id,)
+                    )
+                    cur.execute(
+                        "DELETE FROM evidence_fts WHERE episode_id = ?", 
+                        (episode_id,)
+                    )
+                else:
+                    # For non-episode sources, clear by source_id
+                    cur.execute(
+                        "DELETE FROM claims_fts WHERE source_id = ?", 
+                        (source_id,)
+                    )
+                    cur.execute(
+                        "DELETE FROM evidence_fts WHERE source_id = ?", 
+                        (source_id,)
+                    )
+                
+                conn.commit()
+            except Exception as e:
+                logger.warning(f"FTS cleanup failed (tables may not exist): {e}")
+                conn.rollback()
+            finally:
+                conn.close()
+            
+            # 5. Store claims (claims are the fundamental unit)
             for claim_data in outputs.claims:
                 # Generate global claim ID
                 global_claim_id = f"{source_id}_{claim_data.claim_id}"
@@ -165,6 +230,53 @@ class ClaimStore:
                     )
                     session.add(evidence_span)
                 
+                session.flush()
+                
+                # 3c. Index claim and evidence in FTS (Full-Text Search)
+                conn = self.db_service.engine.raw_connection()
+                try:
+                    cur = conn.cursor()
+                    
+                    # Index the claim text for search
+                    cur.execute(
+                        """
+                        INSERT INTO claims_fts(
+                            claim_id, source_id, episode_id, canonical, claim_type
+                        ) VALUES(?, ?, ?, ?, ?)
+                        """,
+                        (
+                            global_claim_id,
+                            source_id,
+                            episode_id,
+                            claim_data.canonical,
+                            claim_data.claim_type,
+                        ),
+                    )
+                    
+                    # Index each evidence quote for search
+                    for seq, evidence in enumerate(claim_data.evidence):
+                        if evidence.quote:
+                            cur.execute(
+                                """
+                                INSERT INTO evidence_fts(
+                                    claim_id, source_id, episode_id, quote
+                                ) VALUES(?, ?, ?, ?)
+                                """,
+                                (
+                                    global_claim_id,
+                                    source_id,
+                                    episode_id,
+                                    evidence.quote,
+                                ),
+                            )
+                    
+                    conn.commit()
+                except Exception as e:
+                    logger.warning(f"FTS indexing failed (tables may not exist): {e}")
+                    conn.rollback()
+                finally:
+                    conn.close()
+                
                 # 3b. Store claim categories (normalized - no JSON)
                 if hasattr(claim_data, 'structured_categories') and claim_data.structured_categories:
                     # Delete old categories
@@ -195,7 +307,7 @@ class ClaimStore:
                             else:
                                 logger.warning(f"WikiData category not found: {wikidata_id}")
             
-            # 4. Store claim relations
+            # 6. Store claim relations
             for relation in outputs.relations:
                 # Generate global claim IDs
                 source_global_id = f"{source_id}_{relation.source_claim_id}"
@@ -222,10 +334,18 @@ class ClaimStore:
                     existing.strength = relation.strength
                     existing.rationale = relation.rationale
             
-            # 5. Store people (normalized - no JSON for external_ids)
+            # 7. Store people (normalized - no JSON for external_ids)
+            # Group person mentions by normalized name to track all mentions
+            person_mentions_by_name = {}
             for person_data in outputs.people:
-                # Create/get person
                 person_name = person_data.normalized or person_data.surface
+                if person_name not in person_mentions_by_name:
+                    person_mentions_by_name[person_name] = []
+                person_mentions_by_name[person_name].append(person_data)
+            
+            for person_name, mentions in person_mentions_by_name.items():
+                # Create/get person (using first mention for metadata)
+                first_mention = mentions[0]
                 person = session.query(Person).filter_by(name=person_name).first()
                 
                 if not person:
@@ -233,16 +353,14 @@ class ClaimStore:
                     person = Person(
                         person_id=person_id,
                         name=person_name,
-                        normalized_name=person_data.normalized,
-                        entity_type=person_data.entity_type or 'person',
-                        confidence=person_data.confidence,
+                        normalized_name=first_mention.normalized,
+                        entity_type=first_mention.entity_type or 'person',
+                        confidence=first_mention.confidence,
                     )
                     session.add(person)
                     session.flush()
                 
                 # Link person to claims (many-to-many)
-                # We need to determine which claims mention this person
-                # For now, link to all claims in this source (can be refined later)
                 for claim_data in outputs.claims:
                     global_claim_id = f"{source_id}_{claim_data.claim_id}"
                     
@@ -257,14 +375,39 @@ class ClaimStore:
                             claim_person = ClaimPerson(
                                 claim_id=global_claim_id,
                                 person_id=person.person_id,
-                                first_mention_ts=person_data.t0,
-                                mention_context=person_data.surface,
+                                first_mention_ts=first_mention.t0,
+                                mention_context=first_mention.surface,
                             )
                             session.add(claim_person)
                 
+                # Store ALL mentions with timestamps (not just first)
+                # Delete old evidence for this person
+                session.query(PersonEvidence).filter_by(person_id=person.person_id).delete()
+                
+                for seq, mention in enumerate(mentions):
+                    # Link to the claim that contains this mention
+                    for claim_data in outputs.claims:
+                        global_claim_id = f"{source_id}_{claim_data.claim_id}"
+                        # Check if this mention's segment matches any claim evidence
+                        if mention.span_segment_id and any(e.segment_id == mention.span_segment_id for e in claim_data.evidence):
+                            person_evidence = PersonEvidence(
+                                person_id=person.person_id,
+                                claim_id=global_claim_id,
+                                sequence=seq,
+                                start_time=mention.t0,
+                                end_time=mention.t1,
+                                quote=mention.surface,  # How they were mentioned
+                                surface_form=mention.surface,
+                                segment_id=mention.span_segment_id,
+                                # No extended context for person mentions in current schema
+                                context_type='exact',
+                            )
+                            session.add(person_evidence)
+                            break  # Found the claim, move to next mention
+                
                 # Store external IDs (normalized)
-                if hasattr(person_data, 'external_ids') and person_data.external_ids:
-                    for system, ext_id in person_data.external_ids.items():
+                if hasattr(first_mention, 'external_ids') and first_mention.external_ids:
+                    for system, ext_id in first_mention.external_ids.items():
                         existing_ext = session.query(PersonExternalId).filter_by(
                             person_id=person.person_id,
                             external_system=system,
@@ -278,7 +421,7 @@ class ClaimStore:
                             )
                             session.add(external_id)
             
-            # 6. Store concepts (normalized - no JSON for aliases)
+            # 8. Store concepts (normalized - no JSON for aliases)
             for concept_data in outputs.concepts:
                 # Create/get concept
                 concept = session.query(Concept).filter_by(name=concept_data.name).first()
@@ -313,6 +456,35 @@ class ClaimStore:
                             )
                             session.add(claim_concept)
                 
+                # Store ALL evidence spans (not just first mention)
+                if hasattr(concept_data, 'evidence_spans') and concept_data.evidence_spans:
+                    # Delete old evidence for this concept
+                    session.query(ConceptEvidence).filter_by(
+                        concept_id=concept.concept_id
+                    ).delete()
+                    
+                    for seq, evidence in enumerate(concept_data.evidence_spans):
+                        # Link to the claim that contains this evidence
+                        for claim_data in outputs.claims:
+                            global_claim_id = f"{source_id}_{claim_data.claim_id}"
+                            # Check if this evidence belongs to this claim (by segment or text match)
+                            if evidence.segment_id and any(e.segment_id == evidence.segment_id for e in claim_data.evidence):
+                                concept_evidence = ConceptEvidence(
+                                    concept_id=concept.concept_id,
+                                    claim_id=global_claim_id,
+                                    sequence=seq,
+                                    start_time=evidence.t0,
+                                    end_time=evidence.t1,
+                                    quote=evidence.quote,
+                                    segment_id=evidence.segment_id,
+                                    context_start_time=evidence.context_t0,
+                                    context_end_time=evidence.context_t1,
+                                    context_text=evidence.context_text,
+                                    context_type=evidence.context_type,
+                                )
+                                session.add(concept_evidence)
+                                break  # Found the claim, move to next evidence
+                
                 # Store aliases (normalized)
                 if hasattr(concept_data, 'aliases') and concept_data.aliases:
                     for alias in concept_data.aliases:
@@ -328,7 +500,7 @@ class ClaimStore:
                             )
                             session.add(concept_alias)
             
-            # 7. Store jargon (normalized)
+            # 9. Store jargon (normalized)
             for jargon_data in outputs.jargon:
                 # Create/get jargon term
                 jargon = session.query(JargonTerm).filter_by(term=jargon_data.term).first()
@@ -362,8 +534,37 @@ class ClaimStore:
                                 first_mention_ts=jargon_data.evidence_spans[0].t0 if jargon_data.evidence_spans else None,
                             )
                             session.add(claim_jargon)
+                
+                # Store ALL evidence spans (not just first mention)
+                if hasattr(jargon_data, 'evidence_spans') and jargon_data.evidence_spans:
+                    # Delete old evidence for this jargon
+                    session.query(JargonEvidence).filter_by(
+                        jargon_id=jargon.jargon_id
+                    ).delete()
+                    
+                    for seq, evidence in enumerate(jargon_data.evidence_spans):
+                        # Link to the claim that contains this evidence
+                        for claim_data in outputs.claims:
+                            global_claim_id = f"{source_id}_{claim_data.claim_id}"
+                            # Check if this evidence belongs to this claim (by segment or text match)
+                            if evidence.segment_id and any(e.segment_id == evidence.segment_id for e in claim_data.evidence):
+                                jargon_evidence = JargonEvidence(
+                                    jargon_id=jargon.jargon_id,
+                                    claim_id=global_claim_id,
+                                    sequence=seq,
+                                    start_time=evidence.t0,
+                                    end_time=evidence.t1,
+                                    quote=evidence.quote,
+                                    segment_id=evidence.segment_id,
+                                    context_start_time=evidence.context_t0,
+                                    context_end_time=evidence.context_t1,
+                                    context_text=evidence.context_text,
+                                    context_type=evidence.context_type,
+                                )
+                                session.add(jargon_evidence)
+                                break  # Found the claim, move to next evidence
             
-            # 8. NOTE: We do NOT store source-level WikiData categories
+            # 10. NOTE: We do NOT store source-level WikiData categories
             # Sources are categorized by:
             # - Platform categories (from YouTube/RSS) - handled separately
             # - Aggregated claim categories (computed via JOIN)
@@ -373,12 +574,18 @@ class ClaimStore:
             
             session.commit()
             
+            # Calculate total evidence spans stored
+            total_claim_evidence = sum(len(c.evidence) for c in outputs.claims)
+            total_concept_evidence = sum(len(c.evidence_spans) for c in outputs.concepts if hasattr(c, 'evidence_spans'))
+            total_jargon_evidence = sum(len(j.evidence_spans) for j in outputs.jargon if hasattr(j, 'evidence_spans'))
+            total_people_mentions = len(outputs.people)
+            
             logger.info(
-                f"✅ Stored {len(outputs.claims)} claims with evidence, "
+                f"✅ Stored {len(outputs.claims)} claims ({total_claim_evidence} evidence spans), "
                 f"{len(outputs.relations)} relations, "
-                f"{len(outputs.people)} people, "
-                f"{len(outputs.concepts)} concepts, "
-                f"{len(outputs.jargon)} jargon terms"
+                f"{len(person_mentions_by_name)} people ({total_people_mentions} mentions), "
+                f"{len(outputs.concepts)} concepts ({total_concept_evidence} evidence spans), "
+                f"{len(outputs.jargon)} jargon terms ({total_jargon_evidence} evidence spans)"
             )
     
     def get_claim(self, claim_id: str, with_context: bool = True) -> dict | None:

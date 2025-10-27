@@ -1451,18 +1451,77 @@ class FileGenerationService:
         pipeline_outputs,  # PipelineOutputs
     ) -> Path | None:
         """
-        Generate summary markdown from rich PipelineOutputs.
+        Generate summary markdown from rich PipelineOutputs with source metadata.
 
-        This version includes evidence spans, relations, and categories
-        that weren't available in the old simple format.
+        This version includes evidence spans, relations, categories, and
+        YouTube/source metadata for complete context.
         """
         try:
             output_file = self.summaries_dir / f"{video_id}_summary.md"
+            
+            # Fetch source metadata
+            video_metadata = None
+            try:
+                source_id = video_id.replace("episode_", "")
+                with self.db_service.get_session() as session:
+                    from ..database.models import MediaSource
+                    source = session.query(MediaSource).filter_by(source_id=source_id).first()
+                    if source:
+                        video_metadata = {
+                            'title': source.title,
+                            'description': source.description,
+                            'uploader': source.uploader,
+                            'upload_date': source.upload_date,
+                            'duration_seconds': source.duration_seconds,
+                            'tags': source.tags_json,
+                            'chapters': source.video_chapters_json,
+                            'url': source.url,
+                        }
+            except Exception as e:
+                logger.warning(f"Could not fetch source metadata: {e}")
 
             # Build comprehensive markdown
             markdown_lines = [
                 f"# Summary: {episode_id}",
                 "",
+            ]
+            
+            # Add source metadata section if available
+            if video_metadata:
+                markdown_lines.extend([
+                    "## Source Information",
+                    f"- **Title:** {video_metadata.get('title', 'N/A')}",
+                    f"- **Author/Channel:** {video_metadata.get('uploader', 'N/A')}",
+                    f"- **Upload Date:** {video_metadata.get('upload_date', 'N/A')}",
+                    f"- **Duration:** {video_metadata.get('duration_seconds', 0) // 60} minutes",
+                    f"- **URL:** {video_metadata.get('url', 'N/A')}",
+                    "",
+                ])
+                
+                if desc := video_metadata.get('description'):
+                    markdown_lines.extend([
+                        "### Description",
+                        desc[:500] + ("..." if len(desc) > 500 else ""),
+                        "",
+                    ])
+                
+                if tags := video_metadata.get('tags'):
+                    markdown_lines.extend([
+                        "### Tags",
+                        ", ".join(tags[:20]),
+                        "",
+                    ])
+                
+                if chapters := video_metadata.get('chapters'):
+                    markdown_lines.extend([
+                        "### Chapters",
+                        "",
+                    ])
+                    for ch in chapters[:10]:  # Limit to 10 chapters
+                        markdown_lines.append(f"- [{ch.get('start_time', '0:00')}] {ch.get('title', 'Unknown')}")
+                    markdown_lines.append("")
+            
+            markdown_lines.extend([
                 "## Overview",
                 f"- **Claims:** {len(pipeline_outputs.claims)}",
                 f"  - Tier A: {len([c for c in pipeline_outputs.claims if c.tier == 'A'])}",
@@ -1488,7 +1547,7 @@ class FileGenerationService:
                     ]
                 )
 
-            # Add Tier A claims with evidence
+            # Add Tier A claims with evidence and metadata
             tier_a_claims = [c for c in pipeline_outputs.claims if c.tier == "A"]
             if tier_a_claims:
                 markdown_lines.extend(
@@ -1499,9 +1558,24 @@ class FileGenerationService:
                 )
                 for claim in tier_a_claims[:20]:  # Top 20
                     markdown_lines.append(f"### {claim.canonical}")
-                    markdown_lines.append(
-                        f"**Type:** {claim.claim_type} | **Tier:** {claim.tier}"
-                    )
+                    
+                    # Enhanced metadata display
+                    metadata_parts = [f"**Type:** {claim.claim_type}", f"**Tier:** {claim.tier}"]
+                    
+                    # Add temporality info
+                    if hasattr(claim, 'temporality_score') and claim.temporality_score:
+                        temporal_labels = {1: "Immediate", 2: "Short-term", 3: "Medium-term", 4: "Long-term", 5: "Timeless"}
+                        temporal_label = temporal_labels.get(claim.temporality_score, "Unknown")
+                        conf = getattr(claim, 'temporality_confidence', 0.5)
+                        metadata_parts.append(f"**Temporality:** {temporal_label} (confidence: {conf:.2f})")
+                    
+                    # Add scores
+                    if hasattr(claim, 'scores') and claim.scores:
+                        score_str = ", ".join([f"{k}={v:.2f}" for k, v in claim.scores.items() if v is not None])
+                        if score_str:
+                            metadata_parts.append(f"**Scores:** {score_str}")
+                    
+                    markdown_lines.append(" | ".join(metadata_parts))
 
                     if claim.evidence:
                         markdown_lines.append("")

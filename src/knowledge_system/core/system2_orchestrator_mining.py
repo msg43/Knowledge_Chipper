@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-from ..database.hce_store import HCEStore
 from ..errors import ErrorCode, KnowledgeSystemError
 from ..processors.hce.config_flex import PipelineConfigFlex, StageModelConfig
 from ..processors.hce.types import EpisodeBundle, Segment
@@ -30,9 +29,23 @@ async def process_mine_with_unified_pipeline(
     - Claim evaluation and A/B/C ranking
     - Relations between claims
     - Structured categories
+    - Full checkpoint support for resumability
+    
+    Checkpoint structure:
+    {
+        "stage": "parsing" | "mining" | "storing" | "completed",
+        "completed_segments": ["seg_0001", "seg_0002", ...],
+        "pipeline_outputs_partial": {...},  # Partial results if interrupted
+        "total_segments": 100
+    }
     """
 
     try:
+        # Check if already completed
+        if checkpoint and checkpoint.get("stage") == "completed":
+            logger.info(f"Job already completed (from checkpoint), returning cached results")
+            return checkpoint.get("final_result", {"status": "succeeded", "output_id": episode_id})
+
         # 1. Load transcript
         if orchestrator.progress_callback:
             orchestrator.progress_callback("loading", 0, episode_id)
@@ -47,12 +60,25 @@ async def process_mine_with_unified_pipeline(
         transcript_text = Path(file_path).read_text()
 
         # 2. Parse transcript to segments
-        if orchestrator.progress_callback:
-            orchestrator.progress_callback("parsing", 5, episode_id)
+        if checkpoint and checkpoint.get("stage") in ["mining", "storing"]:
+            logger.info("Resuming from checkpoint - skipping parsing")
+            segments = orchestrator._parse_transcript_to_segments(
+                transcript_text, episode_id
+            )
+        else:
+            if orchestrator.progress_callback:
+                orchestrator.progress_callback("parsing", 5, episode_id)
 
-        segments = orchestrator._parse_transcript_to_segments(
-            transcript_text, episode_id
-        )
+            segments = orchestrator._parse_transcript_to_segments(
+                transcript_text, episode_id
+            )
+            
+            # Save checkpoint after parsing
+            orchestrator.save_checkpoint(run_id, {
+                "stage": "parsing",
+                "total_segments": len(segments),
+                "completed_segments": []
+            })
 
         if not segments:
             logger.warning(f"No segments parsed from transcript for {episode_id}")
@@ -72,8 +98,42 @@ async def process_mine_with_unified_pipeline(
 
         logger.info(f"📄 Parsed {len(segments)} segments for mining")
 
-        # 3. Create EpisodeBundle
-        episode_bundle = EpisodeBundle(episode_id=episode_id, segments=segments)
+        # 3. Check for completed segments and filter if resuming
+        completed_segment_ids = set()
+        if checkpoint and checkpoint.get("stage") == "mining":
+            completed_segment_ids = set(checkpoint.get("completed_segments", []))
+            if completed_segment_ids:
+                logger.info(f"Resuming mining: {len(completed_segment_ids)}/{len(segments)} segments already completed")
+                # Filter to only unprocessed segments
+                segments = [s for s in segments if s.segment_id not in completed_segment_ids]
+                logger.info(f"Processing remaining {len(segments)} segments")
+
+        # 3a. Fetch video metadata for evaluator/summary context
+        video_metadata = None
+        try:
+            source_id = episode_id.replace("episode_", "")
+            video = orchestrator.db_service.get_video(source_id)
+            if video:
+                video_metadata = {
+                    'title': video.title,
+                    'description': video.description,
+                    'uploader': video.uploader,
+                    'upload_date': video.upload_date,
+                    'duration_seconds': video.duration_seconds,
+                    'tags': video.tags_json,
+                    'chapters': video.video_chapters_json,
+                    'url': video.url,
+                }
+                logger.info(f"📺 Loaded video metadata: {video.title}")
+        except Exception as e:
+            logger.warning(f"Could not fetch video metadata: {e}")
+
+        # 3b. Create EpisodeBundle with metadata
+        episode_bundle = EpisodeBundle(
+            episode_id=episode_id,
+            segments=segments,
+            video_metadata=video_metadata
+        )
 
         # 4. Configure HCE Pipeline
         miner_model = config.get("miner_model", "ollama:qwen2.5:7b-instruct")
@@ -101,9 +161,12 @@ async def process_mine_with_unified_pipeline(
         # 5. Initialize UnifiedHCEPipeline
         pipeline = UnifiedHCEPipeline(hce_config)
 
-        # 6. Create progress callback wrapper
+        # 6. Create progress callback wrapper with checkpoint saving
+        segment_counter = {"count": len(completed_segment_ids)}
+        checkpoint_interval = max(1, len(segments) // 10)  # Save checkpoint every 10%
+        
         def progress_wrapper(progress_obj):
-            """Wrap pipeline progress to orchestrator format."""
+            """Wrap pipeline progress to orchestrator format and save periodic checkpoints."""
             if orchestrator.progress_callback:
                 # Pipeline reports SummarizationProgress objects
                 # Map to orchestrator's callback format
@@ -120,9 +183,32 @@ async def process_mine_with_unified_pipeline(
                 # Map 0-100% to orchestrator's 10-95% range
                 adjusted_percent = 10 + int(percent * 0.85)
                 orchestrator.progress_callback(step, adjusted_percent, episode_id)
+            
+            # Periodic checkpoint saving during mining
+            # Note: This is a best-effort approach; actual segment completion
+            # tracking would require deeper integration with parallel processor
+            segment_counter["count"] += 1
+            if segment_counter["count"] % checkpoint_interval == 0:
+                try:
+                    orchestrator.save_checkpoint(run_id, {
+                        "stage": "mining",
+                        "total_segments": checkpoint.get("total_segments", len(segments)) if checkpoint else len(segments),
+                        "completed_segments": list(completed_segment_ids),
+                        "progress_percent": adjusted_percent if orchestrator.progress_callback else 0
+                    })
+                    logger.debug(f"Saved mining checkpoint at {segment_counter['count']} segments")
+                except Exception as e:
+                    logger.warning(f"Failed to save checkpoint: {e}")
 
         # 7. Process with full pipeline (mining + evaluation + categories)
         logger.info(f"🚀 Starting UnifiedHCEPipeline for {len(segments)} segments")
+
+        # Save checkpoint before starting mining
+        orchestrator.save_checkpoint(run_id, {
+            "stage": "mining",
+            "total_segments": checkpoint.get("total_segments", len(segments)) if checkpoint else len(segments),
+            "completed_segments": list(completed_segment_ids),
+        })
 
         # Align adapter local concurrency with pipeline workers for this run
         try:
@@ -150,6 +236,13 @@ async def process_mine_with_unified_pipeline(
         if orchestrator.progress_callback:
             orchestrator.progress_callback("storing", 90, episode_id)
 
+        # Save checkpoint before storage
+        orchestrator.save_checkpoint(run_id, {
+            "stage": "storing",
+            "total_segments": checkpoint.get("total_segments", len(segments)) if checkpoint else len(segments),
+            "completed_segments": list(completed_segment_ids),
+        })
+
         try:
             # Determine source_id (strip episode_ prefix if present)
             source_id = episode_id.replace("episode_", "")
@@ -164,13 +257,30 @@ async def process_mine_with_unified_pipeline(
                 episode_title=Path(file_path).stem,
             )
             logger.info("💾 Stored claims with evidence to claim-centric database")
+            
+            # Verify claims were actually written to database
+            if orchestrator.progress_callback:
+                orchestrator.progress_callback("verifying", 93, episode_id)
+            
+            with orchestrator.db_service.get_session() as session:
+                from ..database.claim_models import Claim
+                verified_claims = session.query(Claim).filter_by(source_id=source_id).count()
+            
+            if verified_claims != len(pipeline_outputs.claims):
+                raise KnowledgeSystemError(
+                    f"Database verification failed: expected {len(pipeline_outputs.claims)} claims, found {verified_claims}",
+                    ErrorCode.DATABASE_ERROR,
+                )
+            
+            logger.info(f"✅ Database verification passed: {verified_claims} claims stored")
+            
         except Exception as e:
-            logger.error(f"❌ Database storage failed: {e}")
+            logger.error(f"❌ Database storage or verification failed: {e}")
             raise
 
         # 9. Summaries now stored in episodes table (via ClaimStore)
         if orchestrator.progress_callback:
-            orchestrator.progress_callback("generating_summary", 95, episode_id)
+            orchestrator.progress_callback("generating_summary", 96, episode_id)
         
         # Note: Summary text (short_summary, long_summary) is already stored
         # in the episodes table by ClaimStore.upsert_pipeline_outputs()
@@ -188,7 +298,7 @@ async def process_mine_with_unified_pipeline(
                 file_gen = FileGenerationService()
 
             summary_file_path = file_gen.generate_summary_markdown_from_pipeline(
-                video_id, episode_id, pipeline_outputs
+                source_id, episode_id, pipeline_outputs
             )
 
             if summary_file_path:
@@ -197,8 +307,12 @@ async def process_mine_with_unified_pipeline(
         except Exception as e:
             logger.error(f"❌ Summary file generation failed: {e}")
 
-        # 11. Return rich results
-        return {
+        # 11. Finalize checkpoint
+        if orchestrator.progress_callback:
+            orchestrator.progress_callback("finalizing", 99, episode_id)
+        
+        # 12. Build final results
+        final_result = {
             "status": "succeeded",
             "output_id": episode_id,
             "summary_file": str(summary_file_path) if summary_file_path else None,
@@ -228,6 +342,28 @@ async def process_mine_with_unified_pipeline(
             },
         }
 
+        # 13. Save final checkpoint marking job as completed
+        orchestrator.save_checkpoint(run_id, {
+            "stage": "completed",
+            "total_segments": checkpoint.get("total_segments", len(segments)) if checkpoint else len(segments),
+            "completed_segments": list(completed_segment_ids),
+            "final_result": final_result
+        })
+        
+        logger.info(f"✅ Mining job completed and checkpoint saved")
+        
+        return final_result
+
     except Exception as e:
         logger.error(f"❌ Mining failed for {episode_id}: {e}")
+        # Save error checkpoint for potential retry with partial results
+        try:
+            orchestrator.save_checkpoint(run_id, {
+                "stage": "failed",
+                "total_segments": checkpoint.get("total_segments", 0) if checkpoint else 0,
+                "completed_segments": list(completed_segment_ids) if completed_segment_ids else [],
+                "error": str(e)
+            })
+        except Exception as checkpoint_error:
+            logger.warning(f"Failed to save error checkpoint: {checkpoint_error}")
         raise
