@@ -503,13 +503,16 @@ class UnifiedHCEPipeline:
         self,
         episode: EpisodeBundle,
         miner_outputs: list[UnifiedMinerOutput],
-        evaluation_output: FlagshipEvaluationOutput,
+        claims_evaluation,  # FlagshipEvaluationOutput
+        jargon_evaluation,  # JargonEvaluationOutput | None
+        people_evaluation,  # PeopleEvaluationOutput | None
+        concepts_evaluation,  # ConceptsEvaluationOutput | None
     ) -> PipelineOutputs:
-        """Convert unified pipeline results to the standard PipelineOutputs format."""
+        """Convert unified pipeline results to the standard PipelineOutputs format using evaluated entities."""
 
         # Convert accepted claims to ScoredClaim format
         scored_claims = []
-        accepted_claims = evaluation_output.get_claims_by_rank()
+        accepted_claims = claims_evaluation.get_claims_by_rank()
 
         for eval_claim in accepted_claims:
             # Find the original claim data to get evidence
