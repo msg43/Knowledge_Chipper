@@ -204,7 +204,7 @@ class UnifiedHCEPipeline:
 
         try:
             long_summary = self._generate_long_summary(
-                episode, miner_outputs, evaluation_output, short_summary, final_outputs
+                episode, miner_outputs, claims_evaluation, short_summary, final_outputs
             )
             final_outputs.long_summary = long_summary
             logger.info(f"Generated long summary: {len(long_summary)} characters")
@@ -377,7 +377,7 @@ class UnifiedHCEPipeline:
         self,
         episode: EpisodeBundle,
         miner_outputs: list[UnifiedMinerOutput],
-        evaluation_output: FlagshipEvaluationOutput,
+        claims_evaluation: FlagshipEvaluationOutput,
         short_summary: str,
         final_outputs: PipelineOutputs,
     ) -> str:
@@ -399,13 +399,13 @@ class UnifiedHCEPipeline:
                 top_claims_text.append(f"{i}. [{importance:.1f}/10] {claim.canonical}")
 
             # Format flagship assessment
-            flagship_themes = ", ".join(evaluation_output.key_themes)
+            flagship_themes = ", ".join(claims_evaluation.key_themes)
             flagship_text = (
-                f"Quality: {evaluation_output.overall_quality}\n"
+                f"Quality: {claims_evaluation.overall_quality}\n"
                 f"Key Themes: {flagship_themes}\n"
-                f"Claims Processed: {evaluation_output.total_claims_processed}\n"
-                f"Accepted: {evaluation_output.claims_accepted}\n"
-                f"Rejected: {evaluation_output.claims_rejected}"
+                f"Claims Processed: {claims_evaluation.total_claims_processed}\n"
+                f"Accepted: {claims_evaluation.claims_accepted}\n"
+                f"Rejected: {claims_evaluation.claims_rejected}"
             )
 
             # Format people
@@ -419,9 +419,9 @@ class UnifiedHCEPipeline:
 
             # Format evaluation stats
             eval_stats = (
-                f"Total Claims: {evaluation_output.total_claims_processed}\n"
-                f"Acceptance Rate: {evaluation_output.claims_accepted / max(evaluation_output.total_claims_processed, 1) * 100:.1f}%\n"
-                f"Recommendations: {evaluation_output.recommendations or 'None'}"
+                f"Total Claims: {claims_evaluation.total_claims_processed}\n"
+                f"Acceptance Rate: {claims_evaluation.claims_accepted / max(claims_evaluation.total_claims_processed, 1) * 100:.1f}%\n"
+                f"Recommendations: {claims_evaluation.recommendations or 'None'}"
             )
 
             # Create the full prompt
@@ -483,7 +483,7 @@ class UnifiedHCEPipeline:
             return (
                 f"{short_summary}\n\n"
                 f"This analysis identified {len(final_outputs.claims)} significant claims, "
-                f"with {evaluation_output.claims_accepted} accepted by evaluation. "
+                f"with {claims_evaluation.claims_accepted} accepted by evaluation. "
                 f"Key participants include {len(final_outputs.people)} individuals, "
                 f"and {len(final_outputs.concepts)} mental models or frameworks were discussed."
             )
@@ -573,73 +573,91 @@ class UnifiedHCEPipeline:
 
             scored_claims.append(scored_claim)
 
-        # Convert other entities from miner outputs to proper Pydantic models
-
+        # Convert EVALUATED entities (with deduplication and filtering)
         all_jargon = []
         all_people = []
         all_mental_models = []
 
-        for output in miner_outputs:
-            # Convert jargon terms
-            for i, jargon_data in enumerate(output.jargon):
-                if isinstance(jargon_data, dict):
-                    jargon_term = JargonTerm(
-                        episode_id=episode.episode_id,
-                        term_id=f"jargon_{len(all_jargon):04d}",
-                        term=jargon_data.get("term", ""),
-                        definition=jargon_data.get("definition"),
-                        evidence_spans=(
-                            [
-                                EvidenceSpan(
-                                    t0=jargon_data.get("timestamp", "00:00"),
-                                    t1=jargon_data.get("timestamp", "00:00"),
-                                    quote=jargon_data.get("context_quote", ""),
-                                    segment_id=None,
-                                )
-                            ]
-                            if jargon_data.get("context_quote")
-                            else []
-                        ),
-                    )
-                    all_jargon.append(jargon_term)
+        # Process evaluated jargon (if evaluation succeeded)
+        if jargon_evaluation:
+            for eval_jargon in jargon_evaluation.get_accepted_jargon():
+                jargon_term = JargonTerm(
+                    episode_id=episode.episode_id,
+                    term_id=f"jargon_{len(all_jargon):04d}",
+                    term=eval_jargon.canonical_term,
+                    definition=eval_jargon.definition,
+                    category=eval_jargon.category if hasattr(eval_jargon, 'category') else None,
+                )
+                all_jargon.append(jargon_term)
+        else:
+            # Fallback: Use raw miner outputs (no deduplication)
+            for output in miner_outputs:
+                for jargon_data in output.jargon:
+                    if isinstance(jargon_data, dict):
+                        jargon_term = JargonTerm(
+                            episode_id=episode.episode_id,
+                            term_id=f"jargon_{len(all_jargon):04d}",
+                            term=jargon_data.get("term", ""),
+                            definition=jargon_data.get("definition"),
+                        )
+                        all_jargon.append(jargon_term)
 
-            # Convert people mentions
-            for i, person_data in enumerate(output.people):
-                if isinstance(person_data, dict):
-                    person_mention = PersonMention(
-                        episode_id=episode.episode_id,
-                        mention_id=f"person_{len(all_people):04d}",
-                        span_segment_id="unknown",
-                        t0=person_data.get("timestamp", "00:00"),
-                        t1=person_data.get("timestamp", "00:00"),
-                        surface=person_data.get("name", ""),
-                        normalized=person_data.get("name", ""),
-                    )
-                    all_people.append(person_mention)
+        # Process evaluated people (if evaluation succeeded)
+        if people_evaluation:
+            for eval_person in people_evaluation.get_accepted_people():
+                person_mention = PersonMention(
+                    episode_id=episode.episode_id,
+                    mention_id=f"person_{len(all_people):04d}",
+                    span_segment_id="unknown",
+                    t0="00:00",
+                    t1="00:00",
+                    surface=eval_person.canonical_name,
+                    normalized=eval_person.canonical_name,
+                    entity_type="person",
+                    role_description=eval_person.role if hasattr(eval_person, 'role') else None,
+                )
+                all_people.append(person_mention)
+        else:
+            # Fallback: Use raw miner outputs (no deduplication)
+            for output in miner_outputs:
+                for person_data in output.people:
+                    if isinstance(person_data, dict):
+                        person_mention = PersonMention(
+                            episode_id=episode.episode_id,
+                            mention_id=f"person_{len(all_people):04d}",
+                            span_segment_id="unknown",
+                            t0=person_data.get("timestamp", "00:00"),
+                            t1=person_data.get("timestamp", "00:00"),
+                            surface=person_data.get("name", ""),
+                            normalized=person_data.get("name", ""),
+                        )
+                        all_people.append(person_mention)
 
-            # Convert mental models
-            for i, model_data in enumerate(output.mental_models):
-                if isinstance(model_data, dict):
-                    mental_model = MentalModel(
-                        episode_id=episode.episode_id,
-                        model_id=f"model_{len(all_mental_models):04d}",
-                        name=model_data.get("name", ""),
-                        definition=model_data.get("description"),
-                        first_mention_ts=model_data.get("timestamp", "00:00"),
-                        evidence_spans=(
-                            [
-                                EvidenceSpan(
-                                    t0=model_data.get("timestamp", "00:00"),
-                                    t1=model_data.get("timestamp", "00:00"),
-                                    quote=model_data.get("context_quote", ""),
-                                    segment_id=None,
-                                )
-                            ]
-                            if model_data.get("context_quote")
-                            else []
-                        ),
-                    )
-                    all_mental_models.append(mental_model)
+        # Process evaluated concepts (if evaluation succeeded)
+        if concepts_evaluation:
+            for eval_concept in concepts_evaluation.get_accepted_concepts():
+                mental_model = MentalModel(
+                    episode_id=episode.episode_id,
+                    model_id=f"concept_{len(all_mental_models):04d}",
+                    name=eval_concept.canonical_name,
+                    definition=eval_concept.description,
+                    first_mention_ts="00:00",
+                    aliases=[],
+                )
+                all_mental_models.append(mental_model)
+        else:
+            # Fallback: Use raw miner outputs (no deduplication)
+            for output in miner_outputs:
+                for model_data in output.mental_models:
+                    if isinstance(model_data, dict):
+                        mental_model = MentalModel(
+                            episode_id=episode.episode_id,
+                            model_id=f"concept_{len(all_mental_models):04d}",
+                            name=model_data.get("name", ""),
+                            definition=model_data.get("description"),
+                            first_mention_ts=model_data.get("timestamp", "00:00"),
+                        )
+                        all_mental_models.append(mental_model)
 
         # Create final pipeline outputs
         return PipelineOutputs(

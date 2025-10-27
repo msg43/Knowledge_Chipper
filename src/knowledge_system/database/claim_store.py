@@ -30,7 +30,6 @@ from .claim_models import (
     Person,
     PersonExternalId,
     Segment,
-    SourceCategory,
     WikiDataCategory,
 )
 
@@ -364,32 +363,13 @@ class ClaimStore:
                             )
                             session.add(claim_jargon)
             
-            # 8. Store source categories (from structured_categories)
-            if outputs.structured_categories:
-                # Delete old source categories
-                session.query(SourceCategory).filter_by(source_id=source_id).delete()
-                
-                # Store top 3 as source categories
-                for rank, cat in enumerate(outputs.structured_categories[:3], start=1):
-                    wikidata_id = cat.wikidata_qid or cat.category_id
-                    
-                    # Verify WikiData category exists
-                    wikidata_cat = session.query(WikiDataCategory).filter_by(
-                        wikidata_id=wikidata_id
-                    ).first()
-                    
-                    if wikidata_cat:
-                        source_category = SourceCategory(
-                            source_id=source_id,
-                            wikidata_id=wikidata_id,
-                            relevance_score=cat.coverage_confidence,
-                            confidence=0.8,
-                            rank=rank,
-                            source='system',
-                        )
-                        session.add(source_category)
-                    else:
-                        logger.warning(f"WikiData category not in vocabulary: {wikidata_id} ({cat.category_name})")
+            # 8. NOTE: We do NOT store source-level WikiData categories
+            # Sources are categorized by:
+            # - Platform categories (from YouTube/RSS) - handled separately
+            # - Aggregated claim categories (computed via JOIN)
+            
+            # Platform categories would be stored elsewhere when processing YouTube/RSS metadata
+            # For now, structured_categories from the pipeline are used for claim categorization only
             
             session.commit()
             

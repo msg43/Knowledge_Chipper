@@ -78,7 +78,6 @@ class MediaSource(Base):
     # Relationships
     claims = relationship("Claim", back_populates="source", foreign_keys="Claim.source_id")
     episodes = relationship("Episode", back_populates="source", uselist=False)
-    source_categories = relationship("SourceCategory", back_populates="source", cascade="all, delete-orphan")
     platform_categories = relationship("SourcePlatformCategory", back_populates="source", cascade="all, delete-orphan")
     platform_tags = relationship("SourcePlatformTag", back_populates="source", cascade="all, delete-orphan")
     
@@ -490,7 +489,6 @@ class WikiDataCategory(Base):
     
     # Relationships
     parent = relationship("WikiDataCategory", remote_side=[wikidata_id], backref="children")
-    source_categories = relationship("SourceCategory", back_populates="wikidata_category", cascade="all, delete-orphan")
     claim_categories = relationship("ClaimCategory", back_populates="wikidata_category", cascade="all, delete-orphan")
     aliases = relationship("WikiDataAlias", back_populates="wikidata_category", cascade="all, delete-orphan")
     
@@ -510,41 +508,6 @@ class WikiDataAlias(Base):
     
     # Relationships
     wikidata_category = relationship("WikiDataCategory", back_populates="aliases")
-
-
-class SourceCategory(Base):
-    """Source categories (max 3 general topics)."""
-    
-    __tablename__ = "source_categories"
-    
-    # Composite primary key
-    source_id = Column(String, ForeignKey("media_sources.source_id", ondelete="CASCADE"), primary_key=True)
-    wikidata_id = Column(String, ForeignKey("wikidata_categories.wikidata_id"), primary_key=True)
-    
-    # System scores
-    relevance_score = Column(Float)
-    confidence = Column(Float)
-    
-    # Ranking (1, 2, or 3)
-    rank = Column(Integer)
-    
-    # User workflow
-    user_approved = Column(Boolean, default=False)
-    user_rejected = Column(Boolean, default=False)
-    source = Column(String, default='system')
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relationships
-    source = relationship("MediaSource", back_populates="source_categories")  # Changed name to avoid conflict
-    wikidata_category = relationship("WikiDataCategory", back_populates="source_categories")
-    
-    __table_args__ = (
-        CheckConstraint("relevance_score BETWEEN 0 AND 1", name="ck_relevance_score"),
-        CheckConstraint("confidence BETWEEN 0 AND 1", name="ck_confidence"),
-        CheckConstraint("rank BETWEEN 1 AND 3", name="ck_rank"),
-    )
 
 
 class ClaimCategory(Base):

@@ -2063,3 +2063,51 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to export claim validation data: {e}")
             return False
+
+    def bulk_insert_json(
+        self,
+        table_name: str,
+        records: list[dict[str, Any]],
+        conflict_resolution: str = "REPLACE",
+    ) -> int:
+        """
+        High-performance bulk insert from JSON data.
+        
+        Bypasses ORM for maximum speed using direct SQL.
+        
+        Args:
+            table_name: Target table name
+            records: List of dictionaries with column: value mappings
+            conflict_resolution: "REPLACE", "IGNORE", or "FAIL"
+            
+        Returns:
+            Number of records inserted
+        """
+        if not records:
+            return 0
+            
+        try:
+            with self.get_session() as session:
+                # Extract columns from first record
+                columns = list(records[0].keys())
+                placeholders = ", ".join([f":{col}" for col in columns])
+                columns_str = ", ".join(columns)
+                
+                # Build appropriate INSERT statement
+                if conflict_resolution == "REPLACE":
+                    sql = f"INSERT OR REPLACE INTO {table_name} ({columns_str}) VALUES ({placeholders})"
+                elif conflict_resolution == "IGNORE":
+                    sql = f"INSERT OR IGNORE INTO {table_name} ({columns_str}) VALUES ({placeholders})"
+                else:
+                    sql = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders})"
+                
+                # Execute bulk insert
+                session.execute(text(sql), records)
+                session.commit()
+                
+                logger.info(f"Bulk inserted {len(records)} records into {table_name}")
+                return len(records)
+            
+        except Exception as e:
+            logger.error(f"Bulk insert failed for {table_name}: {e}")
+            raise

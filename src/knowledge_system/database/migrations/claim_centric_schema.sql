@@ -391,42 +391,10 @@ CREATE TABLE IF NOT EXISTS wikidata_aliases (
 
 CREATE INDEX idx_wikidata_aliases_alias ON wikidata_aliases(alias);
 
--- Source categories (max 3 general topics)
-CREATE TABLE IF NOT EXISTS source_categories (
-    source_id TEXT NOT NULL,
-    wikidata_id TEXT NOT NULL,
-    
-    -- System scores
-    relevance_score REAL CHECK (relevance_score BETWEEN 0 AND 1),
-    confidence REAL CHECK (confidence BETWEEN 0 AND 1),
-    
-    -- Ranking (1, 2, or 3)
-    rank INTEGER CHECK (rank BETWEEN 1 AND 3),
-    
-    -- User workflow
-    user_approved BOOLEAN DEFAULT 0,
-    user_rejected BOOLEAN DEFAULT 0,
-    source TEXT DEFAULT 'system',  -- 'system' or 'user'
-    
-    created_at DATETIME DEFAULT (datetime('now')),
-    updated_at DATETIME DEFAULT (datetime('now')),
-    
-    PRIMARY KEY (source_id, wikidata_id),
-    FOREIGN KEY (source_id) REFERENCES media_sources(source_id) ON DELETE CASCADE,
-    FOREIGN KEY (wikidata_id) REFERENCES wikidata_categories(wikidata_id)
-);
-
-CREATE INDEX idx_source_categories_source ON source_categories(source_id);
-CREATE INDEX idx_source_categories_category ON source_categories(wikidata_id);
-CREATE INDEX idx_source_categories_rank ON source_categories(rank);
-
--- Trigger to enforce max 3 categories per source
-CREATE TRIGGER IF NOT EXISTS enforce_source_category_limit
-BEFORE INSERT ON source_categories
-WHEN (SELECT COUNT(*) FROM source_categories WHERE source_id = NEW.source_id AND (user_rejected IS NULL OR user_rejected = 0)) >= 3
-BEGIN
-    SELECT RAISE(ABORT, 'Source already has 3 active categories (max limit)');
-END;
+-- NOTE: Sources do NOT get their own WikiData categories
+-- Episodes/sources are categorized by:
+-- 1. Platform categories (from YouTube/RSS) - stored in platform_categories below
+-- 2. Aggregated claim categories (what claims inside contain) - computed via JOIN, not stored
 
 -- Claim categories (typically 1 specific topic)
 CREATE TABLE IF NOT EXISTS claim_categories (
