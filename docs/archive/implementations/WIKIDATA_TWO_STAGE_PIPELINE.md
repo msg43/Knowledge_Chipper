@@ -512,4 +512,3 @@ Store in database
 **Winner:** Two-stage pipeline!
 
 Ready to implement this approach?
-

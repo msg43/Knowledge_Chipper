@@ -744,7 +744,9 @@ class AudioProcessor(BaseProcessor):
             for speaker_data in speaker_data_list:
                 if speaker_data.suggested_name:
                     assignments[speaker_data.speaker_id] = speaker_data.suggested_name
-                    confidence_indicator = "✅" if speaker_data.confidence_score > 0.7 else "⚠️"
+                    confidence_indicator = (
+                        "✅" if speaker_data.confidence_score > 0.7 else "⚠️"
+                    )
                     logger.info(
                         f"{confidence_indicator} Using LLM suggestion: {speaker_data.speaker_id} -> "
                         f"'{speaker_data.suggested_name}' (confidence: {speaker_data.confidence_score:.2f})"
@@ -760,7 +762,9 @@ class AudioProcessor(BaseProcessor):
                     try:
                         num = int(speaker_num)
                         letter = chr(65 + num)  # A, B, C, ...
-                        assignments[speaker_data.speaker_id] = f"Unknown Speaker {letter}"
+                        assignments[
+                            speaker_data.speaker_id
+                        ] = f"Unknown Speaker {letter}"
                         logger.error(
                             f"Emergency fallback: {speaker_data.speaker_id} -> 'Unknown Speaker {letter}'"
                         )
@@ -1700,7 +1704,9 @@ class AudioProcessor(BaseProcessor):
                                         diarization_segments,
                                         transcript_segments,
                                         metadata_for_speaker,
-                                        str(path),  # Pass audio path for voice fingerprinting
+                                        str(
+                                            path
+                                        ),  # Pass audio path for voice fingerprinting
                                     )
                                 )
 

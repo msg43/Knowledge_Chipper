@@ -532,7 +532,7 @@ class SpeakerProcessor(BaseProcessor):
         """
         Use state-of-the-art voice fingerprinting to merge speakers that have the same voice.
         This prevents over-segmentation at the source rather than cleaning up after.
-        
+
         Args:
             speaker_map: Dictionary mapping speaker IDs to their data
             audio_path: Path to the audio file for extracting segments
@@ -540,9 +540,14 @@ class SpeakerProcessor(BaseProcessor):
         try:
             # Import voice fingerprinting
             try:
-                from ..voice.voice_fingerprinting import VoiceFingerprintProcessor, load_audio_for_voice_processing
                 from pathlib import Path
+
                 import numpy as np
+
+                from ..voice.voice_fingerprinting import (
+                    VoiceFingerprintProcessor,
+                    load_audio_for_voice_processing,
+                )
 
                 voice_processor = VoiceFingerprintProcessor()
                 logger.info(
@@ -557,7 +562,9 @@ class SpeakerProcessor(BaseProcessor):
 
             # If no audio path provided, fall back to text-based heuristics
             if not audio_path:
-                logger.debug("No audio path provided - using text-based similarity fallback")
+                logger.debug(
+                    "No audio path provided - using text-based similarity fallback"
+                )
                 self._voice_fingerprint_merge_speakers_fallback(speaker_map)
                 return
 
@@ -565,69 +572,75 @@ class SpeakerProcessor(BaseProcessor):
                 # Load the full audio file
                 audio_file = Path(audio_path)
                 if not audio_file.exists():
-                    logger.warning(f"Audio file not found: {audio_path} - using fallback")
+                    logger.warning(
+                        f"Audio file not found: {audio_path} - using fallback"
+                    )
                     self._voice_fingerprint_merge_speakers_fallback(speaker_map)
                     return
-                
+
                 full_audio = load_audio_for_voice_processing(audio_file)
                 sample_rate = 16000
-                
+
                 # Extract voice fingerprints for each speaker
                 speaker_fingerprints = {}
-                
+
                 for speaker_id, speaker_data in speaker_map.items():
                     # Get audio segments for this speaker (use first few segments, up to 30 seconds total)
                     audio_segments = []
                     total_duration = 0.0
                     max_duration = 30.0  # Use up to 30 seconds for fingerprinting
-                    
+
                     for segment in speaker_data.segments:
                         if total_duration >= max_duration:
                             break
-                        
+
                         start_sample = int(segment.start * sample_rate)
                         end_sample = int(segment.end * sample_rate)
-                        
+
                         # Validate segment bounds
-                        if start_sample >= len(full_audio) or end_sample > len(full_audio):
+                        if start_sample >= len(full_audio) or end_sample > len(
+                            full_audio
+                        ):
                             continue
-                        
+
                         segment_audio = full_audio[start_sample:end_sample]
-                        
+
                         # Only use segments longer than 0.5 seconds
                         if len(segment_audio) > sample_rate * 0.5:
                             audio_segments.append(segment_audio)
                             total_duration += (end_sample - start_sample) / sample_rate
-                    
+
                     if not audio_segments:
                         logger.debug(f"No valid audio segments for {speaker_id}")
                         continue
-                    
+
                     # Concatenate segments for this speaker
                     concatenated_audio = np.concatenate(audio_segments)
-                    
+
                     # Extract voice fingerprint
-                    fingerprint = voice_processor.extract_voice_fingerprint(concatenated_audio)
+                    fingerprint = voice_processor.extract_voice_fingerprint(
+                        concatenated_audio
+                    )
                     speaker_fingerprints[speaker_id] = fingerprint
-                    
+
                     logger.debug(
                         f"Extracted fingerprint for {speaker_id} from {len(audio_segments)} segments ({total_duration:.1f}s)"
                     )
-                
+
                 # Compare speakers pairwise using voice fingerprints
                 speakers_to_merge = []
                 main_speakers = list(speaker_fingerprints.keys())
-                
+
                 for i, speaker1_id in enumerate(main_speakers):
-                    for speaker2_id in main_speakers[i + 1:]:
+                    for speaker2_id in main_speakers[i + 1 :]:
                         fingerprint1 = speaker_fingerprints[speaker1_id]
                         fingerprint2 = speaker_fingerprints[speaker2_id]
-                        
+
                         # Calculate voice similarity
                         similarity_score = voice_processor.calculate_voice_similarity(
                             fingerprint1, fingerprint2
                         )
-                        
+
                         # Use 0.7 threshold for merging (70% similar = same person)
                         if similarity_score > 0.7:
                             logger.info(
@@ -637,7 +650,7 @@ class SpeakerProcessor(BaseProcessor):
                             speakers_to_merge.append(
                                 (speaker1_id, speaker2_id, similarity_score)
                             )
-                
+
                 # Perform merges for highly similar speakers
                 for speaker1_id, speaker2_id, score in speakers_to_merge:
                     if speaker2_id in speaker_map:  # Check if still exists
@@ -645,14 +658,14 @@ class SpeakerProcessor(BaseProcessor):
                         logger.info(
                             f"🎯 Merged {speaker2_id} into {speaker1_id} (voice similarity: {score:.3f})"
                         )
-                
+
             except Exception as e:
                 logger.warning(f"Error extracting audio segments: {e} - using fallback")
                 self._voice_fingerprint_merge_speakers_fallback(speaker_map)
 
         except Exception as e:
             logger.error(f"Error in voice fingerprint merging: {e}")
-    
+
     def _voice_fingerprint_merge_speakers_fallback(
         self, speaker_map: dict[str, SpeakerData]
     ) -> None:
@@ -664,7 +677,7 @@ class SpeakerProcessor(BaseProcessor):
 
         # Compare speakers pairwise for potential merging
         for i, speaker1_id in enumerate(main_speakers):
-            for speaker2_id in main_speakers[i + 1:]:
+            for speaker2_id in main_speakers[i + 1 :]:
                 speaker1_data = speaker_map[speaker1_id]
                 speaker2_data = speaker_map[speaker2_id]
 
@@ -975,7 +988,7 @@ class SpeakerProcessor(BaseProcessor):
     ) -> None:
         """
         🚨 OPTIMIZED: Channel mapping BEFORE LLM for maximum accuracy.
-        
+
         Flow:
         1. Check channel mapping FIRST - identify known hosts
         2. Pass pre-identified speakers to LLM as context
@@ -997,11 +1010,9 @@ class SpeakerProcessor(BaseProcessor):
             # PRIORITY 1: Get known host names from channel (if available)
             # DOES NOT assign to speaker IDs - provides context to LLM
             known_hosts = self._get_known_hosts_from_channel(metadata)
-            
+
             if known_hosts:
-                logger.info(
-                    f"📺 Channel has known hosts: {known_hosts}"
-                )
+                logger.info(f"📺 Channel has known hosts: {known_hosts}")
                 logger.info(
                     f"   → LLM will match speakers to these names based on content"
                 )
@@ -1080,90 +1091,94 @@ class SpeakerProcessor(BaseProcessor):
                 speaker_data.suggested_name = f"Unknown Speaker {letter}"
                 speaker_data.confidence_score = 0.1
                 speaker_data.suggestion_method = "emergency_fallback"
-    
+
     def _get_known_hosts_from_channel(
         self,
         metadata: dict[str, Any] | None = None,
     ) -> list[str] | None:
         """
         Get known host names from channel mapping to provide as context to LLM.
-        
+
         DOES NOT assign to specific speaker IDs - lets LLM figure out which speaker
         is which based on content analysis (self-intros, being addressed, etc.)
-        
+
         Example:
         - Channel: "Eurodollar University"
         - Returns: ["Jeff Snider", "Emil Kalinowski"]
         - LLM prompt: "This channel is hosted by Jeff Snider and Emil Kalinowski.
                        Determine which speaker is which based on the transcript."
-        
+
         Args:
             metadata: Video/podcast metadata with channel info
-            
+
         Returns:
             List of known host names for this channel, or None
         """
         if not metadata:
             return None
-            
+
         # Get channel name from metadata
         channel_name = metadata.get("uploader") or metadata.get("channel")
         if not channel_name:
             logger.debug("No channel information in metadata")
             return None
-        
+
         # Load channel mappings from config
         try:
-            import yaml
             from pathlib import Path
-            
+
+            import yaml
+
             config_path = (
                 Path(__file__).parent.parent.parent
                 / "config"
                 / "speaker_attribution.yaml"
             )
-            
+
             if not config_path.exists():
                 logger.debug("speaker_attribution.yaml not found")
                 return None
-                
+
             with open(config_path) as f:
                 config = yaml.safe_load(f)
-            
+
             channel_mappings = config.get("channel_mappings", {})
-            
+
             if not channel_mappings:
                 logger.debug("No channel mappings configured")
                 return None
-                
+
         except Exception as e:
             logger.warning(f"Failed to load channel mappings: {e}")
             return None
-        
+
         # Check if this channel has mappings
         channel_config = None
         for configured_channel, config_data in channel_mappings.items():
             # Case-insensitive, partial match
-            if configured_channel.lower() in channel_name.lower() or channel_name.lower() in configured_channel.lower():
+            if (
+                configured_channel.lower() in channel_name.lower()
+                or channel_name.lower() in configured_channel.lower()
+            ):
                 channel_config = config_data
                 logger.info(f"📺 Found channel mapping for: {channel_name}")
                 break
-        
+
         if not channel_config or "hosts" not in channel_config:
             logger.debug(f"No mappings configured for channel: {channel_name}")
             return None
-        
+
         # Extract host names from config
         hosts = channel_config.get("hosts", [])
         if not hosts:
             return None
-        
+
         known_host_names = []
         for host_config in hosts:
             host_name = host_config.get("full_name")
             if host_name:
                 known_host_names.append(host_name)
-        
+
         if known_host_names:
             logger.info(
                 f"📺 Channel '{channel_name}' is hosted by: {', '.join(known_host_names)}"
@@ -1171,7 +1186,7 @@ class SpeakerProcessor(BaseProcessor):
             logger.info(
                 f"   → LLM will use this context to match speakers to these names"
             )
-        
+
         return known_host_names if known_host_names else None
 
     def _apply_conversational_context_analysis(
@@ -1202,7 +1217,7 @@ class SpeakerProcessor(BaseProcessor):
         try:
             # NOTE: Channel mapping now happens BEFORE LLM call (in _suggest_all_speaker_names_together)
             # This method focuses on conversational context analysis only
-            
+
             # Import the context analyzer (Layer 4)
             from ..utils.speaker_intelligence import SpeakerContextAnalyzer
 
@@ -1276,7 +1291,7 @@ class SpeakerProcessor(BaseProcessor):
         except Exception as e:
             logger.warning(f"Error in contextual analysis: {e}")
             return None
-    
+
     # REMOVED: _apply_channel_mappings method - replaced by _identify_speakers_from_channel
     # Channel identification now happens BEFORE LLM call, not after
     # This allows LLM to use host context for better guest identification

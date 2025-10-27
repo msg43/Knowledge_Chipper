@@ -170,4 +170,3 @@ Return valid JSON only (no additional text):
 ```
 
 Remember: Be rigorous in deduplication and filtering. It's better to have 50 well-chosen specialized terms than 200 terms including common vocabulary.
-

@@ -603,5 +603,3 @@ Database FK → ENFORCED (must be in wikidata_categories table)
 **Session Complete!** 🎉
 
 Everything is documented, tested, and ready for production use.
-
-

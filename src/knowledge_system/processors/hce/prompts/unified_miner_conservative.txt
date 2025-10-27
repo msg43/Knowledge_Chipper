@@ -122,4 +122,3 @@ Each mental model must include:
 - **timestamp**: When it's discussed
 
 Remember: Be SELECTIVE. Quality over quantity. Extract only what truly matters for understanding the content's intellectual contribution.
-

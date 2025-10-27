@@ -389,4 +389,3 @@ Save this as `scripts/cleanup_obsolete.sh` and run with:
 chmod +x scripts/cleanup_obsolete.sh
 ./scripts/cleanup_obsolete.sh
 ```
-

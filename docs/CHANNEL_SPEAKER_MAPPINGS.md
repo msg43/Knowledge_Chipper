@@ -263,4 +263,3 @@ Channel-based speaker mapping is a powerful feature that:
 - ✅ Integrates seamlessly with voice fingerprinting and LLM analysis
 
 Perfect for podcast channels with consistent hosts!
-

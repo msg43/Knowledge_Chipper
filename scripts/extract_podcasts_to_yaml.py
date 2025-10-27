@@ -267,12 +267,18 @@ PODCASTS = [
     ("Las Culturistas", "Matt Rogers"),
 ]
 
+
 def generate_partial_names(host_name):
     """Generate partial name variations."""
     # Remove titles
-    clean_name = host_name.replace("Dr. ", "").replace("Mr. ", "").replace("Ms. ", "").replace("Mrs. ", "")
+    clean_name = (
+        host_name.replace("Dr. ", "")
+        .replace("Mr. ", "")
+        .replace("Ms. ", "")
+        .replace("Mrs. ", "")
+    )
     parts = clean_name.split()
-    
+
     partials = []
     if len(parts) >= 2:
         partials.append(parts[0])  # First name
@@ -282,9 +288,10 @@ def generate_partial_names(host_name):
             partials.append(f"{parts[0]} {parts[1][0]}.")
     elif len(parts) == 1:
         partials.append(parts[0])
-    
+
     # Remove duplicates
     return list(dict.fromkeys(partials))[:3]
+
 
 print("# Channel-based speaker mappings")
 print("# Auto-generated from 300+ popular podcasts")
@@ -293,14 +300,13 @@ print("channel_mappings:")
 
 for channel, host in PODCASTS:
     partials = generate_partial_names(host)
-    partial_str = ', '.join(f'"{p}"' for p in partials)
-    
+    partial_str = ", ".join(f'"{p}"' for p in partials)
+
     print(f'  "{channel}":')
-    print('    hosts:')
+    print("    hosts:")
     print(f'      - full_name: "{host}"')
-    print(f'        partial_names: [{partial_str}]')
+    print(f"        partial_names: [{partial_str}]")
     print('        role: "host"')
     print()
 
 print(f"\n# Total: {len(PODCASTS)} podcast channels mapped")
-

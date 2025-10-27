@@ -403,5 +403,3 @@ The WikiData categorization service is:
 - ✅ Ready for integration
 
 **Next:** Integrate into summarization pipeline when ready to switch from episode-level to claim-level categorization!
-
-

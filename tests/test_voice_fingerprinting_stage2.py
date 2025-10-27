@@ -38,15 +38,17 @@ class TestDatabaseOperations:
         """Set up test database."""
         # Use unique in-memory SQLite database for each test
         # By using a unique file path, each test gets a fresh database
-        import tempfile
         import os
+        import tempfile
+
         self.temp_db = tempfile.mktemp(suffix=".db")
         self.db_service = SpeakerDatabaseService(f"sqlite:///{self.temp_db}")
-    
+
     def teardown_method(self):
         """Clean up test database."""
         import os
-        if hasattr(self, 'temp_db') and os.path.exists(self.temp_db):
+
+        if hasattr(self, "temp_db") and os.path.exists(self.temp_db):
             os.unlink(self.temp_db)
 
     def test_get_all_voices_empty(self):
@@ -88,7 +90,9 @@ class TestDatabaseOperations:
         }
 
         voice1 = SpeakerVoiceModel(
-            name="MatchTestSpeaker", voice_fingerprint=test_fingerprint, confidence_threshold=0.7
+            name="MatchTestSpeaker",
+            voice_fingerprint=test_fingerprint,
+            confidence_threshold=0.7,
         )
         self.db_service.create_speaker_voice(voice1)
 
@@ -100,7 +104,9 @@ class TestDatabaseOperations:
         }
 
         # Find matches
-        matches = self.db_service.find_matching_voices(similar_fingerprint, threshold=0.5)
+        matches = self.db_service.find_matching_voices(
+            similar_fingerprint, threshold=0.5
+        )
 
         assert len(matches) > 0
         assert matches[0][0].name == "MatchTestSpeaker"
@@ -116,7 +122,9 @@ class TestDatabaseOperations:
         }
 
         voice1 = SpeakerVoiceModel(
-            name="NoMatchTestSpeaker", voice_fingerprint=test_fingerprint, confidence_threshold=0.7
+            name="NoMatchTestSpeaker",
+            voice_fingerprint=test_fingerprint,
+            confidence_threshold=0.7,
         )
         self.db_service.create_speaker_voice(voice1)
 
@@ -192,15 +200,15 @@ class TestVoiceFingerprintExtraction:
         # Should be very similar (close to 1.0)
         assert similarity > 0.95
 
-    def test_calculate_voice_similarity_different(
-        self, voice_processor, sample_audio
-    ):
+    def test_calculate_voice_similarity_different(self, voice_processor, sample_audio):
         """Test similarity with different audio."""
         # Generate different audio
         duration = 3.0
         sample_rate = 16000
         t = np.linspace(0, duration, int(duration * sample_rate))
-        different_audio = np.sin(2 * np.pi * 300 * t).astype(np.float32)  # Different frequency
+        different_audio = np.sin(2 * np.pi * 300 * t).astype(
+            np.float32
+        )  # Different frequency
 
         fp1 = voice_processor.extract_voice_fingerprint(sample_audio)
         fp2 = voice_processor.extract_voice_fingerprint(different_audio)
@@ -439,10 +447,10 @@ class TestEndToEndVoiceFingerprinting:
 
         # Enroll both speakers
         success1 = voice_processor.enroll_speaker(
-            "Speaker1", [speaker1_audio[:sample_rate * 3]]  # 3 seconds
+            "Speaker1", [speaker1_audio[: sample_rate * 3]]  # 3 seconds
         )
         success2 = voice_processor.enroll_speaker(
-            "Speaker2", [speaker2_audio[:sample_rate * 3]]  # 3 seconds
+            "Speaker2", [speaker2_audio[: sample_rate * 3]]  # 3 seconds
         )
 
         assert success1
@@ -451,7 +459,7 @@ class TestEndToEndVoiceFingerprinting:
         # Test identification
         # Should identify speaker 1 from their audio
         result1 = voice_processor.identify_speaker(
-            speaker1_audio[:sample_rate * 2], threshold=0.3
+            speaker1_audio[: sample_rate * 2], threshold=0.3
         )
 
         if result1:  # Only check if models are available
@@ -459,7 +467,7 @@ class TestEndToEndVoiceFingerprinting:
 
         # Should identify speaker 2 from their audio
         result2 = voice_processor.identify_speaker(
-            speaker2_audio[:sample_rate * 2], threshold=0.3
+            speaker2_audio[: sample_rate * 2], threshold=0.3
         )
 
         if result2:  # Only check if models are available
@@ -472,4 +480,3 @@ class TestEndToEndVoiceFingerprinting:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
-

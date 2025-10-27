@@ -353,4 +353,3 @@ Would you like me to:
 3. **Use a pre-downloaded WikiData category dump** and filter it locally?
 
 The fastest path to 70% automation is **option 2** (manual curation to 200 categories).
-

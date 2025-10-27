@@ -227,5 +227,3 @@ src/knowledge_system/database/
 ⏸️ Testing pending  
 
 **Ready to recompute embeddings and test!**
-
-

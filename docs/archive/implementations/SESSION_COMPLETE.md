@@ -216,5 +216,3 @@ When ready to switch from episode-level to claim-level:
 ---
 
 **Session Complete!** All requested work finished, tested, and documented. 🚀
-
-

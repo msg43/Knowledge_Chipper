@@ -521,4 +521,3 @@ This is the **simplest option** that still leverages your hardware better than t
 ---
 
 **Bottom Line**: With 128GB RAM, you can run 20+ workers, but you need either multiple accounts OR 24/7 downloads to keep them fed. The 3-account strategy is the sweet spot for speed + safety.
-

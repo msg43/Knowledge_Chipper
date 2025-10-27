@@ -1458,24 +1458,29 @@ class FileGenerationService:
         """
         try:
             output_file = self.summaries_dir / f"{video_id}_summary.md"
-            
+
             # Fetch source metadata
             video_metadata = None
             try:
                 source_id = video_id.replace("episode_", "")
                 with self.db_service.get_session() as session:
                     from ..database.models import MediaSource
-                    source = session.query(MediaSource).filter_by(source_id=source_id).first()
+
+                    source = (
+                        session.query(MediaSource)
+                        .filter_by(source_id=source_id)
+                        .first()
+                    )
                     if source:
                         video_metadata = {
-                            'title': source.title,
-                            'description': source.description,
-                            'uploader': source.uploader,
-                            'upload_date': source.upload_date,
-                            'duration_seconds': source.duration_seconds,
-                            'tags': source.tags_json,
-                            'chapters': source.video_chapters_json,
-                            'url': source.url,
+                            "title": source.title,
+                            "description": source.description,
+                            "uploader": source.uploader,
+                            "upload_date": source.upload_date,
+                            "duration_seconds": source.duration_seconds,
+                            "tags": source.tags_json,
+                            "chapters": source.video_chapters_json,
+                            "url": source.url,
                         }
             except Exception as e:
                 logger.warning(f"Could not fetch source metadata: {e}")
@@ -1485,58 +1490,68 @@ class FileGenerationService:
                 f"# Summary: {episode_id}",
                 "",
             ]
-            
+
             # Add source metadata section if available
             if video_metadata:
-                markdown_lines.extend([
-                    "## Source Information",
-                    f"- **Title:** {video_metadata.get('title', 'N/A')}",
-                    f"- **Author/Channel:** {video_metadata.get('uploader', 'N/A')}",
-                    f"- **Upload Date:** {video_metadata.get('upload_date', 'N/A')}",
-                    f"- **Duration:** {video_metadata.get('duration_seconds', 0) // 60} minutes",
-                    f"- **URL:** {video_metadata.get('url', 'N/A')}",
-                    "",
-                ])
-                
-                if desc := video_metadata.get('description'):
-                    markdown_lines.extend([
-                        "### Description",
-                        desc[:500] + ("..." if len(desc) > 500 else ""),
+                markdown_lines.extend(
+                    [
+                        "## Source Information",
+                        f"- **Title:** {video_metadata.get('title', 'N/A')}",
+                        f"- **Author/Channel:** {video_metadata.get('uploader', 'N/A')}",
+                        f"- **Upload Date:** {video_metadata.get('upload_date', 'N/A')}",
+                        f"- **Duration:** {video_metadata.get('duration_seconds', 0) // 60} minutes",
+                        f"- **URL:** {video_metadata.get('url', 'N/A')}",
                         "",
-                    ])
-                
-                if tags := video_metadata.get('tags'):
-                    markdown_lines.extend([
-                        "### Tags",
-                        ", ".join(tags[:20]),
-                        "",
-                    ])
-                
-                if chapters := video_metadata.get('chapters'):
-                    markdown_lines.extend([
-                        "### Chapters",
-                        "",
-                    ])
+                    ]
+                )
+
+                if desc := video_metadata.get("description"):
+                    markdown_lines.extend(
+                        [
+                            "### Description",
+                            desc[:500] + ("..." if len(desc) > 500 else ""),
+                            "",
+                        ]
+                    )
+
+                if tags := video_metadata.get("tags"):
+                    markdown_lines.extend(
+                        [
+                            "### Tags",
+                            ", ".join(tags[:20]),
+                            "",
+                        ]
+                    )
+
+                if chapters := video_metadata.get("chapters"):
+                    markdown_lines.extend(
+                        [
+                            "### Chapters",
+                            "",
+                        ]
+                    )
                     for ch in chapters[:10]:  # Limit to 10 chapters
-                        start_time = ch.get('start_time', '0:00')
-                        ch_title = ch.get('title', 'Unknown')
+                        start_time = ch.get("start_time", "0:00")
+                        ch_title = ch.get("title", "Unknown")
                         markdown_lines.append(f"- [{start_time}] {ch_title}")
                     markdown_lines.append("")
-            
-            markdown_lines.extend([
-                "## Overview",
-                f"- **Claims:** {len(pipeline_outputs.claims)}",
-                f"  - Tier A: {len([c for c in pipeline_outputs.claims if c.tier == 'A'])}",
-                f"  - Tier B: {len([c for c in pipeline_outputs.claims if c.tier == 'B'])}",
-                f"  - Tier C: {len([c for c in pipeline_outputs.claims if c.tier == 'C'])}",
-                f"- **Evidence Spans:** {sum(len(c.evidence) for c in pipeline_outputs.claims)}",
-                f"- **People:** {len(pipeline_outputs.people)}",
-                f"- **Concepts:** {len(pipeline_outputs.concepts)}",
-                f"- **Jargon:** {len(pipeline_outputs.jargon)}",
-                f"- **Relations:** {len(pipeline_outputs.relations)}",
-                f"- **Categories:** {len(pipeline_outputs.structured_categories)}",
-                "",
-            ])
+
+            markdown_lines.extend(
+                [
+                    "## Overview",
+                    f"- **Claims:** {len(pipeline_outputs.claims)}",
+                    f"  - Tier A: {len([c for c in pipeline_outputs.claims if c.tier == 'A'])}",
+                    f"  - Tier B: {len([c for c in pipeline_outputs.claims if c.tier == 'B'])}",
+                    f"  - Tier C: {len([c for c in pipeline_outputs.claims if c.tier == 'C'])}",
+                    f"- **Evidence Spans:** {sum(len(c.evidence) for c in pipeline_outputs.claims)}",
+                    f"- **People:** {len(pipeline_outputs.people)}",
+                    f"- **Concepts:** {len(pipeline_outputs.concepts)}",
+                    f"- **Jargon:** {len(pipeline_outputs.jargon)}",
+                    f"- **Relations:** {len(pipeline_outputs.relations)}",
+                    f"- **Categories:** {len(pipeline_outputs.structured_categories)}",
+                    "",
+                ]
+            )
 
             # Add short summary if available
             if pipeline_outputs.short_summary:
@@ -1560,23 +1575,42 @@ class FileGenerationService:
                 )
                 for claim in tier_a_claims[:20]:  # Top 20
                     markdown_lines.append(f"### {claim.canonical}")
-                    
+
                     # Enhanced metadata display
-                    metadata_parts = [f"**Type:** {claim.claim_type}", f"**Tier:** {claim.tier}"]
-                    
+                    metadata_parts = [
+                        f"**Type:** {claim.claim_type}",
+                        f"**Tier:** {claim.tier}",
+                    ]
+
                     # Add temporality info
-                    if hasattr(claim, 'temporality_score') and claim.temporality_score:
-                        temporal_labels = {1: "Immediate", 2: "Short-term", 3: "Medium-term", 4: "Long-term", 5: "Timeless"}
-                        temporal_label = temporal_labels.get(claim.temporality_score, "Unknown")
-                        conf = getattr(claim, 'temporality_confidence', 0.5)
-                        metadata_parts.append(f"**Temporality:** {temporal_label} (confidence: {conf:.2f})")
-                    
+                    if hasattr(claim, "temporality_score") and claim.temporality_score:
+                        temporal_labels = {
+                            1: "Immediate",
+                            2: "Short-term",
+                            3: "Medium-term",
+                            4: "Long-term",
+                            5: "Timeless",
+                        }
+                        temporal_label = temporal_labels.get(
+                            claim.temporality_score, "Unknown"
+                        )
+                        conf = getattr(claim, "temporality_confidence", 0.5)
+                        metadata_parts.append(
+                            f"**Temporality:** {temporal_label} (confidence: {conf:.2f})"
+                        )
+
                     # Add scores
-                    if hasattr(claim, 'scores') and claim.scores:
-                        score_str = ", ".join([f"{k}={v:.2f}" for k, v in claim.scores.items() if v is not None])
+                    if hasattr(claim, "scores") and claim.scores:
+                        score_str = ", ".join(
+                            [
+                                f"{k}={v:.2f}"
+                                for k, v in claim.scores.items()
+                                if v is not None
+                            ]
+                        )
                         if score_str:
                             metadata_parts.append(f"**Scores:** {score_str}")
-                    
+
                     markdown_lines.append(" | ".join(metadata_parts))
 
                     if claim.evidence:

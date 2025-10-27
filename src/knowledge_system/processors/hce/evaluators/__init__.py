@@ -1,8 +1,8 @@
 """Entity evaluators for HCE pipeline."""
 
+from .concepts_evaluator import ConceptsEvaluator, evaluate_concepts
 from .jargon_evaluator import JargonEvaluator, evaluate_jargon
 from .people_evaluator import PeopleEvaluator, evaluate_people
-from .concepts_evaluator import ConceptsEvaluator, evaluate_concepts
 
 __all__ = [
     "JargonEvaluator",
@@ -12,4 +12,3 @@ __all__ = [
     "ConceptsEvaluator",
     "evaluate_concepts",
 ]
-

@@ -327,4 +327,3 @@ scheduler = DownloadScheduler(
 - ✅ **Minimal overhead** (+2 days vs 24/7)
 
 Just set your timezone in config, export cookies from throwaway account, and let it run!
-

@@ -516,5 +516,3 @@ JOIN hce_categories cat ON cc.category_id = cat.category_id;
 ✅ No JSON parsing in queries  
 
 Would you like me to implement this normalized category schema?
-
-

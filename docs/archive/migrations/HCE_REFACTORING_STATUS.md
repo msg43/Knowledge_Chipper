@@ -230,4 +230,3 @@ This is a substantial architectural refactoring (~25-30 hours remaining work).
 **Which approach would you prefer?**
 
 Note: Points 1-2 are already complete and committed. The remaining work is Points 4-5 + testing.
-

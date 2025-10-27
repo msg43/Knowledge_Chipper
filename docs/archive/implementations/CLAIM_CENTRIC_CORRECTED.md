@@ -327,4 +327,3 @@ Claims (fundamental unit)
 - Sources provide optional context via JOIN
 
 This is a **claim-first knowledge base**, not a source library!
-

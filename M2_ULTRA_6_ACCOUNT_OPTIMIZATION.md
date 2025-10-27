@@ -248,4 +248,3 @@ Total: ~25 min × 6 = 2.5 hours (round to 2 hours)
 ---
 
 **Recommendation updated: Use 6 accounts for M2 Ultra 128GB!** 🚀
-

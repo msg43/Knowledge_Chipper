@@ -212,4 +212,3 @@ if name in known_hosts:
 ✅ **Confidence boost** when LLM matches known hosts  
 
 The LLM is now **guided but not constrained** - perfect balance! 🎯
-

@@ -519,4 +519,3 @@ Database FK Constraint (hard enforcement)
 ```
 
 **Result:** LLM can ONLY return categories from our curated WikiData vocabulary!
-

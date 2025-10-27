@@ -341,4 +341,3 @@ SELECT * FROM v_episode_topics WHERE category_name = 'Monetary policy';
 ---
 
 Is this now correct?
-

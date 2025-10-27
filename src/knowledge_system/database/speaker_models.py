@@ -292,33 +292,33 @@ class SpeakerDatabaseService:
     ) -> list[tuple[SpeakerVoice, float]]:
         """
         Find speaker voices matching given audio features.
-        
+
         Args:
             audio_features: Voice fingerprint dictionary with feature types
             threshold: Minimum similarity threshold for matching
-            
+
         Returns:
             List of tuples (SpeakerVoice, similarity_score) sorted by similarity
         """
         try:
-            from scipy.spatial.distance import cosine
             import numpy as np
-            
+            from scipy.spatial.distance import cosine
+
             with self.get_session() as session:
                 all_voices = session.query(SpeakerVoice).all()
-                
+
                 if not all_voices:
                     return []
-                
+
                 matches = []
-                
+
                 # Calculate similarity for each stored voice profile
                 for voice in all_voices:
                     try:
                         stored_features = voice.fingerprint_data
                         if not stored_features:
                             continue
-                        
+
                         # Calculate weighted similarity across feature types
                         similarities = []
                         weights = {
@@ -328,7 +328,7 @@ class SpeakerDatabaseService:
                             "wav2vec2": 0.3,
                             "ecapa": 0.3,
                         }
-                        
+
                         for feature_type, weight in weights.items():
                             if (
                                 feature_type in audio_features
@@ -339,7 +339,7 @@ class SpeakerDatabaseService:
                                 try:
                                     vec1 = np.array(audio_features[feature_type])
                                     vec2 = np.array(stored_features[feature_type])
-                                    
+
                                     # Ensure same dimensionality
                                     if vec1.shape == vec2.shape:
                                         # Use cosine similarity
@@ -348,24 +348,27 @@ class SpeakerDatabaseService:
                                 except Exception as e:
                                     logger.debug(f"Error comparing {feature_type}: {e}")
                                     continue
-                        
+
                         if similarities:
                             # Weighted average similarity
                             total_weight = sum(weight for _, weight in similarities)
                             if total_weight > 0:
                                 weighted_similarity = (
-                                    sum(sim * weight for sim, weight in similarities) / total_weight
+                                    sum(sim * weight for sim, weight in similarities)
+                                    / total_weight
                                 )
                                 # Clamp to [0, 1]
-                                weighted_similarity = max(0.0, min(1.0, weighted_similarity))
-                                
+                                weighted_similarity = max(
+                                    0.0, min(1.0, weighted_similarity)
+                                )
+
                                 if weighted_similarity >= threshold:
                                     matches.append((voice, weighted_similarity))
-                    
+
                     except Exception as e:
                         logger.debug(f"Error processing voice {voice.name}: {e}")
                         continue
-                
+
                 # Sort by similarity score (highest first)
                 matches.sort(key=lambda x: x[1], reverse=True)
                 return matches

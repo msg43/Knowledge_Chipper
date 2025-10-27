@@ -714,4 +714,3 @@ for document in test_set:
 ---
 
 **Great question!** You've identified a real architectural inefficiency that deserves investigation.
-

@@ -252,4 +252,3 @@ for cat_name in youtube_categories:
 ✅ **Claim-centric** - claims drive topic discovery  
 
 Schema is now correct!
-

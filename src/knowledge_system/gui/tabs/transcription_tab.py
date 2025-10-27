@@ -654,13 +654,13 @@ class EnhancedTranscriptionWorker(QThread):
     ) -> list[Path]:
         """Download URLs using single account (existing sequential logic)"""
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        
+
         downloaded_files = []
-        
+
         logger.info(
             f"🚀 Starting sequential downloads: {len(urls)} URLs (one at a time for safety)"
         )
-        
+
         if len(urls) == 1:
             self.transcription_step_updated.emit(
                 f"🚀 Starting download (1 file)...",
@@ -671,17 +671,17 @@ class EnhancedTranscriptionWorker(QThread):
                 f"🚀 Starting sequential downloads ({len(urls)} files, one at a time)...",
                 0,
             )
-        
+
         # Sequential pattern: Single worker to avoid bot detection
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             # Submit all downloads to the queue
             futures = {}
-            
+
             for idx, url in enumerate(urls, 1):
                 if self.should_stop:
                     break
-                
+
                 # Submit download to thread pool (sequential processing)
                 future = executor.submit(
                     self._download_single_url,
@@ -694,40 +694,45 @@ class EnhancedTranscriptionWorker(QThread):
                     is_first=(idx == 1),
                 )
                 futures[future] = (url, idx)
-            
+
             # Process results as they complete
             completed = 0
             for future in as_completed(futures):
                 if self.should_stop:
-                    logger.info("Stop requested during downloads - cleaning up executor")
+                    logger.info(
+                        "Stop requested during downloads - cleaning up executor"
+                    )
                     for f in futures:
                         if not f.done():
                             f.cancel()
                     break
-                
+
                 url, idx = futures[future]
                 try:
                     result_url, audio_file, success, error = future.result()
-                    
+
                     if success and audio_file:
                         downloaded_files.append(audio_file)
                         completed += 1
-                        logger.info(f"✅ Completed {completed}/{len(urls)}: {result_url[:40]}...")
+                        logger.info(
+                            f"✅ Completed {completed}/{len(urls)}: {result_url[:40]}..."
+                        )
                     else:
                         # Handle failed URL with smart retry logic
                         from ...database.service import DatabaseService
+
                         db_service = DatabaseService()
-                        
+
                         retry_result = self._handle_failed_url(
                             result_url, error or "Unknown error", db_service
                         )
-                        
+
                         if retry_result == "REQUEUE":
                             logger.info(f"🔄 {result_url[:40]}... added to retry queue")
                         else:
                             self.failed_count += 1
                             logger.error(f"❌ Permanently failed: {result_url[:40]}...")
-                
+
                 except Exception as e:
                     logger.error(f"Exception processing result for {url}: {e}")
                     self.failed_count += 1
@@ -736,11 +741,13 @@ class EnhancedTranscriptionWorker(QThread):
                 executor.shutdown(wait=False, cancel_futures=True)
             except TypeError:
                 executor.shutdown(wait=False)
-        
-        logger.info(f"🏁 Download complete: {completed} successful, {self.failed_count} failed")
-        
+
+        logger.info(
+            f"🏁 Download complete: {completed} successful, {self.failed_count} failed"
+        )
+
         return downloaded_files
-    
+
     def _download_with_multi_account(
         self,
         urls: list[str],
@@ -749,24 +756,25 @@ class EnhancedTranscriptionWorker(QThread):
     ) -> list[Path]:
         """Download URLs using multi-account rotation"""
         import asyncio
-        from ...services.multi_account_downloader import MultiAccountDownloadScheduler
+
         from ...database.service import DatabaseService
-        
+        from ...services.multi_account_downloader import MultiAccountDownloadScheduler
+
         downloaded_files = []
-        
+
         # Test and filter cookies first
         self.transcription_step_updated.emit("🧪 Testing cookie files...", 0)
         valid_cookies = self._test_and_filter_cookies(cookie_files)
-        
+
         if not valid_cookies:
             raise Exception("No valid cookie files found")
-        
+
         self.transcription_step_updated.emit(
             f"✅ Using {len(valid_cookies)} account(s) for downloads\n"
             f"   Expected speedup: {len(valid_cookies)}x faster than single account",
-            0
+            0,
         )
-        
+
         # Create scheduler
         db_service = DatabaseService()
         scheduler = MultiAccountDownloadScheduler(
@@ -777,13 +785,13 @@ class EnhancedTranscriptionWorker(QThread):
             sleep_end_hour=self.gui_settings.get("sleep_end_hour", 6),
             db_service=db_service,
         )
-        
+
         # Create a simple callback for progress
         def progress_callback(message):
             self.transcription_step_updated.emit(message, 0)
-        
+
         scheduler.progress_callback = progress_callback
-        
+
         # Download with rotation (async)
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -796,13 +804,14 @@ class EnhancedTranscriptionWorker(QThread):
                     progress_callback=progress_callback,
                 )
             )
-            
+
             # Extract downloaded files from results
             downloaded_files = [
-                r.get("audio_file") for r in results 
+                r.get("audio_file")
+                for r in results
                 if r.get("success") and r.get("audio_file")
             ]
-            
+
             # Get statistics
             stats = scheduler.get_stats()
             self.transcription_step_updated.emit(
@@ -812,41 +821,41 @@ class EnhancedTranscriptionWorker(QThread):
                 f"   Duplicates skipped: {stats['duplicates_skipped']}\n"
                 f"   Accounts disabled: {stats['accounts_disabled']}\n"
                 f"   Active accounts: {stats['active_accounts']}/{stats['total_accounts']}",
-                0
+                0,
             )
-            
+
             # Handle failed URLs
             failed_urls = scheduler.get_failed_urls()
             if failed_urls:
                 self.transcription_step_updated.emit(
-                    f"⚠️ {len(failed_urls)} URL(s) failed after all retries",
-                    0
+                    f"⚠️ {len(failed_urls)} URL(s) failed after all retries", 0
                 )
                 for url in failed_urls:
                     self._write_to_failed_urls_file(url, "Failed with all accounts")
-        
+
         finally:
             loop.close()
-        
+
         return downloaded_files
-    
+
     def _test_and_filter_cookies(self, cookie_files: list[str]) -> list[str]:
         """Test cookie files and return only valid ones"""
         from http.cookiejar import MozillaCookieJar
-        
+
         valid_cookies = []
-        
+
         for idx, cookie_file in enumerate(cookie_files):
             try:
                 # Test cookie file
                 jar = MozillaCookieJar(cookie_file)
                 jar.load(ignore_discard=True, ignore_expires=True)
-                
+
                 youtube_cookies = [
-                    c for c in jar 
-                    if 'youtube.com' in c.domain or 'google.com' in c.domain
+                    c
+                    for c in jar
+                    if "youtube.com" in c.domain or "google.com" in c.domain
                 ]
-                
+
                 if youtube_cookies:
                     valid_cookies.append(cookie_file)
                     self.transcription_step_updated.emit(
@@ -856,12 +865,12 @@ class EnhancedTranscriptionWorker(QThread):
                     self.transcription_step_updated.emit(
                         f"❌ Account {idx+1}: No YouTube cookies found", 0
                     )
-            
+
             except Exception as e:
                 self.transcription_step_updated.emit(
                     f"❌ Account {idx+1}: Invalid ({str(e)[:50]})", 0
                 )
-        
+
         return valid_cookies
 
     def run(self) -> None:
@@ -896,7 +905,9 @@ class EnhancedTranscriptionWorker(QThread):
                     # Get cookie settings from GUI
                     enable_cookies = self.gui_settings.get("enable_cookies", True)
                     cookie_files = self.gui_settings.get("cookie_files", [])
-                    use_multi_account = self.gui_settings.get("use_multi_account", False)
+                    use_multi_account = self.gui_settings.get(
+                        "use_multi_account", False
+                    )
 
                     # Choose download strategy based on cookie file count
                     if use_multi_account and len(cookie_files) > 1:
@@ -907,7 +918,7 @@ class EnhancedTranscriptionWorker(QThread):
                     else:
                         # Single-account mode (existing behavior)
                         cookie_file_path = cookie_files[0] if cookie_files else None
-                        
+
                         downloader = YouTubeDownloadProcessor(
                             download_thumbnails=True,
                             enable_cookies=enable_cookies,
@@ -2171,7 +2182,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         cookie_layout = QVBoxLayout()
 
         # Enable/disable checkbox
-        self.enable_cookies_checkbox = QCheckBox("Enable multi-account cookie authentication")
+        self.enable_cookies_checkbox = QCheckBox(
+            "Enable multi-account cookie authentication"
+        )
         self.enable_cookies_checkbox.setChecked(True)
         self.enable_cookies_checkbox.setToolTip(
             "Use cookies from 1-6 throwaway Google accounts.\n"
@@ -3943,9 +3956,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 if missing_files:
                     self.show_warning(
                         "Cookie Files Not Found",
-                        f"The following cookie file(s) do not exist:\n\n" +
-                        "\n".join(missing_files) +
-                        "\n\nPlease select valid cookie files or disable cookie authentication.",
+                        f"The following cookie file(s) do not exist:\n\n"
+                        + "\n".join(missing_files)
+                        + "\n\nPlease select valid cookie files or disable cookie authentication.",
                     )
                     return False
 

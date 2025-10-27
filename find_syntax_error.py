@@ -11,12 +11,12 @@ except SyntaxError as e:
     print(f"Message: {e.msg}")
     print(f"Text: {e.text}")
     print(f"Offset: {e.offset}")
-    
+
     # Show context
-    lines = code.split('\n')
+    lines = code.split("\n")
     start = max(0, e.lineno - 10)
     end = min(len(lines), e.lineno + 5)
-    
+
     print(f"\nContext (lines {start}-{end}):")
     for i in range(start, end):
         marker = " >>> " if i + 1 == e.lineno else "     "

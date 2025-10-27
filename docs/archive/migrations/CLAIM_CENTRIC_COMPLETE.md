@@ -361,4 +361,3 @@ Everything is normalized and queryable.
 Categories work for all content types.
 
 All done!
-

@@ -63,7 +63,9 @@ class PeopleEvaluator:
 
         # Load prompt
         if prompt_path is None:
-            prompt_path = Path(__file__).parent.parent / "prompts" / "people_evaluator.txt"
+            prompt_path = (
+                Path(__file__).parent.parent / "prompts" / "people_evaluator.txt"
+            )
 
         if not prompt_path.exists():
             raise FileNotFoundError(f"People evaluator prompt not found: {prompt_path}")

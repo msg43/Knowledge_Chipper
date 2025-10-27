@@ -1140,4 +1140,3 @@ Sorted by popularity (number of podcasts using this topic):
 - Broad conceptual domains (Economics, Physics, Medicine)
 - Stable, globally recognized
 - Good for categorizing knowledge claims
-

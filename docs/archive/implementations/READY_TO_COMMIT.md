@@ -212,5 +212,3 @@ print("Categories:", categories)
 ---
 
 All files are ready! 🚀
-
-

@@ -63,10 +63,14 @@ class ConceptsEvaluator:
 
         # Load prompt
         if prompt_path is None:
-            prompt_path = Path(__file__).parent.parent / "prompts" / "concepts_evaluator.txt"
+            prompt_path = (
+                Path(__file__).parent.parent / "prompts" / "concepts_evaluator.txt"
+            )
 
         if not prompt_path.exists():
-            raise FileNotFoundError(f"Concepts evaluator prompt not found: {prompt_path}")
+            raise FileNotFoundError(
+                f"Concepts evaluator prompt not found: {prompt_path}"
+            )
 
         self.template = prompt_path.read_text()
 
@@ -185,4 +189,3 @@ def evaluate_concepts(
 
     evaluator = ConceptsEvaluator(llm)
     return evaluator.evaluate_concepts(content_summary, mental_models)
-

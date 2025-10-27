@@ -551,11 +551,11 @@ class VoiceFingerprintProcessor:
     ) -> tuple[str, float] | None:
         """
         Identify the most likely speaker from enrolled profiles.
-        
+
         Args:
             audio: Audio segment to identify
             threshold: Minimum similarity threshold for positive identification
-            
+
         Returns:
             Tuple of (speaker_name, confidence) or None if no match found
         """
@@ -565,16 +565,16 @@ class VoiceFingerprintProcessor:
 
             # Get all voice profiles and find matches
             matches = self.db_service.find_matching_voices(test_fingerprint, threshold)
-            
+
             if not matches:
                 logger.debug(
                     f"No matching voice profiles found (threshold: {threshold})"
                 )
                 return None
-            
+
             # Return the best match
             best_match_voice, best_similarity = matches[0]
-            
+
             logger.info(
                 f"Identified speaker as '{best_match_voice.name}' with confidence {best_similarity:.3f}"
             )

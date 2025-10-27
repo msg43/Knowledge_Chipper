@@ -124,7 +124,7 @@ class LLMSpeakerSuggester:
     ) -> dict[str, tuple[str, float]]:
         """
         Suggest speaker names using LLM with optional known host context.
-        
+
         Known hosts (from channel mappings) are provided as context to help the LLM
         match speakers to names based on content analysis.
 
@@ -140,13 +140,11 @@ class LLMSpeakerSuggester:
         """
         # If we have known hosts, log them
         if known_hosts:
-            logger.info(
-                f"📺 Channel has {len(known_hosts)} known hosts: {known_hosts}"
-            )
+            logger.info(f"📺 Channel has {len(known_hosts)} known hosts: {known_hosts}")
             logger.info(
                 f"   → LLM will match speakers to these names based on transcript content"
             )
-        
+
         # If no LLM available, use fallback (can't effectively use host context without LLM)
         if not self.llm_client:
             logger.info("No LLM configured - using pattern-based fallback")
@@ -181,7 +179,7 @@ class LLMSpeakerSuggester:
             suggestions = self._validate_and_fix_suggestions(
                 suggestions, speaker_segments
             )
-            
+
             # Boost confidence for speakers matched to known hosts
             if known_hosts:
                 for speaker_id, (name, conf) in suggestions.items():
@@ -216,12 +214,14 @@ class LLMSpeakerSuggester:
             return self._simple_fallback(speaker_segments)
 
     def _create_simple_prompt(
-        self, speaker_segments: dict[str, list[dict]], metadata: dict | None,
-        known_hosts: list[str] | None = None
+        self,
+        speaker_segments: dict[str, list[dict]],
+        metadata: dict | None,
+        known_hosts: list[str] | None = None,
     ) -> str:
         """
         Create smart podcast-focused prompt with full metadata + first 3 minutes of content.
-        
+
         Args:
             speaker_segments: Speaker segments to analyze
             metadata: Video/podcast metadata
@@ -319,11 +319,13 @@ class LLMSpeakerSuggester:
 
         # Count speakers for explicit validation
         num_speakers = len(ordered_speaker_ids)
-        
+
         # Build known hosts section if available
         known_hosts_section = ""
         if known_hosts:
-            known_hosts_section = "\n📺 CHANNEL CONTEXT - Known Host(s) for this channel:\n"
+            known_hosts_section = (
+                "\n📺 CHANNEL CONTEXT - Known Host(s) for this channel:\n"
+            )
             for host_name in known_hosts:
                 known_hosts_section += f"  • {host_name}\n"
             known_hosts_section += (
@@ -529,17 +531,17 @@ class LLMSpeakerSuggester:
 
                 if isinstance(candidate, dict):
                     # Extract speaker number for fallback
-                    speaker_num_str = speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
+                    speaker_num_str = (
+                        speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
+                    )
                     try:
                         num = int(speaker_num_str)
                         letter = chr(65 + num)  # A, B, C, ...
                         fallback_name = f"Unknown Speaker {letter}"
                     except (ValueError, IndexError):
                         fallback_name = "Unknown Speaker X"
-                    
-                    suggested_name = str(
-                        candidate.get("name", fallback_name)
-                    ).strip()
+
+                    suggested_name = str(candidate.get("name", fallback_name)).strip()
                     # Sanitize name
                     if len(suggested_name) > 60:
                         suggested_name = suggested_name[:57] + "..."
@@ -559,7 +561,9 @@ class LLMSpeakerSuggester:
                     )
                 else:
                     # Fallback for missing speakers - use letter-based naming
-                    speaker_num_str = speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
+                    speaker_num_str = (
+                        speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
+                    )
                     try:
                         num = int(speaker_num_str)
                         letter = chr(65 + num)
@@ -579,22 +583,23 @@ class LLMSpeakerSuggester:
     ) -> dict[str, tuple[str, float]]:
         """
         Smart fallback when LLM is not available.
-        
+
         Attempts to extract names from self-introductions in the transcript.
         If that fails, uses descriptive names instead of generic "Speaker X".
         """
         suggestions = {}
-        
+
         # Try to extract names from self-introductions
         import re
+
         name_pattern = re.compile(
             r"\b(?:I\'?m|my name is|this is|I am|call me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
-            re.IGNORECASE
+            re.IGNORECASE,
         )
-        
+
         for i, (speaker_id, segments) in enumerate(sorted(speaker_segments.items())):
             found_name = None
-            
+
             # Check first few segments for self-introduction
             for segment in segments[:5]:
                 text = segment.get("text", "")
@@ -602,7 +607,7 @@ class LLMSpeakerSuggester:
                 if match:
                     found_name = match.group(1).title()
                     break
-            
+
             if found_name:
                 suggestions[speaker_id] = (found_name, 0.6)
             else:

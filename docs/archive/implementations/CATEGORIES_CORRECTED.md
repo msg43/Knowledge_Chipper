@@ -285,4 +285,3 @@ episodes = db.find_sources_with_claims_about('Monetary policy')
 - Episodes discovered via claim category aggregation
 
 Should I update the schema to remove `source_categories`?
-

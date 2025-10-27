@@ -192,4 +192,3 @@ def upsert_pipeline_outputs(self, outputs):
 7. Debug any issues automatically
 
 **Estimated remaining effort:** 4-6 hours
-

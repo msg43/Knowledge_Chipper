@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 # Load and test expanded vocabulary
-vocab_file = Path('src/knowledge_system/database/wikidata_merged.json')
+vocab_file = Path("src/knowledge_system/database/wikidata_merged.json")
 
 with open(vocab_file) as f:
     data = json.load(f)
@@ -33,11 +33,11 @@ print(f"  Vocab gaps: 33% → 5-10%")
 # Sample categories by domain
 print(f"\n{'-'*70}")
 print("Sample Categories by Domain:")
-print("-"*70)
+print("-" * 70)
 
 # Group by level and show samples
-general = [c for c in data['categories'] if c['level'] == 'general']
-specific = [c for c in data['categories'] if c['level'] == 'specific']
+general = [c for c in data["categories"] if c["level"] == "general"]
+specific = [c for c in data["categories"] if c["level"] == "specific"]
 
 print(f"\nGeneral ({len(general)}):")
 for cat in general[:10]:
@@ -45,7 +45,7 @@ for cat in general[:10]:
 
 print(f"\nSpecific (showing 20 of {len(specific)}):")
 for cat in specific[:20]:
-    parent = f" < {cat['parent_id']}" if cat.get('parent_id') else ""
+    parent = f" < {cat['parent_id']}" if cat.get("parent_id") else ""
     print(f"  - {cat['category_name']} ({cat['wikidata_id']}){parent}")
 
 print(f"\n{'='*70}")
@@ -54,5 +54,3 @@ print(f"{'='*70}\n")
 
 print("Next step: Update wikidata_categorizer.py to use this vocabulary by default")
 print("  Or: Copy wikidata_merged.json to wikidata_seed.json to replace current")
-
-

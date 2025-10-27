@@ -302,5 +302,3 @@ cat.add_category_to_vocabulary(
 ---
 
 **All requested steps completed successfully!** 🎉
-
-

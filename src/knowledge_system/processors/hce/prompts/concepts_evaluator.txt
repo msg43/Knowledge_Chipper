@@ -188,4 +188,3 @@ Return valid JSON only (no additional text):
 ```
 
 Remember: Be rigorous in filtering vague appeals while preserving genuine analytical frameworks. Merge variants thoughtfully to create comprehensive descriptions.
-

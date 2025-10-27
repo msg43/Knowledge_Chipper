@@ -301,5 +301,3 @@ src/knowledge_system/database/
 - Enables style-based filtering
 
 **Don't mix them - they serve different purposes!**
-
-

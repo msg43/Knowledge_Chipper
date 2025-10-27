@@ -35,4 +35,6 @@ class PipelineConfigFlex(BaseModel):
     flagship_max_claims_per_file: int | None = None
     max_workers: int | None = None  # None = auto-calculate, 1 = single worker, etc.
     enable_parallel_processing: bool = True  # Enable/disable parallel processing
-    miner_selectivity: Literal["liberal", "moderate", "conservative"] = "moderate"  # NEW: Controls how aggressively miner filters
+    miner_selectivity: Literal[
+        "liberal", "moderate", "conservative"
+    ] = "moderate"  # NEW: Controls how aggressively miner filters

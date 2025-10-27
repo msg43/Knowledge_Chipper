@@ -192,7 +192,12 @@ class UnifiedHCEPipeline:
         report_progress("Converting results", 80.0, "Converting to final output format")
 
         final_outputs = self._convert_to_pipeline_outputs(
-            episode, miner_outputs, claims_evaluation, jargon_evaluation, people_evaluation, concepts_evaluation
+            episode,
+            miner_outputs,
+            claims_evaluation,
+            jargon_evaluation,
+            people_evaluation,
+            concepts_evaluation,
         )
 
         # Step 5: Long Summary (Post-Evaluation)
@@ -276,9 +281,9 @@ class UnifiedHCEPipeline:
         )
 
         # Import evaluators
+        from .evaluators.concepts_evaluator import evaluate_concepts
         from .evaluators.jargon_evaluator import evaluate_jargon
         from .evaluators.people_evaluator import evaluate_people
-        from .evaluators.concepts_evaluator import evaluate_concepts
 
         # Run all 4 evaluators in parallel
         results = {}
@@ -292,10 +297,16 @@ class UnifiedHCEPipeline:
                     evaluator_model_uri,
                 ): "claims",
                 executor.submit(
-                    evaluate_jargon, content_summary, all_jargon_raw, evaluator_model_uri
+                    evaluate_jargon,
+                    content_summary,
+                    all_jargon_raw,
+                    evaluator_model_uri,
                 ): "jargon",
                 executor.submit(
-                    evaluate_people, content_summary, all_people_raw, evaluator_model_uri
+                    evaluate_people,
+                    content_summary,
+                    all_people_raw,
+                    evaluator_model_uri,
                 ): "people",
                 executor.submit(
                     evaluate_concepts,
@@ -391,21 +402,25 @@ class UnifiedHCEPipeline:
                 return short_summary
 
             prompt_template = prompt_path.read_text()
-            
+
             # Add source metadata context if available
             context_parts = []
             if episode.video_metadata:
-                if title := episode.video_metadata.get('title'):
+                if title := episode.video_metadata.get("title"):
                     context_parts.append(f"Source Title: {title}")
-                if uploader := episode.video_metadata.get('uploader'):
+                if uploader := episode.video_metadata.get("uploader"):
                     context_parts.append(f"Author/Channel: {uploader}")
-                if desc := episode.video_metadata.get('description'):
+                if desc := episode.video_metadata.get("description"):
                     context_parts.append(f"Description: {desc[:300]}...")
-                if chapters := episode.video_metadata.get('chapters'):
-                    chapter_titles = [c.get('title', 'Unknown') for c in chapters[:5]]
+                if chapters := episode.video_metadata.get("chapters"):
+                    chapter_titles = [c.get("title", "Unknown") for c in chapters[:5]]
                     context_parts.append(f"Topics Covered: {', '.join(chapter_titles)}")
-            
-            source_context = "\n".join(context_parts) if context_parts else "No source metadata available"
+
+            source_context = (
+                "\n".join(context_parts)
+                if context_parts
+                else "No source metadata available"
+            )
 
             # Format top-ranked claims
             top_claims_text = []
@@ -602,7 +617,9 @@ class UnifiedHCEPipeline:
                     term_id=f"jargon_{len(all_jargon):04d}",
                     term=eval_jargon.canonical_term,
                     definition=eval_jargon.definition,
-                    category=eval_jargon.category if hasattr(eval_jargon, 'category') else None,
+                    category=eval_jargon.category
+                    if hasattr(eval_jargon, "category")
+                    else None,
                 )
                 all_jargon.append(jargon_term)
         else:
@@ -630,7 +647,9 @@ class UnifiedHCEPipeline:
                     surface=eval_person.canonical_name,
                     normalized=eval_person.canonical_name,
                     entity_type="person",
-                    role_description=eval_person.role if hasattr(eval_person, 'role') else None,
+                    role_description=eval_person.role
+                    if hasattr(eval_person, "role")
+                    else None,
                 )
                 all_people.append(person_mention)
         else:

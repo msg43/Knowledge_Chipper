@@ -144,23 +144,23 @@ echo "📦 Cleaning old PKG files from dist/..."
 
 if [ -d "dist" ]; then
     cd dist/
-    
+
     # Count PKG files
     PKG_COUNT=$(ls -1 Skip_the_Podcast_Desktop-*.pkg 2>/dev/null | wc -l || echo 0)
-    
+
     if [ "$PKG_COUNT" -gt 2 ]; then
         echo "  Found $PKG_COUNT PKG files (keeping only latest 2)"
-        
+
         # Find latest version
         LATEST_VERSION=$(ls -1 Skip_the_Podcast_Desktop-*.pkg 2>/dev/null | grep -v signed | sed 's/Skip_the_Podcast_Desktop-//' | sed 's/.pkg//' | sort -V | tail -1)
-        
+
         if [ -n "$LATEST_VERSION" ]; then
             # Delete old unsigned versions
             find . -name "Skip_the_Podcast_Desktop-*.pkg" \
               ! -name "Skip_the_Podcast_Desktop-${LATEST_VERSION}.pkg" \
               ! -name "Skip_the_Podcast_Desktop-*-signed.pkg" \
               -delete 2>/dev/null
-            
+
             # Delete old signed versions except latest
             LATEST_SIGNED=$(ls -1 Skip_the_Podcast_Desktop-*-signed.pkg 2>/dev/null | sort -V | tail -1)
             if [ -n "$LATEST_SIGNED" ]; then
@@ -168,19 +168,19 @@ if [ -d "dist" ]; then
                 ! -name "$LATEST_SIGNED" \
                 -delete 2>/dev/null
             fi
-            
+
             echo "  ✓ Kept only latest PKG: $LATEST_VERSION"
         fi
     else
         echo "  ✓ PKG count is reasonable ($PKG_COUNT files)"
     fi
-    
+
     # Delete test PKGs
     if ls test-*.pkg 1> /dev/null 2>&1; then
         rm -f test-*.pkg
         echo "  ✓ Deleted test PKGs"
     fi
-    
+
     cd ..
 else
     echo "  ✓ dist/ not found, skipping"
@@ -203,4 +203,3 @@ echo "  - Coverage reports: pytest --cov=src --cov-report=html"
 echo ""
 echo "⚡ Fast rebuilds: ~2 minutes (thanks to dist/ cache)"
 echo "💾 Space freed: ~${TOTAL_MB} MB"
-

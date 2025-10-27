@@ -315,4 +315,3 @@ ORDER BY ms.upload_date, je.start_time;
 ✅ **Documentation complete**  
 
 **Next:** Process a video to verify the full pipeline works with all new features!
-

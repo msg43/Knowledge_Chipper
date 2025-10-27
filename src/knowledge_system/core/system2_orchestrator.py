@@ -369,7 +369,7 @@ class System2Orchestrator:
         - Database storage
         - Markdown file generation
         - Full checkpoint/resume support
-        
+
         Checkpoint structure:
         {
             "stage": "validating" | "transcribing" | "diarizing" | "storing" | "completed",
@@ -381,8 +381,12 @@ class System2Orchestrator:
         try:
             # Check if already completed
             if checkpoint and checkpoint.get("stage") == "completed":
-                logger.info(f"Transcription already completed (from checkpoint), returning cached result")
-                return checkpoint.get("final_result", {"status": "succeeded", "output_id": media_id})
+                logger.info(
+                    f"Transcription already completed (from checkpoint), returning cached result"
+                )
+                return checkpoint.get(
+                    "final_result", {"status": "succeeded", "output_id": media_id}
+                )
 
             # Report progress
             if self.progress_callback:
@@ -406,10 +410,9 @@ class System2Orchestrator:
             logger.info(f"📄 Transcribing: {file_path.name}")
 
             # Save initial checkpoint
-            self.save_checkpoint(run_id, {
-                "stage": "validating",
-                "file_path": str(file_path)
-            })
+            self.save_checkpoint(
+                run_id, {"stage": "validating", "file_path": str(file_path)}
+            )
 
             # Check if transcription already completed in checkpoint
             if checkpoint and checkpoint.get("stage") in ["diarizing", "storing"]:
@@ -424,10 +427,9 @@ class System2Orchestrator:
                     self.progress_callback("transcribing", 10, media_id)
 
                 # Save checkpoint before transcription
-                self.save_checkpoint(run_id, {
-                    "stage": "transcribing",
-                    "file_path": str(file_path)
-                })
+                self.save_checkpoint(
+                    run_id, {"stage": "transcribing", "file_path": str(file_path)}
+                )
 
                 # Create AudioProcessor
                 from ..processors.audio_processor import AudioProcessor
@@ -464,17 +466,22 @@ class System2Orchestrator:
                 transcript_text = result.data.get("transcript", "")
                 language = result.data.get("language", "unknown")
                 duration = result.data.get("duration")
-                
+
                 # Save checkpoint after transcription
                 enable_diarization = config.get("enable_diarization", False)
-                self.save_checkpoint(run_id, {
-                    "stage": "diarizing" if enable_diarization else "storing",
-                    "file_path": str(file_path),
-                    "transcript_path": str(transcript_path) if transcript_path else None,
-                    "transcript_text": transcript_text,
-                    "language": language,
-                    "duration": duration
-                })
+                self.save_checkpoint(
+                    run_id,
+                    {
+                        "stage": "diarizing" if enable_diarization else "storing",
+                        "file_path": str(file_path),
+                        "transcript_path": str(transcript_path)
+                        if transcript_path
+                        else None,
+                        "transcript_text": transcript_text,
+                        "language": language,
+                        "duration": duration,
+                    },
+                )
 
             # Report progress
             if self.progress_callback:
@@ -487,7 +494,9 @@ class System2Orchestrator:
                 "status": "succeeded",
                 "output_id": media_id,
                 "result": {
-                    "transcript_path": str(transcript_path) if transcript_path else None,
+                    "transcript_path": str(transcript_path)
+                    if transcript_path
+                    else None,
                     "transcript_text": transcript_text,
                     "language": language,
                     "duration": duration,
@@ -497,11 +506,14 @@ class System2Orchestrator:
             }
 
             # Save final checkpoint
-            self.save_checkpoint(run_id, {
-                "stage": "completed",
-                "file_path": str(file_path),
-                "final_result": final_result
-            })
+            self.save_checkpoint(
+                run_id,
+                {
+                    "stage": "completed",
+                    "file_path": str(file_path),
+                    "final_result": final_result,
+                },
+            )
 
             return final_result
 
@@ -509,11 +521,14 @@ class System2Orchestrator:
             logger.error(f"Transcription failed for {media_id}: {e}")
             # Save error checkpoint
             try:
-                self.save_checkpoint(run_id, {
-                    "stage": "failed",
-                    "file_path": config.get("file_path", ""),
-                    "error": str(e)
-                })
+                self.save_checkpoint(
+                    run_id,
+                    {
+                        "stage": "failed",
+                        "file_path": config.get("file_path", ""),
+                        "error": str(e),
+                    },
+                )
             except Exception as checkpoint_error:
                 logger.warning(f"Failed to save error checkpoint: {checkpoint_error}")
             raise KnowledgeSystemError(
@@ -768,11 +783,11 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
     ) -> dict[str, Any]:
         """
         Process flagship evaluation with checkpoint support.
-        
+
         NOTE: This is a legacy/deprecated path. The UnifiedHCEPipeline now includes
         flagship evaluation as part of the mining process. This remains for
         backward compatibility.
-        
+
         Checkpoint structure:
         {
             "stage": "loading" | "evaluating" | "completed",
@@ -783,12 +798,12 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             # Check if already completed
             if checkpoint and checkpoint.get("stage") == "completed":
                 logger.info(f"Flagship evaluation already completed (from checkpoint)")
-                return checkpoint.get("final_result", {"status": "succeeded", "output_id": episode_id})
+                return checkpoint.get(
+                    "final_result", {"status": "succeeded", "output_id": episode_id}
+                )
 
             # Save initial checkpoint
-            self.save_checkpoint(run_id, {
-                "stage": "loading"
-            })
+            self.save_checkpoint(run_id, {"stage": "loading"})
 
             # 1. Load mining results (deprecated legacy path); skip
             miner_outputs = []
@@ -805,22 +820,19 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                         "claims_evaluated": 0,
                         "claims_accepted": 0,
                         "claims_rejected": 0,
-                        "note": "Flagship evaluation now integrated in mining pipeline"
+                        "note": "Flagship evaluation now integrated in mining pipeline",
                     },
                 }
-                
+
                 # Save completion checkpoint
-                self.save_checkpoint(run_id, {
-                    "stage": "completed",
-                    "final_result": final_result
-                })
-                
+                self.save_checkpoint(
+                    run_id, {"stage": "completed", "final_result": final_result}
+                )
+
                 return final_result
 
             # Save checkpoint before evaluation
-            self.save_checkpoint(run_id, {
-                "stage": "evaluating"
-            })
+            self.save_checkpoint(run_id, {"stage": "evaluating"})
 
             # 2. Run flagship evaluation (simplified for MVP)
             _flagship_model = config.get(
@@ -846,21 +858,17 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             }
 
             # Save completion checkpoint
-            self.save_checkpoint(run_id, {
-                "stage": "completed",
-                "final_result": final_result
-            })
+            self.save_checkpoint(
+                run_id, {"stage": "completed", "final_result": final_result}
+            )
 
             return final_result
-            
+
         except Exception as e:
             logger.error(f"Flagship evaluation failed for {episode_id}: {e}")
             # Save error checkpoint
             try:
-                self.save_checkpoint(run_id, {
-                    "stage": "failed",
-                    "error": str(e)
-                })
+                self.save_checkpoint(run_id, {"stage": "failed", "error": str(e)})
             except Exception as checkpoint_error:
                 logger.warning(f"Failed to save error checkpoint: {checkpoint_error}")
             raise KnowledgeSystemError(
@@ -876,7 +884,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
     ) -> dict[str, Any]:
         """
         Process upload job with checkpoint support.
-        
+
         Checkpoint structure:
         {
             "stage": "preparing" | "uploading" | "completed",
@@ -889,44 +897,38 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             # Check if already completed
             if checkpoint and checkpoint.get("stage") == "completed":
                 logger.info(f"Upload already completed (from checkpoint)")
-                return checkpoint.get("final_result", {"status": "succeeded", "output_id": episode_id})
+                return checkpoint.get(
+                    "final_result", {"status": "succeeded", "output_id": episode_id}
+                )
 
             logger.info(f"Processing upload for {episode_id}")
-            
+
             # Save initial checkpoint
-            self.save_checkpoint(run_id, {
-                "stage": "preparing",
-                "uploaded_bytes": 0,
-                "total_bytes": 0
-            })
+            self.save_checkpoint(
+                run_id, {"stage": "preparing", "uploaded_bytes": 0, "total_bytes": 0}
+            )
 
             # TODO: Implement actual upload logic here
             # For now, just mark as completed
-            
+
             final_result = {
-                "status": "succeeded", 
+                "status": "succeeded",
                 "output_id": episode_id,
-                "result": {
-                    "note": "Upload functionality pending implementation"
-                }
+                "result": {"note": "Upload functionality pending implementation"},
             }
-            
+
             # Save completion checkpoint
-            self.save_checkpoint(run_id, {
-                "stage": "completed",
-                "final_result": final_result
-            })
-            
+            self.save_checkpoint(
+                run_id, {"stage": "completed", "final_result": final_result}
+            )
+
             return final_result
-            
+
         except Exception as e:
             logger.error(f"Upload failed for {episode_id}: {e}")
             # Save error checkpoint
             try:
-                self.save_checkpoint(run_id, {
-                    "stage": "failed",
-                    "error": str(e)
-                })
+                self.save_checkpoint(run_id, {"stage": "failed", "error": str(e)})
             except Exception as checkpoint_error:
                 logger.warning(f"Failed to save error checkpoint: {checkpoint_error}")
             raise KnowledgeSystemError(

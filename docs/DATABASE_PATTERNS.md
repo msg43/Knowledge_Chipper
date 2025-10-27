@@ -405,4 +405,3 @@ cur.execute("INSERT INTO videos VALUES(?)", (user_input,))
 - `src/knowledge_system/database/service.py` - DatabaseService implementation
 - `src/knowledge_system/database/hce_store.py` - Direct SQL example
 - SQLAlchemy docs: https://docs.sqlalchemy.org/
-

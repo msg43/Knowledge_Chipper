@@ -452,5 +452,3 @@ wikidata_categories (vocabulary)
 **Claims inherit episode context** while having their own specific category!
 
 Is this the correct architecture?
-
-

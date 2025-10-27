@@ -394,4 +394,3 @@ Bandwidth saved: ~165 GB
 ```
 
 Both features work automatically - no special configuration needed! ✅
-

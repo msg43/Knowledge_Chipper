@@ -292,4 +292,3 @@ python -m pytest tests/test_batch_pipeline_e2e.py -v --run-integration
 ---
 
 **All tasks completed successfully.** ✅
-

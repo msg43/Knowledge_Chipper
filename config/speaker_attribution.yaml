@@ -32,7 +32,7 @@ channel_mappings:
 # POPULAR PODCASTS (300+) - Auto-generated, do not edit this section manually
 # ============================================================================
 # To update: Run python3 scripts/extract_podcasts_to_yaml.py
-# 
+#
 # Note: These mappings work with partial name matching. For example:
 #   - "Joe" on "Joe Rogan Experience" → "Joe Rogan"
 #   - "Andrew" on "Huberman Lab" → "Andrew D. Huberman"

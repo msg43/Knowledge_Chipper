@@ -545,5 +545,3 @@ Every category in `wikidata_seed.json` has:
 - Verification URL: `https://www.wikidata.org/wiki/{Q-ID}`
 
 **You can verify every single one.**
-
-

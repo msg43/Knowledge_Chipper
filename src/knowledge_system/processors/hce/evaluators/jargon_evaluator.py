@@ -7,7 +7,7 @@ from typing import Any
 
 from ..model_uri_parser import parse_model_uri
 from ..models.llm_system2 import System2LLM, create_system2_llm
-from ..types import JargonTerm, EvidenceSpan
+from ..types import EvidenceSpan, JargonTerm
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,9 @@ class JargonEvaluator:
 
         # Load prompt
         if prompt_path is None:
-            prompt_path = Path(__file__).parent.parent / "prompts" / "jargon_evaluator.txt"
+            prompt_path = (
+                Path(__file__).parent.parent / "prompts" / "jargon_evaluator.txt"
+            )
 
         if not prompt_path.exists():
             raise FileNotFoundError(f"Jargon evaluator prompt not found: {prompt_path}")
@@ -174,7 +176,7 @@ def evaluate_jargon(
 
     Args:
         content_summary: High-level summary of the content
-        jargon_terms: List of raw jargon terms from miner  
+        jargon_terms: List of raw jargon terms from miner
         evaluator_model_uri: URI for the evaluator LLM model
 
     Returns:
@@ -185,4 +187,3 @@ def evaluate_jargon(
 
     evaluator = JargonEvaluator(llm)
     return evaluator.evaluate_jargon(content_summary, jargon_terms)
-

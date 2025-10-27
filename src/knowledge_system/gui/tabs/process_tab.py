@@ -38,13 +38,15 @@ class ProcessPipelineWorker(QThread):
     processing_finished = pyqtSignal(dict)  # final results
     processing_error = pyqtSignal(str)
 
-    def __init__(self, files: list[str], config: dict[str, Any], parent: Any = None) -> None:
+    def __init__(
+        self, files: list[str], config: dict[str, Any], parent: Any = None
+    ) -> None:
         super().__init__(parent)
         self.files = files
         self.config = config
         self.should_stop = False
         self.output_dir = None
-        
+
         # Processing state
         self.files_processed = 0
         self.files_failed = 0
@@ -64,7 +66,7 @@ class ProcessPipelineWorker(QThread):
 
             total_files = len(self.files)
             logger.info(f"Starting batch processing of {total_files} files")
-            
+
             self.progress_updated.emit(0, total_files, "Initializing...")
 
             # Process each file sequentially
@@ -75,16 +77,38 @@ class ProcessPipelineWorker(QThread):
 
                 file_obj = Path(file_path)
                 logger.info(f"Processing file {idx}/{total_files}: {file_obj.name}")
-                self.progress_updated.emit(idx - 1, total_files, f"Processing {file_obj.name}...")
+                self.progress_updated.emit(
+                    idx - 1, total_files, f"Processing {file_obj.name}..."
+                )
 
                 try:
                     # Determine file type and process accordingly
-                    if file_obj.suffix.lower() in ['.mp3', '.wav', '.m4a', '.mp4', '.avi', '.mkv']:
+                    if file_obj.suffix.lower() in [
+                        ".mp3",
+                        ".wav",
+                        ".m4a",
+                        ".mp4",
+                        ".avi",
+                        ".mkv",
+                    ]:
                         success = self._process_audio_video(file_path)
-                    elif file_obj.suffix.lower() in ['.pdf', '.txt', '.md', '.docx', '.doc', '.rtf', '.html', '.htm']:
+                    elif file_obj.suffix.lower() in [
+                        ".pdf",
+                        ".txt",
+                        ".md",
+                        ".docx",
+                        ".doc",
+                        ".rtf",
+                        ".html",
+                        ".htm",
+                    ]:
                         success = self._process_document(file_path)
                     else:
-                        self.file_completed.emit(file_path, False, f"Unsupported file type: {file_obj.suffix}")
+                        self.file_completed.emit(
+                            file_path,
+                            False,
+                            f"Unsupported file type: {file_obj.suffix}",
+                        )
                         self.files_failed += 1
                         self.failed_files.append((file_path, f"Unsupported file type"))
                         continue
@@ -92,7 +116,9 @@ class ProcessPipelineWorker(QThread):
                     if success:
                         self.files_processed += 1
                         self.successful_files.append(file_path)
-                        self.file_completed.emit(file_path, True, "Completed successfully")
+                        self.file_completed.emit(
+                            file_path, True, "Completed successfully"
+                        )
                     else:
                         self.files_failed += 1
                         self.failed_files.append((file_path, "Processing failed"))
@@ -122,27 +148,29 @@ class ProcessPipelineWorker(QThread):
         """Process audio/video files through transcription and optional summarization."""
         try:
             file_obj = Path(file_path)
-            
+
             # Step 1: Transcription (if enabled)
             transcript_path = None
             if self.config.get("transcribe", True):
                 self.progress_updated.emit(
                     self.files_processed,
                     len(self.files),
-                    f"Transcribing {file_obj.name}..."
+                    f"Transcribing {file_obj.name}...",
                 )
-                
+
                 audio_processor = AudioProcessor(
                     device=self.config.get("device", "cpu"),
                     model=self.config.get("transcription_model", "base"),
                 )
-                
-                result = audio_processor.process(file_path, output_dir=str(self.output_dir))
-                
+
+                result = audio_processor.process(
+                    file_path, output_dir=str(self.output_dir)
+                )
+
                 if not result.success:
                     logger.error(f"Transcription failed: {result.errors}")
                     return False
-                
+
                 transcript_path = result.output_file
                 logger.info(f"Transcription completed: {transcript_path}")
 
@@ -151,13 +179,13 @@ class ProcessPipelineWorker(QThread):
                 self.progress_updated.emit(
                     self.files_processed,
                     len(self.files),
-                    f"Summarizing {file_obj.name}..."
+                    f"Summarizing {file_obj.name}...",
                 )
-                
+
                 # Use System2Orchestrator for mining/summarization
                 orchestrator = System2Orchestrator()
                 episode_id = file_obj.stem
-                
+
                 job_id = orchestrator.create_job(
                     job_type="mine",
                     input_id=episode_id,
@@ -169,14 +197,14 @@ class ProcessPipelineWorker(QThread):
                     },
                     auto_process=False,
                 )
-                
+
                 # Execute synchronously
                 result = asyncio.run(orchestrator.process_job(job_id))
-                
+
                 if result.get("status") != "succeeded":
                     logger.error(f"Summarization failed: {result.get('error_message')}")
                     return False
-                    
+
                 logger.info(f"Summarization completed for {file_obj.name}")
 
             # Step 3: MOC Generation (if enabled)
@@ -194,18 +222,18 @@ class ProcessPipelineWorker(QThread):
         """Process documents through summarization."""
         try:
             file_obj = Path(file_path)
-            
+
             if self.config.get("summarize", False):
                 self.progress_updated.emit(
                     self.files_processed,
                     len(self.files),
-                    f"Summarizing {file_obj.name}..."
+                    f"Summarizing {file_obj.name}...",
                 )
-                
+
                 # Use System2Orchestrator for mining/summarization
                 orchestrator = System2Orchestrator()
                 episode_id = file_obj.stem
-                
+
                 job_id = orchestrator.create_job(
                     job_type="mine",
                     input_id=episode_id,
@@ -217,14 +245,14 @@ class ProcessPipelineWorker(QThread):
                     },
                     auto_process=False,
                 )
-                
+
                 # Execute synchronously
                 result = asyncio.run(orchestrator.process_job(job_id))
-                
+
                 if result.get("status") != "succeeded":
                     logger.error(f"Summarization failed: {result.get('error_message')}")
                     return False
-                    
+
                 logger.info(f"Summarization completed for {file_obj.name}")
 
             # MOC generation for documents

@@ -109,4 +109,3 @@ Each mental model must include:
 - **timestamp**: When it's discussed
 
 Remember: Be COMPREHENSIVE. Extract everything that might be relevant. Quality filtering happens in the next stage.
-

@@ -172,4 +172,3 @@ Return valid JSON only (no additional text):
 ```
 
 Remember: Be thorough in name merging and rigorous in filtering. Only include people whose ideas, work, or actions are meaningfully engaged with in the content.
-

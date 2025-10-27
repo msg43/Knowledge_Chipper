@@ -183,7 +183,9 @@ class TestTranscriptionToSummarizationPipeline:
         )
 
         transcription_results = batch_processor.process_batch(
-            batch_items, audio_processor, transcription_kwargs={"output_dir": str(output_dir)}
+            batch_items,
+            audio_processor,
+            transcription_kwargs={"output_dir": str(output_dir)},
         )
 
         # Verify all transcriptions succeeded
@@ -327,4 +329,3 @@ class TestDatabaseIntegration:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

@@ -299,4 +299,3 @@ CREATE TABLE claim_categories (
 ```
 
 Is this the correct understanding now?
-

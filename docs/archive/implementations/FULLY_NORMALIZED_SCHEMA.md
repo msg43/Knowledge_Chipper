@@ -527,5 +527,3 @@ CREATE TABLE claim_exports (
 - ❌ `scores_json TEXT`
 
 **Everything is normalized!**
-
-

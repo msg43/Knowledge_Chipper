@@ -596,4 +596,3 @@ ORDER BY shared_categories DESC;
 7. **User metadata separate** (claim curation vs platform metadata)
 
 Ready to test and deploy!
-

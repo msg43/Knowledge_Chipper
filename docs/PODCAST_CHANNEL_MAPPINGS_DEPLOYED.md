@@ -231,4 +231,3 @@ Channel mappings integrate with:
 🔧 **Easy to extend** - add your own channels in YAML  
 
 This update transforms speaker attribution from a bottleneck into a seamless automatic process for 262 of the most popular podcasts!
-
