@@ -44,17 +44,30 @@ class UnifiedMiner:
     from content segments in a single LLM call per segment.
     """
 
-    def __init__(self, llm: System2LLM, prompt_path: Path | None = None):
+    def __init__(
+        self,
+        llm: System2LLM,
+        prompt_path: Path | None = None,
+        selectivity: str = "moderate",
+    ):
         self.llm = llm
+        self.selectivity = selectivity
 
-        # Load prompt
+        # Load prompt based on selectivity if path not explicitly provided
         if prompt_path is None:
-            prompt_path = Path(__file__).parent / "prompts" / "unified_miner.txt"
+            prompt_files = {
+                "liberal": "unified_miner_liberal.txt",
+                "moderate": "unified_miner_moderate.txt",
+                "conservative": "unified_miner_conservative.txt",
+            }
+            prompt_file = prompt_files.get(selectivity, "unified_miner_moderate.txt")
+            prompt_path = Path(__file__).parent / "prompts" / prompt_file
 
         if not prompt_path.exists():
             raise FileNotFoundError(f"Unified miner prompt not found: {prompt_path}")
 
         self.template = prompt_path.read_text()
+        logger.info(f"UnifiedMiner initialized with {selectivity} selectivity")
 
     def mine_segment(self, segment: Segment) -> UnifiedMinerOutput:
         """Extract all entity types from a single segment."""
@@ -240,6 +253,7 @@ def mine_episode_unified(
     miner_model_uri: str,
     max_workers: int | None = None,
     progress_callback: Callable | None = None,
+    selectivity: str = "moderate",  # NEW: Miner selectivity level
 ) -> list[UnifiedMinerOutput]:
     """
     Convenience function for mining an entire episode with the unified miner.
@@ -249,6 +263,7 @@ def mine_episode_unified(
         miner_model_uri: URI for the miner LLM model (format: "provider:model")
         max_workers: Number of parallel workers (None = auto, 1 = sequential)
         progress_callback: Optional progress reporting function
+        selectivity: Miner selectivity ("liberal" | "moderate" | "conservative")
 
     Returns:
         List of UnifiedMinerOutput objects, one per segment
@@ -259,16 +274,20 @@ def mine_episode_unified(
     # Create System2LLM instance
     llm = System2LLM(provider=provider, model=model, temperature=0.3)
 
-    # Use simplified prompt for Ollama models
-    if provider and provider.lower() == "ollama":
-        prompt_path = Path(__file__).parent / "prompts" / "unified_miner_ollama.txt"
-        if not prompt_path.exists():
-            # Fall back to main prompt if Ollama version doesn't exist
-            prompt_path = Path(__file__).parent / "prompts" / "unified_miner.txt"
-    else:
-        prompt_path = Path(__file__).parent / "prompts" / "unified_miner.txt"
+    # Select prompt based on selectivity (replaces Ollama-specific logic)
+    prompt_files = {
+        "liberal": "unified_miner_liberal.txt",
+        "moderate": "unified_miner_moderate.txt",
+        "conservative": "unified_miner_conservative.txt",
+    }
+    prompt_file = prompt_files.get(selectivity, "unified_miner_moderate.txt")
+    prompt_path = Path(__file__).parent / "prompts" / prompt_file
 
-    miner = UnifiedMiner(llm, prompt_path)
+    if not prompt_path.exists():
+        # Fall back to moderate if selected variant doesn't exist
+        prompt_path = Path(__file__).parent / "prompts" / "unified_miner_moderate.txt"
+
+    miner = UnifiedMiner(llm, prompt_path, selectivity=selectivity)
     return miner.mine_episode(
         episode, max_workers=max_workers, progress_callback=progress_callback
     )

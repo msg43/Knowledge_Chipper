@@ -146,32 +146,35 @@ async def process_mine_with_unified_pipeline(
             f"{len(pipeline_outputs.structured_categories)} categories"
         )
 
-        # 8. Store rich outputs to main database (unified HCE schema)
+        # 8. Store rich outputs to main database (claim-centric schema)
         if orchestrator.progress_callback:
             orchestrator.progress_callback("storing", 90, episode_id)
 
         try:
-            video_id = episode_id.replace("episode_", "")
-            hce_store = HCEStore(orchestrator.db_service)
-            hce_store.upsert_pipeline_outputs(
+            # Determine source_id (strip episode_ prefix if present)
+            source_id = episode_id.replace("episode_", "")
+            
+            # Use ClaimStore for claim-centric storage
+            from ..database.claim_store import ClaimStore
+            claim_store = ClaimStore(orchestrator.db_service)
+            claim_store.upsert_pipeline_outputs(
                 pipeline_outputs,
+                source_id=source_id,
+                source_type='episode',
                 episode_title=Path(file_path).stem,
-                video_id=video_id,
             )
-            logger.info("💾 Stored HCE outputs in main database (unified schema)")
+            logger.info("💾 Stored claims with evidence to claim-centric database")
         except Exception as e:
             logger.error(f"❌ Database storage failed: {e}")
             raise
 
-        # 9. Create Summary record (keep existing functionality)
+        # 9. Summaries now stored in episodes table (via ClaimStore)
         if orchestrator.progress_callback:
             orchestrator.progress_callback("generating_summary", 95, episode_id)
-
-        video_id = episode_id.replace("episode_", "")
-        summary_id = orchestrator._create_summary_from_pipeline_outputs(
-            video_id, episode_id, pipeline_outputs, config
-        )
-        logger.info(f"📋 Summary record created: {summary_id}")
+        
+        # Note: Summary text (short_summary, long_summary) is already stored
+        # in the episodes table by ClaimStore.upsert_pipeline_outputs()
+        logger.info(f"📋 Episode summaries stored in episodes table")
 
         # 10. Generate summary markdown file
         summary_file_path = None

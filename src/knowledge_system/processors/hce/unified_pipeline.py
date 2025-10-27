@@ -103,6 +103,7 @@ class UnifiedHCEPipeline:
                 progress_callback=lambda msg: report_progress(
                     "Mining segments", 40.0, msg
                 ),
+                selectivity=self.config.miner_selectivity,  # NEW: Pass selectivity
             )
 
             # Count total extractions
