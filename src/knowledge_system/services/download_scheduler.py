@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from ..config import get_config
+from ..config import get_settings
 from ..processors.youtube_download import YouTubeDownloadProcessor
 
 logger = logging.getLogger(__name__)
@@ -299,7 +299,7 @@ def create_download_scheduler(
         Configured DownloadScheduler instance
     """
     if use_config:
-        config = get_config()
+        config = get_settings()
         yt_config = config.youtube_processing
         
         return DownloadScheduler(

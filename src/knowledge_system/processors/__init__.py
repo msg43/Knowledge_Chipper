@@ -5,7 +5,6 @@ from .base import BaseProcessor, ProcessorResult
 from .diarization import SpeakerDiarizationProcessor
 from .document_processor import DocumentProcessor
 from .html import HTMLProcessor
-from .moc import MOCProcessor
 from .pdf import PDFProcessor
 from .rss_processor import RSSProcessor
 
@@ -16,6 +15,9 @@ from .youtube_download import YouTubeDownloadProcessor
 # YouTubeMetadataProcessor removed - YouTubeDownloadProcessor handles all metadata extraction
 # YouTube transcript processor removed - use YouTubeDownloadProcessor + AudioProcessor instead
 # SummarizerProcessor removed - GUI uses System2Orchestrator instead
+# MOCProcessor removed - claim-centric architecture supersedes this functionality
+# QualityEvaluator removed - not used anywhere in codebase
+# YouTubeMetadataProxyProcessor removed - functionality absorbed by YouTubeDownloadProcessor
 
 __all__ = [
     "BaseProcessor",
@@ -24,8 +26,6 @@ __all__ = [
     # "WhisperCppTranscribeProcessor",  # Internal use only
     "DocumentProcessor",
     "YouTubeDownloadProcessor",
-    # "YouTubeMetadataProcessor",  # Removed - YouTubeDownloadProcessor handles metadata
-    "MOCProcessor",  # Still used by GUI
     "PDFProcessor",
     "HTMLProcessor",
     "RSSProcessor",

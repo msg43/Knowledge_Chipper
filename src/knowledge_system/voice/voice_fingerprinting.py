@@ -549,18 +549,36 @@ class VoiceFingerprintProcessor:
     def identify_speaker(
         self, audio: np.ndarray, threshold: float = 0.85
     ) -> tuple[str, float] | None:
-        """Identify the most likely speaker from enrolled profiles."""
+        """
+        Identify the most likely speaker from enrolled profiles.
+        
+        Args:
+            audio: Audio segment to identify
+            threshold: Minimum similarity threshold for positive identification
+            
+        Returns:
+            Tuple of (speaker_name, confidence) or None if no match found
+        """
         try:
             # Extract fingerprint from audio
-            self.extract_voice_fingerprint(audio)
+            test_fingerprint = self.extract_voice_fingerprint(audio)
 
-            # Get all voice profiles
-            # TODO: Implement get_all_voices in database service
-            # For now, return None - this needs database service enhancement
-            logger.warning(
-                "Speaker identification requires database service enhancement"
+            # Get all voice profiles and find matches
+            matches = self.db_service.find_matching_voices(test_fingerprint, threshold)
+            
+            if not matches:
+                logger.debug(
+                    f"No matching voice profiles found (threshold: {threshold})"
+                )
+                return None
+            
+            # Return the best match
+            best_match_voice, best_similarity = matches[0]
+            
+            logger.info(
+                f"Identified speaker as '{best_match_voice.name}' with confidence {best_similarity:.3f}"
             )
-            return None
+            return best_match_voice.name, best_similarity
 
         except Exception as e:
             logger.error(f"Error during speaker identification: {e}")

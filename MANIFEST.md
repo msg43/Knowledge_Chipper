@@ -316,7 +316,7 @@ Complete manifest of all files in the Knowledge Chipper codebase with meaningful
 - `__init__.py` - GUI components for the knowledge system.
 - `__main__.py` - Direct GUI launcher entrypoint.
 - `__init__.py` - Package initialization module
-- `hce_adapter.py` - HCE Adapter for GUI Components
+- `hce_adapter.py` - DEPRECATED: HCE Adapter for GUI Components (use System2Orchestrator and ClaimStore instead)
 - `icons.py` - Icon management for Knowledge Chipper GUI
 - `batch_processing_widget.py` - GUI Widget for Batch Processing
 - `__init__.py` - Shared GUI components and utilities.
@@ -387,68 +387,78 @@ Complete manifest of all files in the Knowledge Chipper codebase with meaningful
 - `base.py` - Base processor class for Knowledge System
 - `diarization.py` - Check if diarization dependencies are available.
 - `document_processor.py` - Document Processor for Knowledge System.
-- `__init__.py` - HCE public API re-exports for remaining modules after unified pipeline migration.
-- `concepts.py` - Extract concepts using chunked processing for efficiency.
-- `config_flex.py` - Python module
-- `context_expansion.py` - Context Expansion for Evidence Spans
-- `discourse.py` - # Analyze segment text for discourse type
-- `export.py` - Python module
-- `flagship_evaluator.py` - Flagship Evaluator for ranking and filtering extracted claims.
-- `global_index.py` - Python module
-- `glossary.py` - Extract jargon terms using chunked processing for efficiency.
-- `health.py` - HCE health checks and validation utilities.
-- `io_utils.py` - Python module
-- `__init__.py` - HCE Models Package.
-- `cross_encoder.py` - Cross-encoder model for scoring claim-context pairs.
-- `embedder.py` - Embedder implementation with caching support.
-- `llm_system2.py` - System 2 LLM wrapper that uses the centralized LLM adapter.
-- `parallel_processor.py` - Parallel HCE Processing with Memory Pressure Integration
-- `people.py` - Python module
-- `concepts_detect.txt` - LLM prompt: Detect explicit or implicit mental models.
-- `contradiction.txt` - LLM prompt: Given two accepted claims A and B, decide if they contradict, support, are indep
-- `flagship_evaluator.txt` - LLM prompt: You are an expert knowledge evaluator tasked with reviewing and ranking extracte
-- `glossary_detect.txt` - LLM prompt: Extract jargon/key terms whose meaning may be non-obvious.
-- `jargon_judge_high.txt` - LLM prompt: You are an expert lexicographer and domain specialist with deep knowledge of tec
-- `jargon_judge_low.txt` - LLM prompt: You are evaluating whether a term is specialized jargon that needs definition fo
-- `long_summary.txt` - LLM prompt: You are an expert knowledge analyst tasked with creating a comprehensive, integr
-- `mental_models_judge_high.txt` - LLM prompt: You are an expert in mental models and thinking frameworks with deep knowledge o
-- `mental_models_judge_low.txt` - LLM prompt: You are evaluating whether a concept is a mental model/thinking framework versus
-- `people_detect.txt` - LLM prompt: Extract mentions of people and organizations with timestamps.
-- `people_disambiguate.txt` - LLM prompt: Given a name surface and minimal context, provide canonical identity if reasonab
-- `people_judge_high.txt` - LLM prompt: You are an expert at identifying actual people versus organizations, institution
-- `people_judge_low.txt` - LLM prompt: You are evaluating whether a name refers to an actual person who would potential
-- `short_summary.txt` - LLM prompt: You are an expert content analyst tasked with creating a concise overview of an 
-- `skim.txt` - LLM prompt: You are creating 5–10 milestone markers from a transcript. For each chunk, retur
-- `unified_miner.txt` - LLM prompt: You are an expert knowledge analyst tasked with extracting claims, jargon, peopl
-- `relations.py` - Find relationships between claims using LLM analysis.
-- `schema_validator.py` - JSON Schema validation for unified HCE pipeline outputs.
-- `flagship_output.json` - JSON schema for data validation
-- `miner_output.json` - JSON schema for data validation
-- `skim.py` - Extract key milestones from segments using LLM analysis.
-- `sqlite_schema.sql` - HCE SQLite Schema with FTS5 for Full-Text Search
-- `storage_sqlite.py` - SQLite storage module for HCE pipeline outputs.
-- `structured_categories.py` - Structured Categories Analysis for Episodes
-- `temporal_numeric.py` - Python module
-- `temporality.py` - Temporality Analysis for Claims.
-- `types.py` - Python module
-- `unified_miner.py` - Unified Miner for extracting claims, jargon, people, and mental models in a single pass.
-- `unified_pipeline.py` - Unified HCE Pipeline - 4-pass system: Short Summary → Mining → Evaluation → Long Summary + Categories
 - `html.py` - Extracts text content from HTML files using BeautifulSoup.
-- `moc.py` - HCE-based Maps of Content (MOC) Processor
 - `pdf.py` - Extracts text from PDF files using PyPDF2 and pdfplumber.
-- `quality_evaluator.py` - Quality Evaluation Engine for LLM Outputs
 - `registry.py` - Register a processor for file extensions and/or URL patterns.
 - `rss_processor.py` - RSS Feed Processor
 - `speaker_processor.py` - Speaker Processing Module
-- `summarizer.py` - Unified HCE-based Summarizer Processor
-- `summarizer_legacy.py` - HCE-based Summarizer Processor
-- `summarizer_unified.py` - Unified HCE-based Summarizer Processor
 - `unified_batch_processor.py` - Unified Batch Processor for YouTube URLs and Local Files.
 - `whisper_cpp_transcribe.py` - Transcribes audio files using whisper.cpp with Core ML support on macOS.
 - `youtube_download.py` - YouTube Download Processor
 - `youtube_metadata.py` - Advanced YouTube Metadata Processor with PacketStream-Only Support
-- `youtube_metadata_proxy.py` - Enhanced YouTube Metadata Processor with PacketStream Proxy Support
 - `youtube_transcript.py` - Advanced YouTube Transcript Processor
+
+#### src/knowledge_system/processors/hce/
+*HCE (Hybrid Claim Extraction) pipeline modules*
+
+- `__init__.py` - HCE public API re-exports for remaining modules after unified pipeline migration.
+- `concepts.py` - Extract concepts using chunked processing for efficiency.
+- `config_flex.py` - HCE pipeline configuration
+- `context_expansion.py` - Context Expansion for Evidence Spans
+- `discourse.py` - Discourse type analysis for segments
+- `export.py` - Export utilities for HCE outputs
+- `flagship_evaluator.py` - Flagship Evaluator for ranking and filtering extracted claims.
+- `global_index.py` - Global index management
+- `glossary.py` - Extract jargon terms using chunked processing for efficiency.
+- `health.py` - HCE health checks and validation utilities.
+- `io_utils.py` - I/O utilities for HCE pipeline
+- `parallel_processor.py` - Parallel HCE Processing with Memory Pressure Integration
+- `people.py` - People extraction and disambiguation
+- `relations.py` - Find relationships between claims using LLM analysis.
+- `schema_validator.py` - JSON Schema validation for unified HCE pipeline outputs.
+- `skim.py` - Extract key milestones from segments using LLM analysis.
+- `storage_sqlite.py` - SQLite storage module for HCE pipeline outputs.
+- `structured_categories.py` - Structured Categories Analysis for Episodes
+- `temporal_numeric.py` - Temporal and numeric analysis
+- `temporality.py` - Temporality Analysis for Claims.
+- `types.py` - Type definitions for HCE pipeline
+- `unified_miner.py` - Unified Miner for extracting claims, jargon, people, and mental models in a single pass.
+- `unified_pipeline.py` - Unified HCE Pipeline - 4-pass system: Short Summary → Mining → Evaluation → Long Summary + Categories
+
+#### src/knowledge_system/processors/hce/models/
+*HCE model wrappers*
+
+- `__init__.py` - HCE Models Package.
+- `cross_encoder.py` - Cross-encoder model for scoring claim-context pairs.
+- `embedder.py` - Embedder implementation with caching support.
+- `llm_system2.py` - System 2 LLM wrapper that uses the centralized LLM adapter.
+
+#### src/knowledge_system/processors/hce/prompts/
+*LLM prompts for HCE pipeline stages*
+
+- `concepts_detect.txt` - LLM prompt: Detect explicit or implicit mental models.
+- `contradiction.txt` - LLM prompt: Contradiction detection for claim relations
+- `flagship_evaluator.txt` - LLM prompt: Flagship claim evaluation and ranking
+- `glossary_detect.txt` - LLM prompt: Extract jargon/key terms whose meaning may be non-obvious.
+- `jargon_judge_high.txt` - LLM prompt: High-confidence jargon evaluation
+- `jargon_judge_low.txt` - LLM prompt: Low-confidence jargon evaluation
+- `long_summary.txt` - LLM prompt: Comprehensive summary generation
+- `mental_models_judge_high.txt` - LLM prompt: High-confidence mental model evaluation
+- `mental_models_judge_low.txt` - LLM prompt: Low-confidence mental model evaluation
+- `people_detect.txt` - LLM prompt: Extract mentions of people and organizations with timestamps.
+- `people_disambiguate.txt` - LLM prompt: Name disambiguation and canonical identity resolution
+- `people_judge_high.txt` - LLM prompt: High-confidence people identification
+- `people_judge_low.txt` - LLM prompt: Low-confidence people identification
+- `short_summary.txt` - LLM prompt: Concise summary generation
+- `skim.txt` - LLM prompt: Milestone marker extraction from transcripts
+- `unified_miner.txt` - LLM prompt: Unified extraction of claims, jargon, people, and mental models
+
+#### src/knowledge_system/processors/hce/schemas/
+*JSON schemas for HCE validation*
+
+- `flagship_output.json` - JSON schema for flagship evaluator output
+- `miner_output.json` - JSON schema for unified miner output
+- `sqlite_schema.sql` - HCE SQLite Schema with FTS5 for Full-Text Search
 
 ### src/knowledge_system/services/
 *External service integrations: Supabase, OAuth, file generation*
@@ -914,7 +924,13 @@ Files that are historical artifacts, completed implementations, or should be arc
 - `test_simple_summary.md` - Documentation file
 - `update_output.log` - Log file
 
-**Note:** 143 additional obsolete files exist in other directories (backups, deprecated code, old dependencies).
+### src/knowledge_system/processors/ (Removed October 2025)
+
+- `moc.py` - REMOVED: HCE-based Maps of Content (MOC) Processor - superseded by claim-centric architecture (ClaimStore, claim_models)
+- `quality_evaluator.py` - REMOVED: Quality Evaluation Engine for LLM Outputs - not used anywhere in codebase
+- `youtube_metadata_proxy.py` - REMOVED: Enhanced YouTube Metadata Processor with PacketStream Proxy Support - functionality absorbed by YouTubeDownloadProcessor
+
+**Note:** 146 additional obsolete files exist in other directories (backups, deprecated code, old dependencies).
 ---
 
 ## ORGANIZATION RECOMMENDATIONS

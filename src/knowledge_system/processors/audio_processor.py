@@ -448,7 +448,7 @@ class AudioProcessor(BaseProcessor):
             # Prepare speaker data with metadata for enhanced suggestions
             metadata = kwargs.get("metadata", {})
             speaker_data_list = speaker_processor.prepare_speaker_data(
-                diarization_segments, transcript_segments, metadata
+                diarization_segments, transcript_segments, metadata, recording_path
             )
 
             if not speaker_data_list:
@@ -738,24 +738,33 @@ class AudioProcessor(BaseProcessor):
                 logger.debug(f"Could not load AI suggestions from database: {e}")
 
             # PRIORITY 3: Use AI suggestions from current speaker_data_list
+            # 🚨 ALWAYS use LLM suggestions regardless of confidence
+            # The LLM provides best-guess names even with low confidence
             assignments = {}
             for speaker_data in speaker_data_list:
-                if speaker_data.suggested_name and speaker_data.confidence_score > 0.6:
+                if speaker_data.suggested_name:
                     assignments[speaker_data.speaker_id] = speaker_data.suggested_name
+                    confidence_indicator = "✅" if speaker_data.confidence_score > 0.7 else "⚠️"
                     logger.info(
-                        f"🤖 Using AI suggestion from processing: {speaker_data.speaker_id} -> "
+                        f"{confidence_indicator} Using LLM suggestion: {speaker_data.speaker_id} -> "
                         f"'{speaker_data.suggested_name}' (confidence: {speaker_data.confidence_score:.2f})"
                     )
                 else:
-                    # PRIORITY 4: Generate generic name as fallback
+                    # This should never happen - LLM must always provide a name
+                    logger.error(
+                        f"❌ CRITICAL: No LLM suggestion for {speaker_data.speaker_id} - LLM failed to provide name"
+                    )
+                    # Emergency fallback only if LLM completely failed
+                    # Use letter-based naming
                     speaker_num = speaker_data.speaker_id.replace("SPEAKER_", "")
                     try:
-                        num = int(speaker_num) + 1
-                        assignments[speaker_data.speaker_id] = f"Speaker {num}"
-                        logger.debug(
-                            f"Using generic name: {speaker_data.speaker_id} -> 'Speaker {num}'"
+                        num = int(speaker_num)
+                        letter = chr(65 + num)  # A, B, C, ...
+                        assignments[speaker_data.speaker_id] = f"Unknown Speaker {letter}"
+                        logger.error(
+                            f"Emergency fallback: {speaker_data.speaker_id} -> 'Unknown Speaker {letter}'"
                         )
-                    except ValueError:
+                    except (ValueError, IndexError):
                         assignments[speaker_data.speaker_id] = speaker_data.speaker_id
 
             if assignments:
@@ -1691,6 +1700,7 @@ class AudioProcessor(BaseProcessor):
                                         diarization_segments,
                                         transcript_segments,
                                         metadata_for_speaker,
+                                        str(path),  # Pass audio path for voice fingerprinting
                                     )
                                 )
 

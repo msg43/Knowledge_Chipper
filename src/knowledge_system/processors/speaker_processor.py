@@ -127,6 +127,7 @@ class SpeakerProcessor(BaseProcessor):
         diarization_segments: list[dict[str, Any]],
         transcript_segments: list[dict[str, Any]],
         metadata: dict[str, Any] | None = None,
+        audio_path: str | None = None,
     ) -> list[SpeakerData]:
         """
         Merge diarization and transcript data for speaker assignment.
@@ -134,6 +135,8 @@ class SpeakerProcessor(BaseProcessor):
         Args:
             diarization_segments: List of diarization segments with speaker IDs and timing
             transcript_segments: List of transcript segments with text and timing
+            metadata: Optional metadata about the recording
+            audio_path: Optional path to audio file for voice fingerprinting
 
         Returns:
             List of SpeakerData objects with aggregated information per speaker
@@ -175,7 +178,7 @@ class SpeakerProcessor(BaseProcessor):
                 speaker_data.segment_count += 1
 
             # 🚨 NEW: Use voice fingerprinting to merge similar speakers before text assignment
-            self._voice_fingerprint_merge_speakers(speaker_map)
+            self._voice_fingerprint_merge_speakers(speaker_map, audio_path)
 
             # 🚨 NEW: Check for potential over-segmentation and merge similar speakers
             self._detect_and_merge_oversegmented_speakers(speaker_map)
@@ -524,18 +527,24 @@ class SpeakerProcessor(BaseProcessor):
             logger.error(f"Error in over-segmentation detection: {e}")
 
     def _voice_fingerprint_merge_speakers(
-        self, speaker_map: dict[str, SpeakerData]
+        self, speaker_map: dict[str, SpeakerData], audio_path: str | None = None
     ) -> None:
         """
         Use state-of-the-art voice fingerprinting to merge speakers that have the same voice.
         This prevents over-segmentation at the source rather than cleaning up after.
+        
+        Args:
+            speaker_map: Dictionary mapping speaker IDs to their data
+            audio_path: Path to the audio file for extracting segments
         """
         try:
             # Import voice fingerprinting
             try:
-                from ..voice.voice_fingerprinting import VoiceFingerprintProcessor
+                from ..voice.voice_fingerprinting import VoiceFingerprintProcessor, load_audio_for_voice_processing
+                from pathlib import Path
+                import numpy as np
 
-                VoiceFingerprintProcessor()
+                voice_processor = VoiceFingerprintProcessor()
                 logger.info(
                     "🎯 Voice fingerprinting available - analyzing speaker segments"
                 )
@@ -546,48 +555,141 @@ class SpeakerProcessor(BaseProcessor):
             if len(speaker_map) < 2:
                 return  # Nothing to merge
 
-            # Extract audio segments for each speaker (we'll simulate this with text similarity for now)
-            # TODO: In full implementation, we'd extract actual audio segments
-            # For now, we'll use a simplified approach based on speaking patterns
+            # If no audio path provided, fall back to text-based heuristics
+            if not audio_path:
+                logger.debug("No audio path provided - using text-based similarity fallback")
+                self._voice_fingerprint_merge_speakers_fallback(speaker_map)
+                return
 
-            speakers_to_merge = []
-            main_speakers = list(speaker_map.keys())
-
-            # Compare speakers pairwise for potential merging
-            for i, speaker1_id in enumerate(main_speakers):
-                for speaker2_id in main_speakers[i + 1 :]:
-                    speaker1_data = speaker_map[speaker1_id]
-                    speaker2_data = speaker_map[speaker2_id]
-
-                    # Simple heuristic: if speakers have very similar speaking patterns
-                    # and timing, they might be the same person over-segmented
-                    similarity_score = self._calculate_speaker_similarity(
-                        speaker1_data, speaker2_data
+            try:
+                # Load the full audio file
+                audio_file = Path(audio_path)
+                if not audio_file.exists():
+                    logger.warning(f"Audio file not found: {audio_path} - using fallback")
+                    self._voice_fingerprint_merge_speakers_fallback(speaker_map)
+                    return
+                
+                full_audio = load_audio_for_voice_processing(audio_file)
+                sample_rate = 16000
+                
+                # Extract voice fingerprints for each speaker
+                speaker_fingerprints = {}
+                
+                for speaker_id, speaker_data in speaker_map.items():
+                    # Get audio segments for this speaker (use first few segments, up to 30 seconds total)
+                    audio_segments = []
+                    total_duration = 0.0
+                    max_duration = 30.0  # Use up to 30 seconds for fingerprinting
+                    
+                    for segment in speaker_data.segments:
+                        if total_duration >= max_duration:
+                            break
+                        
+                        start_sample = int(segment.start * sample_rate)
+                        end_sample = int(segment.end * sample_rate)
+                        
+                        # Validate segment bounds
+                        if start_sample >= len(full_audio) or end_sample > len(full_audio):
+                            continue
+                        
+                        segment_audio = full_audio[start_sample:end_sample]
+                        
+                        # Only use segments longer than 0.5 seconds
+                        if len(segment_audio) > sample_rate * 0.5:
+                            audio_segments.append(segment_audio)
+                            total_duration += (end_sample - start_sample) / sample_rate
+                    
+                    if not audio_segments:
+                        logger.debug(f"No valid audio segments for {speaker_id}")
+                        continue
+                    
+                    # Concatenate segments for this speaker
+                    concatenated_audio = np.concatenate(audio_segments)
+                    
+                    # Extract voice fingerprint
+                    fingerprint = voice_processor.extract_voice_fingerprint(concatenated_audio)
+                    speaker_fingerprints[speaker_id] = fingerprint
+                    
+                    logger.debug(
+                        f"Extracted fingerprint for {speaker_id} from {len(audio_segments)} segments ({total_duration:.1f}s)"
                     )
-
-                    if (
-                        similarity_score > 0.7
-                    ):  # Moderate similarity threshold - let voice fingerprinting do the work
+                
+                # Compare speakers pairwise using voice fingerprints
+                speakers_to_merge = []
+                main_speakers = list(speaker_fingerprints.keys())
+                
+                for i, speaker1_id in enumerate(main_speakers):
+                    for speaker2_id in main_speakers[i + 1:]:
+                        fingerprint1 = speaker_fingerprints[speaker1_id]
+                        fingerprint2 = speaker_fingerprints[speaker2_id]
+                        
+                        # Calculate voice similarity
+                        similarity_score = voice_processor.calculate_voice_similarity(
+                            fingerprint1, fingerprint2
+                        )
+                        
+                        # Use 0.7 threshold for merging (70% similar = same person)
+                        if similarity_score > 0.7:
+                            logger.info(
+                                f"🔗 Voice fingerprinting: {speaker1_id} and {speaker2_id} "
+                                f"are likely the same speaker (similarity: {similarity_score:.3f})"
+                            )
+                            speakers_to_merge.append(
+                                (speaker1_id, speaker2_id, similarity_score)
+                            )
+                
+                # Perform merges for highly similar speakers
+                for speaker1_id, speaker2_id, score in speakers_to_merge:
+                    if speaker2_id in speaker_map:  # Check if still exists
+                        self._merge_speakers(speaker_map, speaker1_id, speaker2_id)
                         logger.info(
-                            f"🔗 Voice analysis suggests {speaker1_id} and {speaker2_id} "
-                            f"are likely the same speaker (similarity: {similarity_score:.3f})"
+                            f"🎯 Merged {speaker2_id} into {speaker1_id} (voice similarity: {score:.3f})"
                         )
-                        speakers_to_merge.append(
-                            (speaker1_id, speaker2_id, similarity_score)
-                        )
-
-            # Perform merges for highly similar speakers
-            for speaker1_id, speaker2_id, score in speakers_to_merge:
-                if (
-                    speaker2_id in speaker_map
-                ):  # Check if still exists (might have been merged already)
-                    self._merge_speakers(speaker_map, speaker1_id, speaker2_id)
-                    logger.info(
-                        f"🎯 Merged {speaker2_id} into {speaker1_id} based on voice analysis"
-                    )
+                
+            except Exception as e:
+                logger.warning(f"Error extracting audio segments: {e} - using fallback")
+                self._voice_fingerprint_merge_speakers_fallback(speaker_map)
 
         except Exception as e:
             logger.error(f"Error in voice fingerprint merging: {e}")
+    
+    def _voice_fingerprint_merge_speakers_fallback(
+        self, speaker_map: dict[str, SpeakerData]
+    ) -> None:
+        """
+        Fallback method using text-based heuristics when audio is not available.
+        """
+        speakers_to_merge = []
+        main_speakers = list(speaker_map.keys())
+
+        # Compare speakers pairwise for potential merging
+        for i, speaker1_id in enumerate(main_speakers):
+            for speaker2_id in main_speakers[i + 1:]:
+                speaker1_data = speaker_map[speaker1_id]
+                speaker2_data = speaker_map[speaker2_id]
+
+                # Simple heuristic: if speakers have very similar speaking patterns
+                # and timing, they might be the same person over-segmented
+                similarity_score = self._calculate_speaker_similarity(
+                    speaker1_data, speaker2_data
+                )
+
+                if similarity_score > 0.7:
+                    logger.info(
+                        f"🔗 Text-based analysis suggests {speaker1_id} and {speaker2_id} "
+                        f"are likely the same speaker (similarity: {similarity_score:.3f})"
+                    )
+                    speakers_to_merge.append(
+                        (speaker1_id, speaker2_id, similarity_score)
+                    )
+
+        # Perform merges for highly similar speakers
+        for speaker1_id, speaker2_id, score in speakers_to_merge:
+            if speaker2_id in speaker_map:
+                self._merge_speakers(speaker_map, speaker1_id, speaker2_id)
+                logger.info(
+                    f"🎯 Merged {speaker2_id} into {speaker1_id} based on text analysis"
+                )
 
     def _calculate_speaker_similarity(
         self, speaker1: SpeakerData, speaker2: SpeakerData
@@ -938,21 +1040,27 @@ class SpeakerProcessor(BaseProcessor):
                         f"Batch LLM suggestion for {speaker_id}: '{suggested_name}' (confidence: {confidence:.2f})"
                     )
                 else:
-                    # Fallback for missing suggestions
+                    # 🚨 This should NEVER happen - LLM must always provide a name
+                    # If we hit this, it means the LLM completely failed
+                    logger.error(
+                        f"❌ CRITICAL ERROR: No LLM suggestion for {speaker_id} - LLM failed completely"
+                    )
+                    # Emergency fallback with descriptive name
                     speaker_num = speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
-                    fallback_name = f"Speaker {int(speaker_num) + 1}"
+                    fallback_name = f"Unknown Speaker {int(speaker_num) + 1}"
                     speaker_data.suggested_name = fallback_name
-                    speaker_data.confidence_score = 0.2
-                    speaker_data.suggestion_method = "fallback"
-                    logger.warning(
-                        f"No LLM suggestion for {speaker_id}, using fallback: '{fallback_name}'"
+                    speaker_data.confidence_score = 0.1
+                    speaker_data.suggestion_method = "emergency_fallback"
+                    logger.error(
+                        f"Using emergency fallback for {speaker_id}: '{fallback_name}'"
                     )
 
         except Exception as e:
             logger.error(f"Error in batch speaker suggestion: {e}")
-            # Emergency fallback: assign generic names
+            # Emergency fallback: assign descriptive unknown names
             for i, (speaker_id, speaker_data) in enumerate(speaker_map.items()):
-                speaker_data.suggested_name = f"Speaker {i + 1}"
+                letter = chr(65 + i)  # A, B, C, ...
+                speaker_data.suggested_name = f"Unknown Speaker {letter}"
                 speaker_data.confidence_score = 0.1
                 speaker_data.suggestion_method = "emergency_fallback"
 
@@ -965,11 +1073,12 @@ class SpeakerProcessor(BaseProcessor):
     ) -> dict[str, tuple[str, float]] | None:
         """
         Apply Layer 4 contextual analysis to map extracted names to speakers
-        based on conversational flow and direct address patterns.
+        based on conversational flow, direct address patterns, and channel mappings.
 
-        This is the missing link that handles scenarios like:
-        "I'm Robert Siegel. Today's guests are David Brooks and E.J. Dionne."
-        "David, what do you think?" -> Next speaker should be David
+        This handles:
+        1. Channel-based mapping: "Tony" on "China Update" -> "Anthony Johnson"
+        2. Conversational flow: "David, what do you think?" -> Next speaker is David
+        3. Self-introduction patterns
 
         Args:
             llm_suggestions: Initial name suggestions from LLM
@@ -981,6 +1090,11 @@ class SpeakerProcessor(BaseProcessor):
             Refined suggestions with contextual mapping, or None if no improvements
         """
         try:
+            # PRIORITY 1: Apply channel-based mappings first (highest confidence)
+            channel_improved = self._apply_channel_mappings(llm_suggestions, metadata)
+            if channel_improved:
+                llm_suggestions = channel_improved
+                logger.info("🎯 Applied channel-based speaker mappings")
             # Import the context analyzer (Layer 4)
             from ..utils.speaker_intelligence import SpeakerContextAnalyzer
 
@@ -1054,6 +1168,130 @@ class SpeakerProcessor(BaseProcessor):
         except Exception as e:
             logger.warning(f"Error in contextual analysis: {e}")
             return None
+    
+    def _apply_channel_mappings(
+        self,
+        llm_suggestions: dict[str, tuple[str, float]],
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, tuple[str, float]] | None:
+        """
+        Apply channel-based speaker mappings to expand partial names to full names.
+        
+        Example:
+        - Channel: "China Update"
+        - LLM suggests: "Tony" (confidence 0.7)
+        - Channel mapping: Tony -> "Anthony Johnson"
+        - Result: "Anthony Johnson" (confidence upgraded to 0.95)
+        
+        Args:
+            llm_suggestions: LLM suggested names
+            metadata: Video/podcast metadata with channel info
+            
+        Returns:
+            Improved suggestions if channel mappings applied, None otherwise
+        """
+        if not metadata:
+            return None
+            
+        # Get channel name from metadata
+        channel_name = metadata.get("uploader") or metadata.get("channel")
+        if not channel_name:
+            logger.debug("No channel information in metadata")
+            return None
+        
+        # Load channel mappings from config
+        try:
+            import yaml
+            from pathlib import Path
+            
+            config_path = (
+                Path(__file__).parent.parent.parent
+                / "config"
+                / "speaker_attribution.yaml"
+            )
+            
+            if not config_path.exists():
+                logger.debug("speaker_attribution.yaml not found")
+                return None
+                
+            with open(config_path) as f:
+                config = yaml.safe_load(f)
+            
+            channel_mappings = config.get("channel_mappings", {})
+            
+            if not channel_mappings:
+                logger.debug("No channel mappings configured")
+                return None
+                
+        except Exception as e:
+            logger.warning(f"Failed to load channel mappings: {e}")
+            return None
+        
+        # Check if this channel has mappings
+        channel_config = None
+        for configured_channel, config_data in channel_mappings.items():
+            # Case-insensitive, partial match
+            if configured_channel.lower() in channel_name.lower() or channel_name.lower() in configured_channel.lower():
+                channel_config = config_data
+                logger.info(f"📺 Found channel mapping for: {channel_name}")
+                break
+        
+        if not channel_config or "hosts" not in channel_config:
+            logger.debug(f"No mappings configured for channel: {channel_name}")
+            return None
+        
+        # Apply mappings
+        improved_suggestions = llm_suggestions.copy()
+        improvements_made = False
+        
+        for speaker_id, (suggested_name, confidence) in llm_suggestions.items():
+            suggested_name_lower = suggested_name.lower().strip()
+            
+            # Check if this name matches any partial names in channel config
+            for host_config in channel_config["hosts"]:
+                full_name = host_config.get("full_name")
+                partial_names = host_config.get("partial_names", [])
+                
+                if not full_name or not partial_names:
+                    continue
+                
+                # Check for exact or partial match
+                for partial_name in partial_names:
+                    partial_lower = partial_name.lower().strip()
+                    
+                    # Match if:
+                    # 1. Exact match: "Tony" == "tony"
+                    # 2. Contained: "Tony" in "Tony Smith" or "I'm Tony"
+                    # 3. Word boundary match: "tony" in "tony johnson"
+                    if (
+                        suggested_name_lower == partial_lower
+                        or partial_lower in suggested_name_lower
+                        or suggested_name_lower in partial_lower
+                    ):
+                        logger.info(
+                            f"🎯 Channel mapping: '{suggested_name}' -> '{full_name}' "
+                            f"(channel: {channel_name})"
+                        )
+                        
+                        # Upgrade to full name with high confidence
+                        improved_suggestions[speaker_id] = (
+                            full_name,
+                            max(0.95, confidence)  # Channel-based mapping is very reliable
+                        )
+                        improvements_made = True
+                        break  # Found a match, move to next speaker
+                
+                if improvements_made:
+                    break  # Already improved this speaker
+        
+        if improvements_made:
+            logger.info(
+                f"✅ Applied channel-based speaker mappings for {channel_name}"
+            )
+            return improved_suggestions
+        
+        logger.debug(f"No channel mappings applied for {channel_name}")
+        return None
 
     def _find_direct_address_mappings(
         self,
@@ -1192,22 +1430,27 @@ class SpeakerProcessor(BaseProcessor):
                 except Exception as e:
                     logger.debug(f"LLM suggester not available or failed: {e}")
 
-            # No pattern-based fallback - just return generic name
+            # No pattern-based fallback - use descriptive unknown name
             # Extract speaker number from ID (e.g., SPEAKER_00 -> 00)
             speaker_num = (
                 speaker_data.speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
             )
-            generic_name = f"Speaker {int(speaker_num) + 1}"
+            try:
+                num = int(speaker_num)
+                letter = chr(65 + num)  # A, B, C, ...
+                descriptive_name = f"Unknown Speaker {letter}"
+            except (ValueError, IndexError):
+                descriptive_name = "Unknown Speaker X"
 
             speaker_data.suggestion_method = "generic_fallback"
             speaker_data.suggestion_metadata = {
-                "reason": "LLM not available - using generic name",
+                "reason": "LLM not available - using descriptive unknown name",
             }
 
             logger.info(
-                f"No LLM available for {speaker_data.speaker_id}: using generic '{generic_name}'"
+                f"No LLM available for {speaker_data.speaker_id}: using fallback '{descriptive_name}'"
             )
-            return generic_name, 0.2  # Low confidence for generic names
+            return descriptive_name, 0.2  # Low confidence for fallback names
 
         except Exception as e:
             logger.error(f"Error in enhanced speaker suggestion: {e}")
@@ -1215,7 +1458,13 @@ class SpeakerProcessor(BaseProcessor):
             speaker_num = (
                 speaker_data.speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
             )
-            return f"Speaker {int(speaker_num) + 1}", 0.1
+            # Emergency fallback with letter-based naming
+            try:
+                num = int(speaker_num)
+                letter = chr(65 + num)  # A, B, C, ...
+                return f"Unknown Speaker {letter}", 0.1
+            except (ValueError, IndexError):
+                return "Unknown Speaker X", 0.1
 
     def _prepare_database_assignment(
         self, speaker_data: SpeakerData, assigned_name: str = None

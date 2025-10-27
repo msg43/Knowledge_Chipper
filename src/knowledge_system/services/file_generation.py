@@ -1518,7 +1518,9 @@ class FileGenerationService:
                         "",
                     ])
                     for ch in chapters[:10]:  # Limit to 10 chapters
-                        markdown_lines.append(f"- [{ch.get('start_time', '0:00')}] {ch.get('title', 'Unknown')}")
+                        start_time = ch.get('start_time', '0:00')
+                        ch_title = ch.get('title', 'Unknown')
+                        markdown_lines.append(f"- [{start_time}] {ch_title}")
                     markdown_lines.append("")
             
             markdown_lines.extend([
@@ -1534,7 +1536,7 @@ class FileGenerationService:
                 f"- **Relations:** {len(pipeline_outputs.relations)}",
                 f"- **Categories:** {len(pipeline_outputs.structured_categories)}",
                 "",
-            ]
+            ])
 
             # Add short summary if available
             if pipeline_outputs.short_summary:

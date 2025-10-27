@@ -61,46 +61,63 @@ Found **9 obsolete or cleanup-worthy folders** consuming significant disk space.
 
 ---
 
-## CATEGORY 3: Build Artifacts (CAN DELETE - REBUILT AS NEEDED)
+## CATEGORY 3: Build Artifacts - Temporary Working Directories
+
+**IMPORTANT:** The build system uses a two-layer cache:
+- `dist/*.tar.gz` = Final cached artifacts (11+ GB) - **KEEP THESE!**
+- `build_*/` = Temporary working directories - **SAFE TO DELETE**
+
+When you run `./scripts/build_complete_pkg.sh`:
+1. Checks if `dist/python-framework-3.13-macos.tar.gz` exists
+2. If exists and script unchanged → Uses cached version (fast!)
+3. If missing → Rebuilds to `dist/` using `build_framework/` as temp workspace
+4. Final output always goes to `dist/`, temp folders can be deleted anytime
+
+**Result:** Deleting `build_*/` saves disk space with NO impact on rebuild speed!
 
 ### 5. `build_framework/` - **706 MB** 🔴 LARGEST
 - **Contents:** Python 3.13.1 framework (5,799 files)
-- **Purpose:** Built framework for PKG installer
-- **Recommendation:** ✅ **DELETE** (can rebuild with scripts)
-- **Rebuild Command:** `./scripts/build_python_framework.sh`
+- **Purpose:** Temporary workspace for building Python framework
+- **Final Output:** `dist/python-framework-3.13-macos.tar.gz` (2.1 KB - kept!)
+- **Recommendation:** ✅ **DELETE** (temp workspace, final output cached in dist/)
+- **Rebuild:** Auto-regenerates if needed, uses dist/ cache
 - **Command:** `rm -rf build_framework/`
 
 ### 6. `github_models_prep/` - **502 MB** 🔴 2ND LARGEST
 - **Contents:** Model files prepared for GitHub releases (89 files)
-- **Purpose:** Temporary staging for model release
-- **Recommendation:** ✅ **DELETE** (can regenerate)
-- **Rebuild Command:** `./scripts/prepare_models_for_github.py`
+- **Purpose:** Temporary staging - sources already bundled in `dist/ai-models-bundle.tar.gz`
+- **Final Output:** `dist/ai-models-bundle.tar.gz` (341 MB - kept!)
+- **Recommendation:** ✅ **DELETE** (sources already in dist/ cache)
+- **Rebuild:** Uses dist/ cache, no need to re-download
 - **Command:** `rm -rf github_models_prep/`
 
 ### 7. `build_ffmpeg/` - **101 MB**
-- **Contents:** FFmpeg binary (4 files, including 80MB ffmpeg executable)
-- **Purpose:** FFmpeg for PKG installer
-- **Recommendation:** ✅ **DELETE** (can re-download)
-- **Rebuild:** Downloads automatically during build
+- **Contents:** FFmpeg binary workspace (4 files, including 80MB executable)
+- **Purpose:** Temporary workspace for FFmpeg bundling
+- **Final Output:** `dist/ffmpeg-macos-universal.tar.gz` (25 MB - kept!)
+- **Recommendation:** ✅ **DELETE** (temp workspace, final output in dist/)
+- **Rebuild:** Uses cached dist/ tarball
 - **Command:** `rm -rf build_ffmpeg/`
 
 ### 8. `build_pkg/` - **11 MB**
 - **Contents:** PKG installer artifacts (341 files)
-- **Purpose:** Built installer package
-- **Recommendation:** ✅ **DELETE** (built on demand)
-- **Rebuild Command:** `./scripts/build_complete_pkg.sh`
+- **Purpose:** Temporary build workspace for final .pkg assembly
+- **Final Output:** `dist/SkipThePodcast-*.pkg` (created on demand)
+- **Recommendation:** ✅ **DELETE** (regenerated each build)
+- **Rebuild:** Auto-regenerates during PKG build
 - **Command:** `rm -rf build_pkg/`
 
 ### 9. `build_app_template/` - **4.9 MB**
 - **Contents:** App template with 281 files
-- **Purpose:** Template for app bundle
+- **Purpose:** Temporary template workspace
 - **Recommendation:** ✅ **DELETE** (regenerated during build)
+- **Rebuild:** Auto-regenerates during PKG build
 - **Command:** `rm -rf build_app_template/`
 
 ### 10. `build_packages/` - **8 KB**
 - **Contents:** Old Packages.app project file
 - **Purpose:** Legacy installer (now using SkipThePodcast.pkgproj in root)
-- **Recommendation:** ✅ **DELETE** (superseded)
+- **Recommendation:** ✅ **DELETE** (superseded, unused)
 - **Command:** `rm -rf build_packages/`
 
 ---
@@ -192,11 +209,14 @@ requirements.txt.backup   (1.5 KB)
 ## Cleanup Summary
 
 ### Safe to Delete Immediately (~1.35 GB)
+
+**⚠️ IMPORTANT: Keep `dist/` directory - it contains cached build artifacts (11+ GB) that save hours of rebuild time!**
+
 ```bash
 # Delete explicitly marked folders
 rm -rf _to_delete/ _quarantine/ .git_backup_20250807_185718/
 
-# Delete build artifacts (can rebuild)
+# Delete TEMPORARY build workspaces (final outputs cached in dist/)
 rm -rf build_framework/ github_models_prep/ build_ffmpeg/ 
 rm -rf build_pkg/ build_app_template/ build_packages/
 
@@ -218,12 +238,22 @@ rm state/application_state.json.backup
 
 **Total space saved: ~1.35 GB**
 
+**Build performance after cleanup:**
+- With `dist/` cache: ~2 minutes to rebuild PKG
+- Without `dist/`: ~1 hour (re-downloads 11GB models, recompiles Python)
+
 ### Keep For Now
 - `_deprecated/` - Keep until Dec 2025 (rollback grace period)
 - `data/` - Active test data
 - `output/` - User-generated content
 - `tmp/` - Working directory
 - `state/` - Application state (after removing .backup)
+- **`dist/` - Build cache (11+ GB) - CRITICAL: Saves hours of rebuild time!**
+  - `dist/python-framework-3.13-macos.tar.gz` (2.1 KB)
+  - `dist/ai-models-bundle.tar.gz` (341 MB)
+  - `dist/ffmpeg-macos-universal.tar.gz` (25 MB)
+  - `dist/ollama-models-bundle.tar.gz` (11 GB!)
+  - Hash cache files (`.python_framework_hash`, etc.)
 - Most recent DB backup: `knowledge_system.db.backup.20251024_195602`
 
 ---
@@ -281,21 +311,29 @@ After cleanup:
    .git_backup*/
    ```
 
-2. **Document build process** to ensure team knows how to rebuild if needed
-
-3. **Add to README.md** under "Development" section:
+2. **Document build process** in README.md under "Development" section:
    ```markdown
-   ## Building from Source
+   ## Building the PKG Installer
    
-   To build the installer:
+   The build system uses intelligent caching for fast rebuilds:
+   
    ```bash
    ./scripts/build_complete_pkg.sh
    ```
    
-   This will automatically:
-   - Build Python framework (build_framework/)
-   - Download FFmpeg (build_ffmpeg/)
-   - Create installer package (build_pkg/)
+   **Build Cache (`dist/` directory):**
+   - Keeps final build artifacts (11+ GB)
+   - Enables 2-minute rebuilds vs 1-hour full builds
+   - Safe to keep, saves significant time
+   
+   **Temporary Workspaces (`build_*/` directories):**
+   - Created during build process
+   - Safe to delete anytime
+   - Auto-regenerate when needed
+   
+   **Rebuild times:**
+   - With cache: ~2 minutes (just packaging)
+   - Without cache: ~1 hour (downloads 11GB models, compiles Python)
    ```
 
 ---

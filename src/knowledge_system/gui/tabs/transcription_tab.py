@@ -645,6 +645,225 @@ class EnhancedTranscriptionWorker(QThread):
         except Exception as e:
             logger.error(f"Failed to write failed URL to file: {e}")
 
+    def _download_with_single_account(
+        self,
+        urls: list[str],
+        downloader,
+        downloads_dir: Path,
+        youtube_delay: int,
+    ) -> list[Path]:
+        """Download URLs using single account (existing sequential logic)"""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        downloaded_files = []
+        
+        logger.info(
+            f"🚀 Starting sequential downloads: {len(urls)} URLs (one at a time for safety)"
+        )
+        
+        if len(urls) == 1:
+            self.transcription_step_updated.emit(
+                f"🚀 Starting download (1 file)...",
+                0,
+            )
+        else:
+            self.transcription_step_updated.emit(
+                f"🚀 Starting sequential downloads ({len(urls)} files, one at a time)...",
+                0,
+            )
+        
+        # Sequential pattern: Single worker to avoid bot detection
+        executor = ThreadPoolExecutor(max_workers=1)
+        try:
+            # Submit all downloads to the queue
+            futures = {}
+            
+            for idx, url in enumerate(urls, 1):
+                if self.should_stop:
+                    break
+                
+                # Submit download to thread pool (sequential processing)
+                future = executor.submit(
+                    self._download_single_url,
+                    url,
+                    idx,
+                    len(urls),
+                    downloader,
+                    downloads_dir,
+                    youtube_delay,
+                    is_first=(idx == 1),
+                )
+                futures[future] = (url, idx)
+            
+            # Process results as they complete
+            completed = 0
+            for future in as_completed(futures):
+                if self.should_stop:
+                    logger.info("Stop requested during downloads - cleaning up executor")
+                    for f in futures:
+                        if not f.done():
+                            f.cancel()
+                    break
+                
+                url, idx = futures[future]
+                try:
+                    result_url, audio_file, success, error = future.result()
+                    
+                    if success and audio_file:
+                        downloaded_files.append(audio_file)
+                        completed += 1
+                        logger.info(f"✅ Completed {completed}/{len(urls)}: {result_url[:40]}...")
+                    else:
+                        # Handle failed URL with smart retry logic
+                        from ...database.service import DatabaseService
+                        db_service = DatabaseService()
+                        
+                        retry_result = self._handle_failed_url(
+                            result_url, error or "Unknown error", db_service
+                        )
+                        
+                        if retry_result == "REQUEUE":
+                            logger.info(f"🔄 {result_url[:40]}... added to retry queue")
+                        else:
+                            self.failed_count += 1
+                            logger.error(f"❌ Permanently failed: {result_url[:40]}...")
+                
+                except Exception as e:
+                    logger.error(f"Exception processing result for {url}: {e}")
+                    self.failed_count += 1
+        finally:
+            try:
+                executor.shutdown(wait=False, cancel_futures=True)
+            except TypeError:
+                executor.shutdown(wait=False)
+        
+        logger.info(f"🏁 Download complete: {completed} successful, {self.failed_count} failed")
+        
+        return downloaded_files
+    
+    def _download_with_multi_account(
+        self,
+        urls: list[str],
+        cookie_files: list[str],
+        downloads_dir: Path,
+    ) -> list[Path]:
+        """Download URLs using multi-account rotation"""
+        import asyncio
+        from ...services.multi_account_downloader import MultiAccountDownloadScheduler
+        from ...database.service import DatabaseService
+        
+        downloaded_files = []
+        
+        # Test and filter cookies first
+        self.transcription_step_updated.emit("🧪 Testing cookie files...", 0)
+        valid_cookies = self._test_and_filter_cookies(cookie_files)
+        
+        if not valid_cookies:
+            raise Exception("No valid cookie files found")
+        
+        self.transcription_step_updated.emit(
+            f"✅ Using {len(valid_cookies)} account(s) for downloads\n"
+            f"   Expected speedup: {len(valid_cookies)}x faster than single account",
+            0
+        )
+        
+        # Create scheduler
+        db_service = DatabaseService()
+        scheduler = MultiAccountDownloadScheduler(
+            cookie_files=valid_cookies,
+            parallel_workers=20,  # For M2 Ultra
+            enable_sleep_period=self.gui_settings.get("enable_sleep_period", True),
+            sleep_start_hour=self.gui_settings.get("sleep_start_hour", 0),
+            sleep_end_hour=self.gui_settings.get("sleep_end_hour", 6),
+            db_service=db_service,
+        )
+        
+        # Create a simple callback for progress
+        def progress_callback(message):
+            self.transcription_step_updated.emit(message, 0)
+        
+        scheduler.progress_callback = progress_callback
+        
+        # Download with rotation (async)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            results = loop.run_until_complete(
+                scheduler.download_batch_with_rotation(
+                    urls=urls,
+                    output_dir=downloads_dir,
+                    processing_queue=None,  # No queue for now
+                    progress_callback=progress_callback,
+                )
+            )
+            
+            # Extract downloaded files from results
+            downloaded_files = [
+                r.get("audio_file") for r in results 
+                if r.get("success") and r.get("audio_file")
+            ]
+            
+            # Get statistics
+            stats = scheduler.get_stats()
+            self.transcription_step_updated.emit(
+                f"📊 Download complete:\n"
+                f"   Successful: {stats['downloads_completed']}\n"
+                f"   Failed: {stats['downloads_failed']}\n"
+                f"   Duplicates skipped: {stats['duplicates_skipped']}\n"
+                f"   Accounts disabled: {stats['accounts_disabled']}\n"
+                f"   Active accounts: {stats['active_accounts']}/{stats['total_accounts']}",
+                0
+            )
+            
+            # Handle failed URLs
+            failed_urls = scheduler.get_failed_urls()
+            if failed_urls:
+                self.transcription_step_updated.emit(
+                    f"⚠️ {len(failed_urls)} URL(s) failed after all retries",
+                    0
+                )
+                for url in failed_urls:
+                    self._write_to_failed_urls_file(url, "Failed with all accounts")
+        
+        finally:
+            loop.close()
+        
+        return downloaded_files
+    
+    def _test_and_filter_cookies(self, cookie_files: list[str]) -> list[str]:
+        """Test cookie files and return only valid ones"""
+        from http.cookiejar import MozillaCookieJar
+        
+        valid_cookies = []
+        
+        for idx, cookie_file in enumerate(cookie_files):
+            try:
+                # Test cookie file
+                jar = MozillaCookieJar(cookie_file)
+                jar.load(ignore_discard=True, ignore_expires=True)
+                
+                youtube_cookies = [
+                    c for c in jar 
+                    if 'youtube.com' in c.domain or 'google.com' in c.domain
+                ]
+                
+                if youtube_cookies:
+                    valid_cookies.append(cookie_file)
+                    self.transcription_step_updated.emit(
+                        f"✅ Account {idx+1}: Valid ({len(youtube_cookies)} cookies)", 0
+                    )
+                else:
+                    self.transcription_step_updated.emit(
+                        f"❌ Account {idx+1}: No YouTube cookies found", 0
+                    )
+            
+            except Exception as e:
+                self.transcription_step_updated.emit(
+                    f"❌ Account {idx+1}: Invalid ({str(e)[:50]})", 0
+                )
+        
+        return valid_cookies
+
     def run(self) -> None:
         """Run the transcription process with real-time progress tracking."""
         try:
@@ -674,208 +893,30 @@ class EnhancedTranscriptionWorker(QThread):
                     downloads_dir = Path(output_dir) / "downloads"
                     downloads_dir.mkdir(parents=True, exist_ok=True)
 
-                    # Use existing YouTubeDownloadProcessor with cookie settings from GUI
-                    # Get cookie settings from GUI state (not config file)
+                    # Get cookie settings from GUI
                     enable_cookies = self.gui_settings.get("enable_cookies", True)
-                    cookie_file_path = self.gui_settings.get("cookie_file_path", "")
+                    cookie_files = self.gui_settings.get("cookie_files", [])
+                    use_multi_account = self.gui_settings.get("use_multi_account", False)
 
-                    downloader = YouTubeDownloadProcessor(
-                        download_thumbnails=True,
-                        enable_cookies=enable_cookies,
-                        cookie_file_path=cookie_file_path if cookie_file_path else None,
-                    )  # Keep original format
-
-                    # Get YouTube delay setting
-                    youtube_delay = self.gui_settings.get("youtube_delay", 5)
-
-                    # Sequential downloads (1 at a time) to avoid bot detection
-                    # Parallel downloads from multiple IPs look suspicious to YouTube
-                    max_concurrent_downloads = 1
-
-                    logger.info(
-                        f"🚀 Starting sequential downloads: {len(expanded_urls)} URLs (one at a time for safety)"
-                    )
-
-                    if len(expanded_urls) == 1:
-                        self.transcription_step_updated.emit(
-                            f"🚀 Starting download (1 file)...",
-                            0,
+                    # Choose download strategy based on cookie file count
+                    if use_multi_account and len(cookie_files) > 1:
+                        # Multi-account mode
+                        downloaded_files = self._download_with_multi_account(
+                            expanded_urls, cookie_files, downloads_dir
                         )
                     else:
-                        self.transcription_step_updated.emit(
-                            f"🚀 Starting sequential downloads ({len(expanded_urls)} files, one at a time)...",
-                            0,
+                        # Single-account mode (existing behavior)
+                        cookie_file_path = cookie_files[0] if cookie_files else None
+                        
+                        downloader = YouTubeDownloadProcessor(
+                            download_thumbnails=True,
+                            enable_cookies=enable_cookies,
+                            cookie_file_path=cookie_file_path,
                         )
 
-                    # Sequential pattern: Single worker to avoid bot detection
-                    executor = ThreadPoolExecutor(max_workers=1)
-                    try:
-                        # Submit all downloads to the queue
-                        futures = {}
-
-                        for idx, url in enumerate(expanded_urls, 1):
-                            if self.should_stop:
-                                break
-
-                            # No stagger delay needed - we're sequential (one worker)
-                            # The youtube_delay is applied within _download_single_url between videos
-
-                            # Submit download to thread pool (sequential processing)
-                            future = executor.submit(
-                                self._download_single_url,
-                                url,
-                                idx,
-                                len(expanded_urls),
-                                downloader,
-                                downloads_dir,
-                                youtube_delay,
-                                is_first=(idx == 1),
-                            )
-                            futures[future] = (url, idx)
-
-                        # Process results as they complete (true conveyor belt)
-                        completed = 0
-                        for future in as_completed(futures):
-                            if self.should_stop:
-                                logger.info(
-                                    "Stop requested during downloads - cleaning up executor"
-                                )
-                                # Cancel remaining futures
-                                for f in futures:
-                                    if not f.done():
-                                        f.cancel()
-                                # Don't block - let the executor cleanup in finally
-                                break
-
-                            url, idx = futures[future]
-                            try:
-                                result_url, audio_file, success, error = future.result()
-
-                                if success and audio_file:
-                                    downloaded_files.append(audio_file)
-                                    completed += 1
-                                    logger.info(
-                                        f"✅ Completed {completed}/{len(expanded_urls)}: {result_url[:40]}..."
-                                    )
-                                else:
-                                    # Handle failed URL with smart retry logic
-                                    from ...database.service import DatabaseService
-
-                                    db_service = DatabaseService()
-
-                                    retry_result = self._handle_failed_url(
-                                        result_url, error or "Unknown error", db_service
-                                    )
-
-                                    if retry_result == "REQUEUE":
-                                        logger.info(
-                                            f"🔄 {result_url[:40]}... added to retry queue"
-                                        )
-                                    else:
-                                        # Permanent failure
-                                        self.failed_count += 1
-                                        logger.error(
-                                            f"❌ Permanently failed {completed + self.failed_count}/{len(expanded_urls)}: {result_url[:40]}..."
-                                        )
-
-                            except Exception as e:
-                                logger.error(
-                                    f"Exception processing result for {url}: {e}"
-                                )
-                                self.failed_count += 1
-                    finally:
-                        # Ensure executor is properly shut down with timeout
-                        # Use cancel_futures=True to prevent waiting for running tasks (Python 3.9+)
-                        try:
-                            executor.shutdown(wait=False, cancel_futures=True)
-                        except TypeError:
-                            # Fallback for Python < 3.9
-                            executor.shutdown(wait=False)
-
-                    logger.info(
-                        f"🏁 Download complete: {completed} successful, {self.failed_count} failed"
-                    )
-
-                    # Process retry queue after initial downloads
-                    if self.queue_for_retry and not self.should_stop:
-                        logger.info(
-                            f"🔄 Processing retry queue: {len(self.queue_for_retry)} URLs"
-                        )
-                        self.transcription_step_updated.emit(
-                            f"🔄 Processing {len(self.queue_for_retry)} retries...", 0
-                        )
-
-                        # Process retry queue URLs one by one
-                        retry_idx = 0
-                        while self.queue_for_retry and not self.should_stop:
-                            retry_url = self.queue_for_retry.pop(0)
-                            retry_idx += 1
-
-                            logger.info(
-                                f"🔄 Processing retry {retry_idx}: {retry_url[:40]}..."
-                            )
-                            self.transcription_step_updated.emit(
-                                f"🔄 Retry {retry_idx}: {retry_url[:40]}...", 0
-                            )
-
-                            # Download with same logic as initial URLs
-                            try:
-                                (
-                                    result_url,
-                                    audio_file,
-                                    success,
-                                    error,
-                                ) = self._download_single_url(
-                                    retry_url,
-                                    idx=len(expanded_urls) + retry_idx,
-                                    total=len(expanded_urls)
-                                    + len(self.queue_for_retry)
-                                    + retry_idx,
-                                    downloader=downloader,
-                                    downloads_dir=downloads_dir,
-                                    youtube_delay=youtube_delay,
-                                    is_first=False,
-                                )
-
-                                if success and audio_file:
-                                    downloaded_files.append(audio_file)
-                                    completed += 1
-                                    logger.info(
-                                        f"✅ Retry successful: {retry_url[:40]}..."
-                                    )
-                                    self.transcription_step_updated.emit(
-                                        f"✅ Retry successful: {retry_url[:40]}...", 0
-                                    )
-                                else:
-                                    # Retry failed - call _handle_failed_url again
-                                    from ...database.service import DatabaseService
-
-                                    db_service = DatabaseService()
-
-                                    retry_result = self._handle_failed_url(
-                                        retry_url, error or "Retry failed", db_service
-                                    )
-
-                                    if retry_result == "PERMANENT_FAILURE":
-                                        self.failed_count += 1
-                                        logger.error(
-                                            f"❌ Retry failed permanently: {retry_url[:40]}..."
-                                        )
-                                    # If REQUEUE, it will be added to queue_for_retry again and processed later
-
-                            except Exception as e:
-                                logger.error(
-                                    f"Exception during retry for {retry_url}: {e}"
-                                )
-                                self.failed_count += 1
-
-                        logger.info(f"🏁 Retry queue processing complete")
-
-                    # Emit failed URLs summary if any failures
-                    if self.failed_urls:
-                        self.transcription_step_updated.emit(
-                            f"⚠️ {len(self.failed_urls)} download(s) failed - see summary below",
-                            0,
+                        youtube_delay = self.gui_settings.get("youtube_delay", 5)
+                        downloaded_files = self._download_with_single_account(
+                            expanded_urls, downloader, downloads_dir, youtube_delay
                         )
 
             # Combine downloaded files with local files
@@ -2126,46 +2167,25 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         layout.addWidget(self.youtube_delay_spinbox, 7, 3)
 
         # Cookie Authentication Section
-        cookie_group = QGroupBox("Cookie Authentication (Throwaway Account)")
-        cookie_layout = QGridLayout()
+        cookie_group = QGroupBox("Cookie Authentication (Multi-Account Support)")
+        cookie_layout = QVBoxLayout()
 
-        self.enable_cookies_checkbox = QCheckBox("Enable cookie-based authentication")
+        # Enable/disable checkbox
+        self.enable_cookies_checkbox = QCheckBox("Enable multi-account cookie authentication")
         self.enable_cookies_checkbox.setChecked(True)
         self.enable_cookies_checkbox.setToolTip(
-            "Use cookies from a throwaway Google account to avoid bot detection.\n\n"
-            "HOW TO GET COOKIES:\n"
-            "1. Open incognito/private browser window\n"
-            "2. Log into throwaway Google account ONLY\n"
-            "3. Install cookie export extension (e.g., 'Get cookies.txt')\n"
-            "4. Export cookies to Netscape format (.txt file)\n"
-            "5. Upload the file below\n\n"
-            "⚠️ IMPORTANT: Only use throwaway accounts!\n"
-            "• Much higher success rate than anonymous access\n"
-            "• Recommended: Use with home IP (disable proxies below)\n"
-            "• Requires rate limiting to avoid account flags"
+            "Use cookies from 1-6 throwaway Google accounts.\n"
+            "More accounts = faster downloads (3 recommended for large batches).\n\n"
+            "Each account downloads with safe 3-5 min delays.\n"
+            "Automatic failover if any account's cookies go stale."
         )
-        cookie_layout.addWidget(self.enable_cookies_checkbox, 0, 0, 1, 3)
+        cookie_layout.addWidget(self.enable_cookies_checkbox)
 
-        # File path for manual upload (ONLY method supported)
-        cookie_layout.addWidget(QLabel("Cookie file (Netscape format):"), 1, 0)
-        self.cookie_file_input = QLineEdit()
-        self.cookie_file_input.setPlaceholderText("Path to cookies.txt file...")
-        self.cookie_file_input.setEnabled(False)
-        cookie_layout.addWidget(self.cookie_file_input, 1, 1)
-
-        self.cookie_file_browse_btn = QPushButton("Browse...")
-        self.cookie_file_browse_btn.setEnabled(False)
-        self.cookie_file_browse_btn.clicked.connect(self._browse_cookie_file)
-        cookie_layout.addWidget(self.cookie_file_browse_btn, 1, 2)
-
-        # Add helpful info label
-        info_label = QLabel(
-            "💡 Browser extraction disabled for security - prevents accidentally using main account.\n"
-            "   Manual file upload ensures you control which account's cookies are used."
-        )
-        info_label.setWordWrap(True)
-        info_label.setStyleSheet("QLabel { color: #666; font-size: 10px; }")
-        cookie_layout.addWidget(info_label, 2, 0, 1, 3)
+        # Multi-account cookie manager widget
+        self.cookie_manager = CookieFileManager()
+        self.cookie_manager.setEnabled(False)
+        self.cookie_manager.cookies_changed.connect(self._on_setting_changed)
+        cookie_layout.addWidget(self.cookie_manager)
 
         # Connect enable checkbox to enable/disable controls
         self.enable_cookies_checkbox.toggled.connect(self._on_cookies_toggled)
@@ -2740,9 +2760,10 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         gui_settings["packetstream_available"] = packetstream_available
         gui_settings["youtube_delay"] = self.youtube_delay_spinbox.value()
 
-        # Pass cookie settings to worker
+        # Pass cookie settings to worker (multi-account support)
         gui_settings["enable_cookies"] = self.enable_cookies_checkbox.isChecked()
-        gui_settings["cookie_file_path"] = self.cookie_file_input.text().strip()
+        gui_settings["cookie_files"] = self.cookie_manager.get_all_cookie_files()
+        gui_settings["use_multi_account"] = len(gui_settings["cookie_files"]) > 1
 
         # Start transcription worker
         self.transcription_worker = EnhancedTranscriptionWorker(
@@ -3603,7 +3624,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.use_proxy_checkbox,
                 self.youtube_delay_spinbox,
                 self.enable_cookies_checkbox,
-                self.cookie_file_input,
+                self.cookie_manager,
                 self.min_delay_spinbox,
                 self.max_delay_spinbox,
                 self.randomization_spinbox,
@@ -3732,20 +3753,21 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.gui_settings.get_spinbox_value(self.tab_name, "youtube_delay", 5)
             )
 
-            # Load cookie authentication settings (file upload only - browser extraction disabled)
+            # Load cookie authentication settings (multi-account support)
             self.enable_cookies_checkbox.setChecked(
                 self.gui_settings.get_checkbox_state(
                     self.tab_name, "enable_cookies", True
                 )
             )
 
-            # Load cookie path using standard settings hierarchy
-            cookie_file_path = self.gui_settings.get_line_edit_text(
-                self.tab_name, "cookie_file_path", ""
+            # Load cookie files list
+            cookie_files = self.gui_settings.get_list_setting(
+                self.tab_name, "cookie_files", []
             )
 
-            logger.debug(f"📂 Loaded cookie file path: {cookie_file_path}")
-            self.cookie_file_input.setText(cookie_file_path)
+            logger.debug(f"📂 Loaded cookie files: {cookie_files}")
+            if cookie_files:
+                self.cookie_manager.set_cookie_files(cookie_files)
 
             # Load rate limiting settings
             self.min_delay_spinbox.setValue(
@@ -3826,15 +3848,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.tab_name, "youtube_delay", self.youtube_delay_spinbox.value()
             )
 
-            # Save cookie authentication settings (file upload only - browser extraction disabled)
+            # Save cookie authentication settings (multi-account support)
             self.gui_settings.set_checkbox_state(
                 self.tab_name,
                 "enable_cookies",
                 self.enable_cookies_checkbox.isChecked(),
             )
-            # Save cookie path using standard settings hierarchy
-            self.gui_settings.set_line_edit_text(
-                self.tab_name, "cookie_file_path", self.cookie_file_input.text()
+            # Save cookie files list
+            cookie_files = self.cookie_manager.get_all_cookie_files()
+            self.gui_settings.set_list_setting(
+                self.tab_name, "cookie_files", cookie_files
             )
 
             # Save rate limiting settings
@@ -3861,25 +3884,10 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         """Called when any setting changes to automatically save."""
         self._save_settings()
 
-    def _browse_cookie_file(self):
-        """Browse for cookies.txt file."""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select Cookies File",
-            str(Path.home()),
-            "Cookie Files (*.txt);;All Files (*)",
-        )
-        if file_path:
-            self.cookie_file_input.setText(file_path)
-
-            # Save immediately - _on_setting_changed() will trigger save to both session and config
-            self._on_setting_changed()
-
     def _on_cookies_toggled(self, checked: bool):
         """Enable/disable cookie-related controls."""
-        # Only file upload supported (browser extraction disabled for security)
-        self.cookie_file_input.setEnabled(checked)
-        self.cookie_file_browse_btn.setEnabled(checked)
+        # Enable/disable the multi-account cookie manager
+        self.cookie_manager.setEnabled(checked)
         self._on_setting_changed()
 
     def _validate_cookie_settings(self) -> bool:
@@ -3890,70 +3898,54 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         """
         from PyQt6.QtWidgets import QMessageBox
 
-        # Check if cookies are enabled but no file is selected
+        # Check if cookies are enabled but no files are selected
         if self.enable_cookies_checkbox.isChecked():
-            cookie_file = self.cookie_file_input.text().strip()
+            cookie_files = self.cookie_manager.get_all_cookie_files()
 
-            if not cookie_file:
-                # Show warning about using default account
+            if not cookie_files:
+                # Show warning about no cookies selected
                 msg_box = QMessageBox(self)
                 msg_box.setIcon(QMessageBox.Icon.Warning)
-                msg_box.setWindowTitle("⚠️ Cookie File Not Selected")
+                msg_box.setWindowTitle("⚠️ No Cookie Files Selected")
                 msg_box.setText(
-                    "<b style='color: #d32f2f; font-size: 14pt;'>WARNING: No Cookie File Selected!</b>"
+                    "<b style='color: #d32f2f; font-size: 14pt;'>WARNING: No Cookie Files Selected!</b>"
                 )
                 msg_box.setInformativeText(
-                    "<p>You have enabled cookie authentication but haven't selected a cookie file.</p>"
-                    "<p><b>This means YouTube downloads will use whatever account is logged into your default browser.</b></p>"
-                    "<p style='color: #d32f2f;'><b>⚠️ RISK: If your main Google account is logged in, you could get it flagged or banned for bulk downloads!</b></p>"
-                    "<br>"
+                    "<p>You have enabled cookie authentication but haven't selected any cookie files.</p>"
                     "<p><b>Recommended Actions:</b></p>"
                     "<ul>"
-                    "<li><b>Option 1 (Safest):</b> Click 'Cancel', create a throwaway Google account, export cookies, and select the cookie file</li>"
-                    "<li><b>Option 2:</b> Uncheck 'Enable cookie-based authentication' to proceed without cookies (may hit rate limits)</li>"
-                    "<li><b>Option 3 (RISKY):</b> Click 'OK' below to proceed with your default browser account (NOT RECOMMENDED)</li>"
+                    "<li><b>Option 1 (Safest):</b> Click 'Cancel', create throwaway Google account(s), export cookies, and upload the file(s)</li>"
+                    "<li><b>Option 2:</b> Uncheck 'Enable cookie authentication' to proceed without cookies (may hit rate limits)</li>"
                     "</ul>"
-                    "<br>"
-                    "<p><b>Click OK only if you understand the risk and want to proceed with your default account.</b></p>"
                 )
                 msg_box.setStandardButtons(
                     QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
                 )
                 msg_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
 
-                # Style the message box
-                msg_box.setStyleSheet(
-                    """
-                    QMessageBox {
-                        background-color: #fff;
-                    }
-                    QLabel {
-                        color: #333;
-                    }
-                """
-                )
-
                 result = msg_box.exec()
 
                 if result == QMessageBox.StandardButton.Cancel:
                     logger.info(
-                        "User cancelled YouTube download - no cookie file selected"
+                        "User cancelled YouTube download - no cookie files selected"
                     )
                     return False
                 else:
                     logger.warning(
-                        "⚠️ User proceeding with YouTube downloads using default browser account (no cookie file)"
+                        "⚠️ User proceeding with YouTube downloads without cookies"
                     )
                     return True
             else:
-                # Cookie file is specified - verify it exists
+                # Cookie files specified - verify they exist
                 from pathlib import Path
 
-                if not Path(cookie_file).exists():
+                missing_files = [f for f in cookie_files if not Path(f).exists()]
+                if missing_files:
                     self.show_warning(
-                        "Cookie File Not Found",
-                        f"The specified cookie file does not exist:\n\n{cookie_file}\n\n"
-                        "Please select a valid cookie file or disable cookie authentication.",
+                        "Cookie Files Not Found",
+                        f"The following cookie file(s) do not exist:\n\n" +
+                        "\n".join(missing_files) +
+                        "\n\nPlease select valid cookie files or disable cookie authentication.",
                     )
                     return False
 

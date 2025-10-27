@@ -1,439 +1,9 @@
 {
-  "version": "merged_20251026",
+  "version": "2.0.0",
   "created": "2025-10-26",
-  "source": "WikiData + Manual Curation",
-  "description": "Merged vocabulary: 506 categories",
+  "source": "WikiData SPARQL",
+  "description": "Downloaded WikiData taxonomy with 476 categories",
   "categories": [
-    {
-      "wikidata_id": "Q8134",
-      "category_name": "Economics",
-      "description": "Social science studying production, distribution, and consumption of goods and services",
-      "level": "general",
-      "parent_id": null,
-      "aliases": [
-        "Economic science",
-        "Political economy"
-      ]
-    },
-    {
-      "wikidata_id": "Q7163",
-      "category_name": "Geopolitics",
-      "description": "Politics influenced by geographical factors",
-      "level": "general",
-      "parent_id": "Q7163",
-      "aliases": [
-        "Geostrategy",
-        "International politics"
-      ]
-    },
-    {
-      "wikidata_id": "Q11016",
-      "category_name": "Technology",
-      "description": "Application of scientific knowledge for practical purposes",
-      "level": "general",
-      "parent_id": null,
-      "aliases": [
-        "Tech",
-        "Applied science"
-      ]
-    },
-    {
-      "wikidata_id": "Q336",
-      "category_name": "Science",
-      "description": "Systematic study of the natural and social world",
-      "level": "general",
-      "parent_id": null,
-      "aliases": [
-        "Scientific research",
-        "Natural science"
-      ]
-    },
-    {
-      "wikidata_id": "Q24885",
-      "category_name": "Finance",
-      "description": "Management of money and investments",
-      "level": "general",
-      "parent_id": "Q8134",
-      "aliases": [
-        "Financial services",
-        "Financial sector"
-      ]
-    },
-    {
-      "wikidata_id": "Q11024",
-      "category_name": "Communication",
-      "description": "Exchange of information and meaning",
-      "level": "general",
-      "parent_id": null,
-      "aliases": [
-        "Communications"
-      ]
-    },
-    {
-      "wikidata_id": "Q8386",
-      "category_name": "Law",
-      "description": "System of rules created and enforced through institutions",
-      "level": "general",
-      "parent_id": null,
-      "aliases": [
-        "Legal system",
-        "Jurisprudence"
-      ]
-    },
-    {
-      "wikidata_id": "Q7397",
-      "category_name": "Software",
-      "description": "Non-tangible executable component of a computer",
-      "level": "specific",
-      "parent_id": "Q11016",
-      "aliases": [
-        "Computer software",
-        "Software systems"
-      ]
-    },
-    {
-      "wikidata_id": "Q11660",
-      "category_name": "Artificial intelligence",
-      "description": "Intelligence demonstrated by machines",
-      "level": "specific",
-      "parent_id": "Q11016",
-      "aliases": [
-        "AI",
-        "Machine intelligence"
-      ]
-    },
-    {
-      "wikidata_id": "Q186363",
-      "category_name": "Monetary policy",
-      "description": "Process by which monetary authority controls money supply",
-      "level": "specific",
-      "parent_id": "Q8134",
-      "aliases": [
-        "Central bank policy",
-        "Monetary policies"
-      ]
-    },
-    {
-      "wikidata_id": "Q53536",
-      "category_name": "Federal Reserve System",
-      "description": "Central banking system of the United States",
-      "level": "specific",
-      "parent_id": "Q186363",
-      "aliases": [
-        "The Fed",
-        "Federal Reserve",
-        "US Federal Reserve"
-      ]
-    },
-    {
-      "wikidata_id": "Q82580",
-      "category_name": "Interest rate",
-      "description": "Rate at which interest is paid by borrowers for the use of money",
-      "level": "specific",
-      "parent_id": "Q186363",
-      "aliases": [
-        "Interest rates",
-        "Rate of interest"
-      ]
-    },
-    {
-      "wikidata_id": "Q179289",
-      "category_name": "Inflation",
-      "description": "General increase in prices and fall in purchasing value of money",
-      "level": "specific",
-      "parent_id": "Q8134",
-      "aliases": [
-        "Price inflation",
-        "Monetary inflation"
-      ]
-    },
-    {
-      "wikidata_id": "Q185038",
-      "category_name": "Quantitative easing",
-      "description": "Monetary policy of purchasing government securities or other securities",
-      "level": "specific",
-      "parent_id": "Q186363",
-      "aliases": [
-        "QE",
-        "Asset purchase program"
-      ]
-    },
-    {
-      "wikidata_id": "Q159810",
-      "category_name": "International trade",
-      "description": "Exchange of goods and services across international borders",
-      "level": "specific",
-      "parent_id": "Q8134",
-      "aliases": [
-        "World trade",
-        "Global trade"
-      ]
-    },
-    {
-      "wikidata_id": "Q66344",
-      "category_name": "Central banking",
-      "description": "Institution that manages state's currency, money supply, and interest rates",
-      "level": "specific",
-      "parent_id": "Q24885",
-      "aliases": [
-        "Central bank",
-        "Reserve bank"
-      ]
-    },
-    {
-      "wikidata_id": "Q36236",
-      "category_name": "Ideology",
-      "description": "Set of beliefs or philosophies attributed to a person or group",
-      "level": "specific",
-      "parent_id": "Q7163",
-      "aliases": [
-        "Political ideology",
-        "Belief system"
-      ]
-    },
-    {
-      "wikidata_id": "Q7188",
-      "category_name": "Government",
-      "description": "System or group of people governing an organized community",
-      "level": "specific",
-      "parent_id": "Q7163",
-      "aliases": [
-        "Governance",
-        "Political system"
-      ]
-    },
-    {
-      "wikidata_id": "Q170509",
-      "category_name": "Cryptocurrency",
-      "description": "Digital currency secured by cryptography",
-      "level": "specific",
-      "parent_id": "Q24885",
-      "aliases": [
-        "Digital currency",
-        "Crypto"
-      ]
-    },
-    {
-      "wikidata_id": "Q20514253",
-      "category_name": "Blockchain",
-      "description": "Distributed ledger technology",
-      "level": "specific",
-      "parent_id": "Q11016",
-      "aliases": [
-        "Distributed ledger",
-        "Blockchain technology"
-      ]
-    },
-    {
-      "wikidata_id": "Q7942",
-      "category_name": "Climate change",
-      "description": "Current rise in Earth's average temperature",
-      "level": "specific",
-      "parent_id": "Q336",
-      "aliases": [
-        "Global warming",
-        "Climate crisis"
-      ]
-    },
-    {
-      "wikidata_id": "Q39680",
-      "category_name": "Macroeconomics",
-      "description": "Branch of economics studying entire economies",
-      "level": "specific",
-      "parent_id": "Q8134",
-      "aliases": [
-        "Macro economics"
-      ]
-    },
-    {
-      "wikidata_id": "Q39631",
-      "category_name": "Microeconomics",
-      "description": "Branch of economics studying individual and firm behavior",
-      "level": "specific",
-      "parent_id": "Q8134",
-      "aliases": [
-        "Micro economics"
-      ]
-    },
-    {
-      "wikidata_id": "Q8465",
-      "category_name": "Civil war",
-      "description": "War between organized groups within the same state",
-      "level": "specific",
-      "parent_id": "Q7163",
-      "aliases": [
-        "Internal conflict"
-      ]
-    },
-    {
-      "wikidata_id": "Q163082",
-      "category_name": "Fiscal policy",
-      "description": "Use of government revenue collection and expenditure",
-      "level": "specific",
-      "parent_id": "Q8134",
-      "aliases": [
-        "Tax policy",
-        "Budget policy"
-      ]
-    },
-    {
-      "wikidata_id": "Q9143",
-      "category_name": "Programming language",
-      "description": "Formal language for communicating instructions to computers",
-      "level": "specific",
-      "parent_id": "Q7397",
-      "aliases": [
-        "Computer language",
-        "Coding language"
-      ]
-    },
-    {
-      "wikidata_id": "Q47728",
-      "category_name": "Machine learning",
-      "description": "Field of study focused on algorithms that improve through experience",
-      "level": "specific",
-      "parent_id": "Q11660",
-      "aliases": [
-        "ML",
-        "Statistical learning"
-      ]
-    },
-    {
-      "wikidata_id": "Q638608",
-      "category_name": "Stock market",
-      "description": "Market for buying and selling stocks and derivatives",
-      "level": "specific",
-      "parent_id": "Q24885",
-      "aliases": [
-        "Equity market",
-        "Share market"
-      ]
-    },
-    {
-      "wikidata_id": "Q178651",
-      "category_name": "Supply and demand",
-      "description": "Economic model of price determination in a market",
-      "level": "specific",
-      "parent_id": "Q39631",
-      "aliases": [
-        "Market equilibrium"
-      ]
-    },
-    {
-      "wikidata_id": "Q43015",
-      "category_name": "Diplomacy",
-      "description": "Practice of conducting negotiations between representatives of states",
-      "level": "specific",
-      "parent_id": "Q7163",
-      "aliases": [
-        "International diplomacy",
-        "Foreign relations"
-      ]
-    },
-    {
-      "wikidata_id": "Q36539",
-      "category_name": "Democracy",
-      "description": "Form of government where citizens exercise power by voting",
-      "level": "specific",
-      "parent_id": "Q7188",
-      "aliases": [
-        "Democratic system"
-      ]
-    },
-    {
-      "wikidata_id": "Q7272",
-      "category_name": "Capitalism",
-      "description": "Economic system based on private ownership of means of production",
-      "level": "specific",
-      "parent_id": "Q8134",
-      "aliases": [
-        "Market economy",
-        "Free enterprise"
-      ]
-    },
-    {
-      "wikidata_id": "Q7264",
-      "category_name": "Marxism",
-      "description": "Economic and sociopolitical worldview based on works of Karl Marx",
-      "level": "specific",
-      "parent_id": "Q36236",
-      "aliases": [
-        "Marxist theory"
-      ]
-    },
-    {
-      "wikidata_id": "Q34178",
-      "category_name": "Health care",
-      "description": "Prevention, treatment, and management of illness",
-      "level": "general",
-      "parent_id": null,
-      "aliases": [
-        "Healthcare",
-        "Medical care"
-      ]
-    },
-    {
-      "wikidata_id": "Q11190",
-      "category_name": "Medicine",
-      "description": "Science and practice of diagnosis, treatment, and prevention of disease",
-      "level": "specific",
-      "parent_id": "Q34178",
-      "aliases": [
-        "Medical science"
-      ]
-    },
-    {
-      "wikidata_id": "Q12147",
-      "category_name": "Internet",
-      "description": "Global system of interconnected computer networks",
-      "level": "specific",
-      "parent_id": "Q11016",
-      "aliases": [
-        "World Wide Web",
-        "Net"
-      ]
-    },
-    {
-      "wikidata_id": "Q837866",
-      "category_name": "Cybersecurity",
-      "description": "Protection of computer systems from theft or damage",
-      "level": "specific",
-      "parent_id": "Q11016",
-      "aliases": [
-        "Information security",
-        "Computer security"
-      ]
-    },
-    {
-      "wikidata_id": "Q638",
-      "category_name": "Music",
-      "description": "Art form and cultural activity using sound organized in time",
-      "level": "general",
-      "parent_id": null,
-      "aliases": [
-        "Musical art"
-      ]
-    },
-    {
-      "wikidata_id": "Q25379",
-      "category_name": "Philosophy",
-      "description": "Study of general and fundamental questions",
-      "level": "general",
-      "parent_id": null,
-      "aliases": [
-        "Philosophical inquiry"
-      ]
-    },
-    {
-      "wikidata_id": "Q9129",
-      "category_name": "History",
-      "description": "Study of the past",
-      "level": "general",
-      "parent_id": null,
-      "aliases": [
-        "Historical studies"
-      ]
-    },
     {
       "wikidata_id": "Q21201",
       "category_name": "sociology",
@@ -443,9 +13,25 @@
       "aliases": []
     },
     {
+      "wikidata_id": "Q25379",
+      "category_name": "play",
+      "description": "theatrical dramatic work intended to be performed by actors (in theatre, radio or recorded for TV)",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
       "wikidata_id": "Q34749",
       "category_name": "social science",
       "description": "academic disciplines concerned with society and the relationships between individuals in society",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q336",
+      "category_name": "science",
+      "description": "systematic endeavor that builds and organizes knowledge, and the set of knowledge produced by this system",
       "level": "general",
       "parent_id": null,
       "aliases": []
@@ -462,6 +48,30 @@
       "wikidata_id": "Q8242",
       "category_name": "literature",
       "description": "polysemous term referring to a written art form, and the set of all literary works",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q34178",
+      "category_name": "theology",
+      "description": "study of the nature of deities and religious beliefs",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q8134",
+      "category_name": "economics",
+      "description": "social science that studies the production, distribution, and consumption of goods and services",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q638",
+      "category_name": "music",
+      "description": "art using sound",
       "level": "general",
       "parent_id": null,
       "aliases": []
@@ -491,9 +101,33 @@
       "aliases": []
     },
     {
+      "wikidata_id": "Q7163",
+      "category_name": "politics",
+      "description": "activities associated with group decisions",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
       "wikidata_id": "Q395",
       "category_name": "mathematics",
       "description": "field of study",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q8386",
+      "category_name": "drug",
+      "description": "chemical substance having an effect on the body",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q9129",
+      "category_name": "Greek",
+      "description": "Indo-European language",
       "level": "general",
       "parent_id": null,
       "aliases": []
@@ -510,6 +144,22 @@
       "wikidata_id": "Q413",
       "category_name": "physics",
       "description": "study of matter and its motion, along with related concepts such as energy and force",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q11016",
+      "category_name": "technology",
+      "description": "making, modification, usage, and knowledge of tools, machines, techniques, crafts, systems, and methods of organization, or tools and techniques so created",
+      "level": "general",
+      "parent_id": null,
+      "aliases": []
+    },
+    {
+      "wikidata_id": "Q11024",
+      "category_name": "communication",
+      "description": "act of conveying intended meaning",
       "level": "general",
       "parent_id": null,
       "aliases": []
@@ -4164,10 +3814,9 @@
     }
   ],
   "metadata": {
-    "total_categories": 506,
-    "from_curated": 40,
-    "from_wikidata": 466,
-    "general_categories": 22,
-    "specific_categories": 484
+    "total_categories": 476,
+    "general_categories": 21,
+    "specific_categories": 455,
+    "subcategory_depth": 1
   }
 }

@@ -41,9 +41,9 @@ class WikiDataTaxonomyDownloader:
         self.output_file = output_file
         self.categories = []
     
-    def query_sparql(self, query: str, max_retries: int = 3) -> list[dict]:
+    def query_sparql(self, query: str, max_retries: int = 5) -> list[dict]:
         """
-        Execute SPARQL query against WikiData.
+        Execute SPARQL query against WikiData with rate limit handling.
         
         Args:
             query: SPARQL query string
@@ -59,66 +59,105 @@ class WikiDataTaxonomyDownloader:
         
         for attempt in range(max_retries):
             try:
+                # Add delay before each attempt to avoid rate limits
+                if attempt > 0:
+                    wait_time = min(10 * (2 ** attempt), 60)  # Max 60 seconds
+                    logger.info(f"  Waiting {wait_time}s before retry...")
+                    time.sleep(wait_time)
+                
                 response = requests.get(
                     self.SPARQL_ENDPOINT,
                     params={'query': query, 'format': 'json'},
                     headers=headers,
-                    timeout=60
+                    timeout=90  # Longer timeout
                 )
+                
+                # Handle rate limiting
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get('Retry-After', 60))
+                    logger.warning(f"Rate limited (429). Retry after {retry_after}s...")
+                    time.sleep(retry_after)
+                    continue
+                
                 response.raise_for_status()
                 
                 data = response.json()
                 return data['results']['bindings']
             
             except requests.exceptions.RequestException as e:
-                logger.warning(f"SPARQL query attempt {attempt + 1} failed: {e}")
+                logger.warning(f"SPARQL query attempt {attempt + 1}/{max_retries} failed: {e}")
                 if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)  # Exponential backoff
+                    # Exponential backoff
+                    continue
                 else:
+                    logger.error(f"All retries exhausted")
                     raise
         
         return []
     
-    def download_academic_disciplines(self) -> list[dict]:
+    def download_conceptual_taxonomy(self, limit: int = 1000) -> list[dict]:
         """
-        Download academic disciplines and fields of study.
+        Download conceptual taxonomy: fields of study and academic disciplines.
         
-        Queries for subclasses of:
+        Targets:
+        - Q2267705 (field of study) - Primary root
         - Q11862829 (academic discipline)
-        - Q1047113 (specialty)
-        - Q2267705 (field of study)
-        """
-        logger.info("Downloading academic disciplines...")
+        - Q1936384 (branch of science)
         
-        query = """
+        Excludes:
+        - Q16521 (Taxon) - No biological species
+        - Q11173 (Chemical compound) - No molecules
+        - Q5 (Human) - No individual people
+        - Q515 (City) - No places
+        - Q431289 (Brand) - No products
+        
+        Result: ~800-1,200 stable conceptual categories
+        """
+        logger.info("Downloading conceptual taxonomy (fields of study)...")
+        
+        query = f"""
         SELECT DISTINCT ?item ?itemLabel ?itemDescription ?parentLabel
-        WHERE {
-          {
-            ?item wdt:P31/wdt:P279* wd:Q11862829.  # academic discipline
-          } UNION {
-            ?item wdt:P31/wdt:P279* wd:Q2267705.   # field of study  
-          } UNION {
-            ?item wdt:P31/wdt:P279* wd:Q1047113.   # specialty
-          }
+        WHERE {{
+          # Root: Fields of study and academic disciplines
+          {{
+            ?item wdt:P31 wd:Q2267705.  # Field of study
+          }} UNION {{
+            ?item wdt:P31 wd:Q11862829. # Academic discipline
+          }} UNION {{
+            ?item wdt:P31 wd:Q1936384.  # Branch of science
+          }}
           
-          # Get parent category
-          OPTIONAL { ?item wdt:P279 ?parent. }
+          # Get direct parent for hierarchy
+          OPTIONAL {{ ?item wdt:P279 ?parent. }}
           
-          # Get labels and descriptions
-          SERVICE wikibase:label { 
+          # Get labels
+          SERVICE wikibase:label {{ 
             bd:serviceParam wikibase:language "en". 
-          }
+          }}
           
-          # Filter: Only items with English labels
-          FILTER(LANG(?itemLabel) = "en" || LANG(?itemLabel) = "")
-        }
-        LIMIT 2000
+          # EXCLUSIONS: Filter out non-conceptual items
+          FILTER NOT EXISTS {{ ?item wdt:P31 wd:Q16521. }}   # Not taxon (species)
+          FILTER NOT EXISTS {{ ?item wdt:P31 wd:Q11173. }}   # Not chemical compound
+          FILTER NOT EXISTS {{ ?item wdt:P31 wd:Q5. }}       # Not person
+          FILTER NOT EXISTS {{ ?item wdt:P31 wd:Q515. }}     # Not city
+          FILTER NOT EXISTS {{ ?item wdt:P31 wd:Q431289. }}  # Not brand
+          FILTER NOT EXISTS {{ ?item wdt:P31 wd:Q4830453. }} # Not business
+          
+          # Only items with English labels
+          FILTER(BOUND(?itemLabel))
+        }}
+        LIMIT {limit}
         """
         
-        results = self.query_sparql(query)
-        logger.info(f"  Retrieved {len(results)} academic disciplines")
+        try:
+            results = self.query_sparql(query)
+            logger.info(f"  Retrieved {len(results)} conceptual categories")
+            return self._parse_results(results, level='specific')
         
-        return self._parse_results(results, level='specific')
+        except Exception as e:
+            logger.error(f"Conceptual taxonomy download failed: {e}")
+            logger.info("  Falling back to manual curated list...")
+            return []
     
     def download_broad_concepts(self) -> list[dict]:
         """
@@ -317,11 +356,11 @@ class WikiDataTaxonomyDownloader:
             all_categories.extend(broad)
             logger.info(f"✅ Broad concepts: {len(broad)}")
         
-        # 2. Get academic disciplines
+        # 2. Get conceptual taxonomy (fields of study, academic disciplines)
         if include_academic:
-            academic = self.download_academic_disciplines()
-            all_categories.extend(academic)
-            logger.info(f"✅ Academic disciplines: {len(academic)}")
+            conceptual = self.download_conceptual_taxonomy(limit=max_total)
+            all_categories.extend(conceptual)
+            logger.info(f"✅ Conceptual categories: {len(conceptual)}")
         
         # 3. Get subcategories of broad concepts
         if subcategory_depth > 0 and include_broad:

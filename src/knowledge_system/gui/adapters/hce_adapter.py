@@ -6,13 +6,13 @@ Maintains backward compatibility while enabling HCE features.
 
 Note: This adapter is deprecated. GUI components should use System2Orchestrator directly.
 SummarizerProcessor has been removed - use System2Orchestrator instead.
+MOCProcessor has been removed - claim-centric architecture supersedes this functionality.
 """
 
 from collections.abc import Callable
 from typing import Any
 
 from ...logger import get_logger
-from ...processors.moc import MOCProcessor
 from ...utils.progress import SummarizationProgress
 
 logger = get_logger(__name__)
@@ -45,15 +45,20 @@ class HCEAdapter:
             "Use System2Orchestrator from knowledge_system.core.system2_orchestrator instead."
         )
 
-    def create_moc_processor(self, **kwargs) -> MOCProcessor:
+    def create_moc_processor(self, **kwargs):
         """
-        Create an HCE-based MOC processor that maintains legacy API.
+        DEPRECATED: Use claim-centric database instead.
 
-        Uses HCE entity extraction instead of regex patterns.
+        MOCProcessor has been removed. GUI components should query the
+        claim-centric database directly for people, concepts, jargon, and claims.
+
+        This method is kept for backward compatibility but will raise an error.
         """
-        processor = MOCProcessor()
-        self.current_processor = processor
-        return processor
+        raise NotImplementedError(
+            "MOCProcessor has been removed. "
+            "Use claim-centric database (ClaimStore) instead. "
+            "Query Claim, Person, Concept, and JargonTerm models directly."
+        )
 
     def process_with_progress(
         self,
@@ -82,7 +87,7 @@ class HCEAdapter:
 
             if progress_callback:
                 # Map HCE stages to progress updates
-                # Note: SummarizerProcessor removed - this handles MOCProcessor and other processors
+                # Note: SummarizerProcessor and MOCProcessor removed - this handles remaining processors
                 stage_mapping = {
                     "skim": "Analyzing document structure...",
                     "miner": "Extracting claims...",
