@@ -15,11 +15,18 @@ Complete manifest of all files in the Knowledge Chipper codebase with meaningful
 ## RECENT ADDITIONS (October 2025)
 
 ### New Core Features
+- **Speaker Attribution System** - Voice fingerprinting, LLM-based naming, and channel-based mapping for 262+ podcasts
+- **Channel Speaker Mappings** - Pre-configured host mappings for 262+ popular podcasts (99% host accuracy)
 - **WikiData Categorization System** - Two-stage categorization with reasoning-first prompts, hybrid matching, and adaptive thresholds
 - **Checkpoint & Resumption** - Full checkpoint support for job orchestration allowing safe interruption and resume
 - **Claim-Centric Architecture** - Claim-first database schema where claims are fundamental units with source attribution
 
 ### New Files & Components
+- `speaker_attribution.yaml` - 262+ podcast-to-host mappings with partial name variations (1,668 lines)
+- `extract_podcasts_to_yaml.py` - Generator script for channel mappings from podcast database
+- `seed_podcast_mappings.py` - Master list of 300+ popular podcasts and their hosts
+- `PODCAST_CHANNEL_MAPPINGS_DEPLOYED.md` - Documentation for deployed channel mappings
+- `CHANNEL_SPEAKER_MAPPINGS.md` - User guide for channel-based speaker mapping
 - `wikidata_categorizer.py` - Production-ready WikiData categorization service
 - `wikidata_seed.json` - Curated WikiData category vocabulary (~200 categories)
 - `claim_store.py` & `claim_models.py` - Claim-centric storage layer
@@ -28,6 +35,7 @@ Complete manifest of all files in the Knowledge Chipper codebase with meaningful
 - `test_wikidata_categorizer.py` - WikiData categorizer test suite
 
 ### Documentation Updates
+- Added speaker attribution documentation with accuracy metrics and examples
 - Added 50+ new documentation files covering implementation, testing, refactoring
 - Updated all file counts and descriptions to reflect current state
 - Documented storage unification, performance optimizations, and architecture refinements

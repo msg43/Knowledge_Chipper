@@ -974,14 +974,19 @@ class SpeakerProcessor(BaseProcessor):
         transcript_segments: list[dict[str, Any]] | None = None,
     ) -> None:
         """
-        🚨 CRITICAL FIX: Process ALL speakers together to prevent duplicates.
-        This replaces the old per-speaker suggestion method.
+        🚨 OPTIMIZED: Channel mapping BEFORE LLM for maximum accuracy.
+        
+        Flow:
+        1. Check channel mapping FIRST - identify known hosts
+        2. Pass pre-identified speakers to LLM as context
+        3. LLM only needs to identify remaining speakers (guests)
+        4. Apply contextual analysis for final refinement
         """
         try:
             if not speaker_map:
                 return
 
-            # Prepare ALL speakers for LLM processing
+            # Prepare ALL speakers for processing
             speaker_segments_for_llm = {}
             for speaker_id, speaker_data in speaker_map.items():
                 speaker_segments_for_llm[speaker_id] = [
@@ -989,7 +994,19 @@ class SpeakerProcessor(BaseProcessor):
                     for seg in speaker_data.segments
                 ]
 
-            # Call LLM suggester with ALL speakers at once (enables validation)
+            # PRIORITY 1: Get known host names from channel (if available)
+            # DOES NOT assign to speaker IDs - provides context to LLM
+            known_hosts = self._get_known_hosts_from_channel(metadata)
+            
+            if known_hosts:
+                logger.info(
+                    f"📺 Channel has known hosts: {known_hosts}"
+                )
+                logger.info(
+                    f"   → LLM will match speakers to these names based on content"
+                )
+
+            # PRIORITY 2: Call LLM with known host names as context
             from ..utils.llm_speaker_suggester import suggest_speaker_names_with_llm
 
             # Import voice fingerprinting for advanced speaker verification
@@ -1001,10 +1018,10 @@ class SpeakerProcessor(BaseProcessor):
                 logger.warning(f"Voice fingerprinting not available: {e}")
 
             llm_suggestions = suggest_speaker_names_with_llm(
-                speaker_segments_for_llm, metadata
+                speaker_segments_for_llm, metadata, known_hosts
             )
 
-            # NEW: Apply contextual analysis to refine LLM suggestions
+            # PRIORITY 3: Apply contextual analysis to refine LLM suggestions
             # This connects Layer 4 (Context Analysis) to the pipeline
             contextual_suggestions = self._apply_conversational_context_analysis(
                 llm_suggestions, speaker_segments_for_llm, transcript_segments, metadata
@@ -1063,6 +1080,99 @@ class SpeakerProcessor(BaseProcessor):
                 speaker_data.suggested_name = f"Unknown Speaker {letter}"
                 speaker_data.confidence_score = 0.1
                 speaker_data.suggestion_method = "emergency_fallback"
+    
+    def _get_known_hosts_from_channel(
+        self,
+        metadata: dict[str, Any] | None = None,
+    ) -> list[str] | None:
+        """
+        Get known host names from channel mapping to provide as context to LLM.
+        
+        DOES NOT assign to specific speaker IDs - lets LLM figure out which speaker
+        is which based on content analysis (self-intros, being addressed, etc.)
+        
+        Example:
+        - Channel: "Eurodollar University"
+        - Returns: ["Jeff Snider", "Emil Kalinowski"]
+        - LLM prompt: "This channel is hosted by Jeff Snider and Emil Kalinowski.
+                       Determine which speaker is which based on the transcript."
+        
+        Args:
+            metadata: Video/podcast metadata with channel info
+            
+        Returns:
+            List of known host names for this channel, or None
+        """
+        if not metadata:
+            return None
+            
+        # Get channel name from metadata
+        channel_name = metadata.get("uploader") or metadata.get("channel")
+        if not channel_name:
+            logger.debug("No channel information in metadata")
+            return None
+        
+        # Load channel mappings from config
+        try:
+            import yaml
+            from pathlib import Path
+            
+            config_path = (
+                Path(__file__).parent.parent.parent
+                / "config"
+                / "speaker_attribution.yaml"
+            )
+            
+            if not config_path.exists():
+                logger.debug("speaker_attribution.yaml not found")
+                return None
+                
+            with open(config_path) as f:
+                config = yaml.safe_load(f)
+            
+            channel_mappings = config.get("channel_mappings", {})
+            
+            if not channel_mappings:
+                logger.debug("No channel mappings configured")
+                return None
+                
+        except Exception as e:
+            logger.warning(f"Failed to load channel mappings: {e}")
+            return None
+        
+        # Check if this channel has mappings
+        channel_config = None
+        for configured_channel, config_data in channel_mappings.items():
+            # Case-insensitive, partial match
+            if configured_channel.lower() in channel_name.lower() or channel_name.lower() in configured_channel.lower():
+                channel_config = config_data
+                logger.info(f"📺 Found channel mapping for: {channel_name}")
+                break
+        
+        if not channel_config or "hosts" not in channel_config:
+            logger.debug(f"No mappings configured for channel: {channel_name}")
+            return None
+        
+        # Extract host names from config
+        hosts = channel_config.get("hosts", [])
+        if not hosts:
+            return None
+        
+        known_host_names = []
+        for host_config in hosts:
+            host_name = host_config.get("full_name")
+            if host_name:
+                known_host_names.append(host_name)
+        
+        if known_host_names:
+            logger.info(
+                f"📺 Channel '{channel_name}' is hosted by: {', '.join(known_host_names)}"
+            )
+            logger.info(
+                f"   → LLM will use this context to match speakers to these names"
+            )
+        
+        return known_host_names if known_host_names else None
 
     def _apply_conversational_context_analysis(
         self,
@@ -1090,11 +1200,9 @@ class SpeakerProcessor(BaseProcessor):
             Refined suggestions with contextual mapping, or None if no improvements
         """
         try:
-            # PRIORITY 1: Apply channel-based mappings first (highest confidence)
-            channel_improved = self._apply_channel_mappings(llm_suggestions, metadata)
-            if channel_improved:
-                llm_suggestions = channel_improved
-                logger.info("🎯 Applied channel-based speaker mappings")
+            # NOTE: Channel mapping now happens BEFORE LLM call (in _suggest_all_speaker_names_together)
+            # This method focuses on conversational context analysis only
+            
             # Import the context analyzer (Layer 4)
             from ..utils.speaker_intelligence import SpeakerContextAnalyzer
 
@@ -1169,129 +1277,9 @@ class SpeakerProcessor(BaseProcessor):
             logger.warning(f"Error in contextual analysis: {e}")
             return None
     
-    def _apply_channel_mappings(
-        self,
-        llm_suggestions: dict[str, tuple[str, float]],
-        metadata: dict[str, Any] | None = None,
-    ) -> dict[str, tuple[str, float]] | None:
-        """
-        Apply channel-based speaker mappings to expand partial names to full names.
-        
-        Example:
-        - Channel: "China Update"
-        - LLM suggests: "Tony" (confidence 0.7)
-        - Channel mapping: Tony -> "Anthony Johnson"
-        - Result: "Anthony Johnson" (confidence upgraded to 0.95)
-        
-        Args:
-            llm_suggestions: LLM suggested names
-            metadata: Video/podcast metadata with channel info
-            
-        Returns:
-            Improved suggestions if channel mappings applied, None otherwise
-        """
-        if not metadata:
-            return None
-            
-        # Get channel name from metadata
-        channel_name = metadata.get("uploader") or metadata.get("channel")
-        if not channel_name:
-            logger.debug("No channel information in metadata")
-            return None
-        
-        # Load channel mappings from config
-        try:
-            import yaml
-            from pathlib import Path
-            
-            config_path = (
-                Path(__file__).parent.parent.parent
-                / "config"
-                / "speaker_attribution.yaml"
-            )
-            
-            if not config_path.exists():
-                logger.debug("speaker_attribution.yaml not found")
-                return None
-                
-            with open(config_path) as f:
-                config = yaml.safe_load(f)
-            
-            channel_mappings = config.get("channel_mappings", {})
-            
-            if not channel_mappings:
-                logger.debug("No channel mappings configured")
-                return None
-                
-        except Exception as e:
-            logger.warning(f"Failed to load channel mappings: {e}")
-            return None
-        
-        # Check if this channel has mappings
-        channel_config = None
-        for configured_channel, config_data in channel_mappings.items():
-            # Case-insensitive, partial match
-            if configured_channel.lower() in channel_name.lower() or channel_name.lower() in configured_channel.lower():
-                channel_config = config_data
-                logger.info(f"📺 Found channel mapping for: {channel_name}")
-                break
-        
-        if not channel_config or "hosts" not in channel_config:
-            logger.debug(f"No mappings configured for channel: {channel_name}")
-            return None
-        
-        # Apply mappings
-        improved_suggestions = llm_suggestions.copy()
-        improvements_made = False
-        
-        for speaker_id, (suggested_name, confidence) in llm_suggestions.items():
-            suggested_name_lower = suggested_name.lower().strip()
-            
-            # Check if this name matches any partial names in channel config
-            for host_config in channel_config["hosts"]:
-                full_name = host_config.get("full_name")
-                partial_names = host_config.get("partial_names", [])
-                
-                if not full_name or not partial_names:
-                    continue
-                
-                # Check for exact or partial match
-                for partial_name in partial_names:
-                    partial_lower = partial_name.lower().strip()
-                    
-                    # Match if:
-                    # 1. Exact match: "Tony" == "tony"
-                    # 2. Contained: "Tony" in "Tony Smith" or "I'm Tony"
-                    # 3. Word boundary match: "tony" in "tony johnson"
-                    if (
-                        suggested_name_lower == partial_lower
-                        or partial_lower in suggested_name_lower
-                        or suggested_name_lower in partial_lower
-                    ):
-                        logger.info(
-                            f"🎯 Channel mapping: '{suggested_name}' -> '{full_name}' "
-                            f"(channel: {channel_name})"
-                        )
-                        
-                        # Upgrade to full name with high confidence
-                        improved_suggestions[speaker_id] = (
-                            full_name,
-                            max(0.95, confidence)  # Channel-based mapping is very reliable
-                        )
-                        improvements_made = True
-                        break  # Found a match, move to next speaker
-                
-                if improvements_made:
-                    break  # Already improved this speaker
-        
-        if improvements_made:
-            logger.info(
-                f"✅ Applied channel-based speaker mappings for {channel_name}"
-            )
-            return improved_suggestions
-        
-        logger.debug(f"No channel mappings applied for {channel_name}")
-        return None
+    # REMOVED: _apply_channel_mappings method - replaced by _identify_speakers_from_channel
+    # Channel identification now happens BEFORE LLM call, not after
+    # This allows LLM to use host context for better guest identification
 
     def _find_direct_address_mappings(
         self,

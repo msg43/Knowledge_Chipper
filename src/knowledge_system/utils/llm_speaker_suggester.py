@@ -120,19 +120,36 @@ class LLMSpeakerSuggester:
         self,
         speaker_segments: dict[str, list[dict]],
         metadata: dict | None = None,
+        known_hosts: list[str] | None = None,
     ) -> dict[str, tuple[str, float]]:
         """
-        Simple LLM suggestion: read metadata + first 5 statements and guess.
+        Suggest speaker names using LLM with optional known host context.
+        
+        Known hosts (from channel mappings) are provided as context to help the LLM
+        match speakers to names based on content analysis.
 
         Args:
             speaker_segments: Dict mapping speaker_id to list of speech segments
-            metadata: Video/podcast metadata (title, description, uploader, etc.)
+            metadata: Video/podcast metadata (title, description, channel, etc.)
+            known_hosts: Optional list of known host names for this channel
+                        (e.g., ["Jeff Snider", "Emil Kalinowski"])
+                        LLM will determine which speaker is which
 
         Returns:
             Dict mapping speaker_id to (suggested_name, confidence_score)
         """
+        # If we have known hosts, log them
+        if known_hosts:
+            logger.info(
+                f"📺 Channel has {len(known_hosts)} known hosts: {known_hosts}"
+            )
+            logger.info(
+                f"   → LLM will match speakers to these names based on transcript content"
+            )
+        
+        # If no LLM available, use fallback (can't effectively use host context without LLM)
         if not self.llm_client:
-            logger.info("LLM not available - using simple fallback names")
+            logger.info("No LLM configured - using pattern-based fallback")
             return self._simple_fallback(speaker_segments)
 
         try:
@@ -145,7 +162,8 @@ class LLMSpeakerSuggester:
                 logger.debug(f"  {speaker_id}: {len(segments)} segments")
 
             # Create simple prompt with metadata + first 5 statements per speaker
-            prompt = self._create_simple_prompt(speaker_segments, metadata)
+            # Include known hosts as context
+            prompt = self._create_simple_prompt(speaker_segments, metadata, known_hosts)
 
             # Debug log the prompt
             logger.debug(f"Generated prompt (first 500 chars): {prompt[:500]}...")
@@ -163,6 +181,17 @@ class LLMSpeakerSuggester:
             suggestions = self._validate_and_fix_suggestions(
                 suggestions, speaker_segments
             )
+            
+            # Boost confidence for speakers matched to known hosts
+            if known_hosts:
+                for speaker_id, (name, conf) in suggestions.items():
+                    if name in known_hosts:
+                        # LLM matched this speaker to a known host - high confidence!
+                        suggestions[speaker_id] = (name, 0.95)
+                        logger.info(
+                            f"🎯 LLM matched speaker to known host: {speaker_id} → '{name}' "
+                            f"(confidence boosted to 0.95)"
+                        )
 
             logger.info(f"LLM suggested names for {len(suggestions)} speakers")
             for speaker_id, (name, conf) in suggestions.items():
@@ -187,9 +216,18 @@ class LLMSpeakerSuggester:
             return self._simple_fallback(speaker_segments)
 
     def _create_simple_prompt(
-        self, speaker_segments: dict[str, list[dict]], metadata: dict | None
+        self, speaker_segments: dict[str, list[dict]], metadata: dict | None,
+        known_hosts: list[str] | None = None
     ) -> str:
-        """Create smart podcast-focused prompt with full metadata + first 3 minutes of content."""
+        """
+        Create smart podcast-focused prompt with full metadata + first 3 minutes of content.
+        
+        Args:
+            speaker_segments: Speaker segments to analyze
+            metadata: Video/podcast metadata
+            known_hosts: Optional list of known host names for this channel
+                        (e.g., ["Jeff Snider", "Emil Kalinowski"])
+        """
 
         # Build comprehensive metadata section (don't truncate description)
         metadata_text = "No metadata available"
@@ -281,10 +319,26 @@ class LLMSpeakerSuggester:
 
         # Count speakers for explicit validation
         num_speakers = len(ordered_speaker_ids)
+        
+        # Build known hosts section if available
+        known_hosts_section = ""
+        if known_hosts:
+            known_hosts_section = "\n📺 CHANNEL CONTEXT - Known Host(s) for this channel:\n"
+            for host_name in known_hosts:
+                known_hosts_section += f"  • {host_name}\n"
+            known_hosts_section += (
+                "\nIMPORTANT: One or more speakers in the transcript should match these names.\n"
+                "Use self-introductions, direct address patterns, and context to determine WHICH speaker is WHICH host.\n"
+                "If a speaker says 'I'm Jeff' or is addressed as 'Jeff', and Jeff Snider is a known host, assign 'Jeff Snider'.\n\n"
+            )
+            logger.info(
+                f"📝 LLM prompt includes {len(known_hosts)} known hosts as context: {known_hosts}"
+            )
 
         prompt = (
             "You are identifying speakers in a podcast/interview transcript.\n\n"
-            f"CRITICAL REQUIREMENT: You have {num_speakers} speakers. Each MUST get a DIFFERENT, DESCRIPTIVE name.\n\n"
+            f"CRITICAL REQUIREMENT: You have {num_speakers} speakers total. Each MUST get a DIFFERENT, DESCRIPTIVE name.\n\n"
+            f"{known_hosts_section}"
             "🚨 CRITICAL RULES - VIOLATION = FAILURE 🚨\n"
             "1. NO DUPLICATE NAMES: Each speaker gets a UNIQUE name (NEVER assign 'John Smith' to multiple speakers)\n"
             "2. NO EMPTY NAMES: Every speaker MUST have a name assigned\n"
@@ -600,6 +654,7 @@ class LLMSpeakerSuggester:
 def suggest_speaker_names_with_llm(
     speaker_segments: dict[str, list[dict]],
     metadata: dict | None = None,
+    known_hosts: list[str] | None = None,
 ) -> dict[str, tuple[str, float]]:
     """
     Convenience function for LLM speaker suggestions.
@@ -607,9 +662,12 @@ def suggest_speaker_names_with_llm(
     Args:
         speaker_segments: Dict mapping speaker_id to list of speech segments
         metadata: Optional metadata (title, description, etc.)
+        known_hosts: Optional list of known host names for this channel
+                    (e.g., ["Jeff Snider", "Emil Kalinowski"])
+                    LLM will match speakers to these names based on content
 
     Returns:
         Dict mapping speaker_id to (suggested_name, confidence_score)
     """
     suggester = LLMSpeakerSuggester()
-    return suggester.suggest_speaker_names(speaker_segments, metadata)
+    return suggester.suggest_speaker_names(speaker_segments, metadata, known_hosts)
