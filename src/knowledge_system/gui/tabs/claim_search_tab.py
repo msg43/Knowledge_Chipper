@@ -52,10 +52,7 @@ class ClaimSearchWorker(QThread):
 
         try:
             with self.db.get_session() as session:
-                from knowledge_system.database import (  # Video now points to claim_models.MediaSource
-                    Summary,
-                    Video,
-                )
+                from knowledge_system.database import MediaSource, Summary
 
                 # Get HCE summaries
                 hce_summaries = (
@@ -72,8 +69,8 @@ class ClaimSearchWorker(QThread):
                         # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
                         hce_data = summary.hce_data_json
                         video = (
-                            session.query(Video)
-                            .filter(Video.source_id == summary.video_id)
+                            session.query(MediaSource)
+                            .filter(MediaSource.source_id == summary.video_id)
                             .first()
                         )
 

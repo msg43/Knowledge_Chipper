@@ -79,5 +79,13 @@ def test_no_video_model_exported():
     assert not hasattr(db_module, "Video")
 
 
+def test_claim_search_tab_imports():
+    """Test that claim_search_tab can import MediaSource without errors."""
+    # This test verifies that claim_search_tab.py doesn't try to import Video
+    from knowledge_system.gui.tabs.claim_search_tab import ClaimSearchTab
+
+    assert ClaimSearchTab is not None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
