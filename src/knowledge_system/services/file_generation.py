@@ -210,7 +210,7 @@ class FileGenerationService:
             # Generate YAML frontmatter
             frontmatter = {
                 "title": f"Transcript of {video.title}",
-                "video_id": video.video_id,
+                "video_id": video.source_id,
                 "url": video.url,
                 "uploader": video.uploader,
                 "upload_date": video.upload_date,
@@ -222,8 +222,9 @@ class FileGenerationService:
                 "processed_at": (
                     transcript.created_at.isoformat() if transcript.created_at else None
                 ),
-                "tags": video.tags_json if video.tags_json else [],
-                "categories": video.categories_json if video.categories_json else [],
+                # Claim-centric schema doesn't have tags_json or categories_json
+                "tags": [],
+                "categories": [],
             }
 
             # Build transcript content
@@ -242,7 +243,7 @@ class FileGenerationService:
                     include_speakers=include_speakers,
                     include_timestamps=include_timestamps,
                     diarization_enabled=has_speaker_data,  # Use actual speaker data presence
-                    video_id=video.video_id,  # Pass video_id for YouTube timestamp hyperlinks
+                    video_id=video.source_id,  # Pass video_id for YouTube timestamp hyperlinks
                 )
 
             # Fallback to stored speaker text if segments not available
@@ -255,14 +256,8 @@ class FileGenerationService:
             # Generate markdown content
             yaml_frontmatter = yaml.dump(frontmatter, default_flow_style=False)
 
-            # Add Obsidian hashtags from database tags
+            # Claim-centric schema doesn't have tags_json, so no hashtags from database
             hashtags_section = ""
-            if video.tags_json:
-                from ..utils.obsidian_tags import yaml_tags_to_obsidian_hashtags
-
-                hashtags = yaml_tags_to_obsidian_hashtags(video.tags_json)
-                if hashtags:
-                    hashtags_section = f"\n{' '.join(sorted(hashtags))}\n"
 
             markdown_content = f"""---
 {yaml_frontmatter}---
@@ -762,15 +757,10 @@ class FileGenerationService:
         # Generate Obsidian tags from concepts and claim types
         obsidian_tags = set()
 
-        # Add tags from database (converted to hashtag format)
-        if video.tags_json:
-            from ..utils.obsidian_tags import yaml_tags_to_obsidian_hashtags
-
-            db_hashtags = yaml_tags_to_obsidian_hashtags(video.tags_json)
-            obsidian_tags.update(db_hashtags)
+        # Claim-centric schema doesn't have tags_json, so no hashtags from database
 
         # Add video-related tags
-        obsidian_tags.add(f"#video/{video.video_id}")
+        obsidian_tags.add(f"#video/{video.source_id}")
         obsidian_tags.add("#claim-analysis")
         obsidian_tags.add("#hce-processed")
 
@@ -1478,8 +1468,9 @@ class FileGenerationService:
                             "uploader": source.uploader,
                             "upload_date": source.upload_date,
                             "duration_seconds": source.duration_seconds,
-                            "tags": source.tags_json,
-                            "chapters": source.video_chapters_json,
+                            # Claim-centric schema doesn't have tags_json or video_chapters_json
+                            "tags": None,
+                            "chapters": None,
                             "url": source.url,
                         }
             except Exception as e:

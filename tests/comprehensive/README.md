@@ -1,6 +1,6 @@
 # Comprehensive Real Testing Suite
 
-This directory contains the consolidated, non-overlapping test suite for real GUI + real data testing.
+This directory contains the consolidated, non-overlapping test suite for real backend + GUI testing.
 
 ## Overview
 
@@ -8,8 +8,8 @@ This replaces **15+ redundant test files** with **3 focused test files** that pr
 
 ### Test Files
 
-1. **`test_real_gui_complete.py`** - Real GUI workflows with actual data sources
-2. **`test_real_integration_complete.py`** - Real file processing and System2 orchestration  
+1. **`test_real_gui_complete.py`** - GUI tab navigation and widget loading (limited due to PyQt6 offscreen mode limitations)
+2. **`test_real_integration_complete.py`** - Real file processing and System2 orchestration (RECOMMENDED FOR TESTING)
 3. **`test_real_system2_complete.py`** - Real System2 job tracking and database operations
 
 ### What This Replaces
@@ -39,14 +39,12 @@ This replaces **15+ redundant test files** with **3 focused test files** that pr
 ## Coverage
 
 ### Real GUI Testing (`test_real_gui_complete.py`)
-- **Transcription**: YouTube URL, playlist, RSS feed, local audio/video, batch processing
-- **Summarization**: MD, PDF, TXT, DOCX, HTML, JSON, RTF formats
-- **Workflows**: Complete transcribe → summarize pipeline
-- **Tab Navigation**: All 7 tabs load and switch correctly
-- **Error Handling**: Invalid inputs, cancellation, edge cases
-- **Real Processing**: Actual Ollama integration, real file processing
-- **Database Validation**: SQLite persistence verification
-- **Output Validation**: Markdown file generation with YAML frontmatter
+**⚠️ LIMITATIONS:** PyQt6 offscreen mode (`QT_QPA_PLATFORM=offscreen`) has fundamental limitations with signal/slot delivery across threads, causing tests to hang indefinitely. GUI tests are currently limited to:
+- **Tab Navigation**: All 7 tabs load and switch correctly ✅
+- **Widget Initialization**: Tab widgets create successfully ✅
+- **Real Processing**: NOT RELIABLE - worker threads don't start properly ❌
+
+**RECOMMENDATION:** Use backend integration tests (`test_real_integration_complete.py`) for real data processing instead.
 
 ### Real Integration Testing (`test_real_integration_complete.py`)
 - **File Processing**: Ken Rogoff RTF, Bannon MD, Wolf RTF
@@ -75,26 +73,26 @@ python -m pytest tests/comprehensive/ -v
 
 ### Run Specific Test Suites
 ```bash
-# GUI tests only
-python -m pytest tests/comprehensive/test_real_gui_complete.py -v
-
-# Integration tests only  
+# Integration tests (RECOMMENDED - most reliable)
 python -m pytest tests/comprehensive/test_real_integration_complete.py -v
 
-# System2 tests only
+# System2 tests  
 python -m pytest tests/comprehensive/test_real_system2_complete.py -v
+
+# GUI tests (limited to tab navigation due to PyQt6 offscreen limitations)
+python -m pytest tests/comprehensive/test_real_gui_complete.py -v
 ```
 
 ### Run Specific Test Classes
 ```bash
-# Transcription tests only
-python -m pytest tests/comprehensive/test_real_gui_complete.py::TestRealGUITranscription -v
-
-# Mining tests only
+# Mining tests (RECOMMENDED - real processing with Ollama)
 python -m pytest tests/comprehensive/test_real_integration_complete.py::TestRealSystem2Mining -v
 
-# Job creation tests only
+# Job creation tests  
 python -m pytest tests/comprehensive/test_real_system2_complete.py::TestRealJobCreation -v
+
+# Tab navigation only (GUI)
+python -m pytest tests/comprehensive/test_real_gui_complete.py::TestRealGUITabNavigation -v
 ```
 
 ## Requirements
@@ -176,6 +174,48 @@ Common functionality is in `utils.py`:
 - `wait_for_completion()` - Processing completion
 - `DBValidator` - Database validation
 - `check_ollama_running()` - Ollama status check
+
+## Testing Strategy
+
+### Why Backend Tests Over GUI Tests?
+
+After extensive debugging, we've determined that **PyQt6 offscreen mode has fundamental limitations** that prevent reliable GUI automation:
+
+1. **Signal/Slot Delivery**: Worker thread signals aren't delivered across threads in offscreen mode
+2. **Event Loop Blocking**: Tests hang indefinitely on worker completion
+3. **Silent Failures**: No useful error messages when processing fails
+
+### Recommended Approach
+
+✅ **USE BACKEND TESTS** (`test_real_integration_complete.py`) for:
+- File processing verification
+- Real Ollama integration testing
+- Database operations validation
+- System2 orchestration
+
+✅ **USE GUI TESTS** (`test_real_gui_complete.py`) for:
+- Tab navigation verification
+- Widget initialization checks
+- UI element existence validation
+
+❌ **AVOID GUI TESTS** for:
+- Real processing workflows
+- Worker thread operations
+- Signal/slot interactions
+- End-to-end workflows
+
+### Manual GUI Testing
+
+For comprehensive GUI testing, run the actual application:
+```bash
+python -m knowledge_system.gui.main
+```
+
+This provides:
+- Real event loop processing
+- Actual worker thread execution
+- Proper signal/slot delivery
+- Complete end-to-end workflows
 
 ## Future Enhancements
 

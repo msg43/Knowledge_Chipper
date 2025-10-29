@@ -432,6 +432,42 @@ class APIKeysTab(BaseTab):
 
         update_section.addWidget(self.auto_update_checkbox)
 
+        # Show Introduction Tab checkbox
+        self.show_intro_tab_checkbox = QCheckBox("Show Introduction Tab At Launch")
+        self.show_intro_tab_checkbox.setToolTip(
+            "When enabled, the Introduction tab will be visible when you launch the app.\n"
+            "When disabled, the Introduction tab will be hidden on all future launches.\n\n"
+            "• You can always re-enable this checkbox to show the Introduction tab again\n"
+            "• Useful if you're already familiar with the app and don't need the intro"
+        )
+        # Use consistent styling
+        self.show_intro_tab_checkbox.setStyleSheet(
+            """
+            QCheckBox {
+                font-size: 12px;
+                color: #333;
+                font-weight: normal;
+                padding: 4px;
+            }
+            QCheckBox:hover {
+                color: #2196F3;
+            }
+            QCheckBox:checked {
+                color: #1976d2;
+            }
+        """
+        )
+        # Load saved preference (default to True - show intro by default)
+        show_intro_enabled = self.gui_settings.get_checkbox_state(
+            self.tab_name, "show_introduction_tab", default=True
+        )
+        self.show_intro_tab_checkbox.setChecked(show_intro_enabled)
+        self.show_intro_tab_checkbox.stateChanged.connect(
+            self._on_show_intro_tab_changed
+        )
+
+        update_section.addWidget(self.show_intro_tab_checkbox)
+
         # Add the update section to the horizontal layout
         button_widget_layout.addLayout(update_section)
 
@@ -959,6 +995,38 @@ class APIKeysTab(BaseTab):
             # Still update the runtime setting even if file save fails
             self.append_log(
                 f"{'Enabled' if is_enabled else 'Disabled'} automatic update checking (runtime only)"
+            )
+
+    def _on_show_intro_tab_changed(self, state: int) -> None:
+        """Handle show introduction tab checkbox state change."""
+        is_enabled = bool(state)
+
+        # Save to GUI settings
+        self.gui_settings.set_checkbox_state(
+            self.tab_name, "show_introduction_tab", is_enabled
+        )
+        self.gui_settings.save()
+
+        # Update the main window's introduction tab visibility immediately
+        main_window = self.parent()
+        if main_window and hasattr(main_window, "introduction_tab_index"):
+            main_window.tabs.setTabVisible(
+                main_window.introduction_tab_index, is_enabled
+            )
+            self.append_log(
+                f"✅ Introduction tab will be {'shown' if is_enabled else 'hidden'} on future launches"
+            )
+            if is_enabled:
+                self.append_log(
+                    "   Tab is now visible - you can access it from the tabs bar"
+                )
+            else:
+                self.append_log(
+                    "   Tab is now hidden - you can re-enable this checkbox to show it again"
+                )
+        else:
+            self.append_log(
+                f"✅ Introduction tab visibility preference saved ({'shown' if is_enabled else 'hidden'})"
             )
 
     def check_for_updates_on_launch(self) -> None:

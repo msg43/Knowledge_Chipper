@@ -125,14 +125,15 @@ async def process_mine_with_unified_pipeline(
             source_id = episode_id.replace("episode_", "")
             video = orchestrator.db_service.get_video(source_id)
             if video:
+                # Claim-centric schema doesn't have tags_json or video_chapters_json
                 video_metadata = {
                     "title": video.title,
                     "description": video.description,
                     "uploader": video.uploader,
                     "upload_date": video.upload_date,
                     "duration_seconds": video.duration_seconds,
-                    "tags": video.tags_json,
-                    "chapters": video.video_chapters_json,
+                    "tags": None,  # Not available in claim-centric schema
+                    "chapters": None,  # Not available in claim-centric schema
                     "url": video.url,
                 }
                 logger.info(f"📺 Loaded video metadata: {video.title}")
@@ -294,7 +295,7 @@ async def process_mine_with_unified_pipeline(
                 orchestrator.progress_callback("verifying", 93, episode_id)
 
             with orchestrator.db_service.get_session() as session:
-                from ..database.claim_models import Claim
+                from ..database.models import Claim
 
                 verified_claims = (
                     session.query(Claim).filter_by(source_id=source_id).count()

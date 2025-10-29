@@ -149,6 +149,9 @@ coverage:
 
 lint:
 	@echo "🔍 Running linting checks..."
+	@echo "Running quick import validation tests..."
+	@pytest tests/test_database_imports.py -q || (echo "❌ Import validation failed - check database exports!" && exit 1)
+	@echo "✅ Import validation passed"
 	flake8 src/ --count --select=E9,F63,F7,F82,F821 --show-source --statistics
 	flake8 src/ --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
 

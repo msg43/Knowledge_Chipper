@@ -1,579 +1,211 @@
 # Skipthepodcast.com (Skip the Podcast Desktop)
 
-
-## Application Type
-
-**Knowledge Chipper is a GUI-only application.** All functionality is available through the graphical interface.
-
-The CLI interface has been removed to maintain a single, well-tested code path. If you need automation/scripting capabilities, please use the GUI's batch processing and folder monitoring features.
-
-
 > Transform audio, video, and documents into structured knowledge with AI-powered analysis
 
 **Version 3.4.0** | **macOS Application** | **Offline-First Design**
 
-## 🆕 What's New in Version 3.4.0 - System 2 Architecture
+## What Does This App Do?
 
-### System 2: Production-Grade Reliability
-- **🗄️ Database-Backed Job Orchestration**: All operations create persistent job records with SQLite WAL mode
-- **🔄 Checkpoint/Resume Capability**: Failed jobs resume from their last successful checkpoint automatically
-- **💾 Perfect State Persistence**: No more lost work due to crashes or interruptions
-- **📊 Complete Audit Trail**: Track every LLM call, token usage, and processing metric in database
+Skipthepodcast.com extracts **structured knowledge** from your content:
 
-### Hardware-Aware Resource Management
-- **🖥️ Automatic Hardware Detection**: Adapts to your system tier:
-  - Consumer (M1/M2 base): 2 concurrent LLM requests
-  - Prosumer (M1/M2 Pro/Max): 4 concurrent LLM requests
-  - Enterprise (M1/M2 Ultra): 8 concurrent LLM requests
-- **🧠 Dynamic Memory Monitoring**: Throttles at 70% memory usage to prevent crashes
-- **⚡ Exponential Backoff**: Intelligent rate limit handling for all providers
-- **📈 Real-Time Performance Metrics**: JSON-structured logs with correlation IDs
-
-### Enhanced Observability
-- **🏷️ Structured Error Codes**: HIGH/MEDIUM/LOW severity taxonomy per TECHNICAL_SPECIFICATIONS.md
-- **📋 Job State Tracking**: Monitor jobs through queued→running→succeeded/failed lifecycle
-- **🔍 LLM Request/Response Tables**: Full database tracking with costs and metrics
-- **📊 System2Logger**: Structured JSON logging with job_run_id correlation
-
-### GUI Simplified to 7 Tabs
-- **1️⃣ Introduction**: Getting started guide
-- **2️⃣ Transcribe**: With "Process automatically through entire pipeline" checkbox
-- **3️⃣ Summarize**: LLM-powered summarization
-- **4️⃣ Review**: SQLite-backed claim editor with tier coloring (A/B/C)
-- **5️⃣ Upload**: Cloud storage management
-- **6️⃣ Monitor**: Directory watching (renamed from Watcher)
-- **7️⃣ Settings**: Configuration and API keys
-
-### Smart Speaker Correction System
-- **🔄 HCE Database Sync**: Automatically detects when speaker names are corrected
-- **⚡ Background Reprocessing**: Updates all claims and evidence with correct speaker context
-- **💰 Cost Transparency**: Shows estimated time and API costs before reprocessing
-- **🎯 Manual Control**: "Update HCE Database" button in Speaker Attribution tab
-- **📊 Real-Time Progress**: Beautiful dialog with live updates during reprocessing
-
-### JSON Schema Validation
-- **📋 Versioned Schemas**: All LLM I/O validated against `/schemas/*.v1.json`
-- **🔧 Automatic Repair**: Schema validator fixes common issues
-- **✅ Type Safety**: Guaranteed structure for miner and flagship outputs
-
-## 🆕 What's New in Version 3.3.0
-
-### Revolutionary Unified HCE Pipeline
-- **🔄 Four-Pass Architecture**: Short Summary → Miner → Flagship Evaluator → Long Summary + Categories
-- **📝 Intelligent Summaries**: Pre-mining context and post-evaluation comprehensive analysis
-- **📊 Enhanced Scoring**: Importance, novelty, confidence on 1-10 scale
-- **🎯 Single-Pass Extraction**: Claims, people, concepts, jargon in one operation
-- **📋 Claim Type Classification**: Factual, causal, normative, forecast, definitional
-- **🏷️ WikiData Categories**: Automatic topic categorization with confidence scores
-
-### Qwen Model Integration
-- **🚀 Superior JSON Compliance**: Industry-leading structured output reliability
-- **🖥️ Hardware-Optimized Selection**: Automatic model recommendations by Mac specs
-- **⚡ Consistent Performance**: All tiers use Qwen models for reliability
-- **🔧 Multi-shot Prompting**: Examples and anti-examples for consistent results
-
-### Technical Improvements
-- **📈 Simplified Architecture**: Removed complex routing and reranking systems
-- **🎛️ Updated GUI**: Streamlined controls for Miner and Flagship model selection
-- **🔍 Schema Validation**: Guaranteed JSON output with comprehensive error handling
-- **📚 Enhanced Documentation**: Updated troubleshooting and configuration guides
-
-### YouTube Bulk Downloads with Cookie Authentication
-- **🍪 Throwaway Account Support**: Use cookies from throwaway Google accounts for reliable downloads
-- **🏠 Home IP Recommended**: Disable proxies when using cookies for best results
-- **⏱️ Configurable Rate Limiting**: Min/max delays with randomization to mimic human behavior
-- **🔒 Manual Cookie Upload Only**: Browser extraction disabled to prevent accidentally using main account
-- **📊 Smart Sequential Processing**: Downloads one video at a time with intelligent pacing
-- **🔧 Large Scale Support**: Designed for processing 1000+ videos efficiently
-
----
-
-## Why Skipthepodcast.com Exists
-
-In our information-rich world, valuable insights are buried in hours of podcasts, video lectures, research papers, and meeting recordings. Skipthepodcast.com was created to solve a fundamental problem: **extracting actionable intelligence from unstructured media content**.
-
-Traditional transcription tools give you text. Skipthepodcast.com gives you **structured knowledge**:
-- **Claims** with importance, novelty, and confidence scores (1-10 scale)
-- **Speaker identification** with 97% voice fingerprinting accuracy  
-- **Entity extraction** (people, concepts, technical terms) in single pass
-- **Claim type classification** (factual, causal, normative, forecast, definitional)
-- **Evidence citations** linking claims to exact sources
+- **📹 YouTube Videos**: Process individual videos or entire playlists
+- **🎙️ Local Audio/Video**: Transcribe MP4, MP3, WAV, and other formats
+- **📄 Documents**: Analyze PDFs, Word docs, Markdown, and text files
+- **🗣️ Speaker Identification**: Automatically identify who said what with 97% accuracy
+- **🧠 Knowledge Extraction**: Extract claims, key people, concepts, and technical terms
+- **📊 Smart Organization**: Store everything in a searchable database with automatic categorization
 
 Perfect for researchers, students, professionals, and anyone who needs to process large volumes of content efficiently.
 
-## What Skipthepodcast.com Accomplishes
-
-### 🎯 Core Capabilities
-
-**📹 Universal Content Processing**
-- YouTube videos and playlists
-- Local audio/video files (MP4, MP3, WAV, etc.)
-- Documents (PDF, Word, Markdown, Plain Text)
-- Batch processing of entire folders
-
-**🎙️ Advanced Speaker Intelligence**
-- State-of-the-art voice fingerprinting (ECAPA-TDNN + Wav2Vec2 models)
-- Conservative diarization with AI-powered speaker merging
-- Persistent speaker profiles across recordings
-- LLM-validated speaker identification
-
-**🧠 Structured Knowledge Extraction**
-- **Unified HCE Pipeline**: Advanced four-pass system (Short Summary → Miner → Flagship Evaluator → Long Summary + Categories)
-- **Intelligent Summaries**: Pre-mining overview and post-evaluation comprehensive analysis
-- **Enhanced JSON Compliance**: Qwen models for reliable structured output
-- **Entity Recognition**: People, concepts, jargon, mental models in single pass
-- **Intelligent Claim Ranking**: LLM-powered importance, novelty, and confidence scoring
-- **WikiData Categories**: Automatic topic categorization for content organization
-- **Semantic Deduplication**: Eliminate redundant content
-
-**📊 Knowledge Organization**
-- SQLite-first database with optional cloud sync
-- Obsidian integration with auto-tagging
-- Searchable claim database across all content
-- Knowledge maps (MOCs) linking related content
-- Multiple export formats (Markdown, YAML, JSON, CSV)
-
-### 🚀 Key Differentiators
-
-1. **Unified HCE Pipeline**: Revolutionary four-pass system with intelligent summaries and category detection
-2. **Qwen Model Integration**: Industry-leading JSON compliance and structured output
-3. **Intelligent Summaries**: Pre-mining context and post-evaluation comprehensive analysis
-4. **WikiData Categories**: Automatic topic categorization for content discovery
-5. **97% Voice Accuracy**: Enterprise-grade speaker verification models
-6. **Hardware-Optimized Models**: Automatic model selection based on Mac specifications
-7. **Apple Silicon Acceleration**: Optimized for M2/M3 with MPS support
-8. **Zero Configuration**: Works immediately after installation
-
-## How to Use Skipthepodcast.com
-
-### Quick Start (5 Minutes)
-
-1. **Download & Install**
-   - Download the DMG from releases
-   - Right-click → Open (to bypass Gatekeeper)
-   - Everything bundled - no additional setup required
-
-2. **Your First Transcription**
-   - Launch the app → "Local Transcription" tab
-   - Drop in an audio/video file
-   - Click "Start Transcription"
-   - Speaker diarization runs automatically
-
-3. **Extract Knowledge**
-   - Go to "Summarization" tab
-   - Select your transcript file
-   - Choose analysis type (Unified HCE is default)
-   - Review extracted claims with importance, novelty, and confidence scores (1-10 scale)
-
-4. **Explore Results**
-   - "Claim Search" tab: Filter and explore extracted knowledge
-   - "Speaker Attribution" tab: Review and correct speaker identification
-   - All results stored in SQLite database for fast searching
-
-### Desktop Interface Overview
-
-The application provides a tabbed interface for different workflows:
-
-**🎬 Content Input**
-- **YouTube Extraction**: Process videos and playlists with intelligent pacing
-- **Local Transcription**: Handle local audio/video files
-- **Document Processing**: Analyze PDFs and text documents
-
-**🧠 Analysis & Organization**  
-- **Summarization**: Extract structured claims and entities (Unified HCE system)
-- **Process Management**: Full pipeline processing (transcribe → analyze → organize)
-- **Claim Search**: Explore extracted knowledge across all content
-
-**🎙️ Speaker Management**
-- **Speaker Attribution**: Review and assign speaker names
-- **HCE Database Sync**: Automatically update analysis when speaker names change
-- **Voice Enrollment**: Create persistent speaker profiles
-
-**⚙️ System Management**
-- **File Watcher**: Automated processing of new files
-- **API Keys**: Configure LLM providers (OpenAI, Anthropic, Local)
-- **Sync Status**: Manage cloud backup (optional)
-
-### Command Line Interface
-
-For automation and scripting:
-
-```bash
-# Basic transcription with speaker diarization
-knowledge-system transcribe --input "video.mp4" --enable-diarization
-
-# Extract structured knowledge
-knowledge-system summarize "transcript.md"
-
-# Process entire folders
-knowledge-system process ./content/ --recursive
-
-# Voice fingerprinting
-knowledge-system voice enroll --speaker-name "John Doe" --audio-file "sample.wav"
-
-# Get help
-knowledge-system --help
-```
-
-### Input Formats Supported
-
-**Audio & Video**: MP4, MOV, MP3, WAV, M4A, WEBM (anything FFmpeg supports)
-**Documents**: PDF, DOCX, DOC, RTF, TXT, MD
-**Web Content**: YouTube URLs and playlists
-**Batch Processing**: Entire folders with pattern matching
-
-### Output Formats
-
-**Structured Data**: SQLite database (primary storage)
-**Knowledge Maps**: Markdown with Obsidian linking
-**Exports**: YAML, JSON, CSV for integration
-**Reports**: Detailed processing summaries
-
-## Advanced Features
-
-### Unified HCE (Hybrid Claim Extractor) System
-
-The revolutionary four-pass intelligence engine that replaces traditional summarization:
-
-**🔄 Four-Pass Architecture:**
-1. **Short Summary (Pre-Mining)**: Generate 1-2 paragraph contextual overview before extraction begins
-2. **Unified Miner**: Single pass extraction of claims, people, concepts, and jargon with claim type classification
-3. **Flagship Evaluator**: Comprehensive LLM-powered ranking using short summary for context
-4. **Long Summary + Categories**: Generate 3-5 paragraph comprehensive analysis and identify WikiData topic categories
-
-**📊 Advanced Scoring System:**
-- **Importance** (1-10): Core relevance and significance
-- **Novelty** (1-10): Uniqueness and freshness of information  
-- **Confidence** (1-10): Reliability and evidence quality
-- **Claim Types**: Factual, causal, normative, forecast, definitional
-
-**🎯 Key Features:**
-- **Intelligent Summaries**: Pre-mining context improves evaluation; post-evaluation creates coherent narrative
-- **WikiData Categories**: Automatic topic categorization with confidence scores (3-8 categories per episode)
-- **JSON Schema Validation**: Guaranteed structured output with Qwen models
-- **Multi-shot Prompting**: Examples and anti-examples for consistent results
-- **Evidence Citations**: Every claim linked to exact source quotes
-- **Entity Recognition**: Comprehensive extraction in single pass
-- **Interactive Validation**: Review and correct AI-assigned scores
-
-### Voice Fingerprinting Technology
-
-State-of-the-art speaker verification achieving 97% accuracy:
-
-- **Multi-Modal Analysis**: MFCC, spectral, prosodic features + deep embeddings
-- **Enterprise Models**: Wav2Vec2 (Facebook) + ECAPA-TDNN (SpeechBrain)
-- **Hardware Accelerated**: Automatic MPS (Apple Silicon) and CUDA support
-- **Persistent Profiles**: Voice enrollment for automatic recognition
-- **Conservative Diarization**: Moderate clustering with AI-powered merging
-- **Smart HCE Sync**: Automatically update analysis database when speaker names are corrected
-
-### Intelligent Processing Pipeline
-
-1. **Content Ingestion** → Universal format support
-2. **Transcription** → Whisper with speaker diarization  
-3. **Voice Fingerprinting** → 97% accurate speaker identification
-4. **LLM Validation** → AI-powered speaker name suggestion
-5. **Short Summary** → Pre-mining contextual overview (1-2 paragraphs)
-6. **Unified Mining** → Single-pass extraction of all entities with Qwen models
-7. **Flagship Evaluation** → Comprehensive LLM ranking using context from short summary
-8. **Long Summary** → Post-evaluation comprehensive analysis (3-5 paragraphs)
-9. **Category Detection** → WikiData topic identification with confidence scores
-10. **Storage** → SQLite database with relationships
-11. **Export** → Multiple formats for integration
-
-### Speaker Correction & HCE Sync
-
-When you correct speaker assignments after analysis, the system intelligently updates everything:
-
-**Automatic Workflow:**
-1. **Correct Names** → Update speaker assignments in the Speaker Attribution tab
-2. **Detect Changes** → System checks if HCE analysis exists for this content
-3. **Confirm Update** → Beautiful dialog shows what will be reprocessed with cost/time estimates
-4. **Background Processing** → Reprocess claims, evidence, and entities with correct speaker context
-5. **Complete Sync** → Database fully updated with corrected speaker attributions
-
-**Key Features:**
-- **Non-Blocking**: Reprocessing runs in background with real-time progress
-- **Smart Detection**: Only triggers when HCE data actually exists
-- **Cost Transparency**: Shows estimated API costs before confirming
-- **Complete Reprocessing**: All claims and evidence updated with correct speaker context
-- **Manual Control**: Optional "Update HCE Database" button for on-demand updates
-
-This ensures your knowledge base always reflects the correct speaker attributions, even if you fix mistakes after initial processing.
-
-### Hardware-Optimized Model Selection
-
-Automatic model recommendations based on your Mac specifications:
-
-- **🔥 M2/M3 Ultra (64GB+ RAM)**: `qwen2.5:14b-instruct` (8.2GB) - Maximum capability
-- **🔥 M2/M3 Max (32GB+ RAM)**: `qwen2.5:14b-instruct` (8.2GB) - High performance  
-- **🔥 M2/M3 Pro (16GB+ RAM)**: `qwen2.5:7b-instruct` (4GB) - Balanced efficiency
-- **🔥 Base Systems**: `qwen2.5:3b-instruct` (2GB) - Optimized for limited resources
-
-**Key Benefits:**
-- **Consistent JSON Compliance**: All Qwen models excel at structured output
-- **Automatic Detection**: Hardware specs detected during installation
-- **Optimal Performance**: Right-sized models for your system capabilities
-- **Future-Proof**: Easy model upgrades as hardware improves
-
-### Performance & Optimization
-
-- **Smart Chunking**: Model-aware content segmentation
-- **Unified Pipeline**: Streamlined two-pass processing for efficiency
-- **Cache Management**: Intelligent caching for speed
-- **Hardware Acceleration**: Optimized for Apple Silicon MPS
-- **Offline Operation**: No internet required for core functionality
-
-## System 2 Architecture
-
-### Job Orchestration
-The System 2 architecture introduces database-backed job management for reliability and observability:
-
-**Job Types:**
-- `download`: Media file acquisition
-- `transcribe`: Audio/video to text conversion
-- `mine`: Extract claims, entities, and concepts
-- `flagship`: Evaluate and rank extractions
-- `upload`: Cloud synchronization
-- `pipeline`: End-to-end processing chain
-
-**Key Features:**
-- **Persistent State**: All jobs tracked in SQLite with WAL mode
-- **Checkpoint/Resume**: Failed jobs resume from last checkpoint
-- **Auto-Process Chains**: Automatic progression through pipeline stages
-- **Metrics Tracking**: Token usage, latency, and cost per operation
-
-### Resource Management
-System 2 automatically adapts to your hardware:
-
-| Hardware Tier | RAM | CPU Cores | Mining Workers | Eval Workers |
-|--------------|-----|-----------|----------------|--------------|
-| Consumer | <8GB | 2-4 | 2 | 1 |
-| Prosumer | 16GB | 8 | 4 | 2 |
-| Professional | 32GB | 12+ | 6 | 3 |
-| Server | 64GB+ | 16+ | 10 | 5 |
-
-**Memory Protection:**
-- Dynamic throttling when memory usage exceeds 70%
-- Critical mode at 90% prevents new job starts
-- Graceful degradation maintains system stability
-
-### Observability
-Comprehensive logging and monitoring:
-
-**Error Taxonomy:**
-- `HIGH`: Immediate attention (database errors, schema failures)
-- `MEDIUM`: Degraded function (API limits, partial failures)
-- `LOW`: Minor issues (cache misses, optional features)
-
-**Monitoring:**
-- Job state transitions tracked in database
-- LLM token usage and costs per operation
-- Memory throttle events and performance metrics
-- Structured logs with contextual information
-
-## Configuration & Customization
-
-The system uses a layered configuration approach:
-
-1. **Default Settings**: System defaults (read-only)
-2. **User Configuration**: Your personal overrides
-3. **Environment Variables**: Runtime overrides
-
-Key configuration areas:
-- **LLM Providers**: OpenAI, Anthropic, local Qwen models
-- **HCE Pipeline**: Miner and Flagship model selection
-- **Voice Processing**: Sensitivity thresholds, model selection
-- **Output Preferences**: Export formats, file organization
-- **Performance**: Batch sizes, hardware utilization
-
-## Use Cases
-
-### Research & Academia
-- Process lecture recordings and research papers
-- Extract structured claims with evidence citations
-- Build knowledge maps connecting related concepts
-- Identify contradictions in literature
-
-### Business & Professional
-- Analyze meeting recordings and presentations
-- Process training materials and documentation
-- Create searchable knowledge bases
-- Track speaker contributions and insights
+## Why Use Skipthepodcast.com?
+
+Instead of manually listening to hours of podcasts or reading through long documents, Skipthepodcast.com:
+
+✅ **Extracts Key Claims**: Automatically identifies important statements with importance, novelty, and confidence scores  
+✅ **Identifies Speakers**: 97% accurate voice fingerprinting tells you who said what  
+✅ **Organizes Knowledge**: Builds a searchable database of insights across all your content  
+✅ **Finds Connections**: Links related concepts, people, and ideas together  
+✅ **Works Offline**: Core features work without internet using local AI models  
+✅ **Batch Processing**: Process entire folders automatically  
+
+---
+
+## Getting Started
+
+### Installation
+
+1. **Download**: Get the DMG from the releases page
+2. **Install**: Drag to Applications folder
+3. **First Launch**: Right-click → Open (macOS may require this the first time)
+4. **Setup**: The app walks you through initial configuration
+
+**System Requirements:**
+- macOS 10.15 (Catalina) or later
+- 8GB RAM minimum (16GB+ recommended)
+- 2GB free disk space
+- Apple Silicon (M1/M2/M3) or Intel Mac
+
+### Your First Processing Session
+
+**Step 1: Add Content**
+- Open the **Transcribe** tab
+- Paste a YouTube URL, or drag and drop a local audio/video file
+- Check "Process automatically through entire pipeline" to do everything in one go
+
+**Step 2: Let It Process**
+- Click "Start Transcription"
+- The app will:
+  1. Download/load your content
+  2. Transcribe the audio
+  3. Identify speakers
+  4. Extract key claims, people, and concepts
+  5. Organize everything into a searchable database
+
+**Step 3: Explore Results**
+- **Review Tab**: See all extracted claims with importance scores
+- **Speaker Attribution**: Assign names to speakers and correct any mistakes
+- **Claim Search**: Search across all your processed content
+
+### The 7 Tabs Explained
+
+1. **Introduction**: Quick tour and getting started guide
+2. **Transcribe**: Upload YouTube URLs or local files for processing
+3. **Summarize**: Extract knowledge from transcripts or documents
+4. **Review**: Browse and edit extracted claims, organized by importance
+5. **Upload**: Optional cloud storage backup (future feature)
+6. **Monitor**: Watch folders for automatic processing of new files
+7. **Settings**: Configure API keys, models, and preferences
+
+### Supported File Types
+
+**Audio/Video**: MP4, MOV, MP3, WAV, M4A, WEBM, and more  
+**Documents**: PDF, DOCX, DOC, RTF, TXT, Markdown  
+**Batch**: Process entire folders at once
+
+## Common Use Cases
+
+### Research & Learning
+Process lecture recordings, research papers, and academic content:
+- Extract key claims and concepts from hours of content
+- Build a searchable knowledge base of insights
+- Connect related ideas across multiple sources
+- Export to Obsidian or other knowledge management tools
 
 ### Content Analysis
-- Podcast and video content analysis
-- Multi-speaker conversation processing
-- Claim verification and fact-checking
-- Relationship mapping between ideas
+Analyze podcasts, interviews, and video content:
+- Identify who said what with automatic speaker identification
+- Extract important statements with confidence scores
+- Organize by topics and categories automatically
+- Find connections between different episodes or videos
+
+### Business & Professional
+Process meetings, presentations, and training materials:
+- Create searchable archives of team knowledge
+- Track key insights and decisions from meetings
+- Build internal knowledge bases from training content
+- Export structured data for reporting and analysis
 
 ### Personal Knowledge Management
-- Organize learning materials
-- Build personal knowledge bases
-- Track insights across multiple sources
-- Integrate with Obsidian workflows
+Organize your learning and reference materials:
+- Process educational videos and podcasts
+- Build personal knowledge graphs
+- Connect concepts across different sources
+- Export to your preferred note-taking system
 
-## System 2 Architecture
+## Configuration
 
-Skipthepodcast.com v3.4.0 introduces System 2, a production-grade architecture designed for reliability and observability:
+### API Keys & Models
 
-### Core Components
+The app can use different AI providers:
 
-**1. Job Orchestration (`System2Orchestrator`)**
-- Persistent job records with unique IDs
-- Checkpoint save/restore for resumability
-- Auto-process chaining between pipeline stages
-- Failed job retry with exponential backoff
+- **Local Models** (Recommended): Uses Ollama with Qwen models - works offline, free, private
+- **OpenAI**: GPT-4, GPT-3.5 for cloud-based processing
+- **Anthropic**: Claude models for cloud-based processing
 
-**2. LLM Adapter (`LLMAdapter`)**
-- Centralized API management for all providers
-- Hardware-aware concurrency limits
-- Memory-based throttling (70% threshold)
-- Cost tracking and estimation
+**Setting Up Local Models:**
+1. Install [Ollama](https://ollama.ai) if you haven't already
+2. Download a Qwen model: `ollama pull qwen2.5:7b-instruct`
+3. The app automatically detects available models
+4. Models are selected based on your Mac's capabilities
 
-**3. Database Layer**
-- SQLite with WAL mode for concurrency
-- New tables: `job`, `job_run`, `llm_request`, `llm_response`
-- Optimistic locking with `updated_at` columns
-- Complete audit trail of all operations
+**Hardware-Aware Model Selection:**
+- The app automatically picks the best model for your Mac
+- M2/M3 Ultra: Larger, more capable models
+- Base M1/M2: Optimized smaller models
+- Everything configured automatically - no technical knowledge needed
 
-**4. Structured Logging (`System2Logger`)**
-- JSON-formatted logs with correlation IDs
-- Error taxonomy (HIGH/MEDIUM/LOW severity)
-- Performance metrics on every operation
-- Integration with log aggregation tools
+### Processing Options
 
-**5. Schema Validation**
-- Versioned JSON schemas in `/schemas/` directory
-- Automatic repair of malformed LLM outputs
-- Type safety for all pipeline data
+**Speaker Diarization:**
+- Automatically enabled for audio/video files
+- Identifies when different people are speaking
+- Can be disabled in settings if you don't need it
 
-### Benefits
+**Pipeline Mode:**
+- Check "Process automatically through entire pipeline" to:
+  1. Transcribe → Extract knowledge → Organize in one go
+  2. No manual steps required
+  3. Perfect for batch processing
 
-- **Reliability**: Jobs resume automatically after failures
-- **Observability**: Complete visibility into system behavior
-- **Cost Control**: Track and limit LLM API usage
-- **Performance**: Optimized for your specific hardware
-- **Maintainability**: Consistent patterns across codebase
+**Output Settings:**
+- Choose where transcribed files are saved
+- Configure export formats (Markdown, JSON, CSV, etc.)
+- Set up Obsidian integration paths
 
-For detailed operations guide, see [OPERATIONS.md](OPERATIONS.md).
+## YouTube Bulk Processing
 
-## Installation & Setup
+For processing large numbers of YouTube videos, the app supports cookie-based authentication:
 
-### System Requirements
-- **macOS 10.15+** (Catalina or later)
-- **8GB RAM minimum** (16GB+ recommended)
-- **2GB free disk space** 
-- **Apple Silicon or Intel Mac** (Apple Silicon recommended)
+**Setup Steps:**
+1. Create a throwaway Google account (never use your main account)
+2. Log into YouTube with the throwaway account
+3. Export cookies using a browser extension (Netscape format)
+4. In the app, enable cookie authentication and upload your cookie file
+5. Configure rate limiting (3-5 minute delays recommended)
 
-### Installation Options
+**Why Use Cookies?**
+- More reliable downloads for large batches
+- Reduces rate limiting issues
+- Designed for processing 100+ videos
+- Cookies stay local - never shared with anyone
 
-**Option 1: DMG Installation (Recommended)**
-1. Download the latest DMG from releases (~600MB)
-2. Mount and copy to Applications
-3. Right-click → Open to bypass Gatekeeper
-4. All models and dependencies pre-bundled
-
-**Option 2: Manual Installation**
-```bash
-git clone https://github.com/your-repo/knowledge_chipper.git
-cd knowledge_chipper
-pip install -e ".[full]"
-knowledge-system gui
-```
-
-### Intelligent Updates & Caching
-
-Skip the Podcast Desktop features an intelligent component caching system that makes updates fast and efficient:
-
-**🚀 Smart Update System:**
-- **Daily patches**: Only download changed app code (~940KB)
-- **Large components**: Python, AI models, FFmpeg cached until version changes
-- **Automatic detection**: System knows what needs updating
-- **Bandwidth efficient**: 99.7% reduction in update downloads
-
-**💡 Recommendation:**
-Enable **"Check for updates on startup"** in the app settings to get the latest features and improvements automatically. The intelligent caching system ensures updates are lightning-fast, typically downloading only the small app code changes rather than re-downloading large components.
-
-### First Run Setup
-1. Configure API keys for your preferred LLM provider
-2. Test with a short audio file
-3. Ready to process your content!
-
-### YouTube Bulk Downloads Setup
-
-For processing large batches of YouTube videos, the app supports cookie-based authentication with throwaway accounts:
-
-**Step 1: Create Throwaway Google Account**
-- Create a new Google account specifically for YouTube downloads
-- **Never use your main Google account** for bulk downloads
-
-**Step 2: Export Cookies**
-1. Open incognito/private browser window
-2. Log into throwaway Google account
-3. Install "Get cookies.txt" browser extension (or similar)
-4. Navigate to YouTube and export cookies to Netscape format (.txt file)
-
-**Step 3: Configure in App**
-1. Open "Transcribe" tab
-2. Check "Enable cookie-based authentication"
-3. Click "Browse..." and select your cookies.txt file
-4. Check "Disable proxies when cookies enabled" (recommended for home IP)
-5. Configure rate limiting:
-   - **Min delay**: 180 seconds (3 minutes) - default
-   - **Max delay**: 300 seconds (5 minutes) - default
-   - **Randomization**: 25% - adds ±25% jitter to delays
-
-**Step 4: Bulk Download**
-1. Paste YouTube URLs (one per line) or entire playlist URL
-2. Click "Start Transcription"
-3. Downloads proceed sequentially with randomized delays
-4. Processing continues automatically if "Process through entire pipeline" is checked
-
-**Security Notes:**
-- ✅ Browser extraction is **disabled** to prevent accidentally using main account
-- ✅ Only manual cookie file upload is supported
-- ✅ Cookies stay local - never transmitted except to YouTube
-- ✅ Rate limiting prevents account flags from YouTube
-- ✅ Sequential downloads mimic human behavior
-
-**Troubleshooting:**
-- **Bot detection errors**: Increase min/max delays (try 5-10 minutes)
-- **Cookie expiration**: Re-export cookies from throwaway account
-- **Account flags**: Stop downloads for 24 hours, then resume with longer delays
-
-## Performance & Hardware
-
-### Recommended Hardware
-- **Apple M2/M3**: Optimal performance with MPS acceleration
-- **16GB+ RAM**: For large files and batch processing
-- **SSD Storage**: Fast I/O for temporary files
-- **GPU**: Apple Silicon or NVIDIA for acceleration
-
-### Processing Performance
-- **Transcription**: 2-15 minutes per hour of audio (model dependent)
-- **Analysis**: 30-90 seconds per 10k words (model dependent)
-- **Voice Fingerprinting**: Near real-time on Apple Silicon
-- **Batch Processing**: Linear scaling with parallel workers
+**Security:**
+- Browser extraction disabled to prevent using your main account
+- Only manual cookie file upload supported
+- Use a throwaway account exclusively for bulk downloads
 
 ## Troubleshooting
 
 ### Common Issues
-- **Installation**: Right-click → Open to bypass Gatekeeper warnings
-- **API Errors**: Verify API keys and model access in API Keys tab
-- **Poor Quality**: Use larger models for better accuracy
-- **Performance**: Enable GPU acceleration in settings
+
+**Installation Warnings:**
+- macOS may show a security warning on first launch
+- Right-click the app → Open to bypass Gatekeeper
+- This is normal for apps not distributed through the App Store
+
+**Processing Stuck or Slow:**
+- Check that Ollama is running (if using local models)
+- Larger files take longer - a 1-hour video may take 10-15 minutes
+- Check available disk space - processing creates temporary files
+
+**Speaker Identification Issues:**
+- If speakers aren't being identified correctly, manually assign names
+- The app learns from your corrections and improves over time
+- Enable speaker diarization in settings if it's disabled
+
+**API Errors:**
+- Verify your API keys in the Settings tab
+- Check that the selected model is available
+- For local models, ensure Ollama is running and the model is downloaded
 
 ### Getting Help
-- Check the `/docs` directory for detailed documentation
-- Review processing reports for specific error messages
-- Use the built-in model refresh to update available options
-- Consult the CHANGELOG.md for version-specific information
-- See OPERATIONS.md for System 2 operational guidance
-- Review Architecture Decision Records in `/docs/adr/`
+
+- Check the `/docs` directory for detailed technical documentation
+- Review processing logs in the app for specific error messages
+- See `CHANGELOG.md` for version-specific information
 
 ---
 
-**Ready to transform your content into structured knowledge?** Download Skipthepodcast.com and start extracting insights from your audio, video, and document libraries today.
+**Ready to get started?** Download Skipthepodcast.com and begin transforming your content into structured knowledge today.
 
-For technical documentation, troubleshooting, and advanced configuration, see the `/docs` directory and `CHANGELOG.md` for detailed feature history.
+For developers and technical details, see the `/docs` directory and `CHANGELOG.md`.

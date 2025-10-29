@@ -76,15 +76,12 @@ class DownloadCleanupService:
 
         try:
             with self.db_service.get_session() as session:
-                from ..database.models import Video
+                from ..database import MediaSource
 
-                # Get all videos marked as having audio downloaded
+                # Get all videos with audio_file_path set (claim-centric schema doesn't track audio_downloaded)
                 videos_with_audio = (
-                    session.query(Video)
-                    .filter(
-                        Video.audio_downloaded == True,  # noqa: E712
-                        Video.audio_file_path.isnot(None),
-                    )
+                    session.query(MediaSource)
+                    .filter(MediaSource.audio_file_path.isnot(None))
                     .all()
                 )
 
@@ -92,28 +89,20 @@ class DownloadCleanupService:
                     audio_path = Path(video.audio_file_path)
                     if not audio_path.exists():
                         logger.warning(
-                            f"Audio file missing for {video.video_id}: {video.audio_file_path}"
+                            f"Audio file missing for {video.source_id}: {video.audio_file_path}"
                         )
                         self.cleanup_report["missing_audio_files"].append(
                             {
-                                "video_id": video.video_id,
+                                "video_id": video.source_id,
                                 "title": video.title,
                                 "url": video.url,
                                 "expected_path": video.audio_file_path,
                             }
                         )
-
-                        # Mark for audio retry
-                        video.audio_downloaded = False
-                        video.needs_audio_retry = True
-                        session.commit()
-
-                        self.cleanup_report["actions_taken"].append(
-                            f"Marked {video.video_id} for audio retry (file missing)"
-                        )
+                        # Note: Retry tracking not available in claim-centric schema
 
                 logger.info(
-                    f"Validated {len(videos_with_audio)} videos with audio. "
+                    f"Validated {len(videos_with_audio)} videos with audio paths. "
                     f"Found {len(self.cleanup_report['missing_audio_files'])} missing files."
                 )
 
@@ -139,12 +128,12 @@ class DownloadCleanupService:
 
             # Get all audio file paths from database
             with self.db_service.get_session() as session:
-                from ..database.models import Video
+                from ..database import MediaSource
 
                 db_audio_paths = {
                     row[0]
-                    for row in session.query(Video.audio_file_path)
-                    .filter(Video.audio_file_path.isnot(None))
+                    for row in session.query(MediaSource.audio_file_path)
+                    .filter(MediaSource.audio_file_path.isnot(None))
                     .all()
                 }
 
@@ -183,14 +172,10 @@ class DownloadCleanupService:
             for video in incomplete:
                 self.cleanup_report["incomplete_videos"].append(
                     {
-                        "video_id": video.video_id,
+                        "video_id": video.source_id,
                         "title": video.title,
                         "url": video.url,
-                        "audio_downloaded": video.audio_downloaded,
-                        "metadata_complete": video.metadata_complete,
-                        "retry_count": video.retry_count,
-                        "needs_metadata_retry": video.needs_metadata_retry,
-                        "needs_audio_retry": video.needs_audio_retry,
+                        # Note: Completion tracking columns not available in claim-centric schema
                     }
                 )
 
@@ -209,16 +194,10 @@ class DownloadCleanupService:
             for video in failed:
                 self.cleanup_report["failed_videos"].append(
                     {
-                        "video_id": video.video_id,
+                        "video_id": video.source_id,
                         "title": video.title,
                         "url": video.url,
-                        "retry_count": video.retry_count,
-                        "failure_reason": video.failure_reason,
-                        "last_retry_at": (
-                            video.last_retry_at.isoformat()
-                            if video.last_retry_at
-                            else None
-                        ),
+                        # Note: Retry tracking columns not available in claim-centric schema
                     }
                 )
 
@@ -237,12 +216,10 @@ class DownloadCleanupService:
             for video in needing_retry:
                 self.cleanup_report["videos_needing_retry"].append(
                     {
-                        "video_id": video.video_id,
+                        "video_id": video.source_id,
                         "title": video.title,
                         "url": video.url,
-                        "needs_metadata_retry": video.needs_metadata_retry,
-                        "needs_audio_retry": video.needs_audio_retry,
-                        "retry_count": video.retry_count,
+                        # Note: Retry tracking columns not available in claim-centric schema
                     }
                 )
 

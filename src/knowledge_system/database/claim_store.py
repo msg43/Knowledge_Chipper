@@ -10,8 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ..processors.hce.types import PipelineOutputs
-from .claim_models import (
+from ..processors.hce.types import Milestone, PipelineOutputs
+from .models import (
     Claim,
     ClaimCategory,
     ClaimConcept,
@@ -28,7 +28,6 @@ from .claim_models import (
     JargonEvidence,
     JargonTerm,
     MediaSource,
-    Milestone,
     Person,
     PersonEvidence,
     PersonExternalId,
@@ -74,17 +73,64 @@ class ClaimStore:
         """
         with self.db_service.get_session() as session:
             # 1. Ensure source exists
-            source = session.query(MediaSource).filter_by(source_id=source_id).first()
+            # MediaSource might not exist if using old schema - handle gracefully
+            try:
+                source = (
+                    session.query(MediaSource).filter_by(source_id=source_id).first()
+                )
+            except Exception as e:
+                # If MediaSource table doesn't have source_id column, handle gracefully
+                logger.warning(f"MediaSource query failed (might be old schema): {e}")
+                session.rollback()  # Rollback before trying again
+                source = None
+
             if not source:
                 logger.info(f"Creating new source: {source_id}")
-                source = MediaSource(
-                    source_id=source_id,
-                    source_type=source_type,
-                    title=episode_title or source_id,
-                    url=f"local://{source_id}",
-                )
-                session.add(source)
-                session.flush()
+                try:
+                    source = MediaSource(
+                        source_id=source_id,
+                        source_type=source_type,
+                        title=episode_title or source_id,
+                        url=f"local://{source_id}",
+                    )
+                    session.add(source)
+                    session.flush()
+                except Exception as e:
+                    # If MediaSource model doesn't work, rollback and use raw SQL
+                    logger.warning(
+                        f"MediaSource model creation failed: {e}, using raw SQL"
+                    )
+                    session.rollback()  # Rollback before raw SQL
+                    from sqlalchemy import text
+
+                    try:
+                        session.execute(
+                            text(
+                                """
+                            INSERT OR IGNORE INTO media_sources (source_id, source_type, title, url)
+                            VALUES (:source_id, :source_type, :title, :url)
+                        """
+                            ),
+                            {
+                                "source_id": source_id,
+                                "source_type": source_type,
+                                "title": episode_title or source_id,
+                                "url": f"local://{source_id}",
+                            },
+                        )
+                        session.commit()
+                        # Reload source in new transaction
+                        source = (
+                            session.query(MediaSource)
+                            .filter_by(source_id=source_id)
+                            .first()
+                        )
+                    except Exception as e2:
+                        logger.error(
+                            f"Failed to create MediaSource even with raw SQL: {e2}"
+                        )
+                        session.rollback()
+                        raise  # Re-raise - cannot proceed without source
 
             # 2. If episode type, create/update episode
             episode_id = None
@@ -95,6 +141,9 @@ class ClaimStore:
                 )
 
                 if not episode:
+                    logger.info(
+                        f"Creating new episode: {episode_id} (source_id={source_id})"
+                    )
                     episode = Episode(
                         episode_id=episode_id,
                         source_id=source_id,
@@ -102,14 +151,20 @@ class ClaimStore:
                         recorded_at=recorded_at,
                     )
                     session.add(episode)
+                    session.flush()  # Flush to get episode in DB before updating
+                else:
+                    logger.info(f"Updating existing episode: {episode_id}")
 
                 # Update summaries
                 episode.short_summary = outputs.short_summary
                 episode.long_summary = outputs.long_summary
-                episode.input_length = len(outputs.short_summary or "") + sum(
-                    len(s.text)
-                    for s in outputs.episode.segments
-                    if hasattr(outputs, "episode")
+
+                # Calculate input_length from segments stored in database
+                # PipelineOutputs doesn't include segments, so we get them from the database
+                segments = session.query(Segment).filter_by(episode_id=episode_id).all()
+                input_text_length = sum(len(s.text or "") for s in segments)
+                episode.input_length = (
+                    len(outputs.short_summary or "") + input_text_length
                 )
                 episode.output_length = len(outputs.long_summary or "")
 
@@ -118,7 +173,8 @@ class ClaimStore:
                         episode.output_length / episode.input_length
                     )
 
-                session.flush()
+                session.flush()  # Ensure episode updates are flushed
+                logger.info(f"Episode {episode_id} updated/created successfully")
 
             # 3. Store milestones (chapter/section markers with timestamps)
             if hasattr(outputs, "milestones") and outputs.milestones:

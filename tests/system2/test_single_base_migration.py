@@ -13,6 +13,19 @@ from src.knowledge_system.database.models import Base
 
 def test_all_models_accessible_from_unified_base():
     """Verify all models are accessible from the unified Base."""
+    # Ensure all tables are registered by importing System2 models
+    from src.knowledge_system.database import DatabaseService
+    from src.knowledge_system.database.system2_models import (  # noqa: F401
+        Job,
+        JobRun,
+        LLMRequest,
+        LLMResponse,
+    )
+
+    # Create database to register all tables
+    db_service = DatabaseService("sqlite:///:memory:")
+    Base.metadata.create_all(db_service.engine)
+
     tables = Base.metadata.tables.keys()
 
     # Core models (MainBase)
@@ -24,7 +37,6 @@ def test_all_models_accessible_from_unified_base():
     assert "processing_jobs" in tables
     assert "bright_data_sessions" in tables
     assert "claim_tier_validations" in tables
-    assert "quality_ratings" in tables
     assert "quality_metrics" in tables
 
     # HCE models
@@ -32,7 +44,7 @@ def test_all_models_accessible_from_unified_base():
     assert "claims" in tables
     assert "people" in tables
     assert "concepts" in tables
-    assert "jargon" in tables
+    assert "jargon_terms" in tables
 
     # System2 models
     assert "job" in tables
@@ -63,28 +75,24 @@ def test_in_memory_database_creation():
 
 
 def test_cross_base_foreign_key_resolution():
-    """Test that Episode.video_id → MediaSource.media_id FK resolves correctly."""
+    """Test that Episode.source_id → MediaSource.source_id FK resolves correctly."""
     from src.knowledge_system.database.models import Episode, MediaSource
 
     # Check that Episode has the foreign key
     episode_table = Base.metadata.tables["episodes"]
-    assert "video_id" in episode_table.columns
+    assert "source_id" in episode_table.columns
 
     # Check that the FK references media_sources
     fk = list(episode_table.foreign_keys)[0]
     assert fk.column.table.name == "media_sources"
-    assert fk.column.name == "media_id"
+    assert fk.column.name == "source_id"
 
 
 def test_hce_models_in_unified_base():
     """Test that all HCE models are in the unified Base."""
-    from src.knowledge_system.database.models import (
-        Claim,
-        Concept,
-        Episode,
-        Jargon,
-        Person,
-    )
+    from src.knowledge_system.database.models import Claim, Concept, Episode
+    from src.knowledge_system.database.models import JargonTerm as Jargon
+    from src.knowledge_system.database.models import Person
 
     # Verify all models use the same Base
     assert Episode.__table__.metadata is Base.metadata
@@ -117,6 +125,11 @@ def test_speaker_models_in_unified_base():
 def test_system2_models_in_unified_base():
     """Test that all System2 models are in the unified Base."""
     # System2 models are imported through system2_models.py
+    # Create tables to ensure they're registered in metadata
+    from src.knowledge_system.database import DatabaseService
+
+    # Import Base from models to ensure metadata is populated
+    from src.knowledge_system.database.models import Base
     from src.knowledge_system.database.system2_models import (
         Job,
         JobRun,
@@ -124,33 +137,14 @@ def test_system2_models_in_unified_base():
         LLMResponse,
     )
 
+    db_service = DatabaseService("sqlite:///:memory:")
+    Base.metadata.create_all(db_service.engine)
+
     # Verify all models use the same Base
     assert Job.__table__.metadata is Base.metadata
     assert JobRun.__table__.metadata is Base.metadata
     assert LLMRequest.__table__.metadata is Base.metadata
     assert LLMResponse.__table__.metadata is Base.metadata
-
-
-def test_backward_compatibility_hce_imports():
-    """Test that old imports from hce_models still work."""
-    from src.knowledge_system.database.hce_models import Base as HCEBase
-    from src.knowledge_system.database.hce_models import (
-        Claim,
-        Concept,
-        Episode,
-        Jargon,
-        Person,
-    )
-
-    # Verify they're the same Base
-    assert HCEBase is Base
-
-    # Verify models are accessible
-    assert Episode is not None
-    assert Claim is not None
-    assert Person is not None
-    assert Concept is not None
-    assert Jargon is not None
 
 
 def test_backward_compatibility_speaker_imports():
@@ -204,8 +198,8 @@ def test_bidirectional_relationships():
     # Check MediaSource has episodes relationship
     assert hasattr(MediaSource, "episodes")
 
-    # Check Episode has media_source relationship
-    assert hasattr(Episode, "media_source")
+    # Check Episode has source relationship (claim-centric schema)
+    assert hasattr(Episode, "source")
 
 
 def test_create_episode_with_media_source():
@@ -215,9 +209,9 @@ def test_create_episode_with_media_source():
     from src.knowledge_system.database.models import Episode, MediaSource
 
     with db_service.get_session() as session:
-        # Create a media source
+        # Create a media source (claim-centric schema uses source_id)
         media_source = MediaSource(
-            media_id="test_video_123",
+            source_id="test_video_123",
             source_type="youtube",
             title="Test Video",
             url="https://youtube.com/watch?v=test_video_123",
@@ -225,10 +219,10 @@ def test_create_episode_with_media_source():
         session.add(media_source)
         session.flush()
 
-        # Create an episode that references it
+        # Create an episode that references it (claim-centric schema uses source_id)
         episode = Episode(
             episode_id="episode_test_123",
-            video_id="test_video_123",
+            source_id="test_video_123",
             title="Test Episode",
         )
         session.add(episode)
@@ -239,11 +233,11 @@ def test_create_episode_with_media_source():
             session.query(Episode).filter_by(episode_id="episode_test_123").first()
         )
         assert retrieved_episode is not None
-        assert retrieved_episode.video_id == "test_video_123"
+        assert retrieved_episode.source_id == "test_video_123"
 
         # Verify the relationship works
-        assert retrieved_episode.media_source is not None
-        assert retrieved_episode.media_source.media_id == "test_video_123"
+        assert retrieved_episode.source is not None
+        assert retrieved_episode.source.source_id == "test_video_123"
 
 
 def test_all_foreign_keys_resolve():

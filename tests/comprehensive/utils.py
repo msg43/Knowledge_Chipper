@@ -58,10 +58,14 @@ def process_events_for(milliseconds: int):
     """Process Qt events for specified duration."""
     app = QApplication.instance()
     if app:
-        timer = QTimer()
-        timer.timeout.connect(app.quit)
-        timer.start(milliseconds)
-        app.exec()
+        # Process events multiple times during the duration
+        # to ensure signals are delivered
+        import time
+
+        end_time = time.time() + (milliseconds / 1000.0)
+        while time.time() < end_time:
+            app.processEvents()
+            time.sleep(0.01)  # Small sleep to prevent CPU spinning
 
 
 def find_button_by_text(parent, text: str) -> QPushButton | None:
@@ -111,48 +115,110 @@ def get_summarize_tab(main_window):
 def add_file_to_transcribe(transcribe_tab, file_path: Path) -> bool:
     """Add file to transcription queue."""
     try:
-        # Find file input widget
-        file_input = transcribe_tab.findChild(QLineEdit)
-        if file_input:
-            file_input.setText(str(file_path))
+        # Find the file list widget (QListWidget named 'transcription_files')
+        from PyQt6.QtWidgets import QApplication, QListWidget
+
+        file_list = getattr(transcribe_tab, "transcription_files", None)
+        if file_list is None:
+            # Try finding it as a child
+            file_lists = transcribe_tab.findChildren(QListWidget)
+            file_list = file_lists[0] if file_lists else None
+
+        if file_list:
+            file_list.addItem(str(file_path))
+            # Process events to ensure the item is added
+            app = QApplication.instance()
+            if app:
+                app.processEvents()
             return True
         return False
-    except Exception:
+    except Exception as e:
+        print(f"Error adding file to transcribe: {e}")
+        import traceback
+
+        traceback.print_exc()
         return False
 
 
 def add_file_to_summarize(summarize_tab, file_path: Path) -> bool:
     """Add file to summarization queue."""
     try:
-        # Find file input widget
-        file_input = summarize_tab.findChild(QLineEdit)
-        if file_input:
-            file_input.setText(str(file_path))
+        # Find the file list widget
+        from PyQt6.QtWidgets import QListWidget
+
+        file_list = getattr(summarize_tab, "file_list", None)
+        if file_list is None:
+            # Try finding it as a child
+            file_lists = summarize_tab.findChildren(QListWidget)
+            file_list = file_lists[0] if file_lists else None
+
+        if file_list:
+            file_list.addItem(str(file_path))
             return True
         return False
-    except Exception:
+    except Exception as e:
+        print(f"Error adding file to summarize: {e}")
         return False
 
 
 def wait_for_completion(tab, timeout_seconds: int = 300) -> bool:
     """Wait for processing to complete."""
+    import time
 
-    def is_complete():
-        # Check if processing is complete
-        if hasattr(tab, "is_processing"):
-            return not tab.is_processing()
+    from PyQt6.QtWidgets import QApplication
 
-        # Check output text for completion indicators
+    start_time = time.time()
+
+    while time.time() - start_time < timeout_seconds:
+        # Process events to ensure signals are delivered
+        app = QApplication.instance()
+        if app:
+            app.processEvents()
+
+        # Check if worker thread is running
+        worker_running = False
+        if hasattr(tab, "transcription_worker") and tab.transcription_worker:
+            if hasattr(tab.transcription_worker, "isRunning"):
+                worker_running = tab.transcription_worker.isRunning()
+
+        # If worker is NOT running, check for completion
+        if not worker_running:
+            # Check output text for completion indicators
+            if hasattr(tab, "output_text"):
+                output = tab.output_text.toPlainText()
+                completion_words = [
+                    "complete",
+                    "finished",
+                    "done",
+                    "success",
+                    "✅",
+                    "transcribed",
+                    "saved successfully",
+                ]
+                if any(word in output.lower() for word in completion_words):
+                    return True
+
+            # If no completion message but worker finished, might be done
+            if hasattr(tab, "transcription_worker") and tab.transcription_worker:
+                if hasattr(tab.transcription_worker, "isFinished"):
+                    if tab.transcription_worker.isFinished():
+                        # Worker finished - check if there's any output
+                        if hasattr(tab, "output_text"):
+                            output = tab.output_text.toPlainText()
+                            if len(output) > 100:  # Has some output
+                                return True
+
+        # Check for error indicators
         if hasattr(tab, "output_text"):
             output = tab.output_text.toPlainText()
-            return any(
-                word in output.lower()
-                for word in ["complete", "finished", "done", "success"]
-            )
+            error_words = ["error", "failed", "❌", "exception", "critical"]
+            if any(word in output.lower() for word in error_words):
+                return True
 
-        return False
+        # Small sleep to prevent CPU spinning
+        time.sleep(0.1)
 
-    return wait_until(is_complete, timeout_seconds)
+    return False
 
 
 def check_ollama_running() -> bool:

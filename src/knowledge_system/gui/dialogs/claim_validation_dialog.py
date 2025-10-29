@@ -554,25 +554,18 @@ class ClaimValidationDialog(QDialog):
             db = DatabaseService()
 
             for result in results:
-                # Save claim tier validation
-                rating_id = db.save_quality_rating(
-                    content_type="claim_tier",
-                    content_id=result["claim_id"],
-                    user_rating=self._tier_to_rating(result["validated_tier"]),
-                    criteria_scores={"tier_validation": 1.0},
-                    user_feedback=f"Tier validation: {result['original_tier']} -> {result['validated_tier']}",
-                    llm_rating=self._tier_to_rating(result["original_tier"]),
-                    is_user_corrected=result["was_modified"],
-                    model_used="hce_system",
-                    input_characteristics={
-                        "claim_text": result["claim_text"],
-                        "claim_type": result["claim_type"],
-                        "original_tier": result["original_tier"],
-                        "validated_tier": result["validated_tier"],
-                    },
+                # Save claim tier validation using ClaimTierValidation model
+                validation_id = db.save_claim_tier_validation(
+                    claim_id=result["claim_id"],
+                    episode_id=result.get("episode_id", ""),
+                    original_tier=result["original_tier"],
+                    validated_tier=result["validated_tier"],
+                    claim_text=result.get("claim_text", ""),
+                    claim_type=result.get("claim_type"),
+                    validated_by_user=result.get("validated_by_user"),
                 )
 
-                logger.info(f"Saved claim validation: {rating_id}")
+                logger.info(f"Saved claim validation: {validation_id}")
 
         except Exception as e:
             logger.error(f"Failed to save validation results: {e}")

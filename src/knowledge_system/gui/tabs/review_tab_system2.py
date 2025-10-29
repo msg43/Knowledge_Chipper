@@ -30,16 +30,40 @@ from PyQt6.QtWidgets import (
 )
 
 from ...database import DatabaseService
-from ...database.hce_models import Claim, Episode
+
+# Use models for claim-centric schema compatibility
+from ...database.models import Claim, Episode
 from ...logger import get_logger
 
 logger = get_logger(__name__)
 
 
 def extract_scores(claim: Claim) -> dict[str, Any]:
-    """Helper to extract scores_json from a claim."""
+    """Helper to extract scores from a claim (handles both old scores_json and new separate columns)."""
     scores = {}
-    if claim.scores_json:
+    # Try claim-centric schema first (separate score columns)
+    if hasattr(claim, "importance_score") and claim.importance_score is not None:
+        scores["importance"] = (
+            int(claim.importance_score * 10)
+            if claim.importance_score <= 1.0
+            else int(claim.importance_score)
+        )
+        scores["specificity"] = (
+            int(claim.specificity_score * 10)
+            if hasattr(claim, "specificity_score")
+            and claim.specificity_score
+            and claim.specificity_score <= 1.0
+            else 5
+        )
+        scores["confidence"] = (
+            int(claim.verifiability_score * 10)
+            if hasattr(claim, "verifiability_score")
+            and claim.verifiability_score
+            and claim.verifiability_score <= 1.0
+            else 5
+        )
+    # Fallback to old scores_json if present
+    elif hasattr(claim, "scores_json") and claim.scores_json:
         if isinstance(claim.scores_json, str):
             try:
                 scores = json.loads(claim.scores_json)
@@ -47,6 +71,9 @@ def extract_scores(claim: Claim) -> dict[str, Any]:
                 scores = {}
         elif isinstance(claim.scores_json, dict):
             scores = claim.scores_json
+    # Default scores if nothing found
+    if not scores:
+        scores = {"importance": 5, "novelty": 5, "confidence": 5}
     return scores
 
 
@@ -164,22 +191,35 @@ class ClaimEditDialog(QDialog):
 
     def get_updated_values(self) -> dict[str, Any]:
         """Get the updated claim values."""
-        # Get existing scores or create new dict
-        scores = extract_scores(self.claim).copy() if self.claim.scores_json else {}
+        # Get scores from combo boxes (1-10 scale)
+        importance = int(self.importance_combo.currentText())
+        novelty = int(self.novelty_combo.currentText())
+        confidence = int(self.confidence_combo.currentText())
 
-        # Update scores
-        scores["importance"] = int(self.importance_combo.currentText())
-        scores["novelty"] = int(self.novelty_combo.currentText())
-        scores["confidence"] = int(self.confidence_combo.currentText())
-
-        return {
+        # Convert to 0-1 scale for claim-centric schema
+        result = {
             "canonical": self.canonical_edit.toPlainText().strip(),
             "claim_type": self.type_combo.currentText(),
-            "scores_json": scores,
+            "importance_score": importance / 10.0,  # Convert 1-10 to 0-1
+            "specificity_score": novelty / 10.0,  # Novelty maps to specificity
+            "verifiability_score": confidence
+            / 10.0,  # Confidence maps to verifiability
             "first_mention_ts": self.timestamp_edit.text().strip(),
             "upload_status": self.status_combo.currentText(),
             "updated_at": datetime.utcnow(),
         }
+
+        # Also include scores_json for backward compatibility if needed
+        scores = {
+            "importance": importance,
+            "novelty": novelty,
+            "confidence": confidence,
+        }
+        # Only add scores_json if claim has that attribute (old schema)
+        if hasattr(self.claim, "scores_json"):
+            result["scores_json"] = scores
+
+        return result
 
 
 class ClaimsTableModel(QAbstractTableModel):
@@ -349,12 +389,26 @@ class ClaimsTableModel(QAbstractTableModel):
             except (ValueError, TypeError):
                 return False
 
-            # Update scores_json
-            scores = extract_scores(claim).copy() if claim.scores_json else {}
+            # Update scores in claim-centric schema (separate columns)
+            score_val_normalized = score_val / 10.0  # Convert 1-10 to 0-1
 
-            score_key = col_name.lower()
-            scores[score_key] = score_val
-            claim.scores_json = scores
+            if col_name == "Importance":
+                claim.importance_score = score_val_normalized
+            elif col_name == "Novelty":
+                claim.specificity_score = (
+                    score_val_normalized  # Novelty maps to specificity
+                )
+            elif col_name == "Confidence":
+                claim.verifiability_score = (
+                    score_val_normalized  # Confidence maps to verifiability
+                )
+
+            # Also update scores_json for backward compatibility if attribute exists
+            if hasattr(claim, "scores_json"):
+                scores = extract_scores(claim).copy()
+                score_key = col_name.lower()
+                scores[score_key] = score_val
+                claim.scores_json = scores
 
         elif col_name == "Upload Status" and value not in [
             "pending",
@@ -396,10 +450,32 @@ class ClaimsTableModel(QAbstractTableModel):
                     # Update fields
                     db_claim.canonical = claim.canonical
                     db_claim.claim_type = claim.claim_type
-                    db_claim.scores_json = claim.scores_json
                     db_claim.first_mention_ts = claim.first_mention_ts
                     db_claim.upload_status = claim.upload_status
                     db_claim.updated_at = claim.updated_at
+
+                    # Update scores (claim-centric schema uses separate columns)
+                    if (
+                        hasattr(claim, "importance_score")
+                        and claim.importance_score is not None
+                    ):
+                        db_claim.importance_score = claim.importance_score
+                    if (
+                        hasattr(claim, "specificity_score")
+                        and claim.specificity_score is not None
+                    ):
+                        db_claim.specificity_score = claim.specificity_score
+                    if (
+                        hasattr(claim, "verifiability_score")
+                        and claim.verifiability_score is not None
+                    ):
+                        db_claim.verifiability_score = claim.verifiability_score
+
+                    # Also update scores_json for backward compatibility if attribute exists
+                    if hasattr(claim, "scores_json") and hasattr(
+                        db_claim, "scores_json"
+                    ):
+                        db_claim.scores_json = claim.scores_json
 
                 session.commit()
 
@@ -995,6 +1071,10 @@ class ReviewTabSystem2(QWidget):
                         ),
                     }
 
+                # Build scores_json from claim-centric schema scores
+                scores_dict = extract_scores(claim)
+                scores_json_str = json.dumps(scores_dict) if scores_dict else "{}"
+
                 # Build claim upload data
                 claim_upload = ClaimUploadData(
                     claim_id=claim.claim_id,
@@ -1002,9 +1082,11 @@ class ReviewTabSystem2(QWidget):
                     episode_id=claim.episode_id,
                     claim_type=claim.claim_type,
                     tier=claim.tier,
-                    scores_json=claim.scores_json or "{}",
+                    scores_json=scores_json_str,
                     first_mention_ts=claim.first_mention_ts,
-                    inserted_at=str(claim.inserted_at) if claim.inserted_at else None,
+                    inserted_at=str(claim.created_at)
+                    if hasattr(claim, "created_at") and claim.created_at
+                    else None,
                     episode_data=episode_data,
                     evidence_spans=[],
                     people=[],

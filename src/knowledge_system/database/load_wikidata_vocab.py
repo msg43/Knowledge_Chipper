@@ -6,7 +6,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from .claim_models import WikiDataAlias, WikiDataCategory
+from .models import WikiDataAlias, WikiDataCategory
 
 logger = logging.getLogger(__name__)
 

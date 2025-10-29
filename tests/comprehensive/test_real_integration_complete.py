@@ -21,16 +21,72 @@ import pytest
 
 from src.knowledge_system.core.system2_orchestrator import System2Orchestrator
 from src.knowledge_system.database import DatabaseService
-from src.knowledge_system.database.hce_models import Claim, Concept, Jargon, Person
+
+# All models are now unified in models.py with claim-centric schema (source_id)
 
 
 @pytest.fixture
 def test_db_service():
     """Create a test database service with in-memory database."""
-    db_service = DatabaseService("sqlite:///:memory:")
+    # Use shared cache for in-memory DB so all connections see the same data
+    db_service = DatabaseService("sqlite:///:memory:?cache=shared")
 
-    # Create all tables
-    from src.knowledge_system.database.models import Base
+    # DatabaseService creates media_sources with old schema (media_id)
+    # We need to drop and recreate with claim-centric schema (source_id)
+    from sqlalchemy import inspect as sql_inspect
+    from sqlalchemy import text
+
+    with db_service.engine.connect() as conn:
+        # Disable foreign keys temporarily
+        conn.execute(text("PRAGMA foreign_keys=OFF"))
+
+        # Drop tables that have foreign keys to media_sources first
+        # Also drop HCE tables that might reference episodes/media_sources
+        # And drop claim-centric tables that might have wrong schema
+        inspector = sql_inspect(db_service.engine)
+        tables_to_drop = [
+            "bright_data_sessions",
+            "episodes",
+            "generated_files",
+            "moc_extractions",
+            "summaries",
+            "transcripts",
+            # Also drop HCE tables that reference episodes
+            "hce_episodes",
+            "hce_segments",
+            "hce_claims",
+            "hce_evidence_spans",
+            "hce_relations",
+            "hce_people",
+            "hce_concepts",
+            "hce_jargon",
+            "hce_milestones",
+            "hce_structured_categories",
+            # Drop claim-centric tables that might be created with wrong schema
+            "claims",
+            "evidence_spans",
+            "people",
+            "concepts",
+            "jargon",
+            "segments",
+            "source_platform_categories",
+            "source_platform_tags",
+        ]
+        for table in tables_to_drop:
+            conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
+
+        # Drop existing media_sources table (created by DatabaseService with old schema)
+        conn.execute(text("DROP TABLE IF EXISTS media_sources"))
+        conn.commit()
+
+        # Re-enable foreign keys
+        conn.execute(text("PRAGMA foreign_keys=ON"))
+        conn.commit()
+
+    # Create tables from unified Base (claim_models now imports Base from models.py)
+    # This will create media_sources with all columns including audio_downloaded, etc.
+    # All models share the same Base, so tables will be created correctly
+    from src.knowledge_system.database import Base
 
     Base.metadata.create_all(db_service.engine)
 
@@ -278,12 +334,15 @@ class TestRealSystem2Mining:
 
         # Verify data was stored in database
         with test_db_service.get_session() as session:
-            from src.knowledge_system.database.hce_models import Episode
+            # Use claim_models Episode (has source_id) not hce_models Episode (has video_id)
+            from src.knowledge_system.database.models import Episode
 
             episode = session.query(Episode).filter_by(episode_id=episode_id).first()
             assert episode is not None, "Episode should be stored in database"
 
-            # Check that some data was extracted
+            # Check that some data was extracted (use claim_models Claim)
+            from src.knowledge_system.database.models import Claim
+
             claims = session.query(Claim).filter_by(episode_id=episode_id).all()
             assert len(claims) >= 0, "Should have extracted claims"
 
@@ -347,13 +406,15 @@ class TestRealSystem2Mining:
 
         # Check database for stored results
         with test_db_service.get_session() as session:
-            # Should have episode
-            from src.knowledge_system.database.hce_models import Episode
+            # Should have episode (use claim_models Episode)
+            from src.knowledge_system.database.models import Episode
 
             episode = session.query(Episode).filter_by(episode_id=episode_id).first()
             assert episode is not None
 
-            # May or may not have claims depending on LLM output
+            # May or may not have claims depending on LLM output (use claim_models Claim)
+            from src.knowledge_system.database.models import Claim
+
             claims = session.query(Claim).filter_by(episode_id=episode_id).all()
             # Just verify query works
             assert isinstance(claims, list)
@@ -420,9 +481,9 @@ class TestRealSystem2Mining:
 class TestRealUnifiedHCEStorage:
     """Test unified HCE storage with real content."""
 
-    def test_mining_creates_rich_data(self, sample_transcript_file):
+    def test_mining_creates_rich_data(self, test_db_service, sample_transcript_file):
         """Test that mining creates evidence, relations, categories."""
-        orchestrator = System2Orchestrator()
+        orchestrator = System2Orchestrator(test_db_service)
 
         # Create mining job
         job_id = orchestrator.create_job(
@@ -441,91 +502,99 @@ class TestRealUnifiedHCEStorage:
         assert result["status"] == "succeeded"
         assert result["result"]["claims_extracted"] >= 0
 
-        # Verify rich data in database
-        unified_db = (
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "SkipThePodcast"
-            / "unified_hce.db"
-        )
-        assert unified_db.exists()
+        # Verify rich data in test database
+        with test_db_service.get_session() as session:
+            from src.knowledge_system.database.models import (
+                Claim,
+                Concept,
+                EvidenceSpan,
+                Person,
+            )
 
-        conn = sqlite3.connect(unified_db)
-        cursor = conn.cursor()
+            # Check for claims
+            claims_count = (
+                session.query(Claim).filter_by(episode_id="test_episode").count()
+            )
+            assert claims_count >= 0, "Should have claims table"
 
-        # Check for claims
-        cursor.execute("SELECT COUNT(*) FROM claims WHERE episode_id = 'test_episode'")
-        claims_count = cursor.fetchone()[0]
-        assert claims_count >= 0, "Should have claims table"
+            # Check for evidence spans (EvidenceSpan links to claims, not episodes directly)
+            from src.knowledge_system.database.models import Claim
 
-        # Check for evidence spans
-        cursor.execute(
-            "SELECT COUNT(*) FROM evidence_spans WHERE episode_id = 'test_episode'"
-        )
-        evidence_count = cursor.fetchone()[0]
-        assert evidence_count >= 0, "Should have evidence_spans table"
+            claims = session.query(Claim).filter_by(episode_id="test_episode").all()
+            evidence_count = sum(len(claim.evidence_spans) for claim in claims)
+            assert evidence_count >= 0, "Should have evidence_spans table"
 
-        # Check for people mentions
-        cursor.execute("SELECT COUNT(*) FROM people WHERE episode_id = 'test_episode'")
-        people_count = cursor.fetchone()[0]
-        assert people_count >= 0, "Should have people table"
+            # Check for people mentions (Person links through PersonEvidence -> Claim -> episode_id)
+            from src.knowledge_system.database.models import PersonEvidence
 
-        # Check for concepts
-        cursor.execute(
-            "SELECT COUNT(*) FROM concepts WHERE episode_id = 'test_episode'"
-        )
-        concepts_count = cursor.fetchone()[0]
-        assert concepts_count >= 0, "Should have concepts table"
+            people_count = (
+                session.query(Person)
+                .join(PersonEvidence, Person.person_id == PersonEvidence.person_id)
+                .join(Claim, PersonEvidence.claim_id == Claim.claim_id)
+                .filter(Claim.episode_id == "test_episode")
+                .distinct()
+                .count()
+            )
+            assert people_count >= 0, "Should have people table"
 
-        conn.close()
+            # Check for concepts (Concept links through ConceptEvidence -> Claim -> episode_id)
+            from src.knowledge_system.database.models import ConceptEvidence
 
-    def test_context_quotes_populated(self, sample_transcript_file):
+            concepts_count = (
+                session.query(Concept)
+                .join(ConceptEvidence, Concept.concept_id == ConceptEvidence.concept_id)
+                .join(Claim, ConceptEvidence.claim_id == Claim.claim_id)
+                .filter(Claim.episode_id == "test_episode")
+                .distinct()
+                .count()
+            )
+            assert concepts_count >= 0, "Should have concepts table"
+
+    def test_context_quotes_populated(self, test_db_service, sample_transcript_file):
         """Test that context_quote fields are populated."""
-        orchestrator = System2Orchestrator()
+        orchestrator = System2Orchestrator(test_db_service)
 
         job_id = orchestrator.create_job(
             "mine", "test_context_episode", config={"file_path": sample_transcript_file}
         )
 
-        asyncio.run(orchestrator.process_job(job_id))
+        result = asyncio.run(orchestrator.process_job(job_id))
+        assert result.get("status") == "succeeded"
 
-        # Check database
-        unified_db = (
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "SkipThePodcast"
-            / "unified_hce.db"
-        )
-        conn = sqlite3.connect(unified_db)
-        cursor = conn.cursor()
+        # Check test database
+        with test_db_service.get_session() as session:
+            # Verify PersonEvidence has quote field (context_quote is in PersonEvidence, not Person)
+            from src.knowledge_system.database.models import Claim as ClaimModel
+            from src.knowledge_system.database.models import (
+                Concept,
+                Person,
+                PersonEvidence,
+            )
 
-        # Verify context_quote in people (if any people were extracted)
-        cursor.execute(
-            """
-            SELECT name, context_quote FROM people
-            WHERE episode_id = 'test_context_episode'
-            AND context_quote IS NOT NULL
-        """
-        )
-        people_with_quotes = cursor.fetchall()
-        # May be 0 if no people extracted, but structure should exist
-        assert isinstance(people_with_quotes, list)
+            people_with_quotes = (
+                session.query(PersonEvidence)
+                .join(ClaimModel, PersonEvidence.claim_id == ClaimModel.claim_id)
+                .filter(ClaimModel.episode_id == "test_context_episode")
+                .filter(PersonEvidence.quote.isnot(None))
+                .distinct()
+                .all()
+            )
+            # May be 0 if no people extracted, but structure should exist
+            assert isinstance(people_with_quotes, list)
 
-        # Verify context_quote in concepts (if any concepts were extracted)
-        cursor.execute(
-            """
-            SELECT name, context_quote FROM concepts
-            WHERE episode_id = 'test_context_episode'
-            AND context_quote IS NOT NULL
-        """
-        )
-        concepts_with_quotes = cursor.fetchall()
-        # May be 0 if no concepts extracted, but structure should exist
-        assert isinstance(concepts_with_quotes, list)
+            # Verify ConceptEvidence has quote field (concepts don't have context_quote directly)
+            from src.knowledge_system.database.models import ConceptEvidence
 
-        conn.close()
+            concepts_with_quotes = (
+                session.query(ConceptEvidence)
+                .join(ClaimModel, ConceptEvidence.claim_id == ClaimModel.claim_id)
+                .filter(ClaimModel.episode_id == "test_context_episode")
+                .filter(ConceptEvidence.quote.isnot(None))
+                .distinct()
+                .all()
+            )
+            # May be 0 if no concepts extracted, but structure should exist
+            assert isinstance(concepts_with_quotes, list)
 
 
 class TestRealDatabaseValidation:

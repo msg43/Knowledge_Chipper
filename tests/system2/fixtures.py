@@ -16,7 +16,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.knowledge_system.database import Base, DatabaseService
-from src.knowledge_system.database.hce_models import Claim, Episode
+
+# All models are now in models.py (unified Base)
+from src.knowledge_system.database.models import Claim, Episode
 from src.knowledge_system.database.system2_models import (
     Job,
     JobRun,
@@ -217,9 +219,10 @@ def sample_episode(test_db_service):
     episode_id = f"test-episode-{uuid.uuid4().hex[:8]}"
 
     with test_db_service.get_session() as session:
+        # Episode from claim_models uses source_id (not video_id)
         episode = Episode(
             episode_id=episode_id,
-            video_id="test_video_123",
+            source_id="test_video_123",  # models.Episode uses source_id
             title="Test Episode: AI Safety Discussion",
             recorded_at=datetime.utcnow().isoformat(),
         )
@@ -236,19 +239,18 @@ def sample_claim(test_db_service, sample_episode):
     claim_id = f"test-claim-{uuid.uuid4().hex[:8]}"
 
     with test_db_service.get_session() as session:
+        # Claim from models has single PK (claim_id), not composite PK
         claim = Claim(
-            episode_id=sample_episode.episode_id,
             claim_id=claim_id,
+            episode_id=sample_episode.episode_id,  # Still need episode_id for relationship
             canonical="AI safety is a critical concern for modern systems",
             claim_type="normative",
             tier="A",
             first_mention_ts="00:00:00",
-            scores_json={
-                "importance": 8,
-                "novelty": 6,
-                "confidence_final": 9,
-                "stance": "asserts",
-            },
+            # models.Claim uses separate score columns, not scores_json
+            importance_score=0.8,
+            specificity_score=0.6,
+            verifiability_score=0.9,
         )
         session.add(claim)
         session.commit()

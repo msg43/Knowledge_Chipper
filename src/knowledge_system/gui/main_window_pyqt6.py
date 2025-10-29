@@ -260,7 +260,7 @@ class MainWindow(QMainWindow):
         """Set up the streamlined main UI."""
         self.setWindowTitle("Skip the Podcast")
         # Make window resizable with reasonable default size and minimum size
-        self.resize(1200, 800)  # Default size
+        self.resize(1400, 900)  # Default size - larger dimensions for better usability
         self.setMinimumSize(800, 600)  # Minimum size to ensure usability
 
         # Create central widget and main layout
@@ -331,10 +331,20 @@ class MainWindow(QMainWindow):
         # 6. Monitor (renamed from File Watcher)
         # 7. Settings (includes web authentication)
 
-        # 1. Introduction tab
-        introduction_tab = IntroductionTab(self)
-        introduction_tab.navigate_to_tab.connect(self._navigate_to_tab)
-        self.tabs.addTab(introduction_tab, "Introduction")
+        # 1. Introduction tab - conditionally shown based on user preference
+        self.introduction_tab = IntroductionTab(self)
+        self.introduction_tab.navigate_to_tab.connect(self._navigate_to_tab)
+        self.introduction_tab_index = self.tabs.addTab(
+            self.introduction_tab, "Introduction"
+        )
+
+        # Check user preference to hide/show introduction tab
+        show_intro = self.gui_settings.get_checkbox_state(
+            "Settings", "show_introduction_tab", default=True
+        )
+        if not show_intro:
+            # Hide the introduction tab
+            self.tabs.setTabVisible(self.introduction_tab_index, False)
 
         # 2. Transcribe tab (with auto-process checkbox)
         transcription_tab = TranscriptionTab(self)

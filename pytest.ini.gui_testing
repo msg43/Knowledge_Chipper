@@ -1,0 +1,15 @@
+[pytest]
+# GUI Testing Configuration
+# Skip network-dependent tests that hang in offscreen mode
+
+# Skip YouTube URL tests (require proxy configuration and network)
+markers =
+    skip_youtube: marks tests that require YouTube/download functionality (deselect during debugging)
+    skip_network: marks tests that require network access
+
+addopts =
+    -v
+    --tb=short
+    -x
+    --timeout=1800
+    -m "not skip_youtube"

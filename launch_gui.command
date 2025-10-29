@@ -1,9 +1,10 @@
 #!/bin/bash
 
-# Set terminal window size to 206 columns x 43 rows
-osascript -e 'tell application "Terminal" to set bounds of front window to {0, 0, 1200, 800}'
-osascript -e 'tell application "Terminal" to set number of columns of front window to 206'
-osascript -e 'tell application "Terminal" to set number of rows of front window to 43'
+# Set terminal window size to larger dimensions (1400x900)
+# Silently ignore errors if Terminal window doesn't exist or is not accessible
+osascript -e 'tell application "Terminal" to set bounds of front window to {0, 0, 1400, 900}' 2>/dev/null || true
+osascript -e 'tell application "Terminal" to set number of columns of front window to 240' 2>/dev/null || true
+osascript -e 'tell application "Terminal" to set number of rows of front window to 50' 2>/dev/null || true
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"

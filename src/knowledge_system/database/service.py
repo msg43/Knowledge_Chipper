@@ -16,13 +16,21 @@ from sqlalchemy import desc, func, or_, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..logger import get_logger
-from .models import BrightDataSession, ClaimTierValidation, GeneratedFile
-from .models import MediaSource as Video  # Back-compat alias
 from .models import (
+    BrightDataSession,
+    Claim,
+    ClaimRelation,
+    ClaimTierValidation,
+    Concept,
+    Episode,
+    EvidenceSpan,
+    GeneratedFile,
+    JargonTerm,
+    MediaSource,
     MOCExtraction,
+    Person,
     ProcessingJob,
     QualityMetrics,
-    QualityRating,
     Summary,
     Transcript,
     create_all_tables,
@@ -217,13 +225,15 @@ class DatabaseService:
 
     def create_video(
         self, video_id: str, title: str, url: str, **metadata
-    ) -> Video | None:
+    ) -> MediaSource | None:
         """Create a new video record or update existing one for re-runs."""
         try:
             with self.get_session() as session:
-                # Check for existing video
+                # Check for existing video using claim-centric schema (source_id)
                 existing_video = (
-                    session.query(Video).filter(Video.video_id == video_id).first()
+                    session.query(MediaSource)
+                    .filter(MediaSource.source_id == video_id)
+                    .first()
                 )
 
                 if existing_video:
@@ -233,9 +243,7 @@ class DatabaseService:
                     # Update core fields
                     existing_video.title = title
                     existing_video.url = url
-                    existing_video.processed_at = (
-                        datetime.utcnow()
-                    )  # Update processing timestamp
+                    existing_video.processed_at = datetime.utcnow()
 
                     # Update metadata fields
                     for key, value in metadata.items():
@@ -246,8 +254,10 @@ class DatabaseService:
                     logger.info(f"Updated video record: {video_id}")
                     return existing_video
                 else:
-                    # Create new video
-                    video = Video(video_id=video_id, title=title, url=url, **metadata)
+                    # Create new video with claim-centric schema
+                    video = MediaSource(
+                        source_id=video_id, title=title, url=url, **metadata
+                    )
                     session.add(video)
                     session.commit()
                     logger.info(f"Created video record: {video_id}")
@@ -256,11 +266,17 @@ class DatabaseService:
             logger.error(f"Failed to create/update video {video_id}: {e}")
             return None
 
-    def get_video(self, video_id: str) -> Video | None:
-        """Get video by ID."""
+    def get_video(self, video_id: str) -> MediaSource | None:
+        """Get video by ID (using claim-centric schema with source_id)."""
         try:
             with self.get_session() as session:
-                return session.query(Video).filter(Video.video_id == video_id).first()
+                # Use claim_models MediaSource (has source_id)
+                video = (
+                    session.query(MediaSource)
+                    .filter(MediaSource.source_id == video_id)
+                    .first()
+                )
+                return video
         except Exception as e:
             logger.error(f"Failed to get video {video_id}: {e}")
             return None
@@ -269,7 +285,11 @@ class DatabaseService:
         """Update video record."""
         try:
             with self.get_session() as session:
-                video = session.query(Video).filter(Video.video_id == video_id).first()
+                video = (
+                    session.query(MediaSource)
+                    .filter(MediaSource.source_id == video_id)
+                    .first()
+                )
                 if not video:
                     return False
 
@@ -289,7 +309,9 @@ class DatabaseService:
         try:
             with self.get_session() as session:
                 return (
-                    session.query(Video).filter(Video.video_id == video_id).first()
+                    session.query(MediaSource)
+                    .filter(MediaSource.source_id == video_id)
+                    .first()
                     is not None
                 )
         except Exception as e:
@@ -302,27 +324,27 @@ class DatabaseService:
         uploader: str | None = None,
         status: str | None = None,
         limit: int = 100,
-    ) -> list[Video]:
+    ) -> list[MediaSource]:
         """Search videos with filters."""
         try:
             with self.get_session() as session:
-                q = session.query(Video)
+                q = session.query(MediaSource)
 
                 if query:
                     q = q.filter(
                         or_(
-                            Video.title.contains(query),
-                            Video.description.contains(query),
+                            MediaSource.title.contains(query),
+                            MediaSource.description.contains(query),
                         )
                     )
 
                 if uploader:
-                    q = q.filter(Video.uploader.contains(uploader))
+                    q = q.filter(MediaSource.uploader.contains(uploader))
 
                 if status:
-                    q = q.filter(Video.status == status)
+                    q = q.filter(MediaSource.status == status)
 
-                return q.order_by(desc(Video.processed_at)).limit(limit).all()
+                return q.order_by(desc(MediaSource.processed_at)).limit(limit).all()
         except Exception as e:
             logger.error(f"Failed to search videos: {e}")
             return []
@@ -342,7 +364,11 @@ class DatabaseService:
         """Update audio download status for a video."""
         try:
             with self.get_session() as session:
-                video = session.query(Video).filter(Video.video_id == video_id).first()
+                video = (
+                    session.query(MediaSource)
+                    .filter(MediaSource.source_id == video_id)
+                    .first()
+                )
                 if not video:
                     logger.warning(
                         f"Cannot update audio status: video {video_id} not found"
@@ -373,7 +399,11 @@ class DatabaseService:
         """Update metadata completion status for a video."""
         try:
             with self.get_session() as session:
-                video = session.query(Video).filter(Video.video_id == video_id).first()
+                video = (
+                    session.query(MediaSource)
+                    .filter(MediaSource.source_id == video_id)
+                    .first()
+                )
                 if not video:
                     logger.warning(
                         f"Cannot update metadata status: video {video_id} not found"
@@ -405,7 +435,11 @@ class DatabaseService:
         """Mark a video for retry (metadata, audio, or both)."""
         try:
             with self.get_session() as session:
-                video = session.query(Video).filter(Video.video_id == video_id).first()
+                video = (
+                    session.query(MediaSource)
+                    .filter(MediaSource.source_id == video_id)
+                    .first()
+                )
                 if not video:
                     logger.warning(f"Cannot mark for retry: video {video_id} not found")
                     return False
@@ -436,56 +470,56 @@ class DatabaseService:
 
     def get_videos_needing_retry(
         self, metadata_only: bool = False, audio_only: bool = False
-    ) -> list[Video]:
+    ) -> list[MediaSource]:
         """Get videos that need retry (not exceeded max attempts)."""
         try:
             with self.get_session() as session:
-                q = session.query(Video).filter(
-                    Video.max_retries_exceeded == False,  # noqa: E712
+                q = session.query(MediaSource).filter(
+                    MediaSource.max_retries_exceeded == False,  # noqa: E712
                     or_(
-                        Video.needs_metadata_retry == True,
-                        Video.needs_audio_retry == True,
+                        MediaSource.needs_metadata_retry == True,
+                        MediaSource.needs_audio_retry == True,
                     ),  # noqa: E712
                 )
 
                 if metadata_only:
-                    q = q.filter(Video.needs_metadata_retry == True)  # noqa: E712
+                    q = q.filter(MediaSource.needs_metadata_retry == True)  # noqa: E712
                 if audio_only:
-                    q = q.filter(Video.needs_audio_retry == True)  # noqa: E712
+                    q = q.filter(MediaSource.needs_audio_retry == True)  # noqa: E712
 
-                return q.order_by(desc(Video.last_retry_at)).all()
+                return q.order_by(desc(MediaSource.last_retry_at)).all()
         except Exception as e:
             logger.error(f"Failed to get videos needing retry: {e}")
             return []
 
-    def get_failed_videos(self) -> list[Video]:
+    def get_failed_videos(self) -> list[MediaSource]:
         """Get videos that exceeded max retry attempts."""
         try:
             with self.get_session() as session:
                 return (
-                    session.query(Video)
-                    .filter(Video.max_retries_exceeded == True)  # noqa: E712
-                    .order_by(desc(Video.last_retry_at))
+                    session.query(MediaSource)
+                    .filter(MediaSource.max_retries_exceeded == True)  # noqa: E712
+                    .order_by(desc(MediaSource.last_retry_at))
                     .all()
                 )
         except Exception as e:
             logger.error(f"Failed to get failed videos: {e}")
             return []
 
-    def get_incomplete_videos(self) -> list[Video]:
+    def get_incomplete_videos(self) -> list[MediaSource]:
         """Get videos with partial downloads (missing audio or metadata)."""
         try:
             with self.get_session() as session:
                 return (
-                    session.query(Video)
+                    session.query(MediaSource)
                     .filter(
                         or_(
-                            Video.audio_downloaded == False,  # noqa: E712
-                            Video.metadata_complete == False,  # noqa: E712
+                            MediaSource.audio_downloaded == False,  # noqa: E712
+                            MediaSource.metadata_complete == False,  # noqa: E712
                         ),
-                        Video.max_retries_exceeded == False,  # noqa: E712
+                        MediaSource.max_retries_exceeded == False,  # noqa: E712
                     )
-                    .order_by(desc(Video.processed_at))
+                    .order_by(desc(MediaSource.updated_at))
                     .all()
                 )
         except Exception as e:
@@ -496,7 +530,11 @@ class DatabaseService:
         """Check if video has both audio and metadata complete."""
         try:
             with self.get_session() as session:
-                video = session.query(Video).filter(Video.video_id == video_id).first()
+                video = (
+                    session.query(MediaSource)
+                    .filter(MediaSource.source_id == video_id)
+                    .first()
+                )
                 if not video:
                     return False
                 return video.audio_downloaded and video.metadata_complete
@@ -508,7 +546,11 @@ class DatabaseService:
         """Validate that the audio file path in database actually exists on disk."""
         try:
             with self.get_session() as session:
-                video = session.query(Video).filter(Video.video_id == video_id).first()
+                video = (
+                    session.query(MediaSource)
+                    .filter(MediaSource.source_id == video_id)
+                    .first()
+                )
                 if not video or not video.audio_file_path:
                     return False
 
@@ -721,22 +763,24 @@ class DatabaseService:
                     return None, None
 
                 # Get video metadata for markdown generation
+                # Use claim_models MediaSource (has source_id)
                 video = (
                     session.query(MediaSource)
-                    .filter(MediaSource.media_id == transcript.video_id)
+                    .filter(MediaSource.source_id == transcript.video_id)
                     .first()
                 )
 
                 video_metadata = None
                 if video:
                     video_metadata = {
-                        "video_id": video.video_id,
+                        "video_id": video.source_id,
                         "title": video.title,
                         "url": video.url,
-                        "uploader": video.uploader,
-                        "upload_date": video.upload_date,
-                        "duration": video.duration_seconds,
-                        "tags": video.tags_json or [],
+                        "uploader": getattr(video, "uploader", None),
+                        "upload_date": getattr(video, "upload_date", None),
+                        "duration": getattr(video, "duration_seconds", None),
+                        # Claim-centric schema doesn't have tags_json column
+                        "tags": [],
                     }
 
                 return Path(generated_file.file_path), video_metadata
@@ -816,29 +860,18 @@ class DatabaseService:
     def save_hce_data(self, video_id: str, hce_outputs) -> bool:
         """Save HCE pipeline outputs to database tables."""
         try:
-            from .hce_models import (
-                Claim,
-                Concept,
-                Episode,
-                EvidenceSpan,
-                JargonTerm,
-                Person,
-                Relation,
-            )
-
             with self.get_session() as session:
                 # Create or get episode
                 episode = (
-                    session.query(Episode).filter(Episode.video_id == video_id).first()
+                    session.query(Episode).filter(Episode.source_id == video_id).first()
                 )
                 if not episode:
+                    # Create new episode with claim-centric schema
+                    video = self.get_video(video_id)
                     episode = Episode(
                         episode_id=hce_outputs.episode_id,
-                        video_id=video_id,
-                        title=session.query(Video)
-                        .filter(Video.video_id == video_id)
-                        .first()
-                        .title,
+                        source_id=video_id,
+                        title=video.title if video else hce_outputs.episode_id,
                     )
                     session.add(episode)
 
@@ -869,11 +902,10 @@ class DatabaseService:
 
                 # Save relations
                 for relation in hce_outputs.relations:
-                    db_relation = Relation(
-                        episode_id=episode.episode_id,
+                    db_relation = ClaimRelation(
                         source_claim_id=relation.source_claim_id,
                         target_claim_id=relation.target_claim_id,
-                        type=relation.type,
+                        relation_type=relation.type,
                         strength=relation.strength,
                         rationale=relation.rationale,
                     )
@@ -1141,9 +1173,11 @@ class DatabaseService:
         try:
             with self.get_session() as session:
                 # Video statistics
-                total_videos = session.query(Video).count()
+                total_videos = session.query(MediaSource).count()
                 completed_videos = (
-                    session.query(Video).filter(Video.status == "completed").count()
+                    session.query(MediaSource)
+                    .filter(MediaSource.status == "completed")
+                    .count()
                 )
 
                 # Cost statistics
@@ -1329,470 +1363,8 @@ class DatabaseService:
             return False
 
     # =============================================================================
-    # QUALITY RATING OPERATIONS
+    # CLAIM TIER VALIDATION METHODS
     # =============================================================================
-
-    def save_quality_rating(
-        self,
-        content_type: str,
-        content_id: str,
-        user_rating: float,
-        criteria_scores: dict,
-        user_feedback: str = "",
-        llm_rating: float | None = None,
-        is_user_corrected: bool = True,
-        model_used: str | None = None,
-        prompt_template: str | None = None,
-        input_characteristics: dict | None = None,
-        rated_by_user: str = "default_user",
-    ) -> str:
-        """Save a quality rating to the database.
-
-        Args:
-            content_type: Type of content ('summary', 'transcript', 'moc_extraction')
-            content_id: Unique identifier for the content
-            user_rating: User's overall rating (0.0-1.0)
-            criteria_scores: Dictionary of criteria scores
-            user_feedback: Optional text feedback
-            llm_rating: Original LLM rating (optional)
-            is_user_corrected: Whether this is a user correction
-            model_used: Model that generated the content
-            prompt_template: Template used for generation
-            input_characteristics: Input metadata
-            rated_by_user: User identifier
-
-        Returns:
-            Rating ID of the saved rating
-        """
-        try:
-            with self.get_session() as session:
-                # Generate unique rating ID
-                rating_id = f"rating_{content_type}_{content_id}_{int(datetime.now().timestamp())}"
-
-                # Create rating record
-                rating = QualityRating(
-                    rating_id=rating_id,
-                    content_type=content_type,
-                    content_id=content_id,
-                    llm_rating=llm_rating,
-                    user_rating=user_rating,
-                    is_user_corrected=is_user_corrected,
-                    criteria_scores=criteria_scores,
-                    user_feedback=user_feedback,
-                    rating_reason="",  # Could be added as parameter
-                    rated_by_user=rated_by_user,
-                    model_used=model_used,
-                    prompt_template=prompt_template,
-                    input_characteristics=input_characteristics or {},
-                )
-
-                session.add(rating)
-                session.commit()
-
-                # Update aggregated metrics
-                self._update_quality_metrics(
-                    session, content_type, model_used or "unknown"
-                )
-
-                logger.info(f"Saved quality rating: {rating_id}")
-                return rating_id
-
-        except Exception as e:
-            logger.error(f"Failed to save quality rating: {e}")
-            raise
-
-    def get_quality_rating(self, rating_id: str) -> QualityRating | None:
-        """Get a quality rating by ID."""
-        try:
-            with self.get_session() as session:
-                return (
-                    session.query(QualityRating)
-                    .filter(QualityRating.rating_id == rating_id)
-                    .first()
-                )
-        except Exception as e:
-            logger.error(f"Failed to get quality rating {rating_id}: {e}")
-            return None
-
-    def get_ratings_for_content(
-        self, content_type: str, content_id: str
-    ) -> list[QualityRating]:
-        """Get all ratings for specific content."""
-        try:
-            with self.get_session() as session:
-                return (
-                    session.query(QualityRating)
-                    .filter(
-                        QualityRating.content_type == content_type,
-                        QualityRating.content_id == content_id,
-                    )
-                    .order_by(desc(QualityRating.rated_at))
-                    .all()
-                )
-        except Exception as e:
-            logger.error(f"Failed to get ratings for {content_type} {content_id}: {e}")
-            return []
-
-    def get_quality_statistics(self) -> dict[str, Any]:
-        """Get overall quality rating statistics."""
-        try:
-            with self.get_session() as session:
-                # Total ratings
-                total_ratings = session.query(QualityRating).count()
-
-                # User corrections
-                user_corrections = (
-                    session.query(QualityRating)
-                    .filter(QualityRating.is_user_corrected.is_(True))
-                    .count()
-                )
-
-                # Calculate average drift where both ratings exist
-                ratings_with_both = (
-                    session.query(QualityRating)
-                    .filter(
-                        QualityRating.llm_rating.isnot(None),
-                        QualityRating.user_rating.isnot(None),
-                    )
-                    .all()
-                )
-
-                if ratings_with_both:
-                    drifts = [
-                        abs(r.user_rating - r.llm_rating) for r in ratings_with_both
-                    ]
-                    avg_drift = sum(drifts) / len(drifts)
-                else:
-                    avg_drift = 0.0
-
-                # Average ratings
-                avg_user_rating = (
-                    session.query(func.avg(QualityRating.user_rating))
-                    .filter(QualityRating.user_rating.isnot(None))
-                    .scalar()
-                    or 0.0
-                )
-
-                avg_llm_rating = (
-                    session.query(func.avg(QualityRating.llm_rating))
-                    .filter(QualityRating.llm_rating.isnot(None))
-                    .scalar()
-                    or 0.0
-                )
-
-                return {
-                    "total_ratings": total_ratings,
-                    "user_corrections": user_corrections,
-                    "correction_percentage": (
-                        (user_corrections / total_ratings * 100)
-                        if total_ratings > 0
-                        else 0
-                    ),
-                    "avg_drift": avg_drift,
-                    "avg_user_rating": avg_user_rating,
-                    "avg_llm_rating": avg_llm_rating,
-                    "ratings_with_both": len(ratings_with_both),
-                }
-
-        except Exception as e:
-            logger.error(f"Failed to get quality statistics: {e}")
-            return {
-                "total_ratings": 0,
-                "user_corrections": 0,
-                "correction_percentage": 0,
-                "avg_drift": 0.0,
-                "avg_user_rating": 0.0,
-                "avg_llm_rating": 0.0,
-                "ratings_with_both": 0,
-            }
-
-    def get_model_performance_metrics(self) -> list[dict[str, Any]]:
-        """Get performance metrics by model and content type."""
-        try:
-            with self.get_session() as session:
-                # Query ratings grouped by model and content type
-                results = (
-                    session.query(
-                        QualityRating.model_used,
-                        QualityRating.content_type,
-                        func.count(QualityRating.rating_id).label("total_ratings"),
-                        func.count(QualityRating.user_rating).label("user_ratings"),
-                        func.avg(QualityRating.llm_rating).label("avg_llm_rating"),
-                        func.avg(QualityRating.user_rating).label("avg_user_rating"),
-                    )
-                    .filter(QualityRating.model_used.isnot(None))
-                    .group_by(QualityRating.model_used, QualityRating.content_type)
-                    .all()
-                )
-
-                metrics = []
-                for result in results:
-                    avg_llm = result.avg_llm_rating or 0.0
-                    avg_user = result.avg_user_rating or 0.0
-                    drift = (
-                        abs(avg_user - avg_llm) if avg_llm > 0 and avg_user > 0 else 0.0
-                    )
-
-                    metrics.append(
-                        {
-                            "model": result.model_used or "unknown",
-                            "content_type": result.content_type,
-                            "total_ratings": result.total_ratings,
-                            "user_ratings": result.user_ratings,
-                            "avg_llm_rating": avg_llm,
-                            "avg_user_rating": avg_user,
-                            "drift": drift,
-                            "sample_size": result.user_ratings,
-                        }
-                    )
-
-                return metrics
-
-        except Exception as e:
-            logger.error(f"Failed to get model performance metrics: {e}")
-            return []
-
-    def get_quality_trends(self, days: int = 30) -> dict[str, Any]:
-        """Get quality trends over time."""
-        try:
-            with self.get_session() as session:
-                # Get ratings from the last N days
-                cutoff_date = datetime.now() - timedelta(days=days)
-
-                ratings = (
-                    session.query(QualityRating)
-                    .filter(QualityRating.rated_at >= cutoff_date)
-                    .order_by(QualityRating.rated_at)
-                    .all()
-                )
-
-                # Group by day
-                daily_stats = {}
-                for rating in ratings:
-                    day = rating.rated_at.date()
-                    if day not in daily_stats:
-                        daily_stats[day] = {
-                            "count": 0,
-                            "user_ratings": [],
-                            "llm_ratings": [],
-                            "drifts": [],
-                        }
-
-                    daily_stats[day]["count"] += 1
-                    if rating.user_rating is not None:
-                        daily_stats[day]["user_ratings"].append(rating.user_rating)
-                    if rating.llm_rating is not None:
-                        daily_stats[day]["llm_ratings"].append(rating.llm_rating)
-                    if rating.user_rating is not None and rating.llm_rating is not None:
-                        daily_stats[day]["drifts"].append(
-                            abs(rating.user_rating - rating.llm_rating)
-                        )
-
-                # Calculate daily averages
-                trends = []
-                for day, stats in sorted(daily_stats.items()):
-                    avg_user = (
-                        sum(stats["user_ratings"]) / len(stats["user_ratings"])
-                        if stats["user_ratings"]
-                        else 0
-                    )
-                    avg_llm = (
-                        sum(stats["llm_ratings"]) / len(stats["llm_ratings"])
-                        if stats["llm_ratings"]
-                        else 0
-                    )
-                    avg_drift = (
-                        sum(stats["drifts"]) / len(stats["drifts"])
-                        if stats["drifts"]
-                        else 0
-                    )
-
-                    trends.append(
-                        {
-                            "date": day.isoformat(),
-                            "count": stats["count"],
-                            "avg_user_rating": avg_user,
-                            "avg_llm_rating": avg_llm,
-                            "avg_drift": avg_drift,
-                        }
-                    )
-
-                return {
-                    "period_days": days,
-                    "total_ratings": len(ratings),
-                    "daily_trends": trends,
-                }
-
-        except Exception as e:
-            logger.error(f"Failed to get quality trends: {e}")
-            return {"period_days": days, "total_ratings": 0, "daily_trends": []}
-
-    def export_quality_data(self, format: str = "dict") -> list[dict[str, Any]] | str:
-        """Export quality rating data for analysis."""
-        try:
-            with self.get_session() as session:
-                ratings = (
-                    session.query(QualityRating)
-                    .order_by(desc(QualityRating.rated_at))
-                    .all()
-                )
-
-                data = []
-                for rating in ratings:
-                    data.append(
-                        {
-                            "rating_id": rating.rating_id,
-                            "content_type": rating.content_type,
-                            "content_id": rating.content_id,
-                            "llm_rating": rating.llm_rating,
-                            "user_rating": rating.user_rating,
-                            "is_user_corrected": rating.is_user_corrected,
-                            "criteria_scores": rating.criteria_scores,
-                            "user_feedback": rating.user_feedback,
-                            "rated_by_user": rating.rated_by_user,
-                            "rated_at": (
-                                rating.rated_at.isoformat() if rating.rated_at else None
-                            ),
-                            "model_used": rating.model_used,
-                            "prompt_template": rating.prompt_template,
-                            "input_characteristics": rating.input_characteristics,
-                        }
-                    )
-
-                if format == "csv":
-                    import csv
-                    import io
-
-                    output = io.StringIO()
-                    if data:
-                        writer = csv.DictWriter(output, fieldnames=data[0].keys())
-                        writer.writeheader()
-                        writer.writerows(data)
-                    return output.getvalue()
-
-                return data
-
-        except Exception as e:
-            logger.error(f"Failed to export quality data: {e}")
-            return [] if format == "dict" else ""
-
-    def _update_quality_metrics(
-        self, session: Session, content_type: str, model_name: str
-    ):
-        """Update aggregated quality metrics for a model/content type combination."""
-        try:
-            # Calculate metrics for this model/content type
-            ratings = (
-                session.query(QualityRating)
-                .filter(
-                    QualityRating.content_type == content_type,
-                    QualityRating.model_used == model_name,
-                )
-                .all()
-            )
-
-            if not ratings:
-                return
-
-            # Calculate aggregated statistics
-            total_ratings = len(ratings)
-            user_corrected_count = sum(1 for r in ratings if r.is_user_corrected)
-
-            user_ratings = [r.user_rating for r in ratings if r.user_rating is not None]
-            llm_ratings = [r.llm_rating for r in ratings if r.llm_rating is not None]
-
-            avg_user_rating = (
-                sum(user_ratings) / len(user_ratings) if user_ratings else None
-            )
-            avg_llm_rating = (
-                sum(llm_ratings) / len(llm_ratings) if llm_ratings else None
-            )
-
-            # Calculate drift for ratings that have both
-            drifts = []
-            for rating in ratings:
-                if rating.user_rating is not None and rating.llm_rating is not None:
-                    drifts.append(abs(rating.user_rating - rating.llm_rating))
-
-            rating_drift = sum(drifts) / len(drifts) if drifts else None
-
-            # Calculate criteria performance
-            criteria_performance = {}
-            for rating in ratings:
-                if rating.criteria_scores:
-                    for criterion, score in rating.criteria_scores.items():
-                        if criterion not in criteria_performance:
-                            criteria_performance[criterion] = []
-                        criteria_performance[criterion].append(score)
-
-            # Average criteria scores
-            for criterion in criteria_performance:
-                scores = criteria_performance[criterion]
-                criteria_performance[criterion] = sum(scores) / len(scores)
-
-            # Create or update metrics record
-            metric_id = f"metrics_{model_name}_{content_type}"
-
-            existing_metric = (
-                session.query(QualityMetrics)
-                .filter(QualityMetrics.metric_id == metric_id)
-                .first()
-            )
-
-            if existing_metric:
-                # Update existing
-                existing_metric.total_ratings = total_ratings
-                existing_metric.user_corrected_count = user_corrected_count
-                existing_metric.avg_llm_rating = avg_llm_rating
-                existing_metric.avg_user_rating = avg_user_rating
-                existing_metric.rating_drift = rating_drift
-                existing_metric.criteria_performance = criteria_performance
-                existing_metric.last_updated = datetime.now()
-            else:
-                # Create new
-                metric = QualityMetrics(
-                    metric_id=metric_id,
-                    model_name=model_name,
-                    content_type=content_type,
-                    total_ratings=total_ratings,
-                    user_corrected_count=user_corrected_count,
-                    avg_llm_rating=avg_llm_rating,
-                    avg_user_rating=avg_user_rating,
-                    rating_drift=rating_drift,
-                    criteria_performance=criteria_performance,
-                    period_start=min(r.rated_at for r in ratings if r.rated_at),
-                    period_end=max(r.rated_at for r in ratings if r.rated_at),
-                )
-                session.add(metric)
-
-            session.commit()
-
-        except Exception as e:
-            logger.error(f"Failed to update quality metrics: {e}")
-
-    def delete_quality_rating(self, rating_id: str) -> bool:
-        """Delete a quality rating."""
-        try:
-            with self.get_session() as session:
-                rating = (
-                    session.query(QualityRating)
-                    .filter(QualityRating.rating_id == rating_id)
-                    .first()
-                )
-
-                if rating:
-                    session.delete(rating)
-                    session.commit()
-                    logger.info(f"Deleted quality rating: {rating_id}")
-                    return True
-
-                return False
-
-        except Exception as e:
-            logger.error(f"Failed to delete quality rating {rating_id}: {e}")
-            return False
-
-    # Claim Tier Validation Methods
 
     def save_claim_tier_validation(
         self,

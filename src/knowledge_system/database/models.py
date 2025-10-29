@@ -3,28 +3,33 @@ SQLAlchemy models for Knowledge System database.
 
 Comprehensive database schema for storing YouTube videos, transcripts, summaries,
 MOC extractions, file generation tracking, processing jobs, and Bright Data sessions.
+Also includes claim-centric models where claims are the fundamental unit of knowledge.
 """
 
 import json
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     Float,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker, synonym
+from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.types import TypeDecorator
 
+# Unified Base class - all models inherit from this
 Base = declarative_base()
 
 
@@ -50,91 +55,91 @@ class JSONEncodedType(TypeDecorator):
             return value
 
 
+# ============================================================================
+# CORE: Sources (Attribution Layer)
+# ============================================================================
+
+
 class MediaSource(Base):
-    """Core media source records with complete metadata (replaces legacy 'videos')."""
+    """Sources: Where claims come from (attribution metadata)."""
 
     __tablename__ = "media_sources"
 
     # Primary key
-    media_id = Column(String(20), primary_key=True)
-    # Back-compat attribute: many modules still expect 'video_id'
-    video_id = synonym("media_id")
-    source_type = Column(
-        String(50), nullable=False, default="youtube"
-    )  # 'youtube', 'upload', 'rss'
-    title = Column(String(500), nullable=False)
-    url = Column(String(200), nullable=False)
-
-    # YouTube metadata (from yt-dlp/Bright Data)
+    source_id = Column(String, primary_key=True)
+    source_type = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    url = Column(String, nullable=False)
     description = Column(Text)
-    uploader = Column(String(200))
-    uploader_id = Column(String(50))
-    upload_date = Column(String(8))  # YYYYMMDD format
+
+    # Author/Creator info (from platform)
+    uploader = Column(String)
+    uploader_id = Column(String)
+    author = Column(String)
+    organization = Column(String)
+
+    # Temporal metadata (from platform)
+    upload_date = Column(String)
+    recorded_at = Column(String)
+    published_at = Column(String)
+
+    # Platform metrics (from platform)
     duration_seconds = Column(Integer)
     view_count = Column(Integer)
     like_count = Column(Integer)
     comment_count = Column(Integer)
-    categories_json = Column(JSONEncodedType)  # JSON array of categories
-    privacy_status = Column(String(20))
+
+    # Technical metadata
+    privacy_status = Column(String)
     caption_availability = Column(Boolean)
+    language = Column(String)
 
-    # Thumbnails
-    thumbnail_url = Column(String(500))  # Original YouTube thumbnail URL
-    thumbnail_local_path = Column(String(500))  # Local downloaded thumbnail path
-
-    # Tags and keywords (searchable)
-    tags_json = Column(JSONEncodedType)  # JSON array of video tags
-    extracted_keywords_json = Column(
-        JSONEncodedType
-    )  # JSON array of AI-extracted keywords
-
-    # Related content and recommendations
-    related_videos_json = Column(JSONEncodedType)  # JSON array of related video data
-
-    # Detailed channel statistics
-    channel_stats_json = Column(JSONEncodedType)  # JSON object with channel metrics
-
-    # Video chapters/timestamps
-    video_chapters_json = Column(
-        JSONEncodedType
-    )  # JSON array of chapter data with timestamps
-
-    # Processing metadata
-    extraction_method = Column(String(50))  # 'bright_data_api', 'yt_dlp', etc.
-    processed_at = Column(DateTime, default=datetime.utcnow)
-    bright_data_session_id = Column(String(100))
-    processing_cost = Column(Float)
-    status = Column(
-        String(20), default="pending"
-    )  # 'pending', 'processing', 'completed', 'failed'
+    # Local storage paths
+    thumbnail_url = Column(String)
+    thumbnail_local_path = Column(String)
+    audio_file_path = Column(String)
 
     # Audio file tracking (for partial download detection and cleanup)
-    audio_file_path = Column(String(500))  # Path to downloaded audio file
-    audio_downloaded = Column(
-        Boolean, default=False
-    )  # True if audio successfully downloaded
-    audio_file_size_bytes = Column(Integer)  # Size of audio file for validation
-    audio_format = Column(String(10))  # Audio format (m4a, opus, webm, etc.)
+    audio_downloaded = Column(Boolean, default=False)
+    audio_file_size_bytes = Column(Integer)
+    audio_format = Column(String)
 
     # Metadata completion tracking
-    metadata_complete = Column(Boolean, default=False)  # True if all metadata extracted
+    metadata_complete = Column(Boolean, default=False)
 
     # Retry tracking (for smart retry logic)
-    needs_metadata_retry = Column(
-        Boolean, default=False
-    )  # True if metadata download failed
-    needs_audio_retry = Column(Boolean, default=False)  # True if audio download failed
-    retry_count = Column(Integer, default=0)  # Number of retry attempts
-    last_retry_at = Column(DateTime)  # Timestamp of last retry attempt
-    first_failure_at = Column(
-        DateTime
-    )  # Timestamp of first failure for time-based retry logic
+    needs_metadata_retry = Column(Boolean, default=False)
+    needs_audio_retry = Column(Boolean, default=False)
+    retry_count = Column(Integer, default=0)
+    last_retry_at = Column(DateTime)
+    first_failure_at = Column(DateTime)
 
     # Failure tracking (after max retries exceeded)
-    max_retries_exceeded = Column(Boolean, default=False)  # True if retry limit reached
-    failure_reason = Column(Text)  # Detailed failure reason for user reporting
+    max_retries_exceeded = Column(Boolean, default=False)
+    failure_reason = Column(Text)
+
+    # Processing status
+    status = Column(
+        String, default="pending"
+    )  # 'pending', 'processing', 'completed', 'failed'
+    processed_at = Column(DateTime)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    fetched_at = Column(DateTime)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
+    claims = relationship(
+        "Claim", back_populates="source", foreign_keys="Claim.source_id"
+    )
+    episodes = relationship("Episode", back_populates="source", uselist=False)
+    platform_categories = relationship(
+        "SourcePlatformCategory", back_populates="source", cascade="all, delete-orphan"
+    )
+    platform_tags = relationship(
+        "SourcePlatformTag", back_populates="source", cascade="all, delete-orphan"
+    )
     transcripts = relationship(
         "Transcript", back_populates="video", cascade="all, delete-orphan"
     )
@@ -150,19 +155,85 @@ class MediaSource(Base):
     bright_data_sessions = relationship(
         "BrightDataSession", back_populates="video", cascade="all, delete-orphan"
     )
-    episodes = relationship(
-        "Episode", back_populates="media_source", cascade="all, delete-orphan"
+
+    __table_args__ = (
+        CheckConstraint(
+            "source_type IN ('episode', 'document', 'youtube', 'pdf', 'article', 'podcast', 'rss')",
+            name="ck_source_type",
+        ),
     )
 
-    def __repr__(self) -> str:
-        return (
-            f"<MediaSource(media_id='{self.media_id}', title='{self.title[:50]}...')>"
-        )
+
+class Episode(Base):
+    """Episodes: Segmented sources (1-to-1 with media_sources where source_type='episode')."""
+
+    __tablename__ = "episodes"
+
+    # Primary key
+    episode_id = Column(String, primary_key=True)
+    source_id = Column(
+        String,
+        ForeignKey("media_sources.source_id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+
+    # Episode-specific metadata
+    title = Column(String)
+    subtitle = Column(String)
+    description = Column(Text)
+    recorded_at = Column(String)
+
+    # Summaries (generated by us)
+    short_summary = Column(Text)
+    long_summary = Column(Text)
+    summary_generated_at = Column(DateTime)
+    summary_generated_by_model = Column(String)
+
+    # Summary metrics
+    input_length = Column(Integer)
+    output_length = Column(Integer)
+    compression_ratio = Column(Float)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    processed_at = Column(DateTime)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    source = relationship("MediaSource", back_populates="episodes")
+    segments = relationship(
+        "Segment", back_populates="episode", cascade="all, delete-orphan"
+    )
+    claims = relationship(
+        "Claim", back_populates="episode", foreign_keys="Claim.episode_id"
+    )
 
 
-# Backward-compatibility: many modules still import/use `Video`
-# Map the legacy symbol to the new class to avoid breaking imports
-Video = MediaSource
+class Segment(Base):
+    """Segments: Temporal chunks (only for episodes)."""
+
+    __tablename__ = "segments"
+
+    # Primary key
+    segment_id = Column(String, primary_key=True)
+    episode_id = Column(
+        String, ForeignKey("episodes.episode_id", ondelete="CASCADE"), nullable=False
+    )
+
+    speaker = Column(String)
+    start_time = Column(String)
+    end_time = Column(String)
+    text = Column(Text, nullable=False)
+    topic_guess = Column(String)
+
+    sequence = Column(Integer)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    episode = relationship("Episode", back_populates="segments")
+    evidence_spans = relationship("EvidenceSpan", back_populates="segment")
 
 
 class Transcript(Base):
@@ -172,7 +243,7 @@ class Transcript(Base):
 
     # Primary key
     transcript_id = Column(String(50), primary_key=True)
-    video_id = Column(String(20), ForeignKey("media_sources.media_id"), nullable=False)
+    video_id = Column(String(20), ForeignKey("media_sources.source_id"), nullable=False)
 
     # Transcript metadata
     language = Column(String(10), nullable=False)
@@ -231,15 +302,15 @@ class Summary(Base):
 
     # Primary key
     summary_id = Column(String(50), primary_key=True)
-    video_id = Column(String(20), ForeignKey("media_sources.media_id"), nullable=False)
+    video_id = Column(String(20), ForeignKey("media_sources.source_id"), nullable=False)
     transcript_id = Column(String(50), ForeignKey("transcripts.transcript_id"))
 
     # Summary content
     summary_text = Column(Text, nullable=False)
     summary_metadata_json = Column(JSONEncodedType)  # YAML frontmatter data as JSON
 
-    # Processing type - legacy or HCE
-    processing_type = Column(String(10), default="legacy")  # 'legacy' or 'hce'
+    # Processing type - HCE is the primary method
+    processing_type = Column(String(10), default="hce")  # 'hce' or 'hce_unified'
     hce_data_json = Column(
         JSONEncodedType
     )  # HCE structured output (claims, entities, etc.)
@@ -283,7 +354,7 @@ class MOCExtraction(Base):
 
     # Primary key
     moc_id = Column(String(50), primary_key=True)
-    video_id = Column(String(20), ForeignKey("media_sources.media_id"), nullable=False)
+    video_id = Column(String(20), ForeignKey("media_sources.source_id"), nullable=False)
     summary_id = Column(String(50), ForeignKey("summaries.summary_id"))
 
     # Extracted entities (JSON arrays)
@@ -328,7 +399,7 @@ class GeneratedFile(Base):
 
     # Primary key
     file_id = Column(String(50), primary_key=True)
-    video_id = Column(String(20), ForeignKey("media_sources.media_id"), nullable=False)
+    video_id = Column(String(20), ForeignKey("media_sources.source_id"), nullable=False)
     transcript_id = Column(String(50), ForeignKey("transcripts.transcript_id"))
     summary_id = Column(String(50), ForeignKey("summaries.summary_id"))
     moc_id = Column(String(50), ForeignKey("moc_extractions.moc_id"))
@@ -416,7 +487,7 @@ class BrightDataSession(Base):
 
     # Primary key
     session_id = Column(String(100), primary_key=True)
-    video_id = Column(String(20), ForeignKey("media_sources.media_id"), nullable=False)
+    video_id = Column(String(20), ForeignKey("media_sources.source_id"), nullable=False)
 
     # Session details
     session_type = Column(
@@ -487,47 +558,6 @@ class ClaimTierValidation(Base):
         return f"<ClaimTierValidation(claim_id='{self.claim_id}', {self.original_tier}->{self.validated_tier}, modified={self.is_modified})>"
 
 
-class QualityRating(Base):
-    """Legacy quality ratings table - kept for backward compatibility."""
-
-    __tablename__ = "quality_ratings"
-
-    # Primary key
-    rating_id = Column(String(50), primary_key=True)
-
-    # What's being rated
-    content_type = Column(
-        String(30), nullable=False
-    )  # 'summary', 'transcript', 'moc_extraction', 'claim_tier'
-    content_id = Column(String(50), nullable=False)  # ID of the rated content
-
-    # Rating details
-    llm_rating = Column(Float)  # Original LLM-assigned rating (0.0-1.0)
-    user_rating = Column(Float)  # User-corrected rating (0.0-1.0)
-    is_user_corrected = Column(Boolean, default=False)
-
-    # Rating criteria (JSON object with detailed scores)
-    criteria_scores = Column(
-        JSONEncodedType
-    )  # {"accuracy": 0.8, "completeness": 0.9, "relevance": 0.7}
-
-    # Feedback details
-    user_feedback = Column(Text)  # Optional text feedback from user
-    rating_reason = Column(Text)  # Why this rating was given
-
-    # Context
-    rated_by_user = Column(String(100))  # User identifier
-    rated_at = Column(DateTime, default=datetime.utcnow)
-
-    # Model context for learning
-    model_used = Column(String(50))  # Which model generated the content
-    prompt_template = Column(String(200))  # Which template was used
-    input_characteristics = Column(JSONEncodedType)  # Input length, complexity, etc.
-
-    def __repr__(self) -> str:
-        return f"<QualityRating(rating_id='{self.rating_id}', content_type='{self.content_type}', user_rating={self.user_rating})>"
-
-
 class QualityMetrics(Base):
     """Aggregated quality metrics for model performance tracking."""
 
@@ -558,77 +588,58 @@ class QualityMetrics(Base):
 
 
 # ============================================================================
-# HCE (Hybrid Claim Extraction) Models
+# CORE: Claims (Fundamental Unit)
 # ============================================================================
 
 
-class Episode(Base):
-    """Episode extracted from a media source during HCE processing."""
-
-    __tablename__ = "episodes"
-    __table_args__ = {"extend_existing": True}
-
-    # Primary key
-    episode_id = Column(String, primary_key=True)
-
-    # Foreign key to media source
-    video_id = Column(String, ForeignKey("media_sources.media_id"), nullable=False)
-
-    # Episode metadata
-    title = Column(String, nullable=False)
-    subtitle = Column(String)
-    description = Column(Text)
-
-    # Processing metadata
-    recorded_at = Column(String)  # ISO format datetime string
-    processed_at = Column(DateTime, default=datetime.utcnow)
-
-    # Relationships
-    media_source = relationship("MediaSource", back_populates="episodes")
-    claims = relationship(
-        "Claim", back_populates="episode", cascade="all, delete-orphan"
-    )
-    people = relationship(
-        "Person", back_populates="episode", cascade="all, delete-orphan"
-    )
-    concepts = relationship(
-        "Concept", back_populates="episode", cascade="all, delete-orphan"
-    )
-    jargon = relationship(
-        "Jargon", back_populates="episode", cascade="all, delete-orphan"
-    )
-
-    def __repr__(self):
-        return f"<Episode(episode_id='{self.episode_id}', title='{self.title}')>"
-
-
 class Claim(Base):
-    """Claim extracted from an episode."""
+    """Claims: The atomic unit of knowledge."""
 
     __tablename__ = "claims"
-    __table_args__ = {"extend_existing": True}
 
-    # Composite primary key
-    episode_id = Column(String, ForeignKey("episodes.episode_id"), primary_key=True)
+    # Primary key
     claim_id = Column(String, primary_key=True)
 
-    # Claim content
-    canonical = Column(Text, nullable=False)  # The canonical form of the claim
-    original_text = Column(Text)  # Original text from transcript
+    # Attribution (optional)
+    source_id = Column(
+        String, ForeignKey("media_sources.source_id", ondelete="SET NULL")
+    )
+    episode_id = Column(String, ForeignKey("episodes.episode_id", ondelete="SET NULL"))
 
-    # Claim metadata
-    claim_type = Column(String)  # factual, causal, normative, forecast, definition
-    tier = Column(String)  # A, B, C
-    first_mention_ts = Column(String)  # Timestamp of first mention
+    # Content
+    canonical = Column(Text, nullable=False)
+    original_text = Column(Text)
+    claim_type = Column(String)
 
-    # Scores and evaluation
-    scores_json = Column(
-        JSON
-    )  # Dictionary of various scores (importance, novelty, etc.)
-    evaluator_notes = Column(Text)  # Notes from the evaluator
+    # System evaluation (from HCE)
+    tier = Column(String)
+    importance_score = Column(Float)
+    specificity_score = Column(Float)
+    verifiability_score = Column(Float)
 
-    # Upload tracking
-    upload_status = Column(String, default="pending")  # pending, uploaded, failed
+    # User curation
+    user_tier_override = Column(String)
+    user_confidence_override = Column(Float)
+    evaluator_notes = Column(Text)
+
+    # Verification workflow
+    verification_status = Column(String, default="unverified")
+    verification_source = Column(String)
+    verification_notes = Column(Text)
+
+    # Review workflow
+    flagged_for_review = Column(Boolean, default=False)
+    reviewed_by = Column(String)
+    reviewed_at = Column(DateTime)
+
+    # Temporality analysis
+    temporality_score = Column(Integer, default=3)
+    temporality_confidence = Column(Float, default=0.5)
+    temporality_rationale = Column(Text)
+    first_mention_ts = Column(String)
+
+    # Export tracking
+    upload_status = Column(String, default="pending")
     upload_timestamp = Column(DateTime)
     upload_error = Column(Text)
 
@@ -637,92 +648,726 @@ class Claim(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    episode = relationship("Episode", back_populates="claims")
+    source = relationship(
+        "MediaSource", back_populates="claims", foreign_keys=[source_id]
+    )
+    episode = relationship(
+        "Episode", back_populates="claims", foreign_keys=[episode_id]
+    )
+    evidence_spans = relationship(
+        "EvidenceSpan", back_populates="claim", cascade="all, delete-orphan"
+    )
+    relations_as_source = relationship(
+        "ClaimRelation",
+        foreign_keys="ClaimRelation.source_claim_id",
+        back_populates="source_claim",
+        cascade="all, delete-orphan",
+    )
+    relations_as_target = relationship(
+        "ClaimRelation",
+        foreign_keys="ClaimRelation.target_claim_id",
+        back_populates="target_claim",
+        cascade="all, delete-orphan",
+    )
+    categories = relationship(
+        "ClaimCategory", back_populates="claim", cascade="all, delete-orphan"
+    )
+    tags = relationship(
+        "ClaimTag", back_populates="claim", cascade="all, delete-orphan"
+    )
+    people = relationship(
+        "ClaimPerson", back_populates="claim", cascade="all, delete-orphan"
+    )
+    concepts = relationship(
+        "ClaimConcept", back_populates="claim", cascade="all, delete-orphan"
+    )
+    jargon = relationship(
+        "ClaimJargon", back_populates="claim", cascade="all, delete-orphan"
+    )
+    exports = relationship(
+        "ClaimExport", back_populates="claim", cascade="all, delete-orphan"
+    )
 
-    def __repr__(self):
-        return f"<Claim(claim_id='{self.claim_id}', tier='{self.tier}', type='{self.claim_type}')>"
+    __table_args__ = (
+        CheckConstraint(
+            "claim_type IN ('factual', 'causal', 'normative', 'forecast', 'definition')",
+            name="ck_claim_type",
+        ),
+        CheckConstraint("tier IN ('A', 'B', 'C')", name="ck_tier"),
+        CheckConstraint("user_tier_override IN ('A', 'B', 'C')", name="ck_user_tier"),
+        CheckConstraint("importance_score BETWEEN 0 AND 1", name="ck_importance"),
+        CheckConstraint("specificity_score BETWEEN 0 AND 1", name="ck_specificity"),
+        CheckConstraint("verifiability_score BETWEEN 0 AND 1", name="ck_verifiability"),
+        CheckConstraint(
+            "user_confidence_override BETWEEN 0 AND 1", name="ck_user_confidence"
+        ),
+        CheckConstraint(
+            "verification_status IN ('unverified', 'verified', 'disputed', 'false')",
+            name="ck_verification_status",
+        ),
+        CheckConstraint(
+            "temporality_score IN (1, 2, 3, 4, 5)", name="ck_temporality_score"
+        ),
+        CheckConstraint(
+            "temporality_confidence BETWEEN 0 AND 1", name="ck_temporality_confidence"
+        ),
+    )
+
+
+# ============================================================================
+# EVIDENCE & CONTEXT
+# ============================================================================
+
+
+class EvidenceSpan(Base):
+    """Evidence spans: Supporting quotes for claims."""
+
+    __tablename__ = "evidence_spans"
+
+    # Primary key
+    evidence_id = Column(Integer, primary_key=True, autoincrement=True)
+    claim_id = Column(
+        String, ForeignKey("claims.claim_id", ondelete="CASCADE"), nullable=False
+    )
+    segment_id = Column(String, ForeignKey("segments.segment_id", ondelete="SET NULL"))
+    sequence = Column(Integer, nullable=False)
+
+    # Precise quote
+    start_time = Column(String)
+    end_time = Column(String)
+    quote = Column(Text)
+
+    # Extended context
+    context_start_time = Column(String)
+    context_end_time = Column(String)
+    context_text = Column(Text)
+    context_type = Column(String, default="exact")
+
+    # For document sources
+    page_number = Column(Integer)
+    paragraph_number = Column(Integer)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    claim = relationship("Claim", back_populates="evidence_spans")
+    segment = relationship("Segment", back_populates="evidence_spans")
+
+    __table_args__ = (
+        CheckConstraint(
+            "context_type IN ('exact', 'extended', 'segment')", name="ck_context_type"
+        ),
+    )
+
+
+class ClaimRelation(Base):
+    """Claim relations: How claims relate to each other."""
+
+    __tablename__ = "claim_relations"
+
+    # Primary key
+    relation_id = Column(Integer, primary_key=True, autoincrement=True)
+    source_claim_id = Column(
+        String, ForeignKey("claims.claim_id", ondelete="CASCADE"), nullable=False
+    )
+    target_claim_id = Column(
+        String, ForeignKey("claims.claim_id", ondelete="CASCADE"), nullable=False
+    )
+    relation_type = Column(String, nullable=False)
+    strength = Column(Float)
+    rationale = Column(Text)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    source_claim = relationship(
+        "Claim", foreign_keys=[source_claim_id], back_populates="relations_as_source"
+    )
+    target_claim = relationship(
+        "Claim", foreign_keys=[target_claim_id], back_populates="relations_as_target"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "relation_type IN ('supports', 'contradicts', 'depends_on', 'refines', 'related_to')",
+            name="ck_relation_type",
+        ),
+        CheckConstraint("strength BETWEEN 0 AND 1", name="ck_strength"),
+        UniqueConstraint(
+            "source_claim_id",
+            "target_claim_id",
+            "relation_type",
+            name="uq_claim_relation",
+        ),
+    )
+
+
+# ============================================================================
+# ENTITIES: People, Concepts, Jargon
+# ============================================================================
 
 
 class Person(Base):
-    """Person mentioned in an episode."""
+    """People/Organizations catalog."""
 
     __tablename__ = "people"
-    __table_args__ = {"extend_existing": True}
 
-    # Composite primary key
-    episode_id = Column(String, ForeignKey("episodes.episode_id"), primary_key=True)
+    # Primary key
     person_id = Column(String, primary_key=True)
-
-    # Person information
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=False, unique=True)
+    normalized_name = Column(String)
     description = Column(Text)
-    first_mention_ts = Column(String)
-    context_quote = Column(Text)  # Quote showing how the person is mentioned
+    entity_type = Column(String, default="person")
+    confidence = Column(Float)
 
-    # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    episode = relationship("Episode", back_populates="people")
+    claim_mentions = relationship(
+        "ClaimPerson", back_populates="person", cascade="all, delete-orphan"
+    )
+    external_ids = relationship(
+        "PersonExternalId", back_populates="person", cascade="all, delete-orphan"
+    )
 
-    def __repr__(self):
-        return f"<Person(person_id='{self.person_id}', name='{self.name}')>"
+    __table_args__ = (
+        CheckConstraint(
+            "entity_type IN ('person', 'organization')", name="ck_entity_type"
+        ),
+        CheckConstraint("confidence BETWEEN 0 AND 1", name="ck_confidence"),
+    )
+
+
+class ClaimPerson(Base):
+    """Person mentions in claims."""
+
+    __tablename__ = "claim_people"
+
+    # Composite primary key
+    claim_id = Column(
+        String, ForeignKey("claims.claim_id", ondelete="CASCADE"), primary_key=True
+    )
+    person_id = Column(
+        String, ForeignKey("people.person_id", ondelete="CASCADE"), primary_key=True
+    )
+
+    mention_context = Column(Text)
+    first_mention_ts = Column(String)
+    role = Column(String)  # 'subject', 'object', 'mentioned'
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    claim = relationship("Claim", back_populates="people")
+    person = relationship("Person", back_populates="claim_mentions")
+
+
+class PersonExternalId(Base):
+    """External IDs for people (WikiData, Wikipedia, etc.)."""
+
+    __tablename__ = "person_external_ids"
+
+    # Composite primary key
+    person_id = Column(
+        String, ForeignKey("people.person_id", ondelete="CASCADE"), primary_key=True
+    )
+    external_system = Column(String, primary_key=True)
+    external_id = Column(String, nullable=False)
+
+    # Relationships
+    person = relationship("Person", back_populates="external_ids")
+
+
+class PersonEvidence(Base):
+    """All mentions of a person with timestamps (not just first mention)."""
+
+    __tablename__ = "person_evidence"
+
+    # Composite primary key
+    person_id = Column(
+        String, ForeignKey("people.person_id", ondelete="CASCADE"), primary_key=True
+    )
+    claim_id = Column(
+        String, ForeignKey("claims.claim_id", ondelete="CASCADE"), primary_key=True
+    )
+    sequence = Column(Integer, primary_key=True)  # Order of mentions
+
+    # Timing
+    start_time = Column(String, nullable=False)
+    end_time = Column(String, nullable=False)
+
+    # Content
+    quote = Column(Text, nullable=False)  # How they were mentioned
+    surface_form = Column(String)  # Exact text used
+    segment_id = Column(String)
+
+    # Context (extended window)
+    context_start_time = Column(String)
+    context_end_time = Column(String)
+    context_text = Column(Text)
+    context_type = Column(String, default="exact")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    person = relationship("Person")
+    claim = relationship("Claim")
 
 
 class Concept(Base):
-    """Mental model or concept extracted from an episode."""
+    """Concepts / Mental Models catalog."""
 
     __tablename__ = "concepts"
-    __table_args__ = {"extend_existing": True}
 
-    # Composite primary key
-    episode_id = Column(String, ForeignKey("episodes.episode_id"), primary_key=True)
+    # Primary key
     concept_id = Column(String, primary_key=True)
-
-    # Concept information
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=False, unique=True)
     description = Column(Text)
-    first_mention_ts = Column(String)
-    context_quote = Column(Text)  # Quote illustrating the mental model
+    definition = Column(Text)
 
-    # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    episode = relationship("Episode", back_populates="concepts")
+    claim_mentions = relationship(
+        "ClaimConcept", back_populates="concept", cascade="all, delete-orphan"
+    )
+    aliases = relationship(
+        "ConceptAlias", back_populates="concept", cascade="all, delete-orphan"
+    )
 
-    def __repr__(self):
-        return f"<Concept(concept_id='{self.concept_id}', name='{self.name}')>"
 
+class ClaimConcept(Base):
+    """Concept mentions in claims."""
 
-class Jargon(Base):
-    """Jargon term extracted from an episode."""
-
-    __tablename__ = "jargon"
-    __table_args__ = {"extend_existing": True}
+    __tablename__ = "claim_concepts"
 
     # Composite primary key
-    episode_id = Column(String, ForeignKey("episodes.episode_id"), primary_key=True)
-    term_id = Column(String, primary_key=True)
+    claim_id = Column(
+        String, ForeignKey("claims.claim_id", ondelete="CASCADE"), primary_key=True
+    )
+    concept_id = Column(
+        String, ForeignKey("concepts.concept_id", ondelete="CASCADE"), primary_key=True
+    )
 
-    # Jargon information
-    term = Column(String, nullable=False)
-    definition = Column(Text)
-    category = Column(String)  # Category of jargon term
     first_mention_ts = Column(String)
-    context_quote = Column(Text)  # Quote showing how the term is used
+    context = Column(Text)
 
-    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    claim = relationship("Claim", back_populates="concepts")
+    concept = relationship("Concept", back_populates="claim_mentions")
+
+
+class ConceptAlias(Base):
+    """Concept aliases."""
+
+    __tablename__ = "concept_aliases"
+
+    # Composite primary key
+    concept_id = Column(
+        String, ForeignKey("concepts.concept_id", ondelete="CASCADE"), primary_key=True
+    )
+    alias = Column(String, primary_key=True)
+
+    # Relationships
+    concept = relationship("Concept", back_populates="aliases")
+
+
+class ConceptEvidence(Base):
+    """All mentions of a concept with timestamps (not just first mention)."""
+
+    __tablename__ = "concept_evidence"
+
+    # Composite primary key
+    concept_id = Column(
+        String, ForeignKey("concepts.concept_id", ondelete="CASCADE"), primary_key=True
+    )
+    claim_id = Column(
+        String, ForeignKey("claims.claim_id", ondelete="CASCADE"), primary_key=True
+    )
+    sequence = Column(Integer, primary_key=True)  # Order of mentions
+
+    # Timing
+    start_time = Column(String, nullable=False)
+    end_time = Column(String, nullable=False)
+
+    # Content
+    quote = Column(Text, nullable=False)  # Example/usage of the concept
+    segment_id = Column(String)
+
+    # Context (extended window)
+    context_start_time = Column(String)
+    context_end_time = Column(String)
+    context_text = Column(Text)
+    context_type = Column(String, default="exact")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    concept = relationship("Concept")
+    claim = relationship("Claim")
+
+
+class JargonTerm(Base):
+    """Jargon terms catalog."""
+
+    __tablename__ = "jargon_terms"
+
+    # Primary key
+    jargon_id = Column(String, primary_key=True)
+    term = Column(String, nullable=False, unique=True)
+    definition = Column(Text)
+    domain = Column(String)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    episode = relationship("Episode", back_populates="jargon")
+    claim_mentions = relationship(
+        "ClaimJargon", back_populates="jargon_term", cascade="all, delete-orphan"
+    )
 
-    def __repr__(self):
-        return f"<Jargon(term_id='{self.term_id}', term='{self.term}')>"
+
+class ClaimJargon(Base):
+    """Jargon usage in claims."""
+
+    __tablename__ = "claim_jargon"
+
+    # Composite primary key
+    claim_id = Column(
+        String, ForeignKey("claims.claim_id", ondelete="CASCADE"), primary_key=True
+    )
+    jargon_id = Column(
+        String,
+        ForeignKey("jargon_terms.jargon_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    context = Column(Text)
+    first_mention_ts = Column(String)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    claim = relationship("Claim", back_populates="jargon")
+    jargon_term = relationship("JargonTerm", back_populates="claim_mentions")
+
+
+class JargonEvidence(Base):
+    """All usages of jargon with timestamps (not just first mention)."""
+
+    __tablename__ = "jargon_evidence"
+
+    # Composite primary key
+    jargon_id = Column(
+        String,
+        ForeignKey("jargon_terms.jargon_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    claim_id = Column(
+        String, ForeignKey("claims.claim_id", ondelete="CASCADE"), primary_key=True
+    )
+    sequence = Column(Integer, primary_key=True)  # Order of mentions
+
+    # Timing
+    start_time = Column(String, nullable=False)
+    end_time = Column(String, nullable=False)
+
+    # Content
+    quote = Column(Text, nullable=False)  # Usage of the jargon term
+    segment_id = Column(String)
+
+    # Context (extended window)
+    context_start_time = Column(String)
+    context_end_time = Column(String)
+    context_text = Column(Text)
+    context_type = Column(String, default="exact")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    jargon_term = relationship("JargonTerm")
+    claim = relationship("Claim")
+
+
+# ============================================================================
+# CATEGORIES: WikiData Controlled Vocabulary
+# ============================================================================
+
+
+class WikiDataCategory(Base):
+    """WikiData categories vocabulary."""
+
+    __tablename__ = "wikidata_categories"
+
+    # Primary key
+    wikidata_id = Column(String, primary_key=True)
+    category_name = Column(String, nullable=False, unique=True)
+    category_description = Column(Text)
+    parent_wikidata_id = Column(String, ForeignKey("wikidata_categories.wikidata_id"))
+    level = Column(String)
+
+    # For semantic matching
+    embedding_vector = Column(LargeBinary)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    parent = relationship(
+        "WikiDataCategory", remote_side=[wikidata_id], backref="children"
+    )
+    claim_categories = relationship(
+        "ClaimCategory",
+        back_populates="wikidata_category",
+        cascade="all, delete-orphan",
+    )
+    aliases = relationship(
+        "WikiDataAlias",
+        back_populates="wikidata_category",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        CheckConstraint("level IN ('general', 'specific')", name="ck_level"),
+    )
+
+
+class WikiDataAlias(Base):
+    """WikiData category aliases (for matching)."""
+
+    __tablename__ = "wikidata_aliases"
+
+    # Composite primary key
+    wikidata_id = Column(
+        String,
+        ForeignKey("wikidata_categories.wikidata_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    alias = Column(String, primary_key=True)
+
+    # Relationships
+    wikidata_category = relationship("WikiDataCategory", back_populates="aliases")
+
+
+class ClaimCategory(Base):
+    """Claim categories (typically 1 specific topic)."""
+
+    __tablename__ = "claim_categories"
+
+    # Composite primary key
+    claim_id = Column(
+        String, ForeignKey("claims.claim_id", ondelete="CASCADE"), primary_key=True
+    )
+    wikidata_id = Column(
+        String, ForeignKey("wikidata_categories.wikidata_id"), primary_key=True
+    )
+
+    # System scores
+    relevance_score = Column(Float)
+    confidence = Column(Float)
+
+    # Primary category flag
+    is_primary = Column(Boolean, default=False)
+
+    # User workflow
+    user_approved = Column(Boolean, default=False)
+    user_rejected = Column(Boolean, default=False)
+    source = Column(String, default="system")
+
+    # Context
+    context_quote = Column(Text)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    claim = relationship("Claim", back_populates="categories")
+    wikidata_category = relationship(
+        "WikiDataCategory", back_populates="claim_categories"
+    )
+
+    __table_args__ = (
+        CheckConstraint("relevance_score BETWEEN 0 AND 1", name="ck_cc_relevance"),
+        CheckConstraint("confidence BETWEEN 0 AND 1", name="ck_cc_confidence"),
+    )
+
+
+# ============================================================================
+# USER TAGS (Separate from WikiData)
+# ============================================================================
+
+
+class UserTag(Base):
+    """User-defined tags."""
+
+    __tablename__ = "user_tags"
+
+    # Primary key
+    tag_id = Column(Integer, primary_key=True, autoincrement=True)
+    tag_name = Column(String, unique=True, nullable=False)
+    tag_color = Column(String)
+    description = Column(Text)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    claim_tags = relationship(
+        "ClaimTag", back_populates="tag", cascade="all, delete-orphan"
+    )
+
+
+class ClaimTag(Base):
+    """Claim tags (many-to-many)."""
+
+    __tablename__ = "claim_tags"
+
+    # Composite primary key
+    claim_id = Column(
+        String, ForeignKey("claims.claim_id", ondelete="CASCADE"), primary_key=True
+    )
+    tag_id = Column(
+        Integer, ForeignKey("user_tags.tag_id", ondelete="CASCADE"), primary_key=True
+    )
+
+    added_by = Column(String)
+    added_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    claim = relationship("Claim", back_populates="tags")
+    tag = relationship("UserTag", back_populates="claim_tags")
+
+
+# ============================================================================
+# PLATFORM CATEGORIES (Uncontrolled - from YouTube, etc.)
+# ============================================================================
+
+
+class PlatformCategory(Base):
+    """Platform categories (YouTube, iTunes, etc.)."""
+
+    __tablename__ = "platform_categories"
+
+    # Primary key
+    category_id = Column(Integer, primary_key=True, autoincrement=True)
+    platform = Column(String, nullable=False)
+    category_name = Column(String, nullable=False)
+
+    # Relationships
+    source_categories = relationship(
+        "SourcePlatformCategory",
+        back_populates="category",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        UniqueConstraint("platform", "category_name", name="uq_platform_category"),
+    )
+
+
+class SourcePlatformCategory(Base):
+    """Source platform categories (many-to-many)."""
+
+    __tablename__ = "source_platform_categories"
+
+    # Composite primary key
+    source_id = Column(
+        String,
+        ForeignKey("media_sources.source_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    category_id = Column(
+        Integer, ForeignKey("platform_categories.category_id"), primary_key=True
+    )
+
+    # Relationships
+    source = relationship("MediaSource", back_populates="platform_categories")
+    category = relationship("PlatformCategory", back_populates="source_categories")
+
+
+class PlatformTag(Base):
+    """Platform tags (YouTube tags, etc.)."""
+
+    __tablename__ = "platform_tags"
+
+    # Primary key
+    tag_id = Column(Integer, primary_key=True, autoincrement=True)
+    platform = Column(String, nullable=False)
+    tag_name = Column(String, nullable=False)
+
+    # Relationships
+    source_tags = relationship(
+        "SourcePlatformTag", back_populates="tag", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (UniqueConstraint("platform", "tag_name", name="uq_platform_tag"),)
+
+
+class SourcePlatformTag(Base):
+    """Source platform tags (many-to-many)."""
+
+    __tablename__ = "source_platform_tags"
+
+    # Composite primary key
+    source_id = Column(
+        String,
+        ForeignKey("media_sources.source_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    tag_id = Column(Integer, ForeignKey("platform_tags.tag_id"), primary_key=True)
+
+    # Relationships
+    source = relationship("MediaSource", back_populates="platform_tags")
+    tag = relationship("PlatformTag", back_populates="source_tags")
+
+
+# ============================================================================
+# EXPORT TRACKING
+# ============================================================================
+
+
+class ExportDestination(Base):
+    """Export destinations."""
+
+    __tablename__ = "export_destinations"
+
+    # Primary key
+    destination_id = Column(Integer, primary_key=True, autoincrement=True)
+    destination_name = Column(String, nullable=False, unique=True)
+    destination_url = Column(String)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    claim_exports = relationship(
+        "ClaimExport", back_populates="destination", cascade="all, delete-orphan"
+    )
+
+
+class ClaimExport(Base):
+    """Claim exports."""
+
+    __tablename__ = "claim_exports"
+
+    # Composite primary key
+    claim_id = Column(
+        String, ForeignKey("claims.claim_id", ondelete="CASCADE"), primary_key=True
+    )
+    destination_id = Column(
+        Integer, ForeignKey("export_destinations.destination_id"), primary_key=True
+    )
+
+    exported_at = Column(DateTime, default=datetime.utcnow)
+    export_url = Column(String)
+    export_status = Column(String, default="success")
+    export_error = Column(Text)
+
+    # Relationships
+    claim = relationship("Claim", back_populates="exports")
+    destination = relationship("ExportDestination", back_populates="claim_exports")
 
 
 # ============================================================================

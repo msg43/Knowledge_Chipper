@@ -328,8 +328,7 @@ def test_database(tmp_path: Path) -> DatabaseService:
     db_service = DatabaseService(f"sqlite:///{db_path}")
 
     # Create all tables
-    from knowledge_system.database.hce_models import Claim, Episode
-    from knowledge_system.database.models import Base
+    from knowledge_system.database.models import Base, Claim, Episode
     from knowledge_system.database.system2_models import Job, JobRun
 
     with db_service.engine.begin() as conn:

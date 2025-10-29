@@ -35,6 +35,7 @@ from ..components.file_operations import FileOperationsMixin
 
 # Removed rich log display import - using main output_text area instead
 from ..core.settings_manager import get_gui_settings_manager
+from ..widgets.cookie_file_manager import CookieFileManager
 
 logger = get_logger(__name__)
 

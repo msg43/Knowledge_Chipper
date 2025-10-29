@@ -87,6 +87,10 @@ class CookieFileManager(QWidget):
         self.cookie_layout = QVBoxLayout()
         self.cookie_layout.setSpacing(5)
 
+        # Create status label first (needed by _add_cookie_entry)
+        self.status_label = QLabel("No cookies loaded")
+        self.status_label.setStyleSheet("font-size: 10pt; padding: 5px;")
+
         # Add initial entry
         self._add_cookie_entry()
 
@@ -127,9 +131,7 @@ class CookieFileManager(QWidget):
 
         layout.addLayout(button_layout)
 
-        # Status display
-        self.status_label = QLabel("No cookies loaded")
-        self.status_label.setStyleSheet("font-size: 10pt; padding: 5px;")
+        # Add status label to layout
         layout.addWidget(self.status_label)
 
         self.setLayout(layout)

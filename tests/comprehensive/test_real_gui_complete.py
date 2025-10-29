@@ -81,16 +81,23 @@ class TestRealGUITranscription:
     @pytest.mark.parametrize(
         "input_type,file_path,timeout",
         [
-            ("youtube_url", "https://youtu.be/CYrISmYGT8A?si=4TvYl42udS1v-jum", 600),
-            (
+            pytest.param(
+                "youtube_url",
+                "https://youtu.be/CYrISmYGT8A?si=4TvYl42udS1v-jum",
+                600,
+                marks=pytest.mark.skip_youtube,
+            ),
+            pytest.param(
                 "youtube_playlist",
                 "https://youtube.com/playlist?list=PLmPoIpZcewRt6SXGBm0eBykcCp9Zx-fns&si=fsZvALKteA_t2PiJ",
                 1200,
+                marks=pytest.mark.skip_youtube,
             ),
-            (
+            pytest.param(
                 "rss_feed",
                 "https://podcasts.apple.com/us/podcast/making-sense-with-sam-harris/id733163012?i=1000731856868",
                 900,
+                marks=pytest.mark.skip_network,
             ),
             ("local_audio", "fixtures/sample_files/test_speech.mp3", 180),
             ("local_video", "fixtures/sample_files/short_video.webm", 240),
@@ -109,20 +116,25 @@ class TestRealGUITranscription:
         transcribe_tab = get_transcribe_tab(gui_app)
         assert transcribe_tab is not None, "Could not find Transcribe tab"
 
+        # Set output directory (required for processing)
+        if hasattr(transcribe_tab, "output_dir_input"):
+            transcribe_tab.output_dir_input.setText(str(test_sandbox.output_dir))
+            process_events_for(100)
+
         # Handle different input types
         if input_type in ["youtube_url", "youtube_playlist", "rss_feed"]:
             # Network sources
             add_file_to_transcribe(transcribe_tab, Path(file_path))
         else:
-            # Local files
-            local_file = Path(__file__).parent.parent.parent / file_path
+            # Local files - fix path to use tests/fixtures/ prefix
+            local_file = Path(__file__).parent.parent / file_path
             assert local_file.exists(), f"Test file not found: {local_file}"
             add_file_to_transcribe(transcribe_tab, local_file)
 
         process_events_for(200)
 
         # Start processing
-        transcribe_tab.start_btn.click()
+        transcribe_tab._start_processing()  # Call method directly for offscreen testing
         process_events_for(500)
 
         # Wait for real processing
@@ -159,13 +171,9 @@ class TestRealGUITranscription:
         assert transcribe_tab is not None, "Could not find Transcribe tab"
 
         # Add multiple audio files
-        audio1 = (
-            Path(__file__).parent.parent.parent
-            / "fixtures/sample_files/short_audio.mp3"
-        )
+        audio1 = Path(__file__).parent.parent / "fixtures/sample_files/short_audio.mp3"
         audio2 = (
-            Path(__file__).parent.parent.parent
-            / "fixtures/sample_files/short_audio_multi.mp3"
+            Path(__file__).parent.parent / "fixtures/sample_files/short_audio_multi.mp3"
         )
 
         assert audio1.exists() and audio2.exists(), "Test audio files not found"
@@ -176,7 +184,7 @@ class TestRealGUITranscription:
         process_events_for(200)
 
         # Start processing
-        transcribe_tab.start_btn.click()
+        transcribe_tab._start_processing()  # Call method directly for offscreen testing
         process_events_for(500)
 
         # Wait for batch processing
@@ -232,6 +240,11 @@ class TestRealGUISummarization:
         summarize_tab = get_summarize_tab(gui_app)
         assert summarize_tab is not None, "Could not find Summarize tab"
 
+        # Set output directory (required for processing)
+        if hasattr(summarize_tab, "output_edit"):
+            summarize_tab.output_edit.setText(str(test_sandbox.output_dir))
+            process_events_for(100)
+
         # Handle file paths
         if file_type in ["pdf", "docx", "rtf"]:
             # Files in project root
@@ -240,7 +253,7 @@ class TestRealGUISummarization:
             )
         else:
             # Files in fixtures
-            doc_file = Path(__file__).parent.parent.parent / file_path
+            doc_file = Path(__file__).parent.parent / file_path
 
         assert doc_file.exists(), f"Test file not found: {doc_file}"
 
@@ -250,7 +263,7 @@ class TestRealGUISummarization:
         process_events_for(200)
 
         # Start summarization
-        summarize_tab.start_btn.click()
+        summarize_tab._start_processing()  # Call method directly for offscreen testing
         process_events_for(500)
 
         # Wait for real Ollama processing
@@ -301,8 +314,7 @@ class TestRealGUIWorkflows:
         assert transcribe_tab is not None
 
         audio_file = (
-            Path(__file__).parent.parent.parent
-            / "fixtures/sample_files/short_audio.mp3"
+            Path(__file__).parent.parent / "fixtures/sample_files/short_audio.mp3"
         )
         assert audio_file.exists(), f"Test audio file not found: {audio_file}"
 
@@ -310,7 +322,7 @@ class TestRealGUIWorkflows:
         process_events_for(200)
 
         # Start transcription
-        transcribe_tab.start_btn.click()
+        transcribe_tab._start_processing()  # Call method directly for offscreen testing
         process_events_for(500)
 
         # Wait for transcription
@@ -348,7 +360,7 @@ class TestRealGUIWorkflows:
         process_events_for(200)
 
         # Start summarization
-        summarize_tab.start_btn.click()
+        summarize_tab._start_processing()  # Call method directly for offscreen testing
         process_events_for(500)
 
         # Wait for summarization
@@ -389,14 +401,13 @@ class TestRealGUIWorkflows:
 
         # Add audio file
         audio_file = (
-            Path(__file__).parent.parent.parent
-            / "fixtures/sample_files/short_audio.mp3"
+            Path(__file__).parent.parent / "fixtures/sample_files/short_audio.mp3"
         )
         add_file_to_transcribe(transcribe_tab, audio_file)
         process_events_for(200)
 
         # Start processing
-        transcribe_tab.start_btn.click()
+        transcribe_tab._start_processing()  # Call method directly for offscreen testing
         process_events_for(1000)  # Let it start processing
 
         # Click stop button
@@ -429,7 +440,7 @@ class TestRealGUIWorkflows:
         process_events_for(200)
 
         # Click start
-        transcribe_tab.start_btn.click()
+        transcribe_tab._start_processing()  # Call method directly for offscreen testing
         process_events_for(2000)
 
         # Check for error indication in output log

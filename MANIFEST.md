@@ -93,6 +93,7 @@ Complete manifest of all files in the Knowledge Chipper codebase with meaningful
 - `HCE_TROUBLESHOOTING_GUIDE.md` - The HCE system is successfully processing segments and running parallel workers, but extracted claims are not appearing in the final summary output files. The system shows "Extracted 0 claims using HCE analysis" despite all infrastructure components working correctly.
 - `INTELLIGENT_BUILD_SYSTEM.md` - The build system now uses intelligent hash-based change detection instead of arbitrary time limits. It detects when you've actually changed source files, binaries, or configurations.
 - `INTRODUCTION_TAB_REWRITE_SUMMARY.md` - The Introduction tab has been completely rewritten to focus on what users can accomplish with the app, with extensive practical examples and user-centric language. All technical backend details have been removed in favor of clear, actionable guidance.
+- `INTRODUCTION_TAB_CONTROL_IMPLEMENTATION.md` - Implementation details for user-controllable Introduction tab visibility. Documents the addition of "Show Introduction Tab At Launch" checkbox in Settings tab and increased default window dimensions (1400x900).
 - `LICENSE` - MIT License
 - `Makefile` - Build automation and development task runner
 - `Makefile.hce` - Build automation and development task runner
@@ -220,6 +221,8 @@ Complete manifest of all files in the Knowledge Chipper codebase with meaningful
 - `run_auto_fix_loop.sh` - Shell script for auto-fixing issues in a loop
 - `run_comprehensive_gui_tests.sh` - Shell script to run comprehensive GUI tests
 - `run_comprehensive_tests.sh` - Shell script to run comprehensive test suite
+- `run_working_tests.py` - Python script to run all working test suites (29 tests: basic, logger, evaluators, schema, errors, integration)
+- `run_working_tests.sh` - Shell script version of run_working_tests.py for convenience
 - `run_find_all_issues.sh` - Shell script to find all issues in the codebase
 - `run_smart_auto_fix_loop.sh` - Smart auto-fixing loop with issue detection
 - `src copy.zip` - File
@@ -289,7 +292,7 @@ Complete manifest of all files in the Knowledge Chipper codebase with meaningful
 - `__init__.py` - Database module for Knowledge System SQLite integration.
 - `alembic_migrations.py` - Database Schema Versioning and Migration System
 - `apply_hce_migrations.py` - Apply HCE database migrations for Knowledge System.
-- `claim_models.py` - SQLAlchemy models for Claim-Centric Knowledge System with claims as fundamental unit
+- `models.py` - Unified SQLAlchemy models for Knowledge System - includes all models (transcripts, summaries, claims, episodes, etc.)
 - `claim_store.py` - Claim-Centric HCE storage for main application database using claim-first architecture
 - `hce_models.py` - Database models for HCE (Hybrid Claim Extraction) system.
 - `hce_store.py` - HCE storage layer for pipeline outputs

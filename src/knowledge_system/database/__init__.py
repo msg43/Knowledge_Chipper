@@ -5,30 +5,46 @@ This module provides SQLAlchemy models and database services for storing
 YouTube video records, transcripts, summaries, MOC data, and processing tracking.
 """
 
-# HCE models are optional and imported separately to avoid SQLAlchemy issues
-try:
-    from .hce_models import extend_video_model
-
-    HCE_AVAILABLE = True
-except Exception:
-    # If HCE models fail to import, continue without them
-    HCE_AVAILABLE = False
-
-    # Define dummy function to avoid errors
-    def extend_video_model():
-        pass
-
-
 from .models import (
     Base,
     BrightDataSession,
+    Claim,
+    ClaimCategory,
+    ClaimConcept,
+    ClaimExport,
+    ClaimJargon,
+    ClaimPerson,
+    ClaimRelation,
+    ClaimTag,
+    Concept,
+    ConceptAlias,
+    ConceptEvidence,
+    Episode,
+    EvidenceSpan,
+    ExportDestination,
     GeneratedFile,
+    JargonEvidence,
+    JargonTerm,
     MediaSource,
     MOCExtraction,
+    Person,
+    PersonEvidence,
+    PersonExternalId,
+    PlatformCategory,
+    PlatformTag,
     ProcessingJob,
+    Segment,
+    SourcePlatformCategory,
+    SourcePlatformTag,
     Summary,
     Transcript,
+    UserTag,
+    WikiDataAlias,
+    WikiDataCategory,
 )
+
+# HCE models are available (imported directly from models)
+HCE_AVAILABLE = True
 
 # System 2 models
 try:
@@ -37,16 +53,10 @@ try:
     SYSTEM2_AVAILABLE = True
 except Exception:
     SYSTEM2_AVAILABLE = False
-
-# Backward-compatibility: export legacy symbol `Video` even if models renamed
-Video = MediaSource
 from .service import DatabaseService  # noqa: E402
 
-# Extend Video model with HCE relationship
-extend_video_model()
-
 __all__ = [
-    "Video",
+    "MediaSource",
     "Transcript",
     "Summary",
     "MOCExtraction",
@@ -55,22 +65,16 @@ __all__ = [
     "BrightDataSession",
     "Base",
     "DatabaseService",
+    # HCE models
+    "Episode",
+    "Claim",
+    "EvidenceSpan",
+    "ClaimRelation",
+    "Person",
+    "Concept",
+    "JargonTerm",
 ]
 
 # Add System 2 models to exports if available
 if SYSTEM2_AVAILABLE:
     __all__.extend(["Job", "JobRun", "LLMRequest", "LLMResponse"])
-
-# Add HCE models to exports if available
-if HCE_AVAILABLE:
-    __all__.extend(
-        [
-            "Episode",
-            "Claim",
-            "EvidenceSpan",
-            "Relation",
-            "Person",
-            "Concept",
-            "JargonTerm",
-        ]
-    )
