@@ -254,9 +254,11 @@ class DatabaseService:
                     existing_video.url = url
                     existing_video.processed_at = datetime.utcnow()
 
-                    # Update metadata fields (excluding tags_json and categories_json)
+                    # Update metadata fields (excluding tags_json, categories_json, and invalid fields)
+                    # Filter out fields that don't exist in MediaSource model
+                    invalid_fields = {"extraction_method"}  # Fields not in MediaSource
                     for key, value in metadata.items():
-                        if hasattr(existing_video, key):
+                        if key not in invalid_fields and hasattr(existing_video, key):
                             setattr(existing_video, key, value)
 
                     session.commit()
@@ -276,8 +278,13 @@ class DatabaseService:
                     return existing_video
                 else:
                     # Create new video with claim-centric schema
+                    # Filter out invalid fields before creating MediaSource
+                    invalid_fields = {"extraction_method"}  # Fields not in MediaSource
+                    filtered_metadata = {
+                        k: v for k, v in metadata.items() if k not in invalid_fields
+                    }
                     video = MediaSource(
-                        source_id=video_id, title=title, url=url, **metadata
+                        source_id=video_id, title=title, url=url, **filtered_metadata
                     )
                     session.add(video)
                     session.commit()
