@@ -545,9 +545,28 @@ class MainWindow(QMainWindow):
             # Restore window geometry if available
             geometry = self.gui_settings.get_window_geometry()
             if geometry:
-                self.setGeometry(
-                    geometry["x"], geometry["y"], geometry["width"], geometry["height"]
-                )
+                # If saved size is significantly smaller than current default, use default
+                # This handles the resize from 1400x900 to 2800x1800
+                if geometry["width"] < 2000 or geometry["height"] < 1500:
+                    logger.info(
+                        "Saved window size is too small, using new default size"
+                    )
+                    self.setGeometry(geometry["x"], geometry["y"], 2800, 1800)
+                else:
+                    self.setGeometry(
+                        geometry["x"],
+                        geometry["y"],
+                        geometry["width"],
+                        geometry["height"],
+                    )
+            else:
+                # Center the window on screen with new default size
+                from PyQt6.QtWidgets import QApplication
+
+                screen = QApplication.primaryScreen().availableGeometry()
+                x = (screen.width() - 2800) // 2
+                y = (screen.height() - 1800) // 2
+                self.setGeometry(x, y, 2800, 1800)
 
             logger.debug("Session state loaded successfully")
         except Exception as e:
