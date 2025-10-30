@@ -191,11 +191,12 @@ def get_local_models(force_refresh: bool = False) -> list[str]:
     except Exception as e:
         logger.warning(f"Failed to fetch local models: {e}")
         # Return some common fallback models
+        # NOTE: Qwen3-4B-Instruct-2507 not yet in Ollama (only base/thinking variants available)
         return [
             "qwen2.5:7b-instruct",
+            "llama3.1:8b-instruct",
             "qwen2.5:3b-instruct",
             "llama3.2:3b-instruct",
-            "llama3.1:8b-instruct",
             "mistral:7b-instruct",
         ]
 

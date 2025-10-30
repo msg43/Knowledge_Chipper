@@ -2,7 +2,7 @@
 
 > Transform audio, video, and documents into structured knowledge with AI-powered analysis
 
-**Version 3.4.0** | **macOS Application** | **Offline-First Design**
+**Version 3.5.0** | **macOS Application** | **Offline-First Design**
 
 ## What Does This App Do?
 
@@ -66,6 +66,23 @@ Instead of manually listening to hours of podcasts or reading through long docum
 - **Speaker Attribution**: Assign names to speakers and correct any mistakes
 - **Claim Search**: Search across all your processed content
 
+### Working with Different Content Types
+
+**For Your Own Transcripts:**
+1. First transcribe using the Transcribe tab
+2. Later, use Summarize → Database to re-analyze without files
+3. Select "Transcript (Own)" as content type
+4. The system will use your speaker labels and timestamps
+
+**For External Content:**
+1. Use Summarize → Files
+2. Add PDFs, Word docs, or third-party transcripts
+3. Select the appropriate content type:
+   - "Transcript (Third-party)" for external transcripts
+   - "Document (PDF/eBook)" for books and reports
+   - "Document (White Paper)" for technical papers
+4. The system adapts its analysis approach automatically
+
 ### The 7 Tabs Explained
 
 1. **Introduction**: Quick tour and getting started guide
@@ -75,6 +92,51 @@ Instead of manually listening to hours of podcasts or reading through long docum
 5. **Upload**: Optional cloud storage backup (future feature)
 6. **Monitor**: Watch folders for automatic processing of new files
 7. **Settings**: Configure API keys, models, and preferences
+
+### The Summarize Tab in Detail
+
+The Summarize tab offers two powerful ways to extract knowledge from your content:
+
+**1. Summarize from Files**
+- Add files directly (PDFs, Word docs, Markdown, transcripts)
+- Process multiple files in one batch
+- Great for documents, reports, and third-party transcripts
+
+**2. Summarize from Database** *(New!)*
+- Browse all your previously transcribed content
+- Select transcripts directly from your knowledge database
+- No need to generate intermediate files
+- Shows duration, existing summary status, and token counts
+
+**Content Type Selection**
+The app now intelligently adapts its analysis based on your content type:
+
+- **Transcript (Own)**: For content you transcribed with this app
+  - Uses rich metadata like speaker labels and timestamps
+  - Tracks who said what throughout the conversation
+  - Preserves conversational context and speaker dynamics
+  
+- **Transcript (Third-party)**: For external transcripts
+  - Handles missing or incomplete metadata gracefully
+  - Works with various transcript formats
+  - Adapts to quality issues in the source material
+  
+- **Document (PDF/eBook)**: For long-form written content
+  - Respects document structure (chapters, sections)
+  - Handles academic citations and references
+  - Optimized for books, reports, and articles
+  
+- **Document (White Paper)**: For technical documents
+  - Focuses on technical terminology and frameworks
+  - Extracts methodologies and formal models
+  - Ideal for research papers and technical specs
+
+**Smart Chunking**
+The app automatically breaks large content into optimal chunks:
+- Respects natural boundaries (sentences, speaker changes)
+- Includes smart overlap to maintain context
+- Adapts chunk size based on content density
+- Ensures no important claims are split across boundaries
 
 ### Supported File Types
 
@@ -90,6 +152,8 @@ Process lecture recordings, research papers, and academic content:
 - Build a searchable knowledge base of insights
 - Connect related ideas across multiple sources
 - Export to Obsidian or other knowledge management tools
+
+**New Workflow**: Summarize directly from your database! After transcribing lectures or videos, use the Summarize tab's database browser to re-analyze content without managing intermediate files.
 
 ### Content Analysis
 Analyze podcasts, interviews, and video content:

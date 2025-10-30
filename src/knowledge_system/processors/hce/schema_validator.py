@@ -436,6 +436,36 @@ class SchemaValidator:
                     "key_themes": [],
                     "overall_quality": "low",
                 }
+            
+            # Repair invalid overall_quality values
+            if "summary_assessment" in repaired and isinstance(repaired["summary_assessment"], dict):
+                quality = repaired["summary_assessment"].get("overall_quality")
+                valid_qualities = ["high", "medium", "low"]
+                
+                if quality not in valid_qualities:
+                    # Map common invalid values to valid ones
+                    quality_map: dict[str, str] = {
+                        "good": "high",
+                        "excellent": "high",
+                        "great": "high",
+                        "fair": "medium",
+                        "average": "medium",
+                        "moderate": "medium",
+                        "poor": "low",
+                        "bad": "low",
+                        "weak": "low",
+                        "no_claims": "low",
+                        "error": "low",
+                        "unknown": "medium",
+                    }
+                    # Ensure quality is a string before using it as a key
+                    quality_str = str(quality) if quality is not None else "unknown"
+                    repaired["summary_assessment"]["overall_quality"] = quality_map.get(
+                        quality_str, "medium"
+                    )
+                    logger.debug(
+                        f"Repaired overall_quality from '{quality}' to '{repaired['summary_assessment']['overall_quality']}'"
+                    )
 
         return repaired
 

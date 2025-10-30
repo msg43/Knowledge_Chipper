@@ -52,25 +52,52 @@ class UnifiedMiner:
         llm: System2LLM,
         prompt_path: Path | None = None,
         selectivity: str = "moderate",
+        content_type: str | None = None,
     ):
         self.llm = llm
         self.selectivity = selectivity
+        self.content_type = content_type
 
         # Load prompt based on selectivity if path not explicitly provided
         if prompt_path is None:
-            prompt_files = {
-                "liberal": "unified_miner_liberal.txt",
-                "moderate": "unified_miner_moderate.txt",
-                "conservative": "unified_miner_conservative.txt",
-            }
-            prompt_file = prompt_files.get(selectivity, "unified_miner_moderate.txt")
-            prompt_path = Path(__file__).parent / "prompts" / prompt_file
+            # If content_type is specified, use content-specific prompt
+            if content_type:
+                content_type_files = {
+                    "transcript_own": "unified_miner_transcript_own.txt",
+                    "transcript_third_party": "unified_miner_transcript_third_party.txt",
+                    "document_pdf": "unified_miner_document.txt",
+                    "document_whitepaper": "unified_miner_document.txt",  # Uses same as document_pdf
+                }
+                prompt_file = content_type_files.get(content_type)
+                
+                if prompt_file:
+                    prompt_path = Path(__file__).parent / "prompts" / prompt_file
+                    # Check if content-specific prompt exists
+                    if not prompt_path.exists():
+                        logger.warning(f"Content-specific prompt not found: {prompt_path}, falling back to default")
+                        prompt_path = None
+            
+            # Fall back to selectivity-based prompts
+            if prompt_path is None:
+                prompt_files = {
+                    "liberal": "unified_miner_liberal.txt",
+                    "moderate": "unified_miner_moderate.txt",
+                    "conservative": "unified_miner_conservative.txt",
+                }
+                prompt_file = prompt_files.get(selectivity, "unified_miner_moderate.txt")
+                prompt_path = Path(__file__).parent / "prompts" / prompt_file
 
         if not prompt_path.exists():
-            raise FileNotFoundError(f"Unified miner prompt not found: {prompt_path}")
+            # Final fallback to unified_miner.txt
+            prompt_path = Path(__file__).parent / "prompts" / "unified_miner.txt"
+            if not prompt_path.exists():
+                raise FileNotFoundError(f"No unified miner prompt found")
 
         self.template = prompt_path.read_text()
-        logger.info(f"UnifiedMiner initialized with {selectivity} selectivity")
+        logger.info(
+            f"UnifiedMiner initialized with {selectivity} selectivity" + 
+            (f" and {content_type} content type" if content_type else "")
+        )
 
     def mine_segment(self, segment: Segment) -> UnifiedMinerOutput:
         """Extract all entity types from a single segment."""
@@ -258,6 +285,7 @@ def mine_episode_unified(
     max_workers: int | None = None,
     progress_callback: Callable | None = None,
     selectivity: str = "moderate",  # NEW: Miner selectivity level
+    content_type: str | None = None,  # Content type for specialized prompts
 ) -> list[UnifiedMinerOutput]:
     """
     Convenience function for mining an entire episode with the unified miner.
@@ -291,7 +319,7 @@ def mine_episode_unified(
         # Fall back to moderate if selected variant doesn't exist
         prompt_path = Path(__file__).parent / "prompts" / "unified_miner_moderate.txt"
 
-    miner = UnifiedMiner(llm, prompt_path, selectivity=selectivity)
+    miner = UnifiedMiner(llm, prompt_path, selectivity=selectivity, content_type=content_type)
     return miner.mine_episode(
         episode, max_workers=max_workers, progress_callback=progress_callback
     )

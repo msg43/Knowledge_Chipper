@@ -38,3 +38,4 @@ class PipelineConfigFlex(BaseModel):
     miner_selectivity: Literal[
         "liberal", "moderate", "conservative"
     ] = "moderate"  # NEW: Controls how aggressively miner filters
+    content_type: str | None = None  # Content type for specialized prompts

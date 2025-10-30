@@ -106,6 +106,7 @@ class UnifiedHCEPipeline:
                     "Mining segments", 40.0, msg
                 ),
                 selectivity=self.config.miner_selectivity,  # NEW: Pass selectivity
+                content_type=self.config.content_type,  # Pass content type for prompt selection
             )
 
             # Count total extractions

@@ -6,6 +6,7 @@ from typing import Any
 import yaml
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -16,8 +17,12 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QPushButton,
+    QRadioButton,
     QSizePolicy,
     QSpinBox,
+    QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -195,20 +200,52 @@ class EnhancedSummarizationWorker(QThread):
                     self.processing_error.emit("Processing was cancelled by user")
                     return
 
-                file_name = Path(file_path).name
+                # Get content type
+                content_type_map = {
+                    "Transcript (Own)": "transcript_own",
+                    "Transcript (Third-party)": "transcript_third_party",
+                    "Document (PDF/eBook)": "document_pdf",
+                    "Document (White Paper)": "document_whitepaper"
+                }
+                content_type = content_type_map.get(self.content_type_combo.currentText(), "transcript_own")
+                
+                # Handle database sources
+                if file_path.startswith("db://"):
+                    # Extract video_id from db://VIDEO_ID format
+                    video_id = file_path[5:]  # Remove "db://" prefix
+                    episode_id = f"episode_{video_id}"
+                    file_name = f"Database: {video_id}"
+                    
+                    # Create mining job for database source
+                    job_id = orchestrator.create_job(
+                        "mine",  # Database job type (not JobType enum)
+                        episode_id,
+                        config={
+                            "source": "manual_summarization",
+                            # No file_path for database sources - will use DB segments
+                            "gui_settings": self.gui_settings,
+                            "content_type": content_type,
+                            "miner_model": f"{self.gui_settings.get('provider', 'openai')}:{self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')}",
+                        },
+                        auto_process=False,  # Manual job, don't chain
+                    )
+                else:
+                    # Regular file processing
+                    file_name = Path(file_path).name
 
-                # Create episode ID from file name
-                episode_id = Path(file_path).stem
+                    # Create episode ID from file name
+                    episode_id = Path(file_path).stem
 
-                # Create mining job for this file
-                job_id = orchestrator.create_job(
-                    "mine",  # Database job type (not JobType enum)
-                    episode_id,
-                    config={
-                        "source": "manual_summarization",
-                        "file_path": str(file_path),
-                        "gui_settings": self.gui_settings,
-                        "miner_model": f"{self.gui_settings.get('provider', 'openai')}:{self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')}",
+                    # Create mining job for this file
+                    job_id = orchestrator.create_job(
+                        "mine",  # Database job type (not JobType enum)
+                        episode_id,
+                        config={
+                            "source": "manual_summarization",
+                            "file_path": str(file_path),
+                            "gui_settings": self.gui_settings,
+                            "content_type": content_type,
+                            "miner_model": f"{self.gui_settings.get('provider', 'openai')}:{self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')}",
                     },
                     auto_process=False,  # Manual job, don't chain
                 )
@@ -594,6 +631,58 @@ class SummarizationTab(BaseTab):
         input_group = QGroupBox("Input Documents")
         input_layout = QVBoxLayout()
 
+        # Source selection radio buttons
+        source_layout = QHBoxLayout()
+        self.files_radio = QRadioButton("Files")
+        self.database_radio = QRadioButton("Database")
+        self.files_radio.setChecked(True)  # Default to files
+        self.files_radio.toggled.connect(self._on_source_changed)
+        self.database_radio.toggled.connect(self._on_source_changed)
+        # Also save settings when source changes
+        self.files_radio.toggled.connect(self._on_setting_changed)
+        self.database_radio.toggled.connect(self._on_setting_changed)
+        
+        source_layout.addWidget(QLabel("Source:"))
+        source_layout.addWidget(self.files_radio)
+        source_layout.addWidget(self.database_radio)
+        source_layout.addStretch()
+        input_layout.addLayout(source_layout)
+        
+        # Content type selection
+        content_type_layout = QHBoxLayout()
+        self.content_type_combo = QComboBox()
+        self.content_type_combo.addItems([
+            "Transcript (Own)",
+            "Transcript (Third-party)",
+            "Document (PDF/eBook)",
+            "Document (White Paper)"
+        ])
+        self.content_type_combo.setCurrentIndex(0)
+        
+        # Add tooltip
+        self.content_type_combo.setToolTip(
+            "Select the type of content:\n"
+            "• Transcript (Own): Created by this app with diarization and timestamps\n"
+            "• Transcript (Third-party): External transcripts without our metadata\n"
+            "• Document (PDF/eBook): Books, reports, long-form content\n"
+            "• Document (White Paper): Technical documents, research papers"
+        )
+        
+        content_type_layout.addWidget(QLabel("Content Type:"))
+        content_type_layout.addWidget(self.content_type_combo)
+        content_type_layout.addStretch()
+        input_layout.addLayout(content_type_layout)
+        
+        # Connect to save settings when changed
+        self.content_type_combo.currentTextChanged.connect(self._on_setting_changed)
+
+        # Stacked widget for file list and database browser
+        self.source_stack = QStackedWidget()
+        
+        # Page 0: File list widget
+        file_widget = QWidget()
+        file_layout = QVBoxLayout(file_widget)
+        
         # Add supported file types info
         supported_types_label = QLabel(
             "Supported formats: PDF (.pdf), Text (.txt), Markdown (.md), HTML (.html, .htm), JSON (.json), Word (.docx, .doc), RTF (.rt)"
@@ -602,12 +691,12 @@ class SummarizationTab(BaseTab):
             "color: #666; font-style: italic; margin-bottom: 8px;"
         )
         supported_types_label.setWordWrap(True)
-        input_layout.addWidget(supported_types_label)
+        file_layout.addWidget(supported_types_label)
 
         # File list
         self.file_list = QListWidget()
         self.file_list.setMinimumHeight(150)
-        input_layout.addWidget(self.file_list)
+        file_layout.addWidget(self.file_list)
 
         # Add default file if it exists (using curly quotes: U+2018 and U+2019)
         default_input_file = "/Users/matthewgreer/Projects/Knowledge_Chipper/output/transcripts/Steve Bannon_ Silicon Valley Is Turning Us Into \u2018Digital Serfs\u2019_vvj_J2tB2Ag.md"
@@ -633,8 +722,18 @@ class SummarizationTab(BaseTab):
         button_layout.addWidget(add_folder_btn)
         button_layout.addWidget(clear_btn)
         button_layout.addStretch()
-        input_layout.addLayout(button_layout)
-
+        file_layout.addLayout(button_layout)
+        
+        # Add file widget to stacked widget
+        self.source_stack.addWidget(file_widget)
+        
+        # Page 1: Database browser widget
+        self.db_widget = self._create_database_browser()
+        self.source_stack.addWidget(self.db_widget)
+        
+        # Add stacked widget to main layout
+        input_layout.addWidget(self.source_stack)
+        
         input_group.setLayout(input_layout)
         # Input section should also maintain its size and not shrink
         input_group.setSizePolicy(
@@ -1746,35 +1845,203 @@ class SummarizationTab(BaseTab):
     def _clear_files(self) -> None:
         """Clear all files from the list."""
         self.file_list.clear()
+    
+    def _on_source_changed(self) -> None:
+        """Handle source selection change between Files and Database."""
+        if self.files_radio.isChecked():
+            self.source_stack.setCurrentIndex(0)
+        else:
+            self.source_stack.setCurrentIndex(1)
+            # Refresh database list when switching to database view
+            self._refresh_database_list()
+    
+    def _create_database_browser(self) -> QWidget:
+        """Create the database browser widget for transcript selection."""
+        db_widget = QWidget()
+        db_layout = QVBoxLayout(db_widget)
+        
+        # Search bar
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(QLabel("Search:"))
+        self.db_search = QLineEdit()
+        self.db_search.setPlaceholderText("Filter transcripts...")
+        self.db_search.textChanged.connect(self._filter_database_list)
+        search_layout.addWidget(self.db_search)
+        refresh_btn = QPushButton("🔄 Refresh")
+        refresh_btn.clicked.connect(self._refresh_database_list)
+        search_layout.addWidget(refresh_btn)
+        db_layout.addLayout(search_layout)
+        
+        # Database table
+        self.db_table = QTableWidget()
+        self.db_table.setColumnCount(5)
+        self.db_table.setHorizontalHeaderLabels(["Select", "Title", "Duration", "Has Summary", "Token Count"])
+        self.db_table.setAlternatingRowColors(True)
+        self.db_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.db_table.setMinimumHeight(150)
+        
+        # Set column widths
+        self.db_table.setColumnWidth(0, 60)  # Select checkbox
+        self.db_table.setColumnWidth(1, 400) # Title
+        self.db_table.setColumnWidth(2, 80)  # Duration  
+        self.db_table.setColumnWidth(3, 100) # Has Summary
+        self.db_table.setColumnWidth(4, 100) # Token Count
+        
+        db_layout.addWidget(self.db_table)
+        
+        # Selection buttons
+        selection_layout = QHBoxLayout()
+        select_all_btn = QPushButton("Select All")
+        select_all_btn.clicked.connect(self._select_all_db)
+        clear_selection_btn = QPushButton("Clear Selection")
+        clear_selection_btn.clicked.connect(self._clear_db_selection)
+        selection_layout.addWidget(select_all_btn)
+        selection_layout.addWidget(clear_selection_btn)
+        selection_layout.addStretch()
+        db_layout.addLayout(selection_layout)
+        
+        return db_widget
+    
+    def _refresh_database_list(self) -> None:
+        """Refresh the database transcript list."""
+        from ...database import DatabaseService
+        from ...utils.text_utils import estimate_tokens_improved
+        import datetime
+        
+        self.db_table.setRowCount(0)
+        
+        try:
+            db = DatabaseService()
+            
+            # Get all videos that have transcripts
+            with db.get_session() as session:
+                from ...database.models import MediaSource, Transcript, Summary
+                
+                # Query for media sources with transcripts
+                query = session.query(MediaSource).join(
+                    Transcript, MediaSource.source_id == Transcript.video_id, isouter=True
+                ).filter(Transcript.transcript_id.isnot(None))
+                
+                videos = query.all()
+                
+                for video in videos:
+                    # Check if it has a summary
+                    summary = session.query(Summary).filter(
+                        Summary.video_id == video.source_id
+                    ).first()
+                    
+                    # Get transcript for token estimation
+                    transcript = session.query(Transcript).filter(
+                        Transcript.video_id == video.source_id
+                    ).first()
+                    
+                    # Add row to table
+                    row_position = self.db_table.rowCount()
+                    self.db_table.insertRow(row_position)
+                    
+                    # Checkbox
+                    checkbox = QCheckBox()
+                    self.db_table.setCellWidget(row_position, 0, checkbox)
+                    
+                    # Title (store video_id in UserRole)
+                    title_item = QTableWidgetItem(video.title or video.source_id)
+                    title_item.setData(Qt.ItemDataRole.UserRole, video.source_id)
+                    self.db_table.setItem(row_position, 1, title_item)
+                    
+                    # Duration
+                    duration_text = ""
+                    if video.duration_seconds:
+                        hours = video.duration_seconds // 3600
+                        minutes = (video.duration_seconds % 3600) // 60
+                        seconds = video.duration_seconds % 60
+                        if hours > 0:
+                            duration_text = f"{hours}:{minutes:02d}:{seconds:02d}"
+                        else:
+                            duration_text = f"{minutes}:{seconds:02d}"
+                    self.db_table.setItem(row_position, 2, QTableWidgetItem(duration_text))
+                    
+                    # Has Summary
+                    summary_text = "✓" if summary else "✗"
+                    if summary:
+                        summary_text += " (Re-summarize?)"
+                    self.db_table.setItem(row_position, 3, QTableWidgetItem(summary_text))
+                    
+                    # Token Count (estimate)
+                    token_count = 0
+                    if transcript and transcript.transcript_text:
+                        token_count = estimate_tokens_improved(transcript.transcript_text, "default")
+                    self.db_table.setItem(row_position, 4, QTableWidgetItem(f"~{token_count:,}"))
+            
+            logger.info(f"Database browser refreshed - found {self.db_table.rowCount()} transcripts")
+        except Exception as e:
+            logger.error(f"Failed to refresh database list: {e}", exc_info=True)
+    
+    def _filter_database_list(self, text: str) -> None:
+        """Filter the database list based on search text."""
+        for row in range(self.db_table.rowCount()):
+            # Check if title contains search text
+            title_item = self.db_table.item(row, 1)
+            if title_item:
+                match = text.lower() in title_item.text().lower()
+                self.db_table.setRowHidden(row, not match)
+    
+    def _select_all_db(self) -> None:
+        """Select all items in the database table."""
+        for row in range(self.db_table.rowCount()):
+            checkbox = self.db_table.cellWidget(row, 0)
+            if checkbox and hasattr(checkbox, 'setChecked'):
+                checkbox.setChecked(True)
+    
+    def _clear_db_selection(self) -> None:
+        """Clear all selections in the database table."""
+        for row in range(self.db_table.rowCount()):
+            checkbox = self.db_table.cellWidget(row, 0)
+            if checkbox and hasattr(checkbox, 'setChecked'):
+                checkbox.setChecked(False)
 
     def _get_file_list(self) -> list[str]:
-        """Get the list of files to process."""
-        logger.info(
-            f"🎯 DEBUG: _get_file_list() called - file_list has {self.file_list.count()} items"
-        )
-        files = []
-        for i in range(self.file_list.count()):
-            item = self.file_list.item(i)
-            if item:
-                file_path = item.text()
-                logger.info(
-                    f"🎯 DEBUG: File list item {i}: '{file_path}' ({len(file_path)} chars)"
-                )
-
-                # Debug: Check if this looks like a file path
-                if (
-                    len(file_path) < 200
-                    and not file_path.startswith("/")
-                    and not file_path.startswith("\\")
-                ):
-                    logger.warning(
-                        f"🎯 WARNING: Suspicious file path: '{file_path}' - too short or doesn't look like a path"
+        """Get the list of files/sources to process."""
+        if self.files_radio.isChecked():
+            # Get files from file list
+            logger.info(
+                f"🎯 DEBUG: _get_file_list() called - file_list has {self.file_list.count()} items"
+            )
+            files = []
+            for i in range(self.file_list.count()):
+                item = self.file_list.item(i)
+                if item:
+                    file_path = item.text()
+                    logger.info(
+                        f"🎯 DEBUG: File list item {i}: '{file_path}' ({len(file_path)} chars)"
                     )
 
-                files.append(file_path)
+                    # Debug: Check if this looks like a file path
+                    if (
+                        len(file_path) < 200
+                        and not file_path.startswith("/")
+                        and not file_path.startswith("\\")
+                    ):
+                        logger.warning(
+                            f"🎯 WARNING: Suspicious file path: '{file_path}' - too short or doesn't look like a path"
+                        )
 
-        logger.info(f"🎯 DEBUG: Total files collected: {len(files)}")
-        return files
+                    files.append(file_path)
+
+            logger.info(f"🎯 DEBUG: Total files collected: {len(files)}")
+            return files
+        else:
+            # Get selected items from database table
+            sources = []
+            for row in range(self.db_table.rowCount()):
+                checkbox = self.db_table.cellWidget(row, 0)
+                if checkbox and hasattr(checkbox, 'isChecked') and checkbox.isChecked():
+                    # Get video_id stored in row data
+                    video_id = self.db_table.item(row, 1).data(Qt.ItemDataRole.UserRole)
+                    if video_id:
+                        # Use special prefix to indicate database source
+                        sources.append(f"db://{video_id}")
+            logger.info(f"🎯 DEBUG: _get_file_list() returning {len(sources)} database sources")
+            return sources
 
     def _refresh_models(self):
         """Refresh the model list from community source."""
@@ -2721,6 +2988,23 @@ class SummarizationTab(BaseTab):
                     index = self.model_combo.findText(saved_model)
                     if index >= 0:
                         self.model_combo.setCurrentIndex(index)
+                
+                # Load source selection (Files vs Database)
+                saved_source_files = self.gui_settings.get_checkbox_state(
+                    self.tab_name, "source_files", True  # Default to files
+                )
+                if is_widget_valid(self.files_radio) and is_widget_valid(self.database_radio):
+                    self.files_radio.setChecked(saved_source_files)
+                    self.database_radio.setChecked(not saved_source_files)
+                
+                # Load content type selection
+                saved_content_type = self.gui_settings.get_combo_selection(
+                    self.tab_name, "content_type", "Transcript (Own)"
+                )
+                if is_widget_valid(self.content_type_combo):
+                    index = self.content_type_combo.findText(saved_content_type)
+                    if index >= 0:
+                        self.content_type_combo.setCurrentIndex(index)
 
                 # Load max tokens
                 # Load template path
@@ -2924,6 +3208,19 @@ class SummarizationTab(BaseTab):
             if model_text is not None:
                 self.gui_settings.set_combo_selection(
                     self.tab_name, "model", model_text
+                )
+            
+            # Save source selection (Files vs Database)
+            source_selection = "files" if self.files_radio.isChecked() else "database"
+            self.gui_settings.set_checkbox_state(
+                self.tab_name, "source_files", self.files_radio.isChecked()
+            )
+            
+            # Save content type selection
+            content_type_text = safe_get_text(self.content_type_combo, "content_type_combo")
+            if content_type_text is not None:
+                self.gui_settings.set_combo_selection(
+                    self.tab_name, "content_type", content_type_text
                 )
 
             # Save line edit text
