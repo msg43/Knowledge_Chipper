@@ -886,9 +886,8 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                             )
                                             else "partial"
                                         ),
-                                        "extraction_method": (
-                                            "packetstream" if use_proxy else "direct"
-                                        ),
+                                        # Note: extraction_method removed - not a MediaSource field
+                                        # It belongs to MOCExtraction model
                                     }
 
                                     # Create or update video record with full metadata
