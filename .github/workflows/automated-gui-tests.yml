@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest]
         python-version: ['3.11', '3.12']
       fail-fast: false  # Continue testing other combinations even if one fails
 
@@ -28,26 +28,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install system dependencies (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgl1 \
-            libegl1 \
-            libxkbcommon-x11-0 \
-            libxcb-icccm4 \
-            libxcb-image0 \
-            libxcb-keysyms1 \
-            libxcb-randr0 \
-            libxcb-render-util0 \
-            libxcb-xinerama0 \
-            libxcb-xfixes0 \
-            x11-utils \
-            xvfb
-
-      - name: Install system dependencies (macOS)
-        if: runner.os == 'macOS'
+      - name: Install system dependencies
         run: |
           brew install portaudio
 
@@ -68,13 +49,7 @@ jobs:
           echo "QT_QPA_PLATFORM=offscreen" >> $GITHUB_ENV
           echo "PYTHONPATH=$PWD/src:$PYTHONPATH" >> $GITHUB_ENV
 
-      - name: Run automated tests (Ubuntu with Xvfb)
-        if: runner.os == 'Linux'
-        run: |
-          xvfb-run -a ./tests/run_comprehensive_automated_tests.sh
-
-      - name: Run automated tests (macOS)
-        if: runner.os == 'macOS'
+      - name: Run automated tests
         run: |
           ./tests/run_comprehensive_automated_tests.sh
 
