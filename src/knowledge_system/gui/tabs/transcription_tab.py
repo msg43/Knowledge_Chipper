@@ -1814,15 +1814,15 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         # Hardware recommendations section moved to Settings tab
 
-        # Input section with stretch factor
+        # Input section with minimal stretch factor
         input_section = self._create_input_section()
-        layout.addWidget(input_section, 1)  # Give some stretch to input section
+        layout.addWidget(input_section, 0)  # Minimal stretch for input section
 
-        # Settings section - increased stretch to make cookie authentication visible
+        # Settings section - use collapsible groups for better space usage
         settings_section = self._create_settings_section()
         layout.addWidget(
-            settings_section, 3
-        )  # More stretch to show all settings including cookie auth
+            settings_section, 0
+        )  # No extra stretch - let it take only what it needs
 
         # System 2 Auto-process section
         auto_process_section = self._create_auto_process_section()
@@ -1838,9 +1838,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         progress_section = self._create_progress_section()
         layout.addWidget(progress_section)
 
-        # Output section - reduced stretch to make room for settings above
+        # Output section - minimal stretch to save space
         output_layout = self._create_output_section()
-        layout.addLayout(output_layout, 1)  # Reduced stretch to keep console compact
+        layout.addLayout(output_layout, 0)  # No extra stretch - use only needed space
 
         # Load saved settings after UI is set up
         # Use a timer with a small delay to ensure all widgets are fully initialized
@@ -1865,10 +1865,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         supported_types_label.setWordWrap(True)
         layout.addWidget(supported_types_label)
 
-        # File list with improved size policy
+        # File list with improved size policy - much more compact
         self.transcription_files = QListWidget()
-        self.transcription_files.setMinimumHeight(100)  # Smaller minimum height
-        self.transcription_files.setMaximumHeight(150)  # Smaller maximum to save space
+        self.transcription_files.setMinimumHeight(60)  # Much smaller minimum height
+        self.transcription_files.setMaximumHeight(
+            90
+        )  # Much smaller maximum to save space
         # Set size policy to allow proper vertical expansion/contraction
         from PyQt6.QtWidgets import QSizePolicy
 
@@ -2178,8 +2180,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.youtube_delay_spinbox.valueChanged.connect(self._on_setting_changed)
         layout.addWidget(self.youtube_delay_spinbox, 7, 3)
 
-        # Cookie Authentication Section
+        # Cookie Authentication Section - collapsible
         cookie_group = QGroupBox("Cookie Authentication (Multi-Account Support)")
+        cookie_group.setCheckable(True)
+        cookie_group.setChecked(False)  # Start collapsed
+        cookie_group.setFlat(True)  # Make it more compact
         cookie_layout = QVBoxLayout()
 
         # Enable/disable checkbox
@@ -2207,8 +2212,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         cookie_group.setLayout(cookie_layout)
         layout.addWidget(cookie_group, 8, 0, 1, 4)
 
-        # Rate Limiting Section
+        # Rate Limiting Section - collapsible
         rate_limit_group = QGroupBox("Rate Limiting (Anti-Bot Protection)")
+        rate_limit_group.setCheckable(True)
+        rate_limit_group.setChecked(False)  # Start collapsed
+        rate_limit_group.setFlat(True)  # Make it more compact
         rate_limit_layout = QGridLayout()
 
         rate_limit_layout.addWidget(QLabel("Min delay between downloads:"), 0, 0)

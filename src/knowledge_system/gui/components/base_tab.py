@@ -103,8 +103,8 @@ class BaseTab(QWidget):
         self.output_text = QTextEdit()
         self.output_text.setReadOnly(True)
         self.output_text.setMinimumHeight(
-            80
-        )  # Reduced minimum height to make room for settings section
+            60
+        )  # Further reduced minimum height to save even more space
         # Remove maximum height constraint to allow expansion
         # Use Expanding vertical policy to grow/shrink with window
         self.output_text.setSizePolicy(
@@ -112,8 +112,8 @@ class BaseTab(QWidget):
         )
         # Set stretch factor to ensure it gets priority in layout distribution
         layout.addWidget(
-            self.output_text, 1
-        )  # Give stretch factor to ensure proper expansion
+            self.output_text, 0
+        )  # No extra stretch - only take what's needed
 
         return layout
 
