@@ -299,6 +299,83 @@ class DatabaseService:
             logger.error(f"Failed to create/update video {video_id}: {e}")
             return None
 
+    def _store_platform_tags(
+        self, session: Session, source_id: str, tags: list[str], platform: str
+    ) -> None:
+        """Store platform tags in normalized tables."""
+        if not tags:
+            return
+
+        # Clear existing tags for this source
+        session.query(SourcePlatformTag).filter(
+            SourcePlatformTag.source_id == source_id
+        ).delete()
+
+        # Store each tag
+        for tag_name in tags:
+            if not tag_name or not isinstance(tag_name, str):
+                continue
+
+            # Get or create platform tag
+            platform_tag = (
+                session.query(PlatformTag)
+                .filter(
+                    PlatformTag.platform == platform, PlatformTag.tag_name == tag_name
+                )
+                .first()
+            )
+
+            if not platform_tag:
+                platform_tag = PlatformTag(platform=platform, tag_name=tag_name)
+                session.add(platform_tag)
+                session.flush()  # Get the tag_id
+
+            # Create source-platform tag relationship
+            source_tag = SourcePlatformTag(
+                source_id=source_id, tag_id=platform_tag.tag_id
+            )
+            session.add(source_tag)
+
+    def _store_platform_categories(
+        self, session: Session, source_id: str, categories: list[str], platform: str
+    ) -> None:
+        """Store platform categories in normalized tables."""
+        if not categories:
+            return
+
+        # Clear existing categories for this source
+        session.query(SourcePlatformCategory).filter(
+            SourcePlatformCategory.source_id == source_id
+        ).delete()
+
+        # Store each category
+        for category_name in categories:
+            if not category_name or not isinstance(category_name, str):
+                continue
+
+            # Get or create platform category
+            platform_category = (
+                session.query(PlatformCategory)
+                .filter(
+                    PlatformCategory.platform == platform,
+                    PlatformCategory.category_name == category_name,
+                )
+                .first()
+            )
+
+            if not platform_category:
+                platform_category = PlatformCategory(
+                    platform=platform, category_name=category_name
+                )
+                session.add(platform_category)
+                session.flush()  # Get the category_id
+
+            # Create source-platform category relationship
+            source_category = SourcePlatformCategory(
+                source_id=source_id, category_id=platform_category.category_id
+            )
+            session.add(source_category)
+
     def get_video(self, video_id: str) -> MediaSource | None:
         """Get video by ID (using claim-centric schema with source_id)."""
         try:
