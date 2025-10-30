@@ -69,14 +69,16 @@ class UnifiedMiner:
                     "document_whitepaper": "unified_miner_document.txt",  # Uses same as document_pdf
                 }
                 prompt_file = content_type_files.get(content_type)
-                
+
                 if prompt_file:
                     prompt_path = Path(__file__).parent / "prompts" / prompt_file
                     # Check if content-specific prompt exists
                     if not prompt_path.exists():
-                        logger.warning(f"Content-specific prompt not found: {prompt_path}, falling back to default")
+                        logger.warning(
+                            f"Content-specific prompt not found: {prompt_path}, falling back to default"
+                        )
                         prompt_path = None
-            
+
             # Fall back to selectivity-based prompts
             if prompt_path is None:
                 prompt_files = {
@@ -84,7 +86,9 @@ class UnifiedMiner:
                     "moderate": "unified_miner_moderate.txt",
                     "conservative": "unified_miner_conservative.txt",
                 }
-                prompt_file = prompt_files.get(selectivity, "unified_miner_moderate.txt")
+                prompt_file = prompt_files.get(
+                    selectivity, "unified_miner_moderate.txt"
+                )
                 prompt_path = Path(__file__).parent / "prompts" / prompt_file
 
         if not prompt_path.exists():
@@ -95,8 +99,8 @@ class UnifiedMiner:
 
         self.template = prompt_path.read_text()
         logger.info(
-            f"UnifiedMiner initialized with {selectivity} selectivity" + 
-            (f" and {content_type} content type" if content_type else "")
+            f"UnifiedMiner initialized with {selectivity} selectivity"
+            + (f" and {content_type} content type" if content_type else "")
         )
 
     def mine_segment(self, segment: Segment) -> UnifiedMinerOutput:
@@ -319,7 +323,9 @@ def mine_episode_unified(
         # Fall back to moderate if selected variant doesn't exist
         prompt_path = Path(__file__).parent / "prompts" / "unified_miner_moderate.txt"
 
-    miner = UnifiedMiner(llm, prompt_path, selectivity=selectivity, content_type=content_type)
+    miner = UnifiedMiner(
+        llm, prompt_path, selectivity=selectivity, content_type=content_type
+    )
     return miner.mine_episode(
         episode, max_workers=max_workers, progress_callback=progress_callback
     )

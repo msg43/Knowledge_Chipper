@@ -247,4 +247,3 @@ To verify the improvement:
 - `docs/TRANSCRIPTION_FIXES_2025_10_30.md` - Transcript metadata improvements
 - `docs/SPEAKER_IDENTIFICATION_SYSTEM.md` - Speaker attribution system
 - `src/knowledge_system/processors/hce/unified_pipeline.py` - HCE processing pipeline
-

@@ -436,12 +436,14 @@ class SchemaValidator:
                     "key_themes": [],
                     "overall_quality": "low",
                 }
-            
+
             # Repair invalid overall_quality values
-            if "summary_assessment" in repaired and isinstance(repaired["summary_assessment"], dict):
+            if "summary_assessment" in repaired and isinstance(
+                repaired["summary_assessment"], dict
+            ):
                 quality = repaired["summary_assessment"].get("overall_quality")
                 valid_qualities = ["high", "medium", "low"]
-                
+
                 if quality not in valid_qualities:
                     # Map common invalid values to valid ones
                     quality_map: dict[str, str] = {

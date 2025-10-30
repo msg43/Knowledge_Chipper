@@ -1126,10 +1126,12 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
         return miner.mine_segment(segment)
 
-    def _load_transcript_segments_from_db(self, video_id: str) -> list[dict[str, Any]] | None:
+    def _load_transcript_segments_from_db(
+        self, video_id: str
+    ) -> list[dict[str, Any]] | None:
         """
         Load transcript segments from database (Whisper.cpp output).
-        
+
         Returns raw Whisper segments (typically 30-150 segments for a few minutes of audio).
         These need to be re-chunked for efficient HCE processing.
         """
@@ -1138,93 +1140,103 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             if not transcripts:
                 logger.debug(f"No transcripts found in DB for video {video_id}")
                 return None
-            
+
             # Get the most recent transcript
             transcript = transcripts[0]
             segments = transcript.transcript_segments_json
-            
+
             if segments and len(segments) > 0:
-                logger.info(f"📊 Loaded {len(segments)} raw Whisper segments from database for {video_id}")
+                logger.info(
+                    f"📊 Loaded {len(segments)} raw Whisper segments from database for {video_id}"
+                )
                 return segments
-            
+
             return None
         except Exception as e:
             logger.debug(f"Could not load segments from DB for {video_id}: {e}")
             return None
-    
+
     def _rechunk_whisper_segments(
-        self, whisper_segments: list[dict[str, Any]], episode_id: str, target_tokens: int = 750
+        self,
+        whisper_segments: list[dict[str, Any]],
+        episode_id: str,
+        target_tokens: int = 750,
     ) -> list[Any]:
         """
         Intelligently re-chunk Whisper segments for efficient HCE processing.
-        
+
         Whisper.cpp creates many small segments (~2-5 seconds each) based on pauses.
         We combine these into larger ~750-token chunks while respecting:
         - Sentence boundaries (don't split mid-sentence)
         - Speaker changes (preserve speaker context)
         - Natural topic shifts
         - Overlap for claim coherence when hitting max boundary
-        
+
         Args:
             whisper_segments: Raw segments from Whisper (list of dicts with 'text', 'start', 'end', 'speaker')
             episode_id: Episode identifier
             target_tokens: Target tokens per chunk (default 750)
-            
+
         Returns:
             List of optimized Segment objects for HCE processing
         """
         from ..processors.hce.types import Segment
-        from ..utils.text_utils import estimate_tokens_improved, ChunkingConfig
-        
+        from ..utils.text_utils import ChunkingConfig, estimate_tokens_improved
+
         if not whisper_segments:
             return []
-        
+
         # Create chunking configuration with overlap
         config = ChunkingConfig(
             max_chunk_tokens=1000,
             overlap_tokens=100,  # 100 token overlap when hitting max boundary
             min_chunk_tokens=300,  # Lower minimum for active conversations
             prefer_sentence_boundaries=True,
-            prefer_paragraph_boundaries=False  # Not relevant for transcripts
+            prefer_paragraph_boundaries=False,  # Not relevant for transcripts
         )
-        
+
         chunked_segments = []
         current_chunk_parts = []
         current_tokens = 0
         chunk_idx = 0
         overlap_parts = []  # Parts to include in next chunk for overlap
-        
+
         # Track first and last timestamps for the chunk
         chunk_start_time = None
         chunk_end_time = None
         current_speaker = None
-        
+
         for seg in whisper_segments:
             seg_text = seg.get("text", "").strip()
             if not seg_text:
                 continue
-            
+
             seg_tokens = estimate_tokens_improved(seg_text, "default")
             seg_start = seg.get("start", 0)
             seg_end = seg.get("end", 0)
             seg_speaker = seg.get("speaker", "Unknown")
-            
+
             # Initialize chunk timing
             if chunk_start_time is None:
                 chunk_start_time = seg_start
                 current_speaker = seg_speaker
-            
+
             # Check if we should start a new chunk
             should_split = False
-            
+
             # HARD BOUNDARY: Always split on speaker change
             if seg_speaker != current_speaker and current_chunk_parts:
                 should_split = True
                 overlap_parts = []  # No overlap on speaker change
-                logger.debug(f"Splitting chunk due to speaker change: {current_speaker} → {seg_speaker}")
-            
+                logger.debug(
+                    f"Splitting chunk due to speaker change: {current_speaker} → {seg_speaker}"
+                )
+
             # Split if we'd exceed max tokens
-            elif current_tokens + seg_tokens > config.max_chunk_tokens and current_chunk_parts:
+            elif (
+                current_tokens + seg_tokens > config.max_chunk_tokens
+                and current_chunk_parts
+            ):
                 should_split = True
                 # Calculate overlap when hitting max boundary
                 if config.overlap_tokens > 0:
@@ -1239,33 +1251,41 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                         else:
                             break
                     if overlap_parts:
-                        logger.debug(f"Including {len(overlap_parts)} parts ({overlap_token_count} tokens) as overlap")
-            
+                        logger.debug(
+                            f"Including {len(overlap_parts)} parts ({overlap_token_count} tokens) as overlap"
+                        )
+
             # Split if we've reached target and hit a sentence boundary
-            elif current_tokens >= config.min_chunk_tokens and seg_text.rstrip().endswith(('.', '!', '?')):
+            elif (
+                current_tokens >= config.min_chunk_tokens
+                and seg_text.rstrip().endswith((".", "!", "?"))
+            ):
                 should_split = True
                 overlap_parts = []  # Clean break at sentence boundary
-            
+
             if should_split:
                 # Save current chunk (single speaker only)
                 chunk_text = " ".join(current_chunk_parts)
-                
+
                 chunked_segments.append(
                     Segment(
                         episode_id=episode_id,
                         segment_id=f"chunk_{chunk_idx:04d}",
-                        speaker=current_speaker or "Unknown",  # Single speaker per chunk
+                        speaker=current_speaker
+                        or "Unknown",  # Single speaker per chunk
                         t0=str(chunk_start_time),
                         t1=str(chunk_end_time),
                         text=chunk_text,
                     )
                 )
-                
+
                 # Reset for next chunk
                 current_chunk_parts = overlap_parts.copy()  # Start with overlap
-                current_tokens = sum(estimate_tokens_improved(part, "default") for part in overlap_parts)
+                current_tokens = sum(
+                    estimate_tokens_improved(part, "default") for part in overlap_parts
+                )
                 chunk_idx += 1
-                
+
                 # Update timing and speaker
                 if seg_speaker != current_speaker:
                     # Speaker change - no overlap, clean start
@@ -1275,12 +1295,12 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                     # Same speaker - adjust start time if we have overlap
                     if not overlap_parts:
                         chunk_start_time = seg_start
-            
+
             # Add segment to current chunk
             current_chunk_parts.append(seg_text)
             current_tokens += seg_tokens
             chunk_end_time = seg_end
-        
+
         # Add remaining chunk
         if current_chunk_parts:
             chunk_text = " ".join(current_chunk_parts)
@@ -1294,19 +1314,19 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                     text=chunk_text,
                 )
             )
-        
+
         logger.info(
             f"📊 Re-chunked {len(whisper_segments)} Whisper segments → {len(chunked_segments)} optimized segments "
             f"(target: {target_tokens} tokens/segment, range: {config.min_chunk_tokens}-{config.max_chunk_tokens}, "
             f"overlap: {config.overlap_tokens} tokens)"
         )
         return chunked_segments
-    
+
     def _parse_transcript_to_segments(
         self, transcript_text: str, episode_id: str
     ) -> list[Any]:
         """Parse transcript text into intelligent segments (chunks of ~500-1000 tokens).
-        
+
         FALLBACK METHOD: Only used when DB segments are not available.
         Prefer _load_transcript_segments_from_db() + _rechunk_whisper_segments() instead.
         """

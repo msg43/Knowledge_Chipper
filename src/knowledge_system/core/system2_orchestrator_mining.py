@@ -56,21 +56,27 @@ async def process_mine_with_unified_pipeline(
 
         # Extract video_id from episode_id (format: "episode_VIDEO_ID")
         video_id = episode_id.replace("episode_", "")
-        
+
         # PRIORITY 1: Try to load segments from database (our own transcripts)
         whisper_segments = orchestrator._load_transcript_segments_from_db(video_id)
-        
+
         segments = None
         if whisper_segments and len(whisper_segments) > 0:
-            logger.info(f"✅ Using database segments for {video_id} ({len(whisper_segments)} raw Whisper segments)")
-            
+            logger.info(
+                f"✅ Using database segments for {video_id} ({len(whisper_segments)} raw Whisper segments)"
+            )
+
             # Re-chunk Whisper segments for efficient HCE processing
             if orchestrator.progress_callback:
                 orchestrator.progress_callback("parsing", 3, episode_id)
-            
-            segments = orchestrator._rechunk_whisper_segments(whisper_segments, episode_id)
-            logger.info(f"📦 Re-chunked into {len(segments)} optimized segments for HCE mining")
-        
+
+            segments = orchestrator._rechunk_whisper_segments(
+                whisper_segments, episode_id
+            )
+            logger.info(
+                f"📦 Re-chunked into {len(segments)} optimized segments for HCE mining"
+            )
+
         # FALLBACK: Parse from markdown file if DB segments not available
         if not segments:
             file_path = config.get("file_path")
@@ -79,13 +85,15 @@ async def process_mine_with_unified_pipeline(
                     f"No segments in DB and no file_path provided for episode {episode_id}",
                     ErrorCode.INVALID_INPUT,
                 )
-            
-            logger.info(f"⚠️ No DB segments found, falling back to parsing markdown file: {file_path}")
+
+            logger.info(
+                f"⚠️ No DB segments found, falling back to parsing markdown file: {file_path}"
+            )
             transcript_text = Path(file_path).read_text()
-            
+
             if orchestrator.progress_callback:
                 orchestrator.progress_callback("parsing", 5, episode_id)
-            
+
             segments = orchestrator._parse_transcript_to_segments(
                 transcript_text, episode_id
             )
@@ -174,7 +182,9 @@ async def process_mine_with_unified_pipeline(
             ),
             max_workers=max_workers if enable_parallel else 1,
             enable_parallel_processing=enable_parallel,
-            content_type=config.get("content_type"),  # Pass content type for prompt selection
+            content_type=config.get(
+                "content_type"
+            ),  # Pass content type for prompt selection
         )
 
         logger.info(
@@ -297,12 +307,12 @@ async def process_mine_with_unified_pipeline(
             from ..database.claim_store import ClaimStore
 
             claim_store = ClaimStore(orchestrator.db_service)
-            
+
             # CRITICAL: Store segments BEFORE storing claims
             # This ensures foreign key constraints are satisfied when storing evidence spans
             claim_store.store_segments(episode_id, segments)
             logger.info(f"💾 Stored {len(segments)} segments for episode {episode_id}")
-            
+
             claim_store.upsert_pipeline_outputs(
                 pipeline_outputs,
                 source_id=source_id,

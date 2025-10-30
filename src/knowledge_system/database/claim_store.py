@@ -60,10 +60,10 @@ class ClaimStore:
     ) -> None:
         """
         Store segments for an episode before storing claims.
-        
+
         This must be called before upsert_pipeline_outputs to ensure
         foreign key constraints are satisfied when storing evidence spans.
-        
+
         Args:
             episode_id: The episode ID
             segments: List of Segment objects with segment_id, text, speaker, t0, t1
@@ -71,13 +71,13 @@ class ClaimStore:
         with self.db_service.get_session() as session:
             # Delete existing segments for this episode
             session.query(Segment).filter_by(episode_id=episode_id).delete()
-            
+
             # Store new segments
             for i, segment in enumerate(segments):
                 # Generate fully qualified segment_id (episode_id + segment_id)
                 # The segment.segment_id is just "seg_0001", we need to make it globally unique
                 segment_id = f"{episode_id}_{segment.segment_id}"
-                
+
                 db_segment = Segment(
                     segment_id=segment_id,
                     episode_id=episode_id,
@@ -89,7 +89,7 @@ class ClaimStore:
                     sequence=i,
                 )
                 session.add(db_segment)
-            
+
             session.commit()
             logger.info(f"Stored {len(segments)} segments for episode {episode_id}")
 
@@ -299,8 +299,10 @@ class ClaimStore:
                     # The evidence.segment_id is just "seg_0001", we need to make it match the stored segment
                     fully_qualified_segment_id = None
                     if evidence.segment_id and episode_id:
-                        fully_qualified_segment_id = f"{episode_id}_{evidence.segment_id}"
-                    
+                        fully_qualified_segment_id = (
+                            f"{episode_id}_{evidence.segment_id}"
+                        )
+
                     evidence_span = EvidenceSpan(
                         claim_id=global_claim_id,
                         segment_id=fully_qualified_segment_id,
