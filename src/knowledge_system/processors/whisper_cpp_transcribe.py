@@ -114,7 +114,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                     local_model_path, model_name
                 )
                 if is_valid:
-                    logger.info(f"Using local whisper.cpp model: {local_model_path}")
+                    logger.info(f"✅ Using local whisper.cpp model: {local_model_path}")
                     return local_model_path
                 else:
                     logger.warning(
@@ -132,19 +132,19 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
         if model_path.exists():
             is_valid, error_msg = self._validate_model_file(model_path, model_name)
             if is_valid:
-                logger.info(f"Using cached whisper.cpp model: {model_path}")
+                logger.info(f"✅ Using cached whisper.cpp model: {model_path}")
                 return model_path
             else:
-                logger.warning(f"Cached model corrupted: {error_msg}")
-                logger.info(f"Deleting corrupted model file: {model_path}")
+                logger.warning(f"⚠️ Cached model corrupted: {error_msg}")
+                logger.info(f"🗑️ Deleting corrupted model file: {model_path}")
                 try:
                     model_path.unlink()
-                    logger.info("Corrupted model deleted, will redownload")
+                    logger.info("✅ Corrupted model deleted, will redownload")
                 except Exception as e:
                     logger.error(f"Failed to delete corrupted model: {e}")
 
         if not model_path.exists():
-            logger.info(f"Downloading whisper.cpp model: {model_name}")
+            logger.info(f"📥 Downloading whisper.cpp model: {model_name}")
             url = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{model_filename}"
 
             # Model sizes for progress estimation (approximate)

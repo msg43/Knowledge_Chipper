@@ -139,7 +139,7 @@ class SchemaValidator:
         is_valid, errors = self.validate(repaired_data, schema_name)
 
         if is_valid:
-            logger.info(f"Successfully repaired {schema_name} data")
+            logger.debug(f"Successfully repaired {schema_name} data")
             # Log the diff for debugging
             self._log_repair_diff(data, repaired_data)
         else:
@@ -157,7 +157,7 @@ class SchemaValidator:
         """Attempt to repair common JSON issues."""
         repaired = data.copy()
 
-        if schema_name in ["miner_output", "miner_output.v1"]:
+        if schema_name in ["miner_output", "miner_output.v1", "miner_output.v2"]:
             # Ensure all required arrays exist
             for key in ["claims", "jargon", "people", "mental_models"]:
                 if key not in repaired:
@@ -170,9 +170,60 @@ class SchemaValidator:
             if "claims" in repaired and isinstance(repaired["claims"], list):
                 for claim in repaired["claims"]:
                     if isinstance(claim, dict):
-                        # Ensure evidence_spans array exists
+                        # V2 SCHEMA: Ensure evidence_spans array exists
                         if "evidence_spans" not in claim:
-                            claim["evidence_spans"] = []
+                            # Try to migrate from v1 flat structure
+                            if "timestamp" in claim or "evidence_quote" in claim:
+                                claim["evidence_spans"] = [
+                                    {
+                                        "segment_id": claim.get(
+                                            "segment_id", "unknown"
+                                        ),
+                                        "quote": claim.get("evidence_quote", ""),
+                                        "t0": claim.get(
+                                            "timestamp",
+                                            claim.get("evidence_timestamp", "00:00"),
+                                        ),
+                                        "t1": claim.get(
+                                            "evidence_timestamp",
+                                            claim.get("timestamp", "00:00"),
+                                        ),
+                                        "context_type": "exact",
+                                    }
+                                ]
+                                # Remove old v1 fields
+                                claim.pop("timestamp", None)
+                                claim.pop("evidence_quote", None)
+                                claim.pop("evidence_timestamp", None)
+                            else:
+                                claim["evidence_spans"] = []
+
+                        # Ensure each evidence span has required fields
+                        if isinstance(claim.get("evidence_spans"), list):
+                            for evidence in claim["evidence_spans"]:
+                                if isinstance(evidence, dict):
+                                    if "segment_id" not in evidence:
+                                        evidence["segment_id"] = "unknown"
+                                    if "context_type" not in evidence:
+                                        evidence["context_type"] = "exact"
+                                    # Fix invalid context_type values
+                                    elif evidence["context_type"] not in [
+                                        "exact",
+                                        "extended",
+                                        "segment",
+                                    ]:
+                                        # Map common invalid values to valid ones
+                                        context_type_map = {
+                                            "sentence": "exact",
+                                            "paragraph": "extended",
+                                            "full": "segment",
+                                            "partial": "exact",
+                                            "complete": "segment",
+                                        }
+                                        evidence["context_type"] = context_type_map.get(
+                                            evidence["context_type"], "exact"
+                                        )
+
                         # Fix invalid claim types
                         if "claim_type" in claim:
                             valid_types = [
@@ -222,36 +273,156 @@ class SchemaValidator:
                                     claim["stance"], "neutral"
                                 )
 
-            # People: ensure required fields exist
+            # People: ensure required fields exist (v2 schema)
             if "people" in repaired and isinstance(repaired["people"], list):
                 for person in repaired["people"]:
                     if isinstance(person, dict):
-                        if "context_quote" not in person:
-                            # Generate placeholder from name if available
-                            person["context_quote"] = person.get("name", "mentioned")
-                        if "timestamp" not in person:
-                            # Add placeholder timestamp if missing
-                            person["timestamp"] = "00:00"
+                        # V2 SCHEMA: Ensure mentions array exists
+                        if "mentions" not in person:
+                            # Try to migrate from v1 flat structure
+                            if "context_quote" in person or "timestamp" in person:
+                                person["mentions"] = [
+                                    {
+                                        "segment_id": person.get(
+                                            "segment_id", "unknown"
+                                        ),
+                                        "surface_form": person.get("name", ""),
+                                        "quote": person.get(
+                                            "context_quote", person.get("name", "")
+                                        ),
+                                        "t0": person.get("timestamp", "00:00"),
+                                        "t1": person.get("timestamp", "00:00"),
+                                    }
+                                ]
+                                # Remove old v1 fields
+                                person.pop("context_quote", None)
+                                person.pop("timestamp", None)
+                            else:
+                                person["mentions"] = []
 
-            # Jargon: ensure required fields exist
+                        # Ensure normalized_name exists
+                        if "normalized_name" not in person:
+                            person["normalized_name"] = person.get("name", "Unknown")
+
+                        # Ensure entity_type exists
+                        if "entity_type" not in person:
+                            person["entity_type"] = "person"
+
+                        # Ensure confidence exists
+                        if "confidence" not in person:
+                            person["confidence"] = 0.8
+
+            # Jargon: ensure required fields exist (v2 schema)
             if "jargon" in repaired and isinstance(repaired["jargon"], list):
                 for term in repaired["jargon"]:
                     if isinstance(term, dict):
-                        if "context_quote" not in term:
-                            term["context_quote"] = term.get("term", "")
-                        if "timestamp" not in term:
-                            term["timestamp"] = "00:00"
+                        # V2 SCHEMA: Ensure evidence_spans array exists
+                        if "evidence_spans" not in term:
+                            # Try to migrate from v1 flat structure
+                            if "context_quote" in term or "timestamp" in term:
+                                term["evidence_spans"] = [
+                                    {
+                                        "segment_id": term.get("segment_id", "unknown"),
+                                        "quote": term.get(
+                                            "context_quote", term.get("term", "")
+                                        ),
+                                        "t0": term.get("timestamp", "00:00"),
+                                        "t1": term.get("timestamp", "00:00"),
+                                        "context_type": "exact",
+                                    }
+                                ]
+                                # Remove old v1 fields
+                                term.pop("context_quote", None)
+                                term.pop("timestamp", None)
+                            else:
+                                term["evidence_spans"] = []
 
-            # Mental models: ensure required fields exist
+                        # Fix invalid context_type in evidence spans
+                        if isinstance(term.get("evidence_spans"), list):
+                            for evidence in term["evidence_spans"]:
+                                if isinstance(evidence, dict):
+                                    if "context_type" not in evidence:
+                                        evidence["context_type"] = "exact"
+                                    elif evidence["context_type"] not in [
+                                        "exact",
+                                        "extended",
+                                        "segment",
+                                    ]:
+                                        context_type_map = {
+                                            "sentence": "exact",
+                                            "paragraph": "extended",
+                                            "full": "segment",
+                                            "partial": "exact",
+                                            "complete": "segment",
+                                        }
+                                        evidence["context_type"] = context_type_map.get(
+                                            evidence["context_type"], "exact"
+                                        )
+
+                        # Ensure domain exists
+                        if "domain" not in term:
+                            term["domain"] = "other"
+
+            # Mental models: ensure required fields exist (v2 schema)
             if "mental_models" in repaired and isinstance(
                 repaired["mental_models"], list
             ):
                 for model in repaired["mental_models"]:
                     if isinstance(model, dict):
-                        if "context_quote" not in model:
-                            model["context_quote"] = model.get("name", "")
-                        if "timestamp" not in model:
-                            model["timestamp"] = "00:00"
+                        # V2 SCHEMA: Ensure evidence_spans array exists
+                        if "evidence_spans" not in model:
+                            # Try to migrate from v1 flat structure
+                            if "context_quote" in model or "timestamp" in model:
+                                model["evidence_spans"] = [
+                                    {
+                                        "segment_id": model.get(
+                                            "segment_id", "unknown"
+                                        ),
+                                        "quote": model.get(
+                                            "context_quote", model.get("name", "")
+                                        ),
+                                        "t0": model.get("timestamp", "00:00"),
+                                        "t1": model.get("timestamp", "00:00"),
+                                        "context_type": "exact",
+                                    }
+                                ]
+                                # Remove old v1 fields
+                                model.pop("context_quote", None)
+                                model.pop("timestamp", None)
+                            else:
+                                model["evidence_spans"] = []
+
+                        # Fix invalid context_type in evidence spans
+                        if isinstance(model.get("evidence_spans"), list):
+                            for evidence in model["evidence_spans"]:
+                                if isinstance(evidence, dict):
+                                    if "context_type" not in evidence:
+                                        evidence["context_type"] = "exact"
+                                    elif evidence["context_type"] not in [
+                                        "exact",
+                                        "extended",
+                                        "segment",
+                                    ]:
+                                        context_type_map = {
+                                            "sentence": "exact",
+                                            "paragraph": "extended",
+                                            "full": "segment",
+                                            "partial": "exact",
+                                            "complete": "segment",
+                                        }
+                                        evidence["context_type"] = context_type_map.get(
+                                            evidence["context_type"], "exact"
+                                        )
+
+                        # Ensure definition exists (rename from description if needed)
+                        if "definition" not in model and "description" in model:
+                            model["definition"] = model.pop("description")
+                        elif "definition" not in model:
+                            model["definition"] = ""
+
+                        # Ensure aliases exists
+                        if "aliases" not in model:
+                            model["aliases"] = []
 
         elif schema_name in ["flagship_output", "flagship_output.v1"]:
             # Ensure required structure exists

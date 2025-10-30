@@ -1007,6 +1007,19 @@ class AudioProcessor(BaseProcessor):
                 lines.append(f"tags: {tags_yaml}")
                 lines.append(f"# Total tags: {len(video_metadata['tags'])}")
 
+            # Add YouTube categories if available
+            if video_metadata.get("categories"):
+                categories = video_metadata["categories"]
+                if isinstance(categories, list):
+                    safe_categories = [cat.replace('"', '\\"') for cat in categories]
+                    categories_yaml = (
+                        "[" + ", ".join(f'"{cat}"' for cat in safe_categories) + "]"
+                    )
+                    lines.append(f"youtube_categories: {categories_yaml}")
+                elif isinstance(categories, str):
+                    safe_category = categories.replace('"', '\\"')
+                    lines.append(f'youtube_category: "{safe_category}"')
+
             # Add transcription date for YouTube videos too
             trans_date = datetime.now()
             lines.append(f'transcription_date: "{trans_date.strftime("%B %d, %Y")}"')
@@ -1058,6 +1071,19 @@ class AudioProcessor(BaseProcessor):
         lines.append(f"include_timestamps: {include_timestamps}")
         lines.append("---")
         lines.append("")
+
+        # Add thumbnail if available (for YouTube videos)
+        if video_metadata is not None:
+            thumbnail_path = video_metadata.get("thumbnail_local_path")
+            if thumbnail_path:
+                # Convert to relative path if it's in the output directory structure
+                from pathlib import Path
+
+                thumb_path = Path(thumbnail_path)
+                if thumb_path.exists():
+                    # Use relative path from transcript location
+                    lines.append(f"![Thumbnail]({thumbnail_path})")
+                    lines.append("")
 
         # Full transcript section
         lines.append("## Full Transcript")
@@ -1698,7 +1724,10 @@ class AudioProcessor(BaseProcessor):
                                 transcript_segments = final_data.get("segments", [])
 
                                 # Prepare speaker data with metadata for enhanced suggestions
-                                metadata_for_speaker = kwargs.get("metadata", {})
+                                # Use video_metadata if available, otherwise fall back to metadata
+                                metadata_for_speaker = kwargs.get(
+                                    "video_metadata"
+                                ) or kwargs.get("metadata", {})
                                 speaker_data_list = (
                                     speaker_processor.prepare_speaker_data(
                                         diarization_segments,
@@ -1754,6 +1783,8 @@ class AudioProcessor(BaseProcessor):
                         saved_file = None
 
                         if output_dir:
+                            # Ensure output_dir is a Path object
+                            output_dir = Path(output_dir)
                             temp_result = ProcessorResult(
                                 success=True,
                                 data=final_data,
@@ -1837,11 +1868,12 @@ class AudioProcessor(BaseProcessor):
                                 existing_video = db_service.get_video(media_id)
                                 if not existing_video:
                                     # Create media source record
+                                    # Use 'document' as source_type for local audio files (valid per schema)
                                     db_service.create_video(
                                         video_id=media_id,
                                         title=title,
                                         url=file_url,
-                                        source_type="audio_file",
+                                        source_type="document",  # Valid: 'episode', 'document', 'youtube', 'pdf', 'article', 'podcast', 'rss'
                                         duration_seconds=audio_duration,
                                         upload_date=datetime.now().strftime(
                                             "%Y%m%d"
@@ -1948,6 +1980,8 @@ class AudioProcessor(BaseProcessor):
                                 logger.error(
                                     f"Failed to save transcript to database: {e}"
                                 )
+                                logger.error(f"Database error type: {type(e).__name__}")
+                                logger.error(f"Database error details: {str(e)}")
                                 # Continue anyway - at least markdown file was saved
                                 logger.warning(
                                     "Transcript saved to markdown but NOT to database"
@@ -1955,6 +1989,7 @@ class AudioProcessor(BaseProcessor):
                                 # IMPORTANT: Database save failure should affect success reporting
                                 # Based on memory requirement: all transcriptions must write to database
                                 enhanced_metadata["database_save_failed"] = True
+                                enhanced_metadata["database_error"] = str(e)
 
                         # Clean up temporary file before returning success
                         if output_path and output_path.exists():

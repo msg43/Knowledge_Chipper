@@ -207,37 +207,8 @@ class ClaimStore:
                 session.flush()
                 logger.info(f"Stored {len(outputs.milestones)} milestones")
 
-            # 4. Clear FTS indexes for this source (for clean re-indexing)
-            # Using raw connection for FTS operations
-            conn = self.db_service.engine.raw_connection()
-            try:
-                cur = conn.cursor()
-
-                # Clear old FTS entries for this source
-                if source_type == "episode" and episode_id:
-                    cur.execute(
-                        "DELETE FROM claims_fts WHERE episode_id = ?", (episode_id,)
-                    )
-                    cur.execute(
-                        "DELETE FROM evidence_fts WHERE episode_id = ?", (episode_id,)
-                    )
-                else:
-                    # For non-episode sources, clear by source_id
-                    cur.execute(
-                        "DELETE FROM claims_fts WHERE source_id = ?", (source_id,)
-                    )
-                    cur.execute(
-                        "DELETE FROM evidence_fts WHERE source_id = ?", (source_id,)
-                    )
-
-                conn.commit()
-            except Exception as e:
-                logger.warning(f"FTS cleanup failed (tables may not exist): {e}")
-                conn.rollback()
-            finally:
-                conn.close()
-
-            # 5. Store claims (claims are the fundamental unit)
+            # 4. Store claims (claims are the fundamental unit)
+            # Note: FTS indexing moved to after session.commit() to avoid database locks
             for claim_data in outputs.claims:
                 # Generate global claim ID
                 global_claim_id = f"{source_id}_{claim_data.claim_id}"
@@ -300,52 +271,7 @@ class ClaimStore:
 
                 session.flush()
 
-                # 3c. Index claim and evidence in FTS (Full-Text Search)
-                conn = self.db_service.engine.raw_connection()
-                try:
-                    cur = conn.cursor()
-
-                    # Index the claim text for search
-                    cur.execute(
-                        """
-                        INSERT INTO claims_fts(
-                            claim_id, source_id, episode_id, canonical, claim_type
-                        ) VALUES(?, ?, ?, ?, ?)
-                        """,
-                        (
-                            global_claim_id,
-                            source_id,
-                            episode_id,
-                            claim_data.canonical,
-                            claim_data.claim_type,
-                        ),
-                    )
-
-                    # Index each evidence quote for search
-                    for seq, evidence in enumerate(claim_data.evidence):
-                        if evidence.quote:
-                            cur.execute(
-                                """
-                                INSERT INTO evidence_fts(
-                                    claim_id, source_id, episode_id, quote
-                                ) VALUES(?, ?, ?, ?)
-                                """,
-                                (
-                                    global_claim_id,
-                                    source_id,
-                                    episode_id,
-                                    evidence.quote,
-                                ),
-                            )
-
-                    conn.commit()
-                except Exception as e:
-                    logger.warning(f"FTS indexing failed (tables may not exist): {e}")
-                    conn.rollback()
-                finally:
-                    conn.close()
-
-                # 3b. Store claim categories (normalized - no JSON)
+                # Store claim categories (normalized - no JSON)
                 if (
                     hasattr(claim_data, "structured_categories")
                     and claim_data.structured_categories
@@ -727,6 +653,10 @@ class ClaimStore:
                 f"{len(outputs.jargon)} jargon terms ({total_jargon_evidence} evidence spans)"
             )
 
+        # FTS indexing AFTER session commit to avoid database locks
+        # This runs outside the SQLAlchemy session context
+        self._update_fts_indexes(source_id, episode_id, outputs)
+
     def get_claim(self, claim_id: str, with_context: bool = True) -> dict | None:
         """
         Get a claim with optional source context.
@@ -850,3 +780,155 @@ class ClaimStore:
                 results.append(claim_dict)
 
             return results
+
+    def _update_fts_indexes(
+        self, source_id: str, episode_id: str | None, outputs: PipelineOutputs
+    ) -> None:
+        """
+        Update FTS indexes after main data is committed.
+
+        This runs in a separate connection AFTER session.commit() to avoid database locks.
+
+        Args:
+            source_id: The media source ID
+            episode_id: The episode ID (if applicable)
+            outputs: Pipeline outputs with claims and evidence
+        """
+        import time
+
+        max_retries = 3
+        retry_delay = 0.1  # Start with 100ms
+
+        # Step 1: Clear old FTS entries
+        for attempt in range(max_retries):
+            conn = self.db_service.engine.raw_connection()
+            try:
+                cur = conn.cursor()
+                # Wait up to 5s if the database is busy
+                cur.execute("PRAGMA busy_timeout=5000")
+
+                # Check if FTS tables exist
+                cur.execute(
+                    """
+                    SELECT name FROM sqlite_master
+                    WHERE type='table' AND name IN ('claims_fts','evidence_fts')
+                    """
+                )
+                existing_tables = {row[0] for row in cur.fetchall()}
+
+                # Clear old FTS entries for this episode
+                # Note: FTS tables only have episode_id, not source_id
+                if episode_id and existing_tables:
+                    if "claims_fts" in existing_tables:
+                        cur.execute(
+                            "DELETE FROM claims_fts WHERE episode_id = ?",
+                            (episode_id,),
+                        )
+                    if "evidence_fts" in existing_tables:
+                        cur.execute(
+                            "DELETE FROM evidence_fts WHERE episode_id = ?",
+                            (episode_id,),
+                        )
+
+                conn.commit()
+                logger.debug(f"FTS cleanup completed for episode {episode_id}")
+                break  # Success, exit retry loop
+
+            except Exception as e:
+                conn.rollback()
+                if attempt < max_retries - 1:
+                    logger.debug(
+                        f"FTS cleanup attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}"
+                    )
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    logger.warning(
+                        f"FTS cleanup failed after {max_retries} attempts: {e}"
+                    )
+                    return  # Skip indexing if cleanup failed
+            finally:
+                conn.close()
+
+        # Step 2: Index all claims and evidence
+        for attempt in range(max_retries):
+            conn = self.db_service.engine.raw_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute("PRAGMA busy_timeout=5000")
+
+                # Check if FTS tables exist
+                cur.execute(
+                    """
+                    SELECT name FROM sqlite_master
+                    WHERE type='table' AND name IN ('claims_fts','evidence_fts')
+                    """
+                )
+                existing_tables = {row[0] for row in cur.fetchall()}
+
+                if not existing_tables:
+                    logger.debug("No FTS tables found, skipping indexing")
+                    return
+
+                # Index all claims
+                claims_indexed = 0
+                evidence_indexed = 0
+
+                for claim_data in outputs.claims:
+                    global_claim_id = f"{source_id}_{claim_data.claim_id}"
+
+                    # Index claim text
+                    if "claims_fts" in existing_tables:
+                        cur.execute(
+                            """
+                            INSERT INTO claims_fts(
+                                claim_id, episode_id, canonical, claim_type
+                            ) VALUES(?, ?, ?, ?)
+                            """,
+                            (
+                                global_claim_id,
+                                episode_id,
+                                claim_data.canonical,
+                                claim_data.claim_type,
+                            ),
+                        )
+                        claims_indexed += 1
+
+                    # Index evidence quotes
+                    if "evidence_fts" in existing_tables:
+                        for evidence in claim_data.evidence:
+                            if evidence.quote:
+                                cur.execute(
+                                    """
+                                    INSERT INTO evidence_fts(
+                                        claim_id, episode_id, quote
+                                    ) VALUES(?, ?, ?)
+                                    """,
+                                    (
+                                        global_claim_id,
+                                        episode_id,
+                                        evidence.quote,
+                                    ),
+                                )
+                                evidence_indexed += 1
+
+                conn.commit()
+                logger.debug(
+                    f"FTS indexing completed: {claims_indexed} claims, {evidence_indexed} evidence spans"
+                )
+                break  # Success, exit retry loop
+
+            except Exception as e:
+                conn.rollback()
+                if attempt < max_retries - 1:
+                    logger.debug(
+                        f"FTS indexing attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}"
+                    )
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    logger.warning(
+                        f"FTS indexing failed after {max_retries} attempts: {e}"
+                    )
+            finally:
+                conn.close()

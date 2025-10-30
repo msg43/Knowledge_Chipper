@@ -604,8 +604,13 @@ def extract_speaker_statistics(
     # Calculate per-speaker statistics
     for segment in segments:
         speaker = segment.get("speaker", "Unknown")
-        start = segment.get("start", 0.0)
-        end = segment.get("end", 0.0)
+        # Ensure start and end are floats (they might be strings from JSON)
+        try:
+            start = float(segment.get("start", 0.0))
+            end = float(segment.get("end", 0.0))
+        except (ValueError, TypeError):
+            start = 0.0
+            end = 0.0
         duration = end - start
 
         if speaker not in speaker_stats:

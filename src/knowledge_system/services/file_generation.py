@@ -135,7 +135,9 @@ class FileGenerationService:
         """Initialize file generation service."""
         import os
 
-        self.db = database_service or DatabaseService()
+        # Standardize on db_service; keep self.db as a backward-compatible alias
+        self.db_service = database_service or DatabaseService()
+        self.db = self.db_service
 
         # Allow tests to override output directory via environment variable
         if output_dir is not None:
@@ -1484,13 +1486,17 @@ class FileGenerationService:
 
             # Add source metadata section if available
             if video_metadata:
+                # Handle duration_seconds safely (may be None)
+                duration_seconds = video_metadata.get("duration_seconds") or 0
+                duration_minutes = duration_seconds // 60 if duration_seconds else 0
+
                 markdown_lines.extend(
                     [
                         "## Source Information",
                         f"- **Title:** {video_metadata.get('title', 'N/A')}",
                         f"- **Author/Channel:** {video_metadata.get('uploader', 'N/A')}",
                         f"- **Upload Date:** {video_metadata.get('upload_date', 'N/A')}",
-                        f"- **Duration:** {video_metadata.get('duration_seconds', 0) // 60} minutes",
+                        f"- **Duration:** {duration_minutes} minutes",
                         f"- **URL:** {video_metadata.get('url', 'N/A')}",
                         "",
                     ]
@@ -1622,10 +1628,17 @@ class FileGenerationService:
                     ]
                 )
                 for person in pipeline_outputs.people[:30]:  # Top 30
-                    name = person.normalized or person.surface or person.name
+                    name = (
+                        person.normalized
+                        or person.surface
+                        or getattr(person, "name", "Unknown")
+                    )
                     timestamp = f" [{person.t0}]" if person.t0 else ""
+                    # PersonMention doesn't have context_quote, use surface form instead
                     context = (
-                        f': "{person.context_quote}"' if person.context_quote else ""
+                        f': "{person.surface}"'
+                        if person.surface and person.surface != name
+                        else ""
                     )
                     markdown_lines.append(f"- **{name}**{timestamp}{context}")
                 markdown_lines.append("")

@@ -53,6 +53,7 @@ class YouTubeDownloadService:
         cookie_file_path: str | None = None,
         youtube_delay: int = 5,
         db_service=None,
+        disable_proxies_with_cookies: bool | None = None,
     ):
         """
         Initialize YouTube download service.
@@ -62,17 +63,20 @@ class YouTubeDownloadService:
             cookie_file_path: Path to cookie file
             youtube_delay: Delay between sequential downloads (seconds)
             db_service: Database service for failure tracking
+            disable_proxies_with_cookies: Disable proxies when cookies are enabled
         """
         self.enable_cookies = enable_cookies
         self.cookie_file_path = cookie_file_path
         self.youtube_delay = youtube_delay
         self.db_service = db_service
+        self.disable_proxies_with_cookies = disable_proxies_with_cookies
 
         # Create YouTube downloader
         self.downloader = YouTubeDownloadProcessor(
             download_thumbnails=True,
             enable_cookies=enable_cookies,
             cookie_file_path=cookie_file_path if cookie_file_path else None,
+            disable_proxies_with_cookies=disable_proxies_with_cookies,
         )
 
         # Retry tracking

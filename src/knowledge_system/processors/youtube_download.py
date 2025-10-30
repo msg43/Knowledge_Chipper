@@ -55,17 +55,19 @@ class YouTubeDownloadProcessor(BaseProcessor):
         download_thumbnails: bool = True,
         enable_cookies: bool = False,
         cookie_file_path: str | None = None,
+        disable_proxies_with_cookies: bool | None = None,
     ) -> None:
         super().__init__(name or "youtube_download")
         self.output_format = output_format
         self.download_thumbnails = download_thumbnails
         self.enable_cookies = enable_cookies
         self.cookie_file_path = cookie_file_path
+        self.disable_proxies_with_cookies = disable_proxies_with_cookies
 
         # Base options without cookies (cookies will be added dynamically if needed)
         self.ydl_opts_base = {
-            "quiet": True,
-            "no_warnings": True,
+            "quiet": False,  # Changed to False to capture stderr messages
+            "no_warnings": False,  # Changed to False to see warnings
             "noprogress": True,  # Disable yt-dlp's built-in progress to avoid parsing errors with "stalled" messages
             "format": "worstaudio[ext=webm]/worstaudio[ext=opus]/worstaudio[ext=m4a]/worstaudio/bestaudio[ext=webm][abr<=96]/bestaudio[ext=m4a][abr<=128]/bestaudio[abr<=128]/bestaudio/worst",  # Optimal cascade: smallest formats first, guaranteed audio-only fallback
             "outtmpl": "%(title)s [%(id)s].%(ext)s",
@@ -188,7 +190,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
         if duplicate_results:
             logger.info(
-                f"Deduplication: {len(duplicate_results)} duplicates found, {len(unique_urls)} unique videos to process"
+                f"🔍 Deduplication: {len(duplicate_results)} duplicates found, {len(unique_urls)} unique videos to process"
             )
             if progress_callback:
                 progress_callback(
@@ -231,12 +233,12 @@ class YouTubeDownloadProcessor(BaseProcessor):
         if playlist_info:
             total_playlist_videos = sum(p["total_videos"] for p in playlist_info)
             logger.info(
-                f"Found {len(playlist_info)} playlist(s) with {total_playlist_videos} total videos:"
+                f"📋 Found {len(playlist_info)} playlist(s) with {total_playlist_videos} total videos:"
             )
             for i, playlist in enumerate(playlist_info, 1):
                 title = playlist.get("title", "Unknown Playlist")
                 video_count = playlist.get("total_videos", 0)
-                logger.info(f"  {i}. {title} ({video_count} videos)")
+                logger.info(f"   {i}. {title} ({video_count} videos)")
 
         output_dir = Path(output_dir) if output_dir else Path.cwd()
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -262,7 +264,25 @@ class YouTubeDownloadProcessor(BaseProcessor):
             if hasattr(self, "enable_cookies")
             else yt_config.enable_cookies
         )
-        disable_proxies_check = yt_config.disable_proxies_with_cookies
+        # CRITICAL: Check instance variable first (from GUI), then fall back to config
+        disable_proxies_check = (
+            self.disable_proxies_with_cookies
+            if self.disable_proxies_with_cookies is not None
+            else yt_config.disable_proxies_with_cookies
+        )
+
+        # DIAGNOSTIC LOGGING
+        logger.info(f"🔍 Proxy/Cookie Decision Point:")
+        logger.info(f"   self.enable_cookies = {self.enable_cookies}")
+        logger.info(f"   self.cookie_file_path = {self.cookie_file_path}")
+        logger.info(
+            f"   self.disable_proxies_with_cookies = {self.disable_proxies_with_cookies}"
+        )
+        logger.info(f"   enable_cookies_check = {enable_cookies_check}")
+        logger.info(f"   disable_proxies_check = {disable_proxies_check}")
+        logger.info(
+            f"   Decision: {'DISABLE PROXIES' if (enable_cookies_check and disable_proxies_check) else 'USE PROXIES'}"
+        )
 
         if enable_cookies_check and disable_proxies_check:
             use_proxy = False
@@ -284,7 +304,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 if proxy_manager.username and proxy_manager.auth_key:
                     use_proxy = True
                     logger.info(
-                        "Using PacketStream residential proxies for YouTube processing"
+                        "🌐 Using PacketStream residential proxies for YouTube processing"
                     )
                     if progress_callback:
                         progress_callback("🌐 Using PacketStream residential proxies...")
@@ -332,10 +352,47 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
         # Add cookies if enabled (file upload only - browser extraction disabled for security)
         # Use instance variables passed during initialization, not config file
+        logger.info(f"🔍 Cookie File Check:")
+        logger.info(f"   self.enable_cookies = {self.enable_cookies}")
+        logger.info(f"   self.cookie_file_path = {self.cookie_file_path}")
+
         if self.enable_cookies and self.cookie_file_path:
-            if Path(self.cookie_file_path).exists():
+            cookie_path = Path(self.cookie_file_path)
+            logger.info(f"   Cookie file exists: {cookie_path.exists()}")
+            if cookie_path.exists():
+                logger.info(f"   Cookie file size: {cookie_path.stat().st_size} bytes")
                 ydl_opts["cookiefile"] = self.cookie_file_path
                 logger.info(f"✅ Using cookies from file: {self.cookie_file_path}")
+                logger.info(
+                    f"✅ yt-dlp cookiefile option set to: {ydl_opts.get('cookiefile')}"
+                )
+
+                # Disable ALL sleep intervals when using authenticated cookies
+                # Authenticated requests don't need anti-bot delays
+                ydl_opts["sleep_interval"] = 0
+                ydl_opts["max_sleep_interval"] = 0
+                ydl_opts["sleep_interval_requests"] = 0
+                ydl_opts["sleep_interval_subtitles"] = 0
+                logger.info(
+                    f"✅ Disabled ALL yt-dlp sleep intervals (using authenticated cookies)"
+                )
+
+                # CRITICAL: Use Android client to bypass SABR streaming
+                # Web client gets blocked by YouTube's SABR (Server-Assisted Bitrate Reduction)
+                # Android client bypasses SABR and works with cookies
+                ydl_opts["extractor_args"] = {
+                    "youtube": {
+                        "player_client": [
+                            "android",
+                            "web",
+                        ],  # Try Android first, fallback to web
+                        "player_skip": ["configs"],  # Skip unnecessary config downloads
+                    }
+                }
+                logger.info(
+                    f"✅ Configured yt-dlp to use Android client (bypasses SABR streaming with cookie auth)"
+                )
+
                 if progress_callback:
                     progress_callback(f"🍪 Using cookies from throwaway account")
             else:
@@ -344,6 +401,8 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     progress_callback(
                         f"⚠️ Cookie file not found - proceeding without cookies"
                     )
+        else:
+            logger.info(f"   Cookies NOT enabled or no cookie file path provided")
 
         # NOTE: Do NOT add custom user-agent or http_headers when using PacketStream
         # PacketStream residential proxies work best with yt-dlp's default headers
@@ -354,6 +413,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
             import time
 
             last_progress_time = [time.time()]  # Use list for mutable reference
+            last_status_message_time = [0.0]  # Track when we last showed status message
 
             # Track last progress for updating single line
             last_progress_message = ""
@@ -430,19 +490,30 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                     except (TypeError, ValueError, ZeroDivisionError) as e:
                         # Handle any parsing errors gracefully (e.g. when yt-dlp returns string values)
+                        # Only show status message once every 5 seconds to avoid spam
                         logger.debug(f"Progress hook parsing error (non-critical): {e}")
-                        progress_callback("⏳ Downloading... (checking status)")
+                        if current_time - last_status_message_time[0] > 5.0:
+                            progress_callback("⏳ Downloading... (checking status)")
+                            last_status_message_time[0] = current_time
 
                 elif d["status"] == "finished":
                     filename = d.get("filename", "Unknown file")
                     import os
 
                     clean_filename = os.path.basename(filename)
-                    # Pass 100% to indicate download complete
-                    progress_callback(
-                        f"✅ Download complete: {clean_filename[:50]}{'...' if len(clean_filename) > 50 else ''}",
-                        100,
-                    )
+
+                    # Verify the file actually exists
+                    if filename and Path(filename).exists():
+                        # Pass 100% to indicate download complete
+                        progress_callback(
+                            f"✅ Download complete: {clean_filename[:50]}{'...' if len(clean_filename) > 50 else ''}",
+                            100,
+                        )
+                    else:
+                        logger.error(
+                            f"Progress hook reported 'finished' but file does not exist: {filename}"
+                        )
+                        # Don't show success message if file doesn't exist
                 elif d["status"] == "error":
                     error_msg = d.get("error", "Unknown error")
                     if "timeout" in error_msg.lower():
@@ -717,6 +788,57 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             # Track whether files were already added (for info is None case)
                             files_already_tracked = False
 
+                            # Check for stderr errors even when yt-dlp returns info
+                            stderr_output = (
+                                captured_stderr.getvalue() if captured_stderr else ""
+                            )
+                            download_failed = False
+                            if stderr_output:
+                                # Log all stderr output for debugging
+                                logger.info(f"yt-dlp stderr output: {stderr_output}")
+
+                                # Only treat as error if it's an actual ERROR line, not just warnings
+                                # Check for lines starting with "ERROR:" (actual errors)
+                                stderr_lines = stderr_output.strip().split("\n")
+                                has_actual_error = any(
+                                    line.strip().startswith("ERROR:")
+                                    for line in stderr_lines
+                                )
+
+                                if has_actual_error:
+                                    logger.error(
+                                        f"yt-dlp error detected: {stderr_output}"
+                                    )
+                                    download_failed = True
+                                else:
+                                    logger.debug(
+                                        f"yt-dlp warnings (non-fatal): {stderr_output}"
+                                    )
+
+                            # If download failed, treat as if info is None
+                            if download_failed:
+                                logger.error(
+                                    f"Download failed with error in stderr, treating as failed download for {url}"
+                                )
+                                info = None
+
+                            # Log the info dict structure for debugging
+                            if info:
+                                logger.debug(f"yt-dlp info keys: {list(info.keys())}")
+                                if "entries" in info and info["entries"]:
+                                    logger.debug(
+                                        f"Found {len(info['entries'])} entries"
+                                    )
+                                    for entry in info["entries"][
+                                        :1
+                                    ]:  # Log first entry only
+                                        logger.debug(
+                                            f"First entry keys: {list(entry.keys())}"
+                                        )
+                                        logger.debug(
+                                            f"First entry title: {entry.get('title', 'N/A')}"
+                                        )
+
                             if info is None:
                                 # yt-dlp returned None - check if files were actually downloaded
                                 # Sometimes yt-dlp returns None after successful post-processing
@@ -796,7 +918,12 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         if captured_stderr
                                         else ""
                                     )
+
+                                    # Log captured stderr for debugging
                                     if stderr_output:
+                                        logger.error(
+                                            f"Captured stderr from yt-dlp for {url}:\n{stderr_output}"
+                                        )
                                         # Extract the actual error message from stderr
                                         error_lines = [
                                             line
@@ -1007,11 +1134,21 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         # Get actual filename from yt-dlp
                                         filename = None
 
+                                        logger.debug(
+                                            f"Processing entry: {entry.get('title', 'N/A')}"
+                                        )
+                                        logger.debug(
+                                            f"Entry keys: {list(entry.keys())}"
+                                        )
+
                                         # Try to get filename from requested_downloads
                                         if (
                                             "requested_downloads" in entry
                                             and entry["requested_downloads"]
                                         ):
+                                            logger.debug(
+                                                f"Found requested_downloads with {len(entry['requested_downloads'])} items"
+                                            )
                                             filename = entry["requested_downloads"][
                                                 0
                                             ].get("filepath") or entry[
@@ -1020,6 +1157,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                                 0
                                             ].get(
                                                 "filename"
+                                            )
+                                            logger.debug(
+                                                f"Filename from requested_downloads: {filename}"
                                             )
 
                                         # Try to get extension from entry
@@ -1079,29 +1219,17 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                                         )
                                                         break
 
-                                        # Clean up any .part files (incomplete downloads)
+                                        # Check for .part files (incomplete downloads) but don't clean up yet
+                                        # We need to check if the file was actually downloaded first
                                         part_files = list(output_dir.glob("*.part"))
-                                        if part_files:
-                                            logger.warning(
-                                                f"Found {len(part_files)} incomplete download(s), cleaning up..."
-                                            )
-                                            for part_file in part_files:
-                                                try:
-                                                    part_file.unlink()
-                                                    logger.debug(
-                                                        f"Removed incomplete download: {part_file.name}"
-                                                    )
-                                                except Exception as e:
-                                                    logger.warning(
-                                                        f"Failed to remove {part_file.name}: {e}"
-                                                    )
 
                                         if filename:
-                                            all_files.append(str(filename))
-                                            # Track audio file info for database
-                                            audio_downloaded_successfully = True
-                                            audio_file_path_for_db = str(filename)
+                                            # Only count as successful if the file actually exists
                                             if Path(filename).exists():
+                                                all_files.append(str(filename))
+                                                # Track audio file info for database
+                                                audio_downloaded_successfully = True
+                                                audio_file_path_for_db = str(filename)
                                                 audio_file_size = (
                                                     Path(filename).stat().st_size
                                                 )
@@ -1110,7 +1238,32 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                                 ).suffix[
                                                     1:
                                                 ]  # Remove the dot
-                                        else:
+                                            else:
+                                                # Filename was constructed from yt-dlp metadata but file doesn't exist
+                                                logger.error(
+                                                    f"yt-dlp reported filename '{filename}' but file does not exist on disk"
+                                                )
+                                                # Continue to error handling below
+                                                filename = None
+
+                                        # Handle case where no filename was found or file doesn't exist
+                                        if not filename:
+                                            # Clean up any .part files if download failed
+                                            if part_files:
+                                                logger.warning(
+                                                    f"Found {len(part_files)} incomplete download(s), cleaning up..."
+                                                )
+                                                for part_file in part_files:
+                                                    try:
+                                                        part_file.unlink()
+                                                        logger.debug(
+                                                            f"Removed incomplete download: {part_file.name}"
+                                                        )
+                                                    except Exception as e:
+                                                        logger.warning(
+                                                            f"Failed to remove {part_file.name}: {e}"
+                                                        )
+
                                             # Check if we have .part files - indicates incomplete download
                                             if part_files:
                                                 error_msg = f"Download incomplete for: {entry.get('title', 'Unknown')} - connection may have been interrupted or rate-limited"
@@ -1118,6 +1271,31 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                                 raise Exception(error_msg)
                                             else:
                                                 logger.error(
+                                                    f"Failed to locate downloaded file for: {entry.get('title', 'Unknown')}"
+                                                )
+                                                # Log entry details for debugging
+                                                logger.error(
+                                                    f"Entry keys: {list(entry.keys())}"
+                                                )
+                                                if "requested_downloads" in entry:
+                                                    logger.error(
+                                                        f"requested_downloads: {entry['requested_downloads']}"
+                                                    )
+                                                if "url" in entry:
+                                                    logger.error(
+                                                        f"Entry URL: {entry['url']}"
+                                                    )
+                                                if "ext" in entry:
+                                                    logger.error(
+                                                        f"Entry ext: {entry['ext']}"
+                                                    )
+                                                logger.error(
+                                                    f"Output directory: {output_dir}"
+                                                )
+                                                logger.error(
+                                                    f"Listing files in output_dir: {list(output_dir.glob('*'))}"
+                                                )
+                                                raise Exception(
                                                     f"Failed to locate downloaded file for: {entry.get('title', 'Unknown')}"
                                                 )
 

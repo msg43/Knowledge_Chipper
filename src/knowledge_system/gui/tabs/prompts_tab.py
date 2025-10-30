@@ -30,48 +30,31 @@ logger = get_logger(__name__)
 
 
 # Define pipeline stages and their associated prompt files
+# NOTE: This reflects the CURRENT unified pipeline architecture (October 2025)
+# Old separate stages (concepts_detect, glossary_detect, people_detect, people_disambiguate)
+# are now consolidated into unified_miner for efficiency and consistency.
+
 PIPELINE_STAGES = {
     "unified_miner": {
-        "name": "Unified Miner",
-        "description": "Extracts claims, jargon, people, and mental models from content segments",
+        "name": "Unified Miner ⭐ ACTIVE",
+        "description": "Extracts ALL entities in one pass: claims, jargon, people, and mental models from content segments (v2 schema with full evidence structure)",
         "prompt_path": "src/knowledge_system/processors/hce/prompts/unified_miner.txt",
         "default_prompt": "unified_miner.txt",
+        "status": "active",
     },
     "flagship_evaluator": {
-        "name": "Flagship Evaluator",
-        "description": "Reviews and ranks extracted claims by importance and quality",
+        "name": "Flagship Evaluator ⭐ ACTIVE",
+        "description": "Reviews and ranks ALL extracted entities (claims, jargon, people, concepts) by importance and quality in parallel",
         "prompt_path": "src/knowledge_system/processors/hce/prompts/flagship_evaluator.txt",
         "default_prompt": "flagship_evaluator.txt",
+        "status": "active",
     },
     "skim": {
-        "name": "Skimmer",
-        "description": "Performs high-level overview to identify key milestones",
+        "name": "Skimmer (Optional)",
+        "description": "Performs high-level overview to identify key milestones - NOT used in main pipeline but available for custom workflows",
         "prompt_path": "src/knowledge_system/processors/hce/prompts/skim.txt",
         "default_prompt": "skim.txt",
-    },
-    "concepts": {
-        "name": "Concept Extractor",
-        "description": "Detects mental models and conceptual frameworks",
-        "prompt_path": "src/knowledge_system/processors/hce/prompts/concepts_detect.txt",
-        "default_prompt": "concepts_detect.txt",
-    },
-    "glossary": {
-        "name": "Glossary Builder",
-        "description": "Creates definitions for jargon and technical terms",
-        "prompt_path": "src/knowledge_system/processors/hce/prompts/glossary_detect.txt",
-        "default_prompt": "glossary_detect.txt",
-    },
-    "people_detect": {
-        "name": "People Detector",
-        "description": "Identifies people mentioned in content",
-        "prompt_path": "src/knowledge_system/processors/hce/prompts/people_detect.txt",
-        "default_prompt": "people_detect.txt",
-    },
-    "people_disambiguate": {
-        "name": "People Disambiguator",
-        "description": "Resolves ambiguous person references",
-        "prompt_path": "src/knowledge_system/processors/hce/prompts/people_disambiguate.txt",
-        "default_prompt": "people_disambiguate.txt",
+        "status": "optional",
     },
 }
 
@@ -149,9 +132,10 @@ class PromptsTab(BaseTab):
         title_label.setFont(title_font)
         layout.addWidget(title_label)
 
-        # Info label
+        # Info label with architecture note
         info_label = QLabel(
-            "Configure which prompt is used at each stage of the processing pipeline:"
+            "Current Unified Pipeline Architecture (October 2025):\n"
+            "The pipeline now uses a streamlined 2-stage extraction + evaluation approach."
         )
         info_label.setWordWrap(True)
         info_label.setStyleSheet("color: #666; margin-bottom: 10px; font-size: 10pt;")
@@ -166,9 +150,32 @@ class PromptsTab(BaseTab):
         scroll_layout = QVBoxLayout(scroll_widget)
         scroll_layout.setContentsMargins(5, 5, 5, 5)
 
-        # Create group box for each pipeline stage
+        # Active Stages Section
+        active_header = QLabel("⭐ Active Pipeline Stages")
+        active_header_font = QFont()
+        active_header_font.setBold(True)
+        active_header_font.setPointSize(11)
+        active_header.setFont(active_header_font)
+        active_header.setStyleSheet(
+            "color: #4CAF50; margin-top: 10px; margin-bottom: 5px;"
+        )
+        scroll_layout.addWidget(active_header)
+
+        # Create group box for each ACTIVE pipeline stage
         for stage_id, stage_info in PIPELINE_STAGES.items():
+            status = stage_info.get("status", "active")
+
             group = QGroupBox(stage_info["name"])
+            # Highlight active stages
+            if status == "active":
+                group.setStyleSheet(
+                    "QGroupBox { border: 2px solid #4CAF50; border-radius: 5px; margin-top: 10px; padding-top: 10px; }"
+                )
+            elif status == "optional":
+                group.setStyleSheet(
+                    "QGroupBox { border: 1px solid #FFA726; border-radius: 5px; margin-top: 10px; padding-top: 10px; }"
+                )
+
             group_layout = QVBoxLayout()
 
             # Description
@@ -527,7 +534,7 @@ class PromptsTab(BaseTab):
             )
 
         except Exception as e:
-            logger.error(f"Failed to view stage prompt: {e}")
+            logger.error(f"Error viewing stage prompt: {e}")
             QMessageBox.critical(self, "Error", f"Failed to view prompt: {e}")
 
     def _save_current_prompt(self) -> None:

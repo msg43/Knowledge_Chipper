@@ -56,6 +56,7 @@ class EnhancedTranscriptionWorker(QThread):
     speaker_assignment_requested = pyqtSignal(
         object, str, object, str
     )  # speaker_data_list, recording_path, metadata, task_id
+    log_message = pyqtSignal(str)  # Log messages from processing pipeline
 
     def __init__(
         self, files: Any, settings: Any, gui_settings: Any, parent: Any = None
@@ -82,6 +83,7 @@ class EnhancedTranscriptionWorker(QThread):
         from ...utils.cancellation import CancellationToken
 
         self.cancellation_token = CancellationToken()
+        self.log_handler = None  # Will be set when processing starts
 
     def _transcription_progress_callback(
         self, step_description_or_dict: Any, progress_percent: int | None = None
@@ -776,6 +778,11 @@ class EnhancedTranscriptionWorker(QThread):
             0,
         )
 
+        # Get disable_proxies_with_cookies setting
+        disable_proxies_with_cookies = self.gui_settings.get(
+            "disable_proxies_with_cookies", True
+        )
+
         # Create scheduler
         db_service = DatabaseService()
         scheduler = MultiAccountDownloadScheduler(
@@ -785,6 +792,7 @@ class EnhancedTranscriptionWorker(QThread):
             sleep_start_hour=self.gui_settings.get("sleep_start_hour", 0),
             sleep_end_hour=self.gui_settings.get("sleep_end_hour", 6),
             db_service=db_service,
+            disable_proxies_with_cookies=disable_proxies_with_cookies,
         )
 
         # Create a simple callback for progress
@@ -876,6 +884,46 @@ class EnhancedTranscriptionWorker(QThread):
 
     def run(self) -> None:
         """Run the transcription process with real-time progress tracking."""
+        # Install GUI log handler to capture processing logs
+        from ..utils.gui_log_handler import install_gui_log_handler
+
+        # Capture logs from transcription processors and related modules
+        logger_names = [
+            "knowledge_system.processors.whisper_cpp_transcribe",
+            "knowledge_system.processors.youtube_download",
+            "knowledge_system.processors.audio_processor",
+            "knowledge_system.processors.speaker_diarization",
+            "knowledge_system.services.speaker_learning_service",
+        ]
+
+        try:
+            self.log_handler = install_gui_log_handler(
+                callback=self._handle_log_message,
+                logger_names=logger_names,
+                level=20,  # INFO level
+            )
+
+            self._run_transcription()
+
+        finally:
+            # Remove log handler when done
+            if self.log_handler:
+                from ..utils.gui_log_handler import remove_gui_log_handler
+
+                remove_gui_log_handler(self.log_handler, logger_names)
+                self.log_handler = None
+
+    def _handle_log_message(self, message: str) -> None:
+        """Handle log messages from the processing pipeline.
+
+        Args:
+            message: The log message to handle
+        """
+        # Emit the log message signal
+        self.log_message.emit(message)
+
+    def _run_transcription(self) -> None:
+        """Internal method to run transcription with logging already set up."""
         try:
             from ...processors.audio_processor import AudioProcessor
             from ...processors.youtube_download import YouTubeDownloadProcessor
@@ -909,21 +957,39 @@ class EnhancedTranscriptionWorker(QThread):
                     use_multi_account = self.gui_settings.get(
                         "use_multi_account", False
                     )
+                    disable_proxies_with_cookies = self.gui_settings.get(
+                        "disable_proxies_with_cookies", True
+                    )
+
+                    # Log cookie configuration for debugging
+                    logger.info(f"🍪 Cookie configuration:")
+                    logger.info(f"   enable_cookies: {enable_cookies}")
+                    logger.info(f"   cookie_files: {cookie_files}")
+                    logger.info(f"   use_multi_account: {use_multi_account}")
+                    logger.info(
+                        f"   disable_proxies_with_cookies: {disable_proxies_with_cookies}"
+                    )
 
                     # Choose download strategy based on cookie file count
                     if use_multi_account and len(cookie_files) > 1:
                         # Multi-account mode
+                        logger.info(
+                            f"   Using multi-account mode with {len(cookie_files)} cookies"
+                        )
                         downloaded_files = self._download_with_multi_account(
                             expanded_urls, cookie_files, downloads_dir
                         )
                     else:
                         # Single-account mode (existing behavior)
                         cookie_file_path = cookie_files[0] if cookie_files else None
+                        logger.info(f"   Using single-account mode")
+                        logger.info(f"   cookie_file_path: {cookie_file_path}")
 
                         downloader = YouTubeDownloadProcessor(
                             download_thumbnails=True,
                             enable_cookies=enable_cookies,
                             cookie_file_path=cookie_file_path,
+                            disable_proxies_with_cookies=disable_proxies_with_cookies,
                         )
 
                         youtube_delay = self.gui_settings.get("youtube_delay", 5)
@@ -1196,14 +1262,19 @@ class EnhancedTranscriptionWorker(QThread):
                                     "title": video_record.title,
                                     "url": video_record.url,
                                     "uploader": video_record.uploader,
+                                    "uploader_id": video_record.uploader_id,
                                     "upload_date": video_record.upload_date,
                                     "duration": video_record.duration_seconds,
                                     "view_count": video_record.view_count,
                                     "tags": video_record.tags_json
                                     if video_record.tags_json
                                     else [],
+                                    "categories": video_record.categories_json
+                                    if video_record.categories_json
+                                    else [],
                                     "description": video_record.description,
                                     "source_type": video_record.source_type,
+                                    "thumbnail_local_path": video_record.thumbnail_local_path,
                                 }
                                 processing_kwargs_with_output[
                                     "video_metadata"
@@ -1418,7 +1489,40 @@ class EnhancedTranscriptionWorker(QThread):
                                             YouTubeDownloadProcessor,
                                         )
 
-                                        downloader = YouTubeDownloadProcessor()
+                                        # Get cookie settings from GUI
+                                        enable_cookies = self.gui_settings.get(
+                                            "enable_cookies", True
+                                        )
+                                        cookie_files = self.gui_settings.get(
+                                            "cookie_files", []
+                                        )
+                                        cookie_file_path = (
+                                            cookie_files[0] if cookie_files else None
+                                        )
+                                        disable_proxies_with_cookies = (
+                                            self.gui_settings.get(
+                                                "disable_proxies_with_cookies", True
+                                            )
+                                        )
+
+                                        logger.info(
+                                            f"🍪 Re-download cookie configuration:"
+                                        )
+                                        logger.info(
+                                            f"   enable_cookies: {enable_cookies}"
+                                        )
+                                        logger.info(
+                                            f"   cookie_file_path: {cookie_file_path}"
+                                        )
+                                        logger.info(
+                                            f"   disable_proxies_with_cookies: {disable_proxies_with_cookies}"
+                                        )
+
+                                        downloader = YouTubeDownloadProcessor(
+                                            enable_cookies=enable_cookies,
+                                            cookie_file_path=cookie_file_path,
+                                            disable_proxies_with_cookies=disable_proxies_with_cookies,
+                                        )
 
                                         download_result = downloader.process(
                                             video_record.url,
@@ -1824,9 +1928,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             settings_section, 0
         )  # No extra stretch - let it take only what it needs
 
-        # System 2 Auto-process section
-        auto_process_section = self._create_auto_process_section()
-        layout.addWidget(auto_process_section)
+        # System 2 Auto-process controls will be embedded in the action bar
 
         # Performance section removed - dynamic resource management handles this now
 
@@ -1966,80 +2068,163 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         layout.setSpacing(5)  # Reduce vertical spacing between rows
         layout.setHorizontalSpacing(10)  # Reduce horizontal spacing between columns
 
-        # Model selection
+        # Set column stretch factors to prevent excessive spacing
+        # Columns 0, 2, 4 are for labels - no stretch
+        # Columns 1, 3, 5 are for widgets - minimal stretch
+        # Column 6 can stretch for checkboxes
+        for col in range(7):
+            if col in [0, 2, 4]:  # Label columns
+                layout.setColumnStretch(col, 0)
+            elif col in [1, 3, 5]:  # Widget columns
+                layout.setColumnStretch(col, 0)
+            else:  # Last column for checkboxes
+                layout.setColumnStretch(col, 1)
+
+        # Model selection - compact combo without extra width
         self.model_combo = QComboBox()
         self.model_combo.addItems(get_valid_whisper_models())
         self.model_combo.setCurrentText("base")
-        self.model_combo.setMinimumWidth(200)  # Increase width to show full model names
+        self.model_combo.setMaximumWidth(120)  # Compact width
         self.model_combo.currentTextChanged.connect(self._on_model_changed)
 
-        # Model status label
+        # Model status label - hidden or inline
         self.model_status_label = QLabel("✅ Ready")
         self.model_status_label.setStyleSheet("color: green; font-weight: bold;")
         self.model_status_label.setToolTip("Model availability status")
-        # Create a widget container for model selection + status
-        model_container = QWidget()
-        model_layout = QHBoxLayout(model_container)
-        model_layout.setContentsMargins(0, 0, 0, 0)
-        model_layout.addWidget(self.model_combo)
-        model_layout.addWidget(self.model_status_label)
-        model_layout.addStretch()  # Push status to the right
+        self.model_status_label.setMaximumWidth(60)
 
-        self._add_field_with_info(
-            layout,
-            "Transcription Model:",
-            model_container,
-            "Choose the Whisper model size. Larger models are more accurate but slower and use more memory. "
-            "'base' is recommended for most users.",
-            0,
-            0,
+        # Row 0: Transcription Model | Language | Checkboxes side by side
+        # Wrap Transcription Model label + widget together
+        model_label_widget = QWidget()
+        model_label_layout = QHBoxLayout(model_label_widget)
+        model_label_layout.setContentsMargins(0, 0, 0, 0)
+        model_label_layout.setSpacing(6)
+        model_label_layout.addWidget(QLabel("Transcription Model:"))
+        model_label_layout.addWidget(self.model_combo)
+        model_label_layout.addWidget(self.model_status_label)
+        model_label_layout.addStretch()  # Keep compact
+        model_tooltip = "Choose the Whisper model size. Larger models are more accurate but slower and use more memory. 'base' is recommended for most users."
+        model_label_widget.setToolTip(
+            f"<b>Transcription Model:</b><br/><br/>{model_tooltip}"
         )
+        layout.addWidget(model_label_widget, 0, 0, 1, 2)
 
-        # Language selection
+        # Language selection - wrap label + widget together
         self.language_combo = QComboBox()
         self.language_combo.addItems(
             ["en", "auto", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh"]
         )
-        self.language_combo.setCurrentText("en")
+        self.language_combo.setCurrentText("auto")
+        self.language_combo.setMaximumWidth(100)  # Compact width
         self.language_combo.currentTextChanged.connect(self._on_setting_changed)
-        self._add_field_with_info(
-            layout,
-            "Language:",
-            self.language_combo,
-            "Select the language of the audio. 'auto' lets Whisper detect the language automatically. "
-            "Specifying the exact language can improve accuracy.",
-            0,
-            2,
-        )
+        language_label_widget = QWidget()
+        language_label_layout = QHBoxLayout(language_label_widget)
+        language_label_layout.setContentsMargins(0, 0, 0, 0)
+        language_label_layout.setSpacing(6)
+        language_label_layout.addWidget(QLabel("Language:"))
+        language_label_layout.addWidget(self.language_combo)
+        language_label_layout.addStretch()  # Keep compact
+        language_tooltip = "Select the language of the audio. 'auto' lets Whisper detect the language automatically. Specifying the exact language can improve accuracy."
+        self.language_combo.setToolTip(f"<b>Language:</b><br/><br/>{language_tooltip}")
+        layout.addWidget(language_label_widget, 0, 2, 1, 2)
 
-        # Device selection
+        # Checkboxes on same row (row 0, columns 4, 5, 6)
+        self.timestamps_checkbox = QCheckBox("Include timestamps")
+        self.timestamps_checkbox.setChecked(True)
+        self.timestamps_checkbox.setToolTip(
+            "Include precise timing information in the transcript. "
+            "Useful for creating subtitles or referencing specific moments in the audio."
+        )
+        self.timestamps_checkbox.toggled.connect(self._on_setting_changed)
+        layout.addWidget(self.timestamps_checkbox, 0, 4)
+
+        self.diarization_checkbox = QCheckBox("Enable speaker diarization")
+        self.diarization_checkbox.setToolTip(
+            "Identify and separate different speakers in the audio. "
+            "Requires a HuggingFace token and additional dependencies. "
+            "Useful for meetings, interviews, or conversations with multiple speakers."
+        )
+        self.diarization_checkbox.toggled.connect(self._on_setting_changed)
+        self.diarization_checkbox.toggled.connect(self._on_diarization_toggled)
+        layout.addWidget(self.diarization_checkbox, 0, 5)
+
+        self.color_coded_checkbox = QCheckBox("Generate color-coded transcripts")
+        self.color_coded_checkbox.setChecked(True)
+        self.color_coded_checkbox.setToolTip(
+            "Generate HTML and enhanced markdown transcripts with color-coded speakers. "
+            "Creates visually appealing transcripts for easy speaker identification."
+        )
+        self.color_coded_checkbox.toggled.connect(self._on_setting_changed)
+        layout.addWidget(self.color_coded_checkbox, 0, 6)
+
+        # Row 1: GPU Acceleration | Format | Checkboxes side by side
+        # Wrap GPU Acceleration label + widget together
         self.device_combo = QComboBox()
         self.device_combo.addItems(["auto", "cpu", "cuda", "mps"])
-        self.device_combo.setCurrentText("auto")
+        self.device_combo.setCurrentText("mps")
+        self.device_combo.setMaximumWidth(100)  # Compact width
         self.device_combo.currentTextChanged.connect(self._on_setting_changed)
-        self._add_field_with_info(
-            layout,
-            "GPU Acceleration:",
-            self.device_combo,
-            "Choose processing device: 'auto' detects best available, 'cpu' uses CPU only, "
-            "'cuda' uses NVIDIA GPU, 'mps' uses Apple Silicon GPU.",
-            1,
-            0,
+        device_label_widget = QWidget()
+        device_label_layout = QHBoxLayout(device_label_widget)
+        device_label_layout.setContentsMargins(0, 0, 0, 0)
+        device_label_layout.setSpacing(6)
+        device_label_layout.addWidget(QLabel("GPU Acceleration:"))
+        device_label_layout.addWidget(self.device_combo)
+        device_label_layout.addStretch()  # Keep compact
+        device_tooltip = "Choose processing device: 'auto' detects best available, 'cpu' uses CPU only, 'cuda' uses NVIDIA GPU, 'mps' uses Apple Silicon GPU."
+        self.device_combo.setToolTip(
+            f"<b>GPU Acceleration:</b><br/><br/>{device_tooltip}"
         )
+        layout.addWidget(device_label_widget, 1, 0, 1, 2)
 
-        # Output format
+        # Format - wrap label + widget together
         self.format_combo = QComboBox()
         self.format_combo.addItems(["txt", "md", "srt", "vtt"])
         self.format_combo.setCurrentText("md")
+        self.format_combo.setMaximumWidth(80)  # Compact width
         self.format_combo.currentTextChanged.connect(self._on_setting_changed)
-        self._add_field_with_info(
-            layout,
-            "Format:",
-            self.format_combo,
-            "Output format: 'txt' for plain text, 'md' for Markdown, 'srt' and 'vtt' for subtitle files with precise timing.",
-            1,
-            2,
+        format_label_widget = QWidget()
+        format_label_layout = QHBoxLayout(format_label_widget)
+        format_label_layout.setContentsMargins(0, 0, 0, 0)
+        format_label_layout.setSpacing(6)
+        format_label_layout.addWidget(QLabel("Format:"))
+        format_label_layout.addWidget(self.format_combo)
+        format_label_layout.addStretch()  # Keep compact
+        format_tooltip = "Output format: 'txt' for plain text, 'md' for Markdown, 'srt' and 'vtt' for subtitle files with precise timing."
+        self.format_combo.setToolTip(f"<b>Format:</b><br/><br/>{format_tooltip}")
+        layout.addWidget(format_label_widget, 1, 2, 1, 2)
+
+        # Checkboxes on row 1
+        self.overwrite_checkbox = QCheckBox("Overwrite existing transcripts")
+        self.overwrite_checkbox.setChecked(True)
+        self.overwrite_checkbox.setToolTip(
+            "If unchecked, existing transcripts will be skipped"
         )
+        self.overwrite_checkbox.toggled.connect(self._on_setting_changed)
+        layout.addWidget(self.overwrite_checkbox, 1, 4)
+
+        self.speaker_assignment_checkbox = QCheckBox("Enable speaker assignment dialog")
+        self.speaker_assignment_checkbox.setChecked(True)
+        self.speaker_assignment_checkbox.setToolTip(
+            "Show interactive dialog to assign real names to detected speakers. "
+            "Allows you to identify speakers and create color-coded transcripts."
+        )
+        self.speaker_assignment_checkbox.toggled.connect(self._on_setting_changed)
+        layout.addWidget(self.speaker_assignment_checkbox, 1, 5)
+
+        self.use_proxy_checkbox = QCheckBox(
+            "Use PacketStream proxy for YouTube downloads"
+        )
+        self.use_proxy_checkbox.setChecked(True)  # Default to using proxy if configured
+        self.use_proxy_checkbox.setToolTip(
+            "Enable PacketStream residential proxies to avoid YouTube bot detection.\n"
+            "• Recommended when downloading multiple videos\n"
+            "• Requires PacketStream credentials in Settings tab\n"
+            "• Unchecked: Direct download (faster but may trigger bot detection)\n"
+            "• Checked: Proxy download (slower but more reliable for bulk downloads)"
+        )
+        self.use_proxy_checkbox.toggled.connect(self._on_setting_changed)
+        layout.addWidget(self.use_proxy_checkbox, 1, 6)
 
         # Output directory with custom layout for tooltip positioning
         layout.addWidget(QLabel("Output Directory:"), 2, 0)
@@ -2089,59 +2274,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         output_dir_container = QWidget()
         output_dir_container.setLayout(output_dir_layout)
         layout.addWidget(
-            output_dir_container, 2, 1, 1, 3
+            output_dir_container, 2, 1, 1, 6
         )  # Span across multiple columns
 
         # Set tooltips for input and button as well
         self.output_dir_input.setToolTip(formatted_tooltip)
         browse_output_btn.setToolTip(formatted_tooltip)
-
-        # Options
-        self.timestamps_checkbox = QCheckBox("Include timestamps")
-        self.timestamps_checkbox.setChecked(True)
-        self.timestamps_checkbox.setToolTip(
-            "Include precise timing information in the transcript. "
-            "Useful for creating subtitles or referencing specific moments in the audio."
-        )
-        self.timestamps_checkbox.toggled.connect(self._on_setting_changed)
-        layout.addWidget(self.timestamps_checkbox, 3, 0, 1, 2)
-
-        self.diarization_checkbox = QCheckBox("Enable speaker diarization")
-        self.diarization_checkbox.setToolTip(
-            "Identify and separate different speakers in the audio. "
-            "Requires a HuggingFace token and additional dependencies. "
-            "Useful for meetings, interviews, or conversations with multiple speakers."
-        )
-        self.diarization_checkbox.toggled.connect(self._on_setting_changed)
-        self.diarization_checkbox.toggled.connect(self._on_diarization_toggled)
-        layout.addWidget(self.diarization_checkbox, 3, 2, 1, 2)
-
-        # Speaker assignment options (shown when diarization is enabled)
-        self.speaker_assignment_checkbox = QCheckBox("Enable speaker assignment dialog")
-        self.speaker_assignment_checkbox.setChecked(True)
-        self.speaker_assignment_checkbox.setToolTip(
-            "Show interactive dialog to assign real names to detected speakers. "
-            "Allows you to identify speakers and create color-coded transcripts."
-        )
-        self.speaker_assignment_checkbox.toggled.connect(self._on_setting_changed)
-        layout.addWidget(self.speaker_assignment_checkbox, 5, 2, 1, 2)
-
-        self.color_coded_checkbox = QCheckBox("Generate color-coded transcripts")
-        self.color_coded_checkbox.setChecked(True)
-        self.color_coded_checkbox.setToolTip(
-            "Generate HTML and enhanced markdown transcripts with color-coded speakers. "
-            "Creates visually appealing transcripts for easy speaker identification."
-        )
-        self.color_coded_checkbox.toggled.connect(self._on_setting_changed)
-        layout.addWidget(self.color_coded_checkbox, 6, 0, 1, 2)
-
-        self.overwrite_checkbox = QCheckBox("Overwrite existing transcripts")
-        self.overwrite_checkbox.setChecked(True)
-        self.overwrite_checkbox.setToolTip(
-            "If unchecked, existing transcripts will be skipped"
-        )
-        self.overwrite_checkbox.toggled.connect(self._on_setting_changed)
-        layout.addWidget(self.overwrite_checkbox, 4, 0, 1, 2)
 
         # Note: Automatic quality recovery is now always enabled
         # If transcription quality issues are detected, the system will:
@@ -2149,43 +2287,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # 2. If still failing, re-download audio and use large model
         # 3. If still failing, mark as permanent failure
 
-        # YouTube proxy options (for URL downloads)
-        self.use_proxy_checkbox = QCheckBox(
-            "Use PacketStream proxy for YouTube downloads"
-        )
-        self.use_proxy_checkbox.setChecked(True)  # Default to using proxy if configured
-        self.use_proxy_checkbox.setToolTip(
-            "Enable PacketStream residential proxies to avoid YouTube bot detection.\n"
-            "• Recommended when downloading multiple videos\n"
-            "• Requires PacketStream credentials in Settings tab\n"
-            "• Unchecked: Direct download (faster but may trigger bot detection)\n"
-            "• Checked: Proxy download (slower but more reliable for bulk downloads)"
-        )
-        self.use_proxy_checkbox.toggled.connect(self._on_setting_changed)
-        layout.addWidget(self.use_proxy_checkbox, 7, 0, 1, 2)
-
-        # YouTube download delay (anti-bot timing)
-        layout.addWidget(QLabel("Delay between YouTube downloads:"), 7, 2)
-        self.youtube_delay_spinbox = QSpinBox()
-        self.youtube_delay_spinbox.setMinimum(0)
-        self.youtube_delay_spinbox.setMaximum(60)
-        self.youtube_delay_spinbox.setValue(5)  # Default 5 seconds
-        self.youtube_delay_spinbox.setSuffix(" sec")
-        self.youtube_delay_spinbox.setToolTip(
-            "Add delay between YouTube video downloads to avoid bot detection.\n"
-            "• 0 seconds: No delay (fastest, higher bot detection risk)\n"
-            "• 5-10 seconds: Recommended for most use cases\n"
-            "• 15+ seconds: Very conservative, safest for large batches\n"
-            "• Actual delay is randomized ±30% (e.g., 10s becomes 7-13s)\n"
-            "• Only applies to YouTube URLs, not local files"
-        )
-        self.youtube_delay_spinbox.valueChanged.connect(self._on_setting_changed)
-        layout.addWidget(self.youtube_delay_spinbox, 7, 3)
-
         # Cookie Authentication Section - collapsible
         cookie_group = QGroupBox("Cookie Authentication (Multi-Account Support)")
         cookie_group.setCheckable(True)
-        cookie_group.setChecked(False)  # Start collapsed
+        cookie_group.setChecked(
+            True
+        )  # Start expanded to emphasize cookie auth as default
         cookie_group.setFlat(True)  # Make it more compact
         cookie_layout = QVBoxLayout()
 
@@ -2208,55 +2315,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.cookie_manager.cookies_changed.connect(self._on_setting_changed)
         cookie_layout.addWidget(self.cookie_manager)
 
-        # Connect enable checkbox to enable/disable controls
-        self.enable_cookies_checkbox.toggled.connect(self._on_cookies_toggled)
-
-        cookie_group.setLayout(cookie_layout)
-        layout.addWidget(cookie_group, 8, 0, 1, 4)
-
-        # Rate Limiting Section - collapsible
-        rate_limit_group = QGroupBox("Rate Limiting (Anti-Bot Protection)")
-        rate_limit_group.setCheckable(True)
-        rate_limit_group.setChecked(False)  # Start collapsed
-        rate_limit_group.setFlat(True)  # Make it more compact
-        rate_limit_layout = QGridLayout()
-
-        rate_limit_layout.addWidget(QLabel("Min delay between downloads:"), 0, 0)
-        self.min_delay_spinbox = QSpinBox()
-        self.min_delay_spinbox.setMinimum(0)
-        self.min_delay_spinbox.setMaximum(600)
-        self.min_delay_spinbox.setValue(180)  # 3 minutes default
-        self.min_delay_spinbox.setSuffix(" sec")
-        self.min_delay_spinbox.setToolTip(
-            "Minimum delay between YouTube downloads (seconds)"
-        )
-        self.min_delay_spinbox.valueChanged.connect(self._on_setting_changed)
-        rate_limit_layout.addWidget(self.min_delay_spinbox, 0, 1)
-
-        rate_limit_layout.addWidget(QLabel("Max delay between downloads:"), 1, 0)
-        self.max_delay_spinbox = QSpinBox()
-        self.max_delay_spinbox.setMinimum(0)
-        self.max_delay_spinbox.setMaximum(600)
-        self.max_delay_spinbox.setValue(300)  # 5 minutes default
-        self.max_delay_spinbox.setSuffix(" sec")
-        self.max_delay_spinbox.setToolTip(
-            "Maximum delay between YouTube downloads (seconds)"
-        )
-        self.max_delay_spinbox.valueChanged.connect(self._on_setting_changed)
-        rate_limit_layout.addWidget(self.max_delay_spinbox, 1, 1)
-
-        rate_limit_layout.addWidget(QLabel("Randomization:"), 2, 0)
-        self.randomization_spinbox = QSpinBox()
-        self.randomization_spinbox.setMinimum(0)
-        self.randomization_spinbox.setMaximum(100)
-        self.randomization_spinbox.setValue(25)  # ±25% default
-        self.randomization_spinbox.setSuffix(" %")
-        self.randomization_spinbox.setToolTip(
-            "Percentage of random variation in delays (e.g., 25 = ±25%)"
-        )
-        self.randomization_spinbox.valueChanged.connect(self._on_setting_changed)
-        rate_limit_layout.addWidget(self.randomization_spinbox, 2, 1)
-
+        # Disable proxies checkbox - belongs in cookie section
         self.disable_proxies_with_cookies_checkbox = QCheckBox(
             "Disable proxies when cookies enabled (recommended)"
         )
@@ -2268,12 +2327,93 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.disable_proxies_with_cookies_checkbox.toggled.connect(
             self._on_setting_changed
         )
-        rate_limit_layout.addWidget(
-            self.disable_proxies_with_cookies_checkbox, 3, 0, 1, 2
+        cookie_layout.addWidget(self.disable_proxies_with_cookies_checkbox)
+
+        # Connect enable checkbox to enable/disable controls
+        self.enable_cookies_checkbox.toggled.connect(self._on_cookies_toggled)
+
+        cookie_group.setLayout(cookie_layout)
+        layout.addWidget(cookie_group, 3, 0, 1, 7)
+
+        # Rate Limiting Section - collapsible
+        rate_limit_group = QGroupBox("Rate Limiting (Anti-Bot Protection)")
+        rate_limit_group.setCheckable(True)
+        rate_limit_group.setChecked(False)  # Start collapsed
+        rate_limit_group.setFlat(True)  # Make it more compact
+        rate_limit_layout = QGridLayout()
+        rate_limit_layout.setSpacing(5)
+        rate_limit_layout.setHorizontalSpacing(10)
+
+        # Set column stretch to keep labels close to spinboxes
+        # Even columns are labels (no stretch), odd columns are spinboxes (no stretch)
+        for col in range(6):
+            rate_limit_layout.setColumnStretch(col, 0)
+
+        # Row 0: Min delay - use horizontal layout container to keep label and spinbox together
+        min_delay_container = QWidget()
+        min_delay_hbox = QHBoxLayout(min_delay_container)
+        min_delay_hbox.setContentsMargins(0, 0, 0, 0)
+        min_delay_hbox.setSpacing(6)
+        min_delay_label = QLabel("Min delay between downloads:")
+        min_delay_hbox.addWidget(min_delay_label)
+        self.min_delay_spinbox = QSpinBox()
+        self.min_delay_spinbox.setMinimum(0)
+        self.min_delay_spinbox.setMaximum(600)
+        self.min_delay_spinbox.setValue(180)  # 3 minutes default
+        self.min_delay_spinbox.setSuffix(" sec")
+        self.min_delay_spinbox.setMaximumWidth(90)  # Compact spinbox
+        self.min_delay_spinbox.setToolTip(
+            "Minimum delay between YouTube downloads (seconds)"
         )
+        self.min_delay_spinbox.valueChanged.connect(self._on_setting_changed)
+        min_delay_hbox.addWidget(self.min_delay_spinbox)
+        min_delay_hbox.addStretch()  # Push to left
+        rate_limit_layout.addWidget(min_delay_container, 0, 0, 1, 2)
+
+        # Row 1: Max delay - use horizontal layout container
+        max_delay_container = QWidget()
+        max_delay_hbox = QHBoxLayout(max_delay_container)
+        max_delay_hbox.setContentsMargins(0, 0, 0, 0)
+        max_delay_hbox.setSpacing(6)
+        max_delay_label = QLabel("Max delay between downloads:")
+        max_delay_hbox.addWidget(max_delay_label)
+        self.max_delay_spinbox = QSpinBox()
+        self.max_delay_spinbox.setMinimum(0)
+        self.max_delay_spinbox.setMaximum(600)
+        self.max_delay_spinbox.setValue(300)  # 5 minutes default
+        self.max_delay_spinbox.setSuffix(" sec")
+        self.max_delay_spinbox.setMaximumWidth(90)  # Compact spinbox
+        self.max_delay_spinbox.setToolTip(
+            "Maximum delay between YouTube downloads (seconds)"
+        )
+        self.max_delay_spinbox.valueChanged.connect(self._on_setting_changed)
+        max_delay_hbox.addWidget(self.max_delay_spinbox)
+        max_delay_hbox.addStretch()  # Push to left
+        rate_limit_layout.addWidget(max_delay_container, 1, 0, 1, 2)
+
+        # Row 2: Randomization - use horizontal layout container
+        randomization_container = QWidget()
+        randomization_hbox = QHBoxLayout(randomization_container)
+        randomization_hbox.setContentsMargins(0, 0, 0, 0)
+        randomization_hbox.setSpacing(6)
+        randomization_label = QLabel("Randomization:")
+        randomization_hbox.addWidget(randomization_label)
+        self.randomization_spinbox = QSpinBox()
+        self.randomization_spinbox.setMinimum(0)
+        self.randomization_spinbox.setMaximum(100)
+        self.randomization_spinbox.setValue(25)  # ±25% default
+        self.randomization_spinbox.setSuffix(" %")
+        self.randomization_spinbox.setMaximumWidth(70)  # Compact spinbox
+        self.randomization_spinbox.setToolTip(
+            "Percentage of random variation in delays (e.g., 25 = ±25%)"
+        )
+        self.randomization_spinbox.valueChanged.connect(self._on_setting_changed)
+        randomization_hbox.addWidget(self.randomization_spinbox)
+        randomization_hbox.addStretch()  # Push to left
+        rate_limit_layout.addWidget(randomization_container, 2, 0, 1, 2)
 
         rate_limit_group.setLayout(rate_limit_layout)
-        layout.addWidget(rate_limit_group, 9, 0, 1, 4)
+        layout.addWidget(rate_limit_group, 4, 0, 1, 7)
 
         group.setLayout(layout)
         return group
@@ -2305,6 +2445,66 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.progress_status_label.setVisible(False)
 
         return container
+
+    # Override: place auto-process controls on the same row as Dry Run
+    def _create_action_layout(self) -> QHBoxLayout:
+        from PyQt6.QtWidgets import QHBoxLayout
+
+        layout = QHBoxLayout()
+
+        # Start button
+        self.start_btn = QPushButton(self._get_start_button_text())
+        self.start_btn.clicked.connect(self._start_processing)
+        self.start_btn.setFixedHeight(25)
+        self.start_btn.setStyleSheet(
+            "background-color: #4caf50; font-weight: bold; font-size: 12px; padding: 4px;"
+        )
+        layout.addWidget(self.start_btn)
+
+        # Stop button
+        self.stop_btn = QPushButton("Stop Processing")
+        self.stop_btn.clicked.connect(self._stop_processing)
+        self.stop_btn.setFixedHeight(25)
+        self.stop_btn.setStyleSheet(
+            "background-color: #d32f2f; color: white; font-weight: bold; font-size: 12px; padding: 4px;"
+        )
+        self.stop_btn.setEnabled(False)
+        layout.addWidget(self.stop_btn)
+
+        # Dry run checkbox
+        self.dry_run_checkbox = QCheckBox("Dry run (test without processing)")
+        layout.addWidget(self.dry_run_checkbox)
+
+        # Auto-process controls inline with Dry run
+        self.auto_process_checkbox = QCheckBox(
+            "Run these transcriptions through Summarization Process Automatically"
+        )
+        self.auto_process_checkbox.setToolTip(
+            "When enabled, transcribed files will automatically continue through:\n"
+            "1. Mining (extract claims, people, jargon, mental models)\n"
+            "2. Flagship evaluation (rank and tier claims)\n"
+            "3. Upload to cloud (if configured)\n\n"
+            "This runs the complete knowledge extraction pipeline without manual intervention."
+        )
+        layout.addWidget(self.auto_process_checkbox)
+
+        self.pipeline_status_label = QLabel("Ready to process")
+        self.pipeline_status_label.setStyleSheet("color: #666;")
+        layout.addWidget(self.pipeline_status_label)
+
+        # Spacer then report button at far right
+        layout.addStretch()
+
+        self.report_btn = QPushButton("View Last Report")
+        self.report_btn.clicked.connect(self._view_last_report)
+        self.report_btn.setEnabled(True)
+        self.report_btn.setFixedHeight(25)
+        self.report_btn.setStyleSheet(
+            "background-color: #1976d2; font-size: 12px; padding: 4px;"
+        )
+        layout.addWidget(self.report_btn)
+
+        return layout
 
     def _add_files(
         self,
@@ -2782,12 +2982,17 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         gui_settings["local_files"] = local_files
         gui_settings["use_proxy"] = self.use_proxy_checkbox.isChecked()
         gui_settings["packetstream_available"] = packetstream_available
-        gui_settings["youtube_delay"] = self.youtube_delay_spinbox.value()
+        gui_settings[
+            "youtube_delay"
+        ] = 5  # Default delay (legacy setting, rate limiting now handled by min/max delay spinboxes)
 
         # Pass cookie settings to worker (multi-account support)
         gui_settings["enable_cookies"] = self.enable_cookies_checkbox.isChecked()
         gui_settings["cookie_files"] = self.cookie_manager.get_all_cookie_files()
         gui_settings["use_multi_account"] = len(gui_settings["cookie_files"]) > 1
+        gui_settings[
+            "disable_proxies_with_cookies"
+        ] = self.disable_proxies_with_cookies_checkbox.isChecked()
 
         # Start transcription worker
         self.transcription_worker = EnhancedTranscriptionWorker(
@@ -2806,6 +3011,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.transcription_worker.speaker_assignment_requested.connect(
             self._handle_speaker_assignment_request
         )
+        self.transcription_worker.log_message.connect(self._on_worker_log_message)
 
         self.active_workers.append(self.transcription_worker)
         self.transcription_worker.start()
@@ -3132,6 +3338,15 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         # Override the "Ready" status from set_processing_state with specific completion status
         self.status_updated.emit("Transcription completed")
+
+    def _on_worker_log_message(self, message: str) -> None:
+        """Handle log messages from the worker thread.
+
+        Args:
+            message: The log message to display
+        """
+        # Append to GUI output panel
+        self.append_log(message)
 
     def _processing_error(self, error_msg: str):
         """Handle transcription error."""
@@ -3646,7 +3861,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.speaker_assignment_checkbox,
                 self.color_coded_checkbox,
                 self.use_proxy_checkbox,
-                self.youtube_delay_spinbox,
                 self.enable_cookies_checkbox,
                 self.cookie_manager,
                 self.min_delay_spinbox,
@@ -3767,14 +3981,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             # Ensure diarization state is properly reflected in UI
             self._on_diarization_toggled(self.diarization_checkbox.isChecked())
 
-            # Load YouTube proxy and delay settings
+            # Load YouTube proxy settings (delay now handled by rate limiting section)
             self.use_proxy_checkbox.setChecked(
                 self.gui_settings.get_checkbox_state(
                     self.tab_name, "use_youtube_proxy", True
                 )
-            )
-            self.youtube_delay_spinbox.setValue(
-                self.gui_settings.get_spinbox_value(self.tab_name, "youtube_delay", 5)
             )
 
             # Load cookie authentication settings (multi-account support)
@@ -3868,9 +4079,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.gui_settings.set_checkbox_state(
                 self.tab_name, "use_youtube_proxy", self.use_proxy_checkbox.isChecked()
             )
-            self.gui_settings.set_spinbox_value(
-                self.tab_name, "youtube_delay", self.youtube_delay_spinbox.value()
-            )
+            # youtube_delay setting deprecated - now handled by rate limiting min/max delays
 
             # Save cookie authentication settings (multi-account support)
             self.gui_settings.set_checkbox_state(

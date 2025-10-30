@@ -64,7 +64,9 @@ class UnifiedHCEPipeline:
 
         try:
             short_summary = self._generate_short_summary(episode)
-            logger.info(f"Generated short summary: {len(short_summary)} characters")
+            logger.info(
+                f"📝 Generated overview summary ({len(short_summary)} characters)"
+            )
         except Exception as e:
             logger.error(f"Short summary generation failed: {e}")
             short_summary = f"Episode {episode.episode_id} content analysis."
@@ -115,7 +117,7 @@ class UnifiedHCEPipeline:
             )
 
             logger.info(
-                f"Unified mining extracted: {total_claims} claims, {total_jargon} jargon terms, "
+                f"✅ Extraction complete: {total_claims} claims, {total_jargon} jargon terms, "
                 f"{total_people} people, {total_mental_models} mental models"
             )
 
@@ -160,7 +162,7 @@ class UnifiedHCEPipeline:
             concepts_evaluation = evaluation_results["concepts"]
 
             logger.info(
-                f"Evaluation complete: "
+                f"✅ Evaluation complete: "
                 f"Claims: {claims_evaluation.claims_accepted}/{claims_evaluation.total_claims_processed}, "
                 f"Jargon: {jargon_evaluation.terms_accepted}/{jargon_evaluation.total_terms_processed}, "
                 f"People: {people_evaluation.people_accepted}/{people_evaluation.total_mentions_processed}, "
@@ -212,7 +214,9 @@ class UnifiedHCEPipeline:
                 episode, miner_outputs, claims_evaluation, short_summary, final_outputs
             )
             final_outputs.long_summary = long_summary
-            logger.info(f"Generated long summary: {len(long_summary)} characters")
+            logger.info(
+                f"📝 Generated comprehensive summary ({len(long_summary)} characters)"
+            )
         except Exception as e:
             logger.error(f"Long summary generation failed: {e}")
             # Fallback to a basic summary
@@ -234,7 +238,7 @@ class UnifiedHCEPipeline:
         try:
             categories = self._analyze_structured_categories(final_outputs)
             final_outputs.structured_categories = categories
-            logger.info(f"Identified {len(categories)} structured categories")
+            logger.info(f"🏷️  Identified {len(categories)} WikiData topic categories")
         except Exception as e:
             logger.error(f"Category analysis failed: {e}")
             final_outputs.structured_categories = []
@@ -249,7 +253,7 @@ class UnifiedHCEPipeline:
         )
 
         logger.info(
-            f"Pipeline complete: {len(final_outputs.claims)} final claims, "
+            f"🎉 Pipeline complete: {len(final_outputs.claims)} final claims, "
             f"{len(final_outputs.people)} people, {len(final_outputs.concepts)} concepts, "
             f"{len(final_outputs.jargon)} jargon terms, {len(final_outputs.structured_categories)} categories"
         )
@@ -276,7 +280,7 @@ class UnifiedHCEPipeline:
         all_concepts_raw = [m for output in miner_outputs for m in output.mental_models]
 
         logger.info(
-            f"Starting parallel evaluation: {len(all_claims_raw)} claims, "
+            f"🔍 Starting flagship evaluation: {len(all_claims_raw)} claims, "
             f"{len(all_jargon_raw)} jargon, {len(all_people_raw)} people, {len(all_concepts_raw)} concepts"
         )
 
@@ -320,7 +324,28 @@ class UnifiedHCEPipeline:
                 entity_type = futures[future]
                 try:
                     results[entity_type] = future.result()
-                    logger.info(f"✅ {entity_type.capitalize()} evaluation complete")
+                    # Get result counts for more informative logging
+                    result = results[entity_type]
+                    if entity_type == "claims" and hasattr(result, "claims_accepted"):
+                        logger.info(
+                            f"✅ Claims evaluation complete: {result.claims_accepted}/{result.total_claims_processed} accepted"
+                        )
+                    elif entity_type == "jargon" and hasattr(result, "terms_accepted"):
+                        logger.info(
+                            f"✅ Jargon evaluation complete: {result.terms_accepted}/{result.total_terms_processed} accepted"
+                        )
+                    elif entity_type == "people" and hasattr(result, "people_accepted"):
+                        logger.info(
+                            f"✅ People evaluation complete: {result.people_accepted}/{result.total_mentions_processed} accepted"
+                        )
+                    elif entity_type == "concepts" and hasattr(
+                        result, "concepts_accepted"
+                    ):
+                        logger.info(
+                            f"✅ Concepts evaluation complete: {result.concepts_accepted}/{result.total_concepts_processed} accepted"
+                        )
+                    else:
+                        logger.info(f"✅ {entity_type.capitalize()} evaluation complete")
                 except Exception as e:
                     logger.error(f"❌ {entity_type.capitalize()} evaluation failed: {e}")
                     # Create fallback for failed entity type
@@ -559,7 +584,7 @@ class UnifiedHCEPipeline:
             if not original_claim:
                 continue
 
-            # Convert evidence spans
+            # Convert evidence spans (v2 schema with full context)
             evidence_spans = []
             for evidence in original_claim.get("evidence_spans", []):
                 evidence_spans.append(
@@ -567,11 +592,13 @@ class UnifiedHCEPipeline:
                         t0=evidence.get("t0", ""),
                         t1=evidence.get("t1", ""),
                         quote=evidence.get("quote", ""),
-                        segment_id=None,  # Could be enhanced later
-                        context_t0=None,
-                        context_t1=None,
-                        context_text=None,
-                        context_type="exact",
+                        segment_id=evidence.get("segment_id"),  # V2: Now captured
+                        context_t0=evidence.get("context_t0"),  # V2: Extended context
+                        context_t1=evidence.get("context_t1"),  # V2: Extended context
+                        context_text=evidence.get("context_text"),  # V2: Context text
+                        context_type=evidence.get(
+                            "context_type", "exact"
+                        ),  # V2: Context type
                     )
                 )
 
@@ -627,11 +654,21 @@ class UnifiedHCEPipeline:
             for output in miner_outputs:
                 for jargon_data in output.jargon:
                     if isinstance(jargon_data, dict):
+                        # V2: Extract first evidence span for timestamp
+                        evidence_spans = jargon_data.get("evidence_spans", [])
+                        first_ts = (
+                            evidence_spans[0].get("t0", "00:00")
+                            if evidence_spans
+                            else "00:00"
+                        )
+
                         jargon_term = JargonTerm(
                             episode_id=episode.episode_id,
                             term_id=f"jargon_{len(all_jargon):04d}",
                             term=jargon_data.get("term", ""),
                             definition=jargon_data.get("definition"),
+                            category=jargon_data.get("domain"),  # V2: Domain field
+                            first_mention_ts=first_ts,
                         )
                         all_jargon.append(jargon_term)
 
@@ -657,14 +694,34 @@ class UnifiedHCEPipeline:
             for output in miner_outputs:
                 for person_data in output.people:
                     if isinstance(person_data, dict):
+                        # V2: Extract first mention for timestamp and segment
+                        mentions = person_data.get("mentions", [])
+                        first_mention = mentions[0] if mentions else {}
+
                         person_mention = PersonMention(
                             episode_id=episode.episode_id,
                             mention_id=f"person_{len(all_people):04d}",
-                            span_segment_id="unknown",
-                            t0=person_data.get("timestamp", "00:00"),
-                            t1=person_data.get("timestamp", "00:00"),
-                            surface=person_data.get("name", ""),
-                            normalized=person_data.get("name", ""),
+                            span_segment_id=first_mention.get(
+                                "segment_id", "unknown"
+                            ),  # V2: Segment ID
+                            t0=first_mention.get(
+                                "t0", "00:00"
+                            ),  # V2: From mentions array
+                            t1=first_mention.get(
+                                "t1", "00:00"
+                            ),  # V2: From mentions array
+                            surface=first_mention.get(
+                                "surface_form", person_data.get("name", "")
+                            ),  # V2: Surface form
+                            normalized=person_data.get(
+                                "normalized_name", person_data.get("name", "")
+                            ),  # V2: Normalized name
+                            entity_type=person_data.get(
+                                "entity_type", "person"
+                            ),  # V2: Entity type
+                            confidence=person_data.get(
+                                "confidence", 0.8
+                            ),  # V2: Confidence
                         )
                         all_people.append(person_mention)
 
@@ -685,12 +742,23 @@ class UnifiedHCEPipeline:
             for output in miner_outputs:
                 for model_data in output.mental_models:
                     if isinstance(model_data, dict):
+                        # V2: Extract first evidence span for timestamp
+                        evidence_spans = model_data.get("evidence_spans", [])
+                        first_ts = (
+                            evidence_spans[0].get("t0", "00:00")
+                            if evidence_spans
+                            else "00:00"
+                        )
+
                         mental_model = MentalModel(
                             episode_id=episode.episode_id,
                             model_id=f"concept_{len(all_mental_models):04d}",
                             name=model_data.get("name", ""),
-                            definition=model_data.get("description"),
-                            first_mention_ts=model_data.get("timestamp", "00:00"),
+                            definition=model_data.get(
+                                "definition", model_data.get("description")
+                            ),  # V2: definition field
+                            first_mention_ts=first_ts,  # V2: From evidence_spans
+                            aliases=model_data.get("aliases", []),  # V2: Aliases array
                         )
                         all_mental_models.append(mental_model)
 

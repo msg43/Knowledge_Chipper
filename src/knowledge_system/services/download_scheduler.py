@@ -39,6 +39,7 @@ class DownloadScheduler:
         timezone: str = "America/Los_Angeles",
         min_delay: float = 180.0,
         max_delay: float = 300.0,
+        disable_proxies_with_cookies: bool | None = None,
     ):
         """
         Initialize download scheduler.
@@ -51,6 +52,7 @@ class DownloadScheduler:
             timezone: Timezone for sleep period (e.g., 'America/New_York')
             min_delay: Minimum seconds between downloads (default 180 = 3 min)
             max_delay: Maximum seconds between downloads (default 300 = 5 min)
+            disable_proxies_with_cookies: Disable proxies when cookies are enabled
         """
         self.cookie_file_path = cookie_file_path
         self.enable_sleep_period = enable_sleep_period
@@ -59,12 +61,14 @@ class DownloadScheduler:
         self.timezone = ZoneInfo(timezone)
         self.min_delay = min_delay
         self.max_delay = max_delay
+        self.disable_proxies_with_cookies = disable_proxies_with_cookies
 
         # Initialize downloader
         self.downloader = YouTubeDownloadProcessor(
             enable_cookies=bool(cookie_file_path),
             cookie_file_path=cookie_file_path,
             download_thumbnails=True,
+            disable_proxies_with_cookies=disable_proxies_with_cookies,
         )
 
         # Statistics
@@ -291,6 +295,7 @@ class DownloadScheduler:
 def create_download_scheduler(
     cookie_file_path: str | None = None,
     use_config: bool = True,
+    disable_proxies_with_cookies: bool | None = None,
 ) -> DownloadScheduler:
     """
     Create download scheduler from config or with defaults.
@@ -298,6 +303,7 @@ def create_download_scheduler(
     Args:
         cookie_file_path: Path to cookies file (overrides config)
         use_config: Load settings from config file
+        disable_proxies_with_cookies: Disable proxies when cookies are enabled
 
     Returns:
         Configured DownloadScheduler instance
@@ -311,9 +317,12 @@ def create_download_scheduler(
             enable_sleep_period=getattr(yt_config, "enable_sleep_period", True),
             sleep_start_hour=getattr(yt_config, "sleep_start_hour", 0),
             sleep_end_hour=getattr(yt_config, "sleep_end_hour", 6),
-            sleep_timezone=getattr(yt_config, "sleep_timezone", "America/Los_Angeles"),
+            timezone=getattr(yt_config, "sleep_timezone", "America/Los_Angeles"),
             min_delay=yt_config.sequential_download_delay_min,
             max_delay=yt_config.sequential_download_delay_max,
+            disable_proxies_with_cookies=disable_proxies_with_cookies
+            if disable_proxies_with_cookies is not None
+            else yt_config.disable_proxies_with_cookies,
         )
     else:
         return DownloadScheduler(cookie_file_path=cookie_file_path)

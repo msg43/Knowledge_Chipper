@@ -1129,30 +1129,188 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
     def _parse_transcript_to_segments(
         self, transcript_text: str, episode_id: str
     ) -> list[Any]:
-        """Parse transcript text into segments."""
+        """Parse transcript text into intelligent segments (chunks of ~500-1000 tokens)."""
         from ..processors.hce.types import Segment
+        from ..utils.text_utils import estimate_tokens_improved
 
         segments = []
+
+        # Clean transcript: remove headers, combine into paragraphs
         lines = transcript_text.split("\n")
+        clean_lines = []
+        for line in lines:
+            stripped = line.strip()
+            # Skip markdown headers, YAML frontmatter, and very short lines
+            if (
+                stripped
+                and not stripped.startswith("#")
+                and not stripped.startswith("---")
+                and len(stripped) >= 10
+            ):
+                clean_lines.append(stripped)
 
-        for idx, line in enumerate(lines):
-            if line.strip():
-                # Skip markdown headers and empty lines
-                if line.startswith("#") or len(line.strip()) < 10:
-                    continue
+        # Combine into full text
+        full_text = " ".join(clean_lines)
 
+        # Target: 500-1000 tokens per segment (optimal for LLM processing)
+        target_tokens = 750
+        max_tokens = 1000
+
+        # Split into sentences for better chunking
+        import re
+
+        sentences = re.split(r"(?<=[.!?])\s+", full_text)
+
+        current_chunk = []
+        current_tokens = 0
+        segment_idx = 0
+
+        for sentence in sentences:
+            sentence_tokens = estimate_tokens_improved(sentence, "default")
+
+            # If adding this sentence would exceed max, save current chunk
+            if current_tokens + sentence_tokens > max_tokens and current_chunk:
+                chunk_text = " ".join(current_chunk)
                 segments.append(
                     Segment(
                         episode_id=episode_id,
-                        segment_id=f"seg_{idx:04d}",
+                        segment_id=f"seg_{segment_idx:04d}",
                         speaker="Unknown",
-                        t0=f"00:{idx//60:02d}:{idx%60:02d}",
-                        t1=f"00:{(idx+1)//60:02d}:{(idx+1)%60:02d}",
-                        text=line.strip(),
+                        t0=f"00:{segment_idx*2:02d}:00",  # Approximate timestamps
+                        t1=f"00:{(segment_idx+1)*2:02d}:00",
+                        text=chunk_text,
                     )
                 )
+                current_chunk = []
+                current_tokens = 0
+                segment_idx += 1
 
+            current_chunk.append(sentence)
+            current_tokens += sentence_tokens
+
+            # If we've reached target size, save chunk
+            if current_tokens >= target_tokens:
+                chunk_text = " ".join(current_chunk)
+                segments.append(
+                    Segment(
+                        episode_id=episode_id,
+                        segment_id=f"seg_{segment_idx:04d}",
+                        speaker="Unknown",
+                        t0=f"00:{segment_idx*2:02d}:00",
+                        t1=f"00:{(segment_idx+1)*2:02d}:00",
+                        text=chunk_text,
+                    )
+                )
+                current_chunk = []
+                current_tokens = 0
+                segment_idx += 1
+
+        # Add remaining chunk
+        if current_chunk:
+            chunk_text = " ".join(current_chunk)
+            segments.append(
+                Segment(
+                    episode_id=episode_id,
+                    segment_id=f"seg_{segment_idx:04d}",
+                    speaker="Unknown",
+                    t0=f"00:{segment_idx*2:02d}:00",
+                    t1=f"00:{(segment_idx+1)*2:02d}:00",
+                    text=chunk_text,
+                )
+            )
+
+        logger.info(
+            f"📊 Created {len(segments)} intelligent segments from transcript (target: {target_tokens} tokens/segment)"
+        )
         return segments
+
+    def _chunk_speaker_segments_intelligently(
+        self, speaker_segments: list[Any], episode_id: str, target_tokens: int = 750
+    ) -> list[Any]:
+        """
+        Chunk speaker-turn segments into larger segments while preserving speaker context.
+
+        This is used when we have many small speaker turns (e.g., 135 segments) and want to
+        group them into larger chunks for more efficient LLM processing.
+        """
+        from ..processors.hce.types import Segment
+        from ..utils.text_utils import estimate_tokens_improved
+
+        if not speaker_segments:
+            return []
+
+        chunked_segments = []
+        current_chunk_texts = []
+        current_tokens = 0
+        chunk_idx = 0
+        max_tokens = 1000
+
+        for seg in speaker_segments:
+            seg_text = seg.text if hasattr(seg, "text") else str(seg)
+            seg_tokens = estimate_tokens_improved(seg_text, "default")
+
+            # If adding this segment would exceed max, save current chunk
+            if current_tokens + seg_tokens > max_tokens and current_chunk_texts:
+                chunk_text = " ".join(current_chunk_texts)
+                chunked_segments.append(
+                    Segment(
+                        episode_id=episode_id,
+                        segment_id=f"chunk_{chunk_idx:04d}",
+                        speaker="Multiple",  # Chunked segments may have multiple speakers
+                        t0="00:00:00",  # Approximate - would need proper timestamp tracking
+                        t1="00:00:00",
+                        text=chunk_text,
+                    )
+                )
+                current_chunk_texts = []
+                current_tokens = 0
+                chunk_idx += 1
+
+            # Add speaker attribution to text for context
+            speaker = getattr(seg, "speaker", "Unknown")
+            attributed_text = (
+                f"[{speaker}]: {seg_text}"
+                if speaker and speaker != "Unknown"
+                else seg_text
+            )
+            current_chunk_texts.append(attributed_text)
+            current_tokens += seg_tokens
+
+            # If we've reached target size, save chunk
+            if current_tokens >= target_tokens:
+                chunk_text = " ".join(current_chunk_texts)
+                chunked_segments.append(
+                    Segment(
+                        episode_id=episode_id,
+                        segment_id=f"chunk_{chunk_idx:04d}",
+                        speaker="Multiple",
+                        t0="00:00:00",
+                        t1="00:00:00",
+                        text=chunk_text,
+                    )
+                )
+                current_chunk_texts = []
+                current_tokens = 0
+                chunk_idx += 1
+
+        # Add remaining chunk
+        if current_chunk_texts:
+            chunk_text = " ".join(current_chunk_texts)
+            chunked_segments.append(
+                Segment(
+                    episode_id=episode_id,
+                    segment_id=f"chunk_{chunk_idx:04d}",
+                    speaker="Multiple",
+                    t0="00:00:00",
+                    t1="00:00:00",
+                    text=chunk_text,
+                )
+            )
+
+        logger.info(
+            f"📊 Chunked {len(speaker_segments)} speaker segments into {len(chunked_segments)} larger segments (target: {target_tokens} tokens/segment)"
+        )
+        return chunked_segments
 
 
 # Singleton instance

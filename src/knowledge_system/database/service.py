@@ -409,10 +409,37 @@ class DatabaseService:
                     .filter(MediaSource.source_id == video_id)
                     .first()
                 )
+
+                # Add platform categories as a dynamic property
+                if video:
+                    categories = self._get_platform_categories_for_source(
+                        session, video_id
+                    )
+                    # Store as dynamic attribute (not persisted to DB)
+                    video.categories_json = categories if categories else []
+
                 return video
         except Exception as e:
             logger.error(f"Failed to get video {video_id}: {e}")
             return None
+
+    def _get_platform_categories_for_source(self, session, source_id: str) -> list[str]:
+        """Get platform categories for a source from the normalized tables."""
+        try:
+            # Query the junction table and join with platform_categories
+            results = (
+                session.query(PlatformCategory.category_name)
+                .join(
+                    SourcePlatformCategory,
+                    PlatformCategory.category_id == SourcePlatformCategory.category_id,
+                )
+                .filter(SourcePlatformCategory.source_id == source_id)
+                .all()
+            )
+            return [r[0] for r in results] if results else []
+        except Exception as e:
+            logger.debug(f"Could not retrieve platform categories for {source_id}: {e}")
+            return []
 
     def update_video(self, video_id: str, **updates) -> bool:
         """Update video record."""

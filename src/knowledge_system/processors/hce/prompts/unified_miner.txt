@@ -69,23 +69,59 @@ Each claim must include:
 - **stance**: How the speaker presents it (asserts/questions/opposes/neutral)
 - **evidence_spans**: Array of supporting quotes with exact timestamps
 
+**IMPORTANT FOR CLAIMS EVIDENCE:**
+Extract ALL mentions of the claim across the segment. For each evidence span:
+- **segment_id**: The segment identifier (provided in input)
+- **quote**: The exact quote supporting the claim
+- **t0**: Start timestamp (MM:SS or HH:MM:SS)
+- **t1**: End timestamp (MM:SS or HH:MM:SS)
+- **context_text**: 1-2 sentences of surrounding context
+- **context_type**: "exact" (just quote), "extended" (1-2 sentences), or "segment" (full segment)
+
 Each jargon term must include:
 - **term**: The jargon term or phrase
 - **definition**: Explanation of the term in context
-- **context_quote**: Quote showing how the term is used
-- **timestamp**: When the term appears
+- **domain**: Field classification (economics, technology, medical, legal, scientific, business, or other)
+- **evidence_spans**: Array of all uses of this term
+
+**IMPORTANT FOR JARGON EVIDENCE:**
+Extract ALL uses of the term across the segment. For each evidence span:
+- **segment_id**: The segment identifier (provided in input)
+- **quote**: Quote showing how the term is used
+- **t0**: Start timestamp (MM:SS or HH:MM:SS)
+- **t1**: End timestamp (MM:SS or HH:MM:SS)
+- **context_text**: Extended context showing usage
 
 Each person must include:
 - **name**: Person's name as mentioned
+- **normalized_name**: Standardized form ("First Last" or "Organization Name")
+- **entity_type**: "person" or "organization"
 - **role_or_description**: How they're described or their role
-- **context_quote**: Quote mentioning the person
-- **timestamp**: When they're mentioned
+- **confidence**: Confidence in identification (0.0-1.0)
+- **external_ids**: Object with "wikidata" and/or "wikipedia" keys (if mentioned)
+- **mentions**: Array of all mentions of this person/org
+
+**IMPORTANT FOR PEOPLE MENTIONS:**
+Extract ALL mentions of the person/org across the segment. For each mention:
+- **segment_id**: The segment identifier (provided in input)
+- **surface_form**: How they were referred to in this mention
+- **quote**: Quote showing the mention
+- **t0**: Start timestamp (MM:SS or HH:MM:SS)
+- **t1**: End timestamp (MM:SS or HH:MM:SS)
 
 Each mental model must include:
 - **name**: Name or title of the mental model
-- **description**: Explanation of the mental model or framework
-- **context_quote**: Quote illustrating the mental model
-- **timestamp**: When it's discussed
+- **definition**: Explanation of the model/framework
+- **aliases**: Array of alternative names (if any)
+- **evidence_spans**: Array of all mentions/applications
+
+**IMPORTANT FOR MENTAL MODEL EVIDENCE:**
+Extract ALL mentions/applications of the model across the segment. For each evidence span:
+- **segment_id**: The segment identifier (provided in input)
+- **quote**: Quote showing the discussion
+- **t0**: Start timestamp (MM:SS or HH:MM:SS)
+- **t1**: End timestamp (MM:SS or HH:MM:SS)
+- **context_text**: Extended context showing explanation/application
 
 ## EXAMPLES BY TYPE
 
@@ -99,10 +135,19 @@ Each mental model must include:
   "claim_text": "Bitcoin dropped 15% yesterday, marking its worst single-day loss since March 2020",
   "claim_type": "factual",
   "stance": "asserts",
-  "evidence_spans": [{"quote": "Bitcoin's price dropped 15% yesterday, marking its worst single-day loss since March 2020", "t0": "02:15", "t1": "02:22"}]
+  "evidence_spans": [
+    {
+      "segment_id": "seg_001",
+      "quote": "Bitcoin's price dropped 15% yesterday, marking its worst single-day loss since March 2020",
+      "t0": "02:15",
+      "t1": "02:22",
+      "context_text": "Looking at the markets, Bitcoin's price dropped 15% yesterday, marking its worst single-day loss since March 2020. This has shaken investor confidence.",
+      "context_type": "extended"
+    }
+  ]
 }
     </good_extraction>
-    <explanation>Specific factual assertion with verifiable data that can be checked.</explanation>
+    <explanation>Specific factual assertion with verifiable data, segment ID, and context.</explanation>
   </example>
 
   <example type="causal">
@@ -326,9 +371,12 @@ Each mental model must include:
       "stance": "asserts",
       "evidence_spans": [
         {
+          "segment_id": "seg_001",
           "quote": "The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices",
           "t0": "00:15",
-          "t1": "00:23"
+          "t1": "00:23",
+          "context_text": "Let me explain the impact. The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices. This is a major shift from traditional approaches.",
+          "context_type": "extended"
         }
       ]
     },
@@ -338,9 +386,12 @@ Each mental model must include:
       "stance": "asserts",
       "evidence_spans": [
         {
+          "segment_id": "seg_001",
           "quote": "this creates what economists call a 'wealth effect' where rising asset prices boost consumer spending",
           "t0": "00:25",
-          "t1": "00:32"
+          "t1": "00:32",
+          "context_text": "Jerome Powell mentioned that this creates what economists call a 'wealth effect' where rising asset prices boost consumer spending. The mechanism is well documented.",
+          "context_type": "extended"
         }
       ]
     },
@@ -350,9 +401,12 @@ Each mental model must include:
       "stance": "questions",
       "evidence_spans": [
         {
+          "segment_id": "seg_001",
           "quote": "some critics argue this approach primarily benefits wealthy asset holders",
           "t0": "00:35",
-          "t1": "00:40"
+          "t1": "00:40",
+          "context_text": "However, some critics argue this approach primarily benefits wealthy asset holders. This remains a point of debate.",
+          "context_type": "extended"
         }
       ]
     }
@@ -361,22 +415,48 @@ Each mental model must include:
     {
       "term": "quantitative easing",
       "definition": "Federal Reserve program involving large-scale asset purchases to stimulate the economy",
-      "context_quote": "The Federal Reserve's quantitative easing program",
-      "timestamp": "00:15"
+      "domain": "economics",
+      "evidence_spans": [
+        {
+          "segment_id": "seg_001",
+          "quote": "The Federal Reserve's quantitative easing program",
+          "t0": "00:15",
+          "t1": "00:18",
+          "context_text": "The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices."
+        }
+      ]
     },
     {
       "term": "wealth effect",
       "definition": "Economic phenomenon where rising asset prices boost consumer spending",
-      "context_quote": "what economists call a 'wealth effect' where rising asset prices boost consumer spending",
-      "timestamp": "00:28"
+      "domain": "economics",
+      "evidence_spans": [
+        {
+          "segment_id": "seg_001",
+          "quote": "what economists call a 'wealth effect' where rising asset prices boost consumer spending",
+          "t0": "00:28",
+          "t1": "00:32",
+          "context_text": "Jerome Powell mentioned that this creates what economists call a 'wealth effect' where rising asset prices boost consumer spending."
+        }
+      ]
     }
   ],
   "people": [
     {
       "name": "Jerome Powell",
+      "normalized_name": "Jerome Powell",
+      "entity_type": "person",
       "role_or_description": "Federal Reserve Chairman discussing monetary policy effects",
-      "context_quote": "Jerome Powell mentioned that this creates",
-      "timestamp": "00:25"
+      "confidence": 0.95,
+      "mentions": [
+        {
+          "segment_id": "seg_001",
+          "surface_form": "Jerome Powell",
+          "quote": "Jerome Powell mentioned that this creates",
+          "t0": "00:25",
+          "t1": "00:27"
+        }
+      ]
     }
   ],
   "mental_models": []

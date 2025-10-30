@@ -230,19 +230,38 @@ class AsyncTranscriptionManager:
 
         try:
             logger.info("✅ Starting speaker detection (GPU)")
+
+            # CRITICAL: Update the diarizer's progress callback to the current one
+            # This ensures preloaded diarizers get the GUI's progress callback
+            if progress_callback and hasattr(diarizer, "progress_callback"):
+                diarizer.progress_callback = progress_callback
+                logger.debug(
+                    "Updated diarizer progress callback to current GUI callback"
+                )
+
             if progress_callback:
-                progress_callback("Running speaker detection on GPU...")
+                progress_callback("🎙️ Initializing speaker detection on GPU...")
 
             # Add heartbeat mechanism for stuck detection
             last_heartbeat = threading.Event()
+            heartbeat_count = [0]  # Use list for mutable counter in closure
 
             def heartbeat():
                 while not last_heartbeat.is_set():
                     time.sleep(30)  # Heartbeat every 30 seconds
                     if not last_heartbeat.is_set():
-                        logger.debug(
-                            "✅ Speaker detection heartbeat - still processing..."
+                        heartbeat_count[0] += 1
+                        elapsed_min = (
+                            heartbeat_count[0] * 0.5
+                        )  # 30 seconds = 0.5 minutes
+                        # Use INFO level so it reaches the GUI
+                        logger.info(
+                            f"🎙️ Speaker detection in progress... ({elapsed_min:.1f} min elapsed)"
                         )
+                        if progress_callback:
+                            progress_callback(
+                                f"🎙️ Speaker detection in progress... ({elapsed_min:.1f} min elapsed)"
+                            )
 
             heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
             heartbeat_thread.start()

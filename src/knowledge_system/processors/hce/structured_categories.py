@@ -260,9 +260,11 @@ def analyze_structured_categories(
         List of structured categories
     """
     try:
-        # Use the prompt from config/prompts directory
+        # Use the prompt from config/prompts directory (project root)
+        # From this file (src/knowledge_system/processors/hce/structured_categories.py),
+        # project root is 5 levels up
         prompt_path = (
-            Path(__file__).parent.parent.parent.parent
+            Path(__file__).parent.parent.parent.parent.parent
             / "config"
             / "prompts"
             / "structured_categories.txt"

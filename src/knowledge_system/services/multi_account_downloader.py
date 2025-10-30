@@ -48,6 +48,7 @@ class MultiAccountDownloadScheduler:
         min_delay: float = 180.0,
         max_delay: float = 300.0,
         db_service: DatabaseService | None = None,
+        disable_proxies_with_cookies: bool | None = None,
     ):
         """
         Initialize multi-account download scheduler.
@@ -62,12 +63,14 @@ class MultiAccountDownloadScheduler:
             min_delay: Minimum seconds between downloads per account
             max_delay: Maximum seconds between downloads per account
             db_service: Database service for deduplication
+            disable_proxies_with_cookies: Disable proxies when cookies are enabled
         """
         self.cookie_files = cookie_files
         self.parallel_workers = parallel_workers
         self.enable_sleep_period = enable_sleep_period
         self.sleep_start = sleep_start_hour
         self.sleep_end = sleep_end_hour
+        self.disable_proxies_with_cookies = disable_proxies_with_cookies
 
         # Create scheduler for each account
         self.schedulers = [
@@ -79,6 +82,7 @@ class MultiAccountDownloadScheduler:
                 timezone=sleep_timezone,
                 min_delay=min_delay,
                 max_delay=max_delay,
+                disable_proxies_with_cookies=disable_proxies_with_cookies,
             )
             for cf in cookie_files
         ]
@@ -356,9 +360,8 @@ class MultiAccountDownloadScheduler:
                     # Check if we're in sleep period for all accounts
                     if all(
                         s.is_sleep_time()
-                        for s in self.schedulers
-                        if self.account_health[i]["active"]
                         for i, s in enumerate(self.schedulers)
+                        if self.account_health[i]["active"]
                     ):
                         # Wait for wake time
                         for scheduler in self.schedulers:

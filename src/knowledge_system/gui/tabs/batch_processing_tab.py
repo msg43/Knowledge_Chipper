@@ -122,6 +122,7 @@ class BatchProcessingTab(BaseTab):
 
     def __init__(self, main_window):
         super().__init__(main_window)
+        self.tab_name = "Batch Processing"
         self.hardware_specs = detect_hardware_specs()
         self.batch_worker: BatchProcessingWorker | None = None
         self.processor: IntelligentBatchProcessor | None = None
@@ -129,6 +130,7 @@ class BatchProcessingTab(BaseTab):
         self._setup_ui()
         self._update_hardware_info()
         self._load_existing_batches()
+        self._load_settings()
 
     def _setup_ui(self):
         """Setup the user interface."""
@@ -209,6 +211,13 @@ class BatchProcessingTab(BaseTab):
         self.resume_checkbox = QCheckBox("Enable intelligent resume from interruptions")
         self.resume_checkbox.setChecked(True)
         config_layout.addWidget(self.resume_checkbox, 4, 0, 1, 2)
+
+        # Connect signals for auto-save
+        self.batch_name_input.textChanged.connect(self._on_setting_changed)
+        self.max_downloads_spin.valueChanged.connect(self._on_setting_changed)
+        self.max_mining_spin.valueChanged.connect(self._on_setting_changed)
+        self.max_evaluation_spin.valueChanged.connect(self._on_setting_changed)
+        self.resume_checkbox.stateChanged.connect(self._on_setting_changed)
 
         layout.addWidget(config_group)
 
@@ -694,3 +703,86 @@ Recommended Settings:
         # Only auto-scroll if user was already at the bottom
         if should_scroll and scrollbar:
             scrollbar.setValue(scrollbar.maximum())
+
+    def _load_settings(self) -> None:
+        """Load settings from session."""
+        try:
+            from ...logger import get_logger
+
+            logger = get_logger(__name__)
+
+            # Load batch name
+            batch_name = self.gui_settings.get_line_edit_text(
+                self.tab_name, "batch_name", "Episode Batch Processing"
+            )
+            self.batch_name_input.setPlainText(batch_name)
+
+            # Load spinbox values
+            self.max_downloads_spin.setValue(
+                self.gui_settings.get_spinbox_value(
+                    self.tab_name, "max_downloads", self.max_downloads_spin.value()
+                )
+            )
+            self.max_mining_spin.setValue(
+                self.gui_settings.get_spinbox_value(
+                    self.tab_name, "max_mining", self.max_mining_spin.value()
+                )
+            )
+            self.max_evaluation_spin.setValue(
+                self.gui_settings.get_spinbox_value(
+                    self.tab_name, "max_evaluation", self.max_evaluation_spin.value()
+                )
+            )
+
+            # Load checkbox states
+            self.resume_checkbox.setChecked(
+                self.gui_settings.get_checkbox_state(
+                    self.tab_name, "enable_resume", True
+                )
+            )
+
+            logger.debug(f"Settings loaded for {self.tab_name} tab")
+        except Exception as e:
+            from ...logger import get_logger
+
+            logger = get_logger(__name__)
+            logger.error(f"Failed to load settings for {self.tab_name} tab: {e}")
+
+    def _save_settings(self) -> None:
+        """Save current settings to session."""
+        try:
+            from ...logger import get_logger
+
+            logger = get_logger(__name__)
+
+            # Save batch name
+            self.gui_settings.set_line_edit_text(
+                self.tab_name, "batch_name", self.batch_name_input.toPlainText()
+            )
+
+            # Save spinbox values
+            self.gui_settings.set_spinbox_value(
+                self.tab_name, "max_downloads", self.max_downloads_spin.value()
+            )
+            self.gui_settings.set_spinbox_value(
+                self.tab_name, "max_mining", self.max_mining_spin.value()
+            )
+            self.gui_settings.set_spinbox_value(
+                self.tab_name, "max_evaluation", self.max_evaluation_spin.value()
+            )
+
+            # Save checkbox states
+            self.gui_settings.set_checkbox_state(
+                self.tab_name, "enable_resume", self.resume_checkbox.isChecked()
+            )
+
+            logger.debug(f"Saved settings for {self.tab_name} tab")
+        except Exception as e:
+            from ...logger import get_logger
+
+            logger = get_logger(__name__)
+            logger.error(f"Failed to save settings for {self.tab_name} tab: {e}")
+
+    def _on_setting_changed(self):
+        """Called when any setting changes to automatically save."""
+        self._save_settings()

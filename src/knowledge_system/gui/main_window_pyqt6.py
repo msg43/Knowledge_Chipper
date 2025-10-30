@@ -203,31 +203,13 @@ class MainWindow(QMainWindow):
             cleanup_service.save_cleanup_report()
             failed_urls_file = cleanup_service.save_failed_urls_to_file()
 
-            # Show popup if there are failed videos (exceeded retry limit)
+            # Log failed videos (no popup - just log to console)
             failed_count = len(report.get("failed_videos", []))
             if failed_count > 0:
-                from PyQt6.QtWidgets import QMessageBox
-
-                msg = QMessageBox(self)
-                msg.setIcon(QMessageBox.Icon.Warning)
-                msg.setWindowTitle("Partial Download Failures Detected")
-                msg.setText(
-                    f"Found {failed_count} video(s) that failed after 3 retry attempts."
+                logger.info(
+                    f"Found {failed_count} video(s) that failed after 3 retry attempts. "
+                    f"Failed URLs saved to: {failed_urls_file}"
                 )
-
-                details = "Failed URLs have been saved to:\n"
-                if failed_urls_file:
-                    details += f"{failed_urls_file}\n\n"
-                details += "You can copy these URLs and paste them back into the download tab to try again.\n\n"
-                details += "Failed videos:\n"
-                for video in report["failed_videos"][:10]:  # Show first 10
-                    details += f"- {video['title']}\n"
-                if failed_count > 10:
-                    details += f"... and {failed_count - 10} more\n"
-
-                msg.setDetailedText(details)
-                msg.setStandardButtons(QMessageBox.StandardButton.Ok)
-                msg.exec()
 
             # Log summary of other issues
             incomplete_count = len(report.get("incomplete_videos", []))
@@ -260,8 +242,12 @@ class MainWindow(QMainWindow):
         """Set up the streamlined main UI."""
         self.setWindowTitle("Skip the Podcast")
         # Make window resizable with reasonable default size and minimum size
-        self.resize(2200, 1800)  # Optimized size for better space utilization
-        self.setMinimumSize(1000, 700)  # Increased minimum size to maintain usability
+        self.resize(
+            792, 1800
+        )  # Starting width reduced by 40% from 1320 (40% reduction = 792)
+        self.setMinimumSize(
+            600, 700
+        )  # Reduced minimum width proportionally to allow 40% reduction
 
         # Create central widget and main layout
         central_widget = QWidget()
@@ -545,32 +531,27 @@ class MainWindow(QMainWindow):
             # Restore window geometry if available
             geometry = self.gui_settings.get_window_geometry()
             if geometry:
-                # If saved size is significantly smaller than current default, use default
-                # This handles the resize from 1400x900 to 2200x1800
-                if geometry["width"] < 2000 or geometry["height"] < 1500:
-                    logger.info(
-                        "Saved window size is too small, using new default size"
-                    )
-                    self.setGeometry(geometry["x"], geometry["y"], 2200, 1800)
-                else:
-                    self.setGeometry(
-                        geometry["x"],
-                        geometry["y"],
-                        geometry["width"],
-                        geometry["height"],
-                    )
+                # Use saved geometry as-is
+                self.setGeometry(
+                    geometry["x"],
+                    geometry["y"],
+                    geometry["width"],
+                    geometry["height"],
+                )
             else:
-                # Center the window on screen with new default size
+                # Center the window on screen using the size already set in _setup_ui()
                 from PyQt6.QtWidgets import QApplication
 
                 screen = QApplication.primaryScreen().availableGeometry()
-                x = (screen.width() - 2200) // 2
-                y = (screen.height() - 1800) // 2
-                self.setGeometry(x, y, 2200, 1800)
+                current_width = self.width()
+                current_height = self.height()
+                x = (screen.width() - current_width) // 2
+                y = (screen.height() - current_height) // 2
+                self.setGeometry(x, y, current_width, current_height)
 
             logger.debug("Session state loaded successfully")
         except Exception as e:
-            logger.error(f"Could not load session state: {e}")
+            logger.error(f"Failed to load session state: {e}")
 
     def _save_session(self) -> None:
         """Save session state."""

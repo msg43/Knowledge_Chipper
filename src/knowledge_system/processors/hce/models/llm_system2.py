@@ -91,14 +91,38 @@ class System2LLM:
             # Check if we're already in an async context
             try:
                 loop = asyncio.get_running_loop()
-                # We're in an async context - create a task and run it
-                import concurrent.futures
+                # We're in an async context - we need to run in a NEW event loop in a separate thread
+                import threading
 
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    future = pool.submit(
-                        asyncio.run, self._complete_async(prompt, **kwargs)
-                    )
-                    return future.result()
+                result_container = []
+                exception_container = []
+
+                def run_in_new_loop():
+                    """Run the async function in a completely new event loop in this thread."""
+                    try:
+                        # Create a new event loop for this thread
+                        new_loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(new_loop)
+                        try:
+                            result = new_loop.run_until_complete(
+                                self._complete_async(prompt, **kwargs)
+                            )
+                            result_container.append(result)
+                        finally:
+                            new_loop.close()
+                            asyncio.set_event_loop(None)
+                    except Exception as e:
+                        exception_container.append(e)
+
+                # Run in a separate thread with its own event loop
+                thread = threading.Thread(target=run_in_new_loop)
+                thread.start()
+                thread.join()
+
+                if exception_container:
+                    raise exception_container[0]
+                return result_container[0]
+
             except RuntimeError:
                 # No running loop - safe to use asyncio.run()
                 return asyncio.run(self._complete_async(prompt, **kwargs))
@@ -144,14 +168,38 @@ class System2LLM:
             # Check if we're already in an async context
             try:
                 loop = asyncio.get_running_loop()
-                # We're in an async context - create a task and run it
-                import concurrent.futures
+                # We're in an async context - we need to run in a NEW event loop in a separate thread
+                import threading
 
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    future = pool.submit(
-                        asyncio.run, self._generate_json_async(prompt, **kwargs)
-                    )
-                    return future.result()
+                result_container = []
+                exception_container = []
+
+                def run_in_new_loop():
+                    """Run the async function in a completely new event loop in this thread."""
+                    try:
+                        # Create a new event loop for this thread
+                        new_loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(new_loop)
+                        try:
+                            result = new_loop.run_until_complete(
+                                self._generate_json_async(prompt, **kwargs)
+                            )
+                            result_container.append(result)
+                        finally:
+                            new_loop.close()
+                            asyncio.set_event_loop(None)
+                    except Exception as e:
+                        exception_container.append(e)
+
+                # Run in a separate thread with its own event loop
+                thread = threading.Thread(target=run_in_new_loop)
+                thread.start()
+                thread.join()
+
+                if exception_container:
+                    raise exception_container[0]
+                return result_container[0]
+
             except RuntimeError:
                 # No running loop - safe to use asyncio.run()
                 return asyncio.run(self._generate_json_async(prompt, **kwargs))
@@ -227,17 +275,42 @@ class System2LLM:
             # Check if we're already in an async context
             try:
                 loop = asyncio.get_running_loop()
-                # We're in an async context - create a task and run it
+                # We're in an async context - we need to run in a NEW event loop in a separate thread
+                # Using asyncio.run() directly would fail with "cannot be called from a running event loop"
                 import concurrent.futures
+                import threading
 
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    future = pool.submit(
-                        asyncio.run,
-                        self._generate_structured_json_async(
-                            prompt, schema_name, **kwargs
-                        ),
-                    )
-                    return future.result()
+                result_container = []
+                exception_container = []
+
+                def run_in_new_loop():
+                    """Run the async function in a completely new event loop in this thread."""
+                    try:
+                        # Create a new event loop for this thread
+                        new_loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(new_loop)
+                        try:
+                            result = new_loop.run_until_complete(
+                                self._generate_structured_json_async(
+                                    prompt, schema_name, **kwargs
+                                )
+                            )
+                            result_container.append(result)
+                        finally:
+                            new_loop.close()
+                            asyncio.set_event_loop(None)
+                    except Exception as e:
+                        exception_container.append(e)
+
+                # Run in a separate thread with its own event loop
+                thread = threading.Thread(target=run_in_new_loop)
+                thread.start()
+                thread.join()
+
+                if exception_container:
+                    raise exception_container[0]
+                return result_container[0]
+
             except RuntimeError:
                 # No running loop - safe to use asyncio.run()
                 return asyncio.run(

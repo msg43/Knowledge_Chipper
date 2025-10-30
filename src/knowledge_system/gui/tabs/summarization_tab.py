@@ -56,6 +56,7 @@ class EnhancedSummarizationWorker(QThread):
     )  # success_count, failure_count, total_count
     processing_error = pyqtSignal(str)
     hce_analytics_updated = pyqtSignal(dict)  # HCE analytics data
+    log_message = pyqtSignal(str)  # Log messages from processing pipeline
 
     def __init__(
         self, files: Any, settings: Any, gui_settings: Any, parent: Any = None
@@ -70,6 +71,7 @@ class EnhancedSummarizationWorker(QThread):
         from ...utils.cancellation import CancellationToken
 
         self.cancellation_token = CancellationToken()
+        self.log_handler = None  # Will be set when processing starts
 
     def _extract_hce_analytics(self, hce_data: dict, filename: str) -> dict:
         """Extract analytics from HCE data for display."""
@@ -295,8 +297,44 @@ class EnhancedSummarizationWorker(QThread):
 
     def run(self) -> None:
         """Run the summarization process using System 2 orchestrator."""
-        # Always use System 2 orchestrator for job tracking, error handling, and metrics
-        self._run_with_system2_orchestrator()
+        # Install GUI log handler to capture processing logs
+        from ..utils.gui_log_handler import install_gui_log_handler
+
+        # Capture logs from HCE processors and related modules
+        logger_names = [
+            "knowledge_system.processors.hce.unified_pipeline",
+            "knowledge_system.processors.hce.unified_miner",
+            "knowledge_system.processors.hce.parallel_processor",
+            "knowledge_system.processors.hce.evaluators",
+            "knowledge_system.core.system2_orchestrator",
+        ]
+
+        try:
+            self.log_handler = install_gui_log_handler(
+                callback=self._handle_log_message,
+                logger_names=logger_names,
+                level=20,  # INFO level
+            )
+
+            # Always use System 2 orchestrator for job tracking, error handling, and metrics
+            self._run_with_system2_orchestrator()
+
+        finally:
+            # Remove log handler when done
+            if self.log_handler:
+                from ..utils.gui_log_handler import remove_gui_log_handler
+
+                remove_gui_log_handler(self.log_handler, logger_names)
+                self.log_handler = None
+
+    def _handle_log_message(self, message: str) -> None:
+        """Handle log messages from the processing pipeline.
+
+        Args:
+            message: The log message to handle
+        """
+        # Emit the log message signal
+        self.log_message.emit(message)
 
     def stop(self) -> None:
         """Stop the summarization process."""
@@ -1253,6 +1291,7 @@ class SummarizationTab(BaseTab):
         self.summarization_worker.hce_analytics_updated.connect(
             self._on_hce_analytics_updated
         )
+        self.summarization_worker.log_message.connect(self._on_worker_log_message)
 
         self.active_workers.append(self.summarization_worker)
         self.set_processing_state(True)
@@ -1554,6 +1593,7 @@ class SummarizationTab(BaseTab):
         self.summarization_worker.hce_analytics_updated.connect(
             self._on_hce_analytics_updated
         )
+        self.summarization_worker.log_message.connect(self._on_worker_log_message)
 
         self.active_workers.append(self.summarization_worker)
         self.set_processing_state(True)
@@ -2434,6 +2474,15 @@ class SummarizationTab(BaseTab):
         self.set_processing_state(False)
         self.append_log(f"Error: {error}")
         self.show_error("Processing Error", error)
+
+    def _on_worker_log_message(self, message: str) -> None:
+        """Handle log messages from the worker thread.
+
+        Args:
+            message: The log message to display
+        """
+        # Append to GUI output panel
+        self.append_log(message)
 
     def _on_hce_analytics_updated(self, analytics: dict) -> None:
         """Handle HCE analytics updates to show relations and contradictions."""

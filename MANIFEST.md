@@ -33,6 +33,7 @@ Complete manifest of all files in the Knowledge Chipper codebase with meaningful
 - `system2_orchestrator_mining.py` - Mining integration with checkpoint support
 - `test_checkpoint_resumption.py` - Comprehensive checkpoint testing
 - `test_wikidata_categorizer.py` - WikiData categorizer test suite
+- `test_database_imports.py` - Quick import validation tests for database models (runs in lint step)
 
 ### Documentation Updates
 - Added speaker attribution documentation with accuracy metrics and examples

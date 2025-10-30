@@ -1,110 +1,77 @@
 version: 2
 updates:
-  # Main pip dependencies - Base requirements
+  # Monitor Python dependencies
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+      day: "monday"
       time: "09:00"
-    open-pull-requests-limit: 10
-    groups:
-      # Group patch and minor updates together for stable packages
-      minor-patches:
-        patterns:
-          - "requests"
-          - "pydantic"
-          - "sqlalchemy"
-          - "pandas"
-          - "numpy"
-          - "click"
-          - "loguru"
-          - "rich"
-        update-types:
-          - "minor"
-          - "patch"
+      timezone: "America/Los_Angeles"
 
-      # Development tools can be grouped
-      dev-tools:
-        patterns:
-          - "pytest*"
-          - "black"
-          - "isort"
-          - "mypy"
-          - "pre-commit"
-        update-types:
-          - "minor"
-          - "patch"
+    # Only create PRs for specific critical dependencies
+    allow:
+      - dependency-name: "yt-dlp"
+        # yt-dlp is critical - always monitor
+      - dependency-name: "openai"
+        # API changes can break functionality
+      - dependency-name: "anthropic"
+        # API changes can break functionality
 
-      # ML dependencies (careful with breaking changes)
-      ml-dependencies:
-        patterns:
-          - "torch"
-          - "transformers"
-          - "librosa"
-          - "soundfile"
-        update-types:
-          - "patch"
+    # Customize PR settings
+    open-pull-requests-limit: 3
 
-    # NOTE: yt-dlp is NOT grouped - gets individual PRs for careful review
-    # Each yt-dlp update requires testing per docs/YT_DLP_UPGRADE_PROCEDURE.md
-    # Expect 1-2 yt-dlp PRs per week (high frequency, critical dependency)
-
-    # Critical dependencies that need individual review
-    ignore:
-      # PyAnnote updates need careful testing for API changes
-      - dependency-name: "pyannote.audio"
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
-
-      # PyQt major versions need extensive testing
-      - dependency-name: "PyQt6"
-        update-types: ["version-update:semver-major"]
-
-      # Torch major versions need GPU compatibility checks
-      - dependency-name: "torch"
-        update-types: ["version-update:semver-major"]
-
+    # Add labels for easy filtering
     labels:
       - "dependencies"
-      - "automated"
+      - "python"
+      - "automated-pr"
 
-    reviewers:
-      - "msg43"  # Replace with your GitHub username
-
+    # Customize commit message
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "deps"
+      prefix-development: "deps-dev"
       include: "scope"
 
-  # GitHub Actions updates
+    # Group updates when possible
+    groups:
+      llm-providers:
+        patterns:
+          - "openai"
+          - "anthropic"
+
+      youtube-processing:
+        patterns:
+          - "yt-dlp"
+          - "youtube-transcript-api"
+          - "pytube"
+
+    # Ignore certain updates
+    ignore:
+      # Don't auto-update torch (too large, needs manual testing)
+      - dependency-name: "torch"
+      - dependency-name: "transformers"
+      # Don't auto-update PyQt (GUI changes need testing)
+      - dependency-name: "PyQt6"
+
+    # Reviewers (optional - uncomment and add GitHub usernames)
+    # reviewers:
+    #   - "msg43"
+
+    # Assignees (optional - uncomment and add GitHub usernames)
+    # assignees:
+    #   - "msg43"
+
+  # Monitor GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Los_Angeles"
+
     labels:
       - "dependencies"
       - "github-actions"
-    commit-message:
-      prefix: "chore(ci)"
-
-# How this works:
-#
-# 1. GROUPED UPDATES (auto-merge friendly):
-#    - minor-patches: Stable packages like requests, pydantic
-#    - dev-tools: Testing/linting tools
-#    - ml-dependencies: ML packages (patch only)
-#
-# 2. INDIVIDUAL UPDATES (need review):
-#    - pyannote.audio (major versions)
-#    - openai, anthropic (API changes)
-#    - PyQt6 (major versions)
-#
-# 3. IGNORED (manual management):
-#    - yt-dlp: Too critical, manual testing required
-#    - Major versions of ML libraries
-#
-# 4. SECURITY UPDATES:
-#    - Always created regardless of ignore rules
-#    - Labeled with "security" automatically
-#
-# To enable auto-merge for trusted updates:
-# gh repo set --enable-auto-merge
-# Then on PRs: gh pr merge --auto --merge
+      - "automated-pr"

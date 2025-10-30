@@ -7,10 +7,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from ...logger import get_logger
 from .model_uri_parser import parse_model_uri
 from .models.llm_system2 import System2LLM
 from .schema_validator import repair_and_validate_miner_output, validate_miner_output
 from .types import EpisodeBundle, Segment
+
+logger = get_logger(__name__)
 
 
 class UnifiedMinerOutput:
@@ -166,9 +169,9 @@ class UnifiedMiner:
             if not isinstance(result, dict):
                 result = {}
 
-            # Repair and validate against schema
+            # Repair and validate against schema (v2 with full evidence structure)
             # This will add missing required fields (claims, jargon, people, mental_models)
-            # if they're absent, preventing validation errors
+            # and migrate v1 flat structure to v2 nested structure if needed
             repaired_result, is_valid, errors = repair_and_validate_miner_output(result)
             if not is_valid:
                 import logging
@@ -178,6 +181,7 @@ class UnifiedMiner:
                     f"Miner output failed schema validation after repair: {errors}"
                 )
                 # Use repaired result anyway - it will have the required structure
+                # The repair function will have migrated v1→v2 format
 
             result = repaired_result
 

@@ -235,7 +235,7 @@ class ParallelHCEProcessor:
             return [processor_func(items[0])]
 
         logger.info(
-            f"Starting parallel processing of {len(items)} items with {self.max_workers} workers (asyncio={use_asyncio})"
+            f"⚡ Processing {len(items)} segments with {self.max_workers} parallel workers"
         )
 
         # Use asyncio for I/O-bound LLM calls (much more efficient)
@@ -367,7 +367,7 @@ class ParallelHCEProcessor:
             )
 
         logger.info(
-            f"Parallel processing completed: {completed_count}/{len(items)} successful"
+            f"✅ Parallel processing completed: {completed_count}/{len(items)} segments successful"
         )
         return [r for r in results if r is not None]
 
