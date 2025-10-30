@@ -260,7 +260,7 @@ class MainWindow(QMainWindow):
         """Set up the streamlined main UI."""
         self.setWindowTitle("Skip the Podcast")
         # Make window resizable with reasonable default size and minimum size
-        self.resize(2800, 1800)  # Doubled size for better space utilization
+        self.resize(2200, 1800)  # Optimized size for better space utilization
         self.setMinimumSize(1000, 700)  # Increased minimum size to maintain usability
 
         # Create central widget and main layout
@@ -546,12 +546,12 @@ class MainWindow(QMainWindow):
             geometry = self.gui_settings.get_window_geometry()
             if geometry:
                 # If saved size is significantly smaller than current default, use default
-                # This handles the resize from 1400x900 to 2800x1800
+                # This handles the resize from 1400x900 to 2200x1800
                 if geometry["width"] < 2000 or geometry["height"] < 1500:
                     logger.info(
                         "Saved window size is too small, using new default size"
                     )
-                    self.setGeometry(geometry["x"], geometry["y"], 2800, 1800)
+                    self.setGeometry(geometry["x"], geometry["y"], 2200, 1800)
                 else:
                     self.setGeometry(
                         geometry["x"],
@@ -564,9 +564,9 @@ class MainWindow(QMainWindow):
                 from PyQt6.QtWidgets import QApplication
 
                 screen = QApplication.primaryScreen().availableGeometry()
-                x = (screen.width() - 2800) // 2
+                x = (screen.width() - 2200) // 2
                 y = (screen.height() - 1800) // 2
-                self.setGeometry(x, y, 2800, 1800)
+                self.setGeometry(x, y, 2200, 1800)
 
             logger.debug("Session state loaded successfully")
         except Exception as e:
