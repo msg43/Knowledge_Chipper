@@ -29,8 +29,12 @@ from .models import (
     MediaSource,
     MOCExtraction,
     Person,
+    PlatformCategory,
+    PlatformTag,
     ProcessingJob,
     QualityMetrics,
+    SourcePlatformCategory,
+    SourcePlatformTag,
     Summary,
     Transcript,
     create_all_tables,
@@ -229,6 +233,11 @@ class DatabaseService:
         """Create a new video record or update existing one for re-runs."""
         try:
             with self.get_session() as session:
+                # Extract tags and categories from metadata (they use normalized tables)
+                tags_json = metadata.pop("tags_json", None)
+                categories_json = metadata.pop("categories_json", None)
+                source_type = metadata.get("source_type", "youtube")
+
                 # Check for existing video using claim-centric schema (source_id)
                 existing_video = (
                     session.query(MediaSource)
@@ -245,10 +254,22 @@ class DatabaseService:
                     existing_video.url = url
                     existing_video.processed_at = datetime.utcnow()
 
-                    # Update metadata fields
+                    # Update metadata fields (excluding tags_json and categories_json)
                     for key, value in metadata.items():
                         if hasattr(existing_video, key):
                             setattr(existing_video, key, value)
+
+                    session.commit()
+
+                    # Store tags and categories in normalized tables
+                    if tags_json:
+                        self._store_platform_tags(
+                            session, video_id, tags_json, source_type
+                        )
+                    if categories_json:
+                        self._store_platform_categories(
+                            session, video_id, categories_json, source_type
+                        )
 
                     session.commit()
                     logger.info(f"Updated video record: {video_id}")
@@ -259,6 +280,18 @@ class DatabaseService:
                         source_id=video_id, title=title, url=url, **metadata
                     )
                     session.add(video)
+                    session.commit()
+
+                    # Store tags and categories in normalized tables
+                    if tags_json:
+                        self._store_platform_tags(
+                            session, video_id, tags_json, source_type
+                        )
+                    if categories_json:
+                        self._store_platform_categories(
+                            session, video_id, categories_json, source_type
+                        )
+
                     session.commit()
                     logger.info(f"Created video record: {video_id}")
                     return video

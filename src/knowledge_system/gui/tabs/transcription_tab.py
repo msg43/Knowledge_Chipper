@@ -1963,6 +1963,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         """Create the transcription settings section."""
         group = QGroupBox("Settings")
         layout = QGridLayout()
+        layout.setSpacing(5)  # Reduce vertical spacing between rows
+        layout.setHorizontalSpacing(10)  # Reduce horizontal spacing between columns
 
         # Model selection
         self.model_combo = QComboBox()

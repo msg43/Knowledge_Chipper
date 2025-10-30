@@ -260,8 +260,8 @@ class MainWindow(QMainWindow):
         """Set up the streamlined main UI."""
         self.setWindowTitle("Skip the Podcast")
         # Make window resizable with reasonable default size and minimum size
-        self.resize(1400, 900)  # Default size - larger dimensions for better usability
-        self.setMinimumSize(800, 600)  # Minimum size to ensure usability
+        self.resize(2800, 1800)  # Doubled size for better space utilization
+        self.setMinimumSize(1000, 700)  # Increased minimum size to maintain usability
 
         # Create central widget and main layout
         central_widget = QWidget()
