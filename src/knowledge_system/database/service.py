@@ -300,10 +300,15 @@ class DatabaseService:
             return None
 
     def _store_platform_tags(
-        self, session: Session, source_id: str, tags: list[str], platform: str
+        self, session: Session, source_id: str, tags: list[str] | None, platform: str
     ) -> None:
         """Store platform tags in normalized tables."""
         if not tags:
+            return
+        
+        # Ensure tags is a list
+        if not isinstance(tags, list):
+            logger.warning(f"tags_json is not a list for source {source_id}, skipping")
             return
 
         # Clear existing tags for this source
@@ -337,10 +342,15 @@ class DatabaseService:
             session.add(source_tag)
 
     def _store_platform_categories(
-        self, session: Session, source_id: str, categories: list[str], platform: str
+        self, session: Session, source_id: str, categories: list[str] | None, platform: str
     ) -> None:
         """Store platform categories in normalized tables."""
         if not categories:
+            return
+        
+        # Ensure categories is a list
+        if not isinstance(categories, list):
+            logger.warning(f"categories_json is not a list for source {source_id}, skipping")
             return
 
         # Clear existing categories for this source
