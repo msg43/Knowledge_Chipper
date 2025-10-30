@@ -151,12 +151,12 @@ class VideoDeduplicationService:
         """Apply deduplication policy to existing video."""
 
         # Convert SQLAlchemy object to dict for easier handling
+        # Use source_id (claim-centric schema) instead of video_id
         video_data = {
-            "video_id": existing_video.video_id,
+            "video_id": existing_video.source_id,
             "title": existing_video.title,
             "status": existing_video.status,
             "processed_at": existing_video.processed_at,
-            "extraction_method": existing_video.extraction_method,
             "audio_downloaded": getattr(existing_video, "audio_downloaded", False),
             "metadata_complete": getattr(existing_video, "metadata_complete", False),
         }
