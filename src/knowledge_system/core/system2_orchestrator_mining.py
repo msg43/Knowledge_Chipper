@@ -81,7 +81,7 @@ async def process_mine_with_unified_pipeline(
             file_path = config.get("file_path")
             if not file_path:
                 raise KnowledgeSystemError(
-                    f"No segments in DB and no file_path provided for episode {episode_id}",
+                    f"No segments in DB and no file_path provided for source {source_id}",
                     ErrorCode.INVALID_INPUT,
                 )
 
@@ -91,10 +91,10 @@ async def process_mine_with_unified_pipeline(
             transcript_text = Path(file_path).read_text()
 
             if orchestrator.progress_callback:
-                orchestrator.progress_callback("parsing", 5, episode_id)
+                orchestrator.progress_callback("parsing", 5, source_id)
 
             segments = orchestrator._parse_transcript_to_segments(
-                transcript_text, episode_id
+                transcript_text, source_id
             )
 
         # Save checkpoint after parsing/loading
@@ -109,10 +109,10 @@ async def process_mine_with_unified_pipeline(
             )
 
         if not segments:
-            logger.warning(f"No segments parsed from transcript for {episode_id}")
+            logger.warning(f"No segments parsed from transcript for {source_id}")
             return {
                 "status": "succeeded",
-                "output_id": episode_id,
+                "output_id": source_id,
                 "result": {
                     "claims_extracted": 0,
                     "evidence_spans": 0,
@@ -163,7 +163,7 @@ async def process_mine_with_unified_pipeline(
 
         # 3b. Create EpisodeBundle with metadata
         episode_bundle = EpisodeBundle(
-            episode_id=episode_id, segments=segments, video_metadata=video_metadata
+            episode_id=source_id, segments=segments, video_metadata=video_metadata
         )
 
         # 4. Configure HCE Pipeline
@@ -216,7 +216,7 @@ async def process_mine_with_unified_pipeline(
                 )
                 # Map 0-100% to orchestrator's 10-95% range
                 adjusted_percent = 10 + int(percent * 0.85)
-                orchestrator.progress_callback(step, adjusted_percent, episode_id)
+                orchestrator.progress_callback(step, adjusted_percent, source_id)
 
             # Periodic checkpoint saving during mining
             # Note: This is a best-effort approach; actual segment completion
@@ -284,7 +284,7 @@ async def process_mine_with_unified_pipeline(
 
         # 8. Store rich outputs to main database (claim-centric schema)
         if orchestrator.progress_callback:
-            orchestrator.progress_callback("storing", 90, episode_id)
+            orchestrator.progress_callback("storing", 90, source_id)
 
         # Save checkpoint before storage
         orchestrator.save_checkpoint(
@@ -312,9 +312,9 @@ async def process_mine_with_unified_pipeline(
             # Pass source_id and episode_title so the episode record can be created if needed
             episode_title = Path(file_path).stem
             claim_store.store_segments(
-                episode_id, segments, source_id=source_id, episode_title=episode_title
+                source_id, segments, source_id=source_id, episode_title=episode_title
             )
-            logger.info(f"💾 Stored {len(segments)} segments for episode {episode_id}")
+            logger.info(f"💾 Stored {len(segments)} segments for episode {source_id}")
 
             claim_store.upsert_pipeline_outputs(
                 pipeline_outputs,
@@ -326,7 +326,7 @@ async def process_mine_with_unified_pipeline(
 
             # Verify claims were actually written to database
             if orchestrator.progress_callback:
-                orchestrator.progress_callback("verifying", 93, episode_id)
+                orchestrator.progress_callback("verifying", 93, source_id)
 
             with orchestrator.db_service.get_session() as session:
                 from ..database.models import Claim
@@ -351,7 +351,7 @@ async def process_mine_with_unified_pipeline(
 
         # 9. Summaries now stored in episodes table (via ClaimStore)
         if orchestrator.progress_callback:
-            orchestrator.progress_callback("generating_summary", 96, episode_id)
+            orchestrator.progress_callback("generating_summary", 96, source_id)
 
         # Note: Summary text (short_summary, long_summary) is already stored
         # in the episodes table by ClaimStore.upsert_pipeline_outputs()
@@ -369,7 +369,7 @@ async def process_mine_with_unified_pipeline(
                 file_gen = FileGenerationService()
 
             summary_file_path = file_gen.generate_summary_markdown_from_pipeline(
-                source_id, episode_id, pipeline_outputs
+                source_id, source_id, pipeline_outputs
             )
 
             if summary_file_path:
@@ -380,12 +380,12 @@ async def process_mine_with_unified_pipeline(
 
         # 11. Finalize checkpoint
         if orchestrator.progress_callback:
-            orchestrator.progress_callback("finalizing", 99, episode_id)
+            orchestrator.progress_callback("finalizing", 99, source_id)
 
         # 12. Build final results
         final_result = {
             "status": "succeeded",
-            "output_id": episode_id,
+            "output_id": source_id,
             "summary_file": str(summary_file_path) if summary_file_path else None,
             "result": {
                 # Claim metrics
@@ -431,7 +431,7 @@ async def process_mine_with_unified_pipeline(
         return final_result
 
     except Exception as e:
-        logger.error(f"❌ Mining failed for {episode_id}: {e}")
+        logger.error(f"❌ Mining failed for {source_id}: {e}")
         # Save error checkpoint for potential retry with partial results
         try:
             orchestrator.save_checkpoint(
