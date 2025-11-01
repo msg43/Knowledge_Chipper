@@ -153,4 +153,3 @@ python3 scripts/test_document_hash.py
 The document processor now uses deterministic, path-based IDs that prevent duplicate records when re-processing files. This matches the behavior of the audio processor and completes the ID unification project.
 
 **Status:** ✅ IMPLEMENTED, TESTED, AND READY FOR PRODUCTION
-

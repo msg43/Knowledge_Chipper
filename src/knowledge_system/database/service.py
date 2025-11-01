@@ -22,7 +22,6 @@ from .models import (
     ClaimRelation,
     ClaimTierValidation,
     Concept,
-    Episode,
     EvidenceSpan,
     GeneratedFile,
     JargonTerm,

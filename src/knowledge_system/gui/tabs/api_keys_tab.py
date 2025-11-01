@@ -1094,7 +1094,9 @@ class APIKeysTab(BaseTab):
                 )  # nosec B603,B607
             elif sys.platform == "win32":  # Windows
                 subprocess.run(
-                    ["start", str(speaker_file.absolute())], shell=True, check=True  # nosec B602,B603,B607
+                    ["start", str(speaker_file.absolute())],
+                    shell=True,  # nosec B602,B603,B607
+                    check=True,
                 )
             else:  # Linux
                 subprocess.run(

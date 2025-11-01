@@ -270,18 +270,19 @@ class DocumentProcessor(BaseProcessor):
 
             # Create media source record in database with deterministic ID
             db = DatabaseService()
-            
+
             # Use deterministic hash based on file path (like audio_processor)
             # This ensures re-processing the same file updates the existing record
             import hashlib
+
             path_hash = hashlib.md5(
                 str(file_path.absolute()).encode(), usedforsecurity=False
             ).hexdigest()[:8]
             source_id = f"doc_{file_path.stem}_{path_hash}"
-            
+
             # Check if source already exists
             existing_source = db.get_source(source_id)
-            
+
             if existing_source:
                 # Update existing source
                 logger.info(f"Updating existing document source: {source_id}")

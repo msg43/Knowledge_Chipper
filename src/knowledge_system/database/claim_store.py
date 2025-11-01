@@ -238,7 +238,9 @@ class ClaimStore:
             # NOTE: Milestone table removed in claim-centric architecture
             # Milestones are now stored as structured data in MediaSource or as special claims
             if hasattr(outputs, "milestones") and outputs.milestones:
-                logger.debug(f"Milestones present but Milestone table removed: {len(outputs.milestones)} milestones")
+                logger.debug(
+                    f"Milestones present but Milestone table removed: {len(outputs.milestones)} milestones"
+                )
 
             # 4. Store claims (claims are the fundamental unit)
             # Note: FTS indexing moved to after session.commit() to avoid database locks
