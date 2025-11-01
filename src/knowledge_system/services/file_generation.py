@@ -1441,7 +1441,6 @@ class FileGenerationService:
     def generate_summary_markdown_from_pipeline(
         self,
         source_id: str,
-        source_id: str,
         pipeline_outputs,  # PipelineOutputs
     ) -> Path | None:
         """

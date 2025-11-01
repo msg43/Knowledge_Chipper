@@ -18,7 +18,7 @@ from sqlalchemy.orm import sessionmaker
 from src.knowledge_system.database import Base, DatabaseService
 
 # All models are now in models.py (unified Base)
-from src.knowledge_system.database.models import Claim, Episode
+from src.knowledge_system.database.models import Claim
 from src.knowledge_system.database.system2_models import (
     Job,
     JobRun,

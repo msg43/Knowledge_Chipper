@@ -1816,7 +1816,6 @@ class SpeakerProcessor(BaseProcessor):
     @staticmethod
     def reprocess_hce_with_updated_speakers(
         source_id: str,
-        source_id: str,
         transcript_data: dict[str, Any],
         hce_config: dict[str, Any] | None = None,
         progress_callback: Any = None,

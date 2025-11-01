@@ -1546,7 +1546,6 @@ class SpeakerAssignmentDialog(QDialog):
                 # This will handle the update and reprocessing
                 show_hce_update_dialog(
                     source_id=source_id,
-                    source_id=source_id,
                     speaker_mappings=speaker_mappings,
                     transcript_data=transcript_data,
                     segment_count=segment_count,

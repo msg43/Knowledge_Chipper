@@ -176,14 +176,14 @@ podcast_discovery:
   # When enabled, the system will try to find podcast RSS feeds for YouTube videos
   # This bypasses YouTube rate limiting entirely (RSS feeds have no rate limits)
   enable_youtube_to_rss_mapping: true
-  
+
   # API keys for podcast discovery services (all optional)
   # PodcastIndex.org: Free tier available, get key from https://api.podcastindex.org/
   podcast_index_api_key: null
-  
+
   # ListenNotes.com: Free tier available, get key from https://www.listennotes.com/api/
   listen_notes_api_key: null
-  
+
   # Cache mappings to avoid repeated API calls
   cache_mappings: true
   mapping_cache_path: "~/.knowledge_system/podcast_mappings.json"

@@ -30,12 +30,10 @@ class HCEReprocessWorker(QThread):
     def __init__(
         self,
         source_id: str,
-        source_id: str,
         transcript_data: dict,
         hce_config: dict | None = None,
     ):
         super().__init__()
-        self.source_id = source_id
         self.source_id = source_id
         self.transcript_data = transcript_data
         self.hce_config = hce_config

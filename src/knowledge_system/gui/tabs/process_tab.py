@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
 
 from ...core.system2_orchestrator import System2Orchestrator
 from ...logger import get_logger
-from ...processors.audio_processor import AudioProcessor
+# AudioProcessor removed - functionality integrated into System2Orchestrator
 from ..components.base_tab import BaseTab
 from ..components.file_operations import FileOperationsMixin
 from ..core.settings_manager import get_gui_settings_manager
