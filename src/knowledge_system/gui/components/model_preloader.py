@@ -62,7 +62,7 @@ class ModelPreloader(QObject):
         self.diarization_ready = False
 
         # Settings
-        self.model = "base"  # Default model
+        self.model = "medium"  # Default model (best balance of speed/accuracy)
         self.device = None
         self.hf_token = None
         self.enable_diarization = True
@@ -73,7 +73,7 @@ class ModelPreloader(QObject):
 
     def configure(
         self,
-        model: str = "base",
+        model: str = "medium",
         device: str = None,
         hf_token: str = None,
         enable_diarization: bool = True,

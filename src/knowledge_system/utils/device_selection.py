@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 def select_optimal_device(
     preference: str = "auto",
     workload_type: str = "transcription",
-    model_size: str = "base",
+    model_size: str = "medium",
     batch_size: int = 16,
     force_device: str | None = None,
 ) -> str:
@@ -80,7 +80,7 @@ def select_optimal_device(
     # AMD ROCm support (basic)
     if specs.supports_rocm:
         logger.info("Selected ROCm for AMD GPU acceleration")
-        return "auto"  # Let PyTorch handle ROCm detection
+        return "cuda"  # ROCm uses CUDA-compatible API
 
     # Fallback to CPU
     logger.info("Selected CPU (no suitable GPU acceleration found)")

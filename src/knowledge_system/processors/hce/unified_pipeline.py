@@ -124,7 +124,8 @@ class UnifiedHCEPipeline:
 
         except Exception as e:
             logger.error(f"Unified mining failed: {e}")
-            miner_outputs = []
+            # Mining is critical - cannot proceed without it
+            raise RuntimeError(f"Mining failed, cannot continue pipeline: {e}") from e
 
         report_progress(
             "Knowledge extraction complete",

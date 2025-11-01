@@ -15,6 +15,7 @@ from typing import Any
 
 import yt_dlp
 
+from ..config import get_settings
 from ..errors import YouTubeAPIError
 from ..logger import get_logger
 from ..utils.deduplication import DuplicationPolicy, VideoDeduplicationService
@@ -65,34 +66,42 @@ class YouTubeDownloadProcessor(BaseProcessor):
         self.disable_proxies_with_cookies = disable_proxies_with_cookies
 
         # Base options without cookies (cookies will be added dynamically if needed)
+        # Session-based anti-bot settings will be applied from config
         self.ydl_opts_base = {
             "quiet": False,  # Changed to False to capture stderr messages
             "no_warnings": False,  # Changed to False to see warnings
             "noprogress": True,  # Disable yt-dlp's built-in progress to avoid parsing errors with "stalled" messages
-            "format": "worstaudio[ext=webm]/worstaudio[ext=opus]/worstaudio[ext=m4a]/worstaudio/bestaudio[ext=webm][abr<=96]/bestaudio[ext=m4a][abr<=128]/bestaudio[abr<=128]/bestaudio/worst",  # Optimal cascade: smallest formats first, guaranteed audio-only fallback
+            # OPTIMAL: Audio-only with worst quality to minimize traffic
+            # Use worstaudio to get smallest available format (often m4a format 139 @ 48-50kbps)
+            # Sort by ascending bitrate and sample rate to ensure we get the absolute smallest
+            "format": "worstaudio[vcodec=none]/worstaudio",
+            # Sort by ascending audio bitrate (+abr) and sample rate (+asr) = smallest file first
+            "format_sort": ["+abr", "+asr"],
             "outtmpl": "%(title)s [%(id)s].%(ext)s",
             "ignoreerrors": True,
             "noplaylist": False,
-            # Performance optimizations - optimized for stable proxy connections
+            # Performance optimizations - optimized for stable connections
             "http_chunk_size": 524288,  # 512KB chunks - balance between efficiency and stability
             "no_check_formats": True,  # Skip format validation for faster processing
             "prefer_free_formats": True,  # Prefer formats that don't require fragmentation
-            # Note: youtube_include_dash_manifest option removed (deprecated in yt-dlp 2025.9+)
             "no_part": False,  # Enable partial downloading/resuming for connection interruptions
-            "retries": 10,  # Increased retries for connection issues
-            "extractor_retries": 5,  # Increased retries for connection issues
+            # Exponential backoff retry strategy (limited retries to avoid looking suspicious)
+            "retries": 4,  # Retry up to 4 times (avoids infinite hammering on persistent failures)
+            "retry_sleep": "3,8,15,34",  # Custom backoff sequence: 3s, 8s, 15s, 34s (total ~60s)
+            "extractor_retries": 5,
             "socket_timeout": 60,  # Longer timeout to handle stalls
-            # NOTE: Do NOT use Android client with PacketStream - causes "Fixed to extract player response"
             "fragment_retries": 10,  # Increased fragment retries for stability
             "file_access_retries": 5,  # Retry file access operations
             # Network tuning
             "nocheckcertificate": True,
             "http_chunk_retry": True,
             "keep_fragments": False,  # Don't keep fragments to save space
-            # Additional options to help with YouTube anti-bot detection
-            "sleep_interval": 1,  # Add small delay between requests
-            "max_sleep_interval": 5,  # Maximum sleep interval
-            "sleep_interval_requests": 1,  # Sleep between requests
+            "continue": True,  # Resume partial downloads
+            "no_mtime": True,  # Don't set file modification time
+            # Anti-bot jitter (will be overridden by session-based settings from config)
+            "sleep_interval": 8,  # Base sleep between files
+            "max_sleep_interval": 25,  # Max sleep between files
+            "sleep_interval_requests": 0.8,  # Sleep between HTTP requests
             # NO postprocessors - keep original format to avoid double conversion
             # Audio will be converted directly to 16kHz mono WAV by AudioProcessor
         }
@@ -128,7 +137,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
         """Extract video ID from YouTube URL using unified extractor with fallback."""
         from ..utils.video_id_extractor import VideoIDExtractor
 
-        video_id = VideoIDExtractor.extract_video_id(url)
+        source_id = VideoIDExtractor.extract_video_id(url)
         if video_id:
             return video_id
 
@@ -136,6 +145,80 @@ class YouTubeDownloadProcessor(BaseProcessor):
         import hashlib
 
         return hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:8]
+
+    def _is_rate_limited(self, error_msg: str) -> bool:
+        """
+        Detect if error indicates rate limiting (429/403).
+        
+        Args:
+            error_msg: Error message from yt-dlp or exception
+            
+        Returns:
+            True if rate limiting detected
+        """
+        error_lower = error_msg.lower()
+        return any([
+            "429" in error_msg,
+            "403" in error_msg,
+            "too many requests" in error_lower,
+            "rate limit" in error_lower,
+            "throttl" in error_lower,
+        ])
+
+    def _trigger_cooldown(self, progress_callback=None):
+        """
+        Trigger automatic cooldown when rate limiting is detected.
+        
+        Args:
+            progress_callback: Optional callback for progress updates
+        """
+        config = get_settings()
+        yt_config = config.youtube_processing
+        
+        if not yt_config.enable_auto_cooldown:
+            logger.warning("⚠️ Rate limiting detected but auto-cooldown is disabled")
+            return
+        
+        import random
+        import time
+        
+        cooldown_minutes = random.randint(
+            yt_config.cooldown_min_minutes, yt_config.cooldown_max_minutes
+        )
+        cooldown_seconds = cooldown_minutes * 60
+        
+        logger.warning(
+            f"🛑 RATE LIMITING DETECTED - Triggering cooldown for {cooldown_minutes} minutes"
+        )
+        if progress_callback:
+            progress_callback(
+                f"🛑 Rate limited - cooling down for {cooldown_minutes} minutes..."
+            )
+        
+        # Log cooldown event for tracking
+        from datetime import datetime
+        cooldown_end = datetime.now().timestamp() + cooldown_seconds
+        logger.info(
+            f"📊 Cooldown session: start={datetime.now().isoformat()}, "
+            f"end={datetime.fromtimestamp(cooldown_end).isoformat()}, "
+            f"duration={cooldown_minutes}min"
+        )
+        
+        # Sleep with periodic progress updates
+        update_interval = 60  # Update every minute
+        elapsed = 0
+        while elapsed < cooldown_seconds:
+            time.sleep(min(update_interval, cooldown_seconds - elapsed))
+            elapsed += update_interval
+            remaining_minutes = (cooldown_seconds - elapsed) / 60
+            if remaining_minutes > 0 and progress_callback:
+                progress_callback(
+                    f"⏳ Cooldown: {remaining_minutes:.0f} minutes remaining..."
+                )
+        
+        logger.info("✅ Cooldown complete - resuming downloads")
+        if progress_callback:
+            progress_callback("✅ Cooldown complete - resuming downloads")
 
     def process(
         self,
@@ -345,10 +428,42 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
         # Configure base yt-dlp options
         import copy
+        import random
 
         ydl_opts = copy.deepcopy(
             self.ydl_opts_base
         )  # Deep copy to avoid modifying base config
+
+        # Apply session-based anti-bot configuration from settings
+        config = get_settings()
+        yt_config = config.youtube_processing
+
+        if yt_config.enable_session_based_downloads:
+            # Apply randomized rate limiting
+            rate_limit = random.uniform(
+                yt_config.rate_limit_min_mbps, yt_config.rate_limit_max_mbps
+            )
+            ydl_opts["ratelimit"] = int(rate_limit * 1024 * 1024)  # Convert MB/s to bytes/s
+            
+            # Apply randomized jitter between files and requests
+            sleep_interval = random.randint(
+                yt_config.sleep_interval_min, yt_config.sleep_interval_max
+            )
+            ydl_opts["sleep_interval"] = sleep_interval
+            ydl_opts["max_sleep_interval"] = sleep_interval + random.randint(3, 12)
+            ydl_opts["sleep_interval_requests"] = yt_config.sleep_requests
+            
+            # Apply download archive if enabled
+            if yt_config.use_download_archive:
+                archive_path = Path(yt_config.download_archive_path).expanduser()
+                archive_path.parent.mkdir(parents=True, exist_ok=True)
+                ydl_opts["download_archive"] = str(archive_path)
+            
+            logger.info(
+                f"🛡️ Session-based anti-bot: rate={rate_limit:.2f}MB/s, "
+                f"sleep={sleep_interval}-{ydl_opts['max_sleep_interval']}s, "
+                f"sleep_requests={yt_config.sleep_requests}s"
+            )
 
         # Add cookies if enabled (file upload only - browser extraction disabled for security)
         # Use instance variables passed during initialization, not config file
@@ -367,30 +482,29 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     f"✅ yt-dlp cookiefile option set to: {ydl_opts.get('cookiefile')}"
                 )
 
-                # Disable ALL sleep intervals when using authenticated cookies
-                # Authenticated requests don't need anti-bot delays
-                ydl_opts["sleep_interval"] = 0
-                ydl_opts["max_sleep_interval"] = 0
-                ydl_opts["sleep_interval_requests"] = 0
-                ydl_opts["sleep_interval_subtitles"] = 0
+                # NOTE: Keep session-based jitter even with cookies for better anti-bot protection
+                # Old behavior was to disable ALL sleep intervals with cookies, but research shows
+                # that jitter is MORE effective than rigid delays, even with authenticated requests
                 logger.info(
-                    f"✅ Disabled ALL yt-dlp sleep intervals (using authenticated cookies)"
+                    f"✅ Using session-based jitter with authenticated cookies (better anti-bot)"
                 )
 
-                # CRITICAL: Use Android client to bypass SABR streaming
-                # Web client gets blocked by YouTube's SABR (Server-Assisted Bitrate Reduction)
-                # Android client bypasses SABR and works with cookies
+                # Use tv_embedded client for most reliable format listings
+                # tv_embedded exposes classic DASH entries and is less impacted by SABR-only manifests
+                # Standard web client increasingly returns SABR-only which can hide formats
+                # tv_embedded provides more complete format availability for audio-only extraction
                 ydl_opts["extractor_args"] = {
                     "youtube": {
                         "player_client": [
-                            "android",
-                            "web",
-                        ],  # Try Android first, fallback to web
+                            "tv_embedded",  # Most reliable for DASH format listings
+                            "android",  # Fallback if tv_embedded fails
+                            "web",  # Last resort fallback
+                        ],
                         "player_skip": ["configs"],  # Skip unnecessary config downloads
                     }
                 }
                 logger.info(
-                    f"✅ Configured yt-dlp to use Android client (bypasses SABR streaming with cookie auth)"
+                    f"✅ Configured yt-dlp to use tv_embedded client (most reliable for audio-only DASH formats)"
                 )
 
                 if progress_callback:
@@ -529,6 +643,11 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
         # No postprocessor override needed - keeping original format
         ydl_opts["outtmpl"] = str(output_dir / "%(title)s [%(id)s].%(ext)s")
+        
+        # DIAGNOSTIC: Log the actual format string being used
+        logger.info(f"🔍 yt-dlp format string: {ydl_opts.get('format', 'NOT SET')}")
+        if 'extractor_args' in ydl_opts:
+            logger.info(f"🔍 yt-dlp extractor_args: {ydl_opts['extractor_args']}")
 
         all_files = []
         all_thumbnails = []
@@ -552,7 +671,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
             url = urls_to_process[url_index]
             i = url_index + 1
-            video_id = None  # Initialize early for error handling
+            source_id = None  # Initialize early for error handling
 
             try:
                 # Determine playlist context for progress display
@@ -570,7 +689,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url
                 )
                 if youtube_id_match:
-                    video_id = youtube_id_match.group(1)
+                    source_id = youtube_id_match.group(1)
 
                 # Single-use IP strategy: Generate unique session ID for each video
                 current_proxy_url = None
@@ -784,6 +903,34 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             download_start_time = datetime.now()
 
                             info = ydl.extract_info(url, download=True)
+
+                            # Log selected format to help debug unexpected video downloads
+                            if info:
+                                format_id = info.get('format_id', 'unknown')
+                                format_note = info.get('format_note', '')
+                                ext = info.get('ext', 'unknown')
+                                vcodec = info.get('vcodec', 'none')
+                                acodec = info.get('acodec', 'none')
+                                filesize = info.get('filesize') or info.get('filesize_approx', 0)
+                                
+                                # Determine if this is audio-only or includes video
+                                is_audio_only = vcodec == 'none' or vcodec is None
+                                format_type = "audio-only" if is_audio_only else "VIDEO+AUDIO"
+                                
+                                if is_audio_only:
+                                    logger.info(
+                                        f"✅ Downloaded {format_type}: format={format_id} ({format_note}), "
+                                        f"ext={ext}, codec={acodec}, size={filesize/1024/1024:.1f}MB"
+                                    )
+                                else:
+                                    logger.warning(
+                                        f"⚠️  Downloaded {format_type} (fallback): format={format_id} ({format_note}), "
+                                        f"ext={ext}, vcodec={vcodec}, acodec={acodec}, size={filesize/1024/1024:.1f}MB"
+                                    )
+                                    logger.warning(
+                                        f"⚠️  No audio-only format available - fell back to video. "
+                                        f"Audio will be extracted during transcription."
+                                    )
 
                             # Track whether files were already added (for info is None case)
                             files_already_tracked = False
@@ -1018,7 +1165,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     }
 
                                     # Create or update video record with full metadata
-                                    video = db_service.create_video(
+                                    video = db_service.create_source(
                                         video_id=video_id,
                                         title=video_title,
                                         url=url,
@@ -1131,6 +1278,34 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                                 for entry in entries:
                                     if entry and "title" in entry:
+                                        # Log selected format for this entry
+                                        entry_format_id = entry.get('format_id', 'unknown')
+                                        entry_format_note = entry.get('format_note', '')
+                                        entry_ext = entry.get('ext', 'unknown')
+                                        entry_vcodec = entry.get('vcodec', 'none')
+                                        entry_acodec = entry.get('acodec', 'none')
+                                        entry_filesize = entry.get('filesize') or entry.get('filesize_approx', 0)
+                                        
+                                        entry_is_audio_only = entry_vcodec == 'none' or entry_vcodec is None
+                                        entry_format_type = "audio-only" if entry_is_audio_only else "VIDEO+AUDIO"
+                                        
+                                        if entry_is_audio_only:
+                                            logger.info(
+                                                f"✅ Downloaded {entry_format_type}: {entry.get('title', 'N/A')[:50]} | "
+                                                f"format={entry_format_id} ({entry_format_note}), ext={entry_ext}, codec={entry_acodec}, "
+                                                f"size={entry_filesize/1024/1024:.1f}MB"
+                                            )
+                                        else:
+                                            logger.warning(
+                                                f"⚠️  Downloaded {entry_format_type} (fallback): {entry.get('title', 'N/A')[:50]} | "
+                                                f"format={entry_format_id} ({entry_format_note}), ext={entry_ext}, "
+                                                f"vcodec={entry_vcodec}, acodec={entry_acodec}, size={entry_filesize/1024/1024:.1f}MB"
+                                            )
+                                            logger.warning(
+                                                f"⚠️  No audio-only format available - fell back to video. "
+                                                f"Audio will be extracted during transcription."
+                                            )
+                                        
                                         # Get actual filename from yt-dlp
                                         filename = None
 
@@ -1323,22 +1498,23 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                 f"❌ Download failed for {url}: {download_error_msg}"
                             )
 
-                            if progress_callback:
-                                if "HTTP Error 403" in download_error_msg:
-                                    progress_callback(
-                                        "❌ Download blocked (403) - YouTube detected proxy"
-                                    )
-                                    progress_callback(
-                                        "   Try again later or check proxy IP rotation"
-                                    )
-                                elif "HTTP Error 429" in download_error_msg:
-                                    progress_callback(
-                                        "❌ Rate limited (429) - too many requests"
-                                    )
-                                    progress_callback(
-                                        "   YouTube is throttling this proxy IP"
-                                    )
-                                elif "HTTP Error 404" in download_error_msg:
+                            # Check for rate limiting and trigger cooldown if enabled
+                            if self._is_rate_limited(download_error_msg):
+                                if progress_callback:
+                                    if "HTTP Error 403" in download_error_msg:
+                                        progress_callback(
+                                            "❌ Download blocked (403) - YouTube detected proxy"
+                                        )
+                                    elif "HTTP Error 429" in download_error_msg:
+                                        progress_callback(
+                                            "❌ Rate limited (429) - too many requests"
+                                        )
+                                
+                                # Trigger automatic cooldown
+                                self._trigger_cooldown(progress_callback)
+                            
+                            elif progress_callback:
+                                if "HTTP Error 404" in download_error_msg:
                                     progress_callback(
                                         "❌ Video not found (404) - may be private or deleted"
                                     )

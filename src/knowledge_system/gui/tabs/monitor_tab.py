@@ -96,7 +96,7 @@ class MonitorTab(BaseTab, FileOperationsMixin):
         # File patterns
         layout.addWidget(QLabel("File Patterns:"), 1, 0)
         self.file_patterns = QLineEdit()
-        self.file_patterns.setText("*.mp4,*.mp3,*.wav,*.m4a,*.pdf,*.txt,*.md")
+        # Don't set default - let _load_settings() handle it via settings manager
         self.file_patterns.setToolTip(
             "Comma-separated file patterns to watch for (supports wildcards).\n"
             "• Examples: *.mp4, *.mp3, *.wav, *.m4a (audio/video files)\n"
@@ -109,7 +109,7 @@ class MonitorTab(BaseTab, FileOperationsMixin):
 
         # Recursive watching
         self.recursive_checkbox = QCheckBox("Watch subdirectories recursively")
-        self.recursive_checkbox.setChecked(True)
+        # Don't set default - let _load_settings() handle it via settings manager
         self.recursive_checkbox.toggled.connect(self._on_setting_changed)
         self.recursive_checkbox.setToolTip(
             "Monitor subdirectories within the watch directory.\n"
@@ -124,7 +124,7 @@ class MonitorTab(BaseTab, FileOperationsMixin):
         self.debounce_delay = QSpinBox()
         self.debounce_delay.setMinimum(1)
         self.debounce_delay.setMaximum(300)
-        self.debounce_delay.setValue(5)
+        # Don't set default - let _load_settings() handle it via settings manager
         self.debounce_delay.setSuffix(" seconds")
         self.debounce_delay.setToolTip(
             "Wait time in seconds before processing files after they are added or modified. "
@@ -178,7 +178,7 @@ class MonitorTab(BaseTab, FileOperationsMixin):
         self.auto_process_checkbox = QCheckBox(
             "Auto-process new files (uses settings from other tabs)"
         )
-        self.auto_process_checkbox.setChecked(True)
+        # Don't set default - let _load_settings() handle it via settings manager
         self.auto_process_checkbox.setToolTip(
             "Automatically process new files as they are detected.\n"
             "• Uses current settings from Local Transcription and Document Summarization tabs\n"
@@ -203,7 +203,7 @@ class MonitorTab(BaseTab, FileOperationsMixin):
 
         # System 2: Pipeline auto-process checkbox
         self.system2_pipeline = QCheckBox("🚀 Process through entire System 2 pipeline")
-        self.system2_pipeline.setChecked(False)
+        # Don't set default - let _load_settings() handle it via settings manager
         self.system2_pipeline.setToolTip(
             "When enabled, detected files will be processed through the complete System 2 pipeline:\n"
             "1. Transcription (for audio/video files)\n"
@@ -467,7 +467,7 @@ class MonitorTab(BaseTab, FileOperationsMixin):
                 try:
                     processor = AudioProcessor(
                         device="auto",  # Use automatic device selection
-                        model="base",  # Use base model as default
+                        model="medium",  # Use medium model as default
                     )
                     result = processor.process(file_path)
 
@@ -496,10 +496,10 @@ class MonitorTab(BaseTab, FileOperationsMixin):
                     orchestrator = System2Orchestrator()
 
                     # Create mining job
-                    episode_id = file_path.stem
+                    source_id = file_path.stem
                     job_id = orchestrator.create_job(
                         job_type="mine",
-                        input_id=episode_id,
+                        input_id=source_id,
                         config={
                             "source": "monitor_tab_auto",
                             "file_path": str(file_path),
@@ -617,13 +617,14 @@ class MonitorTab(BaseTab, FileOperationsMixin):
             )
             self.watch_directory.setText(saved_watch_dir)
 
-            # Load file patterns
+            # Load file patterns - let settings manager handle hierarchy
             saved_patterns = self.gui_settings.get_line_edit_text(
                 self.tab_name,
                 "file_patterns",
-                "*.mp4,*.mp3,*.wav,*.m4a,*.pdf,*.txt,*.md",
+                "",
             )
-            self.file_patterns.setText(saved_patterns)
+            if saved_patterns:
+                self.file_patterns.setText(saved_patterns)
 
             # Load checkbox states
             self.recursive_checkbox.setChecked(

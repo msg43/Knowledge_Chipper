@@ -1,0 +1,1958 @@
+channel_mappings:
+  The Joe Rogan Experience:
+    hosts:
+    - full_name: Joe Rogan
+      partial_names:
+      - Joe
+      - Rogan
+      role: host
+  Huberman Lab:
+    hosts:
+    - full_name: Andrew D. Huberman
+      partial_names:
+      - Andrew
+      - Huberman
+      - Andrew D.
+      role: host
+  Call Her Daddy:
+    hosts:
+    - full_name: Alex Cooper
+      partial_names:
+      - Alex
+      - Cooper
+      role: host
+  Lex Fridman Podcast:
+    hosts:
+    - full_name: Lex Fridman
+      partial_names:
+      - Lex
+      - Fridman
+      role: host
+  On Purpose with Jay Shetty:
+    hosts:
+    - full_name: Jay Shetty
+      partial_names:
+      - Jay
+      - Shetty
+      role: host
+  The Tucker Carlson Show:
+    hosts:
+    - full_name: Tucker Carlson
+      partial_names:
+      - Tucker
+      - Carlson
+      role: host
+  The Mel Robbins Podcast:
+    hosts:
+    - full_name: Mel Robbins
+      partial_names:
+      - Mel
+      - Robbins
+      role: host
+  Rotten Mango:
+    hosts:
+    - full_name: Stephanie Soo
+      partial_names:
+      - Stephanie
+      - Soo
+      role: host
+  New Heights with Jason and Travis Kelce:
+    hosts:
+    - full_name: Jason Kelce
+      partial_names:
+      - Jason
+      - Kelce
+      role: host
+  Nerdrotic:
+    hosts:
+    - full_name: Gary Buechler
+      partial_names:
+      - Gary
+      - Buechler
+      role: host
+  The Daily:
+    hosts:
+    - full_name: Michael Barbaro
+      partial_names:
+      - Michael
+      - Barbaro
+      role: host
+  NPR News Now:
+    hosts:
+    - full_name: NPR Staff
+      partial_names:
+      - NPR
+      - Staff
+      role: host
+  Pod Save America:
+    hosts:
+    - full_name: Jon Favreau
+      partial_names:
+      - Jon
+      - Favreau
+      role: host
+  The Ben Shapiro Show:
+    hosts:
+    - full_name: Ben Shapiro
+      partial_names:
+      - Ben
+      - Shapiro
+      role: host
+  The Dan Bongino Show:
+    hosts:
+    - full_name: Dan Bongino
+      partial_names:
+      - Dan
+      - Bongino
+      role: host
+  The Glenn Beck Program:
+    hosts:
+    - full_name: Glenn Beck
+      partial_names:
+      - Glenn
+      - Beck
+      role: host
+  Louder with Crowder:
+    hosts:
+    - full_name: Steven Crowder
+      partial_names:
+      - Steven
+      - Crowder
+      role: host
+  The Michael Knowles Show:
+    hosts:
+    - full_name: Michael Knowles
+      partial_names:
+      - Michael
+      - Knowles
+      role: host
+  The Matt Walsh Show:
+    hosts:
+    - full_name: Matt Walsh
+      partial_names:
+      - Matt
+      - Walsh
+      role: host
+  All-In with Chamath, Jason, Sacks & Friedberg:
+    hosts:
+    - full_name: Chamath Palihapitiya
+      partial_names:
+      - Chamath
+      - Palihapitiya
+      role: host
+  The Charlie Kirk Show:
+    hosts:
+    - full_name: Charlie Kirk
+      partial_names:
+      - Charlie
+      - Kirk
+      role: host
+  The Candace Owens Show:
+    hosts:
+    - full_name: Candace Owens
+      partial_names:
+      - Candace
+      - Owens
+      role: host
+  The Tim Pool Podcast:
+    hosts:
+    - full_name: Tim Pool
+      partial_names:
+      - Tim
+      - Pool
+      role: host
+  Breaking Points:
+    hosts:
+    - full_name: Krystal Ball
+      partial_names:
+      - Krystal
+      - Ball
+      role: host
+  The Jimmy Dore Show:
+    hosts:
+    - full_name: Jimmy Dore
+      partial_names:
+      - Jimmy
+      - Dore
+      role: host
+  The Diary Of A CEO with Steven Bartlett:
+    hosts:
+    - full_name: Steven Bartlett
+      partial_names:
+      - Steven
+      - Bartlett
+      role: host
+  How I Built This with Guy Raz:
+    hosts:
+    - full_name: Guy Raz
+      partial_names:
+      - Guy
+      - Raz
+      role: host
+  The Tim Ferriss Show:
+    hosts:
+    - full_name: Tim Ferriss
+      partial_names:
+      - Tim
+      - Ferriss
+      role: host
+  Masters of Scale:
+    hosts:
+    - full_name: Reid Hoffman
+      partial_names:
+      - Reid
+      - Hoffman
+      role: host
+  a16z Podcast:
+    hosts:
+    - full_name: Andreessen Horowitz
+      partial_names:
+      - Andreessen
+      - Horowitz
+      role: host
+  The Knowledge Project:
+    hosts:
+    - full_name: Shane Parrish
+      partial_names:
+      - Shane
+      - Parrish
+      role: host
+  Invest Like the Best:
+    hosts:
+    - full_name: Patrick O'Shaughnessy
+      partial_names:
+      - Patrick
+      - O'Shaughnessy
+      role: host
+  The Acquirers Podcast:
+    hosts:
+    - full_name: Tobias Carlisle
+      partial_names:
+      - Tobias
+      - Carlisle
+      role: host
+  Chat with Traders:
+    hosts:
+    - full_name: Aaron Fifield
+      partial_names:
+      - Aaron
+      - Fifield
+      role: host
+  Capital Allocators:
+    hosts:
+    - full_name: Ted Seides
+      partial_names:
+      - Ted
+      - Seides
+      role: host
+  The Twenty Minute VC:
+    hosts:
+    - full_name: Harry Stebbings
+      partial_names:
+      - Harry
+      - Stebbings
+      role: host
+  This Week in Startups:
+    hosts:
+    - full_name: Jason Calacanis
+      partial_names:
+      - Jason
+      - Calacanis
+      role: host
+  The Full Ratchet:
+    hosts:
+    - full_name: Nick Moran
+      partial_names:
+      - Nick
+      - Moran
+      role: host
+  Venture Stories:
+    hosts:
+    - full_name: Erik Torenberg
+      partial_names:
+      - Erik
+      - Torenberg
+      role: host
+  The Pitch:
+    hosts:
+    - full_name: Josh Muccio
+      partial_names:
+      - Josh
+      - Muccio
+      role: host
+  Crime Junkie:
+    hosts:
+    - full_name: Ashley Flowers
+      partial_names:
+      - Ashley
+      - Flowers
+      role: host
+  My Favorite Murder:
+    hosts:
+    - full_name: Karen Kilgariff
+      partial_names:
+      - Karen
+      - Kilgariff
+      role: host
+  Serial:
+    hosts:
+    - full_name: Sarah Koenig
+      partial_names:
+      - Sarah
+      - Koenig
+      role: host
+  This American Life:
+    hosts:
+    - full_name: Ira Glass
+      partial_names:
+      - Ira
+      - Glass
+      role: host
+  Dateline NBC:
+    hosts:
+    - full_name: Andrea Canning
+      partial_names:
+      - Andrea
+      - Canning
+      role: host
+  Up and Vanished:
+    hosts:
+    - full_name: Payne Lindsey
+      partial_names:
+      - Payne
+      - Lindsey
+      role: host
+  True Crime Garage:
+    hosts:
+    - full_name: Nick Vining
+      partial_names:
+      - Nick
+      - Vining
+      role: host
+  Casefile True Crime:
+    hosts:
+    - full_name: Anonymous Host
+      partial_names:
+      - Anonymous
+      - Host
+      role: host
+  Criminal:
+    hosts:
+    - full_name: Phoebe Judge
+      partial_names:
+      - Phoebe
+      - Judge
+      role: host
+  The Murder Squad:
+    hosts:
+    - full_name: Billy Jensen
+      partial_names:
+      - Billy
+      - Jensen
+      role: host
+  Morbid:
+    hosts:
+    - full_name: Alaina Urquhart
+      partial_names:
+      - Alaina
+      - Urquhart
+      role: host
+  Crime Counts:
+    hosts:
+    - full_name: Scott Weinberger
+      partial_names:
+      - Scott
+      - Weinberger
+      role: host
+  The First Degree:
+    hosts:
+    - full_name: Billy Jensen
+      partial_names:
+      - Billy
+      - Jensen
+      role: host
+  Generation Why:
+    hosts:
+    - full_name: Aaron Habel
+      partial_names:
+      - Aaron
+      - Habel
+      role: host
+  Sword and Scale:
+    hosts:
+    - full_name: Mike Boudet
+      partial_names:
+      - Mike
+      - Boudet
+      role: host
+  Conan O'Brien Needs A Friend:
+    hosts:
+    - full_name: Conan O'Brien
+      partial_names:
+      - Conan
+      - O'Brien
+      role: host
+  This Past Weekend w/ Theo Von:
+    hosts:
+    - full_name: Theo Von
+      partial_names:
+      - Theo
+      - Von
+      role: host
+  The Bill Simmons Podcast:
+    hosts:
+    - full_name: Bill Simmons
+      partial_names:
+      - Bill
+      - Simmons
+      role: host
+  Pardon My Take:
+    hosts:
+    - full_name: Dan Katz
+      partial_names:
+      - Dan
+      - Katz
+      role: host
+  WTF with Marc Maron:
+    hosts:
+    - full_name: Marc Maron
+      partial_names:
+      - Marc
+      - Maron
+      role: host
+  Comedy Bang! Bang!:
+    hosts:
+    - full_name: Scott Aukerman
+      partial_names:
+      - Scott
+      - Aukerman
+      role: host
+  Your Mom's House:
+    hosts:
+    - full_name: Tom Segura
+      partial_names:
+      - Tom
+      - Segura
+      role: host
+  2 Bears, 1 Cave:
+    hosts:
+    - full_name: Tom Segura
+      partial_names:
+      - Tom
+      - Segura
+      role: host
+  Are You Garbage?:
+    hosts:
+    - full_name: Kevin Ryan
+      partial_names:
+      - Kevin
+      - Ryan
+      role: host
+  Bad Friends:
+    hosts:
+    - full_name: Andrew Santino
+      partial_names:
+      - Andrew
+      - Santino
+      role: host
+  The Honeydew:
+    hosts:
+    - full_name: Ryan Sickler
+      partial_names:
+      - Ryan
+      - Sickler
+      role: host
+  Kill Tony:
+    hosts:
+    - full_name: Tony Hinchcliffe
+      partial_names:
+      - Tony
+      - Hinchcliffe
+      role: host
+  Tigerbelly:
+    hosts:
+    - full_name: Bobby Lee
+      partial_names:
+      - Bobby
+      - Lee
+      role: host
+  The Adam Carolla Show:
+    hosts:
+    - full_name: Adam Carolla
+      partial_names:
+      - Adam
+      - Carolla
+      role: host
+  Bertcast:
+    hosts:
+    - full_name: Bert Kreischer
+      partial_names:
+      - Bert
+      - Kreischer
+      role: host
+  Radiolab:
+    hosts:
+    - full_name: Lulu Miller
+      partial_names:
+      - Lulu
+      - Miller
+      role: host
+  Science Vs:
+    hosts:
+    - full_name: Wendy Zukerman
+      partial_names:
+      - Wendy
+      - Zukerman
+      role: host
+  Hidden Brain:
+    hosts:
+    - full_name: Shankar Vedantam
+      partial_names:
+      - Shankar
+      - Vedantam
+      role: host
+  Freakonomics Radio:
+    hosts:
+    - full_name: Stephen J. Dubner
+      partial_names:
+      - Stephen
+      - Dubner
+      - Stephen J.
+      role: host
+  TED Talks Daily:
+    hosts:
+    - full_name: TED Staff
+      partial_names:
+      - TED
+      - Staff
+      role: host
+  Stuff You Should Know:
+    hosts:
+    - full_name: Josh Clark
+      partial_names:
+      - Josh
+      - Clark
+      role: host
+  The Infinite Monkey Cage:
+    hosts:
+    - full_name: Brian Cox
+      partial_names:
+      - Brian
+      - Cox
+      role: host
+  StarTalk:
+    hosts:
+    - full_name: Neil deGrasse Tyson
+      partial_names:
+      - Neil
+      - Tyson
+      - Neil d.
+      role: host
+  The Skeptics' Guide to the Universe:
+    hosts:
+    - full_name: Steven Novella
+      partial_names:
+      - Steven
+      - Novella
+      role: host
+  Intelligence Squared:
+    hosts:
+    - full_name: John Donvan
+      partial_names:
+      - John
+      - Donvan
+      role: host
+  99% Invisible:
+    hosts:
+    - full_name: Roman Mars
+      partial_names:
+      - Roman
+      - Mars
+      role: host
+  Planet Money:
+    hosts:
+    - full_name: Kenny Malone
+      partial_names:
+      - Kenny
+      - Malone
+      role: host
+  More Perfect:
+    hosts:
+    - full_name: Jad Abumrad
+      partial_names:
+      - Jad
+      - Abumrad
+      role: host
+  Invisibilia:
+    hosts:
+    - full_name: Alix Spiegel
+      partial_names:
+      - Alix
+      - Spiegel
+      role: host
+  Reply All:
+    hosts:
+    - full_name: Emmanuel Dzotsi
+      partial_names:
+      - Emmanuel
+      - Dzotsi
+      role: host
+  The Model Health Show:
+    hosts:
+    - full_name: Shawn Stevenson
+      partial_names:
+      - Shawn
+      - Stevenson
+      role: host
+  The Peter Attia Drive:
+    hosts:
+    - full_name: Peter Attia
+      partial_names:
+      - Peter
+      - Attia
+      role: host
+  Ben Greenfield Life:
+    hosts:
+    - full_name: Ben Greenfield
+      partial_names:
+      - Ben
+      - Greenfield
+      role: host
+  Mind Pump:
+    hosts:
+    - full_name: Sal Di Stefano
+      partial_names:
+      - Sal
+      - Stefano
+      - Sal D.
+      role: host
+  The Mindset Mentor:
+    hosts:
+    - full_name: Rob Dial
+      partial_names:
+      - Rob
+      - Dial
+      role: host
+  The School of Greatness:
+    hosts:
+    - full_name: Lewis Howes
+      partial_names:
+      - Lewis
+      - Howes
+      role: host
+  Impact Theory:
+    hosts:
+    - full_name: Tom Bilyeu
+      partial_names:
+      - Tom
+      - Bilyeu
+      role: host
+  The Life Coach School Podcast:
+    hosts:
+    - full_name: Brooke Castillo
+      partial_names:
+      - Brooke
+      - Castillo
+      role: host
+  Optimal Health Daily:
+    hosts:
+    - full_name: Dr. Neal Malik
+      partial_names:
+      - Neal
+      - Malik
+      role: host
+  The Doctor's Farmacy:
+    hosts:
+    - full_name: Dr. Mark Hyman
+      partial_names:
+      - Mark
+      - Hyman
+      role: host
+  FoundMyFitness:
+    hosts:
+    - full_name: Dr. Rhonda Patrick
+      partial_names:
+      - Rhonda
+      - Patrick
+      role: host
+  The Bulletproof Podcast:
+    hosts:
+    - full_name: Dave Asprey
+      partial_names:
+      - Dave
+      - Asprey
+      role: host
+  The Wellness Mama Podcast:
+    hosts:
+    - full_name: Katie Wells
+      partial_names:
+      - Katie
+      - Wells
+      role: host
+  The Ultimate Health Podcast:
+    hosts:
+    - full_name: Jesse Chappus
+      partial_names:
+      - Jesse
+      - Chappus
+      role: host
+  High Intensity Health:
+    hosts:
+    - full_name: Mike Mutzel
+      partial_names:
+      - Mike
+      - Mutzel
+      role: host
+  Syntax:
+    hosts:
+    - full_name: Wes Bos
+      partial_names:
+      - Wes
+      - Bos
+      role: host
+  The Changelog:
+    hosts:
+    - full_name: Adam Stacoviak
+      partial_names:
+      - Adam
+      - Stacoviak
+      role: host
+  Darknet Diaries:
+    hosts:
+    - full_name: Jack Rhysider
+      partial_names:
+      - Jack
+      - Rhysider
+      role: host
+  Security Now:
+    hosts:
+    - full_name: Steve Gibson
+      partial_names:
+      - Steve
+      - Gibson
+      role: host
+  This Week in Tech:
+    hosts:
+    - full_name: Leo Laporte
+      partial_names:
+      - Leo
+      - Laporte
+      role: host
+  The Vergecast:
+    hosts:
+    - full_name: Nilay Patel
+      partial_names:
+      - Nilay
+      - Patel
+      role: host
+  Accidental Tech Podcast:
+    hosts:
+    - full_name: Marco Arment
+      partial_names:
+      - Marco
+      - Arment
+      role: host
+  Talk Python To Me:
+    hosts:
+    - full_name: Michael Kennedy
+      partial_names:
+      - Michael
+      - Kennedy
+      role: host
+  Software Engineering Daily:
+    hosts:
+    - full_name: Jeff Meyerson
+      partial_names:
+      - Jeff
+      - Meyerson
+      role: host
+  Coding Blocks:
+    hosts:
+    - full_name: Allen Underwood
+      partial_names:
+      - Allen
+      - Underwood
+      role: host
+  The Stack Overflow Podcast:
+    hosts:
+    - full_name: Stack Overflow Team
+      partial_names:
+      - Stack
+      - Team
+      - Stack O.
+      role: host
+  JS Party:
+    hosts:
+    - full_name: Jerod Santo
+      partial_names:
+      - Jerod
+      - Santo
+      role: host
+  Go Time:
+    hosts:
+    - full_name: Mat Ryer
+      partial_names:
+      - Mat
+      - Ryer
+      role: host
+  Functional Geekery:
+    hosts:
+    - full_name: Steven Proctor
+      partial_names:
+      - Steven
+      - Proctor
+      role: host
+  The Cognicast:
+    hosts:
+    - full_name: Cognitect Team
+      partial_names:
+      - Cognitect
+      - Team
+      role: host
+  The Investors Podcast:
+    hosts:
+    - full_name: Preston Pysh
+      partial_names:
+      - Preston
+      - Pysh
+      role: host
+  Motley Fool Money:
+    hosts:
+    - full_name: Chris Hill
+      partial_names:
+      - Chris
+      - Hill
+      role: host
+  Eurodollar University:
+    hosts:
+    - full_name: Jeff Snider
+      partial_names:
+      - Jeff
+      - Snider
+      role: host
+  MacroVoices:
+    hosts:
+    - full_name: Erik Townsend
+      partial_names:
+      - Erik
+      - Townsend
+      role: host
+  Real Vision:
+    hosts:
+    - full_name: Raoul Pal
+      partial_names:
+      - Raoul
+      - Pal
+      role: host
+  The Meb Faber Research Podcast:
+    hosts:
+    - full_name: Meb Faber
+      partial_names:
+      - Meb
+      - Faber
+      role: host
+  Value Investing Podcast:
+    hosts:
+    - full_name: Jake Taylor
+      partial_names:
+      - Jake
+      - Taylor
+      role: host
+  The Flirting with Models Podcast:
+    hosts:
+    - full_name: Corey Hoffstein
+      partial_names:
+      - Corey
+      - Hoffstein
+      role: host
+  Excess Returns:
+    hosts:
+    - full_name: Jack Vogel
+      partial_names:
+      - Jack
+      - Vogel
+      role: host
+  DIY Investing Podcast:
+    hosts:
+    - full_name: Andy Hart
+      partial_names:
+      - Andy
+      - Hart
+      role: host
+  Millennial Investing:
+    hosts:
+    - full_name: Robert Leonard
+      partial_names:
+      - Robert
+      - Leonard
+      role: host
+  The Acquirer's Multiple:
+    hosts:
+    - full_name: Tobias Carlisle
+      partial_names:
+      - Tobias
+      - Carlisle
+      role: host
+  Pension Craft:
+    hosts:
+    - full_name: Ramin Nakisa
+      partial_names:
+      - Ramin
+      - Nakisa
+      role: host
+  The Pat McAfee Show:
+    hosts:
+    - full_name: Pat McAfee
+      partial_names:
+      - Pat
+      - McAfee
+      role: host
+  First Take:
+    hosts:
+    - full_name: Stephen A. Smith
+      partial_names:
+      - Stephen
+      - Smith
+      - Stephen A.
+      role: host
+  The Herd with Colin Cowherd:
+    hosts:
+    - full_name: Colin Cowherd
+      partial_names:
+      - Colin
+      - Cowherd
+      role: host
+  Pardon the Interruption:
+    hosts:
+    - full_name: Tony Kornheiser
+      partial_names:
+      - Tony
+      - Kornheiser
+      role: host
+  The Dan Patrick Show:
+    hosts:
+    - full_name: Dan Patrick
+      partial_names:
+      - Dan
+      - Patrick
+      role: host
+  Russillo:
+    hosts:
+    - full_name: Ryen Russillo
+      partial_names:
+      - Ryen
+      - Russillo
+      role: host
+  The Rich Eisen Show:
+    hosts:
+    - full_name: Rich Eisen
+      partial_names:
+      - Rich
+      - Eisen
+      role: host
+  Around the Horn:
+    hosts:
+    - full_name: Tony Reali
+      partial_names:
+      - Tony
+      - Reali
+      role: host
+  Get Up:
+    hosts:
+    - full_name: Mike Greenberg
+      partial_names:
+      - Mike
+      - Greenberg
+      role: host
+  Highly Questionable:
+    hosts:
+    - full_name: Dan Le Batard
+      partial_names:
+      - Dan
+      - Batard
+      - Dan L.
+      role: host
+  The Stephen A. Smith Show:
+    hosts:
+    - full_name: Stephen A. Smith
+      partial_names:
+      - Stephen
+      - Smith
+      - Stephen A.
+      role: host
+  The Lowe Post:
+    hosts:
+    - full_name: Zach Lowe
+      partial_names:
+      - Zach
+      - Lowe
+      role: host
+  The Mina Kimes Show:
+    hosts:
+    - full_name: Mina Kimes
+      partial_names:
+      - Mina
+      - Kimes
+      role: host
+  Good Morning Football:
+    hosts:
+    - full_name: Kyle Brandt
+      partial_names:
+      - Kyle
+      - Brandt
+      role: host
+  The Fantasy Footballers:
+    hosts:
+    - full_name: Andy Holloway
+      partial_names:
+      - Andy
+      - Holloway
+      role: host
+  Anything Goes with Emma Chamberlain:
+    hosts:
+    - full_name: Emma Chamberlain
+      partial_names:
+      - Emma
+      - Chamberlain
+      role: host
+  We Can Do Hard Things:
+    hosts:
+    - full_name: Glennon Doyle
+      partial_names:
+      - Glennon
+      - Doyle
+      role: host
+  Armchair Expert with Dax Shepard:
+    hosts:
+    - full_name: Dax Shepard
+      partial_names:
+      - Dax
+      - Shepard
+      role: host
+  The Michelle Obama Podcast:
+    hosts:
+    - full_name: Michelle Obama
+      partial_names:
+      - Michelle
+      - Obama
+      role: host
+  Oprah's SuperSoul:
+    hosts:
+    - full_name: Oprah Winfrey
+      partial_names:
+      - Oprah
+      - Winfrey
+      role: host
+  The Goop Podcast:
+    hosts:
+    - full_name: Gwyneth Paltrow
+      partial_names:
+      - Gwyneth
+      - Paltrow
+      role: host
+  Talk Tuah with Haliey Welch:
+    hosts:
+    - full_name: Haliey Welch
+      partial_names:
+      - Haliey
+      - Welch
+      role: host
+  The Skinny Confidential Him & Her Podcast:
+    hosts:
+    - full_name: Lauryn Evarts Bosstick
+      partial_names:
+      - Lauryn
+      - Bosstick
+      - Lauryn E.
+      role: host
+  The Goal Digger Podcast:
+    hosts:
+    - full_name: Jenna Kutcher
+      partial_names:
+      - Jenna
+      - Kutcher
+      role: host
+  The Marie Forleo Podcast:
+    hosts:
+    - full_name: Marie Forleo
+      partial_names:
+      - Marie
+      - Forleo
+      role: host
+  The Rachel Hollis Podcast:
+    hosts:
+    - full_name: Rachel Hollis
+      partial_names:
+      - Rachel
+      - Hollis
+      role: host
+  Unlocking Us:
+    hosts:
+    - full_name: Brené Brown
+      partial_names:
+      - Brené
+      - Brown
+      role: host
+  On Being:
+    hosts:
+    - full_name: Krista Tippett
+      partial_names:
+      - Krista
+      - Tippett
+      role: host
+  The Minimalists Podcast:
+    hosts:
+    - full_name: Joshua Fields Millburn
+      partial_names:
+      - Joshua
+      - Millburn
+      - Joshua F.
+      role: host
+  The Life-Changing Magic of Tidying Up:
+    hosts:
+    - full_name: Marie Kondo
+      partial_names:
+      - Marie
+      - Kondo
+      role: host
+  The Rest is History:
+    hosts:
+    - full_name: Tom Holland
+      partial_names:
+      - Tom
+      - Holland
+      role: host
+  Hardcore History:
+    hosts:
+    - full_name: Dan Carlin
+      partial_names:
+      - Dan
+      - Carlin
+      role: host
+  Revolutions:
+    hosts:
+    - full_name: Mike Duncan
+      partial_names:
+      - Mike
+      - Duncan
+      role: host
+  The History of Rome:
+    hosts:
+    - full_name: Mike Duncan
+      partial_names:
+      - Mike
+      - Duncan
+      role: host
+  Stuff You Missed in History Class:
+    hosts:
+    - full_name: Tracy V. Wilson
+      partial_names:
+      - Tracy
+      - Wilson
+      - Tracy V.
+      role: host
+  Presidential:
+    hosts:
+    - full_name: Lillian Cunningham
+      partial_names:
+      - Lillian
+      - Cunningham
+      role: host
+  BackStory:
+    hosts:
+    - full_name: Ed Ayers
+      partial_names:
+      - Ed
+      - Ayers
+      role: host
+  Tides of History:
+    hosts:
+    - full_name: Patrick Wyman
+      partial_names:
+      - Patrick
+      - Wyman
+      role: host
+  The History of Philosophy:
+    hosts:
+    - full_name: Peter Adamson
+      partial_names:
+      - Peter
+      - Adamson
+      role: host
+  You Must Remember This:
+    hosts:
+    - full_name: Karina Longworth
+      partial_names:
+      - Karina
+      - Longworth
+      role: host
+  Fall of Civilizations:
+    hosts:
+    - full_name: Paul Cooper
+      partial_names:
+      - Paul
+      - Cooper
+      role: host
+  The British History Podcast:
+    hosts:
+    - full_name: Jamie Jeffers
+      partial_names:
+      - Jamie
+      - Jeffers
+      role: host
+  History Extra:
+    hosts:
+    - full_name: BBC History Staff
+      partial_names:
+      - BBC
+      - Staff
+      - BBC H.
+      role: host
+  The Ancient World:
+    hosts:
+    - full_name: Scott Chesworth
+      partial_names:
+      - Scott
+      - Chesworth
+      role: host
+  Noble Blood:
+    hosts:
+    - full_name: Dana Schwartz
+      partial_names:
+      - Dana
+      - Schwartz
+      role: host
+  Fresh Air:
+    hosts:
+    - full_name: Terry Gross
+      partial_names:
+      - Terry
+      - Gross
+      role: host
+  The Howard Stern Show:
+    hosts:
+    - full_name: Howard Stern
+      partial_names:
+      - Howard
+      - Stern
+      role: host
+  Desert Island Discs:
+    hosts:
+    - full_name: Lauren Laverne
+      partial_names:
+      - Lauren
+      - Laverne
+      role: host
+  Wait Wait... Don't Tell Me!:
+    hosts:
+    - full_name: Peter Sagal
+      partial_names:
+      - Peter
+      - Sagal
+      role: host
+  Ask Me Another:
+    hosts:
+    - full_name: Ophira Eisenberg
+      partial_names:
+      - Ophira
+      - Eisenberg
+      role: host
+  Says You!:
+    hosts:
+    - full_name: Richard Sher
+      partial_names:
+      - Richard
+      - Sher
+      role: host
+  The Moth:
+    hosts:
+    - full_name: Various Hosts
+      partial_names:
+      - Various
+      - Hosts
+      role: host
+  StoryCorps:
+    hosts:
+    - full_name: Various Hosts
+      partial_names:
+      - Various
+      - Hosts
+      role: host
+  Design Matters:
+    hosts:
+    - full_name: Debbie Millman
+      partial_names:
+      - Debbie
+      - Millman
+      role: host
+  Between the Covers:
+    hosts:
+    - full_name: David Naimon
+      partial_names:
+      - David
+      - Naimon
+      role: host
+  The Paris Review Podcast:
+    hosts:
+    - full_name: Paris Review Staff
+      partial_names:
+      - Paris
+      - Staff
+      - Paris R.
+      role: host
+  Poetry Unbound:
+    hosts:
+    - full_name: Pádraig Ó Tuama
+      partial_names:
+      - Pádraig
+      - Tuama
+      - Pádraig Ó.
+      role: host
+  The Ezra Klein Show:
+    hosts:
+    - full_name: Ezra Klein
+      partial_names:
+      - Ezra
+      - Klein
+      role: host
+  Conversations with Tyler:
+    hosts:
+    - full_name: Tyler Cowen
+      partial_names:
+      - Tyler
+      - Cowen
+      role: host
+  The Tony Robbins Podcast:
+    hosts:
+    - full_name: Tony Robbins
+      partial_names:
+      - Tony
+      - Robbins
+      role: host
+  The Brendon Show:
+    hosts:
+    - full_name: Brendon Burchard
+      partial_names:
+      - Brendon
+      - Burchard
+      role: host
+  The GaryVee Audio Experience:
+    hosts:
+    - full_name: Gary Vaynerchuk
+      partial_names:
+      - Gary
+      - Vaynerchuk
+      role: host
+  The Ed Mylett Show:
+    hosts:
+    - full_name: Ed Mylett
+      partial_names:
+      - Ed
+      - Mylett
+      role: host
+  UnF*ck Your Brain:
+    hosts:
+    - full_name: Kara Loewentheil
+      partial_names:
+      - Kara
+      - Loewentheil
+      role: host
+  The Chalene Show:
+    hosts:
+    - full_name: Chalene Johnson
+      partial_names:
+      - Chalene
+      - Johnson
+      role: host
+  Rise Podcast:
+    hosts:
+    - full_name: Rachel Hollis
+      partial_names:
+      - Rachel
+      - Hollis
+      role: host
+  The Dave Ramsey Show:
+    hosts:
+    - full_name: Dave Ramsey
+      partial_names:
+      - Dave
+      - Ramsey
+      role: host
+  The John Maxwell Leadership Podcast:
+    hosts:
+    - full_name: John Maxwell
+      partial_names:
+      - John
+      - Maxwell
+      role: host
+  Entrepreneur on Fire:
+    hosts:
+    - full_name: John Lee Dumas
+      partial_names:
+      - John
+      - Dumas
+      - John L.
+      role: host
+  The 5 AM Miracle:
+    hosts:
+    - full_name: Jeff Sanders
+      partial_names:
+      - Jeff
+      - Sanders
+      role: host
+  Optimal Living Daily:
+    hosts:
+    - full_name: Justin Malik
+      partial_names:
+      - Justin
+      - Malik
+      role: host
+  The Productivity Show:
+    hosts:
+    - full_name: Asian Efficiency Team
+      partial_names:
+      - Asian
+      - Team
+      - Asian E.
+      role: host
+  Beyond the To Do List:
+    hosts:
+    - full_name: Erik Fisher
+      partial_names:
+      - Erik
+      - Fisher
+      role: host
+  The Science of Success:
+    hosts:
+    - full_name: Matt Bodnar
+      partial_names:
+      - Matt
+      - Bodnar
+      role: host
+  Giant Bombcast:
+    hosts:
+    - full_name: Jeff Gerstmann
+      partial_names:
+      - Jeff
+      - Gerstmann
+      role: host
+  The Game Informer Show:
+    hosts:
+    - full_name: Game Informer Staff
+      partial_names:
+      - Game
+      - Staff
+      - Game I.
+      role: host
+  Kinda Funny Gamescast:
+    hosts:
+    - full_name: Greg Miller
+      partial_names:
+      - Greg
+      - Miller
+      role: host
+  Easy Allies Podcast:
+    hosts:
+    - full_name: Brandon Jones
+      partial_names:
+      - Brandon
+      - Jones
+      role: host
+  DLC:
+    hosts:
+    - full_name: Jeff Cannata
+      partial_names:
+      - Jeff
+      - Cannata
+      role: host
+  The Indoor Kids:
+    hosts:
+    - full_name: Kumail Nanjiani
+      partial_names:
+      - Kumail
+      - Nanjiani
+      role: host
+  Retronauts:
+    hosts:
+    - full_name: Jeremy Parish
+      partial_names:
+      - Jeremy
+      - Parish
+      role: host
+  8-4 Play:
+    hosts:
+    - full_name: Mark MacDonald
+      partial_names:
+      - Mark
+      - MacDonald
+      role: host
+  The Video Game History Hour:
+    hosts:
+    - full_name: Bob Mackey
+      partial_names:
+      - Bob
+      - Mackey
+      role: host
+  Watch Out for Fireballs!:
+    hosts:
+    - full_name: Gary Butterfield
+      partial_names:
+      - Gary
+      - Butterfield
+      role: host
+  Super Best Friendcast:
+    hosts:
+    - full_name: Matt McMuscles
+      partial_names:
+      - Matt
+      - McMuscles
+      role: host
+  The Co-Optional Podcast:
+    hosts:
+    - full_name: Jesse Cox
+      partial_names:
+      - Jesse
+      - Cox
+      role: host
+  What's Good Games:
+    hosts:
+    - full_name: Andrea Rene
+      partial_names:
+      - Andrea
+      - Rene
+      role: host
+  Spawn On Me:
+    hosts:
+    - full_name: Kahlief Adams
+      partial_names:
+      - Kahlief
+      - Adams
+      role: host
+  Into the Aether:
+    hosts:
+    - full_name: Brendon Bigley
+      partial_names:
+      - Brendon
+      - Bigley
+      role: host
+  Song Exploder:
+    hosts:
+    - full_name: Hrishikesh Hirway
+      partial_names:
+      - Hrishikesh
+      - Hirway
+      role: host
+  All Songs Considered:
+    hosts:
+    - full_name: Bob Boilen
+      partial_names:
+      - Bob
+      - Boilen
+      role: host
+  Sound Opinions:
+    hosts:
+    - full_name: Jim DeRogatis
+      partial_names:
+      - Jim
+      - DeRogatis
+      role: host
+  The Needle Drop:
+    hosts:
+    - full_name: Anthony Fantano
+      partial_names:
+      - Anthony
+      - Fantano
+      role: host
+  Dissect:
+    hosts:
+    - full_name: Cole Cuchna
+      partial_names:
+      - Cole
+      - Cuchna
+      role: host
+  What's In My Bag?:
+    hosts:
+    - full_name: Amoeba Music
+      partial_names:
+      - Amoeba
+      - Music
+      role: host
+  Cocaine & Rhinestones:
+    hosts:
+    - full_name: Tyler Mahan Coe
+      partial_names:
+      - Tyler
+      - Coe
+      - Tyler M.
+      role: host
+  The Daily Beatles:
+    hosts:
+    - full_name: Variety
+      partial_names:
+      - Variety
+      role: host
+  A History of Rock Music in 500 Songs:
+    hosts:
+    - full_name: Andrew Hickey
+      partial_names:
+      - Andrew
+      - Hickey
+      role: host
+  The Rolling Stone Music Now Podcast:
+    hosts:
+    - full_name: Brian Hiatt
+      partial_names:
+      - Brian
+      - Hiatt
+      role: host
+  Broken Record:
+    hosts:
+    - full_name: Rick Rubin
+      partial_names:
+      - Rick
+      - Rubin
+      role: host
+  The Bob Lefsetz Podcast:
+    hosts:
+    - full_name: Bob Lefsetz
+      partial_names:
+      - Bob
+      - Lefsetz
+      role: host
+  Music Exists:
+    hosts:
+    - full_name: Zach Schonfeld
+      partial_names:
+      - Zach
+      - Schonfeld
+      role: host
+  And The Writer Is...:
+    hosts:
+    - full_name: Ross Golan
+      partial_names:
+      - Ross
+      - Golan
+      role: host
+  Questlove Supreme:
+    hosts:
+    - full_name: Questlove
+      partial_names:
+      - Questlove
+      role: host
+  The Breakfast Club:
+    hosts:
+    - full_name: Charlamagne tha God
+      partial_names:
+      - Charlamagne
+      - God
+      - Charlamagne t.
+      role: host
+  Drink Champs:
+    hosts:
+    - full_name: N.O.R.E.
+      partial_names:
+      - N.O.R.E.
+      role: host
+  Million Dollaz Worth of Game:
+    hosts:
+    - full_name: Gillie Da Kid
+      partial_names:
+      - Gillie
+      - Kid
+      - Gillie D.
+      role: host
+  85 South Show:
+    hosts:
+    - full_name: Karlous Miller
+      partial_names:
+      - Karlous
+      - Miller
+      role: host
+  Club Shay Shay:
+    hosts:
+    - full_name: Shannon Sharpe
+      partial_names:
+      - Shannon
+      - Sharpe
+      role: host
+  Impaulsive:
+    hosts:
+    - full_name: Logan Paul
+      partial_names:
+      - Logan
+      - Paul
+      role: host
+  Full Send Podcast:
+    hosts:
+    - full_name: NELK Boys
+      partial_names:
+      - NELK
+      - Boys
+      role: host
+  BFFs:
+    hosts:
+    - full_name: Dave Portnoy
+      partial_names:
+      - Dave
+      - Portnoy
+      role: host
+  Flagrant:
+    hosts:
+    - full_name: Andrew Schulz
+      partial_names:
+      - Andrew
+      - Schulz
+      role: host
+  The Brilliant Idiots:
+    hosts:
+    - full_name: Charlamagne tha God
+      partial_names:
+      - Charlamagne
+      - God
+      - Charlamagne t.
+      role: host
+  No Jumper:
+    hosts:
+    - full_name: Adam22
+      partial_names:
+      - Adam22
+      role: host
+  The Joe Budden Podcast:
+    hosts:
+    - full_name: Joe Budden
+      partial_names:
+      - Joe
+      - Budden
+      role: host
+  Everyday Struggle:
+    hosts:
+    - full_name: Joe Budden
+      partial_names:
+      - Joe
+      - Budden
+      role: host
+  Tax Season:
+    hosts:
+    - full_name: DJ Drama
+      partial_names:
+      - DJ
+      - Drama
+      role: host
+  The Combat Jack Show:
+    hosts:
+    - full_name: Combat Jack
+      partial_names:
+      - Combat
+      - Jack
+      role: host
+  H3 Podcast:
+    hosts:
+    - full_name: Ethan Klein
+      partial_names:
+      - Ethan
+      - Klein
+      role: host
+  The Try Guys Podcast:
+    hosts:
+    - full_name: Try Guys
+      partial_names:
+      - Try
+      - Guys
+      role: host
+  SmartLess:
+    hosts:
+    - full_name: Jason Bateman
+      partial_names:
+      - Jason
+      - Bateman
+      role: host
+  Office Ladies:
+    hosts:
+    - full_name: Jenna Fischer
+      partial_names:
+      - Jenna
+      - Fischer
+      role: host
+  Literally! With Rob Lowe:
+    hosts:
+    - full_name: Rob Lowe
+      partial_names:
+      - Rob
+      - Lowe
+      role: host
+  Where Everybody Knows Your Name:
+    hosts:
+    - full_name: Ted Danson
+      partial_names:
+      - Ted
+      - Danson
+      role: host
+  Team Coco:
+    hosts:
+    - full_name: Conan O'Brien
+      partial_names:
+      - Conan
+      - O'Brien
+      role: host
+  Anna Faris is Unqualified:
+    hosts:
+    - full_name: Anna Faris
+      partial_names:
+      - Anna
+      - Faris
+      role: host
+  Busy Philipps is Doing Her Best:
+    hosts:
+    - full_name: Busy Philipps
+      partial_names:
+      - Busy
+      - Philipps
+      role: host
+  Sibling Revelry:
+    hosts:
+    - full_name: Kate Hudson
+      partial_names:
+      - Kate
+      - Hudson
+      role: host
+  The Hilarious World of Depression:
+    hosts:
+    - full_name: John Moe
+      partial_names:
+      - John
+      - Moe
+      role: host
+  Getting Curious with Jonathan Van Ness:
+    hosts:
+    - full_name: Jonathan Van Ness
+      partial_names:
+      - Jonathan
+      - Ness
+      - Jonathan V.
+      role: host
+  Why Won't You Date Me?:
+    hosts:
+    - full_name: Nicole Byer
+      partial_names:
+      - Nicole
+      - Byer
+      role: host
+  Best Friends!:
+    hosts:
+    - full_name: Sasheer Zamata
+      partial_names:
+      - Sasheer
+      - Zamata
+      role: host
+  Las Culturistas:
+    hosts:
+    - full_name: Matt Rogers
+      partial_names:
+      - Matt
+      - Rogers
+      role: host
+content_detection:
+  keywords:
+    harris_indicators:
+    - moral landscape
+    - consciousness
+    - meditation
+    - free will
+    - neuroscience
+    - rationality
+    - illusion
+    - mindfulness
+    - secular
+    - dharma
+    peterson_indicators:
+    - roughly speaking
+    - clean up your room
+    - archetypal
+    - hierarchies
+    - dominance hierarchy
+    - responsibility
+    - meaning
+    - chaos
+    - order
+    - lobster
+    - bucko
+speaker_profiles:
+  Jordan Peterson:
+    aliases:
+    - Peterson
+    - JP
+    - Jordan B Peterson
+    characteristics:
+    - canadian accent
+    - deeper voice
+    - measured speech
+  Sam Harris:
+    aliases:
+    - Harris
+    - SH
+    - Sam
+    characteristics:
+    - american accent
+    - precise diction
+    - analytical tone
+podcasts:
+- title: Huberman Lab
+  category: science
+  rss: https://feeds.megaphone.fm/hubermanlab
+  youtube_channel_id: UC2D2CMWXMOVWx7giW1n3LIg
+- title: Lex Fridman Podcast
+  category: technology
+  rss: https://lexfridman.com/feed/podcast/
+  youtube_channel_id: UCSHZKyawb77ixDdsGog4iWA
+- title: 'Waveform: The MKBHD Podcast'
+  category: technology
+  rss: https://feeds.megaphone.fm/STU4418364045
+  youtube_channel_id: UCEcrRXW3oEYfUctetZTAWLw
+- title: Science Friday
+  category: science
+  rss: https://www.sciencefriday.com/feed/podcast/science-friday/
+  youtube_channel_id: UCDjGU4DP3b-eGxrsipCvoVQ
+- title: Dan Snow's History Hit
+  category: history
+  rss: https://access.acast.com/rss/c939f8d1-c4bc-478e-8bb9-e5343f9a7ab5
+  youtube_channel_id: UC4wKw34XH0pzeeBZ8xT29Eg
+- title: The Jordan B. Peterson Podcast
+  category: philosophy
+  rss: https://feeds.megaphone.fm/BVDWV6444647327
+  youtube_channel_id: UCL_f53ZEJxp8TtlOkHwMV9Q
+- title: StarTalk Radio
+  category: science
+  rss: https://feeds.simplecast.com/4T39_jAj
+  youtube_channel_id: UCQoAEdiRjPJeuFcf2fKlnbA
+- title: The Ancients
+  category: history
+  rss: https://feeds.acast.com/public/shows/the-ancients
+  youtube_channel_id: UCZwU2G-KVl-P-O-B35chZOQ
+- title: EconTalk
+  category: finance
+  rss: https://feeds.simplecast.com/wgl4xEgL
+  youtube_channel_id: UCKAu-mTq7iZtKHK6QiBqKPA
+- title: The Daily Stoic
+  category: philosophy
+  rss: https://rss.art19.com/the-daily-stoic
+  youtube_channel_id: UC6N2Vvwh5Pb9F530wDt_fjQ
+- title: The Knowledge Project
+  category: philosophy
+  rss: https://feeds.megaphone.fm/FSMI7575968096
+  youtube_channel_id: UCLtTf_uKt0Itd0NG7txrwXA
+- title: Intelligence Squared
+  category: geopolitics
+  rss: https://feeds.megaphone.fm/NSR6363847171
+  youtube_channel_id: UCaqcvH8EvUtePORpN03jLMg
+- title: Conversations with Tyler
+  category: science
+  rss: https://cowenconvos.libsyn.com/rss
+  youtube_channel_id: UCKtFwcQCsl1ttW2CgOqFMUQ
+- title: The Life Scientific
+  category: science
+  rss: https://podcasts.files.bbci.co.uk/b015sqc7.rss
+  youtube_channel_id: ''
+- title: a16z Podcast
+  category: technology
+  rss: https://feeds.simplecast.com/JGE3yC0V
+  youtube_channel_id: ''

@@ -160,7 +160,7 @@ class ProcessPipelineWorker(QThread):
 
                 audio_processor = AudioProcessor(
                     device=self.config.get("device", "cpu"),
-                    model=self.config.get("transcription_model", "base"),
+                    model=self.config.get("transcription_model", "medium"),
                 )
 
                 result = audio_processor.process(
@@ -184,11 +184,11 @@ class ProcessPipelineWorker(QThread):
 
                 # Use System2Orchestrator for mining/summarization
                 orchestrator = System2Orchestrator()
-                episode_id = file_obj.stem
+                source_id = file_obj.stem
 
                 job_id = orchestrator.create_job(
                     job_type="mine",
-                    input_id=episode_id,
+                    input_id=source_id,
                     config={
                         "source": "process_tab",
                         "file_path": str(transcript_path),
@@ -206,11 +206,6 @@ class ProcessPipelineWorker(QThread):
                     return False
 
                 logger.info(f"Summarization completed for {file_obj.name}")
-
-            # Step 3: MOC Generation (if enabled)
-            if self.config.get("create_moc", False):
-                # TODO: Implement MOC generation through System2
-                logger.info("MOC generation not yet implemented in updated Process Tab")
 
             return True
 
@@ -232,11 +227,11 @@ class ProcessPipelineWorker(QThread):
 
                 # Use System2Orchestrator for mining/summarization
                 orchestrator = System2Orchestrator()
-                episode_id = file_obj.stem
+                source_id = file_obj.stem
 
                 job_id = orchestrator.create_job(
                     job_type="mine",
-                    input_id=episode_id,
+                    input_id=source_id,
                     config={
                         "source": "process_tab",
                         "file_path": str(file_path),
@@ -254,11 +249,6 @@ class ProcessPipelineWorker(QThread):
                     return False
 
                 logger.info(f"Summarization completed for {file_obj.name}")
-
-            # MOC generation for documents
-            if self.config.get("create_moc", False):
-                # TODO: Implement MOC generation through System2
-                logger.info("MOC generation not yet implemented in updated Process Tab")
 
             return True
 
@@ -346,39 +336,17 @@ class ProcessTab(BaseTab, FileOperationsMixin):
 
         # Processing options
         self.transcribe_checkbox = QCheckBox("Transcribe Audio/Video")
-        self.transcribe_checkbox.setChecked(True)
+        # Don't set default - let _load_settings() handle it via settings manager
         layout.addWidget(self.transcribe_checkbox, row, 0)
 
         self.summarize_checkbox = QCheckBox("Summarize Content")
-        self.summarize_checkbox.setChecked(True)
+        # Don't set default - let _load_settings() handle it via settings manager
         layout.addWidget(self.summarize_checkbox, row, 1)
-
-        self.moc_checkbox = QCheckBox("Generate MOC")
-        self.moc_checkbox.setChecked(False)
-        layout.addWidget(self.moc_checkbox, row, 2)
         row += 1
-
-        # MOC Obsidian Pages checkbox (only enabled when MOC is enabled)
-        self.moc_obsidian_pages_checkbox = QCheckBox("Write MOC Obsidian Pages")
-        self.moc_obsidian_pages_checkbox.setChecked(False)
-        self.moc_obsidian_pages_checkbox.setEnabled(False)
-        self.moc_obsidian_pages_checkbox.setToolTip(
-            "Generate People.md, Mental_Models.md, Jargon.md, and MOC.md files with dataview queries.\n"
-            "These files contain dynamic Obsidian queries and can be copied to your vault."
-        )
-        layout.addWidget(self.moc_obsidian_pages_checkbox, row, 0, 1, 3)
-        row += 1
-
-        # Enable/disable MOC pages checkbox based on MOC checkbox
-        self.moc_checkbox.toggled.connect(
-            lambda checked: self.moc_obsidian_pages_checkbox.setEnabled(checked)
-        )
 
         # Connect checkboxes to save settings
         self.transcribe_checkbox.toggled.connect(self._save_settings)
         self.summarize_checkbox.toggled.connect(self._save_settings)
-        self.moc_checkbox.toggled.connect(self._save_settings)
-        self.moc_obsidian_pages_checkbox.toggled.connect(self._save_settings)
 
         # Output directory
         layout.addWidget(QLabel("Output Directory:"), row, 0)
@@ -510,14 +478,10 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             config = {
                 "transcribe": self.transcribe_checkbox.isChecked(),
                 "summarize": self.summarize_checkbox.isChecked(),
-                "create_moc": self.moc_checkbox.isChecked(),
-                "write_moc_obsidian_pages": self.moc_obsidian_pages_checkbox.isChecked(),
                 "device": "cpu",  # Default for now
                 "transcription_model": "base",  # Default for now
                 "summarization_provider": "local",  # Use local LLM by default
                 "summarization_model": "qwen2.5:7b-instruct",  # Default local model
-                "moc_provider": "local",  # Use local LLM by default
-                "moc_model": "qwen2.5:7b-instruct",  # Default local model
             }
 
             # Create and configure worker
@@ -633,14 +597,6 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             self.gui_settings.set_checkbox_state(
                 self.tab_name, "summarize", self.summarize_checkbox.isChecked()
             )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name, "create_moc", self.moc_checkbox.isChecked()
-            )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name,
-                "write_moc_obsidian_pages",
-                self.moc_obsidian_pages_checkbox.isChecked(),
-            )
 
             logger.debug(f"Settings saved for {self.tab_name} tab")
 
@@ -654,24 +610,18 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             output_dir = self.gui_settings.get_output_directory(self.tab_name, "")
             self.output_dir_line.setText(output_dir)
 
-            # Load checkbox states
-            self.transcribe_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(self.tab_name, "transcribe", True)
+            # Load checkbox states - let settings manager handle hierarchy
+            transcribe_state = self.gui_settings.get_checkbox_state(
+                self.tab_name, "transcribe", None
             )
-            self.summarize_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(self.tab_name, "summarize", True)
+            if transcribe_state is not None:
+                self.transcribe_checkbox.setChecked(transcribe_state)
+            
+            summarize_state = self.gui_settings.get_checkbox_state(
+                self.tab_name, "summarize", None
             )
-            self.moc_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(self.tab_name, "create_moc", False)
-            )
-            self.moc_obsidian_pages_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(
-                    self.tab_name, "write_moc_obsidian_pages", False
-                )
-            )
-
-            # Update checkbox states based on dependencies
-            self.moc_obsidian_pages_checkbox.setEnabled(self.moc_checkbox.isChecked())
+            if summarize_state is not None:
+                self.summarize_checkbox.setChecked(summarize_state)
 
             logger.debug(f"Settings loaded for {self.tab_name} tab")
 

@@ -10,7 +10,7 @@
       "description": "All claims with evaluation decisions and scores",
       "items": {
         "type": "object",
-        "required": ["original_claim_text", "decision", "reasoning", "rank"],
+        "required": ["original_claim_text", "decision", "reasoning"],
         "properties": {
           "claim_id": {
             "type": "string",

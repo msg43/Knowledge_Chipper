@@ -434,7 +434,7 @@ class System2Orchestrator:
                 # Create AudioProcessor
                 from ..processors.audio_processor import AudioProcessor
 
-                model = config.get("model", "base")
+                model = config.get("model", "medium")
                 device = config.get("device", "cpu")
                 enable_diarization = config.get("enable_diarization", False)
 
@@ -556,7 +556,7 @@ class System2Orchestrator:
 
     def _create_summary_from_mining(
         self,
-        video_id: str,
+        source_id: str,
         episode_id: str,
         miner_outputs: list[Any],
         config: dict[str, Any],
@@ -620,7 +620,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE).
         with self.db_service.get_session() as session:
             summary = Summary(
                 summary_id=summary_id,
-                video_id=video_id,
+                video_id=source_id,
                 transcript_id=None,  # Could link to transcript if available
                 summary_text=summary_text,
                 summary_metadata_json={
@@ -652,7 +652,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE).
 
     def _create_summary_from_pipeline_outputs(
         self,
-        video_id: str,
+        source_id: str,
         episode_id: str,
         pipeline_outputs: Any,  # PipelineOutputs
         config: dict[str, Any],
@@ -719,11 +719,11 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
         # Ensure a MediaSource exists for FK integrity on summaries.video_id
         try:
-            if not self.db_service.video_exists(video_id):
+            if not self.db_service.source_exists(video_id):
                 fallback_title = Path(config.get("file_path", video_id)).stem
                 source_url = config.get("source_url", f"local://{video_id}")
-                self.db_service.create_video(
-                    video_id=video_id, title=fallback_title, url=source_url
+                self.db_service.create_source(
+                    video_id=source_id, title=fallback_title, url=source_url
                 )
         except Exception as _e:
             logger.warning(f"Could not ensure MediaSource for {video_id}: {_e}")
@@ -731,7 +731,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
         with self.db_service.get_session() as session:
             summary = Summary(
                 summary_id=summary_id,
-                video_id=video_id,
+                video_id=source_id,
                 transcript_id=None,
                 summary_text=summary_text,
                 summary_metadata_json={
@@ -937,7 +937,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
     async def _process_pipeline(
         self,
-        video_id: str,
+        source_id: str,
         config: dict[str, Any],
         checkpoint: dict[str, Any] | None,
         run_id: str,
@@ -1127,7 +1127,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
         return miner.mine_segment(segment)
 
     def _load_transcript_segments_from_db(
-        self, video_id: str
+        self, source_id: str
     ) -> list[dict[str, Any]] | None:
         """
         Load transcript segments from database (Whisper.cpp output).

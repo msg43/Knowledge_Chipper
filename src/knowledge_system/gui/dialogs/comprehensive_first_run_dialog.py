@@ -187,19 +187,19 @@ class DependencyDownloadWorker(QObject):
             models_dir = self.cache_dir / "models" / "whisper"
             models_dir.mkdir(parents=True, exist_ok=True)
 
-            # Download base model (most commonly used)
+            # Download medium model (best balance of speed/accuracy)
             from ...processors.whisper_cpp_transcribe import (
                 WhisperCppTranscribeProcessor,
             )
 
-            processor = WhisperCppTranscribeProcessor(model="base")
+            processor = WhisperCppTranscribeProcessor(model="medium")
 
             def progress_callback(info):
                 if not self.cancelled:
                     progress = info.get("progress", 0)
                     self.progress_updated.emit(dep.name, progress, "downloading")
 
-            model_path = processor._download_model("base", progress_callback)
+            model_path = processor._download_model("medium", progress_callback)
             return model_path and model_path.exists()
 
         except Exception as e:

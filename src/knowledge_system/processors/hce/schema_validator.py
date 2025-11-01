@@ -437,6 +437,24 @@ class SchemaValidator:
                     "overall_quality": "low",
                 }
 
+            # Add placeholder ranks for rejected/merged/split claims
+            # Only accepted claims should have meaningful ranks, but we add
+            # a sentinel value (999) for rejected claims for backwards compatibility
+            if "evaluated_claims" in repaired and isinstance(
+                repaired["evaluated_claims"], list
+            ):
+                for claim in repaired["evaluated_claims"]:
+                    if isinstance(claim, dict):
+                        decision = claim.get("decision", "reject")
+                        # If rank is missing and claim is not accepted, add placeholder
+                        if "rank" not in claim:
+                            if decision == "accept":
+                                # Accepted claims without rank get a default rank
+                                claim["rank"] = 999
+                            else:
+                                # Rejected/merged/split claims get sentinel rank
+                                claim["rank"] = 999
+
             # Repair invalid overall_quality values
             if "summary_assessment" in repaired and isinstance(
                 repaired["summary_assessment"], dict

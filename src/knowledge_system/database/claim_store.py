@@ -55,32 +55,66 @@ class ClaimStore:
 
     def store_segments(
         self,
-        episode_id: str,
+        source_id: str,
         segments: list,
+        source_title: str | None = None,
     ) -> None:
         """
-        Store segments for an episode before storing claims.
+        Store segments for a source before storing claims.
 
         This must be called before upsert_pipeline_outputs to ensure
         foreign key constraints are satisfied when storing evidence spans.
 
         Args:
-            episode_id: The episode ID
+            source_id: The media source ID
             segments: List of Segment objects with segment_id, text, speaker, t0, t1
+            source_title: Optional title for creating source if it doesn't exist
         """
         with self.db_service.get_session() as session:
-            # Delete existing segments for this episode
-            session.query(Segment).filter_by(episode_id=episode_id).delete()
+            # CRITICAL: Ensure source record exists before storing segments
+            # This prevents foreign key constraint violations
+            source = session.query(MediaSource).filter_by(source_id=source_id).first()
+
+            if not source:
+                # Create minimal source record to satisfy foreign key constraint
+                logger.info(
+                    f"Creating minimal source record for {source_id} to satisfy FK constraint"
+                )
+                from sqlalchemy import text
+
+                try:
+                    session.execute(
+                        text(
+                            """
+                        INSERT OR IGNORE INTO media_sources (source_id, source_type, title, url)
+                        VALUES (:source_id, :source_type, :title, :url)
+                    """
+                        ),
+                        {
+                            "source_id": source_id,
+                            "source_type": "episode",
+                            "title": source_title or source_id,
+                            "url": f"local://{source_id}",
+                        },
+                    )
+                    session.flush()
+                    logger.info(f"Created minimal source record for {source_id}")
+                except Exception as e:
+                    logger.warning(f"Could not create source: {e}")
+                    # Continue anyway - maybe foreign key is not enforced
+
+            # Delete existing segments for this source
+            session.query(Segment).filter_by(source_id=source_id).delete()
 
             # Store new segments
             for i, segment in enumerate(segments):
-                # Generate fully qualified segment_id (episode_id + segment_id)
+                # Generate fully qualified segment_id (source_id + segment_id)
                 # The segment.segment_id is just "seg_0001", we need to make it globally unique
-                segment_id = f"{episode_id}_{segment.segment_id}"
+                segment_id = f"{source_id}_{segment.segment_id}"
 
                 db_segment = Segment(
                     segment_id=segment_id,
-                    episode_id=episode_id,
+                    source_id=source_id,
                     speaker=segment.speaker,
                     start_time=segment.t0,
                     end_time=segment.t1,
@@ -91,14 +125,14 @@ class ClaimStore:
                 session.add(db_segment)
 
             session.commit()
-            logger.info(f"Stored {len(segments)} segments for episode {episode_id}")
+            logger.info(f"Stored {len(segments)} segments for source {source_id}")
 
     def upsert_pipeline_outputs(
         self,
         outputs: PipelineOutputs,
         source_id: str,
         source_type: str = "episode",
-        episode_title: str | None = None,
+        source_title: str | None = None,
         recorded_at: str | None = None,
     ) -> None:
         """
@@ -108,7 +142,7 @@ class ClaimStore:
             outputs: PipelineOutputs from UnifiedHCEPipeline
             source_id: The media source ID
             source_type: 'episode' or 'document'
-            episode_title: Title for episode (optional)
+            source_title: Title for source (optional)
             recorded_at: Recording timestamp (optional)
         """
         with self.db_service.get_session() as session:
@@ -130,8 +164,9 @@ class ClaimStore:
                     source = MediaSource(
                         source_id=source_id,
                         source_type=source_type,
-                        title=episode_title or source_id,
+                        title=source_title or source_id,
                         url=f"local://{source_id}",
+                        recorded_at=recorded_at,
                     )
                     session.add(source)
                     session.flush()
@@ -147,15 +182,16 @@ class ClaimStore:
                         session.execute(
                             text(
                                 """
-                            INSERT OR IGNORE INTO media_sources (source_id, source_type, title, url)
-                            VALUES (:source_id, :source_type, :title, :url)
+                            INSERT OR IGNORE INTO media_sources (source_id, source_type, title, url, recorded_at)
+                            VALUES (:source_id, :source_type, :title, :url, :recorded_at)
                         """
                             ),
                             {
                                 "source_id": source_id,
                                 "source_type": source_type,
-                                "title": episode_title or source_id,
+                                "title": source_title or source_id,
                                 "url": f"local://{source_id}",
+                                "recorded_at": recorded_at,
                             },
                         )
                         session.commit()
@@ -172,49 +208,31 @@ class ClaimStore:
                         session.rollback()
                         raise  # Re-raise - cannot proceed without source
 
-            # 2. If episode type, create/update episode
-            episode_id = None
+            # 2. Store summaries directly in MediaSource (no separate Episode table)
             if source_type == "episode":
-                episode_id = outputs.episode_id
-                episode = (
-                    session.query(Episode).filter_by(episode_id=episode_id).first()
-                )
+                logger.info(f"Updating source {source_id} with episode summaries")
 
-                if not episode:
-                    logger.info(
-                        f"Creating new episode: {episode_id} (source_id={source_id})"
-                    )
-                    episode = Episode(
-                        episode_id=episode_id,
-                        source_id=source_id,
-                        title=episode_title,
-                        recorded_at=recorded_at,
-                    )
-                    session.add(episode)
-                    session.flush()  # Flush to get episode in DB before updating
-                else:
-                    logger.info(f"Updating existing episode: {episode_id}")
-
-                # Update summaries
-                episode.short_summary = outputs.short_summary
-                episode.long_summary = outputs.long_summary
+                # Update summaries in MediaSource
+                source.short_summary = outputs.short_summary
+                source.long_summary = outputs.long_summary
+                source.recorded_at = recorded_at or source.recorded_at
 
                 # Calculate input_length from segments stored in database
                 # PipelineOutputs doesn't include segments, so we get them from the database
-                segments = session.query(Segment).filter_by(episode_id=episode_id).all()
+                segments = session.query(Segment).filter_by(source_id=source_id).all()
                 input_text_length = sum(len(s.text or "") for s in segments)
-                episode.input_length = (
+                source.input_length = (
                     len(outputs.short_summary or "") + input_text_length
                 )
-                episode.output_length = len(outputs.long_summary or "")
+                source.output_length = len(outputs.long_summary or "")
 
-                if episode.input_length > 0:
-                    episode.compression_ratio = (
-                        episode.output_length / episode.input_length
+                if source.input_length > 0:
+                    source.compression_ratio = (
+                        source.output_length / source.input_length
                     )
 
-                session.flush()  # Ensure episode updates are flushed
-                logger.info(f"Episode {episode_id} updated/created successfully")
+                session.flush()  # Ensure source updates are flushed
+                logger.info(f"Source {source_id} updated with summaries successfully")
 
             # 3. Store milestones (chapter/section markers with timestamps)
             if hasattr(outputs, "milestones") and outputs.milestones:

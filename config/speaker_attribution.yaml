@@ -28,6 +28,12 @@ channel_mappings:
         partial_names: ["Tony", "Anthony", "AJ"]
         role: "host"
 
+  "Zeihan on Geopolitics":
+    hosts:
+      - full_name: "Peter Zeihan"
+        partial_names: ["Peter", "Zeihan"]
+        role: "host"
+
 # ============================================================================
 # POPULAR PODCASTS (300+) - Auto-generated, do not edit this section manually
 # ============================================================================

@@ -508,7 +508,7 @@ class EnhancedTranscriptionWorker(QThread):
             # Get or create video record from database
             from ...utils.video_id_extractor import VideoIDExtractor
 
-            video_id = VideoIDExtractor.extract_video_id(url)
+            source_id = VideoIDExtractor.extract_video_id(url)
 
             if not video_id:
                 logger.warning(
@@ -648,135 +648,89 @@ class EnhancedTranscriptionWorker(QThread):
         except Exception as e:
             logger.error(f"Failed to write failed URL to file: {e}")
 
-    def _download_with_single_account(
-        self,
-        urls: list[str],
-        downloader,
-        downloads_dir: Path,
-        youtube_delay: int,
-    ) -> list[Path]:
-        """Download URLs using single account (existing sequential logic)"""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
-        downloaded_files = []
-
-        logger.info(
-            f"🚀 Starting sequential downloads: {len(urls)} URLs (one at a time for safety)"
-        )
-
-        if len(urls) == 1:
-            self.transcription_step_updated.emit(
-                f"🚀 Starting download (1 file)...",
-                0,
-            )
-        else:
-            self.transcription_step_updated.emit(
-                f"🚀 Starting sequential downloads ({len(urls)} files, one at a time)...",
-                0,
-            )
-
-        # Sequential pattern: Single worker to avoid bot detection
-        executor = ThreadPoolExecutor(max_workers=1)
-        try:
-            # Submit all downloads to the queue
-            futures = {}
-
-            for idx, url in enumerate(urls, 1):
-                if self.should_stop:
-                    break
-
-                # Submit download to thread pool (sequential processing)
-                future = executor.submit(
-                    self._download_single_url,
-                    url,
-                    idx,
-                    len(urls),
-                    downloader,
-                    downloads_dir,
-                    youtube_delay,
-                    is_first=(idx == 1),
-                )
-                futures[future] = (url, idx)
-
-            # Process results as they complete
-            completed = 0
-            for future in as_completed(futures):
-                if self.should_stop:
-                    logger.info(
-                        "Stop requested during downloads - cleaning up executor"
-                    )
-                    for f in futures:
-                        if not f.done():
-                            f.cancel()
-                    break
-
-                url, idx = futures[future]
-                try:
-                    result_url, audio_file, success, error = future.result()
-
-                    if success and audio_file:
-                        downloaded_files.append(audio_file)
-                        completed += 1
-                        logger.info(
-                            f"✅ Completed {completed}/{len(urls)}: {result_url[:40]}..."
-                        )
-                    else:
-                        # Handle failed URL with smart retry logic
-                        from ...database.service import DatabaseService
-
-                        db_service = DatabaseService()
-
-                        retry_result = self._handle_failed_url(
-                            result_url, error or "Unknown error", db_service
-                        )
-
-                        if retry_result == "REQUEUE":
-                            logger.info(f"🔄 {result_url[:40]}... added to retry queue")
-                        else:
-                            self.failed_count += 1
-                            logger.error(f"❌ Permanently failed: {result_url[:40]}...")
-
-                except Exception as e:
-                    logger.error(f"Exception processing result for {url}: {e}")
-                    self.failed_count += 1
-        finally:
-            try:
-                executor.shutdown(wait=False, cancel_futures=True)
-            except TypeError:
-                executor.shutdown(wait=False)
-
-        logger.info(
-            f"🏁 Download complete: {completed} successful, {self.failed_count} failed"
-        )
-
-        return downloaded_files
-
-    def _download_with_multi_account(
+    def _download_urls(
         self,
         urls: list[str],
         cookie_files: list[str],
         downloads_dir: Path,
     ) -> list[Path]:
-        """Download URLs using multi-account rotation"""
+        """
+        Download URLs using unified download path.
+        
+        Handles 0, 1, or multiple cookie files with consistent behavior:
+        - 0 cookies: No authentication, safe rate limiting
+        - 1 cookie: Single scheduler with deduplication and failover
+        - 2+ cookies: Parallel schedulers with load distribution
+        """
         import asyncio
+        import random
 
+        from ...config import get_settings
         from ...database.service import DatabaseService
         from ...services.multi_account_downloader import MultiAccountDownloadScheduler
 
         downloaded_files = []
 
-        # Test and filter cookies first
-        self.transcription_step_updated.emit("🧪 Testing cookie files...", 0)
-        valid_cookies = self._test_and_filter_cookies(cookie_files)
+        # Shuffle URLs if enabled (prevents sequential hammering of single channel/playlist)
+        config = get_settings()
+        if config.youtube_processing.shuffle_urls:
+            original_count = len(urls)
+            random.shuffle(urls)
+            logger.info(f"🔀 Shuffled {original_count} URLs to prevent sequential hammering")
+            self.transcription_step_updated.emit(
+                f"🔀 Shuffled {original_count} URLs for better anti-bot protection", 0
+            )
 
-        if not valid_cookies:
-            raise Exception("No valid cookie files found")
+        # Handle no cookies case
+        if not cookie_files:
+            logger.info("📥 No cookies provided - downloading without authentication")
+            cookie_files = [None]  # Single scheduler with no auth
+        
+        # Test and filter cookies (skips None values)
+        if cookie_files != [None]:
+            self.transcription_step_updated.emit("🧪 Testing cookie files...", 0)
+            valid_cookies = self._test_and_filter_cookies(cookie_files)
+            
+            if not valid_cookies:
+                raise Exception("No valid cookie files found")
+            
+            cookie_files = valid_cookies
+            
+            if len(cookie_files) == 1:
+                self.transcription_step_updated.emit(
+                    f"✅ Using 1 account for downloads\n"
+                    f"   Rate limiting: 3-5 min delays for safety",
+                    0,
+                )
+            else:
+                self.transcription_step_updated.emit(
+                    f"✅ Using {len(cookie_files)} account(s) for downloads\n"
+                    f"   Expected speedup: {len(cookie_files)}x faster than single account",
+                    0,
+                )
 
-        self.transcription_step_updated.emit(
-            f"✅ Using {len(valid_cookies)} account(s) for downloads\n"
-            f"   Expected speedup: {len(valid_cookies)}x faster than single account",
-            0,
+        # Get disable_proxies_with_cookies setting
+        disable_proxies_with_cookies = self.gui_settings.get(
+            "disable_proxies_with_cookies", True
         )
+
+        # Create scheduler
+        db_service = DatabaseService()
+        scheduler = MultiAccountDownloadScheduler(
+            cookie_files=cookie_files,
+            parallel_workers=20,  # For M2 Ultra
+            enable_sleep_period=self.gui_settings.get("enable_sleep_period", True),
+            sleep_start_hour=self.gui_settings.get("sleep_start_hour", 0),
+            sleep_end_hour=self.gui_settings.get("sleep_end_hour", 6),
+            db_service=db_service,
+            disable_proxies_with_cookies=disable_proxies_with_cookies,
+        )
+
+        # Create a simple callback for progress
+        def progress_callback(message):
+            self.transcription_step_updated.emit(message, 0)
+
+        scheduler.progress_callback = progress_callback
 
         # Get disable_proxies_with_cookies setting
         disable_proxies_with_cookies = self.gui_settings.get(
@@ -801,7 +755,7 @@ class EnhancedTranscriptionWorker(QThread):
 
         scheduler.progress_callback = progress_callback
 
-        # Download with rotation (async)
+        # Download all URLs (async)
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -970,32 +924,11 @@ class EnhancedTranscriptionWorker(QThread):
                         f"   disable_proxies_with_cookies: {disable_proxies_with_cookies}"
                     )
 
-                    # Choose download strategy based on cookie file count
-                    if use_multi_account and len(cookie_files) > 1:
-                        # Multi-account mode
-                        logger.info(
-                            f"   Using multi-account mode with {len(cookie_files)} cookies"
-                        )
-                        downloaded_files = self._download_with_multi_account(
-                            expanded_urls, cookie_files, downloads_dir
-                        )
-                    else:
-                        # Single-account mode (existing behavior)
-                        cookie_file_path = cookie_files[0] if cookie_files else None
-                        logger.info(f"   Using single-account mode")
-                        logger.info(f"   cookie_file_path: {cookie_file_path}")
-
-                        downloader = YouTubeDownloadProcessor(
-                            download_thumbnails=True,
-                            enable_cookies=enable_cookies,
-                            cookie_file_path=cookie_file_path,
-                            disable_proxies_with_cookies=disable_proxies_with_cookies,
-                        )
-
-                        youtube_delay = self.gui_settings.get("youtube_delay", 5)
-                        downloaded_files = self._download_with_single_account(
-                            expanded_urls, downloader, downloads_dir, youtube_delay
-                        )
+                    # Use unified download path for all cases (0, 1, or multiple cookies)
+                    logger.info(f"   Using unified download path with {len(cookie_files)} cookie(s)")
+                    downloaded_files = self._download_urls(
+                        expanded_urls, cookie_files, downloads_dir
+                    )
 
             # Combine downloaded files with local files
             all_files = list(self.files) + downloaded_files
@@ -1227,80 +1160,130 @@ class EnhancedTranscriptionWorker(QThread):
                         from ...database.service import DatabaseService
                         from ...utils.youtube_utils import extract_video_id
 
-                        # Try to extract video_id from filename
+                        # Try to retrieve metadata from database
+                        # Strategy 1: Look up by file path (DATABASE-CENTRIC - preferred!)
+                        # Strategy 2: Extract video_id from filename (fallback for old files)
                         file_path_obj = Path(file_path)
                         filename = file_path_obj.stem
-
-                        # Try to get video_id - could be in brackets or part of filename
-                        video_id = None
-                        if "[" in filename and "]" in filename:
-                            # Format: "Title [video_id].webm"
-                            video_id = filename.split("[")[-1].split("]")[0]
+                        
+                        logger.debug(f"🔍 Looking up metadata for file: {filename}")
+                        
+                        db_service = DatabaseService()
+                        video_record = None
+                        source_id = None
+                        
+                        # Strategy 1: Try to find by file path in database (DATABASE-CENTRIC!)
+                        # This is the correct architecture - no filename parsing needed
+                        logger.debug(f"   Strategy 1: Querying database by file path...")
+                        video_record = db_service.get_video_by_file_path(file_path)
+                        if source_record:
+                            source_id = source_record.source_id
+                            logger.info(f"✅ Found metadata by file path (database-centric): {video_id}")
                         else:
-                            # Check for underscore format: "Title_video_id"
+                            logger.debug(f"   No match by file path, trying filename extraction...")
+                        
+                        # Strategy 2: Extract video_id from filename (fallback for old files)
+                        if not video_record:
+                            logger.debug(f"   Strategy 2: Extracting video_id from filename...")
                             # YouTube video IDs are 11 characters: [a-zA-Z0-9_-]{11}
                             import re
-
-                            match = re.search(r"_([a-zA-Z0-9_-]{11})$", filename)
-                            if match:
-                                video_id = match.group(1)
-                            else:
-                                # Try to extract from URL-like patterns in filename
+                            
+                            # Try multiple patterns in order of likelihood
+                            patterns = [
+                                r"_([a-zA-Z0-9_-]{11})_transcript",  # Title_videoID_transcript.md
+                                r"_([a-zA-Z0-9_-]{11})$",             # Title_videoID.ext
+                                r"\[([a-zA-Z0-9_-]{11})\]",           # Title [videoID].ext
+                                r"_([a-zA-Z0-9_-]{11})_",             # Title_videoID_anything
+                                r"([a-zA-Z0-9_-]{11})",               # videoID anywhere (last resort)
+                            ]
+                            
+                            for pattern in patterns:
+                                match = re.search(pattern, filename)
+                                if match:
+                                    potential_id = match.group(1)
+                                    # Verify it's not just random characters by checking database
+                                    test_record = db_service.get_video(potential_id)
+                                    if test_record:
+                                        source_id = potential_id
+                                        video_record = test_record
+                                        logger.info(f"✅ Found video_id in filename: {video_id} (pattern: {pattern})")
+                                        break
+                            
+                            # Strategy 3: Try URL extraction as fallback
+                            if not video_id:
                                 try:
-                                    video_id = extract_video_id(filename)
+                                    source_id = extract_video_id(filename)
+                                    if video_id:
+                                        source_record = db_service.get_source(video_id)
+                                        if source_record:
+                                            logger.info(f"✅ Extracted video_id via URL pattern: {video_id}")
                                 except:
-                                    pass
+                                    logger.debug("Could not extract video_id from URL pattern")
+                        
+                        if not video_record:
+                            logger.debug(f"⚠️ No metadata found for file: {filename}")
+                            logger.debug(f"   This is normal for local files or files downloaded outside the app")
+                        
+                        if source_record:
+                            # Retrieve platform tags from relationship
+                            tags = []
+                            if source_record.platform_tags:
+                                tags = [
+                                    tag_assoc.tag.tag_name
+                                    for tag_assoc in source_record.platform_tags
+                                    if tag_assoc.tag
+                                ]
 
-                        if video_id:
-                            db_service = DatabaseService()
-                            video_record = db_service.get_video(video_id)
+                            # Retrieve platform categories from relationship
+                            categories = []
+                            if source_record.platform_categories:
+                                categories = [
+                                    cat_assoc.category.category_name
+                                    for cat_assoc in source_record.platform_categories
+                                    if cat_assoc.category
+                                ]
 
-                            if video_record:
-                                # Convert database record to metadata dict for audio processor
-                                video_metadata = {
-                                    "video_id": video_record.video_id,
-                                    "title": video_record.title,
-                                    "url": video_record.url,
-                                    "uploader": video_record.uploader,
-                                    "uploader_id": video_record.uploader_id,
-                                    "upload_date": video_record.upload_date,
-                                    "duration": video_record.duration_seconds,
-                                    "view_count": video_record.view_count,
-                                    "tags": video_record.tags_json
-                                    if video_record.tags_json
-                                    else [],
-                                    "categories": video_record.categories_json
-                                    if video_record.categories_json
-                                    else [],
-                                    "description": video_record.description,
-                                    "source_type": video_record.source_type,
-                                    "thumbnail_local_path": video_record.thumbnail_local_path,
-                                }
-                                processing_kwargs_with_output[
-                                    "video_metadata"
-                                ] = video_metadata
+                            # Convert database record to metadata dict for audio processor
+                            video_metadata = {
+                                "video_id": source_record.source_id,
+                                "title": source_record.title,
+                                "url": source_record.url,
+                                "uploader": source_record.uploader,
+                                "uploader_id": source_record.uploader_id,
+                                "upload_date": source_record.upload_date,
+                                "duration": source_record.duration_seconds,
+                                "view_count": source_record.view_count,
+                                "tags": tags,
+                                "categories": categories,
+                                "description": source_record.description,
+                                "source_type": source_record.source_type,
+                                "thumbnail_local_path": source_record.thumbnail_local_path,
+                            }
+                            processing_kwargs_with_output[
+                                "video_metadata"
+                            ] = video_metadata
 
-                                # Debug logging for tags
-                                tags_count = (
-                                    len(video_metadata["tags"])
-                                    if video_metadata["tags"]
-                                    else 0
-                                )
-                                logger.info(
-                                    f"✅ Retrieved YouTube metadata for {video_id}: {video_record.title} (tags: {tags_count})"
-                                )
-                                if tags_count > 0:
-                                    logger.debug(
-                                        f"Tags: {video_metadata['tags'][:5]}..."
-                                    )  # Show first 5 tags
-                            else:
-                                logger.debug(
-                                    f"No database record found for video_id: {video_id}"
-                                )
-                        else:
-                            logger.debug(
-                                f"Could not extract video_id from filename: {filename}"
+                            # Debug logging for tags and metadata
+                            tags_count = len(video_metadata["tags"])
+                            categories_count = len(video_metadata["categories"])
+                            has_thumbnail = bool(video_metadata.get("thumbnail_local_path"))
+                            has_description = bool(video_metadata.get("description"))
+                            logger.info(
+                                f"✅ Retrieved YouTube metadata for {video_id}: {source_record.title} "
+                                f"(tags: {tags_count}, categories: {categories_count}, "
+                                f"thumbnail: {has_thumbnail}, description: {has_description})"
                             )
+                            if tags_count > 0:
+                                logger.debug(
+                                    f"Tags: {video_metadata['tags'][:5]}..."
+                                )  # Show first 5 tags
+                            if categories_count > 0:
+                                logger.debug(f"Categories: {video_metadata['categories']}")
+                            if has_thumbnail:
+                                logger.debug(f"Thumbnail path: {video_metadata['thumbnail_local_path']}")
+                            if has_description:
+                                desc_preview = video_metadata['description'][:100] + "..." if len(video_metadata['description']) > 100 else video_metadata['description']
+                                logger.debug(f"Description preview: {desc_preview}")
 
                     except Exception as e:
                         logger.debug(f"Could not retrieve video metadata: {e}")
@@ -1342,7 +1325,7 @@ class EnhancedTranscriptionWorker(QThread):
                         processing_kwargs_with_output["diarization"] = False
                     processing_kwargs_with_output[
                         "enable_color_coding"
-                    ] = self.gui_settings.get("enable_color_coding", True)
+                    ] = self.gui_settings.get("enable_color_coding", False)  # Default to False
 
                     # Pass cancellation token for proper stop support
                     processing_kwargs_with_output[
@@ -1443,13 +1426,13 @@ class EnhancedTranscriptionWorker(QThread):
                                 from ...database.service import DatabaseService
                                 from ...utils.youtube_utils import extract_video_id
 
-                                video_id = None
+                                source_id = None
                                 file_path_obj = Path(file_path)
                                 filename = file_path_obj.stem
 
                                 # Extract video_id from filename
                                 if "[" in filename and "]" in filename:
-                                    video_id = filename.split("[")[-1].split("]")[0]
+                                    source_id = filename.split("[")[-1].split("]")[0]
                                 else:
                                     import re
 
@@ -1457,13 +1440,13 @@ class EnhancedTranscriptionWorker(QThread):
                                         r"_([a-zA-Z0-9_-]{11})$", filename
                                     )
                                     if match:
-                                        video_id = match.group(1)
+                                        source_id = match.group(1)
 
                                 if video_id:
                                     db_service = DatabaseService()
-                                    video_record = db_service.get_video(video_id)
+                                    source_record = db_service.get_source(video_id)
 
-                                    if video_record and video_record.url:
+                                    if video_record and source_record.url:
                                         # Re-download with fresh IP and transcribe with large model
                                         logger.info(
                                             f"🔄 Audio corruption detected for {video_id}, attempting re-download and transcription with large model"
@@ -1525,7 +1508,7 @@ class EnhancedTranscriptionWorker(QThread):
                                         )
 
                                         download_result = downloader.process(
-                                            video_record.url,
+                                            source_record.url,
                                             output_dir=self.gui_settings.get(
                                                 "output_dir"
                                             ),
@@ -1776,7 +1759,7 @@ class EnhancedTranscriptionWorker(QThread):
             from ...core.system2_orchestrator import System2Orchestrator
 
             # Extract video ID from file path or generate one
-            video_id = Path(file_path).stem
+            source_id = Path(file_path).stem
 
             # Create orchestrator instance
             orchestrator = System2Orchestrator()
@@ -1873,7 +1856,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
             # Configure preloader
             self.model_preloader.configure(
-                model=settings.get("model", "base"),
+                model=settings.get("model", "medium"),
                 device=settings.get("device"),
                 hf_token=getattr(self.settings.api_keys, "huggingface_token", None),
                 enable_diarization=settings.get("diarization", True),
@@ -1938,11 +1921,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         # Progress section
         progress_section = self._create_progress_section()
-        layout.addWidget(progress_section)
+        layout.addWidget(progress_section, 0)  # No extra stretch
 
-        # Output section - minimal stretch to save space
+        # Output section - give it priority to expand with available space
         output_layout = self._create_output_section()
-        layout.addLayout(output_layout, 0)  # No extra stretch - use only needed space
+        layout.addLayout(output_layout, 1)  # Stretch factor 1 to claim vertical space
 
         # Load saved settings after UI is set up
         # Use a timer with a small delay to ensure all widgets are fully initialized
@@ -2083,7 +2066,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # Model selection - compact combo without extra width
         self.model_combo = QComboBox()
         self.model_combo.addItems(get_valid_whisper_models())
-        self.model_combo.setCurrentText("base")
+        # Don't set a hardcoded default - let _load_settings() handle it via settings manager
         self.model_combo.setMaximumWidth(120)  # Compact width
         self.model_combo.currentTextChanged.connect(self._on_model_changed)
 
@@ -2099,11 +2082,13 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         model_label_layout = QHBoxLayout(model_label_widget)
         model_label_layout.setContentsMargins(0, 0, 0, 0)
         model_label_layout.setSpacing(6)
-        model_label_layout.addWidget(QLabel("Transcription Model:"))
+        transcription_model_label = QLabel("Transcription Model:")
+        transcription_model_label.setMinimumWidth(130)  # Fixed width for alignment
+        model_label_layout.addWidget(transcription_model_label)
         model_label_layout.addWidget(self.model_combo)
         model_label_layout.addWidget(self.model_status_label)
         model_label_layout.addStretch()  # Keep compact
-        model_tooltip = "Choose the Whisper model size. Larger models are more accurate but slower and use more memory. 'base' is recommended for most users."
+        model_tooltip = "Choose the Whisper model size. Larger models are more accurate but slower and use more memory. 'medium' is recommended for the best balance of speed and accuracy (70-80% less hallucinations than large)."
         model_label_widget.setToolTip(
             f"<b>Transcription Model:</b><br/><br/>{model_tooltip}"
         )
@@ -2121,7 +2106,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         language_label_layout = QHBoxLayout(language_label_widget)
         language_label_layout.setContentsMargins(0, 0, 0, 0)
         language_label_layout.setSpacing(6)
-        language_label_layout.addWidget(QLabel("Language:"))
+        language_label = QLabel("Language:")
+        language_label.setMinimumWidth(130)  # Fixed width for alignment with Transcription Model
+        language_label_layout.addWidget(language_label)
         language_label_layout.addWidget(self.language_combo)
         language_label_layout.addStretch()  # Keep compact
         language_tooltip = "Select the language of the audio. 'auto' lets Whisper detect the language automatically. Specifying the exact language can improve accuracy."
@@ -2149,7 +2136,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         layout.addWidget(self.diarization_checkbox, 0, 5)
 
         self.color_coded_checkbox = QCheckBox("Generate color-coded transcripts")
-        self.color_coded_checkbox.setChecked(True)
+        self.color_coded_checkbox.setChecked(False)  # Default to unchecked
         self.color_coded_checkbox.setToolTip(
             "Generate HTML and enhanced markdown transcripts with color-coded speakers. "
             "Creates visually appealing transcripts for easy speaker identification."
@@ -2168,7 +2155,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         device_label_layout = QHBoxLayout(device_label_widget)
         device_label_layout.setContentsMargins(0, 0, 0, 0)
         device_label_layout.setSpacing(6)
-        device_label_layout.addWidget(QLabel("GPU Acceleration:"))
+        device_label = QLabel("GPU Acceleration:")
+        device_label.setMinimumWidth(130)  # Fixed width for alignment
+        device_label_layout.addWidget(device_label)
         device_label_layout.addWidget(self.device_combo)
         device_label_layout.addStretch()  # Keep compact
         device_tooltip = "Choose processing device: 'auto' detects best available, 'cpu' uses CPU only, 'cuda' uses NVIDIA GPU, 'mps' uses Apple Silicon GPU."
@@ -2179,7 +2168,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         # Format - wrap label + widget together
         self.format_combo = QComboBox()
-        self.format_combo.addItems(["txt", "md", "srt", "vtt"])
+        self.format_combo.addItems(["md", "none"])
         self.format_combo.setCurrentText("md")
         self.format_combo.setMaximumWidth(80)  # Compact width
         self.format_combo.currentTextChanged.connect(self._on_setting_changed)
@@ -2187,10 +2176,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         format_label_layout = QHBoxLayout(format_label_widget)
         format_label_layout.setContentsMargins(0, 0, 0, 0)
         format_label_layout.setSpacing(6)
-        format_label_layout.addWidget(QLabel("Format:"))
+        format_label = QLabel("Format:")
+        format_label.setMinimumWidth(130)  # Fixed width for alignment
+        format_label_layout.addWidget(format_label)
         format_label_layout.addWidget(self.format_combo)
         format_label_layout.addStretch()  # Keep compact
-        format_tooltip = "Output format: 'txt' for plain text, 'md' for Markdown, 'srt' and 'vtt' for subtitle files with precise timing."
+        format_tooltip = "Output format: 'md' for Markdown with YAML frontmatter and metadata, 'none' to save to database only without creating output files."
         self.format_combo.setToolTip(f"<b>Format:</b><br/><br/>{format_tooltip}")
         layout.addWidget(format_label_widget, 1, 2, 1, 2)
 
@@ -2203,7 +2194,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.overwrite_checkbox.toggled.connect(self._on_setting_changed)
         layout.addWidget(self.overwrite_checkbox, 1, 4)
 
-        self.speaker_assignment_checkbox = QCheckBox("Enable speaker assignment dialog")
+        self.speaker_assignment_checkbox = QCheckBox("Enable speaker assignment")
         self.speaker_assignment_checkbox.setChecked(True)
         self.speaker_assignment_checkbox.setToolTip(
             "Show interactive dialog to assign real names to detected speakers. "
@@ -2212,9 +2203,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.speaker_assignment_checkbox.toggled.connect(self._on_setting_changed)
         layout.addWidget(self.speaker_assignment_checkbox, 1, 5)
 
-        self.use_proxy_checkbox = QCheckBox(
-            "Use PacketStream proxy for YouTube downloads"
-        )
+        self.use_proxy_checkbox = QCheckBox("Enable PacketStream proxy")
         self.use_proxy_checkbox.setChecked(True)  # Default to using proxy if configured
         self.use_proxy_checkbox.setToolTip(
             "Enable PacketStream residential proxies to avoid YouTube bot detection.\n"
@@ -2296,10 +2285,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         cookie_group.setFlat(True)  # Make it more compact
         cookie_layout = QVBoxLayout()
 
-        # Enable/disable checkbox
-        self.enable_cookies_checkbox = QCheckBox(
-            "Enable multi-account cookie authentication"
-        )
+        # Horizontal layout for checkboxes on same line
+        checkbox_row = QHBoxLayout()
+        checkbox_row.setSpacing(15)
+        
+        # Enable multi-account checkbox
+        self.enable_cookies_checkbox = QCheckBox("Enable multi-account")
         self.enable_cookies_checkbox.setChecked(True)
         self.enable_cookies_checkbox.setToolTip(
             "Use cookies from 1-6 throwaway Google accounts.\n"
@@ -2307,18 +2298,10 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             "Each account downloads with safe 3-5 min delays.\n"
             "Automatic failover if any account's cookies go stale."
         )
-        cookie_layout.addWidget(self.enable_cookies_checkbox)
+        checkbox_row.addWidget(self.enable_cookies_checkbox)
 
-        # Multi-account cookie manager widget
-        self.cookie_manager = CookieFileManager()
-        self.cookie_manager.setEnabled(False)
-        self.cookie_manager.cookies_changed.connect(self._on_setting_changed)
-        cookie_layout.addWidget(self.cookie_manager)
-
-        # Disable proxies checkbox - belongs in cookie section
-        self.disable_proxies_with_cookies_checkbox = QCheckBox(
-            "Disable proxies when cookies enabled (recommended)"
-        )
+        # Disable proxies checkbox - same line
+        self.disable_proxies_with_cookies_checkbox = QCheckBox("Disable proxies")
         self.disable_proxies_with_cookies_checkbox.setChecked(True)
         self.disable_proxies_with_cookies_checkbox.setToolTip(
             "Automatically disable proxies when using cookies.\n"
@@ -2327,7 +2310,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.disable_proxies_with_cookies_checkbox.toggled.connect(
             self._on_setting_changed
         )
-        cookie_layout.addWidget(self.disable_proxies_with_cookies_checkbox)
+        checkbox_row.addWidget(self.disable_proxies_with_cookies_checkbox)
+        
+        checkbox_row.addStretch()  # Push checkboxes to the left
+        cookie_layout.addLayout(checkbox_row)
+
+        # Multi-account cookie manager widget
+        self.cookie_manager = CookieFileManager()
+        self.cookie_manager.setEnabled(False)
+        self.cookie_manager.cookies_changed.connect(self._on_setting_changed)
+        cookie_layout.addWidget(self.cookie_manager)
 
         # Connect enable checkbox to enable/disable controls
         self.enable_cookies_checkbox.toggled.connect(self._on_cookies_toggled)
@@ -2340,77 +2332,62 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         rate_limit_group.setCheckable(True)
         rate_limit_group.setChecked(False)  # Start collapsed
         rate_limit_group.setFlat(True)  # Make it more compact
-        rate_limit_layout = QGridLayout()
-        rate_limit_layout.setSpacing(5)
-        rate_limit_layout.setHorizontalSpacing(10)
+        rate_limit_layout = QVBoxLayout()
 
-        # Set column stretch to keep labels close to spinboxes
-        # Even columns are labels (no stretch), odd columns are spinboxes (no stretch)
-        for col in range(6):
-            rate_limit_layout.setColumnStretch(col, 0)
-
-        # Row 0: Min delay - use horizontal layout container to keep label and spinbox together
-        min_delay_container = QWidget()
-        min_delay_hbox = QHBoxLayout(min_delay_container)
-        min_delay_hbox.setContentsMargins(0, 0, 0, 0)
-        min_delay_hbox.setSpacing(6)
-        min_delay_label = QLabel("Min delay between downloads:")
-        min_delay_hbox.addWidget(min_delay_label)
+        # Single horizontal row for all delay controls
+        delay_row = QHBoxLayout()
+        delay_row.setSpacing(15)
+        
+        # Min delay
+        min_delay_label = QLabel("Min delay:")
+        delay_row.addWidget(min_delay_label)
         self.min_delay_spinbox = QSpinBox()
         self.min_delay_spinbox.setMinimum(0)
         self.min_delay_spinbox.setMaximum(600)
         self.min_delay_spinbox.setValue(180)  # 3 minutes default
         self.min_delay_spinbox.setSuffix(" sec")
-        self.min_delay_spinbox.setMaximumWidth(90)  # Compact spinbox
+        self.min_delay_spinbox.setMaximumWidth(90)
+        self.min_delay_spinbox.setStyleSheet("QSpinBox { color: white; }")  # White text
         self.min_delay_spinbox.setToolTip(
             "Minimum delay between YouTube downloads (seconds)"
         )
         self.min_delay_spinbox.valueChanged.connect(self._on_setting_changed)
-        min_delay_hbox.addWidget(self.min_delay_spinbox)
-        min_delay_hbox.addStretch()  # Push to left
-        rate_limit_layout.addWidget(min_delay_container, 0, 0, 1, 2)
+        delay_row.addWidget(self.min_delay_spinbox)
 
-        # Row 1: Max delay - use horizontal layout container
-        max_delay_container = QWidget()
-        max_delay_hbox = QHBoxLayout(max_delay_container)
-        max_delay_hbox.setContentsMargins(0, 0, 0, 0)
-        max_delay_hbox.setSpacing(6)
-        max_delay_label = QLabel("Max delay between downloads:")
-        max_delay_hbox.addWidget(max_delay_label)
+        # Max delay
+        max_delay_label = QLabel("Max delay:")
+        delay_row.addWidget(max_delay_label)
         self.max_delay_spinbox = QSpinBox()
         self.max_delay_spinbox.setMinimum(0)
         self.max_delay_spinbox.setMaximum(600)
         self.max_delay_spinbox.setValue(300)  # 5 minutes default
         self.max_delay_spinbox.setSuffix(" sec")
-        self.max_delay_spinbox.setMaximumWidth(90)  # Compact spinbox
+        self.max_delay_spinbox.setMaximumWidth(90)
+        self.max_delay_spinbox.setStyleSheet("QSpinBox { color: white; }")  # White text
         self.max_delay_spinbox.setToolTip(
             "Maximum delay between YouTube downloads (seconds)"
         )
         self.max_delay_spinbox.valueChanged.connect(self._on_setting_changed)
-        max_delay_hbox.addWidget(self.max_delay_spinbox)
-        max_delay_hbox.addStretch()  # Push to left
-        rate_limit_layout.addWidget(max_delay_container, 1, 0, 1, 2)
+        delay_row.addWidget(self.max_delay_spinbox)
 
-        # Row 2: Randomization - use horizontal layout container
-        randomization_container = QWidget()
-        randomization_hbox = QHBoxLayout(randomization_container)
-        randomization_hbox.setContentsMargins(0, 0, 0, 0)
-        randomization_hbox.setSpacing(6)
+        # Randomization
         randomization_label = QLabel("Randomization:")
-        randomization_hbox.addWidget(randomization_label)
+        delay_row.addWidget(randomization_label)
         self.randomization_spinbox = QSpinBox()
         self.randomization_spinbox.setMinimum(0)
         self.randomization_spinbox.setMaximum(100)
         self.randomization_spinbox.setValue(25)  # ±25% default
         self.randomization_spinbox.setSuffix(" %")
-        self.randomization_spinbox.setMaximumWidth(70)  # Compact spinbox
+        self.randomization_spinbox.setMaximumWidth(70)
+        self.randomization_spinbox.setStyleSheet("QSpinBox { color: white; }")  # White text
         self.randomization_spinbox.setToolTip(
             "Percentage of random variation in delays (e.g., 25 = ±25%)"
         )
         self.randomization_spinbox.valueChanged.connect(self._on_setting_changed)
-        randomization_hbox.addWidget(self.randomization_spinbox)
-        randomization_hbox.addStretch()  # Push to left
-        rate_limit_layout.addWidget(randomization_container, 2, 0, 1, 2)
+        delay_row.addWidget(self.randomization_spinbox)
+        
+        delay_row.addStretch()  # Push to left
+        rate_limit_layout.addLayout(delay_row)
 
         rate_limit_group.setLayout(rate_limit_layout)
         layout.addWidget(rate_limit_group, 4, 0, 1, 7)
@@ -2790,8 +2767,18 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         settings = get_settings()
         strict_mode = getattr(settings.youtube_processing, "proxy_strict_mode", True)
 
-        # CRITICAL: If strict mode is enabled and proxy checkbox is NOT checked, block immediately
-        if urls and strict_mode and not self.use_proxy_checkbox.isChecked():
+        # Check if we should skip proxy test (cookies enabled + disable proxies)
+        # This is checked FIRST because cookie auth is an exemption from strict mode
+        # When using cookies with home IP, strict mode enforcement is bypassed
+        skip_proxy_test = (
+            self.enable_cookies_checkbox.isChecked()
+            and self.disable_proxies_with_cookies_checkbox.isChecked()
+        )
+
+        # CRITICAL: Enforce strict mode ONLY if no valid exemption exists
+        # Block if: strict_mode=True AND proxy_unchecked AND NOT using cookie exemption
+        # Allow if: cookie authentication is enabled with "disable proxies" option
+        if urls and strict_mode and not self.use_proxy_checkbox.isChecked() and not skip_proxy_test:
             self.append_log("🚫 BLOCKED: Proxy strict mode is enabled")
             self.append_log("⚠️ Proxy checkbox must be enabled when strict mode is on")
             self.append_log(
@@ -2814,12 +2801,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 "or disable strict mode in Settings > YouTube Processing (not recommended).",
             )
             return
-
-        # Check if we should skip proxy test (cookies enabled + disable proxies)
-        skip_proxy_test = (
-            self.enable_cookies_checkbox.isChecked()
-            and self.disable_proxies_with_cookies_checkbox.isChecked()
-        )
 
         if skip_proxy_test:
             self.append_log(
@@ -2942,7 +2923,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 # User wants proxy but it's not working - already handled above
                 pass
             elif urls and not self.use_proxy_checkbox.isChecked():
-                if strict_mode:
+                if strict_mode and not skip_proxy_test:
+                    # Only block if cookies are NOT being used as an exemption
                     self.append_log("🚫 BLOCKED: Proxy strict mode enabled")
                     self.append_log(
                         "⚠️ Proxy checkbox is disabled but strict mode requires proxy"
@@ -2963,8 +2945,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                         "Please enable the proxy checkbox or disable strict mode in Settings > YouTube Processing (not recommended).",
                     )
                     return
-                else:
-                    # Warn user about risks of direct download
+                elif not skip_proxy_test:
+                    # Warn user about risks of direct download (only if not using cookies)
                     self.append_log("⚠️ WARNING: Direct download mode (proxy disabled)")
                     self.append_log(
                         "⚠️ YouTube may flag your IP as a bot and block downloads"
@@ -3897,12 +3879,17 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.output_dir_input.setText(saved_output_dir)
 
                 # Load model selection
+                # Settings manager handles the hierarchy:
+                # 1. Session state (last used)
+                # 2. settings.yaml (transcription.whisper_model)
+                # 3. Fallback to empty string if neither exists
                 saved_model = self.gui_settings.get_combo_selection(
-                    self.tab_name, "model", "base"
+                    self.tab_name, "model", ""
                 )
-                index = self.model_combo.findText(saved_model)
-                if index >= 0:
-                    self.model_combo.setCurrentIndex(index)
+                if saved_model:
+                    index = self.model_combo.findText(saved_model)
+                    if index >= 0:
+                        self.model_combo.setCurrentIndex(index)
 
                 # Load device selection
                 saved_device = self.gui_settings.get_combo_selection(
@@ -3959,11 +3946,10 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                         self.tab_name, "enable_speaker_assignment", True
                     )
                 )
-                self.color_coded_checkbox.setChecked(
-                    self.gui_settings.get_checkbox_state(
-                        self.tab_name, "enable_color_coding", True
-                    )
-                )
+                # ALWAYS start color-coded checkbox as unchecked (ignore saved settings)
+                # This is a user preference that should default to off each session
+                # Users complained it kept getting re-enabled from saved state
+                self.color_coded_checkbox.setChecked(False)
 
             finally:
                 # Always restore signals
@@ -4002,7 +3988,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
             logger.debug(f"📂 Loaded cookie files: {cookie_files}")
             if cookie_files:
+                # Temporarily disconnect signal to prevent save during load
+                try:
+                    self.cookie_manager.cookies_changed.disconnect(self._on_setting_changed)
+                except:
+                    pass  # Ignore if not connected
+                
                 self.cookie_manager.set_cookie_files(cookie_files)
+                
+                # Reconnect signal
+                self.cookie_manager.cookies_changed.connect(self._on_setting_changed)
 
             # Load rate limiting settings
             self.min_delay_spinbox.setValue(
@@ -4089,6 +4084,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             )
             # Save cookie files list
             cookie_files = self.cookie_manager.get_all_cookie_files()
+            logger.debug(f"💾 Saving cookie files: {cookie_files}")
             self.gui_settings.set_list_setting(
                 self.tab_name, "cookie_files", cookie_files
             )

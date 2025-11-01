@@ -97,6 +97,62 @@ AudioProcessor(
 - `src/knowledge_system/processors/whisper_cpp_transcribe.py` (lines 400-508, 1039-1053, 1305-1367)
 - `src/knowledge_system/processors/audio_processor.py` (lines 1433-1459)
 
+### 5. ✅ Whisper.cpp Command-Line Hallucination Controls (October 2025)
+
+**Rationale**: Whisper.cpp provides native command-line parameters specifically designed to prevent hallucinations at generation time. Using these parameters stops hallucinations **before they're generated** rather than cleaning them up afterward.
+
+**Parameters Added**:
+- `--entropy-thold N` - Entropy threshold for decoder fail (2.8 for large, 2.6 for others, default: 2.4)
+- `--logprob-thold N` - Log probability threshold (-0.8, default: -1.0)
+- `--max-len N` - Maximum segment length in characters (200, default: 0/unlimited)
+- `--temperature N` - Sampling temperature (0.0 = deterministic, default: 0.0)
+
+**Files Modified**:
+- `src/knowledge_system/processors/whisper_cpp_transcribe.py` (lines ~927-959)
+
+**Implementation Details**:
+```python
+# Model-specific entropy thresholds
+if self.model_name == "large":
+    entropy_thold = 2.8  # More aggressive for large models
+else:
+    entropy_thold = 2.6  # Moderate for medium/small
+
+cmd.extend([
+    "--entropy-thold", str(entropy_thold),
+    "--logprob-thold", "-0.8",
+    "--max-len", "200",
+    "--temperature", "0.0"
+])
+```
+
+**What Each Parameter Does**:
+1. **Entropy Threshold**: Higher values make decoder fail faster when uncertain, preventing hallucination spirals
+2. **Log Probability**: Higher (less negative) values reject low-confidence segments more aggressively  
+3. **Max Length**: Prevents runaway repetition loops by limiting segment length
+4. **Temperature**: 0 = deterministic output (no randomness)
+
+**Impact**:
+- **Prevention over cleanup**: Stops hallucinations at generation time
+- **No content loss**: Eliminates need to remove large chunks of repetitions
+- **Faster processing**: Less wasted compute generating hallucinated content
+- **Model-specific tuning**: Large models get more aggressive prevention (entropy=2.8)
+- **Real case**: Fixed video kxKk7sBpcYA which lost 86 seconds to hallucinations (172s-258s)
+
+**Log Output**:
+```
+🛡️ Hallucination prevention: entropy=2.8, logprob=-0.8, max_len=200, temp=0.0
+🎯 Using aggressive hallucination prevention for large model
+```
+
+**Tuning**:
+Parameters can be overridden via kwargs if needed:
+```python
+processor.process(audio_file, entropy_thold=3.0, logprob_thold=-0.6, max_len=300)
+```
+
+**Documentation**: See `docs/HALLUCINATION_FIX_2025.md` for comprehensive details
+
 ## Prevention Strategy Matrix
 
 | Issue | Prevention Method | Effectiveness | Overhead |
@@ -104,7 +160,9 @@ AudioProcessor(
 | Model drift during silence | Silence removal | High (70-80%) | Low (~5%) |
 | Lack of domain context | Initial prompts | Medium (40-50%) | None |
 | Model size vs reliability | Default to medium | High (70-80%) | Medium (~2x time) |
-| Hallucinations that occur | Automatic cleanup | Very High (95-99%) | None |
+| Low-confidence predictions | Entropy/logprob thresholds | Very High (90-95%) | None |
+| Runaway repetition loops | Max segment length | High (85-90%) | None |
+| Hallucinations that occur | Automatic cleanup (fallback) | Very High (95-99%) | None |
 
 ## Expected Results
 

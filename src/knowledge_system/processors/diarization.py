@@ -83,7 +83,11 @@ class SpeakerDiarizationProcessor(BaseProcessor):
         self.model = model
 
         # Allow MPS to be used - we'll identify and fix specific failures
-        self.device = device or self._detect_best_device()
+        # Resolve "auto" to actual device
+        if device == "auto" or device is None:
+            self.device = self._detect_best_device()
+        else:
+            self.device = device
 
         self.hf_token = hf_token
         self.progress_callback = progress_callback

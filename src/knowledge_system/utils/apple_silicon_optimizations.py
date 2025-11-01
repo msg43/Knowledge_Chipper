@@ -32,7 +32,7 @@ def get_cpu_count() -> int:
 
 
 def get_apple_silicon_whisper_config(
-    model_size: str = "base", file_duration_minutes: float = 60.0
+    model_size: str = "medium", file_duration_minutes: float = 60.0
 ) -> dict[str, Any]:
     """
     Get optimized whisper.cpp configuration for Apple Silicon.

@@ -215,9 +215,14 @@ class TranscriptionConfig(BaseModel):
     """Transcription settings."""
 
     whisper_model: str = Field(
-        default="base", pattern="^(tiny|base|small|medium|large)$"
+        default="medium", pattern="^(tiny|base|small|medium|large)$"
     )
-    use_gpu: bool = True
+    device: str = Field(
+        default="auto",
+        pattern="^(auto|cpu|cuda|mps)$",
+        description="Processing device: auto (detect best), cpu, cuda (NVIDIA), mps (Apple Silicon)"
+    )
+    use_gpu: bool = True  # Deprecated - use device instead
     diarization: bool = True
     min_words: int = Field(default=50, ge=1)
     use_whisper_cpp: bool = False
@@ -387,6 +392,31 @@ class ProcessingConfig(BaseModel):
     concurrent_jobs: int = Field(default=2, ge=1, le=10)
     retry_attempts: int = Field(default=3, ge=1, le=10)
     timeout_seconds: int = Field(default=300, ge=30, le=3600)
+    
+    # Process Tab Defaults
+    default_transcribe: bool = Field(default=True, description="Enable transcription by default")
+    default_summarize: bool = Field(default=True, description="Enable summarization by default")
+
+
+class FileWatcherConfig(BaseModel):
+    """File watcher / monitor tab configuration."""
+    
+    default_file_patterns: str = Field(
+        default="*.mp4,*.mp3,*.wav,*.m4a,*.pdf,*.txt,*.md",
+        description="Default file patterns to watch"
+    )
+    default_debounce_delay: int = Field(
+        default=5, ge=1, le=300, description="Default debounce delay in seconds"
+    )
+    default_recursive: bool = Field(
+        default=True, description="Watch subdirectories by default"
+    )
+    default_auto_process: bool = Field(
+        default=True, description="Auto-process new files by default"
+    )
+    default_system2_pipeline: bool = Field(
+        default=False, description="Use System 2 pipeline by default"
+    )
 
 
 class YouTubeProcessingConfig(BaseModel):
@@ -521,6 +551,142 @@ class YouTubeProcessingConfig(BaseModel):
         description="Timezone for sleep period (e.g., 'America/New_York', 'Europe/London')",
     )
 
+    # Session-based download strategy (advanced anti-bot detection)
+    enable_session_based_downloads: bool = Field(
+        default=True,
+        description="Enable session-based download strategy with duty cycles (recommended for large batches)",
+    )
+
+    sessions_per_day_min: int = Field(
+        default=2,
+        ge=1,
+        le=10,
+        description="Minimum number of download sessions per day",
+    )
+
+    sessions_per_day_max: int = Field(
+        default=4,
+        ge=1,
+        le=10,
+        description="Maximum number of download sessions per day",
+    )
+
+    session_duration_min: int = Field(
+        default=60,
+        ge=10,
+        le=300,
+        description="Minimum session duration in minutes",
+    )
+
+    session_duration_max: int = Field(
+        default=180,
+        ge=10,
+        le=300,
+        description="Maximum session duration in minutes",
+    )
+
+    max_downloads_per_session_min: int = Field(
+        default=100,
+        ge=10,
+        le=1000,
+        description="Minimum downloads per session cap",
+    )
+
+    max_downloads_per_session_max: int = Field(
+        default=250,
+        ge=10,
+        le=1000,
+        description="Maximum downloads per session cap",
+    )
+
+    # yt-dlp rate limiting and jitter
+    rate_limit_min_mbps: float = Field(
+        default=0.8,
+        ge=0.1,
+        le=10.0,
+        description="Minimum download rate limit in MB/s (prevents looking like a bot)",
+    )
+
+    rate_limit_max_mbps: float = Field(
+        default=1.5,
+        ge=0.1,
+        le=10.0,
+        description="Maximum download rate limit in MB/s",
+    )
+
+    concurrent_downloads_min: int = Field(
+        default=1,
+        ge=1,
+        le=5,
+        description="Minimum concurrent downloads (1-2 recommended)",
+    )
+
+    concurrent_downloads_max: int = Field(
+        default=2,
+        ge=1,
+        le=5,
+        description="Maximum concurrent downloads",
+    )
+
+    # Jitter between files and requests
+    sleep_interval_min: int = Field(
+        default=8,
+        ge=1,
+        le=60,
+        description="Minimum sleep interval between files in seconds",
+    )
+
+    sleep_interval_max: int = Field(
+        default=25,
+        ge=1,
+        le=120,
+        description="Maximum sleep interval between files in seconds",
+    )
+
+    sleep_requests: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=5.0,
+        description="Sleep between HTTP requests in seconds (adds jitter)",
+    )
+
+    # Backoff on 429/403
+    enable_auto_cooldown: bool = Field(
+        default=True,
+        description="Automatically detect rate limiting (429/403) and trigger cooldown",
+    )
+
+    cooldown_min_minutes: int = Field(
+        default=45,
+        ge=5,
+        le=300,
+        description="Minimum cooldown period in minutes when rate limited",
+    )
+
+    cooldown_max_minutes: int = Field(
+        default=180,
+        ge=5,
+        le=300,
+        description="Maximum cooldown period in minutes when rate limited",
+    )
+
+    # URL shuffling
+    shuffle_urls: bool = Field(
+        default=True,
+        description="Shuffle URLs before download to avoid sequential hammering of single channel/playlist",
+    )
+
+    # Archive file for resume capability
+    use_download_archive: bool = Field(
+        default=True,
+        description="Use download archive to prevent re-downloading already processed videos",
+    )
+
+    download_archive_path: str = Field(
+        default="~/.knowledge_system/youtube_downloads.txt",
+        description="Path to download archive file (tracks successfully downloaded videos)",
+    )
+
 
 class MOCConfig(BaseModel):
     """MOC (Maps of Content) configuration."""
@@ -582,13 +748,8 @@ class HCEConfig(BaseModel):
         default=True, description="Include relationship mapping"
     )
 
-    # Tier thresholds (confidence scores)
-    tier_a_threshold: float = Field(
-        default=0.85, ge=0.0, le=1.0, description="Minimum confidence for Tier A claims"
-    )
-    tier_b_threshold: float = Field(
-        default=0.65, ge=0.0, le=1.0, description="Minimum confidence for Tier B claims"
-    )
+    # NOTE: Tier thresholds removed - tiers are assigned by LLM in flagship evaluator,
+    # not by numeric thresholds. See schemas/flagship_output.v1.json
 
     # Performance settings
     enable_embedding_cache: bool = Field(
@@ -645,11 +806,11 @@ class SpeakerIdentificationConfig(BaseModel):
 
     # Color-coded transcript settings
     enable_color_coded_transcripts: bool = Field(
-        default=True,
+        default=False,  # Default to False to reduce processing overhead
         description="Generate color-coded HTML and enhanced markdown transcripts",
     )
     color_coded_by_default: bool = Field(
-        default=True,
+        default=False,  # Default to False to reduce processing overhead
         description="Enable color coding by default in transcription settings",
     )
 
@@ -773,6 +934,7 @@ class Settings(BaseSettings):
     local_config: LocalLLMConfig = Field(default_factory=LocalLLMConfig)
     api_keys: APIKeysConfig = Field(default_factory=APIKeysConfig)
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
+    file_watcher: FileWatcherConfig = Field(default_factory=FileWatcherConfig)
     youtube_processing: YouTubeProcessingConfig = Field(
         default_factory=YouTubeProcessingConfig
     )

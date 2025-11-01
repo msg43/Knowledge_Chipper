@@ -16,7 +16,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
     def __init__(
         self,
-        model: str = "base",
+        model: str = "medium",
         use_coreml: bool | None = None,
         progress_callback=None,
     ) -> None:
@@ -924,6 +924,42 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                     # Default batch size
                     cmd.extend(["-bs", "8"])
 
+                # Add hallucination prevention parameters
+                # These parameters help prevent Whisper from getting "stuck" and repeating phrases
+                
+                # Entropy threshold: Higher = more aggressive at stopping hallucinations
+                # Default is 2.40, we increase it for large models which are more prone to hallucinations
+                entropy_thold = kwargs.get("entropy_thold")
+                if entropy_thold is None:
+                    # Use higher threshold for large models (more aggressive hallucination prevention)
+                    # self.model_name is "large" but actual model file is "ggml-large-v3"
+                    if self.model_name == "large":
+                        entropy_thold = 2.8  # More aggressive for large models
+                        logger.info("🎯 Using aggressive hallucination prevention for large model")
+                    else:
+                        entropy_thold = 2.6  # Slightly higher than default for medium/small
+                cmd.extend(["--entropy-thold", str(entropy_thold)])
+                
+                # Log probability threshold: Higher (less negative) = more likely to reject low-confidence segments
+                # Default is -1.00, we make it less strict to catch hallucinations
+                logprob_thold = kwargs.get("logprob_thold", -0.8)
+                cmd.extend(["--logprob-thold", str(logprob_thold)])
+                
+                # Maximum segment length: Prevents extremely long repetitive segments
+                # 0 = no limit, we set a reasonable limit to catch runaway hallucinations
+                max_len = kwargs.get("max_len", 200)  # 200 characters max per segment
+                cmd.extend(["--max-len", str(max_len)])
+                
+                # Temperature: 0 = deterministic, higher = more random
+                # Keep at 0 for consistency, but allow override
+                temperature = kwargs.get("temperature", 0.0)
+                cmd.extend(["--temperature", str(temperature)])
+                
+                logger.info(
+                    f"🛡️ Hallucination prevention: entropy={entropy_thold}, "
+                    f"logprob={logprob_thold}, max_len={max_len}, temp={temperature}"
+                )
+
                 # CRITICAL: Add GPU acceleration for Apple Silicon (remove -ng flag which DISABLES GPU)
                 # Note: By default, whisper.cpp uses GPU when available unless -ng (--no-gpu) is specified
                 # We simply don't add the -ng flag to enable GPU acceleration
@@ -1420,9 +1456,12 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
                     # Parse progress from the line (check both stdout and stderr)
                     if self.progress_callback and line_stripped:
-                        # whisper.cpp may output progress to either stdout or stderr
-                        elapsed = time.time() - start_time
-                        self._parse_whisper_output_for_progress(line_stripped, elapsed)
+                        try:
+                            # whisper.cpp may output progress to either stdout or stderr
+                            elapsed = time.time() - start_time
+                            self._parse_whisper_output_for_progress(line_stripped, elapsed)
+                        except Exception:
+                            pass  # Don't let progress parsing errors interrupt streaming
             except Exception as e:
                 logger.error(f"Error reading {stream_name}: {e}", exc_info=True)
             finally:
@@ -1598,7 +1637,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                             realtime_speed = audio_processed_seconds / elapsed_time
                             if realtime_speed >= 1.0:
                                 speed_info = f" ({realtime_speed:.1f}x Realtime)"
-                            else:
+                            elif realtime_speed > 0:
                                 speed_info = (
                                     f" ({1/realtime_speed:.1f}x slower than realtime)"
                                 )
@@ -1634,7 +1673,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                         realtime_speed = current_seconds / elapsed_time
                         if realtime_speed >= 1.0:
                             speed_info = f" ({realtime_speed:.1f}x Realtime)"
-                        else:
+                        elif realtime_speed > 0:
                             speed_info = (
                                 f" ({1/realtime_speed:.1f}x slower than realtime)"
                             )
@@ -1691,7 +1730,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
 
 def fetch_transcript(
-    audio_path: str | Path, model: str = "base", use_coreml: bool | None = None
+    audio_path: str | Path, model: str = "medium", use_coreml: bool | None = None
 ) -> str | None:
     """Convenience function to transcribe an audio file using whisper.cpp."""
     proc = WhisperCppTranscribeProcessor(model=model, use_coreml=use_coreml)

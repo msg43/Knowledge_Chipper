@@ -96,10 +96,28 @@ class GUISettingsManager:
 
         # Fall back to settings.yaml
         if self.system_settings is not None:
-            if tab_name == "Transcription" and checkbox_name == "diarization":
-                return self.system_settings.transcription.diarization
-            elif tab_name == "Transcription" and checkbox_name == "use_gpu":
-                return self.system_settings.transcription.use_gpu
+            # Support both "Transcription", "Local Transcription", and "Audio Transcription" tab names
+            if tab_name in ("Transcription", "Local Transcription", "Audio Transcription"):
+                if checkbox_name == "diarization" or checkbox_name == "enable_diarization":
+                    return self.system_settings.transcription.diarization
+                elif checkbox_name == "use_gpu":
+                    return self.system_settings.transcription.use_gpu
+            
+            # Process tab checkboxes
+            elif tab_name == "Process":
+                if checkbox_name == "transcribe":
+                    return self.system_settings.processing.default_transcribe
+                elif checkbox_name == "summarize":
+                    return self.system_settings.processing.default_summarize
+            
+            # Monitor tab checkboxes
+            elif tab_name == "Monitor":
+                if checkbox_name == "recursive":
+                    return self.system_settings.file_watcher.default_recursive
+                elif checkbox_name == "auto_process":
+                    return self.system_settings.file_watcher.default_auto_process
+                elif checkbox_name == "system2_pipeline":
+                    return self.system_settings.file_watcher.default_system2_pipeline
 
         return default
 
@@ -128,18 +146,34 @@ class GUISettingsManager:
         # Fall back to settings.yaml for defaults
         if self.system_settings is not None:
             # Transcription-specific settings (check first to avoid ambiguity)
-            if tab_name == "Transcription":
+            # Support both "Transcription", "Local Transcription", and "Audio Transcription" tab names
+            if tab_name in ("Transcription", "Local Transcription", "Audio Transcription"):
                 if combo_name == "model":
                     return self.system_settings.transcription.whisper_model
                 elif combo_name == "device":
-                    return (
-                        "auto" if self.system_settings.transcription.use_gpu else "cpu"
-                    )
+                    # Use the device field directly (auto, cpu, cuda, mps)
+                    return self.system_settings.transcription.device
                 elif combo_name == "language":
                     return "en"  # Default to English
 
-            # LLM Provider/Model settings (Summarization, HCE, etc.)
-            if combo_name == "provider":
+            # Summarization tab - LLM Provider/Model settings
+            elif tab_name == "Summarization":
+                if combo_name == "provider":
+                    return self.system_settings.llm.provider
+                elif combo_name == "model":
+                    if hasattr(self.system_settings.llm, "local_model"):
+                        return self.system_settings.llm.local_model
+                    return self.system_settings.llm.model
+                # Advanced per-stage provider/model settings
+                elif combo_name.endswith("_provider"):
+                    return self.system_settings.llm.provider
+                elif combo_name.endswith("_model"):
+                    if hasattr(self.system_settings.llm, "local_model"):
+                        return self.system_settings.llm.local_model
+                    return self.system_settings.llm.model
+
+            # Generic LLM Provider/Model settings (for other tabs)
+            elif combo_name == "provider":
                 return self.system_settings.llm.provider
             elif combo_name == "model":
                 # Return local_model if available, otherwise cloud model
@@ -195,6 +229,9 @@ class GUISettingsManager:
             # LLM settings
             elif spinbox_name == "max_tokens":
                 return self.system_settings.llm.max_tokens
+            # Monitor tab debounce delay
+            elif tab_name == "Monitor" and spinbox_name == "debounce_delay":
+                return self.system_settings.file_watcher.default_debounce_delay
 
         return default
 
@@ -228,6 +265,10 @@ class GUISettingsManager:
                         self.system_settings.youtube_processing.cookie_file_path
                     )
                     return cookie_path if cookie_path else ""
+            
+            # Monitor tab file patterns
+            elif tab_name == "Monitor" and line_edit_name == "file_patterns":
+                return self.system_settings.file_watcher.default_file_patterns
 
         return default
 

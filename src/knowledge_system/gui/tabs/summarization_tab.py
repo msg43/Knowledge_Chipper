@@ -200,22 +200,14 @@ class EnhancedSummarizationWorker(QThread):
                     self.processing_error.emit("Processing was cancelled by user")
                     return
 
-                # Get content type
-                content_type_map = {
-                    "Transcript (Own)": "transcript_own",
-                    "Transcript (Third-party)": "transcript_third_party",
-                    "Document (PDF/eBook)": "document_pdf",
-                    "Document (White Paper)": "document_whitepaper",
-                }
-                content_type = content_type_map.get(
-                    self.content_type_combo.currentText(), "transcript_own"
-                )
+                # Get content type from gui_settings (already set by parent tab)
+                content_type = self.gui_settings.get("content_type", "transcript_own")
 
                 # Handle database sources
                 if file_path.startswith("db://"):
                     # Extract video_id from db://VIDEO_ID format
-                    video_id = file_path[5:]  # Remove "db://" prefix
-                    episode_id = f"episode_{video_id}"
+                    source_id = file_path[5:]  # Remove "db://" prefix
+                    # source_id used directly, no episode_ prefix
                     file_name = f"Database: {video_id}"
 
                     # Create mining job for database source
@@ -236,7 +228,7 @@ class EnhancedSummarizationWorker(QThread):
                     file_name = Path(file_path).name
 
                     # Create episode ID from file name
-                    episode_id = Path(file_path).stem
+                    source_id = Path(file_path).stem
 
                     # Create mining job for this file
                     job_id = orchestrator.create_job(
@@ -934,38 +926,8 @@ class SummarizationTab(BaseTab):
         self.max_claims_spin.setSpecialValueText("Unlimited")
         self.max_claims_spin.valueChanged.connect(self._on_setting_changed)
 
-        # Thresholds
-        self.tier_a_threshold_spin = QSpinBox()
-        self.tier_a_threshold_spin.setMaximumWidth(60)
-        self._add_field_with_info(
-            col1_layout,
-            "Tier A Threshold:",
-            self.tier_a_threshold_spin,
-            "Confidence threshold for Tier A claims (0-100%).\n"
-            "Claims above this threshold are considered high-confidence core claims.",
-            2,
-            0,
-        )
-        self.tier_a_threshold_spin.setRange(0, 100)
-        self.tier_a_threshold_spin.setValue(85)
-        self.tier_a_threshold_spin.setSuffix("%")
-        self.tier_a_threshold_spin.valueChanged.connect(self._on_setting_changed)
-
-        self.tier_b_threshold_spin = QSpinBox()
-        self.tier_b_threshold_spin.setMaximumWidth(60)
-        self._add_field_with_info(
-            col2_layout,
-            "Tier B Threshold:",
-            self.tier_b_threshold_spin,
-            "Confidence threshold for Tier B claims (0-100%).\n"
-            "Claims above this threshold are considered medium-confidence claims.",
-            2,
-            0,
-        )
-        self.tier_b_threshold_spin.setRange(0, 100)
-        self.tier_b_threshold_spin.setValue(65)
-        self.tier_b_threshold_spin.setSuffix("%")
-        self.tier_b_threshold_spin.valueChanged.connect(self._on_setting_changed)
+        # NOTE: Tier thresholds removed - tiers are assigned by LLM, not numeric thresholds
+        # See schemas/flagship_output.v1.json - tier is an enum field in LLM output
 
         # Unified Pipeline Info
         unified_info = QLabel("📋 Unified Pipeline Active")
@@ -1073,7 +1035,7 @@ class SummarizationTab(BaseTab):
 
             provider_combo = QComboBox()
             provider_combo.addItems(["", "openai", "anthropic", "local"])
-            provider_combo.setCurrentText("local")  # Default to local (MVP LLM)
+            # Don't set default - let _load_settings() handle it via settings manager
             provider_combo.setMinimumWidth(120)  # Reasonable width for provider names
             provider_combo.setMaximumWidth(140)  # Prevent it from taking too much space
             provider_combo.currentTextChanged.connect(self._on_setting_changed)
@@ -1229,46 +1191,8 @@ class SummarizationTab(BaseTab):
 
         QTimer.singleShot(100, populate_initial_models)  # Delay to ensure UI is ready
 
-        # Budgets & Limits (collapsible)
-        self.budgets_group = QGroupBox("💰 Budgets & Limits")
-        self.budgets_group.setCheckable(True)
-        self.budgets_group.setChecked(False)  # Collapsed by default
-        budgets_layout = QGridLayout()
-
-        # Flagship budget per file
-        flagship_file_label = QLabel("Flagship max tokens per file:")
-        flagship_file_label.setToolTip(
-            "Maximum tokens to spend on flagship judge per file.\n"
-            "Set to 0 for unlimited. Helps control costs."
-        )
-        self.flagship_file_tokens_spin = QSpinBox()
-        self.flagship_file_tokens_spin.setRange(0, 100000)
-        self.flagship_file_tokens_spin.setValue(0)
-        self.flagship_file_tokens_spin.setSpecialValueText("Unlimited")
-        self.flagship_file_tokens_spin.valueChanged.connect(self._on_setting_changed)
-        budgets_layout.addWidget(flagship_file_label, 0, 0)
-        budgets_layout.addWidget(self.flagship_file_tokens_spin, 0, 1)
-
-        # Flagship budget per session
-        flagship_session_label = QLabel("Flagship max tokens per session:")
-        flagship_session_label.setToolTip(
-            "Maximum tokens to spend on flagship judge per entire session.\n"
-            "Set to 0 for unlimited. Helps control total costs."
-        )
-        self.flagship_session_tokens_spin = QSpinBox()
-        self.flagship_session_tokens_spin.setRange(0, 1000000)
-        self.flagship_session_tokens_spin.setValue(0)
-        self.flagship_session_tokens_spin.setSpecialValueText("Unlimited")
-        self.flagship_session_tokens_spin.valueChanged.connect(self._on_setting_changed)
-        budgets_layout.addWidget(flagship_session_label, 0, 2)
-        budgets_layout.addWidget(self.flagship_session_tokens_spin, 0, 3)
-
-        self.budgets_group.setLayout(budgets_layout)
-        self.budgets_group.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        # Budget Limits section removed per user request
-        # layout.addWidget(self.budgets_group)
+        # NOTE: Token budget spinboxes removed - feature was never implemented in backend
+        # No code exists to enforce token limits, so these controls were misleading
 
         # Action buttons
         action_layout = self._create_action_layout()
@@ -1335,6 +1259,17 @@ class SummarizationTab(BaseTab):
 
             # Store processing parameters for async model check
             self._pending_files = files
+            # Get content type from combo box
+            content_type_map = {
+                "Transcript (Own)": "transcript_own",
+                "Transcript (Third-party)": "transcript_third_party",
+                "Document (PDF/eBook)": "document_pdf",
+                "Document (White Paper)": "document_whitepaper",
+            }
+            content_type = content_type_map.get(
+                self.content_type_combo.currentText(), "transcript_own"
+            )
+
             self._pending_gui_settings = {
                 "provider": provider,
                 "model": model,
@@ -1346,6 +1281,7 @@ class SummarizationTab(BaseTab):
                 "force_regenerate": False,
                 "analysis_type": "Document Summary",  # Fixed to Document Summary
                 "export_getreceipts": False,
+                "content_type": content_type,  # Add content type to settings
                 # New HCE settings
                 "use_skim": True,
                 "enable_routing": True,
@@ -1360,6 +1296,17 @@ class SummarizationTab(BaseTab):
             return  # Exit early, processing will continue after model check
 
         # Prepare settings
+        # Get content type from combo box
+        content_type_map = {
+            "Transcript (Own)": "transcript_own",
+            "Transcript (Third-party)": "transcript_third_party",
+            "Document (PDF/eBook)": "document_pdf",
+            "Document (White Paper)": "document_whitepaper",
+        }
+        content_type = content_type_map.get(
+            self.content_type_combo.currentText(), "transcript_own"
+        )
+
         gui_settings = {
             "provider": provider,
             "model": model,
@@ -1371,6 +1318,7 @@ class SummarizationTab(BaseTab):
             "force_regenerate": False,
             "analysis_type": "Document Summary",  # Fixed to Document Summary
             "export_getreceipts": False,
+            "content_type": content_type,  # Add content type to settings
             # Unified Pipeline HCE settings
             "use_skim": True,
             "miner_model_override": self._get_model_override(
@@ -1968,9 +1916,11 @@ class SummarizationTab(BaseTab):
                     # Duration
                     duration_text = ""
                     if video.duration_seconds:
-                        hours = video.duration_seconds // 3600
-                        minutes = (video.duration_seconds % 3600) // 60
-                        seconds = video.duration_seconds % 60
+                        # Convert to int to handle float values
+                        duration_int = int(video.duration_seconds)
+                        hours = duration_int // 3600
+                        minutes = (duration_int % 3600) // 60
+                        seconds = duration_int % 60
                         if hours > 0:
                             duration_text = f"{hours}:{minutes:02d}:{seconds:02d}"
                         else:
@@ -2063,7 +2013,7 @@ class SummarizationTab(BaseTab):
                 checkbox = self.db_table.cellWidget(row, 0)
                 if checkbox and hasattr(checkbox, "isChecked") and checkbox.isChecked():
                     # Get video_id stored in row data
-                    video_id = self.db_table.item(row, 1).data(Qt.ItemDataRole.UserRole)
+                    source_id = self.db_table.item(row, 1).data(Qt.ItemDataRole.UserRole)
                     if video_id:
                         # Use special prefix to indicate database source
                         sources.append(f"db://{video_id}")
@@ -2937,8 +2887,7 @@ class SummarizationTab(BaseTab):
                 self.template_path_edit,
                 self.claim_tier_combo,
                 self.max_claims_spin,
-                self.tier_a_threshold_spin,
-                self.tier_b_threshold_spin,
+                # tier_a_threshold_spin and tier_b_threshold_spin removed - obsolete
                 # Unified Pipeline HCE fields (profile_combo removed - stored internally)
                 # Advanced per-stage provider and model dropdowns (unified pipeline)
                 self.advanced_models_group,
@@ -2960,8 +2909,7 @@ class SummarizationTab(BaseTab):
                     "template_path_edit",
                     "claim_tier_combo",
                     "max_claims_spin",
-                    "tier_a_threshold_spin",
-                    "tier_b_threshold_spin",
+                    # "tier_a_threshold_spin", "tier_b_threshold_spin" removed
                     "advanced_models_group",
                     "miner_provider",
                     "miner_model",
@@ -3000,8 +2948,9 @@ class SummarizationTab(BaseTab):
                     self.output_edit.setText(saved_output_dir)
 
                 # Load provider selection
+                # Let settings manager handle hierarchy: session → settings.yaml → empty
                 saved_provider = self.gui_settings.get_combo_selection(
-                    self.tab_name, "provider", "local"
+                    self.tab_name, "provider", ""
                 )
                 if is_widget_valid(self.provider_combo):
                     index = self.provider_combo.findText(saved_provider)
@@ -3010,8 +2959,9 @@ class SummarizationTab(BaseTab):
                         self._update_models()  # Update models after setting provider
 
                 # Load model selection
+                # Let settings manager handle hierarchy: session → settings.yaml → empty
                 saved_model = self.gui_settings.get_combo_selection(
-                    self.tab_name, "model", "qwen2.5-coder:7b-instruct"
+                    self.tab_name, "model", ""
                 )
                 if is_widget_valid(self.model_combo):
                     index = self.model_combo.findText(saved_model)
@@ -3074,17 +3024,7 @@ class SummarizationTab(BaseTab):
                 if is_widget_valid(self.max_claims_spin):
                     self.max_claims_spin.setValue(saved_max_claims)
 
-                saved_tier_a_threshold = self.gui_settings.get_spinbox_value(
-                    self.tab_name, "tier_a_threshold", 85
-                )
-                if is_widget_valid(self.tier_a_threshold_spin):
-                    self.tier_a_threshold_spin.setValue(saved_tier_a_threshold)
-
-                saved_tier_b_threshold = self.gui_settings.get_spinbox_value(
-                    self.tab_name, "tier_b_threshold", 65
-                )
-                if is_widget_valid(self.tier_b_threshold_spin):
-                    self.tier_b_threshold_spin.setValue(saved_tier_b_threshold)
+                # Tier threshold loading removed - obsolete (tiers assigned by LLM)
 
                 # Load new HCE settings
                 # Profile removed - using explicit per-stage model controls instead
@@ -3115,49 +3055,27 @@ class SummarizationTab(BaseTab):
                         continue
 
                     try:
-                        # Load provider selection - default to local (MVP LLM)
+                        # Load provider selection - let settings manager handle hierarchy
                         saved_provider = self.gui_settings.get_combo_selection(
                             self.tab_name,
                             f"{stage_name}_provider",
-                            "local",  # Default to local
+                            "",  # Let settings manager use settings.yaml
                         )
-                        index = provider_combo.findText(saved_provider)
-                        if index >= 0:
-                            provider_combo.setCurrentIndex(index)
-                        else:
-                            # If saved provider not found, use local
-                            local_index = provider_combo.findText("local")
-                            if local_index >= 0:
-                                provider_combo.setCurrentIndex(local_index)
-                                saved_provider = "local"
-
-                        # Update models for this provider
                         if saved_provider:
-                            self._update_advanced_model_combo(
-                                saved_provider, model_combo
-                            )
+                            index = provider_combo.findText(saved_provider)
+                            if index >= 0:
+                                provider_combo.setCurrentIndex(index)
+                                # Update models for this provider
+                                self._update_advanced_model_combo(
+                                    saved_provider, model_combo
+                                )
 
-                        # Load model selection - default to MVP LLM model
-                        default_model = (
-                            "qwen2.5:7b-instruct" if saved_provider == "local" else ""
-                        )
+                        # Load model selection - let settings manager handle hierarchy
                         saved_model = self.gui_settings.get_combo_selection(
-                            self.tab_name, f"{stage_name}_model", default_model
+                            self.tab_name, f"{stage_name}_model", ""
                         )
-
-                        # If we have a saved model, try to set it
                         if saved_model:
                             index = model_combo.findText(saved_model)
-                            if index >= 0:
-                                model_combo.setCurrentIndex(index)
-                            elif saved_provider == "local" and default_model:
-                                # Saved model not found but provider is local, use default
-                                index = model_combo.findText(default_model)
-                                if index >= 0:
-                                    model_combo.setCurrentIndex(index)
-                        elif saved_provider == "local" and default_model:
-                            # No saved model but provider is local, use default
-                            index = model_combo.findText(default_model)
                             if index >= 0:
                                 model_combo.setCurrentIndex(index)
                     except RuntimeError as e:
@@ -3276,21 +3194,7 @@ class SummarizationTab(BaseTab):
                     self.tab_name, "max_claims", max_claims_value
                 )
 
-            tier_a_value = safe_get_value(
-                self.tier_a_threshold_spin, "tier_a_threshold_spin"
-            )
-            if tier_a_value is not None:
-                self.gui_settings.set_spinbox_value(
-                    self.tab_name, "tier_a_threshold", tier_a_value
-                )
-
-            tier_b_value = safe_get_value(
-                self.tier_b_threshold_spin, "tier_b_threshold_spin"
-            )
-            if tier_b_value is not None:
-                self.gui_settings.set_spinbox_value(
-                    self.tab_name, "tier_b_threshold", tier_b_value
-                )
+            # Tier threshold saving removed - obsolete (tiers assigned by LLM)
 
             # Save unified pipeline HCE settings
             # Profile removed - using explicit per-stage model controls instead

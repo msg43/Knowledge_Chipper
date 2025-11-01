@@ -139,7 +139,12 @@ class VoiceFeatureExtractor:
             # Tempo estimation
             try:
                 tempo, _ = librosa.beat.beat_track(y=audio, sr=self.sample_rate)
-                tempo_features = np.array([tempo])
+                # Ensure tempo is a scalar (librosa may return array or scalar)
+                if isinstance(tempo, np.ndarray):
+                    tempo_value = float(tempo.item()) if tempo.size == 1 else float(tempo[0])
+                else:
+                    tempo_value = float(tempo)
+                tempo_features = np.array([tempo_value])
             except Exception:
                 tempo_features = np.array([0.0])
 

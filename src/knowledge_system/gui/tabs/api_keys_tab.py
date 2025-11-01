@@ -468,6 +468,36 @@ class APIKeysTab(BaseTab):
 
         update_section.addWidget(self.show_intro_tab_checkbox)
 
+        # Speaker Attribution Editor button
+        self.speaker_attribution_btn = QPushButton("🎤 Edit Speaker Mappings")
+        self.speaker_attribution_btn.clicked.connect(self._open_speaker_attribution_file)
+        self.speaker_attribution_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #9C27B0;
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                font-size: 14px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #7B1FA2;
+            }
+            QPushButton:pressed {
+                background-color: #6A1B9A;
+            }
+        """
+        )
+        self.speaker_attribution_btn.setToolTip(
+            "Open the speaker attribution YAML file to edit channel-speaker mappings.\n"
+            "• Maps YouTube channels to their regular hosts/speakers\n"
+            "• Edit or add custom channel mappings for better speaker recognition\n"
+            "• Changes take effect immediately after saving the file\n"
+            "• Useful for adding your favorite podcasts not in the default list"
+        )
+        update_section.addWidget(self.speaker_attribution_btn)
+
         # Add the update section to the horizontal layout
         button_widget_layout.addLayout(update_section)
 
@@ -1028,6 +1058,76 @@ class APIKeysTab(BaseTab):
             self.append_log(
                 f"✅ Introduction tab visibility preference saved ({'shown' if is_enabled else 'hidden'})"
             )
+
+    def _open_speaker_attribution_file(self) -> None:
+        """Open the speaker attribution CSV file in the system's default editor."""
+        try:
+            from pathlib import Path
+
+            # Find the channel_hosts.csv file
+            config_dir = Path("config")
+            if not config_dir.exists():
+                config_dir = Path("../config")
+            
+            speaker_file = config_dir / "channel_hosts.csv"
+            
+            # Check if file exists
+            if not speaker_file.exists():
+                QMessageBox.warning(
+                    self,
+                    "File Not Found",
+                    f"Speaker attribution file not found at:\n{speaker_file.absolute()}\n\n"
+                    "This file should be created automatically during installation.",
+                )
+                self.append_log(f"❌ Speaker attribution file not found: {speaker_file}")
+                return
+            
+            # Open the file with the default application
+            import subprocess
+            import sys
+            
+            if sys.platform == "darwin":  # macOS
+                subprocess.run(["open", str(speaker_file.absolute())], check=True)  # nosec B603,B607
+            elif sys.platform == "win32":  # Windows
+                subprocess.run(["start", str(speaker_file.absolute())], shell=True, check=True)  # nosec B603,B607
+            else:  # Linux
+                subprocess.run(["xdg-open", str(speaker_file.absolute())], check=True)  # nosec B603,B607
+            
+            self.append_log(f"✅ Opened speaker attribution file: {speaker_file.absolute()}")
+            
+            # Show informational message
+            QMessageBox.information(
+                self,
+                "Speaker Attribution Editor",
+                f"Speaker attribution file opened in your default editor:\n\n"
+                f"{speaker_file.absolute()}\n\n"
+                "📝 Edit Instructions:\n"
+                "• Simple CSV format: channel_id, host_name, podcast_name\n"
+                "• Add new rows for additional podcasts\n"
+                "• channel_id can be YouTube channel ID or RSS URL\n"
+                "• Save the file when done - changes take effect immediately\n\n"
+                "Example:\n"
+                "UC2D2CMWXMOVWx7giW1n3LIg,Andrew D. Huberman,Huberman Lab\n"
+                "UCSHZKyawb77ixDdsGog4iWA,Lex Fridman,Lex Fridman Podcast",
+            )
+            
+        except subprocess.CalledProcessError as e:
+            error_msg = f"Failed to open speaker attribution file: {e}"
+            QMessageBox.critical(
+                self,
+                "Error Opening File",
+                f"{error_msg}\n\n"
+                f"Please open the file manually at:\n{speaker_file.absolute()}",
+            )
+            self.append_log(f"❌ {error_msg}")
+        except Exception as e:
+            error_msg = f"Error accessing speaker attribution file: {e}"
+            QMessageBox.critical(
+                self,
+                "Error",
+                error_msg,
+            )
+            self.append_log(f"❌ {error_msg}")
 
     def check_for_updates_on_launch(self) -> None:
         """Check for updates if auto-update is enabled."""

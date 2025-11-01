@@ -1104,8 +1104,8 @@ class SpeakerProcessor(BaseProcessor):
 
         Example:
         - Channel: "Eurodollar University"
-        - Returns: ["Jeff Snider", "Emil Kalinowski"]
-        - LLM prompt: "This channel is hosted by Jeff Snider and Emil Kalinowski.
+        - Returns: ["Jeff Snider"]
+        - LLM prompt: "This channel is hosted by Jeff Snider.
                        Determine which speaker is which based on the transcript."
 
         Args:
@@ -1117,77 +1117,76 @@ class SpeakerProcessor(BaseProcessor):
         if not metadata:
             return None
 
-        # Get channel name from metadata
+        # Get channel identifier from metadata
+        # Try channel_id first (YouTube), then fall back to channel name
+        channel_id = metadata.get("channel_id")
         channel_name = metadata.get("uploader") or metadata.get("channel")
-        if not channel_name:
+        
+        if not channel_id and not channel_name:
             logger.debug("No channel information in metadata")
             return None
 
-        # Load channel mappings from config
+        # Load channel mappings from CSV
         try:
+            import csv
             from pathlib import Path
 
-            import yaml
-
-            config_path = (
-                Path(__file__).parent.parent.parent
+            # Navigate to project root, then to config directory
+            csv_path = (
+                Path(__file__).parent.parent.parent.parent
                 / "config"
-                / "speaker_attribution.yaml"
+                / "channel_hosts.csv"
             )
 
-            if not config_path.exists():
-                logger.debug("speaker_attribution.yaml not found")
+            if not csv_path.exists():
+                logger.debug("channel_hosts.csv not found")
                 return None
 
-            with open(config_path) as f:
-                config = yaml.safe_load(f)
-
-            channel_mappings = config.get("channel_mappings", {})
-
-            if not channel_mappings:
-                logger.debug("No channel mappings configured")
-                return None
+            # Build lookup dictionary
+            channel_hosts = {}
+            with open(csv_path, newline='', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    # Store by both channel_id and podcast_name for flexible lookup
+                    channel_hosts[row['channel_id']] = row['host_name']
+                    if row.get('podcast_name'):
+                        channel_hosts[row['podcast_name']] = row['host_name']
 
         except Exception as e:
             logger.warning(f"Failed to load channel mappings: {e}")
             return None
 
-        # Check if this channel has mappings
-        channel_config = None
-        for configured_channel, config_data in channel_mappings.items():
-            # Case-insensitive, partial match
-            if (
-                configured_channel.lower() in channel_name.lower()
-                or channel_name.lower() in configured_channel.lower()
-            ):
-                channel_config = config_data
-                logger.info(f"📺 Found channel mapping for: {channel_name}")
-                break
-
-        if not channel_config or "hosts" not in channel_config:
-            logger.debug(f"No mappings configured for channel: {channel_name}")
-            return None
-
-        # Extract host names from config
-        hosts = channel_config.get("hosts", [])
-        if not hosts:
-            return None
-
-        known_host_names = []
-        for host_config in hosts:
-            host_name = host_config.get("full_name")
+        # Try lookup by channel_id first (most reliable)
+        host_name = None
+        if channel_id:
+            host_name = channel_hosts.get(channel_id)
             if host_name:
-                known_host_names.append(host_name)
+                logger.info(f"📺 Found host by channel ID: {channel_id} → {host_name}")
 
-        if known_host_names:
-            logger.info(
-                f"📺 Channel '{channel_name}' is hosted by: {', '.join(known_host_names)}"
-            )
-            logger.info(
-                f"   → LLM will use this context to match speakers to these names"
-            )
+        # Fall back to channel name lookup (fuzzy match)
+        if not host_name and channel_name:
+            # Try exact match first
+            host_name = channel_hosts.get(channel_name)
+            
+            # If no exact match, try case-insensitive partial match
+            if not host_name:
+                for podcast_name, mapped_host in channel_hosts.items():
+                    if (
+                        podcast_name.lower() in channel_name.lower()
+                        or channel_name.lower() in podcast_name.lower()
+                    ):
+                        host_name = mapped_host
+                        logger.info(f"📺 Found host by channel name: {channel_name} → {host_name}")
+                        break
 
-        return known_host_names if known_host_names else None
+        if not host_name:
+            logger.debug(f"No host mapping found for channel: {channel_name or channel_id}")
+            return None
+
+        logger.info(f"📺 Channel '{channel_name or channel_id}' is hosted by: {host_name}")
+        logger.info(f"   → LLM will use this context to match speakers to this name")
+
+        return [host_name]  # Return as list for consistency with original API
 
     def _apply_conversational_context_analysis(
         self,
@@ -1796,7 +1795,7 @@ class SpeakerProcessor(BaseProcessor):
             try:
                 cur = conn.cursor()
                 result = cur.execute(
-                    "SELECT episode_id FROM episodes WHERE video_id = ? LIMIT 1",
+                    "SELECT source_id FROM segments WHERE source_id = ? LIMIT 1",
                     (video_id,),
                 )
                 row = result.fetchone()

@@ -66,8 +66,9 @@ thread_management:
 
 # Transcription Settings
 transcription:
-  whisper_model: "base"  # tiny, base, small, medium, large, large-v3
-  use_gpu: true
+  whisper_model: "medium"  # tiny, base, small, medium, large - medium recommended for balance of speed/accuracy
+  device: "auto"  # auto (detect best), cpu, cuda (NVIDIA GPU), mps (Apple Silicon GPU)
+  use_gpu: true  # Deprecated - use device instead
   diarization: false
   min_words: 50
   use_whisper_cpp: false  # Use whisper.cpp with Core ML acceleration on macOS
@@ -100,6 +101,18 @@ processing:
   concurrent_jobs: 2
   retry_attempts: 3
   timeout_seconds: 300
+  
+  # Process Tab Defaults
+  default_transcribe: true      # Enable transcription by default
+  default_summarize: true        # Enable summarization by default
+
+# File Watcher / Monitor Tab Defaults
+file_watcher:
+  default_file_patterns: "*.mp4,*.mp3,*.wav,*.m4a,*.pdf,*.txt,*.md"
+  default_debounce_delay: 5      # seconds
+  default_recursive: true         # Watch subdirectories
+  default_auto_process: true      # Auto-process new files
+  default_system2_pipeline: false # Don't use System 2 pipeline by default
 
 # YouTube Processing Options
 youtube_processing:
@@ -121,6 +134,41 @@ youtube_processing:
   transcript_delay_max: 3.0
   api_batch_delay_min: 1.0
   api_batch_delay_max: 3.0
+
+  # Session-based download strategy (advanced anti-bot detection)
+  # Based on research: duty-cycle (periodic inactivity) > micro-sleeps for avoiding detection
+  enable_session_based_downloads: true  # Enable session-based strategy with duty cycles
+
+  # Session scheduling (2-4 sessions/day, each 60-180 min)
+  sessions_per_day_min: 2
+  sessions_per_day_max: 4
+  session_duration_min: 60   # minutes
+  session_duration_max: 180  # minutes
+  max_downloads_per_session_min: 100
+  max_downloads_per_session_max: 250
+
+  # yt-dlp rate limiting and jitter (prevents "robotic" traffic patterns)
+  rate_limit_min_mbps: 0.8   # Minimum download rate in MB/s
+  rate_limit_max_mbps: 1.5   # Maximum download rate in MB/s (randomized per session)
+  concurrent_downloads_min: 1  # Minimum concurrent downloads (1-2 recommended)
+  concurrent_downloads_max: 2  # Maximum concurrent downloads
+
+  # Jitter between files and requests (smooths edges, reduces robotic cadence)
+  sleep_interval_min: 8      # Minimum sleep between files in seconds
+  sleep_interval_max: 25     # Maximum sleep between files in seconds
+  sleep_requests: 0.8        # Sleep between HTTP requests in seconds
+
+  # Automatic cooldown on rate limiting (429/403 errors)
+  enable_auto_cooldown: true
+  cooldown_min_minutes: 45   # Minimum cooldown period when rate limited
+  cooldown_max_minutes: 180  # Maximum cooldown period (randomized)
+
+  # URL shuffling (prevents sequential hammering of single channel/playlist)
+  shuffle_urls: true
+
+  # Download archive (prevents re-downloading already processed videos)
+  use_download_archive: true
+  download_archive_path: "~/.knowledge_system/youtube_downloads.txt"
 
 # Maps of Content (MOC) Generation
 moc:

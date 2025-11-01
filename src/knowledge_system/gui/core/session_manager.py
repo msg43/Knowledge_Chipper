@@ -112,6 +112,8 @@ class SessionManager:
         if tab_name not in self._session_data["tab_settings"]:
             self._session_data["tab_settings"][tab_name] = {}
         self._session_data["tab_settings"][tab_name][setting_name] = value
+        # Automatically persist to disk after every change
+        self._save_session()
 
     def save(self) -> None:
         """Save session data to file."""

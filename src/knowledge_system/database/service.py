@@ -224,13 +224,13 @@ class DatabaseService:
             logger.error(f"Failed to ensure unified HCE schema: {e}")
 
     # =============================================================================
-    # VIDEO OPERATIONS
+    # SOURCE OPERATIONS (MediaSource table)
     # =============================================================================
 
-    def create_video(
-        self, video_id: str, title: str, url: str, **metadata
+    def create_source(
+        self, source_id: str, title: str, url: str, **metadata
     ) -> MediaSource | None:
-        """Create a new video record or update existing one for re-runs."""
+        """Create a new source record or update existing one for re-runs."""
         try:
             with self.get_session() as session:
                 # Extract tags and categories from metadata (they use normalized tables)
@@ -238,72 +238,72 @@ class DatabaseService:
                 categories_json = metadata.pop("categories_json", None)
                 source_type = metadata.get("source_type", "youtube")
 
-                # Check for existing video using claim-centric schema (source_id)
-                existing_video = (
+                # Check for existing source using claim-centric schema (source_id)
+                existing_source = (
                     session.query(MediaSource)
-                    .filter(MediaSource.source_id == video_id)
+                    .filter(MediaSource.source_id == source_id)
                     .first()
                 )
 
-                if existing_video:
-                    # Update existing video for re-runs
-                    logger.info(f"Updating existing video record: {video_id}")
+                if existing_source:
+                    # Update existing source for re-runs
+                    logger.info(f"Updating existing source record: {source_id}")
 
                     # Update core fields
-                    existing_video.title = title
-                    existing_video.url = url
-                    existing_video.processed_at = datetime.utcnow()
+                    existing_source.title = title
+                    existing_source.url = url
+                    existing_source.processed_at = datetime.utcnow()
 
                     # Update metadata fields (excluding tags_json, categories_json, and invalid fields)
                     # Filter out fields that don't exist in MediaSource model
                     invalid_fields = {"extraction_method"}  # Fields not in MediaSource
                     for key, value in metadata.items():
-                        if key not in invalid_fields and hasattr(existing_video, key):
-                            setattr(existing_video, key, value)
+                        if key not in invalid_fields and hasattr(existing_source, key):
+                            setattr(existing_source, key, value)
 
                     session.commit()
 
                     # Store tags and categories in normalized tables
                     if tags_json:
                         self._store_platform_tags(
-                            session, video_id, tags_json, source_type
+                            session, source_id, tags_json, source_type
                         )
                     if categories_json:
                         self._store_platform_categories(
-                            session, video_id, categories_json, source_type
+                            session, source_id, categories_json, source_type
                         )
 
                     session.commit()
-                    logger.info(f"Updated video record: {video_id}")
-                    return existing_video
+                    logger.info(f"Updated source record: {source_id}")
+                    return existing_source
                 else:
-                    # Create new video with claim-centric schema
+                    # Create new source with claim-centric schema
                     # Filter out invalid fields before creating MediaSource
                     invalid_fields = {"extraction_method"}  # Fields not in MediaSource
                     filtered_metadata = {
                         k: v for k, v in metadata.items() if k not in invalid_fields
                     }
-                    video = MediaSource(
-                        source_id=video_id, title=title, url=url, **filtered_metadata
+                    source = MediaSource(
+                        source_id=source_id, title=title, url=url, **filtered_metadata
                     )
-                    session.add(video)
+                    session.add(source)
                     session.commit()
 
                     # Store tags and categories in normalized tables
                     if tags_json:
                         self._store_platform_tags(
-                            session, video_id, tags_json, source_type
+                            session, source_id, tags_json, source_type
                         )
                     if categories_json:
                         self._store_platform_categories(
-                            session, video_id, categories_json, source_type
+                            session, source_id, categories_json, source_type
                         )
 
                     session.commit()
-                    logger.info(f"Created video record: {video_id}")
-                    return video
+                    logger.info(f"Created source record: {source_id}")
+                    return source
         except Exception as e:
-            logger.error(f"Failed to create/update video {video_id}: {e}")
+            logger.error(f"Failed to create/update source {source_id}: {e}")
             return None
 
     def _store_platform_tags(
@@ -399,28 +399,71 @@ class DatabaseService:
             )
             session.add(source_category)
 
-    def get_video(self, video_id: str) -> MediaSource | None:
-        """Get video by ID (using claim-centric schema with source_id)."""
+    def get_source(self, source_id: str) -> MediaSource | None:
+        """Get source by ID (using claim-centric schema with source_id)."""
         try:
             with self.get_session() as session:
                 # Use claim_models MediaSource (has source_id)
-                video = (
+                source = (
                     session.query(MediaSource)
-                    .filter(MediaSource.source_id == video_id)
+                    .filter(MediaSource.source_id == source_id)
                     .first()
                 )
 
                 # Add platform categories as a dynamic property
-                if video:
+                if source:
                     categories = self._get_platform_categories_for_source(
-                        session, video_id
+                        session, source_id
                     )
                     # Store as dynamic attribute (not persisted to DB)
-                    video.categories_json = categories if categories else []
+                    source.categories_json = categories if categories else []
 
-                return video
+                return source
         except Exception as e:
-            logger.error(f"Failed to get video {video_id}: {e}")
+            logger.error(f"Failed to get source {source_id}: {e}")
+            return None
+    
+    def get_source_by_file_path(self, file_path: str) -> MediaSource | None:
+        """Get source by audio file path (database-centric lookup).
+        
+        This is the preferred method for looking up metadata during transcription,
+        as it doesn't require extracting source_id from filename.
+        """
+        try:
+            from pathlib import Path
+            
+            # Normalize path for comparison
+            file_path_normalized = str(Path(file_path).resolve())
+            
+            with self.get_session() as session:
+                # Query all videos with audio_file_path set
+                videos = (
+                    session.query(MediaSource)
+                    .filter(MediaSource.audio_file_path.isnot(None))
+                    .all()
+                )
+                
+                # Check each video's audio_file_path (handle path variations)
+                for video in videos:
+                    if video.audio_file_path:
+                        try:
+                            stored_path = str(Path(video.audio_file_path).resolve())
+                            if stored_path == file_path_normalized:
+                                # Add platform categories as a dynamic property
+                                categories = self._get_platform_categories_for_source(
+                                    session, video.source_id
+                                )
+                                # Store as dynamic attribute (not persisted to DB)
+                                video.categories_json = categories if categories else []
+                                return video
+                        except (OSError, ValueError):
+                            # Handle invalid paths gracefully
+                            continue
+                
+                # Not found
+                return None
+        except Exception as e:
+            logger.error(f"Failed to get video by file path {file_path}: {e}")
             return None
 
     def _get_platform_categories_for_source(self, session, source_id: str) -> list[str]:
@@ -441,41 +484,41 @@ class DatabaseService:
             logger.debug(f"Could not retrieve platform categories for {source_id}: {e}")
             return []
 
-    def update_video(self, video_id: str, **updates) -> bool:
-        """Update video record."""
+    def update_source(self, source_id: str, **updates) -> bool:
+        """Update source record."""
         try:
             with self.get_session() as session:
-                video = (
+                source = (
                     session.query(MediaSource)
-                    .filter(MediaSource.source_id == video_id)
+                    .filter(MediaSource.source_id == source_id)
                     .first()
                 )
-                if not video:
+                if not source:
                     return False
 
                 for key, value in updates.items():
-                    if hasattr(video, key):
-                        setattr(video, key, value)
+                    if hasattr(source, key):
+                        setattr(source, key, value)
 
                 session.commit()
-                logger.info(f"Updated video {video_id}")
+                logger.info(f"Updated source {source_id}")
                 return True
         except Exception as e:
-            logger.error(f"Failed to update video {video_id}: {e}")
+            logger.error(f"Failed to update source {source_id}: {e}")
             return False
 
-    def video_exists(self, video_id: str) -> bool:
-        """Check if video exists in database."""
+    def source_exists(self, source_id: str) -> bool:
+        """Check if source exists in database."""
         try:
             with self.get_session() as session:
                 return (
                     session.query(MediaSource)
-                    .filter(MediaSource.source_id == video_id)
+                    .filter(MediaSource.source_id == source_id)
                     .first()
                     is not None
                 )
         except Exception as e:
-            logger.error(f"Failed to check video existence {video_id}: {e}")
+            logger.error(f"Failed to check source existence {source_id}: {e}")
             return False
 
     def search_videos(

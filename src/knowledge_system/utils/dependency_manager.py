@@ -389,7 +389,7 @@ class DependencyManager:
             )
 
             progress_callback(25)
-            processor = WhisperCppTranscribeProcessor(model="base")
+            processor = WhisperCppTranscribeProcessor(model="medium")
 
             def wrapped_progress(info):
                 progress = info.get("progress", 0)
@@ -398,7 +398,7 @@ class DependencyManager:
                 progress_callback(int(actual_progress))
 
             progress_callback(50)
-            model_path = processor._download_model("base", wrapped_progress)
+            model_path = processor._download_model("medium", wrapped_progress)
             progress_callback(100)
 
             return model_path and model_path.exists()

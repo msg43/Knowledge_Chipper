@@ -55,7 +55,7 @@ async def process_mine_with_unified_pipeline(
             orchestrator.progress_callback("loading", 0, episode_id)
 
         # Extract video_id from episode_id (format: "episode_VIDEO_ID")
-        video_id = episode_id.replace("episode_", "")
+        source_id = source_id
 
         # PRIORITY 1: Try to load segments from database (our own transcripts)
         whisper_segments = orchestrator._load_transcript_segments_from_db(video_id)
@@ -144,8 +144,8 @@ async def process_mine_with_unified_pipeline(
         # 3a. Fetch video metadata for evaluator/summary context
         video_metadata = None
         try:
-            source_id = episode_id.replace("episode_", "")
-            video = orchestrator.db_service.get_video(source_id)
+            source_id = source_id
+            video = orchestrator.db_service.get_source(source_id)
             if video:
                 # Claim-centric schema doesn't have tags_json or video_chapters_json
                 video_metadata = {
@@ -301,7 +301,7 @@ async def process_mine_with_unified_pipeline(
 
         try:
             # Determine source_id (strip episode_ prefix if present)
-            source_id = episode_id.replace("episode_", "")
+            source_id = source_id
 
             # Use ClaimStore for claim-centric storage
             from ..database.claim_store import ClaimStore
@@ -310,7 +310,11 @@ async def process_mine_with_unified_pipeline(
 
             # CRITICAL: Store segments BEFORE storing claims
             # This ensures foreign key constraints are satisfied when storing evidence spans
-            claim_store.store_segments(episode_id, segments)
+            # Pass source_id and episode_title so the episode record can be created if needed
+            episode_title = Path(file_path).stem
+            claim_store.store_segments(
+                episode_id, segments, source_id=source_id, episode_title=episode_title
+            )
             logger.info(f"💾 Stored {len(segments)} segments for episode {episode_id}")
 
             claim_store.upsert_pipeline_outputs(
