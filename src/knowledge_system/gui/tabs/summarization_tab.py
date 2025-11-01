@@ -1877,7 +1877,7 @@ class SummarizationTab(BaseTab):
                     session.query(MediaSource)
                     .join(
                         Transcript,
-                        MediaSource.source_id == Transcript.video_id,
+                        MediaSource.source_id == Transcript.source_id,
                         isouter=True,
                     )
                     .filter(Transcript.transcript_id.isnot(None))
@@ -1889,14 +1889,14 @@ class SummarizationTab(BaseTab):
                     # Check if it has a summary
                     summary = (
                         session.query(Summary)
-                        .filter(Summary.video_id == video.source_id)
+                        .filter(Summary.source_id == video.source_id)
                         .first()
                     )
 
                     # Get transcript for token estimation
                     transcript = (
                         session.query(Transcript)
-                        .filter(Transcript.video_id == video.source_id)
+                        .filter(Transcript.source_id == video.source_id)
                         .first()
                     )
 

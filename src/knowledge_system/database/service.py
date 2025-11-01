@@ -793,7 +793,7 @@ class DatabaseService:
                 existing_transcript = (
                     session.query(Transcript)
                     .filter(
-                        Transcript.video_id == video_id,
+                        Transcript.source_id == video_id,
                         Transcript.language == language,
                     )
                     .order_by(desc(Transcript.created_at))
@@ -836,7 +836,7 @@ class DatabaseService:
 
                     transcript = Transcript(
                         transcript_id=transcript_id,
-                        video_id=video_id,
+                        source_id=video_id,
                         language=language,
                         is_manual=is_manual,
                         transcript_text=transcript_text,
@@ -863,7 +863,7 @@ class DatabaseService:
             with self.get_session() as session:
                 return (
                     session.query(Transcript)
-                    .filter(Transcript.video_id == video_id)
+                    .filter(Transcript.source_id == video_id)
                     .order_by(desc(Transcript.created_at))
                     .all()
                 )
@@ -1011,7 +1011,7 @@ class DatabaseService:
             with self.get_session() as session:
                 summary = Summary(
                     summary_id=summary_id,
-                    video_id=video_id,
+                    source_id=video_id,
                     transcript_id=transcript_id,
                     summary_text=summary_text,
                     llm_provider=llm_provider,
@@ -1033,7 +1033,7 @@ class DatabaseService:
             with self.get_session() as session:
                 return (
                     session.query(Summary)
-                    .filter(Summary.video_id == video_id)
+                    .filter(Summary.source_id == video_id)
                     .order_by(desc(Summary.created_at))
                     .all()
                 )
@@ -1047,7 +1047,7 @@ class DatabaseService:
             with self.get_session() as session:
                 return (
                     session.query(Summary)
-                    .filter(Summary.video_id == video_id)
+                    .filter(Summary.source_id == video_id)
                     .order_by(desc(Summary.created_at))
                     .first()
                 )
