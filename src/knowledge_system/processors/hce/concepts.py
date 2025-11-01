@@ -9,7 +9,7 @@ class ConceptExtractor:
         self.llm = llm
         self.template = prompt.read_text()
 
-    def detect(self, episode_id: str, segments: list[Segment]) -> list[MentalModel]:
+    def detect(self, source_id: str, segments: list[Segment]) -> list[MentalModel]:
         """Extract concepts using chunked processing for efficiency."""
         out: list[MentalModel] = []
 
@@ -71,7 +71,7 @@ class ConceptExtractor:
 
                     out.append(
                         MentalModel(
-                            episode_id=episode_id,
+                            source_id=source_id,
                             model_id=f"mm_chunk_{i//chunk_size}_{j}",
                             name=r["name"],
                             definition=r.get("definition"),
@@ -116,7 +116,7 @@ def extract_concepts(
         prompt_path = Path(__file__).parent / "prompts" / "concepts_detect.txt"
 
         extractor = ConceptExtractor(llm, prompt_path)
-        return extractor.detect(episode.episode_id, episode.segments)
+        return extractor.detect(episode.source_id, episode.segments)
     except Exception:
         # Return empty list if extraction fails
         return []

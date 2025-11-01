@@ -298,10 +298,10 @@ class YouTubeDownloadService:
             # Check how many times this URL has failed
             from ..utils.youtube_utils import extract_video_id
 
-            video_id = extract_video_id(url)
+            source_id = extract_video_id(url)
 
             # Query database for failure count
-            failure_count = self.db_service.get_download_failure_count(video_id)
+            failure_count = self.db_service.get_download_failure_count(source_id)
 
             if failure_count < self.max_retries:
                 logger.info(

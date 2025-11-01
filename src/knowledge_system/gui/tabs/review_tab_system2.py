@@ -258,7 +258,7 @@ class ClaimsTableModel(QAbstractTableModel):
                 # Load episodes
                 try:
                     episodes = session.query(Episode).all()
-                    self.episodes = {ep.episode_id: ep for ep in episodes}
+                    self.episodes = {ep.source_id: ep for ep in episodes}
                 except Exception as e:
                     logger.warning(f"Could not load episodes: {e}")
                     self.episodes = {}
@@ -267,10 +267,10 @@ class ClaimsTableModel(QAbstractTableModel):
                 try:
                     query = session.query(Claim)
                     if episode_filter:
-                        query = query.filter_by(episode_id=episode_filter)
+                        query = query.filter_by(source_id=episode_filter)
 
                     # Order by episode and timestamp
-                    query = query.order_by(Claim.episode_id, Claim.first_mention_ts)
+                    query = query.order_by(Claim.source_id, Claim.first_mention_ts)
 
                     self.claims = list(query.all())
                 except Exception as e:
@@ -314,8 +314,8 @@ class ClaimsTableModel(QAbstractTableModel):
 
         if role == Qt.ItemDataRole.DisplayRole:
             if col_name == "Episode":
-                episode = self.episodes.get(claim.episode_id)
-                return episode.title if episode else claim.episode_id
+                episode = self.episodes.get(claim.source_id)
+                return episode.title if episode else claim.source_id
             elif col_name == "Modified":
                 return "✓" if index.row() in self.modified_rows else ""
             elif col_name in ["Importance", "Novelty", "Confidence"]:
@@ -442,7 +442,7 @@ class ClaimsTableModel(QAbstractTableModel):
             with self.db_service.get_session() as session:
                 db_claim = (
                     session.query(Claim)
-                    .filter_by(episode_id=claim.episode_id, claim_id=claim.claim_id)
+                    .filter_by(source_id=claim.source_id, claim_id=claim.claim_id)
                     .first()
                 )
 
@@ -516,7 +516,7 @@ class ClaimsTableModel(QAbstractTableModel):
                         db_claim = (
                             session.query(Claim)
                             .filter_by(
-                                episode_id=claim.episode_id, claim_id=claim.claim_id
+                                source_id=claim.source_id, claim_id=claim.claim_id
                             )
                             .first()
                         )
@@ -692,7 +692,7 @@ class ReviewTabSystem2(QWidget):
             with self.db_service.get_session() as session:
                 episodes = session.query(Episode).order_by(Episode.title).all()
                 for episode in episodes:
-                    self.episode_combo.addItem(episode.title, episode.episode_id)
+                    self.episode_combo.addItem(episode.title, episode.source_id)
         except Exception as e:
             logger.warning(f"Could not populate episodes dropdown: {e}")
             # Keep just the "All Episodes" option if database fails
@@ -702,9 +702,9 @@ class ReviewTabSystem2(QWidget):
         if text == "All Episodes":
             self.model.load_data()
         else:
-            episode_id = self.episode_combo.currentData()
-            if episode_id:
-                self.model.load_data(episode_filter=episode_id)
+            source_id = self.episode_combo.currentData()
+            if source_id:
+                self.model.load_data(episode_filter=source_id)
 
     def _on_cell_double_clicked(self, index: QModelIndex):
         """Handle cell double-click for advanced editing."""
@@ -759,9 +759,9 @@ class ReviewTabSystem2(QWidget):
         if current_filter == "All Episodes":
             self.model.load_data()
         else:
-            episode_id = self.episode_combo.currentData()
-            if episode_id:
-                self.model.load_data(episode_filter=episode_id)
+            source_id = self.episode_combo.currentData()
+            if source_id:
+                self.model.load_data(episode_filter=source_id)
 
     def _check_for_updates(self):
         """Check for database updates (for multi-user scenarios)."""
@@ -810,7 +810,7 @@ class ReviewTabSystem2(QWidget):
                     # Find and delete the claim
                     db_claim = (
                         session.query(Claim)
-                        .filter_by(episode_id=claim.episode_id, claim_id=claim.claim_id)
+                        .filter_by(source_id=claim.source_id, claim_id=claim.claim_id)
                         .first()
                     )
 
@@ -860,13 +860,13 @@ class ReviewTabSystem2(QWidget):
 
                     # Write data
                     for claim in self.model.claims:
-                        episode = self.model.episodes.get(claim.episode_id)
+                        episode = self.model.episodes.get(claim.source_id)
 
                         # Extract scores
                         scores = extract_scores(claim)
 
                         row = [
-                            episode.title if episode else claim.episode_id,
+                            episode.title if episode else claim.source_id,
                             claim.canonical,
                             claim.claim_type,
                             scores.get("importance", ""),
@@ -911,8 +911,8 @@ class ReviewTabSystem2(QWidget):
                     # Group by episode
                     episode_claims = {}
                     for claim in self.model.claims:
-                        episode = self.model.episodes.get(claim.episode_id)
-                        episode_title = episode.title if episode else claim.episode_id
+                        episode = self.model.episodes.get(claim.source_id)
+                        episode_title = episode.title if episode else claim.source_id
                         if episode_title not in episode_claims:
                             episode_claims[episode_title] = []
                         episode_claims[episode_title].append(claim)
@@ -963,10 +963,10 @@ class ReviewTabSystem2(QWidget):
                 export_data = {"episodes": [], "claims": []}
 
                 # Export episodes
-                for episode_id, episode in self.model.episodes.items():
+                for source_id, episode in self.model.episodes.items():
                     export_data["episodes"].append(
                         {
-                            "episode_id": episode.episode_id,
+                            "source_id": episode.source_id,
                             "title": episode.title,
                             "source_url": episode.source_url,
                             "media_type": episode.media_type,
@@ -984,7 +984,7 @@ class ReviewTabSystem2(QWidget):
                     export_data["claims"].append(
                         {
                             "claim_id": claim.claim_id,
-                            "episode_id": claim.episode_id,
+                            "source_id": claim.source_id,
                             "canonical": claim.canonical,
                             "claim_type": claim.claim_type,
                             "tier": claim.tier,
@@ -1055,13 +1055,13 @@ class ReviewTabSystem2(QWidget):
             # Prepare claims data for upload
             claims_data = []
             for claim in self.model.claims:
-                episode = self.model.episodes.get(claim.episode_id)
+                episode = self.model.episodes.get(claim.source_id)
 
                 # Build episode data
                 episode_data = None
                 if episode:
                     episode_data = {
-                        "episode_id": episode.episode_id,
+                        "source_id": episode.source_id,
                         "title": episode.title,
                         "source_url": episode.source_url or "",
                         "media_type": episode.media_type or "unknown",
@@ -1079,7 +1079,7 @@ class ReviewTabSystem2(QWidget):
                 claim_upload = ClaimUploadData(
                     claim_id=claim.claim_id,
                     canonical=claim.canonical,
-                    episode_id=claim.episode_id,
+                    source_id=claim.source_id,
                     claim_type=claim.claim_type,
                     tier=claim.tier,
                     scores_json=scores_json_str,
@@ -1111,16 +1111,16 @@ class ReviewTabSystem2(QWidget):
             for claim_upload in claims_data:
                 if (
                     claim_upload.episode_data
-                    and claim_upload.episode_id not in seen_episodes
+                    and claim_upload.source_id not in seen_episodes
                 ):
                     session_data["episodes"].append(claim_upload.episode_data)
-                    seen_episodes.add(claim_upload.episode_id)
+                    seen_episodes.add(claim_upload.source_id)
 
                 session_data["claims"].append(
                     {
                         "claim_id": claim_upload.claim_id,
                         "canonical": claim_upload.canonical,
-                        "episode_id": claim_upload.episode_id,
+                        "source_id": claim_upload.source_id,
                         "claim_type": claim_upload.claim_type,
                         "tier": claim_upload.tier,
                         "scores_json": claim_upload.scores_json,

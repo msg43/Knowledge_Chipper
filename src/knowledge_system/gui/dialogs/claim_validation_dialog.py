@@ -557,7 +557,7 @@ class ClaimValidationDialog(QDialog):
                 # Save claim tier validation using ClaimTierValidation model
                 validation_id = db.save_claim_tier_validation(
                     claim_id=result["claim_id"],
-                    episode_id=result.get("episode_id", ""),
+                    source_id=result.get("source_id", ""),
                     original_tier=result["original_tier"],
                     validated_tier=result["validated_tier"],
                     claim_text=result.get("claim_text", ""),

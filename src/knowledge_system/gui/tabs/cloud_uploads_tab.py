@@ -113,15 +113,15 @@ class DatabaseUploadWorker(QThread):
 
         for claim in self.claims_data:
             # Add episode data (if not already added)
-            if claim.episode_data and claim.episode_id not in seen_episodes:
+            if claim.episode_data and claim.source_id not in seen_episodes:
                 session_data["episodes"].append(claim.episode_data)
-                seen_episodes.add(claim.episode_id)
+                seen_episodes.add(claim.source_id)
 
             # Add claim data
             claim_dict = {
                 "claim_id": claim.claim_id,
                 "canonical": claim.canonical,
-                "episode_id": claim.episode_id,
+                "source_id": claim.source_id,
                 "claim_type": claim.claim_type,
                 "tier": claim.tier,
                 "scores_json": claim.scores_json,
@@ -722,7 +722,7 @@ Episodes: {stats.get('total_episodes', 0)}"""
             if self.claims_service:
                 selected_claims = self._get_selected_claims()
                 successful_ids = [
-                    (claim.episode_id, claim.claim_id)
+                    (claim.source_id, claim.claim_id)
                     for claim in selected_claims[:success_count]
                 ]
                 self.claims_service.mark_claims_uploaded(successful_ids)

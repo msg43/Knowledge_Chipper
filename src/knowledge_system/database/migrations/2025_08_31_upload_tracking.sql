@@ -15,8 +15,8 @@ CREATE VIEW IF NOT EXISTS unuploaded_claims AS
 SELECT
     c.*,
     e.title as episode_title,
-    e.video_id
+    e.source_id
 FROM claims c
-LEFT JOIN episodes e ON c.episode_id = e.episode_id
+LEFT JOIN episodes e ON c.source_id = e.source_id
 WHERE c.upload_status = 'pending' OR c.last_uploaded_at IS NULL
 ORDER BY c.inserted_at DESC;

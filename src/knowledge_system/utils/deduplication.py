@@ -35,13 +35,13 @@ class DeduplicationResult:
 
     def __init__(
         self,
-        video_id: str,
+        source_id: str,
         is_duplicate: bool,
         existing_video: dict | None = None,
         skip_reason: str | None = None,
         recommendations: list[str] | None = None,
     ):
-        self.video_id = video_id
+        self.source_id = source_id
         self.is_duplicate = is_duplicate
         self.existing_video = existing_video
         self.skip_reason = skip_reason
@@ -91,9 +91,9 @@ class VideoDeduplicationService:
         try:
             parsed = urlparse(url)
             if "v" in parse_qs(parsed.query):
-                video_id = parse_qs(parsed.query)["v"][0]
-                if len(video_id) == 11:
-                    return video_id
+                source_id = parse_qs(parsed.query)["v"][0]
+                if len(source_id) == 11:
+                    return source_id
         except Exception:
             pass
 
@@ -116,44 +116,44 @@ class VideoDeduplicationService:
         Returns:
             DeduplicationResult with duplicate status and recommendations
         """
-        video_id = self.extract_video_id(url)
-        if not video_id:
+        source_id = self.extract_video_id(url)
+        if not source_id:
             return DeduplicationResult(
-                video_id="unknown",
+                source_id="unknown",
                 is_duplicate=False,
                 skip_reason="Could not extract video ID from URL",
             )
 
         # Check cache first (unless force_check)
-        if not force_check and video_id in self._video_cache:
-            cached_result = self._video_cache[video_id]
-            logger.debug(f"Using cached result for video {video_id}")
+        if not force_check and source_id in self._video_cache:
+            cached_result = self._video_cache[source_id]
+            logger.debug(f"Using cached result for video {source_id}")
             return cached_result
 
         # Check database for existing video
-        existing_video = self.db.get_video(video_id)
+        existing_video = self.db.get_video(source_id)
 
         if not existing_video:
             # Video not in database - not a duplicate
-            result = DeduplicationResult(video_id=video_id, is_duplicate=False)
-            self._video_cache[video_id] = result
+            result = DeduplicationResult(source_id=source_id, is_duplicate=False)
+            self._video_cache[source_id] = result
             return result
 
         # Video exists - apply deduplication policy
-        result = self._apply_policy(video_id, existing_video, policy)
-        self._video_cache[video_id] = result
+        result = self._apply_policy(source_id, existing_video, policy)
+        self._video_cache[source_id] = result
 
         return result
 
     def _apply_policy(
-        self, video_id: str, existing_video, policy: DuplicationPolicy
+        self, source_id: str, existing_video, policy: DuplicationPolicy
     ) -> DeduplicationResult:
         """Apply deduplication policy to existing video."""
 
         # Convert SQLAlchemy object to dict for easier handling
-        # Use source_id (claim-centric schema) instead of video_id
+        # Use source_id (claim-centric schema) instead of source_id
         video_data = {
-            "video_id": existing_video.source_id,
+            "source_id": existing_video.source_id,
             "title": existing_video.title,
             "status": existing_video.status,
             "processed_at": existing_video.processed_at,
@@ -170,13 +170,13 @@ class VideoDeduplicationService:
         if not is_complete:
             # Video exists but is incomplete - allow reprocessing
             logger.info(
-                f"Video {video_id} exists but is incomplete "
+                f"Video {source_id} exists but is incomplete "
                 f"(audio={getattr(existing_video, 'audio_downloaded', False)}, "
                 f"metadata={getattr(existing_video, 'metadata_complete', False)}). "
                 "Allowing reprocessing."
             )
             return DeduplicationResult(
-                video_id=video_id,
+                source_id=source_id,
                 is_duplicate=False,  # Not a duplicate - needs completion
                 existing_video=video_data,
                 recommendations=[
@@ -189,7 +189,7 @@ class VideoDeduplicationService:
 
         if policy == DuplicationPolicy.FORCE_REPROCESS:
             return DeduplicationResult(
-                video_id=video_id,
+                source_id=source_id,
                 is_duplicate=False,  # Allow reprocessing
                 existing_video=video_data,
                 recommendations=["Video will be reprocessed (force mode)"],
@@ -197,7 +197,7 @@ class VideoDeduplicationService:
 
         if policy == DuplicationPolicy.SKIP_ALL:
             return DeduplicationResult(
-                video_id=video_id,
+                source_id=source_id,
                 is_duplicate=True,
                 existing_video=video_data,
                 skip_reason=f"Video already processed on {existing_video.processed_at}",
@@ -208,8 +208,8 @@ class VideoDeduplicationService:
             )
 
         # For ALLOW_RETRANSCRIBE and ALLOW_RESUMMARY, check what processing exists
-        transcripts = self.db.get_transcripts_for_video(video_id)
-        summaries = self.db.get_summaries_for_video(video_id)
+        transcripts = self.db.get_transcripts_for_video(source_id)
+        summaries = self.db.get_summaries_for_video(source_id)
 
         recommendations = []
 
@@ -249,7 +249,7 @@ class VideoDeduplicationService:
             )
 
         return DeduplicationResult(
-            video_id=video_id,
+            source_id=source_id,
             is_duplicate=should_skip,
             existing_video=video_data,
             skip_reason=skip_reason,
@@ -278,7 +278,7 @@ class VideoDeduplicationService:
             if result.is_duplicate:
                 duplicate_results.append(result)
                 logger.info(
-                    f"Skipping duplicate video {result.video_id}: {result.skip_reason}"
+                    f"Skipping duplicate video {result.source_id}: {result.skip_reason}"
                 )
             else:
                 unique_urls.append(url)
@@ -322,13 +322,13 @@ class VideoDeduplicationService:
         logger.info("Deduplication cache cleared")
 
     def add_video_to_database(
-        self, video_id: str, title: str, url: str, **metadata
+        self, source_id: str, title: str, url: str, **metadata
     ) -> bool:
         """
         Add a video to the database for future deduplication.
 
         Args:
-            video_id: YouTube video ID
+            source_id: YouTube video ID
             title: Video title
             url: Original URL
             **metadata: Additional video metadata
@@ -338,29 +338,29 @@ class VideoDeduplicationService:
         """
         try:
             video = self.db.create_video(
-                video_id=video_id, title=title, url=url, **metadata
+                source_id=source_id, title=title, url=url, **metadata
             )
 
             if video:
                 # Update cache
-                self._video_cache[video_id] = DeduplicationResult(
-                    video_id=video_id,
+                self._video_cache[source_id] = DeduplicationResult(
+                    source_id=source_id,
                     is_duplicate=True,
                     existing_video={
-                        "video_id": video_id,
+                        "source_id": source_id,
                         "title": title,
                         "status": "processing",
                         "processed_at": "now",
                     },
                 )
                 logger.info(
-                    f"Added video {video_id} to database for deduplication tracking"
+                    f"Added video {source_id} to database for deduplication tracking"
                 )
                 return True
             return False
 
         except Exception as e:
-            logger.error(f"Failed to add video {video_id} to database: {e}")
+            logger.error(f"Failed to add video {source_id} to database: {e}")
             return False
 
 

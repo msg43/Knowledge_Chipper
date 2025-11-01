@@ -83,7 +83,7 @@ class StructuredCategoryAnalyzer:
 
             # Prepare analysis prompt
             prompt_text = self.template.format(
-                episode_id=outputs.episode_id,
+                source_id=outputs.source_id,
                 num_claims=len(outputs.claims),
                 claims_sample="\n".join(
                     [c.canonical for c in outputs.claims[:10]]
@@ -105,7 +105,7 @@ class StructuredCategoryAnalyzer:
             result = self.llm.generate_json(prompt_text)
 
             if not result or not isinstance(result, list):
-                logger.warning(f"Invalid LLM response for episode {outputs.episode_id}")
+                logger.warning(f"Invalid LLM response for episode {outputs.source_id}")
                 return []
 
             categories = []
@@ -119,7 +119,7 @@ class StructuredCategoryAnalyzer:
                         continue
 
                     category = StructuredCategory(
-                        category_id=f"cat_{outputs.episode_id}_{i}",
+                        category_id=f"cat_{outputs.source_id}_{i}",
                         category_name=category_data.get(
                             "category_name", "Unknown Category"
                         ),
@@ -136,7 +136,7 @@ class StructuredCategoryAnalyzer:
 
                 except Exception as e:
                     logger.warning(
-                        f"Failed to parse category {i} for episode {outputs.episode_id}: {e}"
+                        f"Failed to parse category {i} for episode {outputs.source_id}: {e}"
                     )
                     continue
 
@@ -147,7 +147,7 @@ class StructuredCategoryAnalyzer:
 
         except Exception as e:
             logger.error(
-                f"Failed to analyze categories for episode {outputs.episode_id}: {e}"
+                f"Failed to analyze categories for episode {outputs.source_id}: {e}"
             )
             return []
 
@@ -276,7 +276,7 @@ def analyze_structured_categories(
             )
             return []
 
-        logger.info(f"Analyzing structured categories for episode {outputs.episode_id}")
+        logger.info(f"Analyzing structured categories for episode {outputs.source_id}")
 
         # Create LLM instance and analyzer
         from .model_uri_parser import parse_model_uri
@@ -290,7 +290,7 @@ def analyze_structured_categories(
         categories = analyzer.analyze_episode_categories(outputs)
 
         logger.info(
-            f"Identified {len(categories)} structured categories for episode {outputs.episode_id}"
+            f"Identified {len(categories)} structured categories for episode {outputs.source_id}"
         )
         return categories
 

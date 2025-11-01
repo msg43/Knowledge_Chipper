@@ -52,7 +52,7 @@ class System2Orchestrator:
 
         Args:
             job_type: Type of job ('transcribe', 'mine', 'flagship', 'upload', 'pipeline')
-            input_id: ID of the input (video_id or episode_id)
+            input_id: ID of the input (source_id)
             config: Job configuration
             auto_process: Whether to automatically chain to next stage
 

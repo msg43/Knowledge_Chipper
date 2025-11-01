@@ -9,7 +9,7 @@ class GlossaryExtractor:
         self.llm = llm
         self.template = prompt.read_text()
 
-    def detect(self, episode_id: str, segments: list[Segment]) -> list[JargonTerm]:
+    def detect(self, source_id: str, segments: list[Segment]) -> list[JargonTerm]:
         """Extract jargon terms using chunked processing for efficiency."""
         out: list[JargonTerm] = []
 
@@ -70,7 +70,7 @@ class GlossaryExtractor:
 
                     out.append(
                         JargonTerm(
-                            episode_id=episode_id,
+                            source_id=source_id,
                             term_id=f"jt_chunk_{i//chunk_size}_{j}",
                             term=r["term"],
                             category=r.get("category"),
@@ -108,7 +108,7 @@ def extract_jargon(episode, model_uri: str = "local://qwen2.5:7b") -> list[Jargo
         prompt_path = Path(__file__).parent / "prompts" / "glossary_detect.txt"
 
         extractor = GlossaryExtractor(llm, prompt_path)
-        return extractor.detect(episode.episode_id, episode.segments)
+        return extractor.detect(episode.source_id, episode.segments)
     except Exception:
         # Return empty list if extraction fails
         return []

@@ -547,7 +547,7 @@ class MonitorTab(BaseTab, FileOperationsMixin):
             from ...core.system2_orchestrator import System2Orchestrator
 
             # Create video ID from file name
-            video_id = file_path.stem
+            source_id = file_path.stem
 
             # Create orchestrator instance
             orchestrator = System2Orchestrator(
@@ -559,7 +559,7 @@ class MonitorTab(BaseTab, FileOperationsMixin):
             # Create and execute a pipeline job
             job_id = orchestrator.create_job(
                 "pipeline",  # Database job type (not JobType enum)
-                video_id,
+                source_id,
                 config={
                     "source": "file_watcher",
                     "file_path": str(file_path),

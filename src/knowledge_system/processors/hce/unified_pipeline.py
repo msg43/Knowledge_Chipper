@@ -69,7 +69,7 @@ class UnifiedHCEPipeline:
             )
         except Exception as e:
             logger.error(f"Short summary generation failed: {e}")
-            short_summary = f"Episode {episode.episode_id} content analysis."
+            short_summary = f"Episode {episode.source_id} content analysis."
 
         # Step 1: Unified Mining
         report_progress(
@@ -367,7 +367,7 @@ class UnifiedHCEPipeline:
 
             if not prompt_path.exists():
                 logger.warning(f"Short summary prompt not found at {prompt_path}")
-                return f"Episode {episode.episode_id}: Content analysis in progress."
+                return f"Episode {episode.source_id}: Content analysis in progress."
 
             prompt_template = prompt_path.read_text()
 
@@ -409,7 +409,7 @@ class UnifiedHCEPipeline:
 
         except Exception as e:
             logger.error(f"Failed to generate short summary: {e}")
-            return f"Episode {episode.episode_id}: {len(episode.segments)} segments of content."
+            return f"Episode {episode.source_id}: {len(episode.segments)} segments of content."
 
     def _generate_long_summary(
         self,
@@ -606,7 +606,7 @@ class UnifiedHCEPipeline:
 
             # Create scored claim
             scored_claim = ScoredClaim(
-                episode_id=episode.episode_id,
+                source_id=episode.source_id,
                 claim_id=f"claim_{len(scored_claims):04d}",
                 canonical=eval_claim.get_final_claim_text(),
                 claim_type=original_claim.get("claim_type", "factual"),
@@ -642,7 +642,7 @@ class UnifiedHCEPipeline:
         if jargon_evaluation:
             for eval_jargon in jargon_evaluation.get_accepted_jargon():
                 jargon_term = JargonTerm(
-                    episode_id=episode.episode_id,
+                    source_id=episode.source_id,
                     term_id=f"jargon_{len(all_jargon):04d}",
                     term=eval_jargon.canonical_term,
                     definition=eval_jargon.definition,
@@ -665,7 +665,7 @@ class UnifiedHCEPipeline:
                         )
 
                         jargon_term = JargonTerm(
-                            episode_id=episode.episode_id,
+                            source_id=episode.source_id,
                             term_id=f"jargon_{len(all_jargon):04d}",
                             term=jargon_data.get("term", ""),
                             definition=jargon_data.get("definition"),
@@ -678,7 +678,7 @@ class UnifiedHCEPipeline:
         if people_evaluation:
             for eval_person in people_evaluation.get_accepted_people():
                 person_mention = PersonMention(
-                    episode_id=episode.episode_id,
+                    source_id=episode.source_id,
                     mention_id=f"person_{len(all_people):04d}",
                     span_segment_id="unknown",
                     t0="00:00",
@@ -701,7 +701,7 @@ class UnifiedHCEPipeline:
                         first_mention = mentions[0] if mentions else {}
 
                         person_mention = PersonMention(
-                            episode_id=episode.episode_id,
+                            source_id=episode.source_id,
                             mention_id=f"person_{len(all_people):04d}",
                             span_segment_id=first_mention.get(
                                 "segment_id", "unknown"
@@ -731,7 +731,7 @@ class UnifiedHCEPipeline:
         if concepts_evaluation:
             for eval_concept in concepts_evaluation.get_accepted_concepts():
                 mental_model = MentalModel(
-                    episode_id=episode.episode_id,
+                    source_id=episode.source_id,
                     model_id=f"concept_{len(all_mental_models):04d}",
                     name=eval_concept.canonical_name,
                     definition=eval_concept.description,
@@ -753,7 +753,7 @@ class UnifiedHCEPipeline:
                         )
 
                         mental_model = MentalModel(
-                            episode_id=episode.episode_id,
+                            source_id=episode.source_id,
                             model_id=f"concept_{len(all_mental_models):04d}",
                             name=model_data.get("name", ""),
                             definition=model_data.get(
@@ -766,7 +766,7 @@ class UnifiedHCEPipeline:
 
         # Create final pipeline outputs
         return PipelineOutputs(
-            episode_id=episode.episode_id,
+            source_id=episode.source_id,
             claims=scored_claims,
             relations=[],  # Relations not implemented in unified pipeline yet
             milestones=[],  # Milestones not implemented in unified pipeline yet

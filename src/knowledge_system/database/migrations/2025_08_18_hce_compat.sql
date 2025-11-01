@@ -4,14 +4,14 @@ DROP VIEW IF EXISTS legacy_claims;
 CREATE VIEW legacy_claims AS
 SELECT
   c.claim_id               AS claim_id,
-  e.episode_id             AS episode_id,
+  e.source_id             AS source_id,
   c.canonical              AS text,
   c.claim_type             AS type,
   c.scores_json            AS score_json,
   c.inserted_at            AS created_at
 FROM claims c
 LEFT JOIN evidence_spans e
-  ON e.episode_id = c.episode_id AND e.claim_id = c.claim_id AND e.seq = 0;
+  ON e.source_id = c.source_id AND e.claim_id = c.claim_id AND e.seq = 0;
 
 DROP VIEW IF EXISTS legacy_relations;
 CREATE VIEW legacy_relations AS
@@ -21,14 +21,14 @@ SELECT
   r.type                   AS kind,
   r.strength               AS weight,
   r.rationale              AS rationale,
-  r.episode_id             AS episode_id
+  r.source_id             AS source_id
 FROM relations r;
 
 DROP VIEW IF EXISTS legacy_entities_people;
 CREATE VIEW legacy_entities_people AS
 SELECT
   mention_id               AS entity_id,
-  episode_id,
+  source_id,
   normalized               AS name,
   'person'                 AS category,
   COALESCE(external_ids_json, '{}') AS data_json
@@ -38,7 +38,7 @@ DROP VIEW IF EXISTS legacy_entities_concepts;
 CREATE VIEW legacy_entities_concepts AS
 SELECT
   model_id                 AS entity_id,
-  episode_id,
+  source_id,
   name                     AS name,
   'concept'                AS category,
   COALESCE(evidence_json, '[]') AS data_json
@@ -48,7 +48,7 @@ DROP VIEW IF EXISTS legacy_entities_jargon;
 CREATE VIEW legacy_entities_jargon AS
 SELECT
   term_id                  AS entity_id,
-  episode_id,
+  source_id,
   term                     AS name,
   'jargon'                 AS category,
   COALESCE(evidence_json, '[]') AS data_json

@@ -37,7 +37,7 @@ class RelationMiner:
                         # Only create relation if one is detected
                         if relation_data.get("has_relation", False):
                             relation = Relation(
-                                episode_id=claim1.episode_id,
+                                source_id=claim1.source_id,
                                 source_claim_id=claim1.claim_id,
                                 target_claim_id=claim2.claim_id,
                                 type=relation_data.get("relation_type", "supports"),

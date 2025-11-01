@@ -72,7 +72,7 @@ class GetReceiptsExporter:
             Dictionary with export results and any errors
         """
         logger.info(
-            f"Starting GetReceipts export for episode: {pipeline_outputs.episode_id}"
+            f"Starting GetReceipts export for episode: {pipeline_outputs.source_id}"
         )
 
         try:
@@ -129,7 +129,7 @@ class GetReceiptsExporter:
                 "claims_processed": len(pipeline_outputs.claims),
                 "claims_exported": successful_exports,
                 "claims_failed": failed_exports,
-                "episode_id": pipeline_outputs.episode_id,
+                "source_id": pipeline_outputs.source_id,
                 "results": results,
             }
 
@@ -143,7 +143,7 @@ class GetReceiptsExporter:
             return {
                 "success": False,
                 "error": str(e),
-                "episode_id": pipeline_outputs.episode_id,
+                "source_id": pipeline_outputs.source_id,
                 "claims_processed": (
                     len(pipeline_outputs.claims) if pipeline_outputs.claims else 0
                 ),
@@ -241,7 +241,7 @@ class GetReceiptsExporter:
                 "producer_app": "Knowledge_Chipper",
                 "version": __version__,
                 "hce_system": "enabled",
-                "episode_id": pipeline_outputs.episode_id,
+                "source_id": pipeline_outputs.source_id,
                 "claim_id": claim.claim_id,
                 "tier": claim.tier,
                 "confidence": claim.scores.get("confidence_final", 0.0),

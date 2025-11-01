@@ -53,13 +53,13 @@ class BrightDataAdapter:
 
         try:
             # Extract video ID from URL or response
-            video_id = BrightDataAdapter._extract_video_id(
+            source_id = BrightDataAdapter._extract_video_id(
                 video_url, bright_data_response
             )
 
             # Map Bright Data fields to YouTubeMetadata fields
             metadata_dict = {
-                "video_id": video_id,
+                "source_id": source_id,
                 "title": BrightDataAdapter._get_title(bright_data_response),
                 "url": video_url,
                 "description": BrightDataAdapter._get_description(bright_data_response),
@@ -100,7 +100,7 @@ class BrightDataAdapter:
             metadata = YouTubeMetadata(**metadata_dict)
 
             logger.info(
-                f"Successfully adapted Bright Data metadata for video {video_id}"
+                f"Successfully adapted Bright Data metadata for video {source_id}"
             )
             return metadata
 
@@ -131,7 +131,7 @@ class BrightDataAdapter:
 
         try:
             # Extract video ID from URL or response
-            video_id = BrightDataAdapter._extract_video_id(
+            source_id = BrightDataAdapter._extract_video_id(
                 video_url, bright_data_response
             )
 
@@ -148,7 +148,7 @@ class BrightDataAdapter:
 
             # Map to YouTubeTranscript fields
             transcript_dict = {
-                "video_id": video_id,
+                "source_id": source_id,
                 "title": BrightDataAdapter._get_title(bright_data_response),
                 "url": video_url,
                 "language": language,
@@ -173,7 +173,7 @@ class BrightDataAdapter:
             transcript = YouTubeTranscript(**transcript_dict)
 
             logger.info(
-                f"Successfully adapted Bright Data transcript for video {video_id}"
+                f"Successfully adapted Bright Data transcript for video {source_id}"
             )
             return transcript
 
@@ -222,7 +222,7 @@ class BrightDataAdapter:
     def _extract_video_id(url: str, response: dict[str, Any]) -> str:
         """Extract video ID from URL or response."""
         # Try to get from response first
-        for field in ["id", "videoId", "video_id"]:
+        for field in ["id", "videoId", "source_id"]:
             if field in response and response[field]:
                 return str(response[field])
 
@@ -676,12 +676,12 @@ class BrightDataAdapter:
         YouTubeMetadata = get_youtube_metadata_class()
 
         try:
-            video_id = BrightDataAdapter._extract_video_id(url, response)
+            source_id = BrightDataAdapter._extract_video_id(url, response)
         except ValueError:
-            video_id = "unknown"
+            source_id = "unknown"
 
         return YouTubeMetadata(
-            video_id=video_id,
+            source_id=source_id,
             title=response.get("title", "Unknown Title"),
             url=url,
             extraction_method="bright_data_api_scraper_fallback",
@@ -695,12 +695,12 @@ class BrightDataAdapter:
         YouTubeTranscript = get_youtube_transcript_class()
 
         try:
-            video_id = BrightDataAdapter._extract_video_id(url, response)
+            source_id = BrightDataAdapter._extract_video_id(url, response)
         except ValueError:
-            video_id = "unknown"
+            source_id = "unknown"
 
         return YouTubeTranscript(
-            video_id=video_id,
+            source_id=source_id,
             title=response.get("title", "Unknown Title"),
             url=url,
             language="en",
@@ -722,7 +722,7 @@ class BrightDataAdapter:
                 for video in value[:10]:  # Limit to 10 related videos
                     if isinstance(video, dict):
                         related_video = {
-                            "video_id": video.get("video_id", ""),
+                            "source_id": video.get("source_id", ""),
                             "title": video.get("title", ""),
                             "url": video.get("url", ""),
                             "thumbnail": video.get("thumbnail", ""),

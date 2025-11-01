@@ -6,7 +6,7 @@
 CREATE TABLE IF NOT EXISTS claim_tier_validations (
     validation_id TEXT PRIMARY KEY,
     claim_id TEXT NOT NULL,
-    episode_id TEXT,
+    source_id TEXT,
     original_tier TEXT NOT NULL CHECK (original_tier IN ('A', 'B', 'C')),
     validated_tier TEXT NOT NULL CHECK (validated_tier IN ('A', 'B', 'C')),
     is_modified BOOLEAN DEFAULT FALSE,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS claim_tier_validations (
 
 -- Create indexes for efficient querying
 CREATE INDEX IF NOT EXISTS idx_claim_validations_claim_id ON claim_tier_validations(claim_id);
-CREATE INDEX IF NOT EXISTS idx_claim_validations_episode_id ON claim_tier_validations(episode_id);
+CREATE INDEX IF NOT EXISTS idx_claim_validations_episode_id ON claim_tier_validations(source_id);
 CREATE INDEX IF NOT EXISTS idx_claim_validations_session_id ON claim_tier_validations(validation_session_id);
 CREATE INDEX IF NOT EXISTS idx_claim_validations_tiers ON claim_tier_validations(original_tier, validated_tier);
 CREATE INDEX IF NOT EXISTS idx_claim_validations_modified ON claim_tier_validations(is_modified);

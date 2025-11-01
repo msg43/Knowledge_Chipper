@@ -50,7 +50,7 @@ class ProcessingJob:
     """Individual processing job with audio preservation tracking"""
 
     url: str
-    video_id: str
+    source_id: str
     audio_path: Path | None = None
     transcript_path: Path | None = None
     mining_results: dict[str, Any] | None = None
@@ -184,7 +184,7 @@ class ConnectedProcessingCoordinator:
                 CREATE TABLE IF NOT EXISTS processing_jobs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     url TEXT UNIQUE NOT NULL,
-                    video_id TEXT NOT NULL,
+                    source_id TEXT NOT NULL,
                     audio_path TEXT,
                     transcript_path TEXT,
                     mining_results TEXT,
@@ -281,7 +281,7 @@ class ConnectedProcessingCoordinator:
                     # Load existing job
                     job = ProcessingJob(
                         url=row[1],
-                        video_id=row[2],
+                        source_id=row[2],
                         audio_path=Path(row[3]) if row[3] else None,
                         transcript_path=Path(row[4]) if row[4] else None,
                         mining_results=json.loads(row[5]) if row[5] else None,
@@ -301,7 +301,7 @@ class ConnectedProcessingCoordinator:
                     jobs.append(job)
                 else:
                     # Create new job
-                    job = ProcessingJob(url=url, video_id=self._extract_video_id(url))
+                    job = ProcessingJob(url=url, source_id=self._extract_video_id(url))
                     jobs.append(job)
 
         logger.info(
@@ -312,7 +312,7 @@ class ConnectedProcessingCoordinator:
     def _create_new_jobs(self, urls: list[str]) -> list[ProcessingJob]:
         """Create new jobs for URLs"""
         return [
-            ProcessingJob(url=url, video_id=self._extract_video_id(url)) for url in urls
+            ProcessingJob(url=url, source_id=self._extract_video_id(url)) for url in urls
         ]
 
     def _extract_video_id(self, url: str) -> str:
@@ -533,9 +533,9 @@ class ConnectedProcessingCoordinator:
 
             # Create episode bundle for HCE pipeline
             episode_bundle = EpisodeBundle(
-                title=f"Episode_{job.video_id}",
+                title=f"Episode_{job.source_id}",
                 content_path=str(job.audio_path),
-                metadata={"url": job.url, "video_id": job.video_id},
+                metadata={"url": job.url, "source_id": job.source_id},
             )
 
             # Process with HCE pipeline
@@ -636,13 +636,13 @@ class ConnectedProcessingCoordinator:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO processing_jobs
-                (url, video_id, audio_path, transcript_path, mining_results,
+                (url, source_id, audio_path, transcript_path, mining_results,
                  evaluation_results, status, created_at, completed_at, error_message)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     job.url,
-                    job.video_id,
+                    job.source_id,
                     str(job.audio_path) if job.audio_path else None,
                     str(job.transcript_path) if job.transcript_path else None,
                     json.dumps(job.mining_results) if job.mining_results else None,

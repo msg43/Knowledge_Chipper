@@ -321,14 +321,14 @@ class StateMigrator:
             for record_id, record_data in history.items():
                 try:
                     # Extract video information
-                    video_id = record_data.get("video_id")
+                    source_id = record_data.get("source_id")
                     url = record_data.get("url")
                     title = record_data.get("title", "Unknown Title")
 
-                    if video_id and url:
+                    if source_id and url:
                         # Create video record
                         video = self.db.create_video(
-                            video_id=video_id,
+                            source_id=source_id,
                             title=title,
                             url=url,
                             uploader=record_data.get("uploader"),
@@ -345,7 +345,7 @@ class StateMigrator:
                             if "transcript" in record_data:
                                 transcript_data = record_data["transcript"]
                                 self.db.create_transcript(
-                                    video_id=video_id,
+                                    source_id=source_id,
                                     language=transcript_data.get("language", "en"),
                                     transcript_text=transcript_data.get("text", ""),
                                     transcript_type="legacy_migration",
@@ -355,13 +355,13 @@ class StateMigrator:
                             if "summary" in record_data:
                                 summary_data = record_data["summary"]
                                 self.db.create_summary(
-                                    video_id=video_id,
+                                    source_id=source_id,
                                     summary_text=summary_data.get("text", ""),
                                     llm_model=summary_data.get("model", "unknown"),
                                     processing_cost=summary_data.get("cost", 0.0),
                                 )
 
-                        logger.debug(f"Migrated processing record for video {video_id}")
+                        logger.debug(f"Migrated processing record for video {source_id}")
 
                 except Exception as record_error:
                     warning = f"Failed to migrate processing record {record_id}: {record_error}"
@@ -398,20 +398,20 @@ class StateMigrator:
                 metadata = json.load(f)
 
             migrated_count = 0
-            for video_id, video_data in metadata.items():
+            for source_id, video_data in metadata.items():
                 try:
                     # Check if video already exists (avoid duplicates)
-                    existing_video = self.db.get_video(video_id)
+                    existing_video = self.db.get_video(source_id)
                     if existing_video:
-                        logger.debug(f"Video {video_id} already exists, skipping")
+                        logger.debug(f"Video {source_id} already exists, skipping")
                         continue
 
                     # Create video record from metadata
                     video = self.db.create_video(
-                        video_id=video_id,
+                        source_id=source_id,
                         title=video_data.get("title", "Unknown Title"),
                         url=video_data.get(
-                            "url", f"https://youtube.com/watch?v={video_id}"
+                            "url", f"https://youtube.com/watch?v={source_id}"
                         ),
                         uploader=video_data.get("uploader"),
                         duration_seconds=video_data.get("duration"),
@@ -423,10 +423,10 @@ class StateMigrator:
 
                     if video:
                         migrated_count += 1
-                        logger.debug(f"Migrated metadata for video {video_id}")
+                        logger.debug(f"Migrated metadata for video {source_id}")
 
                 except Exception as video_error:
-                    warning = f"Failed to migrate metadata for video {video_id}: {video_error}"
+                    warning = f"Failed to migrate metadata for video {source_id}: {video_error}"
                     result["warnings"].append(warning)
                     logger.warning(warning)
 

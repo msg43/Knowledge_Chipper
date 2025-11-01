@@ -23,7 +23,7 @@ def _format_segments_to_markdown_transcript(
     include_speakers: bool = True,
     include_timestamps: bool = True,
     diarization_enabled: bool = False,
-    video_id: str | None = None,
+    source_id: str | None = None,
 ) -> str:
     """
     Format transcript segments into properly formatted markdown with speaker separation.
@@ -33,7 +33,7 @@ def _format_segments_to_markdown_transcript(
         include_speakers: Whether to include speaker information
         include_timestamps: Whether to include timestamps
         diarization_enabled: Whether diarization was performed
-        video_id: YouTube video ID for creating hyperlinked timestamps
+        source_id: YouTube video ID for creating hyperlinked timestamps
 
     Returns:
         Formatted markdown transcript content
@@ -55,16 +55,16 @@ def _format_segments_to_markdown_transcript(
         # Format timestamp with hyperlink for YouTube videos
         if (
             include_timestamps
-            and video_id is not None
-            and isinstance(video_id, str)
-            and video_id != "youtube_video"
-            and video_id != ""
-            and len(video_id) == 11
+            and source_id is not None
+            and isinstance(source_id, str)
+            and source_id != "youtube_video"
+            and source_id != ""
+            and len(source_id) == 11
         ):
             # Create hyperlinked timestamp for YouTube videos (only for valid video IDs)
             timestamp_str = _format_timestamp_for_display(start_time)
             youtube_url = (
-                f"https://www.youtube.com/watch?v={video_id}&t={int(start_time)}s"
+                f"https://www.youtube.com/watch?v={source_id}&t={int(start_time)}s"
             )
             timestamp_display = f"[{timestamp_str}]({youtube_url})"
         elif include_timestamps:
@@ -167,7 +167,7 @@ class FileGenerationService:
 
     def generate_transcript_markdown(
         self,
-        video_id: str,
+        source_id: str,
         transcript_id: str | None = None,
         include_timestamps: bool = True,
         include_speakers: bool = True,
@@ -176,7 +176,7 @@ class FileGenerationService:
         Generate markdown transcript file from database data.
 
         Args:
-            video_id: YouTube video ID
+            source_id: YouTube video ID
             transcript_id: Specific transcript ID (uses latest if None)
             include_timestamps: Include timestamp markers
             include_speakers: Include speaker labels if available
@@ -186,14 +186,14 @@ class FileGenerationService:
         """
         try:
             # Get video and transcript data
-            video = self.db.get_video(video_id)
+            video = self.db.get_video(source_id)
             if not video:
-                logger.error(f"Video {video_id} not found in database")
+                logger.error(f"Video {source_id} not found in database")
                 return None
 
-            transcripts = self.db.get_transcripts_for_video(video_id)
+            transcripts = self.db.get_transcripts_for_video(source_id)
             if not transcripts:
-                logger.error(f"No transcripts found for video {video_id}")
+                logger.error(f"No transcripts found for video {source_id}")
                 return None
 
             # Use specific transcript or latest
@@ -212,7 +212,7 @@ class FileGenerationService:
             # Generate YAML frontmatter
             frontmatter = {
                 "title": f"Transcript of {video.title}",
-                "video_id": video.source_id,
+                "source_id": video.source_id,
                 "url": video.url,
                 "uploader": video.uploader,
                 "upload_date": video.upload_date,
@@ -245,7 +245,7 @@ class FileGenerationService:
                     include_speakers=include_speakers,
                     include_timestamps=include_timestamps,
                     diarization_enabled=has_speaker_data,  # Use actual speaker data presence
-                    video_id=video.source_id,  # Pass video_id for YouTube timestamp hyperlinks
+                    source_id=video.source_id,  # Pass source_id for YouTube timestamp hyperlinks
                 )
 
             # Fallback to stored speaker text if segments not available
@@ -280,7 +280,7 @@ class FileGenerationService:
 """
 
             # Save to file
-            filename = self._sanitize_filename(f"{video.title}_{video.video_id}.md")
+            filename = self._sanitize_filename(f"{video.title}_{video.source_id}.md")
             file_path = self.transcripts_dir / filename
 
             with open(file_path, "w", encoding="utf-8") as f:
@@ -288,7 +288,7 @@ class FileGenerationService:
 
             # Track generated file in database
             self.db.track_generated_file(
-                video_id=video_id,
+                source_id=source_id,
                 file_path=str(file_path),
                 file_type="transcript_md",
                 file_format="md",
@@ -301,17 +301,17 @@ class FileGenerationService:
             return file_path
 
         except Exception as e:
-            logger.error(f"Failed to generate transcript markdown for {video_id}: {e}")
+            logger.error(f"Failed to generate transcript markdown for {source_id}: {e}")
             return None
 
     def generate_summary_markdown(
-        self, video_id: str, summary_id: str | None = None
+        self, source_id: str, summary_id: str | None = None
     ) -> Path | None:
         """
         Generate markdown summary file from database data.
 
         Args:
-            video_id: YouTube video ID
+            source_id: YouTube video ID
             summary_id: Specific summary ID (uses latest if None)
 
         Returns:
@@ -319,14 +319,14 @@ class FileGenerationService:
         """
         try:
             # Get video and summary data
-            video = self.db.get_video(video_id)
+            video = self.db.get_video(source_id)
             if not video:
-                logger.error(f"Video {video_id} not found in database")
+                logger.error(f"Video {source_id} not found in database")
                 return None
 
-            summaries = self.db.get_summaries_for_video(video_id)
+            summaries = self.db.get_summaries_for_video(source_id)
             if not summaries:
-                logger.error(f"No summaries found for video {video_id}")
+                logger.error(f"No summaries found for video {source_id}")
                 return None
 
             # Use specific summary or latest
@@ -350,7 +350,7 @@ class FileGenerationService:
             # Generate YAML frontmatter
             frontmatter = {
                 "title": f"Summary of {video.title}",
-                "video_id": video.video_id,
+                "source_id": video.source_id,
                 "url": video.url,
                 "summary_id": summary.summary_id,
                 "processing_type": summary.processing_type,
@@ -403,7 +403,7 @@ class FileGenerationService:
 
             # Save to file
             filename = self._sanitize_filename(
-                f"Summary_{video.title}_{video.video_id}.md"
+                f"Summary_{video.title}_{video.source_id}.md"
             )
             file_path = self.summaries_dir / filename
 
@@ -412,7 +412,7 @@ class FileGenerationService:
 
             # Track generated file in database
             self.db.track_generated_file(
-                video_id=video_id,
+                source_id=source_id,
                 file_path=str(file_path),
                 file_type="summary_md",
                 file_format="md",
@@ -423,17 +423,17 @@ class FileGenerationService:
             return file_path
 
         except Exception as e:
-            logger.error(f"Failed to generate summary markdown for {video_id}: {e}")
+            logger.error(f"Failed to generate summary markdown for {source_id}: {e}")
             return None
 
     def generate_moc_files(
-        self, video_id: str | None = None, moc_id: str | None = None
+        self, source_id: str | None = None, moc_id: str | None = None
     ) -> dict[str, Path]:
         """
         Generate MOC (Maps of Content) files from database data.
 
         Args:
-            video_id: Specific video ID (generates for all videos if None)
+            source_id: Specific video ID (generates for all videos if None)
             moc_id: Specific MOC extraction ID
 
         Returns:
@@ -443,10 +443,10 @@ class FileGenerationService:
 
         try:
             # Get MOC extractions
-            if video_id and moc_id:
+            if source_id and moc_id:
                 # Get specific MOC extraction
                 moc_extractions = []  # Would need a get_moc_extraction method
-            elif video_id:
+            elif source_id:
                 # Get all MOC extractions for video
                 moc_extractions = (
                     []
@@ -516,13 +516,13 @@ class FileGenerationService:
             return {}
 
     def generate_export_files(
-        self, video_id: str, formats: list[str] = ["srt", "vtt", "txt"]
+        self, source_id: str, formats: list[str] = ["srt", "vtt", "txt"]
     ) -> dict[str, Path]:
         """
         Generate export files in various formats.
 
         Args:
-            video_id: YouTube video ID
+            source_id: YouTube video ID
             formats: List of formats to generate ('srt', 'vtt', 'txt', 'json')
 
         Returns:
@@ -532,11 +532,11 @@ class FileGenerationService:
 
         try:
             # Get video and transcript data
-            video = self.db.get_video(video_id)
-            transcripts = self.db.get_transcripts_for_video(video_id)
+            video = self.db.get_video(source_id)
+            transcripts = self.db.get_transcripts_for_video(source_id)
 
             if not video or not transcripts:
-                logger.error(f"Video or transcripts not found for {video_id}")
+                logger.error(f"Video or transcripts not found for {source_id}")
                 return generated_files
 
             transcript = transcripts[0]  # Use latest transcript
@@ -559,32 +559,32 @@ class FileGenerationService:
 
                     # Track generated file in database
                     self.db.track_generated_file(
-                        video_id=video_id,
+                        source_id=source_id,
                         file_path=str(file_path),
                         file_type=f"transcript_{format_type}",
                         file_format=format_type,
                         transcript_id=transcript.transcript_id,
                     )
 
-            logger.info(f"Generated {len(generated_files)} export files for {video_id}")
+            logger.info(f"Generated {len(generated_files)} export files for {source_id}")
             return generated_files
 
         except Exception as e:
-            logger.error(f"Failed to generate export files for {video_id}: {e}")
+            logger.error(f"Failed to generate export files for {source_id}: {e}")
             return {}
 
-    def regenerate_all_files(self, video_id: str) -> dict[str, any]:
+    def regenerate_all_files(self, source_id: str) -> dict[str, any]:
         """
         Regenerate all files for a specific video.
 
         Args:
-            video_id: YouTube video ID
+            source_id: YouTube video ID
 
         Returns:
             Dictionary with paths to all generated files
         """
         results = {
-            "video_id": video_id,
+            "source_id": source_id,
             "transcript_markdown": None,
             "summary_markdown": None,
             "export_files": {},
@@ -593,21 +593,21 @@ class FileGenerationService:
 
         try:
             # Generate transcript markdown
-            transcript_path = self.generate_transcript_markdown(video_id)
+            transcript_path = self.generate_transcript_markdown(source_id)
             if transcript_path:
                 results["transcript_markdown"] = str(transcript_path)
             else:
                 results["errors"].append("Failed to generate transcript markdown")
 
             # Generate summary markdown
-            summary_path = self.generate_summary_markdown(video_id)
+            summary_path = self.generate_summary_markdown(source_id)
             if summary_path:
                 results["summary_markdown"] = str(summary_path)
             else:
                 results["errors"].append("Failed to generate summary markdown")
 
             # Generate export files
-            export_files = self.generate_export_files(video_id)
+            export_files = self.generate_export_files(source_id)
             results["export_files"] = {
                 fmt: str(path) for fmt, path in export_files.items()
             }
@@ -615,11 +615,11 @@ class FileGenerationService:
             if not export_files:
                 results["errors"].append("Failed to generate export files")
 
-            logger.info(f"Regenerated all files for video {video_id}")
+            logger.info(f"Regenerated all files for video {source_id}")
             return results
 
         except Exception as e:
-            logger.error(f"Failed to regenerate files for {video_id}: {e}")
+            logger.error(f"Failed to regenerate files for {source_id}: {e}")
             results["errors"].append(str(e))
             return results
 
@@ -996,7 +996,7 @@ class FileGenerationService:
                     content += f"{start_time} --> {end_time}\n"
                     content += f"{text}\n\n"
 
-            filename = self._sanitize_filename(f"{video.title}_{video.video_id}.srt")
+            filename = self._sanitize_filename(f"{video.title}_{video.source_id}.srt")
             file_path = self.exports_dir / filename
 
             with open(file_path, "w", encoding="utf-8") as f:
@@ -1029,7 +1029,7 @@ class FileGenerationService:
                     content += f"{start_time} --> {end_time}\n"
                     content += f"{text}\n\n"
 
-            filename = self._sanitize_filename(f"{video.title}_{video.video_id}.vtt")
+            filename = self._sanitize_filename(f"{video.title}_{video.source_id}.vtt")
             file_path = self.exports_dir / filename
 
             with open(file_path, "w", encoding="utf-8") as f:
@@ -1044,7 +1044,7 @@ class FileGenerationService:
     def _generate_txt_file(self, video, transcript) -> Path | None:
         """Generate plain text file."""
         try:
-            filename = self._sanitize_filename(f"{video.title}_{video.video_id}.txt")
+            filename = self._sanitize_filename(f"{video.title}_{video.source_id}.txt")
             file_path = self.exports_dir / filename
 
             with open(file_path, "w", encoding="utf-8") as f:
@@ -1065,7 +1065,7 @@ class FileGenerationService:
         try:
             data = {
                 "video": {
-                    "video_id": video.video_id,
+                    "source_id": video.source_id,
                     "title": video.title,
                     "url": video.url,
                     "uploader": video.uploader,
@@ -1092,7 +1092,7 @@ class FileGenerationService:
                 },
             }
 
-            filename = self._sanitize_filename(f"{video.title}_{video.video_id}.json")
+            filename = self._sanitize_filename(f"{video.title}_{video.source_id}.json")
             file_path = self.exports_dir / filename
 
             with open(file_path, "w", encoding="utf-8") as f:
@@ -1123,13 +1123,13 @@ class FileGenerationService:
         return f"{hours:02d}:{minutes:02d}:{secs:02d}.{milliseconds:03d}"
 
     def generate_claims_report(
-        self, video_id: str, summary_id: str | None = None
+        self, source_id: str, summary_id: str | None = None
     ) -> Path | None:
         """
         Generate claims report from HCE data.
 
         Args:
-            video_id: YouTube video ID
+            source_id: YouTube video ID
             summary_id: Specific summary ID (uses latest HCE summary if None)
 
         Returns:
@@ -1137,17 +1137,17 @@ class FileGenerationService:
         """
         try:
             # Get video and HCE summary data
-            video = self.db.get_video(video_id)
+            video = self.db.get_video(source_id)
             if not video:
-                logger.error(f"Video {video_id} not found in database")
+                logger.error(f"Video {source_id} not found in database")
                 return None
 
-            summaries = self.db.get_summaries_for_video(video_id)
+            summaries = self.db.get_summaries_for_video(source_id)
             # Filter for HCE summaries
             hce_summaries = [s for s in summaries if s.processing_type == "hce"]
 
             if not hce_summaries:
-                logger.error(f"No HCE summaries found for video {video_id}")
+                logger.error(f"No HCE summaries found for video {source_id}")
                 return None
 
             # Use specific summary or latest HCE summary
@@ -1237,7 +1237,7 @@ class FileGenerationService:
 
             # Save to file
             filename = self._sanitize_filename(
-                f"Claims_{video.title}_{video.video_id}.md"
+                f"Claims_{video.title}_{video.source_id}.md"
             )
             file_path = self.exports_dir / filename
 
@@ -1246,7 +1246,7 @@ class FileGenerationService:
 
             # Track generated file in database
             self.db.track_generated_file(
-                video_id=video_id,
+                source_id=source_id,
                 file_path=str(file_path),
                 file_type="claims_report",
                 file_format="md",
@@ -1257,17 +1257,17 @@ class FileGenerationService:
             return file_path
 
         except Exception as e:
-            logger.error(f"Failed to generate claims report for {video_id}: {e}")
+            logger.error(f"Failed to generate claims report for {source_id}: {e}")
             return None
 
     def generate_contradiction_analysis(
-        self, video_id: str, summary_id: str | None = None
+        self, source_id: str, summary_id: str | None = None
     ) -> Path | None:
         """
         Generate contradiction analysis report from HCE data.
 
         Args:
-            video_id: YouTube video ID
+            source_id: YouTube video ID
             summary_id: Specific summary ID (uses latest HCE summary if None)
 
         Returns:
@@ -1275,11 +1275,11 @@ class FileGenerationService:
         """
         try:
             # Get video and HCE summary data
-            video = self.db.get_video(video_id)
+            video = self.db.get_video(source_id)
             if not video:
                 return None
 
-            summaries = self.db.get_summaries_for_video(video_id)
+            summaries = self.db.get_summaries_for_video(source_id)
             hce_summaries = [s for s in summaries if s.processing_type == "hce"]
 
             if not hce_summaries:
@@ -1337,7 +1337,7 @@ class FileGenerationService:
 
             # Save to file
             filename = self._sanitize_filename(
-                f"Contradictions_{video.title}_{video.video_id}.md"
+                f"Contradictions_{video.title}_{video.source_id}.md"
             )
             file_path = self.exports_dir / filename
 
@@ -1352,13 +1352,13 @@ class FileGenerationService:
             return None
 
     def generate_evidence_mapping(
-        self, video_id: str, summary_id: str | None = None
+        self, source_id: str, summary_id: str | None = None
     ) -> Path | None:
         """
         Generate evidence mapping file from HCE data.
 
         Args:
-            video_id: YouTube video ID
+            source_id: YouTube video ID
             summary_id: Specific summary ID (uses latest HCE summary if None)
 
         Returns:
@@ -1366,11 +1366,11 @@ class FileGenerationService:
         """
         try:
             # Get video and HCE summary data
-            video = self.db.get_video(video_id)
+            video = self.db.get_video(source_id)
             if not video:
                 return None
 
-            summaries = self.db.get_summaries_for_video(video_id)
+            summaries = self.db.get_summaries_for_video(source_id)
             hce_summaries = [s for s in summaries if s.processing_type == "hce"]
 
             if not hce_summaries:
@@ -1422,7 +1422,7 @@ class FileGenerationService:
 
             # Save to file
             filename = self._sanitize_filename(
-                f"Evidence_{video.title}_{video.video_id}.md"
+                f"Evidence_{video.title}_{video.source_id}.md"
             )
             file_path = self.exports_dir / filename
 
@@ -1438,8 +1438,8 @@ class FileGenerationService:
 
     def generate_summary_markdown_from_pipeline(
         self,
-        video_id: str,
-        episode_id: str,
+        source_id: str,
+        source_id: str,
         pipeline_outputs,  # PipelineOutputs
     ) -> Path | None:
         """
@@ -1449,12 +1449,12 @@ class FileGenerationService:
         YouTube/source metadata for complete context.
         """
         try:
-            output_file = self.summaries_dir / f"{video_id}_summary.md"
+            output_file = self.summaries_dir / f"{source_id}_summary.md"
 
             # Fetch source metadata
             video_metadata = None
             try:
-                source_id = video_id.replace("episode_", "")
+                source_id = source_id.replace("episode_", "")
                 with self.db_service.get_session() as session:
                     from ..database.models import MediaSource
 
@@ -1480,7 +1480,7 @@ class FileGenerationService:
 
             # Build comprehensive markdown
             markdown_lines = [
-                f"# Summary: {episode_id}",
+                f"# Summary: {source_id}",
                 "",
             ]
 
@@ -1737,16 +1737,16 @@ class FileGenerationService:
 
 # Convenience functions
 def regenerate_video_files(
-    video_id: str, output_dir: Path | None = None
+    source_id: str, output_dir: Path | None = None
 ) -> dict[str, any]:
     """Convenience function to regenerate all files for a video."""
     service = FileGenerationService(output_dir=output_dir)
-    return service.regenerate_all_files(video_id)
+    return service.regenerate_all_files(source_id)
 
 
 def generate_transcript_from_db(
-    video_id: str, output_dir: Path | None = None
+    source_id: str, output_dir: Path | None = None
 ) -> Path | None:
     """Convenience function to generate transcript markdown from database."""
     service = FileGenerationService(output_dir=output_dir)
-    return service.generate_transcript_markdown(video_id)
+    return service.generate_transcript_markdown(source_id)

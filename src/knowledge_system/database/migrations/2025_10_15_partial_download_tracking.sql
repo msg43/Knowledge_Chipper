@@ -60,7 +60,7 @@ FROM media_sources
 WHERE audio_downloaded = 1
   AND audio_file_path IS NOT NULL
   AND media_id NOT IN (
-      SELECT DISTINCT video_id FROM transcripts WHERE video_id IS NOT NULL
+      SELECT DISTINCT source_id FROM transcripts WHERE source_id IS NOT NULL
   )
 ORDER BY processed_at DESC;
 

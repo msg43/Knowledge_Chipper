@@ -159,7 +159,7 @@ class ClaimsUploadService:
 
                 # Get claims that are pending upload or have never been uploaded
                 query = """
-                SELECT c.*, e.title as episode_title, e.video_id
+                SELECT c.*, e.title as episode_title, e.source_id
                 FROM claims c
                 LEFT JOIN episodes e ON c.episode_id = e.episode_id
                 WHERE (c.upload_status IS NULL OR c.upload_status = 'pending' OR c.upload_status = 'failed')

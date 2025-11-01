@@ -561,7 +561,7 @@ SELECT
     e.long_summary AS episode_long_summary
 FROM claims c
 LEFT JOIN media_sources ms ON c.source_id = ms.source_id
-LEFT JOIN episodes e ON c.episode_id = e.episode_id;
+LEFT JOIN episodes e ON c.source_id = e.source_id;
 
 -- View: Claims with primary categories
 CREATE VIEW IF NOT EXISTS v_claims_with_categories AS

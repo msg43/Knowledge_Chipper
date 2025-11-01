@@ -1313,12 +1313,12 @@ class SpeakerAttributionTab(QWidget):
             if not self.save_assignments():
                 return  # save_assignments shows its own error messages
 
-            # Load transcript data to get video_id
+            # Load transcript data to get source_id
             with open(self.current_transcript_path, encoding="utf-8") as f:
                 transcript_data = json.load(f)
 
-            video_id = transcript_data.get("video_id") or transcript_data.get("id")
-            if not video_id:
+            source_id = transcript_data.get("source_id") or transcript_data.get("id")
+            if not source_id:
                 QMessageBox.warning(
                     self,
                     "Missing Video ID",
@@ -1330,13 +1330,13 @@ class SpeakerAttributionTab(QWidget):
             # Check if HCE data exists
             from ...processors.speaker_processor import SpeakerProcessor
 
-            episode_id = SpeakerProcessor.find_episode_id_for_video(video_id)
+            source_id = SpeakerProcessor.find_episode_id_for_video(source_id)
 
-            if not episode_id:
+            if not source_id:
                 QMessageBox.information(
                     self,
                     "No HCE Data",
-                    f"No HCE data found for video {video_id}.\n\n"
+                    f"No HCE data found for video {source_id}.\n\n"
                     "HCE data is created when you run summarization with HCE enabled.\n"
                     "There is nothing to update.",
                 )
@@ -1363,14 +1363,14 @@ class SpeakerAttributionTab(QWidget):
             segment_count = len(transcript_data.get("segments", []))
 
             logger.info(
-                f"Triggering HCE update for episode {episode_id} "
+                f"Triggering HCE update for episode {source_id} "
                 f"with {len(speaker_mappings)} speaker changes"
             )
 
             # Show dialog and execute update
             success = show_hce_update_dialog(
-                episode_id=episode_id,
-                video_id=video_id,
+                source_id=source_id,
+                source_id=source_id,
                 speaker_mappings=speaker_mappings,
                 transcript_data=transcript_data,
                 segment_count=segment_count,
@@ -1400,34 +1400,34 @@ class SpeakerAttributionTab(QWidget):
                 self.update_hce_btn.setEnabled(False)
                 return
 
-            # Load transcript to get video_id
+            # Load transcript to get source_id
             with open(self.current_transcript_path, encoding="utf-8") as f:
                 transcript_data = json.load(f)
 
-            video_id = transcript_data.get("video_id") or transcript_data.get("id")
-            if not video_id:
+            source_id = transcript_data.get("source_id") or transcript_data.get("id")
+            if not source_id:
                 self.update_hce_btn.setEnabled(False)
                 return
 
             # Check if HCE data exists
             from ...processors.speaker_processor import SpeakerProcessor
 
-            episode_id = SpeakerProcessor.find_episode_id_for_video(video_id)
+            source_id = SpeakerProcessor.find_episode_id_for_video(source_id)
 
-            if episode_id:
+            if source_id:
                 self.update_hce_btn.setEnabled(True)
                 self.update_hce_btn.setToolTip(
-                    f"Update HCE database for episode: {episode_id}\n"
+                    f"Update HCE database for episode: {source_id}\n"
                     "• Updates speaker names in HCE segments table\n"
                     "• Deletes existing claims, evidence, and entities\n"
                     "• Re-runs HCE analysis with correct speaker context"
                 )
                 logger.debug(
-                    f"HCE data found for video {video_id}, enabling update button"
+                    f"HCE data found for video {source_id}, enabling update button"
                 )
             else:
                 self.update_hce_btn.setEnabled(False)
-                logger.debug(f"No HCE data found for video {video_id}")
+                logger.debug(f"No HCE data found for video {source_id}")
 
         except Exception as e:
             logger.warning(f"Error checking HCE data existence: {e}")

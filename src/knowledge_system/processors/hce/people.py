@@ -35,7 +35,7 @@ class PeopleExtractor:
         else:
             self.entity_cache = None
 
-    def detect(self, episode_id: str, segments: list[Segment]) -> list[PersonMention]:
+    def detect(self, source_id: str, segments: list[Segment]) -> list[PersonMention]:
         out: list[PersonMention] = []
 
         # Check cache for suggested entities if enabled
@@ -100,7 +100,7 @@ class PeopleExtractor:
                 t1_str = str(t1_val) if t1_val is not None else seg.t1
 
                 person_mention = PersonMention(
-                    episode_id=episode_id,
+                    source_id=source_id,
                     mention_id=f"pm_{seg.segment_id}_{i}",
                     span_segment_id=seg.segment_id,
                     t0=t0_str,
@@ -169,5 +169,5 @@ def extract_people(episode, people_disambiguator_model_uri: str) -> list[PersonM
     extractor = PeopleExtractor(llm, detect_prompt, disambig_prompt)
 
     # Extract and disambiguate
-    mentions = extractor.detect(episode.episode_id, episode.segments)
+    mentions = extractor.detect(episode.source_id, episode.segments)
     return extractor.disambiguate(mentions)

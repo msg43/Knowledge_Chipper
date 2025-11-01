@@ -93,7 +93,7 @@ class DownloadCleanupService:
                         )
                         self.cleanup_report["missing_audio_files"].append(
                             {
-                                "video_id": video.source_id,
+                                "source_id": video.source_id,
                                 "title": video.title,
                                 "url": video.url,
                                 "expected_path": video.audio_file_path,
@@ -172,7 +172,7 @@ class DownloadCleanupService:
             for video in incomplete:
                 self.cleanup_report["incomplete_videos"].append(
                     {
-                        "video_id": video.source_id,
+                        "source_id": video.source_id,
                         "title": video.title,
                         "url": video.url,
                         # Note: Completion tracking columns not available in claim-centric schema
@@ -194,7 +194,7 @@ class DownloadCleanupService:
             for video in failed:
                 self.cleanup_report["failed_videos"].append(
                     {
-                        "video_id": video.source_id,
+                        "source_id": video.source_id,
                         "title": video.title,
                         "url": video.url,
                         # Note: Retry tracking columns not available in claim-centric schema
@@ -216,7 +216,7 @@ class DownloadCleanupService:
             for video in needing_retry:
                 self.cleanup_report["videos_needing_retry"].append(
                     {
-                        "video_id": video.source_id,
+                        "source_id": video.source_id,
                         "title": video.title,
                         "url": video.url,
                         # Note: Retry tracking columns not available in claim-centric schema

@@ -70,7 +70,7 @@ class ClaimSearchWorker(QThread):
                         hce_data = summary.hce_data_json
                         video = (
                             session.query(MediaSource)
-                            .filter(MediaSource.source_id == summary.video_id)
+                            .filter(MediaSource.source_id == summary.source_id)
                             .first()
                         )
 
@@ -85,7 +85,7 @@ class ClaimSearchWorker(QThread):
                                     {
                                         "claim": claim,
                                         "video": {
-                                            "video_id": video.source_id,
+                                            "source_id": video.source_id,
                                             "title": video.title,
                                             "url": video.url,
                                         },
@@ -474,7 +474,7 @@ class ClaimSearchTab(BaseTab):
 ## Source Video
 **Title:** {video.get('title', '')}
 **URL:** {video.get('url', '')}
-**Video ID:** {video.get('video_id', '')}
+**Video ID:** {video.get('source_id', '')}
 
 ## Evidence
 """
@@ -492,7 +492,7 @@ class ClaimSearchTab(BaseTab):
 
         # Add relationship visualization
         relations = self._get_claim_relations(
-            claim.get("claim_id", ""), result["video"]["video_id"]
+            claim.get("claim_id", ""), result["video"]["source_id"]
         )
         if relations:
             details += "\n## Relationships\n"
@@ -516,7 +516,7 @@ class ClaimSearchTab(BaseTab):
 
         self.claim_details.setMarkdown(details)
 
-    def _get_claim_relations(self, claim_id: str, video_id: str) -> list[dict]:
+    def _get_claim_relations(self, claim_id: str, source_id: str) -> list[dict]:
         """Get relationships for a specific claim."""
         if not claim_id:
             return []
@@ -530,7 +530,7 @@ class ClaimSearchTab(BaseTab):
                 summary = (
                     session.query(Summary)
                     .filter(
-                        Summary.video_id == video_id, Summary.processing_type == "hce"
+                        Summary.source_id == source_id, Summary.processing_type == "hce"
                     )
                     .first()
                 )

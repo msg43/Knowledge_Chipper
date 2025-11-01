@@ -1775,15 +1775,15 @@ class SpeakerProcessor(BaseProcessor):
             return ProcessorResult(success=False, errors=[str(e)])
 
     @staticmethod
-    def find_episode_id_for_video(video_id: str) -> str | None:
+    def find_episode_id_for_video(source_id: str) -> str | None:
         """
-        Find HCE episode_id associated with a video_id.
+        Find HCE source_id associated with a source_id.
 
-        Queries HCE episodes table in knowledge_system.db for matching video_id.
+        Queries HCE episodes table in knowledge_system.db for matching source_id.
         Returns None if no HCE data exists yet.
 
         Args:
-            video_id: Video ID to look up
+            source_id: Video ID to look up
 
         Returns:
             Episode ID if found, None otherwise
@@ -1802,7 +1802,7 @@ class SpeakerProcessor(BaseProcessor):
                 cur = conn.cursor()
                 result = cur.execute(
                     "SELECT source_id FROM segments WHERE source_id = ? LIMIT 1",
-                    (video_id,),
+                    (source_id,),
                 )
                 row = result.fetchone()
                 return row[0] if row else None
@@ -1810,13 +1810,13 @@ class SpeakerProcessor(BaseProcessor):
                 conn.close()
 
         except Exception as e:
-            logger.warning(f"Failed to lookup episode_id for video {video_id}: {e}")
+            logger.warning(f"Failed to lookup source_id for video {source_id}: {e}")
             return None
 
     @staticmethod
     def reprocess_hce_with_updated_speakers(
-        episode_id: str,
-        video_id: str,
+        source_id: str,
+        source_id: str,
         transcript_data: dict[str, Any],
         hce_config: dict[str, Any] | None = None,
         progress_callback: Any = None,
@@ -1831,8 +1831,8 @@ class SpeakerProcessor(BaseProcessor):
         4. Save results back to database
 
         Args:
-            episode_id: Episode ID to reprocess
-            video_id: Video ID for context
+            source_id: Episode ID to reprocess
+            source_id: Video ID for context
             transcript_data: Updated transcript data with corrected speaker names
             hce_config: Optional HCE configuration override
             progress_callback: Optional progress reporting function
@@ -1853,7 +1853,7 @@ class SpeakerProcessor(BaseProcessor):
             from .hce.unified_pipeline import UnifiedHCEPipeline
 
             logger.info(
-                f"Starting HCE reprocessing for episode {episode_id} with updated speakers"
+                f"Starting HCE reprocessing for episode {source_id} with updated speakers"
             )
 
             # Get database path
@@ -1868,7 +1868,7 @@ class SpeakerProcessor(BaseProcessor):
                 if progress_callback:
                     progress_callback("Deleting existing HCE data...")
 
-                success, message = delete_episode_hce_data(conn, episode_id)
+                success, message = delete_episode_hce_data(conn, source_id)
                 if not success:
                     return (False, f"Failed to delete old HCE data: {message}")
 
@@ -1883,7 +1883,7 @@ class SpeakerProcessor(BaseProcessor):
 
                 for i, seg in enumerate(transcript_segments):
                     segment = Segment(
-                        episode_id=episode_id,
+                        source_id=source_id,
                         segment_id=f"seg_{i:04d}",
                         speaker=seg.get("speaker", "Unknown"),
                         t0=str(seg.get("start", 0)),
@@ -1893,7 +1893,7 @@ class SpeakerProcessor(BaseProcessor):
                     segments.append(segment)
 
                 # Save updated segments to database
-                store_segments(conn, episode_id, segments)
+                store_segments(conn, source_id, segments)
                 logger.info(f"Stored {len(segments)} updated segments")
 
                 # Step 3: Run HCE pipeline
@@ -1901,7 +1901,7 @@ class SpeakerProcessor(BaseProcessor):
                     progress_callback("Running HCE analysis...")
 
                 # Create episode bundle
-                episode = EpisodeBundle(episode_id=episode_id, segments=segments)
+                episode = EpisodeBundle(source_id=source_id, segments=segments)
 
                 # Configure HCE pipeline
                 if hce_config:
@@ -1933,7 +1933,7 @@ class SpeakerProcessor(BaseProcessor):
                 # Get video title if available
                 video_title = None
                 try:
-                    video = db_service.get_video(video_id)
+                    video = db_service.get_video(source_id)
                     if video:
                         video_title = (
                             str(video.title) if hasattr(video, "title") else None
@@ -1942,11 +1942,11 @@ class SpeakerProcessor(BaseProcessor):
                     pass
 
                 upsert_pipeline_outputs(
-                    conn, outputs, episode_title=video_title, video_id=video_id
+                    conn, outputs, episode_title=video_title, source_id=source_id
                 )
 
                 logger.info(
-                    f"Successfully reprocessed HCE data for episode {episode_id}"
+                    f"Successfully reprocessed HCE data for episode {source_id}"
                 )
 
                 return (
@@ -1960,5 +1960,5 @@ class SpeakerProcessor(BaseProcessor):
                 conn.close()
 
         except Exception as e:
-            logger.error(f"Failed to reprocess HCE for episode {episode_id}: {e}")
+            logger.error(f"Failed to reprocess HCE for episode {source_id}: {e}")
             return (False, f"HCE reprocessing failed: {str(e)}")

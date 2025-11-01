@@ -62,12 +62,12 @@ def process_bright_data_youtube_response(
         try:
             metadata = adapt_bright_data_metadata(bright_data_response, video_url)
             results["video_metadata"] = metadata
-            logger.info(f"Successfully adapted metadata for video {metadata.video_id}")
+            logger.info(f"Successfully adapted metadata for video {metadata.source_id}")
 
             # Step 3: Store metadata in database
             db_service = DatabaseService()
             video_record = db_service.create_video(
-                video_id=metadata.video_id,
+                source_id=metadata.source_id,
                 title=metadata.title,
                 url=metadata.url,
                 uploader=metadata.uploader,
@@ -86,9 +86,9 @@ def process_bright_data_youtube_response(
             )
 
             if video_record:
-                results["database_records"]["video"] = video_record.video_id
+                results["database_records"]["video"] = video_record.source_id
                 logger.info(
-                    f"Stored video metadata in database: {video_record.video_id}"
+                    f"Stored video metadata in database: {video_record.source_id}"
                 )
 
         except Exception as e:
@@ -104,7 +104,7 @@ def process_bright_data_youtube_response(
                 )
                 results["transcript"] = transcript
                 logger.info(
-                    f"Successfully adapted transcript for video {transcript.video_id}"
+                    f"Successfully adapted transcript for video {transcript.source_id}"
                 )
 
                 # Store transcript in database
@@ -112,7 +112,7 @@ def process_bright_data_youtube_response(
                     transcript.transcript_text
                 ):  # Only store if we have actual transcript text
                     transcript_record = db_service.create_transcript(
-                        video_id=transcript.video_id,
+                        source_id=transcript.source_id,
                         language=transcript.language,
                         transcript_text=transcript.transcript_text,
                         transcript_segments_json=transcript.transcript_data,
@@ -197,7 +197,7 @@ def compare_yt_dlp_vs_bright_data_output():
 
     # Adapt yt-dlp output (existing logic)
     yt_dlp_metadata = YouTubeMetadata(
-        video_id=yt_dlp_output["id"],
+        source_id=yt_dlp_output["id"],
         title=yt_dlp_output["title"],
         url=url,
         uploader=yt_dlp_output["uploader"],
@@ -216,21 +216,21 @@ def compare_yt_dlp_vs_bright_data_output():
 
     # Compare results - should be nearly identical
     print("=== yt-dlp Metadata ===")
-    print(f"Video ID: {yt_dlp_metadata.video_id}")
+    print(f"Video ID: {yt_dlp_metadata.source_id}")
     print(f"Title: {yt_dlp_metadata.title}")
     print(f"Duration: {yt_dlp_metadata.duration}")
     print(f"Views: {yt_dlp_metadata.view_count}")
     print(f"Extraction: {yt_dlp_metadata.extraction_method}")
 
     print("\n=== Bright Data Metadata ===")
-    print(f"Video ID: {bright_data_metadata.video_id}")
+    print(f"Video ID: {bright_data_metadata.source_id}")
     print(f"Title: {bright_data_metadata.title}")
     print(f"Duration: {bright_data_metadata.duration}")
     print(f"Views: {bright_data_metadata.view_count}")
     print(f"Extraction: {bright_data_metadata.extraction_method}")
 
     # Both should be compatible with existing database/processing logic
-    assert yt_dlp_metadata.video_id == bright_data_metadata.video_id
+    assert yt_dlp_metadata.source_id == bright_data_metadata.source_id
     assert yt_dlp_metadata.title == bright_data_metadata.title
     assert yt_dlp_metadata.duration == bright_data_metadata.duration
     assert yt_dlp_metadata.view_count == bright_data_metadata.view_count
@@ -261,8 +261,8 @@ def demonstrate_error_handling():
             metadata = adapt_bright_data_metadata(response, url)
             transcript = adapt_bright_data_transcript(response, url)
 
-            print(f"✅ Metadata adapted: {metadata.video_id} - {metadata.title}")
-            print(f"✅ Transcript adapted: {transcript.video_id} - {transcript.title}")
+            print(f"✅ Metadata adapted: {metadata.source_id} - {metadata.title}")
+            print(f"✅ Transcript adapted: {transcript.source_id} - {transcript.title}")
 
             # Verify they're valid model instances
             assert isinstance(metadata, YouTubeMetadata)

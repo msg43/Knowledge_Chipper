@@ -378,7 +378,7 @@ OPTIMIZATION SUGGESTIONS:
 
 # Convenience functions for easy integration
 def track_video_processing_cost(
-    video_id: str, session_id: str, requests: int = 1, data_mb: float = 0.0
+    source_id: str, session_id: str, requests: int = 1, data_mb: float = 0.0
 ) -> float:
     """Convenience function to track cost for video processing."""
     tracker = CostTracker()

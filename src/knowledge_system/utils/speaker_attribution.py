@@ -126,7 +126,7 @@ class SpeakerAttributor:
     def attribute_speakers(
         self,
         speaker_segments: list[dict],
-        video_id: str | None = None,
+        source_id: str | None = None,
         transcript_text: str | None = None,
         manual_mapping: dict[str, str] | None = None,
     ) -> list[dict]:
@@ -135,7 +135,7 @@ class SpeakerAttributor:
 
         Args:
             speaker_segments: List of segments with 'speaker' field
-            video_id: YouTube video ID for video-specific mapping
+            source_id: YouTube video ID for video-specific mapping
             transcript_text: Full transcript for content analysis
             manual_mapping: Manual override mapping (highest priority)
 
@@ -144,7 +144,7 @@ class SpeakerAttributor:
 
         Priority Order:
         1. Manual Override (manual_mapping parameter)
-        2. Video-Specific Mapping (based on video_id)
+        2. Video-Specific Mapping (based on source_id)
         3. Content-Based Detection (based on transcript_text)
         4. Default Fallback (keep original labels)
         """
@@ -363,7 +363,7 @@ def test_speaker_attribution():
     print(f"   Speakers: {summary2['speakers_found']}")
 
     print("\n3️⃣ Testing Video-Specific Mapping:")
-    result3 = attributor.attribute_speakers(test_segments, video_id="COtibNznlP4")
+    result3 = attributor.attribute_speakers(test_segments, source_id="COtibNznlP4")
     summary3 = attributor.get_attribution_summary(result3)
     print(f"   Method: {summary3['method']}")
     print(f"   Mapping: {summary3['mapping']}")

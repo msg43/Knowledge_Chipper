@@ -29,14 +29,14 @@ class HCEReprocessWorker(QThread):
 
     def __init__(
         self,
-        episode_id: str,
-        video_id: str,
+        source_id: str,
+        source_id: str,
         transcript_data: dict,
         hce_config: dict | None = None,
     ):
         super().__init__()
-        self.episode_id = episode_id
-        self.video_id = video_id
+        self.source_id = source_id
+        self.source_id = source_id
         self.transcript_data = transcript_data
         self.hce_config = hce_config
 
@@ -49,8 +49,8 @@ class HCEReprocessWorker(QThread):
                 self.progress_updated.emit(message)
 
             success, message = SpeakerProcessor.reprocess_hce_with_updated_speakers(
-                episode_id=self.episode_id,
-                video_id=self.video_id,
+                source_id=self.source_id,
+                source_id=self.source_id,
                 transcript_data=self.transcript_data,
                 hce_config=self.hce_config,
                 progress_callback=progress_callback,
@@ -76,8 +76,8 @@ class HCEUpdateConfirmationDialog(QDialog):
 
     def __init__(
         self,
-        episode_id: str,
-        video_id: str,
+        source_id: str,
+        source_id: str,
         speaker_mappings: dict[str, str],
         transcript_data: dict,
         segment_count: int = 0,
@@ -85,8 +85,8 @@ class HCEUpdateConfirmationDialog(QDialog):
         parent=None,
     ):
         super().__init__(parent)
-        self.episode_id = episode_id
-        self.video_id = video_id
+        self.source_id = source_id
+        self.source_id = source_id
         self.speaker_mappings = speaker_mappings
         self.transcript_data = transcript_data
         self.segment_count = segment_count
@@ -244,8 +244,8 @@ class HCEUpdateConfirmationDialog(QDialog):
 
         # Start worker thread
         self.reprocess_worker = HCEReprocessWorker(
-            episode_id=self.episode_id,
-            video_id=self.video_id,
+            source_id=self.source_id,
+            source_id=self.source_id,
             transcript_data=self.transcript_data,
             hce_config=self.hce_config,
         )
@@ -299,8 +299,8 @@ class HCEUpdateConfirmationDialog(QDialog):
 
 
 def show_hce_update_dialog(
-    episode_id: str,
-    video_id: str,
+    source_id: str,
+    source_id: str,
     speaker_mappings: dict[str, str],
     transcript_data: dict,
     segment_count: int = 0,
@@ -311,8 +311,8 @@ def show_hce_update_dialog(
     Show HCE update confirmation dialog and execute reprocessing if confirmed.
 
     Args:
-        episode_id: HCE episode ID
-        video_id: Video/media ID
+        source_id: HCE episode ID
+        source_id: Video/media ID
         speaker_mappings: Dict of old_speaker -> new_speaker
         transcript_data: Updated transcript with new speaker names
         segment_count: Number of segments (for estimation)
@@ -323,8 +323,8 @@ def show_hce_update_dialog(
         True if reprocessing completed successfully, False otherwise
     """
     dialog = HCEUpdateConfirmationDialog(
-        episode_id=episode_id,
-        video_id=video_id,
+        source_id=source_id,
+        source_id=source_id,
         speaker_mappings=speaker_mappings,
         transcript_data=transcript_data,
         segment_count=segment_count,

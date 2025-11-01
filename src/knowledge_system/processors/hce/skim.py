@@ -10,7 +10,7 @@ class Skimmer:
         self.llm = llm
         self.template = prompt_path.read_text()
 
-    def skim(self, episode_id: str, segments: list[Segment]) -> list[Milestone]:
+    def skim(self, source_id: str, segments: list[Segment]) -> list[Milestone]:
         """Extract key milestones from segments using LLM analysis."""
         milestones = []
 
@@ -53,7 +53,7 @@ class Skimmer:
                     t1_str = str(t1_val) if t1_val is not None else "0"
 
                     milestone = Milestone(
-                        milestone_id=f"ms_{episode_id}_{i//chunk_size}_{j}",
+                        milestone_id=f"ms_{source_id}_{i//chunk_size}_{j}",
                         t0=t0_str,
                         t1=t1_str,
                         summary=summary,
@@ -87,4 +87,4 @@ def skim_episode(
     llm = System2LLM(resolved_model_uri)
     prompt_path = Path(__file__).parent / "prompts" / "skim.txt"
     sk = Skimmer(llm, prompt_path)
-    return sk.skim(episode.episode_id, episode.segments)
+    return sk.skim(episode.source_id, episode.segments)

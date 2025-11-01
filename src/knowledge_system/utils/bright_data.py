@@ -101,7 +101,7 @@ class BrightDataSessionManager:
         Create a new Bright Data session for a specific file.
 
         Args:
-            file_id: Unique identifier for the file (typically video_id)
+            file_id: Unique identifier for the file (typically source_id)
             session_type: Type of session ('audio_download', 'metadata_scrape', 'transcript_scrape')
 
         Returns:
@@ -118,7 +118,7 @@ class BrightDataSessionManager:
             # Store session in database for tracking
             self.db.create_bright_data_session(
                 session_id=session_id,
-                video_id=file_id,
+                source_id=file_id,
                 session_type=session_type,
                 proxy_endpoint=self.proxy_endpoint,
                 customer_id=self.customer_id,
@@ -403,19 +403,19 @@ class BrightDataProxyConfig:
 
 # Convenience functions for easy usage
 def get_proxy_for_video(
-    video_id: str, session_type: str = "audio_download"
+    source_id: str, session_type: str = "audio_download"
 ) -> str | None:
     """Convenience function to get proxy URL for a video."""
     manager = BrightDataSessionManager()
-    return manager.get_proxy_url_for_file(video_id, session_type)
+    return manager.get_proxy_url_for_file(source_id, session_type)
 
 
 def get_proxy_dict_for_video(
-    video_id: str, session_type: str = "audio_download"
+    source_id: str, session_type: str = "audio_download"
 ) -> dict[str, str] | None:
     """Convenience function to get proxy dictionary for a video."""
     manager = BrightDataSessionManager()
-    return manager.get_proxy_dict_for_file(video_id, session_type)
+    return manager.get_proxy_dict_for_file(source_id, session_type)
 
 
 def track_usage(

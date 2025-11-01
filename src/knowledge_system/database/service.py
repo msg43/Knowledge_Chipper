@@ -444,16 +444,16 @@ class DatabaseService:
 
                 # Check each video's audio_file_path (handle path variations)
                 for video in videos:
-                    if video.audio_file_path:
+                    if source.audio_file_path:
                         try:
                             stored_path = str(Path(video.audio_file_path).resolve())
                             if stored_path == file_path_normalized:
                                 # Add platform categories as a dynamic property
                                 categories = self._get_platform_categories_for_source(
-                                    session, video.source_id
+                                    session, source.source_id
                                 )
                                 # Store as dynamic attribute (not persisted to DB)
-                                video.categories_json = categories if categories else []
+                                source.categories_json = categories if categories else []
                                 return video
                         except (OSError, ValueError):
                             # Handle invalid paths gracefully
@@ -557,7 +557,7 @@ class DatabaseService:
 
     def update_audio_status(
         self,
-        video_id: str,  # Parameter name kept for backward compatibility
+        source_id: str,
         audio_file_path: str | Path | None,
         audio_downloaded: bool,
         audio_file_size_bytes: int | None = None,
@@ -566,108 +566,108 @@ class DatabaseService:
         """Update audio download status for a source."""
         try:
             with self.get_session() as session:
-                video = (
+                source = (
                     session.query(MediaSource)
-                    .filter(MediaSource.source_id == video_id)
+                    .filter(MediaSource.source_id == source_id)
                     .first()
                 )
-                if not video:
+                if not source:
                     logger.warning(
-                        f"Cannot update audio status: source {video_id} not found"
+                        f"Cannot update audio status: source {source_id} not found"
                     )
                     return False
 
-                video.audio_file_path = (
+                source.audio_file_path = (
                     str(audio_file_path) if audio_file_path else None
                 )
-                video.audio_downloaded = audio_downloaded
-                video.audio_file_size_bytes = audio_file_size_bytes
-                video.audio_format = audio_format
+                source.audio_downloaded = audio_downloaded
+                source.audio_file_size_bytes = audio_file_size_bytes
+                source.audio_format = audio_format
 
                 # Clear audio retry flag if successful
                 if audio_downloaded:
-                    video.needs_audio_retry = False
+                    source.needs_audio_retry = False
 
                 session.commit()
                 logger.debug(
-                    f"Updated audio status for {video_id}: downloaded={audio_downloaded}"
+                    f"Updated audio status for {source_id}: downloaded={audio_downloaded}"
                 )
                 return True
         except Exception as e:
-            logger.error(f"Failed to update audio status for {video_id}: {e}")
+            logger.error(f"Failed to update audio status for {source_id}: {e}")
             return False
 
-    def update_metadata_status(self, video_id: str, metadata_complete: bool) -> bool:
-        """Update metadata completion status for a video."""
+    def update_metadata_status(self, source_id: str, metadata_complete: bool) -> bool:
+        """Update metadata completion status for a source."""
         try:
             with self.get_session() as session:
-                video = (
+                source = (
                     session.query(MediaSource)
-                    .filter(MediaSource.source_id == video_id)
+                    .filter(MediaSource.source_id == source_id)
                     .first()
                 )
-                if not video:
+                if not source:
                     logger.warning(
-                        f"Cannot update metadata status: video {video_id} not found"
+                        f"Cannot update metadata status: source {source_id} not found"
                     )
                     return False
 
-                video.metadata_complete = metadata_complete
+                source.metadata_complete = metadata_complete
 
                 # Clear metadata retry flag if successful
                 if metadata_complete:
-                    video.needs_metadata_retry = False
+                    source.needs_metadata_retry = False
 
                 session.commit()
                 logger.debug(
-                    f"Updated metadata status for {video_id}: complete={metadata_complete}"
+                    f"Updated metadata status for {source_id}: complete={metadata_complete}"
                 )
                 return True
         except Exception as e:
-            logger.error(f"Failed to update metadata status for {video_id}: {e}")
+            logger.error(f"Failed to update metadata status for {source_id}: {e}")
             return False
 
     def mark_for_retry(
         self,
-        video_id: str,
+        source_id: str,
         needs_metadata_retry: bool = False,
         needs_audio_retry: bool = False,
         failure_reason: str | None = None,
     ) -> bool:
-        """Mark a video for retry (metadata, audio, or both)."""
+        """Mark a source for retry (metadata, audio, or both)."""
         try:
             with self.get_session() as session:
-                video = (
+                source = (
                     session.query(MediaSource)
-                    .filter(MediaSource.source_id == video_id)
+                    .filter(MediaSource.source_id == source_id)
                     .first()
                 )
-                if not video:
-                    logger.warning(f"Cannot mark for retry: video {video_id} not found")
+                if not source:
+                    logger.warning(f"Cannot mark for retry: source {source_id} not found")
                     return False
 
-                video.needs_metadata_retry = needs_metadata_retry
-                video.needs_audio_retry = needs_audio_retry
-                video.retry_count += 1
-                video.last_retry_at = datetime.utcnow()
+                source.needs_metadata_retry = needs_metadata_retry
+                source.needs_audio_retry = needs_audio_retry
+                source.retry_count += 1
+                source.last_retry_at = datetime.utcnow()
 
                 if failure_reason:
-                    video.failure_reason = failure_reason
+                    source.failure_reason = failure_reason
 
                 # Check if max retries exceeded (3 attempts)
-                if video.retry_count >= 3:
-                    video.max_retries_exceeded = True
-                    video.status = "failed"
-                    logger.warning(f"Video {video_id} exceeded max retries (3)")
+                if source.retry_count >= 3:
+                    source.max_retries_exceeded = True
+                    source.status = "failed"
+                    logger.warning(f"Source {source_id} exceeded max retries (3)")
 
                 session.commit()
                 logger.info(
-                    f"Marked {video_id} for retry (attempt {video.retry_count}): "
+                    f"Marked {source_id} for retry (attempt {source.retry_count}): "
                     f"metadata={needs_metadata_retry}, audio={needs_audio_retry}"
                 )
                 return True
         except Exception as e:
-            logger.error(f"Failed to mark {video_id} for retry: {e}")
+            logger.error(f"Failed to mark {source_id} for retry: {e}")
             return False
 
     def get_videos_needing_retry(
@@ -728,49 +728,49 @@ class DatabaseService:
             logger.error(f"Failed to get incomplete videos: {e}")
             return []
 
-    def is_video_complete(self, video_id: str) -> bool:
-        """Check if video has both audio and metadata complete."""
+    def is_video_complete(self, source_id: str) -> bool:
+        """Check if source has both audio and metadata complete."""
         try:
             with self.get_session() as session:
-                video = (
+                source = (
                     session.query(MediaSource)
-                    .filter(MediaSource.source_id == video_id)
+                    .filter(MediaSource.source_id == source_id)
                     .first()
                 )
-                if not video:
+                if not source:
                     return False
-                return video.audio_downloaded and video.metadata_complete
+                return source.audio_downloaded and source.metadata_complete
         except Exception as e:
-            logger.error(f"Failed to check if video {video_id} is complete: {e}")
+            logger.error(f"Failed to check if source {source_id} is complete: {e}")
             return False
 
-    def validate_audio_file_exists(self, video_id: str) -> bool:
+    def validate_audio_file_exists(self, source_id: str) -> bool:
         """Validate that the audio file path in database actually exists on disk."""
         try:
             with self.get_session() as session:
-                video = (
+                source = (
                     session.query(MediaSource)
-                    .filter(MediaSource.source_id == video_id)
+                    .filter(MediaSource.source_id == source_id)
                     .first()
                 )
-                if not video or not video.audio_file_path:
+                if not source or not source.audio_file_path:
                     return False
 
-                audio_path = Path(video.audio_file_path)
+                audio_path = Path(source.audio_file_path)
                 exists = audio_path.exists()
 
                 # If file doesn't exist but database says it does, mark for retry
-                if not exists and video.audio_downloaded:
+                if not exists and source.audio_downloaded:
                     logger.warning(
-                        f"Audio file missing for {video_id}: {video.audio_file_path}"
+                        f"Audio file missing for {source_id}: {source.audio_file_path}"
                     )
-                    video.audio_downloaded = False
-                    video.needs_audio_retry = True
+                    source.audio_downloaded = False
+                    source.needs_audio_retry = True
                     session.commit()
 
                 return exists
         except Exception as e:
-            logger.error(f"Failed to validate audio file for {video_id}: {e}")
+            logger.error(f"Failed to validate audio file for {source_id}: {e}")
             return False
 
     # =============================================================================
@@ -779,7 +779,7 @@ class DatabaseService:
 
     def create_transcript(
         self,
-        video_id: str,
+        source_id: str,
         language: str,
         is_manual: bool,
         transcript_text: str,
@@ -789,11 +789,11 @@ class DatabaseService:
         """Create a new transcript record or update existing one for re-runs."""
         try:
             with self.get_session() as session:
-                # Check for existing transcript for this video_id and language
+                # Check for existing transcript for this source_id and language
                 existing_transcript = (
                     session.query(Transcript)
                     .filter(
-                        Transcript.source_id == video_id,
+                        Transcript.source_id == source_id,
                         Transcript.language == language,
                     )
                     .order_by(desc(Transcript.created_at))
@@ -803,7 +803,7 @@ class DatabaseService:
                 if existing_transcript:
                     # Update existing transcript for re-runs
                     logger.info(
-                        f"Updating existing transcript for {video_id} (language: {language})"
+                        f"Updating existing transcript for {source_id} (language: {language})"
                     )
 
                     # Update fields
@@ -832,11 +832,11 @@ class DatabaseService:
                     return existing_transcript
                 else:
                     # Create new transcript
-                    transcript_id = f"{video_id}_{language}_{uuid.uuid4().hex[:8]}"
+                    transcript_id = f"{source_id}_{language}_{uuid.uuid4().hex[:8]}"
 
                     transcript = Transcript(
                         transcript_id=transcript_id,
-                        source_id=video_id,
+                        source_id=source_id,
                         language=language,
                         is_manual=is_manual,
                         transcript_text=transcript_text,
@@ -854,21 +854,21 @@ class DatabaseService:
                     logger.info(f"Created transcript: {transcript_id}")
                     return transcript
         except Exception as e:
-            logger.error(f"Failed to create/update transcript for {video_id}: {e}")
+            logger.error(f"Failed to create/update transcript for {source_id}: {e}")
             return None
 
-    def get_transcripts_for_video(self, video_id: str) -> list[Transcript]:
-        """Get all transcripts for a video."""
+    def get_transcripts_for_video(self, source_id: str) -> list[Transcript]:
+        """Get all transcripts for a source."""
         try:
             with self.get_session() as session:
                 return (
                     session.query(Transcript)
-                    .filter(Transcript.source_id == video_id)
+                    .filter(Transcript.source_id == source_id)
                     .order_by(desc(Transcript.created_at))
                     .all()
                 )
         except Exception as e:
-            logger.error(f"Failed to get transcripts for {video_id}: {e}")
+            logger.error(f"Failed to get transcripts for {source_id}: {e}")
             return []
 
     def get_transcript(self, transcript_id: str) -> Transcript | None:
@@ -966,18 +966,18 @@ class DatabaseService:
 
                 # Get video metadata for markdown generation
                 # Use claim_models MediaSource (has source_id)
-                video = (
+                source = (
                     session.query(MediaSource)
-                    .filter(MediaSource.source_id == transcript.video_id)
+                    .filter(MediaSource.source_id == transcript.source_id)
                     .first()
                 )
 
                 video_metadata = None
                 if video:
                     video_metadata = {
-                        "video_id": video.source_id,
-                        "title": video.title,
-                        "url": video.url,
+                        "source_id": source.source_id,
+                        "title": source.title,
+                        "url": source.url,
                         "uploader": getattr(video, "uploader", None),
                         "upload_date": getattr(video, "upload_date", None),
                         "duration": getattr(video, "duration_seconds", None),
@@ -997,7 +997,7 @@ class DatabaseService:
 
     def create_summary(
         self,
-        video_id: str,
+        source_id: str,
         summary_text: str,
         llm_provider: str,
         llm_model: str,
@@ -1006,12 +1006,12 @@ class DatabaseService:
     ) -> Summary | None:
         """Create a new summary record."""
         try:
-            summary_id = f"{video_id}_{llm_model}_{uuid.uuid4().hex[:8]}"
+            summary_id = f"{source_id}_{llm_model}_{uuid.uuid4().hex[:8]}"
 
             with self.get_session() as session:
                 summary = Summary(
                     summary_id=summary_id,
-                    source_id=video_id,
+                    source_id=source_id,
                     transcript_id=transcript_id,
                     summary_text=summary_text,
                     llm_provider=llm_provider,
@@ -1024,55 +1024,67 @@ class DatabaseService:
                 logger.info(f"Created summary: {summary_id}")
                 return summary
         except Exception as e:
-            logger.error(f"Failed to create summary for {video_id}: {e}")
+            logger.error(f"Failed to create summary for {source_id}: {e}")
             return None
 
-    def get_summaries_for_video(self, video_id: str) -> list[Summary]:
-        """Get all summaries for a video."""
+    def get_summaries_for_video(self, source_id: str) -> list[Summary]:
+        """Get all summaries for a source."""
         try:
             with self.get_session() as session:
                 return (
                     session.query(Summary)
-                    .filter(Summary.source_id == video_id)
+                    .filter(Summary.source_id == source_id)
                     .order_by(desc(Summary.created_at))
                     .all()
                 )
         except Exception as e:
-            logger.error(f"Failed to get summaries for {video_id}: {e}")
+            logger.error(f"Failed to get summaries for {source_id}: {e}")
             return []
 
-    def get_latest_summary(self, video_id: str) -> Summary | None:
-        """Get the most recent summary for a video."""
+    def get_latest_summary(self, source_id: str) -> Summary | None:
+        """Get the most recent summary for a source."""
         try:
             with self.get_session() as session:
                 return (
                     session.query(Summary)
-                    .filter(Summary.source_id == video_id)
+                    .filter(Summary.source_id == source_id)
                     .order_by(desc(Summary.created_at))
                     .first()
                 )
         except Exception as e:
-            logger.error(f"Failed to get latest summary for {video_id}: {e}")
+            logger.error(f"Failed to get latest summary for {source_id}: {e}")
             return None
 
     # =============================================================================
     # HCE OPERATIONS
     # =============================================================================
 
-    def save_hce_data(self, video_id: str, hce_outputs) -> bool:
-        """Save HCE pipeline outputs to database tables."""
+    def save_hce_data(self, source_id: str, hce_outputs) -> bool:
+        """
+        DEPRECATED: Save HCE pipeline outputs to database tables.
+        
+        This method is deprecated in favor of the claim-centric architecture.
+        Use ClaimStore.upsert_pipeline_outputs() instead.
+        """
+        logger.warning(
+            "save_hce_data() is deprecated. Use ClaimStore.upsert_pipeline_outputs() instead."
+        )
+        return False
+        
+        # OLD CODE - DEPRECATED - Episode model removed in claim-centric architecture
+        """
         try:
             with self.get_session() as session:
                 # Create or get episode
                 episode = (
-                    session.query(Episode).filter(Episode.source_id == video_id).first()
+                    session.query(Episode).filter(Episode.source_id == source_id).first()
                 )
                 if not episode:
                     # Create new episode with claim-centric schema
-                    video = self.get_video(video_id)
+                    video = self.get_video(source_id)
                     episode = Episode(
                         episode_id=hce_outputs.episode_id,
-                        source_id=video_id,
+                        source_id=source_id,
                         title=video.title if video else hce_outputs.episode_id,
                     )
                     session.add(episode)
@@ -1169,6 +1181,7 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to save HCE data: {e}")
             return False
+        """
 
     # =============================================================================
     # MOC OPERATIONS
@@ -1176,7 +1189,7 @@ class DatabaseService:
 
     def create_moc_extraction(
         self,
-        video_id: str,
+        source_id: str,
         people: list[dict] | None = None,
         tags: list[dict] | None = None,
         mental_models: list[dict] | None = None,
@@ -1186,12 +1199,12 @@ class DatabaseService:
     ) -> MOCExtraction | None:
         """Create a new MOC extraction record."""
         try:
-            moc_id = f"{video_id}_moc_{uuid.uuid4().hex[:8]}"
+            moc_id = f"{source_id}_moc_{uuid.uuid4().hex[:8]}"
 
             with self.get_session() as session:
                 moc = MOCExtraction(
                     moc_id=moc_id,
-                    video_id=video_id,
+                    source_id=source_id,
                     people_json=people or [],
                     tags_json=tags or [],
                     mental_models_json=mental_models or [],
@@ -1204,7 +1217,7 @@ class DatabaseService:
                 logger.info(f"Created MOC extraction: {moc_id}")
                 return moc
         except Exception as e:
-            logger.error(f"Failed to create MOC extraction for {video_id}: {e}")
+            logger.error(f"Failed to create MOC extraction for {source_id}: {e}")
             return None
 
     # =============================================================================
@@ -1212,14 +1225,14 @@ class DatabaseService:
     # =============================================================================
 
     def create_bright_data_session(
-        self, session_id: str, video_id: str, session_type: str, **metadata
+        self, session_id: str, source_id: str, session_type: str, **metadata
     ) -> BrightDataSession | None:
         """Create a new Bright Data session record."""
         try:
             with self.get_session() as session:
                 bd_session = BrightDataSession(
                     session_id=session_id,
-                    video_id=video_id,
+                    source_id=source_id,
                     session_type=session_type,
                     **metadata,
                 )
@@ -1334,7 +1347,7 @@ class DatabaseService:
 
     def track_generated_file(
         self,
-        video_id: str,
+        source_id: str,
         file_path: str,
         file_type: str,
         file_format: str,
@@ -1342,7 +1355,7 @@ class DatabaseService:
     ) -> GeneratedFile | None:
         """Track a generated output file."""
         try:
-            file_id = f"{video_id}_{file_type}_{uuid.uuid4().hex[:8]}"
+            file_id = f"{source_id}_{file_type}_{uuid.uuid4().hex[:8]}"
 
             with self.get_session() as session:
                 file_size = 0
@@ -1351,7 +1364,7 @@ class DatabaseService:
 
                 generated_file = GeneratedFile(
                     file_id=file_id,
-                    video_id=video_id,
+                    source_id=source_id,
                     file_path=file_path,
                     file_type=file_type,
                     file_format=file_format,
@@ -1518,10 +1531,10 @@ class DatabaseService:
                     "CREATE INDEX IF NOT EXISTS idx_videos_created_at ON videos(created_at)",
                     "CREATE INDEX IF NOT EXISTS idx_videos_title_search ON videos(title)",
                     # Transcript table indexes
-                    "CREATE INDEX IF NOT EXISTS idx_transcripts_video_id ON transcripts(video_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_transcripts_video_id ON transcripts(source_id)",
                     "CREATE INDEX IF NOT EXISTS idx_transcripts_created_at ON transcripts(created_at)",
                     # Summary table indexes
-                    "CREATE INDEX IF NOT EXISTS idx_summaries_video_id ON summaries(video_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_summaries_video_id ON summaries(source_id)",
                     "CREATE INDEX IF NOT EXISTS idx_summaries_processing_type ON summaries(processing_type)",
                     "CREATE INDEX IF NOT EXISTS idx_summaries_llm_provider ON summaries(llm_provider)",
                     "CREATE INDEX IF NOT EXISTS idx_summaries_created_at ON summaries(created_at)",
@@ -1532,11 +1545,11 @@ class DatabaseService:
                     "CREATE INDEX IF NOT EXISTS idx_processing_jobs_status ON processing_jobs(status)",
                     "CREATE INDEX IF NOT EXISTS idx_processing_jobs_created_at ON processing_jobs(created_at)",
                     # HCE-specific indexes for claim searches
-                    "CREATE INDEX IF NOT EXISTS idx_claims_video_id ON claims(video_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_claims_video_id ON claims(source_id)",
                     "CREATE INDEX IF NOT EXISTS idx_claims_tier ON claims(tier)",
                     "CREATE INDEX IF NOT EXISTS idx_claims_claim_type ON claims(claim_type)",
-                    "CREATE INDEX IF NOT EXISTS idx_people_video_id ON people(video_id)",
-                    "CREATE INDEX IF NOT EXISTS idx_concepts_video_id ON concepts(video_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_people_video_id ON people(source_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_concepts_video_id ON concepts(source_id)",
                 ]
 
                 # Execute index creation

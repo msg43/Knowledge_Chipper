@@ -227,7 +227,7 @@ class PacketStreamProvider(BaseProxyProvider):
         return session
 
     @staticmethod
-    def generate_session_id(url: str, video_id: str | None = None) -> str:
+    def generate_session_id(url: str, source_id: str | None = None) -> str:
         """
         Generate consistent session ID from URL or video ID.
 
@@ -236,14 +236,14 @@ class PacketStreamProvider(BaseProxyProvider):
 
         Args:
             url: The URL being accessed
-            video_id: Optional video ID (for YouTube videos)
+            source_id: Optional video ID (for YouTube videos)
 
         Returns:
             Session identifier string
         """
-        if video_id:
+        if source_id:
             # Use video ID directly for YouTube content
-            return video_id
+            return source_id
         else:
             # Hash URL for non-YouTube content (RSS feeds, other platforms)
             import hashlib

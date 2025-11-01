@@ -533,7 +533,7 @@ class EnhancedTranscriptionWorker(QThread):
                 else:
                     # Create new record for retry tracking
                     db_service.create_source(
-                        video_id=source_id,
+                        source_id=source_id,
                         title=f"Retry: {url[:50]}",
                         source_url=url,
                         source_type="youtube",
@@ -1166,7 +1166,7 @@ class EnhancedTranscriptionWorker(QThread):
 
                         # Try to retrieve metadata from database
                         # Strategy 1: Look up by file path (DATABASE-CENTRIC - preferred!)
-                        # Strategy 2: Extract video_id from filename (fallback for old files)
+                        # Strategy 2: Extract source_id from filename (fallback for old files)
                         file_path_obj = Path(file_path)
                         filename = file_path_obj.stem
 
@@ -1195,7 +1195,7 @@ class EnhancedTranscriptionWorker(QThread):
                         # Strategy 2: Extract source_id from filename (fallback for old files)
                         if not source_record:
                             logger.debug(
-                                f"   Strategy 2: Extracting video_id from filename..."
+                                f"   Strategy 2: Extracting source_id from filename..."
                             )
                             # YouTube video IDs are 11 characters: [a-zA-Z0-9_-]{11}
                             import re
@@ -1219,7 +1219,7 @@ class EnhancedTranscriptionWorker(QThread):
                                         source_id = potential_id
                                         source_record = test_record
                                         logger.info(
-                                            f"✅ Found video_id in filename: {source_id} (pattern: {pattern})"
+                                            f"✅ Found source_id in filename: {source_id} (pattern: {pattern})"
                                         )
                                         break
 
@@ -1231,11 +1231,11 @@ class EnhancedTranscriptionWorker(QThread):
                                         source_record = db_service.get_source(source_id)
                                         if source_record:
                                             logger.info(
-                                                f"✅ Extracted video_id via URL pattern: {source_id}"
+                                                f"✅ Extracted source_id via URL pattern: {source_id}"
                                             )
                                 except:
                                     logger.debug(
-                                        "Could not extract video_id from URL pattern"
+                                        "Could not extract source_id from URL pattern"
                                     )
 
                         if not source_record:
@@ -1265,7 +1265,7 @@ class EnhancedTranscriptionWorker(QThread):
 
                             # Convert database record to metadata dict for audio processor
                             video_metadata = {
-                                "video_id": source_record.source_id,
+                                "source_id": source_record.source_id,
                                 "title": source_record.title,
                                 "url": source_record.url,
                                 "uploader": source_record.uploader,
@@ -1462,7 +1462,7 @@ class EnhancedTranscriptionWorker(QThread):
                                 file_path_obj = Path(file_path)
                                 filename = file_path_obj.stem
 
-                                # Extract video_id from filename
+                                # Extract source_id from filename
                                 if "[" in filename and "]" in filename:
                                     source_id = filename.split("[")[-1].split("]")[0]
                                 else:

@@ -39,7 +39,7 @@ def upsert_pipeline_outputs(
     out: PipelineOutputs,
     episode_title: str | None = None,
     recorded_at: str | None = None,
-    video_id: str | None = None,
+    source_id: str | None = None,
 ) -> None:
     """
     Persist pipeline outputs to SQLite with idempotent upserts.
@@ -49,7 +49,7 @@ def upsert_pipeline_outputs(
         out: Pipeline outputs to persist
         episode_title: Optional episode title
         recorded_at: Optional recording timestamp (ISO8601)
-        video_id: Optional reference to existing video_id in videos table
+        source_id: Optional reference to existing source_id in videos table
     """
     cur = conn.cursor()
 
@@ -60,33 +60,33 @@ def upsert_pipeline_outputs(
         # Upsert episode
         cur.execute(
             """
-            INSERT INTO episodes(episode_id, video_id, title, recorded_at)
+            INSERT INTO episodes(source_id, source_id, title, recorded_at)
             VALUES(?, ?, ?, ?)
-            ON CONFLICT(episode_id) DO UPDATE SET
-                video_id = COALESCE(excluded.video_id, video_id),
+            ON CONFLICT(source_id) DO UPDATE SET
+                source_id = COALESCE(excluded.source_id, source_id),
                 title = COALESCE(excluded.title, title),
                 recorded_at = COALESCE(excluded.recorded_at, recorded_at)
         """,
-            (out.episode_id, video_id, episode_title, recorded_at),
+            (out.source_id, source_id, episode_title, recorded_at),
         )
 
         # Clear existing FTS entries for this episode (for clean reindex)
-        cur.execute("DELETE FROM claims_fts WHERE episode_id = ?", (out.episode_id,))
-        cur.execute("DELETE FROM quotes_fts WHERE episode_id = ?", (out.episode_id,))
+        cur.execute("DELETE FROM claims_fts WHERE source_id = ?", (out.source_id,))
+        cur.execute("DELETE FROM quotes_fts WHERE source_id = ?", (out.source_id,))
 
         # Upsert milestones
         for milestone in out.milestones:
             cur.execute(
                 """
-                INSERT INTO milestones(episode_id, milestone_id, t0, t1, summary)
+                INSERT INTO milestones(source_id, milestone_id, t0, t1, summary)
                 VALUES(?, ?, ?, ?, ?)
-                ON CONFLICT(episode_id, milestone_id) DO UPDATE SET
+                ON CONFLICT(source_id, milestone_id) DO UPDATE SET
                     t0 = excluded.t0,
                     t1 = excluded.t1,
                     summary = excluded.summary
             """,
                 (
-                    out.episode_id,
+                    out.source_id,
                     milestone.milestone_id,
                     milestone.t0,
                     milestone.t1,
@@ -101,9 +101,9 @@ def upsert_pipeline_outputs(
 
             cur.execute(
                 """
-                INSERT INTO claims(episode_id, claim_id, canonical, claim_type, tier, first_mention_ts, scores_json, temporality_score, temporality_confidence, temporality_rationale, structured_categories_json, category_relevance_scores_json)
+                INSERT INTO claims(source_id, claim_id, canonical, claim_type, tier, first_mention_ts, scores_json, temporality_score, temporality_confidence, temporality_rationale, structured_categories_json, category_relevance_scores_json)
                 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(episode_id, claim_id) DO UPDATE SET
+                ON CONFLICT(source_id, claim_id) DO UPDATE SET
                     canonical = excluded.canonical,
                     claim_type = excluded.claim_type,
                     tier = excluded.tier,
@@ -116,7 +116,7 @@ def upsert_pipeline_outputs(
                     category_relevance_scores_json = excluded.category_relevance_scores_json
             """,
                 (
-                    out.episode_id,
+                    out.source_id,
                     claim.claim_id,
                     claim.canonical,
                     claim.claim_type,
@@ -135,20 +135,20 @@ def upsert_pipeline_outputs(
             cur.execute(
                 """
                 DELETE FROM evidence_spans
-                WHERE episode_id = ? AND claim_id = ?
+                WHERE source_id = ? AND claim_id = ?
             """,
-                (out.episode_id, claim.claim_id),
+                (out.source_id, claim.claim_id),
             )
 
             # Insert evidence spans with dual-level context
             for i, evidence in enumerate(claim.evidence):
                 cur.execute(
                     """
-                    INSERT INTO evidence_spans(episode_id, claim_id, seq, segment_id, t0, t1, quote, context_t0, context_t1, context_text, context_type)
+                    INSERT INTO evidence_spans(source_id, claim_id, seq, segment_id, t0, t1, quote, context_t0, context_t1, context_text, context_type)
                     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
-                        out.episode_id,
+                        out.source_id,
                         claim.claim_id,
                         i,
                         evidence.segment_id,
@@ -165,33 +165,33 @@ def upsert_pipeline_outputs(
                 # Index quote in FTS
                 cur.execute(
                     """
-                    INSERT INTO quotes_fts(episode_id, claim_id, quote)
+                    INSERT INTO quotes_fts(source_id, claim_id, quote)
                     VALUES(?, ?, ?)
                 """,
-                    (out.episode_id, claim.claim_id, evidence.quote),
+                    (out.source_id, claim.claim_id, evidence.quote),
                 )
 
             # Index claim in FTS
             cur.execute(
                 """
-                INSERT INTO claims_fts(episode_id, claim_id, canonical, claim_type)
+                INSERT INTO claims_fts(source_id, claim_id, canonical, claim_type)
                 VALUES(?, ?, ?, ?)
             """,
-                (out.episode_id, claim.claim_id, claim.canonical, claim.claim_type),
+                (out.source_id, claim.claim_id, claim.canonical, claim.claim_type),
             )
 
         # Upsert relations
         for relation in out.relations:
             cur.execute(
                 """
-                INSERT INTO relations(episode_id, source_claim_id, target_claim_id, type, strength, rationale)
+                INSERT INTO relations(source_id, source_claim_id, target_claim_id, type, strength, rationale)
                 VALUES(?, ?, ?, ?, ?, ?)
-                ON CONFLICT(episode_id, source_claim_id, target_claim_id, type) DO UPDATE SET
+                ON CONFLICT(source_id, source_claim_id, target_claim_id, type) DO UPDATE SET
                     strength = excluded.strength,
                     rationale = excluded.rationale
             """,
                 (
-                    out.episode_id,
+                    out.source_id,
                     relation.source_claim_id,
                     relation.target_claim_id,
                     relation.type,
@@ -208,9 +208,9 @@ def upsert_pipeline_outputs(
 
             cur.execute(
                 """
-                INSERT INTO people(episode_id, mention_id, span_segment_id, t0, t1, surface, normalized, entity_type, external_ids_json, confidence, context_quote)
+                INSERT INTO people(source_id, mention_id, span_segment_id, t0, t1, surface, normalized, entity_type, external_ids_json, confidence, context_quote)
                 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(episode_id, mention_id) DO UPDATE SET
+                ON CONFLICT(source_id, mention_id) DO UPDATE SET
                     span_segment_id = excluded.span_segment_id,
                     t0 = excluded.t0,
                     t1 = excluded.t1,
@@ -222,7 +222,7 @@ def upsert_pipeline_outputs(
                     context_quote = excluded.context_quote
             """,
                 (
-                    out.episode_id,
+                    out.source_id,
                     person.mention_id,
                     person.span_segment_id,
                     person.t0,
@@ -246,9 +246,9 @@ def upsert_pipeline_outputs(
 
             cur.execute(
                 """
-                INSERT INTO concepts(episode_id, model_id, name, definition, first_mention_ts, aliases_json, evidence_json, context_quote)
+                INSERT INTO concepts(source_id, model_id, name, definition, first_mention_ts, aliases_json, evidence_json, context_quote)
                 VALUES(?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(episode_id, model_id) DO UPDATE SET
+                ON CONFLICT(source_id, model_id) DO UPDATE SET
                     name = excluded.name,
                     definition = excluded.definition,
                     first_mention_ts = excluded.first_mention_ts,
@@ -257,7 +257,7 @@ def upsert_pipeline_outputs(
                     context_quote = excluded.context_quote
             """,
                 (
-                    out.episode_id,
+                    out.source_id,
                     concept.model_id,
                     concept.name,
                     concept.definition,
@@ -278,9 +278,9 @@ def upsert_pipeline_outputs(
 
             cur.execute(
                 """
-                INSERT INTO jargon(episode_id, term_id, term, category, definition, evidence_json, context_quote)
+                INSERT INTO jargon(source_id, term_id, term, category, definition, evidence_json, context_quote)
                 VALUES(?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(episode_id, term_id) DO UPDATE SET
+                ON CONFLICT(source_id, term_id) DO UPDATE SET
                     term = excluded.term,
                     category = excluded.category,
                     definition = excluded.definition,
@@ -288,7 +288,7 @@ def upsert_pipeline_outputs(
                     context_quote = excluded.context_quote
             """,
                 (
-                    out.episode_id,
+                    out.source_id,
                     term.term_id,
                     term.term,
                     term.category,
@@ -303,9 +303,9 @@ def upsert_pipeline_outputs(
             supporting_evidence_json = json.dumps(category.supporting_evidence)
             cur.execute(
                 """
-                INSERT INTO structured_categories(episode_id, category_id, category_name, wikidata_qid, coverage_confidence, supporting_evidence_json, frequency_score)
+                INSERT INTO structured_categories(source_id, category_id, category_name, wikidata_qid, coverage_confidence, supporting_evidence_json, frequency_score)
                 VALUES(?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(episode_id, category_id) DO UPDATE SET
+                ON CONFLICT(source_id, category_id) DO UPDATE SET
                     category_name = excluded.category_name,
                     wikidata_qid = excluded.wikidata_qid,
                     coverage_confidence = excluded.coverage_confidence,
@@ -313,7 +313,7 @@ def upsert_pipeline_outputs(
                     frequency_score = excluded.frequency_score
             """,
                 (
-                    out.episode_id,
+                    out.source_id,
                     category.category_id,
                     category.category_name,
                     category.wikidata_qid,
@@ -332,7 +332,7 @@ def upsert_pipeline_outputs(
         raise e
 
 
-def store_segments(conn: sqlite3.Connection, episode_id: str, segments: list) -> None:
+def store_segments(conn: sqlite3.Connection, source_id: str, segments: list) -> None:
     """Store episode segments for reference."""
     cur = conn.cursor()
 
@@ -340,17 +340,17 @@ def store_segments(conn: sqlite3.Connection, episode_id: str, segments: list) ->
         cur.execute("BEGIN")
 
         # Clear existing segments
-        cur.execute("DELETE FROM segments WHERE episode_id = ?", (episode_id,))
+        cur.execute("DELETE FROM segments WHERE source_id = ?", (source_id,))
 
         # Insert new segments
         for segment in segments:
             cur.execute(
                 """
-                INSERT INTO segments(episode_id, segment_id, speaker, t0, t1, text, topic_guess)
+                INSERT INTO segments(source_id, segment_id, speaker, t0, t1, text, topic_guess)
                 VALUES(?, ?, ?, ?, ?, ?, ?)
             """,
                 (
-                    episode_id,
+                    source_id,
                     segment.segment_id,
                     segment.speaker,
                     segment.t0,
@@ -370,26 +370,26 @@ def store_segments(conn: sqlite3.Connection, episode_id: str, segments: list) ->
 # Common query utilities
 
 
-def episode_exists(conn: sqlite3.Connection, episode_id: str) -> bool:
+def episode_exists(conn: sqlite3.Connection, source_id: str) -> bool:
     """
     Check if episode exists in HCE database.
 
     Args:
         conn: SQLite connection
-        episode_id: Episode ID to check
+        source_id: Episode ID to check
 
     Returns:
         True if episode exists, False otherwise
     """
     cur = conn.cursor()
     result = cur.execute(
-        "SELECT 1 FROM episodes WHERE episode_id = ? LIMIT 1", (episode_id,)
+        "SELECT 1 FROM episodes WHERE source_id = ? LIMIT 1", (source_id,)
     )
     return result.fetchone() is not None
 
 
 def update_speaker_names(
-    conn: sqlite3.Connection, episode_id: str, speaker_mappings: dict[str, str]
+    conn: sqlite3.Connection, source_id: str, speaker_mappings: dict[str, str]
 ) -> tuple[bool, str]:
     """
     Update speaker names throughout HCE database for an episode.
@@ -401,7 +401,7 @@ def update_speaker_names(
 
     Args:
         conn: SQLite connection
-        episode_id: Episode ID to update
+        source_id: Episode ID to update
         speaker_mappings: Dict of {old_speaker_name: new_speaker_name}
 
     Returns:
@@ -422,9 +422,9 @@ def update_speaker_names(
                 """
                 UPDATE segments
                 SET speaker = ?
-                WHERE episode_id = ? AND speaker = ?
+                WHERE source_id = ? AND speaker = ?
             """,
-                (new_speaker, episode_id, old_speaker),
+                (new_speaker, source_id, old_speaker),
             )
             rows_updated = cur.rowcount
             updated_count += rows_updated
@@ -432,7 +432,7 @@ def update_speaker_names(
             if rows_updated > 0:
                 logger.info(
                     f"Updated {rows_updated} segments: '{old_speaker}' -> '{new_speaker}' "
-                    f"for episode {episode_id}"
+                    f"for episode {source_id}"
                 )
 
         conn.commit()
@@ -440,7 +440,7 @@ def update_speaker_names(
         if updated_count == 0:
             return (
                 True,
-                f"No segments found matching the old speaker names for episode {episode_id}",
+                f"No segments found matching the old speaker names for episode {source_id}",
             )
 
         return (
@@ -450,12 +450,12 @@ def update_speaker_names(
 
     except Exception as e:
         conn.rollback()
-        logger.error(f"Failed to update speaker names for episode {episode_id}: {e}")
+        logger.error(f"Failed to update speaker names for episode {source_id}: {e}")
         return (False, f"Failed to update speaker names: {str(e)}")
 
 
 def delete_episode_hce_data(
-    conn: sqlite3.Connection, episode_id: str
+    conn: sqlite3.Connection, source_id: str
 ) -> tuple[bool, str]:
     """
     Delete all HCE extracted data for an episode (claims, evidence, entities).
@@ -465,7 +465,7 @@ def delete_episode_hce_data(
 
     Args:
         conn: SQLite connection
-        episode_id: Episode ID to clear
+        source_id: Episode ID to clear
 
     Returns:
         Tuple of (success: bool, message: str)
@@ -480,41 +480,41 @@ def delete_episode_hce_data(
 
         # Delete in order respecting foreign keys
         # Evidence spans reference claims
-        cur.execute("DELETE FROM evidence_spans WHERE episode_id = ?", (episode_id,))
+        cur.execute("DELETE FROM evidence_spans WHERE source_id = ?", (source_id,))
         evidence_count = cur.rowcount
 
         # Relations reference claims
-        cur.execute("DELETE FROM relations WHERE episode_id = ?", (episode_id,))
+        cur.execute("DELETE FROM relations WHERE source_id = ?", (source_id,))
         relations_count = cur.rowcount
 
         # Delete main entity tables
-        cur.execute("DELETE FROM claims WHERE episode_id = ?", (episode_id,))
+        cur.execute("DELETE FROM claims WHERE source_id = ?", (source_id,))
         claims_count = cur.rowcount
 
-        cur.execute("DELETE FROM people WHERE episode_id = ?", (episode_id,))
+        cur.execute("DELETE FROM people WHERE source_id = ?", (source_id,))
         people_count = cur.rowcount
 
-        cur.execute("DELETE FROM concepts WHERE episode_id = ?", (episode_id,))
+        cur.execute("DELETE FROM concepts WHERE source_id = ?", (source_id,))
         concepts_count = cur.rowcount
 
-        cur.execute("DELETE FROM jargon WHERE episode_id = ?", (episode_id,))
+        cur.execute("DELETE FROM jargon WHERE source_id = ?", (source_id,))
         jargon_count = cur.rowcount
 
-        cur.execute("DELETE FROM mental_models WHERE episode_id = ?", (episode_id,))
+        cur.execute("DELETE FROM mental_models WHERE source_id = ?", (source_id,))
         mental_models_count = cur.rowcount
 
         # Delete milestones
-        cur.execute("DELETE FROM milestones WHERE episode_id = ?", (episode_id,))
+        cur.execute("DELETE FROM milestones WHERE source_id = ?", (source_id,))
         milestones_count = cur.rowcount
 
         # Delete FTS entries
-        cur.execute("DELETE FROM claims_fts WHERE episode_id = ?", (episode_id,))
-        cur.execute("DELETE FROM quotes_fts WHERE episode_id = ?", (episode_id,))
+        cur.execute("DELETE FROM claims_fts WHERE source_id = ?", (source_id,))
+        cur.execute("DELETE FROM quotes_fts WHERE source_id = ?", (source_id,))
 
         conn.commit()
 
         message = (
-            f"Deleted HCE data for episode {episode_id}: "
+            f"Deleted HCE data for episode {source_id}: "
             f"{claims_count} claims, {evidence_count} evidence spans, "
             f"{relations_count} relations, {people_count} people, "
             f"{concepts_count} concepts, {jargon_count} jargon terms, "
@@ -526,12 +526,12 @@ def delete_episode_hce_data(
 
     except Exception as e:
         conn.rollback()
-        logger.error(f"Failed to delete HCE data for episode {episode_id}: {e}")
+        logger.error(f"Failed to delete HCE data for episode {source_id}: {e}")
         return (False, f"Failed to delete HCE data: {str(e)}")
 
 
 def get_top_claims(
-    conn: sqlite3.Connection, episode_id: str, tier: str = "A", limit: int = 10
+    conn: sqlite3.Connection, source_id: str, tier: str = "A", limit: int = 10
 ) -> list:
     """Get top claims by importance score."""
     cur = conn.cursor()
@@ -540,15 +540,15 @@ def get_top_claims(
         SELECT claim_id, canonical,
                json_extract(scores_json, '$.importance') AS importance
         FROM claims
-        WHERE episode_id = ? AND tier = ?
+        WHERE source_id = ? AND tier = ?
         ORDER BY importance DESC
         LIMIT ?
     """,
-        (episode_id, tier, limit),
+        (source_id, tier, limit),
     ).fetchall()
 
 
-def find_contradictions(conn: sqlite3.Connection, episode_id: str) -> list:
+def find_contradictions(conn: sqlite3.Connection, source_id: str) -> list:
     """Find all contradiction relations in an episode."""
     cur = conn.cursor()
     return cur.execute(
@@ -556,12 +556,12 @@ def find_contradictions(conn: sqlite3.Connection, episode_id: str) -> list:
         SELECT r.source_claim_id, r.target_claim_id, r.strength, r.rationale,
                sc.canonical as source_claim, tc.canonical as target_claim
         FROM relations r
-        JOIN claims sc ON r.episode_id = sc.episode_id AND r.source_claim_id = sc.claim_id
-        JOIN claims tc ON r.episode_id = tc.episode_id AND r.target_claim_id = tc.claim_id
-        WHERE r.episode_id = ? AND r.type = 'contradicts'
+        JOIN claims sc ON r.source_id = sc.source_id AND r.source_claim_id = sc.claim_id
+        JOIN claims tc ON r.source_id = tc.source_id AND r.target_claim_id = tc.claim_id
+        WHERE r.source_id = ? AND r.type = 'contradicts'
         ORDER BY r.strength DESC
     """,
-        (episode_id,),
+        (source_id,),
     ).fetchall()
 
 
@@ -570,10 +570,10 @@ def search_claims(conn: sqlite3.Connection, query: str, limit: int = 50) -> list
     cur = conn.cursor()
     return cur.execute(
         """
-        SELECT c.episode_id, c.claim_id, c.canonical, c.claim_type,
+        SELECT c.source_id, c.claim_id, c.canonical, c.claim_type,
                snippet(claims_fts, 2, '<mark>', '</mark>', '...', 32) as snippet
         FROM claims_fts
-        JOIN claims c ON claims_fts.episode_id = c.episode_id AND claims_fts.claim_id = c.claim_id
+        JOIN claims c ON claims_fts.source_id = c.source_id AND claims_fts.claim_id = c.claim_id
         WHERE claims_fts MATCH ?
         ORDER BY rank
         LIMIT ?
@@ -587,12 +587,12 @@ def get_person_claims(conn: sqlite3.Connection, normalized_name: str) -> list:
     cur = conn.cursor()
     return cur.execute(
         """
-        SELECT DISTINCT c.episode_id, c.claim_id, c.canonical
+        SELECT DISTINCT c.source_id, c.claim_id, c.canonical
         FROM claims c
-        JOIN quotes_fts q ON c.episode_id = q.episode_id AND c.claim_id = q.claim_id
-        JOIN people p ON p.episode_id = c.episode_id
+        JOIN quotes_fts q ON c.source_id = q.source_id AND c.claim_id = q.claim_id
+        JOIN people p ON p.source_id = c.source_id
         WHERE p.normalized = ? AND q.quote LIKE '%' || p.surface || '%'
-        ORDER BY c.episode_id, c.claim_id
+        ORDER BY c.source_id, c.claim_id
     """,
         (normalized_name,),
     ).fetchall()
@@ -604,7 +604,7 @@ def get_cross_episode_concepts(conn: sqlite3.Connection, limit: int = 50) -> lis
     return cur.execute(
         """
         SELECT name, COUNT(*) as uses,
-               GROUP_CONCAT(DISTINCT episode_id) as episodes
+               GROUP_CONCAT(DISTINCT source_id) as episodes
         FROM concepts
         GROUP BY name
         ORDER BY uses DESC
@@ -615,19 +615,19 @@ def get_cross_episode_concepts(conn: sqlite3.Connection, limit: int = 50) -> lis
 
 
 def get_jargon_glossary(
-    conn: sqlite3.Connection, episode_id: str | None = None
+    conn: sqlite3.Connection, source_id: str | None = None
 ) -> list:
     """Get jargon glossary for an episode or all episodes."""
     cur = conn.cursor()
-    if episode_id:
+    if source_id:
         return cur.execute(
             """
             SELECT term, category, definition
             FROM jargon
-            WHERE episode_id = ?
+            WHERE source_id = ?
             ORDER BY term
         """,
-            (episode_id,),
+            (source_id,),
         ).fetchall()
     else:
         return cur.execute(

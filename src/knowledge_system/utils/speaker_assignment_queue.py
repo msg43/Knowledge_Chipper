@@ -25,7 +25,7 @@ class SpeakerAssignmentTask:
     """Represents a pending speaker assignment task."""
 
     task_id: str
-    video_id: str
+    source_id: str
     transcript_id: str
     speaker_data_list: list[SpeakerData]
     recording_path: str
@@ -55,7 +55,7 @@ class SpeakerAssignmentQueue:
 
     def add_task(
         self,
-        video_id: str,
+        source_id: str,
         transcript_id: str,
         speaker_data_list: list[SpeakerData],
         recording_path: str,
@@ -71,7 +71,7 @@ class SpeakerAssignmentQueue:
 
         task = SpeakerAssignmentTask(
             task_id=task_id,
-            video_id=video_id,
+            source_id=source_id,
             transcript_id=transcript_id,
             speaker_data_list=speaker_data_list,
             recording_path=recording_path,
@@ -183,7 +183,7 @@ class SpeakerAssignmentQueue:
 
                 # CRITICAL: Regenerate the markdown file with speaker names
                 logger.info(
-                    f"Regenerating markdown with assigned speaker names for {task.video_id}"
+                    f"Regenerating markdown with assigned speaker names for {task.source_id}"
                 )
 
                 try:

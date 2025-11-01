@@ -32,7 +32,7 @@ class Job(Base):
     job_type = Column(
         String(50), nullable=False
     )  # 'transcribe', 'mine', 'flagship', 'upload'
-    input_id = Column(String(100), nullable=False)  # video_id or episode_id
+    input_id = Column(String(100), nullable=False)  # source_id or source_id
     config_json = Column(JSONEncodedType)  # Job configuration
     auto_process = Column(String(5), default="false")  # Whether to chain to next stage
     created_at = Column(DateTime, default=datetime.utcnow)

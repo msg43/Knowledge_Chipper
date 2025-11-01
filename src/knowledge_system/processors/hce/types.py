@@ -32,7 +32,7 @@ class EvidenceSpan(BaseModel):
 
 
 class Segment(BaseModel):
-    episode_id: str
+    source_id: str
     segment_id: str
     speaker: str
     t0: str
@@ -49,7 +49,7 @@ class Milestone(BaseModel):
 
 
 class CandidateClaim(BaseModel):
-    episode_id: str
+    source_id: str
     segment_id: str
     candidate_id: str
     speaker: str | None = None
@@ -61,7 +61,7 @@ class CandidateClaim(BaseModel):
 
 
 class ConsolidatedClaim(BaseModel):
-    episode_id: str
+    source_id: str
     claim_id: str
     consolidated: str
     claim_type: ClaimType
@@ -72,7 +72,7 @@ class ConsolidatedClaim(BaseModel):
 
 
 class ScoredClaim(BaseModel):
-    episode_id: str
+    source_id: str
     claim_id: str
     canonical: str
     claim_type: ClaimType
@@ -91,7 +91,7 @@ class ScoredClaim(BaseModel):
 
 
 class Relation(BaseModel):
-    episode_id: str
+    source_id: str
     source_claim_id: str
     target_claim_id: str
     type: RelationType
@@ -100,7 +100,7 @@ class Relation(BaseModel):
 
 
 class PersonMention(BaseModel):
-    episode_id: str
+    source_id: str
     mention_id: str
     span_segment_id: str
     t0: str
@@ -113,7 +113,7 @@ class PersonMention(BaseModel):
 
 
 class MentalModel(BaseModel):
-    episode_id: str
+    source_id: str
     model_id: str
     name: str
     definition: str | None = None
@@ -123,7 +123,7 @@ class MentalModel(BaseModel):
 
 
 class JargonTerm(BaseModel):
-    episode_id: str
+    source_id: str
     term_id: str
     term: str
     category: str | None = None
@@ -145,7 +145,7 @@ class StructuredCategory(BaseModel):
 
 
 class EpisodeBundle(BaseModel):
-    episode_id: str
+    source_id: str
     segments: list[Segment]
     milestones: list[Milestone] | None = None
 
@@ -156,7 +156,7 @@ class EpisodeBundle(BaseModel):
 
 
 class PipelineOutputs(BaseModel):
-    episode_id: str
+    source_id: str
     claims: list[ScoredClaim]
     relations: list[Relation] = []
     milestones: list[Milestone] = []

@@ -537,7 +537,7 @@ def download_thumbnail_direct(
 
         import requests
 
-        video_id = extract_video_id(url)
+        source_id = extract_video_id(url)
 
         # BUGFIX: Save directly to provided output_dir, don't create additional "Thumbnails" subdirectory
         # The caller is responsible for ensuring they pass the correct directory
@@ -556,15 +556,15 @@ def download_thumbnail_direct(
         # Fallback to direct image URLs
         thumbnail_configs.extend(
             [
-                ("maxres", f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"),
-                ("hq", f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"),
-                ("mq", f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg"),
-                ("default", f"https://img.youtube.com/vi/{video_id}/default.jpg"),
+                ("maxres", f"https://img.youtube.com/vi/{source_id}/maxresdefault.jpg"),
+                ("hq", f"https://img.youtube.com/vi/{source_id}/hqdefault.jpg"),
+                ("mq", f"https://img.youtube.com/vi/{source_id}/mqdefault.jpg"),
+                ("default", f"https://img.youtube.com/vi/{source_id}/default.jpg"),
                 # Alternative formats
-                ("sd", f"https://img.youtube.com/vi/{video_id}/sddefault.jpg"),
-                ("thumb1", f"https://img.youtube.com/vi/{video_id}/1.jpg"),
-                ("thumb2", f"https://img.youtube.com/vi/{video_id}/2.jpg"),
-                ("thumb3", f"https://img.youtube.com/vi/{video_id}/3.jpg"),
+                ("sd", f"https://img.youtube.com/vi/{source_id}/sddefault.jpg"),
+                ("thumb1", f"https://img.youtube.com/vi/{source_id}/1.jpg"),
+                ("thumb2", f"https://img.youtube.com/vi/{source_id}/2.jpg"),
+                ("thumb3", f"https://img.youtube.com/vi/{source_id}/3.jpg"),
             ]
         )
 
@@ -599,7 +599,7 @@ def download_thumbnail_direct(
                     if (
                         content_length > 1000
                     ):  # Valid thumbnails are typically larger than 1KB
-                        thumbnail_path = output_dir / f"{video_id}_thumbnail.jpg"
+                        thumbnail_path = output_dir / f"{source_id}_thumbnail.jpg"
                         with open(thumbnail_path, "wb") as f:
                             f.write(response.content)
                         logger.info(
@@ -623,7 +623,7 @@ def download_thumbnail_direct(
                 logger.debug(f"Unexpected error downloading {quality} thumbnail: {e}")
                 continue
 
-        logger.warning(f"No thumbnail available for video: {video_id}")
+        logger.warning(f"No thumbnail available for video: {source_id}")
         return None
 
     except Exception as e:
