@@ -361,7 +361,9 @@ class StateMigrator:
                                     processing_cost=summary_data.get("cost", 0.0),
                                 )
 
-                        logger.debug(f"Migrated processing record for video {source_id}")
+                        logger.debug(
+                            f"Migrated processing record for video {source_id}"
+                        )
 
                 except Exception as record_error:
                     warning = f"Failed to migrate processing record {record_id}: {record_error}"

@@ -614,9 +614,7 @@ def get_cross_episode_concepts(conn: sqlite3.Connection, limit: int = 50) -> lis
     ).fetchall()
 
 
-def get_jargon_glossary(
-    conn: sqlite3.Connection, source_id: str | None = None
-) -> list:
+def get_jargon_glossary(conn: sqlite3.Connection, source_id: str | None = None) -> list:
     """Get jargon glossary for an episode or all episodes."""
     cur = conn.cursor()
     if source_id:

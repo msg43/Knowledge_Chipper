@@ -1484,7 +1484,9 @@ class SpeakerAssignmentDialog(QDialog):
             source_id = SpeakerProcessor.find_episode_id_for_video(source_id)
 
             if not source_id:
-                logger.debug(f"No HCE data found for video {source_id}, skipping update")
+                logger.debug(
+                    f"No HCE data found for video {source_id}, skipping update"
+                )
                 return
 
             logger.info(

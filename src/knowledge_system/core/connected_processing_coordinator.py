@@ -312,7 +312,8 @@ class ConnectedProcessingCoordinator:
     def _create_new_jobs(self, urls: list[str]) -> list[ProcessingJob]:
         """Create new jobs for URLs"""
         return [
-            ProcessingJob(url=url, source_id=self._extract_video_id(url)) for url in urls
+            ProcessingJob(url=url, source_id=self._extract_video_id(url))
+            for url in urls
         ]
 
     def _extract_video_id(self, url: str) -> str:

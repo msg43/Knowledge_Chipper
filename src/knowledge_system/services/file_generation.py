@@ -566,7 +566,9 @@ class FileGenerationService:
                         transcript_id=transcript.transcript_id,
                     )
 
-            logger.info(f"Generated {len(generated_files)} export files for {source_id}")
+            logger.info(
+                f"Generated {len(generated_files)} export files for {source_id}"
+            )
             return generated_files
 
         except Exception as e:
