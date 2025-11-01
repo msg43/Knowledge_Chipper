@@ -655,41 +655,29 @@ class EnhancedTranscriptionWorker(QThread):
         downloads_dir: Path,
     ) -> list[Path]:
         """
-        Download URLs using unified download path.
+        Download URLs using unified download path with YouTube-to-RSS mapping.
 
         Handles 0, 1, or multiple cookie files with consistent behavior:
         - 0 cookies: No authentication, safe rate limiting
         - 1 cookie: Single scheduler with deduplication and failover
         - 2+ cookies: Parallel schedulers with load distribution
+        
+        NEW: Automatically maps YouTube URLs to podcast RSS feeds when available,
+        downloading from RSS (no rate limiting) and falling back to YouTube.
         """
         import asyncio
-        import random
 
         from ...config import get_settings
         from ...database.service import DatabaseService
-        from ...services.multi_account_downloader import MultiAccountDownloadScheduler
-
-        downloaded_files = []
-
-        # Shuffle URLs if enabled (prevents sequential hammering of single channel/playlist)
-        config = get_settings()
-        if config.youtube_processing.shuffle_urls:
-            original_count = len(urls)
-            random.shuffle(urls)
-            logger.info(
-                f"🔀 Shuffled {original_count} URLs to prevent sequential hammering"
-            )
-            self.transcription_step_updated.emit(
-                f"🔀 Shuffled {original_count} URLs for better anti-bot protection", 0
-            )
+        from ...services.unified_download_orchestrator import UnifiedDownloadOrchestrator
 
         # Handle no cookies case
         if not cookie_files:
             logger.info("📥 No cookies provided - downloading without authentication")
-            cookie_files = [None]  # Single scheduler with no auth
+            cookie_files = []  # Empty list for orchestrator
 
         # Test and filter cookies (skips None values)
-        if cookie_files != [None]:
+        if cookie_files:
             self.transcription_step_updated.emit("🧪 Testing cookie files...", 0)
             valid_cookies = self._test_and_filter_cookies(cookie_files)
 
@@ -711,97 +699,62 @@ class EnhancedTranscriptionWorker(QThread):
                     0,
                 )
 
-        # Get disable_proxies_with_cookies setting
-        disable_proxies_with_cookies = self.gui_settings.get(
-            "disable_proxies_with_cookies", True
-        )
-
-        # Create scheduler
-        db_service = DatabaseService()
-        scheduler = MultiAccountDownloadScheduler(
-            cookie_files=cookie_files,
-            parallel_workers=20,  # For M2 Ultra
-            enable_sleep_period=self.gui_settings.get("enable_sleep_period", True),
-            sleep_start_hour=self.gui_settings.get("sleep_start_hour", 0),
-            sleep_end_hour=self.gui_settings.get("sleep_end_hour", 6),
-            db_service=db_service,
-            disable_proxies_with_cookies=disable_proxies_with_cookies,
-        )
-
-        # Create a simple callback for progress
+        # Create progress callback
         def progress_callback(message):
             self.transcription_step_updated.emit(message, 0)
 
-        scheduler.progress_callback = progress_callback
-
-        # Get disable_proxies_with_cookies setting
-        disable_proxies_with_cookies = self.gui_settings.get(
-            "disable_proxies_with_cookies", True
-        )
-
-        # Create scheduler
+        # Create database service
         db_service = DatabaseService()
-        scheduler = MultiAccountDownloadScheduler(
-            cookie_files=valid_cookies,
-            parallel_workers=20,  # For M2 Ultra
-            enable_sleep_period=self.gui_settings.get("enable_sleep_period", True),
-            sleep_start_hour=self.gui_settings.get("sleep_start_hour", 0),
-            sleep_end_hour=self.gui_settings.get("sleep_end_hour", 6),
+
+        # Create unified orchestrator (handles RSS + YouTube)
+        orchestrator = UnifiedDownloadOrchestrator(
+            youtube_urls=urls,
+            cookie_files=cookie_files if cookie_files else [],
+            output_dir=downloads_dir,
             db_service=db_service,
-            disable_proxies_with_cookies=disable_proxies_with_cookies,
+            progress_callback=progress_callback,
         )
 
-        # Create a simple callback for progress
-        def progress_callback(message):
-            self.transcription_step_updated.emit(message, 0)
-
-        scheduler.progress_callback = progress_callback
-
-        # Download all URLs (async)
+        # Run unified orchestrator (RSS + YouTube in parallel)
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            results = loop.run_until_complete(
-                scheduler.download_batch_with_rotation(
-                    urls=urls,
-                    output_dir=downloads_dir,
-                    processing_queue=None,  # No queue for now
-                    progress_callback=progress_callback,
-                )
+            # Returns: [(audio_file_path, source_id), ...]
+            files_with_source_ids = loop.run_until_complete(
+                orchestrator.process_all()
             )
 
-            # Extract downloaded files from results
-            downloaded_files = [
-                r.get("audio_file")
-                for r in results
-                if r.get("success") and r.get("audio_file")
-            ]
+            # Store source_id metadata for downstream processing
+            for audio_file, source_id in files_with_source_ids:
+                self._store_source_id_metadata(audio_file, source_id)
 
-            # Get statistics
-            stats = scheduler.get_stats()
+            # Extract just file paths for return
+            downloaded_files = [Path(path) for path, _ in files_with_source_ids]
+
             self.transcription_step_updated.emit(
-                f"📊 Download complete:\n"
-                f"   Successful: {stats['downloads_completed']}\n"
-                f"   Failed: {stats['downloads_failed']}\n"
-                f"   Duplicates skipped: {stats['duplicates_skipped']}\n"
-                f"   Accounts disabled: {stats['accounts_disabled']}\n"
-                f"   Active accounts: {stats['active_accounts']}/{stats['total_accounts']}",
+                f"✅ Download complete: {len(downloaded_files)} files ready for transcription",
                 0,
             )
-
-            # Handle failed URLs
-            failed_urls = scheduler.get_failed_urls()
-            if failed_urls:
-                self.transcription_step_updated.emit(
-                    f"⚠️ {len(failed_urls)} URL(s) failed after all retries", 0
-                )
-                for url in failed_urls:
-                    self._write_to_failed_urls_file(url, "Failed with all accounts")
 
         finally:
             loop.close()
 
         return downloaded_files
+
+    def _store_source_id_metadata(self, audio_file: Path, source_id: str) -> None:
+        """
+        Store source_id in sidecar file for downstream processing.
+        
+        Args:
+            audio_file: Path to audio file
+            source_id: Source ID for this file
+        """
+        try:
+            metadata_file = audio_file.with_suffix('.source_id')
+            metadata_file.write_text(source_id)
+            logger.debug(f"Stored source_id metadata: {source_id} -> {metadata_file.name}")
+        except Exception as e:
+            logger.warning(f"Failed to store source_id metadata for {audio_file.name}: {e}")
 
     def _test_and_filter_cookies(self, cookie_files: list[str]) -> list[str]:
         """Test cookie files and return only valid ones"""

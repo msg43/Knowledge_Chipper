@@ -75,7 +75,6 @@ class HCEUpdateConfirmationDialog(QDialog):
     def __init__(
         self,
         source_id: str,
-        source_id: str,
         speaker_mappings: dict[str, str],
         transcript_data: dict,
         segment_count: int = 0,
@@ -83,7 +82,6 @@ class HCEUpdateConfirmationDialog(QDialog):
         parent=None,
     ):
         super().__init__(parent)
-        self.source_id = source_id
         self.source_id = source_id
         self.speaker_mappings = speaker_mappings
         self.transcript_data = transcript_data
@@ -297,7 +295,6 @@ class HCEUpdateConfirmationDialog(QDialog):
 
 
 def show_hce_update_dialog(
-    source_id: str,
     source_id: str,
     speaker_mappings: dict[str, str],
     transcript_data: dict,
