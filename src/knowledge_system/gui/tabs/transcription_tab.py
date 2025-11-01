@@ -661,7 +661,7 @@ class EnhancedTranscriptionWorker(QThread):
         - 0 cookies: No authentication, safe rate limiting
         - 1 cookie: Single scheduler with deduplication and failover
         - 2+ cookies: Parallel schedulers with load distribution
-        
+
         NEW: Automatically maps YouTube URLs to podcast RSS feeds when available,
         downloading from RSS (no rate limiting) and falling back to YouTube.
         """
@@ -669,7 +669,9 @@ class EnhancedTranscriptionWorker(QThread):
 
         from ...config import get_settings
         from ...database.service import DatabaseService
-        from ...services.unified_download_orchestrator import UnifiedDownloadOrchestrator
+        from ...services.unified_download_orchestrator import (
+            UnifiedDownloadOrchestrator,
+        )
 
         # Handle no cookies case
         if not cookie_files:
@@ -720,9 +722,7 @@ class EnhancedTranscriptionWorker(QThread):
         asyncio.set_event_loop(loop)
         try:
             # Returns: [(audio_file_path, source_id), ...]
-            files_with_source_ids = loop.run_until_complete(
-                orchestrator.process_all()
-            )
+            files_with_source_ids = loop.run_until_complete(orchestrator.process_all())
 
             # Store source_id metadata for downstream processing
             for audio_file, source_id in files_with_source_ids:
@@ -744,17 +744,21 @@ class EnhancedTranscriptionWorker(QThread):
     def _store_source_id_metadata(self, audio_file: Path, source_id: str) -> None:
         """
         Store source_id in sidecar file for downstream processing.
-        
+
         Args:
             audio_file: Path to audio file
             source_id: Source ID for this file
         """
         try:
-            metadata_file = audio_file.with_suffix('.source_id')
+            metadata_file = audio_file.with_suffix(".source_id")
             metadata_file.write_text(source_id)
-            logger.debug(f"Stored source_id metadata: {source_id} -> {metadata_file.name}")
+            logger.debug(
+                f"Stored source_id metadata: {source_id} -> {metadata_file.name}"
+            )
         except Exception as e:
-            logger.warning(f"Failed to store source_id metadata for {audio_file.name}: {e}")
+            logger.warning(
+                f"Failed to store source_id metadata for {audio_file.name}: {e}"
+            )
 
     def _test_and_filter_cookies(self, cookie_files: list[str]) -> list[str]:
         """Test cookie files and return only valid ones"""
