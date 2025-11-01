@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 async def process_mine_with_unified_pipeline(
     orchestrator,  # System2Orchestrator instance
-    episode_id: str,
+    source_id: str,
     config: dict[str, Any],
     checkpoint: dict[str, Any] | None,
     run_id: str,
@@ -47,7 +47,7 @@ async def process_mine_with_unified_pipeline(
                 f"Job already completed (from checkpoint), returning cached results"
             )
             return checkpoint.get(
-                "final_result", {"status": "succeeded", "output_id": episode_id}
+                "final_result", {"status": "succeeded", "output_id": source_id}
             )
 
         # 1. Load transcript segments (prefer DB over file)
@@ -67,10 +67,10 @@ async def process_mine_with_unified_pipeline(
 
             # Re-chunk Whisper segments for efficient HCE processing
             if orchestrator.progress_callback:
-                orchestrator.progress_callback("parsing", 3, episode_id)
+                orchestrator.progress_callback("parsing", 3, source_id)
 
             segments = orchestrator._rechunk_whisper_segments(
-                whisper_segments, episode_id
+                whisper_segments, source_id
             )
             logger.info(
                 f"📦 Re-chunked into {len(segments)} optimized segments for HCE mining"

@@ -338,7 +338,7 @@ class DocumentProcessor(BaseProcessor):
                     "file_path": str(file_path),
                     "processing_time": datetime.now().isoformat(),
                     "db_records": {
-                        "media_sources": media_id,
+                        "media_sources": source_id,
                         "transcripts": (
                             transcript_record.transcript_id
                             if transcript_record

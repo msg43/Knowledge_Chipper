@@ -2012,13 +2012,13 @@ class SummarizationTab(BaseTab):
             for row in range(self.db_table.rowCount()):
                 checkbox = self.db_table.cellWidget(row, 0)
                 if checkbox and hasattr(checkbox, "isChecked") and checkbox.isChecked():
-                    # Get video_id stored in row data
+                    # Get source_id stored in row data
                     source_id = self.db_table.item(row, 1).data(
                         Qt.ItemDataRole.UserRole
                     )
-                    if video_id:
+                    if source_id:
                         # Use special prefix to indicate database source
-                        sources.append(f"db://{video_id}")
+                        sources.append(f"db://{source_id}")
             logger.info(
                 f"🎯 DEBUG: _get_file_list() returning {len(sources)} database sources"
             )

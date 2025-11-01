@@ -557,13 +557,13 @@ class DatabaseService:
 
     def update_audio_status(
         self,
-        video_id: str,
+        video_id: str,  # Parameter name kept for backward compatibility
         audio_file_path: str | Path | None,
         audio_downloaded: bool,
         audio_file_size_bytes: int | None = None,
         audio_format: str | None = None,
     ) -> bool:
-        """Update audio download status for a video."""
+        """Update audio download status for a source."""
         try:
             with self.get_session() as session:
                 video = (
@@ -573,7 +573,7 @@ class DatabaseService:
                 )
                 if not video:
                     logger.warning(
-                        f"Cannot update audio status: video {video_id} not found"
+                        f"Cannot update audio status: source {video_id} not found"
                     )
                     return False
 
