@@ -692,6 +692,35 @@ class YouTubeProcessingConfig(BaseModel):
     )
 
 
+class PodcastDiscoveryConfig(BaseModel):
+    """Podcast discovery and YouTube-to-RSS mapping configuration."""
+    
+    enable_youtube_to_rss_mapping: bool = Field(
+        default=True,
+        description="Enable automatic mapping of YouTube URLs to native podcast RSS feeds",
+    )
+    
+    podcast_index_api_key: str | None = Field(
+        default=None,
+        description="PodcastIndex.org API key (optional, has free tier). Get from: https://api.podcastindex.org/",
+    )
+    
+    listen_notes_api_key: str | None = Field(
+        default=None,
+        description="ListenNotes.com API key (optional). Get from: https://www.listennotes.com/api/",
+    )
+    
+    cache_mappings: bool = Field(
+        default=True,
+        description="Cache YouTube-to-RSS mappings to avoid repeated API calls",
+    )
+    
+    mapping_cache_path: str = Field(
+        default="~/.knowledge_system/podcast_mappings.json",
+        description="Path to mapping cache file",
+    )
+
+
 class MOCConfig(BaseModel):
     """MOC (Maps of Content) configuration."""
 
@@ -941,6 +970,9 @@ class Settings(BaseSettings):
     file_watcher: FileWatcherConfig = Field(default_factory=FileWatcherConfig)
     youtube_processing: YouTubeProcessingConfig = Field(
         default_factory=YouTubeProcessingConfig
+    )
+    podcast_discovery: PodcastDiscoveryConfig = Field(
+        default_factory=PodcastDiscoveryConfig
     )
     moc: MOCConfig = Field(default_factory=MOCConfig)
     hce: HCEConfig = Field(default_factory=HCEConfig)

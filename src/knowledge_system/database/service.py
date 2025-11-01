@@ -453,7 +453,9 @@ class DatabaseService:
                                     session, source.source_id
                                 )
                                 # Store as dynamic attribute (not persisted to DB)
-                                source.categories_json = categories if categories else []
+                                source.categories_json = (
+                                    categories if categories else []
+                                )
                                 return video
                         except (OSError, ValueError):
                             # Handle invalid paths gracefully
@@ -643,7 +645,9 @@ class DatabaseService:
                     .first()
                 )
                 if not source:
-                    logger.warning(f"Cannot mark for retry: source {source_id} not found")
+                    logger.warning(
+                        f"Cannot mark for retry: source {source_id} not found"
+                    )
                     return False
 
                 source.needs_metadata_retry = needs_metadata_retry
