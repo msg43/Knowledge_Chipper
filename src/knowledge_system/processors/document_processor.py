@@ -268,31 +268,50 @@ class DocumentProcessor(BaseProcessor):
             # Extract metadata
             metadata = self.extract_metadata(text, file_path)
 
-            # Create media source record in database
+            # Create media source record in database with deterministic ID
             db = DatabaseService()
-            media_id = f"doc_{file_path.stem}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-
-            _media_record = db.create_media_source(
-                media_id=media_id,
-                title=metadata.title,
-                url=metadata.url or f"file://{file_path.absolute()}",
-                source_type="document",
-                metadata={
-                    "authors": metadata.authors,
-                    "date": metadata.date.isoformat() if metadata.date else None,
-                    "abstract": metadata.abstract,
-                    "keywords": metadata.keywords,
-                    "organization": metadata.organization,
-                    "document_type": metadata.document_type,
-                    "doi": metadata.doi,
-                    "file_path": str(file_path),
-                    "file_size": file_path.stat().st_size,
-                },
-            )
+            
+            # Use deterministic hash based on file path (like audio_processor)
+            # This ensures re-processing the same file updates the existing record
+            import hashlib
+            path_hash = hashlib.md5(
+                str(file_path.absolute()).encode(), usedforsecurity=False
+            ).hexdigest()[:8]
+            source_id = f"doc_{file_path.stem}_{path_hash}"
+            
+            # Check if source already exists
+            existing_source = db.get_source(source_id)
+            
+            if existing_source:
+                # Update existing source
+                logger.info(f"Updating existing document source: {source_id}")
+                db.update_source(
+                    source_id,
+                    title=metadata.title,
+                    url=metadata.url or f"file://{file_path.absolute()}",
+                    description=metadata.abstract,
+                    author=", ".join(metadata.authors) if metadata.authors else None,
+                    organization=metadata.organization,
+                    processed_at=datetime.now(),
+                )
+                _media_record = existing_source
+            else:
+                # Create new source
+                logger.info(f"Creating new document source: {source_id}")
+                _media_record = db.create_source(
+                    source_id=source_id,
+                    title=metadata.title,
+                    url=metadata.url or f"file://{file_path.absolute()}",
+                    source_type="document",
+                    description=metadata.abstract,
+                    author=", ".join(metadata.authors) if metadata.authors else None,
+                    organization=metadata.organization,
+                    language="en",  # TODO: Detect language
+                )
 
             # Create transcript record with full text
             transcript_record = db.create_transcript(
-                media_id=media_id,
+                source_id=source_id,
                 text=text,
                 language="en",  # TODO: Detect language
                 source="document",
@@ -306,7 +325,7 @@ class DocumentProcessor(BaseProcessor):
             return ProcessorResult(
                 success=True,
                 data={
-                    "media_id": media_id,
+                    "source_id": source_id,
                     "title": metadata.title,
                     "authors": metadata.authors,
                     "document_type": metadata.document_type,

@@ -215,4 +215,3 @@ python -m knowledge_system.gui.main
 ✅ **Session file updated** - Existing users will see correct default  
 ✅ **Architecture documented** - Maintenance guidelines in place  
 ✅ **No hardcoded defaults** - Settings manager is source of truth
-

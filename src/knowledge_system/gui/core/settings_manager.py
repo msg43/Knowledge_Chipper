@@ -97,19 +97,26 @@ class GUISettingsManager:
         # Fall back to settings.yaml
         if self.system_settings is not None:
             # Support both "Transcription", "Local Transcription", and "Audio Transcription" tab names
-            if tab_name in ("Transcription", "Local Transcription", "Audio Transcription"):
-                if checkbox_name == "diarization" or checkbox_name == "enable_diarization":
+            if tab_name in (
+                "Transcription",
+                "Local Transcription",
+                "Audio Transcription",
+            ):
+                if (
+                    checkbox_name == "diarization"
+                    or checkbox_name == "enable_diarization"
+                ):
                     return self.system_settings.transcription.diarization
                 elif checkbox_name == "use_gpu":
                     return self.system_settings.transcription.use_gpu
-            
+
             # Process tab checkboxes
             elif tab_name == "Process":
                 if checkbox_name == "transcribe":
                     return self.system_settings.processing.default_transcribe
                 elif checkbox_name == "summarize":
                     return self.system_settings.processing.default_summarize
-            
+
             # Monitor tab checkboxes
             elif tab_name == "Monitor":
                 if checkbox_name == "recursive":
@@ -147,7 +154,11 @@ class GUISettingsManager:
         if self.system_settings is not None:
             # Transcription-specific settings (check first to avoid ambiguity)
             # Support both "Transcription", "Local Transcription", and "Audio Transcription" tab names
-            if tab_name in ("Transcription", "Local Transcription", "Audio Transcription"):
+            if tab_name in (
+                "Transcription",
+                "Local Transcription",
+                "Audio Transcription",
+            ):
                 if combo_name == "model":
                     return self.system_settings.transcription.whisper_model
                 elif combo_name == "device":
@@ -265,7 +276,7 @@ class GUISettingsManager:
                         self.system_settings.youtube_processing.cookie_file_path
                     )
                     return cookie_path if cookie_path else ""
-            
+
             # Monitor tab file patterns
             elif tab_name == "Monitor" and line_edit_name == "file_patterns":
                 return self.system_settings.file_watcher.default_file_patterns

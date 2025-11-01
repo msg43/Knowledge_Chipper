@@ -1121,7 +1121,7 @@ class SpeakerProcessor(BaseProcessor):
         # Try channel_id first (YouTube), then fall back to channel name
         channel_id = metadata.get("channel_id")
         channel_name = metadata.get("uploader") or metadata.get("channel")
-        
+
         if not channel_id and not channel_name:
             logger.debug("No channel information in metadata")
             return None
@@ -1144,13 +1144,13 @@ class SpeakerProcessor(BaseProcessor):
 
             # Build lookup dictionary
             channel_hosts = {}
-            with open(csv_path, newline='', encoding='utf-8') as f:
+            with open(csv_path, newline="", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     # Store by both channel_id and podcast_name for flexible lookup
-                    channel_hosts[row['channel_id']] = row['host_name']
-                    if row.get('podcast_name'):
-                        channel_hosts[row['podcast_name']] = row['host_name']
+                    channel_hosts[row["channel_id"]] = row["host_name"]
+                    if row.get("podcast_name"):
+                        channel_hosts[row["podcast_name"]] = row["host_name"]
 
         except Exception as e:
             logger.warning(f"Failed to load channel mappings: {e}")
@@ -1167,7 +1167,7 @@ class SpeakerProcessor(BaseProcessor):
         if not host_name and channel_name:
             # Try exact match first
             host_name = channel_hosts.get(channel_name)
-            
+
             # If no exact match, try case-insensitive partial match
             if not host_name:
                 for podcast_name, mapped_host in channel_hosts.items():
@@ -1176,14 +1176,20 @@ class SpeakerProcessor(BaseProcessor):
                         or channel_name.lower() in podcast_name.lower()
                     ):
                         host_name = mapped_host
-                        logger.info(f"📺 Found host by channel name: {channel_name} → {host_name}")
+                        logger.info(
+                            f"📺 Found host by channel name: {channel_name} → {host_name}"
+                        )
                         break
 
         if not host_name:
-            logger.debug(f"No host mapping found for channel: {channel_name or channel_id}")
+            logger.debug(
+                f"No host mapping found for channel: {channel_name or channel_id}"
+            )
             return None
 
-        logger.info(f"📺 Channel '{channel_name or channel_id}' is hosted by: {host_name}")
+        logger.info(
+            f"📺 Channel '{channel_name or channel_id}' is hosted by: {host_name}"
+        )
         logger.info(f"   → LLM will use this context to match speakers to this name")
 
         return [host_name]  # Return as list for consistency with original API

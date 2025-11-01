@@ -422,19 +422,19 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to get source {source_id}: {e}")
             return None
-    
+
     def get_source_by_file_path(self, file_path: str) -> MediaSource | None:
         """Get source by audio file path (database-centric lookup).
-        
+
         This is the preferred method for looking up metadata during transcription,
         as it doesn't require extracting source_id from filename.
         """
         try:
             from pathlib import Path
-            
+
             # Normalize path for comparison
             file_path_normalized = str(Path(file_path).resolve())
-            
+
             with self.get_session() as session:
                 # Query all videos with audio_file_path set
                 videos = (
@@ -442,7 +442,7 @@ class DatabaseService:
                     .filter(MediaSource.audio_file_path.isnot(None))
                     .all()
                 )
-                
+
                 # Check each video's audio_file_path (handle path variations)
                 for video in videos:
                     if video.audio_file_path:
@@ -459,7 +459,7 @@ class DatabaseService:
                         except (OSError, ValueError):
                             # Handle invalid paths gracefully
                             continue
-                
+
                 # Not found
                 return None
         except Exception as e:

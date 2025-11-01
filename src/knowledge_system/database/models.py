@@ -131,7 +131,7 @@ class MediaSource(Base):
     long_summary = Column(Text)
     summary_generated_at = Column(DateTime)
     summary_generated_by_model = Column(String)
-    
+
     # Summary metrics
     input_length = Column(Integer)
     output_length = Column(Integer)
@@ -187,7 +187,9 @@ class Segment(Base):
     # Primary key
     segment_id = Column(String, primary_key=True)
     source_id = Column(
-        String, ForeignKey("media_sources.source_id", ondelete="CASCADE"), nullable=False
+        String,
+        ForeignKey("media_sources.source_id", ondelete="CASCADE"),
+        nullable=False,
     )
 
     speaker = Column(String)
@@ -212,7 +214,9 @@ class Transcript(Base):
 
     # Primary key
     transcript_id = Column(String(50), primary_key=True)
-    source_id = Column(String(50), ForeignKey("media_sources.source_id"), nullable=False)
+    source_id = Column(
+        String(50), ForeignKey("media_sources.source_id"), nullable=False
+    )
 
     # Transcript metadata
     language = Column(String(10), nullable=False)
@@ -271,7 +275,9 @@ class Summary(Base):
 
     # Primary key
     summary_id = Column(String(50), primary_key=True)
-    source_id = Column(String(50), ForeignKey("media_sources.source_id"), nullable=False)
+    source_id = Column(
+        String(50), ForeignKey("media_sources.source_id"), nullable=False
+    )
     transcript_id = Column(String(50), ForeignKey("transcripts.transcript_id"))
 
     # Summary content
@@ -323,7 +329,9 @@ class MOCExtraction(Base):
 
     # Primary key
     moc_id = Column(String(50), primary_key=True)
-    source_id = Column(String(50), ForeignKey("media_sources.source_id"), nullable=False)
+    source_id = Column(
+        String(50), ForeignKey("media_sources.source_id"), nullable=False
+    )
     summary_id = Column(String(50), ForeignKey("summaries.summary_id"))
 
     # Extracted entities (JSON arrays)
@@ -368,7 +376,9 @@ class GeneratedFile(Base):
 
     # Primary key
     file_id = Column(String(50), primary_key=True)
-    source_id = Column(String(50), ForeignKey("media_sources.source_id"), nullable=False)
+    source_id = Column(
+        String(50), ForeignKey("media_sources.source_id"), nullable=False
+    )
     transcript_id = Column(String(50), ForeignKey("transcripts.transcript_id"))
     summary_id = Column(String(50), ForeignKey("summaries.summary_id"))
     moc_id = Column(String(50), ForeignKey("moc_extractions.moc_id"))
@@ -456,7 +466,9 @@ class BrightDataSession(Base):
 
     # Primary key
     session_id = Column(String(100), primary_key=True)
-    source_id = Column(String(50), ForeignKey("media_sources.source_id"), nullable=False)
+    source_id = Column(
+        String(50), ForeignKey("media_sources.source_id"), nullable=False
+    )
 
     # Session details
     session_type = Column(

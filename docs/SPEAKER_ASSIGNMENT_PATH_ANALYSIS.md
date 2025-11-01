@@ -237,4 +237,3 @@ The paths are **NOT redundant** - they serve different, complementary purposes:
 The bug we fixed was **data flow** (inconsistent metadata), not **path redundancy**.
 
 **Recommendation:** Keep both paths as-is, add clarifying comments for future maintainers.
-

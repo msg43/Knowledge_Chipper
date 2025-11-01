@@ -109,4 +109,3 @@ echo "   - '✅ Downloaded audio-only' (NOT '⚠️ VIDEO+AUDIO')"
 echo "5. Verify file size is ~6-15MB (NOT ~40-50MB for 16-min video)"
 echo ""
 echo "See docs/AUDIO_ONLY_FORMAT_FIX_FINAL.md for troubleshooting"
-

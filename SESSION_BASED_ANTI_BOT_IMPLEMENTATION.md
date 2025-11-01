@@ -353,4 +353,3 @@ A higher-level scheduler that:
 ## Conclusion
 
 The session-based anti-bot system implements research-backed best practices for avoiding YouTube bot detection. The implementation is complete, tested, and ready for production use. The only pending enhancement (SessionBasedDownloadScheduler) would add true duty-cycle scheduling for extremely large batches (1000+ videos), but the current implementation is sufficient for most use cases.
-

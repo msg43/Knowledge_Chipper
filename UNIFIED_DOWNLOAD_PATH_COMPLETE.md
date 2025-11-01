@@ -290,4 +290,3 @@ All imports and method calls verified
 - ✅ Ready for production
 
 This is a textbook example of **simplification through unification**. The multi-account infrastructure was already robust enough to handle all cases - we just needed to use it consistently.
-

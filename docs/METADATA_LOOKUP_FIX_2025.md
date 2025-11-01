@@ -159,4 +159,3 @@ Markdown with rich metadata
 ```
 
 This is the **database-centric architecture** working as designed!
-

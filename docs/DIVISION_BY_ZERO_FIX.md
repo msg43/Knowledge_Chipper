@@ -93,4 +93,3 @@ To verify the fix:
 ## Related Issues
 
 This fix also improves resilience against other potential progress parsing errors by ensuring the stream reading thread continues operating regardless of parsing failures.
-

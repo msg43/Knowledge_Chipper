@@ -169,4 +169,3 @@ To test the feature:
 ## Conclusion
 
 This feature makes speaker attribution customization accessible to non-technical users, empowering them to improve transcription quality for their favorite content. The simple button interface removes the barrier of navigating file systems and provides helpful guidance for editing the YAML configuration.
-

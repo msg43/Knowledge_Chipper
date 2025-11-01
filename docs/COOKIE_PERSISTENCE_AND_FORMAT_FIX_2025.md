@@ -190,4 +190,3 @@ For a batch of 7000 videos (average 30 minutes each):
 3. **What if downloads fail with web client?**
    - yt-dlp will automatically fall back to Android client
    - If both fail, error will be logged as usual
-

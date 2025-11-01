@@ -179,4 +179,3 @@ If video_id not in filename, search database by filename/title similarity
 - Or ensure the filename contains the video_id
 
 The enhanced logging I added will make it clear which step is failing.
-

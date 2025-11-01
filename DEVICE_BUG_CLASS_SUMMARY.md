@@ -414,4 +414,3 @@ This applies to:
 ---
 
 **Bottom Line:** Yes, this was a class of problem. We found 4 instances (3 active, 1 dormant), fixed all of them, documented the pattern, and created prevention strategies. The codebase is now future-proofed against this entire class of bugs.
-

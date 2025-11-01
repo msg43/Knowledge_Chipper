@@ -616,7 +616,7 @@ class ProcessTab(BaseTab, FileOperationsMixin):
             )
             if transcribe_state is not None:
                 self.transcribe_checkbox.setChecked(transcribe_state)
-            
+
             summarize_state = self.gui_settings.get_checkbox_state(
                 self.tab_name, "summarize", None
             )

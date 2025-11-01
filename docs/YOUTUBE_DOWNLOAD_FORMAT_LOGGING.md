@@ -112,4 +112,3 @@ This logging helps debug:
 - Wrong file format selection
 - YouTube format availability issues
 - Proxy/region-specific format restrictions
-

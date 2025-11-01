@@ -235,35 +235,10 @@ class ClaimStore:
                 logger.info(f"Source {source_id} updated with summaries successfully")
 
             # 3. Store milestones (chapter/section markers with timestamps)
+            # NOTE: Milestone table removed in claim-centric architecture
+            # Milestones are now stored as structured data in MediaSource or as special claims
             if hasattr(outputs, "milestones") and outputs.milestones:
-                for milestone_data in outputs.milestones:
-                    # Check if milestone exists
-                    milestone = (
-                        session.query(Milestone)
-                        .filter_by(
-                            episode_id=episode_id,
-                            milestone_id=milestone_data.milestone_id,
-                        )
-                        .first()
-                    )
-
-                    if not milestone:
-                        milestone = Milestone(
-                            episode_id=episode_id,
-                            milestone_id=milestone_data.milestone_id,
-                            start_time=milestone_data.t0,
-                            end_time=milestone_data.t1,
-                            summary=milestone_data.summary,
-                        )
-                        session.add(milestone)
-                    else:
-                        # Update existing
-                        milestone.start_time = milestone_data.t0
-                        milestone.end_time = milestone_data.t1
-                        milestone.summary = milestone_data.summary
-
-                session.flush()
-                logger.info(f"Stored {len(outputs.milestones)} milestones")
+                logger.debug(f"Milestones present but Milestone table removed: {len(outputs.milestones)} milestones")
 
             # 4. Store claims (claims are the fundamental unit)
             # Note: FTS indexing moved to after session.commit() to avoid database locks
@@ -278,7 +253,6 @@ class ClaimStore:
                     claim = Claim(
                         claim_id=global_claim_id,
                         source_id=source_id,
-                        episode_id=episode_id,
                     )
                     session.add(claim)
 
@@ -313,12 +287,12 @@ class ClaimStore:
                 session.query(EvidenceSpan).filter_by(claim_id=global_claim_id).delete()
 
                 for seq, evidence in enumerate(claim_data.evidence):
-                    # Generate fully qualified segment_id (episode_id + segment_id)
+                    # Generate fully qualified segment_id (source_id + segment_id)
                     # The evidence.segment_id is just "seg_0001", we need to make it match the stored segment
                     fully_qualified_segment_id = None
-                    if evidence.segment_id and episode_id:
+                    if evidence.segment_id and source_id:
                         fully_qualified_segment_id = (
-                            f"{episode_id}_{evidence.segment_id}"
+                            f"{source_id}_{evidence.segment_id}"
                         )
 
                     evidence_span = EvidenceSpan(
@@ -721,7 +695,7 @@ class ClaimStore:
 
         # FTS indexing AFTER session commit to avoid database locks
         # This runs outside the SQLAlchemy session context
-        self._update_fts_indexes(source_id, episode_id, outputs)
+        self._update_fts_indexes(source_id, source_id, outputs)
 
     def get_claim(self, claim_id: str, with_context: bool = True) -> dict | None:
         """
@@ -848,7 +822,7 @@ class ClaimStore:
             return results
 
     def _update_fts_indexes(
-        self, source_id: str, episode_id: str | None, outputs: PipelineOutputs
+        self, source_id: str, fts_id: str | None, outputs: PipelineOutputs
     ) -> None:
         """
         Update FTS indexes after main data is committed.
@@ -857,7 +831,7 @@ class ClaimStore:
 
         Args:
             source_id: The media source ID
-            episode_id: The episode ID (if applicable)
+            fts_id: The ID to use for FTS indexing (typically same as source_id)
             outputs: Pipeline outputs with claims and evidence
         """
         import time
@@ -882,22 +856,22 @@ class ClaimStore:
                 )
                 existing_tables = {row[0] for row in cur.fetchall()}
 
-                # Clear old FTS entries for this episode
-                # Note: FTS tables only have episode_id, not source_id
-                if episode_id and existing_tables:
+                # Clear old FTS entries for this source
+                # Note: FTS tables use source_id for indexing
+                if fts_id and existing_tables:
                     if "claims_fts" in existing_tables:
                         cur.execute(
                             "DELETE FROM claims_fts WHERE episode_id = ?",
-                            (episode_id,),
+                            (fts_id,),
                         )
                     if "evidence_fts" in existing_tables:
                         cur.execute(
                             "DELETE FROM evidence_fts WHERE episode_id = ?",
-                            (episode_id,),
+                            (fts_id,),
                         )
 
                 conn.commit()
-                logger.debug(f"FTS cleanup completed for episode {episode_id}")
+                logger.debug(f"FTS cleanup completed for source {fts_id}")
                 break  # Success, exit retry loop
 
             except Exception as e:
@@ -953,7 +927,7 @@ class ClaimStore:
                             """,
                             (
                                 global_claim_id,
-                                episode_id,
+                                fts_id,
                                 claim_data.canonical,
                                 claim_data.claim_type,
                             ),
@@ -972,7 +946,7 @@ class ClaimStore:
                                     """,
                                     (
                                         global_claim_id,
-                                        episode_id,
+                                        fts_id,
                                         evidence.quote,
                                     ),
                                 )

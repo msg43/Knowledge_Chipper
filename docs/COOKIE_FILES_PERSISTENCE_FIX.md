@@ -116,4 +116,3 @@ If cookie files are not persisting, check:
 1. Are the log messages appearing?
 2. Is the settings file writable?
 3. Are there any errors in the logs?
-

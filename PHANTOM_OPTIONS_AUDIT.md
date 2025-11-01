@@ -619,4 +619,3 @@ Both are saved to settings but have zero implementation.
 **Recommendation:** Remove these phantom options to provide honest UX.
 
 **Prevention:** Implement feature flag system and GUI-to-implementation verification tests.
-

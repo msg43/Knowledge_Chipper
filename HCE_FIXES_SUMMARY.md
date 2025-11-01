@@ -72,4 +72,3 @@ All tests pass ✅:
 ## Documentation
 
 See `docs/HCE_SCHEMA_AND_FK_FIXES_2025.md` for detailed technical documentation.
-

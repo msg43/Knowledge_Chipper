@@ -132,4 +132,3 @@ Both fixes are critical for safe, effective anti-bot protection:
 2. **Optimal format selection** minimizes traffic footprint
 
 These changes make the system safer and more effective at avoiding detection.
-

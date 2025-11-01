@@ -224,4 +224,3 @@ When video+audio is downloaded, the audio processor will:
 - Failures: 0
 
 **Philosophy:** Optimize for audio-only, but never fail.
-

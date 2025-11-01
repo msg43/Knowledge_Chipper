@@ -147,7 +147,7 @@ class EnhancedSummarizationWorker(QThread):
             def orchestrator_progress_callback(
                 stage: str,
                 percent: int,
-                episode_id: str,
+                source_id: str,
                 current: int = 0,
                 total: int = 0,
             ):
@@ -205,15 +205,15 @@ class EnhancedSummarizationWorker(QThread):
 
                 # Handle database sources
                 if file_path.startswith("db://"):
-                    # Extract video_id from db://VIDEO_ID format
+                    # Extract source_id from db://SOURCE_ID format
                     source_id = file_path[5:]  # Remove "db://" prefix
                     # source_id used directly, no episode_ prefix
-                    file_name = f"Database: {video_id}"
+                    file_name = f"Database: {source_id}"
 
                     # Create mining job for database source
                     job_id = orchestrator.create_job(
                         "mine",  # Database job type (not JobType enum)
-                        episode_id,
+                        source_id,
                         config={
                             "source": "manual_summarization",
                             # No file_path for database sources - will use DB segments
@@ -227,13 +227,13 @@ class EnhancedSummarizationWorker(QThread):
                     # Regular file processing
                     file_name = Path(file_path).name
 
-                    # Create episode ID from file name
+                    # Create source ID from file name
                     source_id = Path(file_path).stem
 
                     # Create mining job for this file
                     job_id = orchestrator.create_job(
                         "mine",  # Database job type (not JobType enum)
-                        episode_id,
+                        source_id,
                         config={
                             "source": "manual_summarization",
                             "file_path": str(file_path),
@@ -2013,7 +2013,9 @@ class SummarizationTab(BaseTab):
                 checkbox = self.db_table.cellWidget(row, 0)
                 if checkbox and hasattr(checkbox, "isChecked") and checkbox.isChecked():
                     # Get video_id stored in row data
-                    source_id = self.db_table.item(row, 1).data(Qt.ItemDataRole.UserRole)
+                    source_id = self.db_table.item(row, 1).data(
+                        Qt.ItemDataRole.UserRole
+                    )
                     if video_id:
                         # Use special prefix to indicate database source
                         sources.append(f"db://{video_id}")

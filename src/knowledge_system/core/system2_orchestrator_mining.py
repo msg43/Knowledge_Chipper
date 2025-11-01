@@ -52,18 +52,17 @@ async def process_mine_with_unified_pipeline(
 
         # 1. Load transcript segments (prefer DB over file)
         if orchestrator.progress_callback:
-            orchestrator.progress_callback("loading", 0, episode_id)
+            orchestrator.progress_callback("loading", 0, source_id)
 
-        # Extract video_id from episode_id (format: "episode_VIDEO_ID")
-        source_id = source_id
+        # source_id is used directly (no episode_ prefix needed)
 
         # PRIORITY 1: Try to load segments from database (our own transcripts)
-        whisper_segments = orchestrator._load_transcript_segments_from_db(video_id)
+        whisper_segments = orchestrator._load_transcript_segments_from_db(source_id)
 
         segments = None
         if whisper_segments and len(whisper_segments) > 0:
             logger.info(
-                f"✅ Using database segments for {video_id} ({len(whisper_segments)} raw Whisper segments)"
+                f"✅ Using database segments for {source_id} ({len(whisper_segments)} raw Whisper segments)"
             )
 
             # Re-chunk Whisper segments for efficient HCE processing

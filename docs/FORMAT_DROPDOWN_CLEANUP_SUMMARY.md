@@ -217,4 +217,3 @@ The two remaining formats ("md" and "none") cover the primary use cases:
 - **"none"** - Database-only for batch processing
 
 Both are fully implemented, tested, and production-ready.
-

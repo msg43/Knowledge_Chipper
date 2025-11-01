@@ -55,4 +55,3 @@ PYTHON_CODE
 
 echo ""
 echo "✅ Test completed. Check the output above for any division by zero errors or SIGPIPE issues."
-

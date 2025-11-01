@@ -166,4 +166,3 @@ None - the changes are complete and ready for use. The system will automatically
 - Use medium model by default for new users
 - Apply hallucination prevention parameters based on model size
 - Pre-download medium model during first-run setup
-

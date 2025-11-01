@@ -138,8 +138,8 @@ class YouTubeDownloadProcessor(BaseProcessor):
         from ..utils.video_id_extractor import VideoIDExtractor
 
         source_id = VideoIDExtractor.extract_video_id(url)
-        if video_id:
-            return video_id
+        if source_id:
+            return source_id
 
         # Fallback for non-standard URLs: use a hash of the URL
         import hashlib
@@ -149,44 +149,46 @@ class YouTubeDownloadProcessor(BaseProcessor):
     def _is_rate_limited(self, error_msg: str) -> bool:
         """
         Detect if error indicates rate limiting (429/403).
-        
+
         Args:
             error_msg: Error message from yt-dlp or exception
-            
+
         Returns:
             True if rate limiting detected
         """
         error_lower = error_msg.lower()
-        return any([
-            "429" in error_msg,
-            "403" in error_msg,
-            "too many requests" in error_lower,
-            "rate limit" in error_lower,
-            "throttl" in error_lower,
-        ])
+        return any(
+            [
+                "429" in error_msg,
+                "403" in error_msg,
+                "too many requests" in error_lower,
+                "rate limit" in error_lower,
+                "throttl" in error_lower,
+            ]
+        )
 
     def _trigger_cooldown(self, progress_callback=None):
         """
         Trigger automatic cooldown when rate limiting is detected.
-        
+
         Args:
             progress_callback: Optional callback for progress updates
         """
         config = get_settings()
         yt_config = config.youtube_processing
-        
+
         if not yt_config.enable_auto_cooldown:
             logger.warning("⚠️ Rate limiting detected but auto-cooldown is disabled")
             return
-        
+
         import random
         import time
-        
+
         cooldown_minutes = random.randint(
             yt_config.cooldown_min_minutes, yt_config.cooldown_max_minutes
         )
         cooldown_seconds = cooldown_minutes * 60
-        
+
         logger.warning(
             f"🛑 RATE LIMITING DETECTED - Triggering cooldown for {cooldown_minutes} minutes"
         )
@@ -194,16 +196,17 @@ class YouTubeDownloadProcessor(BaseProcessor):
             progress_callback(
                 f"🛑 Rate limited - cooling down for {cooldown_minutes} minutes..."
             )
-        
+
         # Log cooldown event for tracking
         from datetime import datetime
+
         cooldown_end = datetime.now().timestamp() + cooldown_seconds
         logger.info(
             f"📊 Cooldown session: start={datetime.now().isoformat()}, "
             f"end={datetime.fromtimestamp(cooldown_end).isoformat()}, "
             f"duration={cooldown_minutes}min"
         )
-        
+
         # Sleep with periodic progress updates
         update_interval = 60  # Update every minute
         elapsed = 0
@@ -215,7 +218,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 progress_callback(
                     f"⏳ Cooldown: {remaining_minutes:.0f} minutes remaining..."
                 )
-        
+
         logger.info("✅ Cooldown complete - resuming downloads")
         if progress_callback:
             progress_callback("✅ Cooldown complete - resuming downloads")
@@ -280,7 +283,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     f"💾 Skipped {len(duplicate_results)} duplicate videos (already processed)"
                 )
                 for dup in duplicate_results[:3]:  # Show first 3 duplicates
-                    progress_callback(f"   • {dup.video_id}: {dup.skip_reason}")
+                    progress_callback(f"   • {dup.source_id}: {dup.skip_reason}")
                 if len(duplicate_results) > 3:
                     progress_callback(f"   • ... and {len(duplicate_results) - 3} more")
 
@@ -443,8 +446,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
             rate_limit = random.uniform(
                 yt_config.rate_limit_min_mbps, yt_config.rate_limit_max_mbps
             )
-            ydl_opts["ratelimit"] = int(rate_limit * 1024 * 1024)  # Convert MB/s to bytes/s
-            
+            ydl_opts["ratelimit"] = int(
+                rate_limit * 1024 * 1024
+            )  # Convert MB/s to bytes/s
+
             # Apply randomized jitter between files and requests
             sleep_interval = random.randint(
                 yt_config.sleep_interval_min, yt_config.sleep_interval_max
@@ -452,13 +457,13 @@ class YouTubeDownloadProcessor(BaseProcessor):
             ydl_opts["sleep_interval"] = sleep_interval
             ydl_opts["max_sleep_interval"] = sleep_interval + random.randint(3, 12)
             ydl_opts["sleep_interval_requests"] = yt_config.sleep_requests
-            
+
             # Apply download archive if enabled
             if yt_config.use_download_archive:
                 archive_path = Path(yt_config.download_archive_path).expanduser()
                 archive_path.parent.mkdir(parents=True, exist_ok=True)
                 ydl_opts["download_archive"] = str(archive_path)
-            
+
             logger.info(
                 f"🛡️ Session-based anti-bot: rate={rate_limit:.2f}MB/s, "
                 f"sleep={sleep_interval}-{ydl_opts['max_sleep_interval']}s, "
@@ -643,10 +648,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
         # No postprocessor override needed - keeping original format
         ydl_opts["outtmpl"] = str(output_dir / "%(title)s [%(id)s].%(ext)s")
-        
+
         # DIAGNOSTIC: Log the actual format string being used
         logger.info(f"🔍 yt-dlp format string: {ydl_opts.get('format', 'NOT SET')}")
-        if 'extractor_args' in ydl_opts:
+        if "extractor_args" in ydl_opts:
             logger.info(f"🔍 yt-dlp extractor_args: {ydl_opts['extractor_args']}")
 
         all_files = []
@@ -700,7 +705,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     # Generate unique session ID for this video (single-use IP)
                     # Add timestamp and random component to ensure uniqueness
                     session_id = PacketStreamProxyManager.generate_session_id(
-                        url, video_id
+                        url, source_id
                     )
                     # Make it truly unique by adding timestamp
                     session_id = (
@@ -711,9 +716,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         session_id=session_id
                     )
 
-                if current_proxy_url and video_id and session_id:
+                if current_proxy_url and source_id and session_id:
                     logger.info(
-                        f"Using PacketStream proxy session '{session_id}' for video {video_id} ({i}/{len(urls)})"
+                        f"Using PacketStream proxy session '{session_id}' for video {source_id} ({i}/{len(urls)})"
                     )
                     logger.info(
                         f"Proxy URL format: {current_proxy_url.split('@')[0]}@***"
@@ -723,9 +728,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     logger.info(
                         f"Proxy URL format: {current_proxy_url.split('@')[0]}@***"
                     )
-                elif video_id:
+                elif source_id:
                     logger.info(
-                        f"Using direct connection for video {video_id} (no proxy configured)"
+                        f"Using direct connection for video {source_id} (no proxy configured)"
                     )
 
                 # Extract metadata to verify video availability
@@ -893,9 +898,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 with suppress_stderr() as captured_stderr:
                     with yt_dlp.YoutubeDL(final_ydl_opts) as ydl:
                         logger.info(f"Downloading audio for: {url}{playlist_context}")
-                        if use_proxy and video_id:
+                        if use_proxy and source_id:
                             logger.info(
-                                f"Using PacketStream proxy for video {video_id}"
+                                f"Using PacketStream proxy for video {source_id}"
                             )
 
                         try:
@@ -906,17 +911,21 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                             # Log selected format to help debug unexpected video downloads
                             if info:
-                                format_id = info.get('format_id', 'unknown')
-                                format_note = info.get('format_note', '')
-                                ext = info.get('ext', 'unknown')
-                                vcodec = info.get('vcodec', 'none')
-                                acodec = info.get('acodec', 'none')
-                                filesize = info.get('filesize') or info.get('filesize_approx', 0)
-                                
+                                format_id = info.get("format_id", "unknown")
+                                format_note = info.get("format_note", "")
+                                ext = info.get("ext", "unknown")
+                                vcodec = info.get("vcodec", "none")
+                                acodec = info.get("acodec", "none")
+                                filesize = info.get("filesize") or info.get(
+                                    "filesize_approx", 0
+                                )
+
                                 # Determine if this is audio-only or includes video
-                                is_audio_only = vcodec == 'none' or vcodec is None
-                                format_type = "audio-only" if is_audio_only else "VIDEO+AUDIO"
-                                
+                                is_audio_only = vcodec == "none" or vcodec is None
+                                format_type = (
+                                    "audio-only" if is_audio_only else "VIDEO+AUDIO"
+                                )
+
                                 if is_audio_only:
                                     logger.info(
                                         f"✅ Downloaded {format_type}: format={format_id} ({format_note}), "
@@ -1052,7 +1061,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         "title": downloaded_files[
                                             0
                                         ].stem,  # Use filename as title
-                                        "id": video_id or "unknown",
+                                        "id": source_id or "unknown",
                                         "ext": downloaded_files[0].suffix[
                                             1:
                                         ],  # Extension without dot
@@ -1123,7 +1132,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                             # Register video in database - MANDATORY for tracking
                             # Without database entry, downloaded files are orphaned and unusable
-                            if video_id and db_service:
+                            if source_id and db_service:
                                 try:
                                     video_title = (
                                         info.get("title", "Unknown Title")
@@ -1134,7 +1143,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     # Extract all available metadata from info dict
                                     tags = info.get("tags", []) or []
                                     logger.debug(
-                                        f"📝 Extracted {len(tags)} tags from YouTube for {video_id}"
+                                        f"📝 Extracted {len(tags)} tags from YouTube for {source_id}"
                                     )
                                     if tags:
                                         logger.debug(f"First 5 tags: {tags[:5]}")
@@ -1166,7 +1175,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                                     # Create or update video record with full metadata
                                     video = db_service.create_source(
-                                        video_id=video_id,
+                                        video_id=source_id,
                                         title=video_title,
                                         url=url,
                                         **video_metadata,
@@ -1180,7 +1189,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     # Update audio download status
                                     if audio_downloaded_successfully:
                                         db_service.update_audio_status(
-                                            video_id=video_id,
+                                            video_id=source_id,
                                             audio_file_path=audio_file_path_for_db,
                                             audio_downloaded=True,
                                             audio_file_size_bytes=audio_file_size,
@@ -1189,7 +1198,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                                     # Update metadata status
                                     db_service.update_metadata_status(
-                                        video_id=video_id,
+                                        video_id=source_id,
                                         metadata_complete=metadata_extracted,
                                     )
 
@@ -1199,7 +1208,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         or not metadata_extracted
                                     ):
                                         db_service.mark_for_retry(
-                                            video_id=video_id,
+                                            video_id=source_id,
                                             needs_metadata_retry=not metadata_extracted,
                                             needs_audio_retry=not audio_downloaded_successfully,
                                             failure_reason=(
@@ -1209,7 +1218,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         )
 
                                     logger.info(
-                                        f"Registered video {video_id} in database: "
+                                        f"Registered video {source_id} in database: "
                                         f"audio={audio_downloaded_successfully}, metadata={metadata_extracted}"
                                     )
 
@@ -1217,7 +1226,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     # CRITICAL: Database write failure means we can't track this download
                                     # Clean up the audio file and fail the download
                                     logger.error(
-                                        f"CRITICAL: Failed to register video {video_id} in database: {db_error}"
+                                        f"CRITICAL: Failed to register video {source_id} in database: {db_error}"
                                     )
 
                                     # Clean up downloaded audio file (orphaned without database entry)
@@ -1239,7 +1248,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     raise Exception(
                                         f"Database write failed - cannot track download: {db_error}"
                                     )
-                            elif video_id and not db_service:
+                            elif source_id and not db_service:
                                 # No database service available - this is a critical error
                                 logger.error(
                                     "CRITICAL: No database service available - cannot track downloads"
@@ -1279,16 +1288,27 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                 for entry in entries:
                                     if entry and "title" in entry:
                                         # Log selected format for this entry
-                                        entry_format_id = entry.get('format_id', 'unknown')
-                                        entry_format_note = entry.get('format_note', '')
-                                        entry_ext = entry.get('ext', 'unknown')
-                                        entry_vcodec = entry.get('vcodec', 'none')
-                                        entry_acodec = entry.get('acodec', 'none')
-                                        entry_filesize = entry.get('filesize') or entry.get('filesize_approx', 0)
-                                        
-                                        entry_is_audio_only = entry_vcodec == 'none' or entry_vcodec is None
-                                        entry_format_type = "audio-only" if entry_is_audio_only else "VIDEO+AUDIO"
-                                        
+                                        entry_format_id = entry.get(
+                                            "format_id", "unknown"
+                                        )
+                                        entry_format_note = entry.get("format_note", "")
+                                        entry_ext = entry.get("ext", "unknown")
+                                        entry_vcodec = entry.get("vcodec", "none")
+                                        entry_acodec = entry.get("acodec", "none")
+                                        entry_filesize = entry.get(
+                                            "filesize"
+                                        ) or entry.get("filesize_approx", 0)
+
+                                        entry_is_audio_only = (
+                                            entry_vcodec == "none"
+                                            or entry_vcodec is None
+                                        )
+                                        entry_format_type = (
+                                            "audio-only"
+                                            if entry_is_audio_only
+                                            else "VIDEO+AUDIO"
+                                        )
+
                                         if entry_is_audio_only:
                                             logger.info(
                                                 f"✅ Downloaded {entry_format_type}: {entry.get('title', 'N/A')[:50]} | "
@@ -1305,7 +1325,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                                 f"⚠️  No audio-only format available - fell back to video. "
                                                 f"Audio will be extracted during transcription."
                                             )
-                                        
+
                                         # Get actual filename from yt-dlp
                                         filename = None
 
@@ -1509,10 +1529,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         progress_callback(
                                             "❌ Rate limited (429) - too many requests"
                                         )
-                                
+
                                 # Trigger automatic cooldown
                                 self._trigger_cooldown(progress_callback)
-                            
+
                             elif progress_callback:
                                 if "HTTP Error 404" in download_error_msg:
                                     progress_callback(
@@ -1553,7 +1573,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     or "sign in to confirm" in error_msg.lower()
                 ):
                     logger.error(
-                        f"🤖 Bot detection for {video_id or url[:50]} - skipping (each video uses unique IP)"
+                        f"🤖 Bot detection for {source_id or url[:50]} - skipping (each video uses unique IP)"
                     )
                     errors.append(f"Bot detection for {url}: {error_msg}")
                     if progress_callback:

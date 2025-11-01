@@ -82,4 +82,3 @@ echo ""
 echo "Original transcript length (with hallucinations cleaned): ~3120 characters"
 echo "Expected with prevention: ~4500-5000 characters (no missing content)"
 echo ""
-

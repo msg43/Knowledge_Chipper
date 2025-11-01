@@ -187,4 +187,3 @@ claim_store.store_segments(
 - Schema validation was too strict for the actual use case (rank only meaningful for accepted claims)
 - Database write ordering was implicit and fragile
 - Foreign key constraints were enforced but not properly handled in code
-

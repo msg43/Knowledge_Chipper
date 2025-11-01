@@ -272,4 +272,3 @@ Python code changes require full restart.
 - ✅ Massive cost savings
 
 **For 7000 videos: 465GB savings vs video+audio, 75GB savings vs Opus**
-

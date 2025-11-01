@@ -272,4 +272,3 @@ If downloads start failing with "No formats found", it means:
 **Expected Result:** Audio-only downloads (6-15MB) instead of video+audio (40-50MB)
 
 **If still not working:** Check diagnostic logs and verify format string is being used
-

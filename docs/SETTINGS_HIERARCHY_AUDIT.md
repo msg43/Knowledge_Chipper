@@ -463,5 +463,3 @@ UI widgets (no defaults set)
 3. **Medium Term:** Complete Phase 2 (configuration improvements)
 4. **Long Term:** Establish coding standard requiring all defaults go through settings manager
 5. **Process:** Add linter or pre-commit hook to detect hardcoded `setCurrentText()`, `setChecked()`, `setValue()` in `__init__()` methods
-
-

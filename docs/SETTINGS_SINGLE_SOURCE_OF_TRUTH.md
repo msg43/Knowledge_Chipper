@@ -218,4 +218,3 @@ rm ~/.knowledge_system/gui_session.json
 ✅ **COMPLETE** (2025-10-31)
 
 All Whisper model settings now follow the single source of truth architecture. No hardcoded defaults remain in the UI code.
-

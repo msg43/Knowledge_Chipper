@@ -178,4 +178,3 @@ When testing format implementations:
 5. Verify error handling for each format
 6. Test with diarization enabled/disabled
 7. Test with video metadata present/absent
-

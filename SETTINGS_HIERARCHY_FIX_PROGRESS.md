@@ -111,4 +111,3 @@ Continue with task 4: Fix summarization tab provider/model to properly use setti
 3. Testing with fresh session
 
 **Estimated Time Remaining:** ~60 minutes
-

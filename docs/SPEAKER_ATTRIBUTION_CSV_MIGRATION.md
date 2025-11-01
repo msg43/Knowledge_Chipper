@@ -253,4 +253,3 @@ This migration achieves the original goal (help LLM identify speakers) with 95% 
 - ✅ More reliable (direct lookups)
 
 The system now has a clean, simple foundation for scaling to 1000+ podcasts.
-

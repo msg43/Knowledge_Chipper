@@ -118,4 +118,3 @@ Test with a new user workflow:
 ✅ **COMPLETE** - All files updated, tested, and documented.
 
 The default model is now **medium** for all users, with the medium model automatically pre-downloaded during first-run setup.
-

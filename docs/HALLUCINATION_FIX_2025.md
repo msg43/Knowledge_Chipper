@@ -180,4 +180,3 @@ processor.process(
 - [Whisper.cpp source](https://github.com/ggerganov/whisper.cpp)
 - `docs/archive/implementations/HALLUCINATION_PREVENTION_IMPROVEMENTS.md` - Original hallucination prevention docs
 - [OpenAI Whisper paper](https://arxiv.org/abs/2212.04356) - Original Whisper model documentation
-

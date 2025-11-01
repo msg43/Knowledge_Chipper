@@ -646,7 +646,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE).
             )
             session.add(summary)
             session.commit()
-            logger.info(f"Created summary record: {summary_id} for video {video_id}")
+            logger.info(f"Created summary record: {summary_id} for video {source_id}")
 
         return summary_id
 
@@ -719,14 +719,14 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
         # Ensure a MediaSource exists for FK integrity on summaries.video_id
         try:
-            if not self.db_service.source_exists(video_id):
-                fallback_title = Path(config.get("file_path", video_id)).stem
-                source_url = config.get("source_url", f"local://{video_id}")
+            if not self.db_service.source_exists(source_id):
+                fallback_title = Path(config.get("file_path", source_id)).stem
+                source_url = config.get("source_url", f"local://{source_id}")
                 self.db_service.create_source(
                     video_id=source_id, title=fallback_title, url=source_url
                 )
         except Exception as _e:
-            logger.warning(f"Could not ensure MediaSource for {video_id}: {_e}")
+            logger.warning(f"Could not ensure MediaSource for {source_id}: {_e}")
 
         with self.db_service.get_session() as session:
             summary = Summary(
@@ -769,7 +769,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             session.add(summary)
             session.commit()
             logger.info(
-                f"Created unified summary record: {summary_id} for video {video_id}"
+                f"Created unified summary record: {summary_id} for video {source_id}"
             )
 
         return summary_id
@@ -961,9 +961,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 # Create sub-job
                 stage_job_id = self.create_job(
                     job_type=stage,
-                    input_id=(
-                        video_id if stage == "transcribe" else f"episode_{video_id}"
-                    ),
+                    input_id=source_id,
                     config=config,
                     auto_process=False,
                 )
@@ -987,12 +985,12 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 )
 
             logger.info(
-                f"Pipeline completed for {video_id}: {len(completed_stages)} stages"
+                f"Pipeline completed for {source_id}: {len(completed_stages)} stages"
             )
 
             return {
                 "status": "succeeded",
-                "output_id": f"episode_{video_id}",
+                "output_id": source_id,
                 "result": {
                     "stages_completed": len(completed_stages),
                     "stages": completed_stages,
@@ -1000,7 +998,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 },
             }
         except Exception as e:
-            logger.error(f"Pipeline failed for {video_id}: {e}")
+            logger.error(f"Pipeline failed for {source_id}: {e}")
             raise KnowledgeSystemError(
                 f"Pipeline failed: {str(e)}", ErrorCode.PROCESSING_FAILED
             ) from e
@@ -1136,9 +1134,9 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
         These need to be re-chunked for efficient HCE processing.
         """
         try:
-            transcripts = self.db_service.get_transcripts_for_video(video_id)
+            transcripts = self.db_service.get_transcripts_for_video(source_id)
             if not transcripts:
-                logger.debug(f"No transcripts found in DB for video {video_id}")
+                logger.debug(f"No transcripts found in DB for video {source_id}")
                 return None
 
             # Get the most recent transcript
@@ -1147,13 +1145,13 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
             if segments and len(segments) > 0:
                 logger.info(
-                    f"📊 Loaded {len(segments)} raw Whisper segments from database for {video_id}"
+                    f"📊 Loaded {len(segments)} raw Whisper segments from database for {source_id}"
                 )
                 return segments
 
             return None
         except Exception as e:
-            logger.debug(f"Could not load segments from DB for {video_id}: {e}")
+            logger.debug(f"Could not load segments from DB for {source_id}: {e}")
             return None
 
     def _rechunk_whisper_segments(

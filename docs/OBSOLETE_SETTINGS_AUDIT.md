@@ -167,4 +167,3 @@ Add note to HCE documentation:
 - `docs/SETTINGS_HIERARCHY_AUDIT.md` - Full settings audit
 - `schemas/flagship_output.v1.json` - Shows tier is LLM-assigned
 - `src/knowledge_system/processors/hce/flagship_evaluator.py` - Tier assignment logic
-

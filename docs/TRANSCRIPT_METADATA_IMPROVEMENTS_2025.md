@@ -218,4 +218,3 @@ Potential improvements:
 2. Batch re-processing tool to upgrade old transcripts
 3. GUI indicator showing metadata richness (basic vs. full)
 4. Metadata validation and cleanup utilities
-

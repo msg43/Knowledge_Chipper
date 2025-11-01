@@ -470,7 +470,9 @@ class APIKeysTab(BaseTab):
 
         # Speaker Attribution Editor button
         self.speaker_attribution_btn = QPushButton("🎤 Edit Speaker Mappings")
-        self.speaker_attribution_btn.clicked.connect(self._open_speaker_attribution_file)
+        self.speaker_attribution_btn.clicked.connect(
+            self._open_speaker_attribution_file
+        )
         self.speaker_attribution_btn.setStyleSheet(
             """
             QPushButton {
@@ -1068,9 +1070,9 @@ class APIKeysTab(BaseTab):
             config_dir = Path("config")
             if not config_dir.exists():
                 config_dir = Path("../config")
-            
+
             speaker_file = config_dir / "channel_hosts.csv"
-            
+
             # Check if file exists
             if not speaker_file.exists():
                 QMessageBox.warning(
@@ -1081,20 +1083,28 @@ class APIKeysTab(BaseTab):
                 )
                 self.append_log(f"❌ Speaker attribution file not found: {speaker_file}")
                 return
-            
+
             # Open the file with the default application
             import subprocess
             import sys
-            
+
             if sys.platform == "darwin":  # macOS
-                subprocess.run(["open", str(speaker_file.absolute())], check=True)  # nosec B603,B607
+                subprocess.run(
+                    ["open", str(speaker_file.absolute())], check=True
+                )  # nosec B603,B607
             elif sys.platform == "win32":  # Windows
-                subprocess.run(["start", str(speaker_file.absolute())], shell=True, check=True)  # nosec B603,B607
+                subprocess.run(
+                    ["start", str(speaker_file.absolute())], shell=True, check=True  # nosec B602,B603,B607
+                )
             else:  # Linux
-                subprocess.run(["xdg-open", str(speaker_file.absolute())], check=True)  # nosec B603,B607
-            
-            self.append_log(f"✅ Opened speaker attribution file: {speaker_file.absolute()}")
-            
+                subprocess.run(
+                    ["xdg-open", str(speaker_file.absolute())], check=True
+                )  # nosec B603,B607
+
+            self.append_log(
+                f"✅ Opened speaker attribution file: {speaker_file.absolute()}"
+            )
+
             # Show informational message
             QMessageBox.information(
                 self,
@@ -1110,7 +1120,7 @@ class APIKeysTab(BaseTab):
                 "UC2D2CMWXMOVWx7giW1n3LIg,Andrew D. Huberman,Huberman Lab\n"
                 "UCSHZKyawb77ixDdsGog4iWA,Lex Fridman,Lex Fridman Podcast",
             )
-            
+
         except subprocess.CalledProcessError as e:
             error_msg = f"Failed to open speaker attribution file: {e}"
             QMessageBox.critical(

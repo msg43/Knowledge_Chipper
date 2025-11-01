@@ -133,4 +133,3 @@ To ensure the LLM uses metadata correctly:
 - `src/knowledge_system/services/file_generation.py`: This is for regenerating files from database, not initial generation
 - `src/knowledge_system/processors/speaker_processor.py`: Already has the right logic
 - `src/knowledge_system/utils/llm_speaker_suggester.py`: LLM prompts (might need enhancement but not for this issue)
-

@@ -19,7 +19,6 @@ from .models import (
     Concept,
     ConceptAlias,
     ConceptEvidence,
-    Episode,
     EvidenceSpan,
     ExportDestination,
     GeneratedFile,
@@ -66,7 +65,6 @@ __all__ = [
     "Base",
     "DatabaseService",
     # HCE models
-    "Episode",
     "Claim",
     "EvidenceSpan",
     "ClaimRelation",

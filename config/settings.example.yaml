@@ -101,7 +101,7 @@ processing:
   concurrent_jobs: 2
   retry_attempts: 3
   timeout_seconds: 300
-  
+
   # Process Tab Defaults
   default_transcribe: true      # Enable transcription by default
   default_summarize: true        # Enable summarization by default

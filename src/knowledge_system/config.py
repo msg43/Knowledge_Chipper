@@ -220,7 +220,7 @@ class TranscriptionConfig(BaseModel):
     device: str = Field(
         default="auto",
         pattern="^(auto|cpu|cuda|mps)$",
-        description="Processing device: auto (detect best), cpu, cuda (NVIDIA), mps (Apple Silicon)"
+        description="Processing device: auto (detect best), cpu, cuda (NVIDIA), mps (Apple Silicon)",
     )
     use_gpu: bool = True  # Deprecated - use device instead
     diarization: bool = True
@@ -392,18 +392,22 @@ class ProcessingConfig(BaseModel):
     concurrent_jobs: int = Field(default=2, ge=1, le=10)
     retry_attempts: int = Field(default=3, ge=1, le=10)
     timeout_seconds: int = Field(default=300, ge=30, le=3600)
-    
+
     # Process Tab Defaults
-    default_transcribe: bool = Field(default=True, description="Enable transcription by default")
-    default_summarize: bool = Field(default=True, description="Enable summarization by default")
+    default_transcribe: bool = Field(
+        default=True, description="Enable transcription by default"
+    )
+    default_summarize: bool = Field(
+        default=True, description="Enable summarization by default"
+    )
 
 
 class FileWatcherConfig(BaseModel):
     """File watcher / monitor tab configuration."""
-    
+
     default_file_patterns: str = Field(
         default="*.mp4,*.mp3,*.wav,*.m4a,*.pdf,*.txt,*.md",
-        description="Default file patterns to watch"
+        description="Default file patterns to watch",
     )
     default_debounce_delay: int = Field(
         default=5, ge=1, le=300, description="Default debounce delay in seconds"

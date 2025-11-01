@@ -510,14 +510,14 @@ class EnhancedTranscriptionWorker(QThread):
 
             source_id = VideoIDExtractor.extract_video_id(url)
 
-            if not video_id:
+            if not source_id:
                 logger.warning(
                     f"Could not extract video ID from {url} - treating as permanent failure"
                 )
                 self._write_to_failed_urls_file(url, error)
                 return "PERMANENT_FAILURE"
 
-            video = db_service.get_video(video_id)
+            video = db_service.get_source(source_id)
             current_time = datetime.now()
 
             if not video or video.retry_count == 0:
@@ -529,11 +529,11 @@ class EnhancedTranscriptionWorker(QThread):
                     video.last_retry_at = current_time
                     video.failure_reason = error
                     video.needs_metadata_retry = True
-                    db_service.update_video(video)
+                    db_service.update_source(video)
                 else:
                     # Create new record for retry tracking
-                    db_service.create_video(
-                        video_id=video_id,
+                    db_service.create_source(
+                        video_id=source_id,
                         title=f"Retry: {url[:50]}",
                         source_url=url,
                         source_type="youtube",
@@ -656,7 +656,7 @@ class EnhancedTranscriptionWorker(QThread):
     ) -> list[Path]:
         """
         Download URLs using unified download path.
-        
+
         Handles 0, 1, or multiple cookie files with consistent behavior:
         - 0 cookies: No authentication, safe rate limiting
         - 1 cookie: Single scheduler with deduplication and failover
@@ -676,7 +676,9 @@ class EnhancedTranscriptionWorker(QThread):
         if config.youtube_processing.shuffle_urls:
             original_count = len(urls)
             random.shuffle(urls)
-            logger.info(f"🔀 Shuffled {original_count} URLs to prevent sequential hammering")
+            logger.info(
+                f"🔀 Shuffled {original_count} URLs to prevent sequential hammering"
+            )
             self.transcription_step_updated.emit(
                 f"🔀 Shuffled {original_count} URLs for better anti-bot protection", 0
             )
@@ -685,17 +687,17 @@ class EnhancedTranscriptionWorker(QThread):
         if not cookie_files:
             logger.info("📥 No cookies provided - downloading without authentication")
             cookie_files = [None]  # Single scheduler with no auth
-        
+
         # Test and filter cookies (skips None values)
         if cookie_files != [None]:
             self.transcription_step_updated.emit("🧪 Testing cookie files...", 0)
             valid_cookies = self._test_and_filter_cookies(cookie_files)
-            
+
             if not valid_cookies:
                 raise Exception("No valid cookie files found")
-            
+
             cookie_files = valid_cookies
-            
+
             if len(cookie_files) == 1:
                 self.transcription_step_updated.emit(
                     f"✅ Using 1 account for downloads\n"
@@ -925,7 +927,9 @@ class EnhancedTranscriptionWorker(QThread):
                     )
 
                     # Use unified download path for all cases (0, 1, or multiple cookies)
-                    logger.info(f"   Using unified download path with {len(cookie_files)} cookie(s)")
+                    logger.info(
+                        f"   Using unified download path with {len(cookie_files)} cookie(s)"
+                    )
                     downloaded_files = self._download_urls(
                         expanded_urls, cookie_files, downloads_dir
                     )
@@ -1165,38 +1169,46 @@ class EnhancedTranscriptionWorker(QThread):
                         # Strategy 2: Extract video_id from filename (fallback for old files)
                         file_path_obj = Path(file_path)
                         filename = file_path_obj.stem
-                        
+
                         logger.debug(f"🔍 Looking up metadata for file: {filename}")
-                        
+
                         db_service = DatabaseService()
                         video_record = None
                         source_id = None
-                        
+
                         # Strategy 1: Try to find by file path in database (DATABASE-CENTRIC!)
                         # This is the correct architecture - no filename parsing needed
-                        logger.debug(f"   Strategy 1: Querying database by file path...")
-                        video_record = db_service.get_video_by_file_path(file_path)
+                        logger.debug(
+                            f"   Strategy 1: Querying database by file path..."
+                        )
+                        source_record = db_service.get_source_by_file_path(file_path)
                         if source_record:
                             source_id = source_record.source_id
-                            logger.info(f"✅ Found metadata by file path (database-centric): {video_id}")
+                            logger.info(
+                                f"✅ Found metadata by file path (database-centric): {source_id}"
+                            )
                         else:
-                            logger.debug(f"   No match by file path, trying filename extraction...")
-                        
-                        # Strategy 2: Extract video_id from filename (fallback for old files)
-                        if not video_record:
-                            logger.debug(f"   Strategy 2: Extracting video_id from filename...")
+                            logger.debug(
+                                f"   No match by file path, trying filename extraction..."
+                            )
+
+                        # Strategy 2: Extract source_id from filename (fallback for old files)
+                        if not source_record:
+                            logger.debug(
+                                f"   Strategy 2: Extracting video_id from filename..."
+                            )
                             # YouTube video IDs are 11 characters: [a-zA-Z0-9_-]{11}
                             import re
-                            
+
                             # Try multiple patterns in order of likelihood
                             patterns = [
                                 r"_([a-zA-Z0-9_-]{11})_transcript",  # Title_videoID_transcript.md
-                                r"_([a-zA-Z0-9_-]{11})$",             # Title_videoID.ext
-                                r"\[([a-zA-Z0-9_-]{11})\]",           # Title [videoID].ext
-                                r"_([a-zA-Z0-9_-]{11})_",             # Title_videoID_anything
-                                r"([a-zA-Z0-9_-]{11})",               # videoID anywhere (last resort)
+                                r"_([a-zA-Z0-9_-]{11})$",  # Title_videoID.ext
+                                r"\[([a-zA-Z0-9_-]{11})\]",  # Title [videoID].ext
+                                r"_([a-zA-Z0-9_-]{11})_",  # Title_videoID_anything
+                                r"([a-zA-Z0-9_-]{11})",  # videoID anywhere (last resort)
                             ]
-                            
+
                             for pattern in patterns:
                                 match = re.search(pattern, filename)
                                 if match:
@@ -1205,25 +1217,33 @@ class EnhancedTranscriptionWorker(QThread):
                                     test_record = db_service.get_video(potential_id)
                                     if test_record:
                                         source_id = potential_id
-                                        video_record = test_record
-                                        logger.info(f"✅ Found video_id in filename: {video_id} (pattern: {pattern})")
+                                        source_record = test_record
+                                        logger.info(
+                                            f"✅ Found video_id in filename: {source_id} (pattern: {pattern})"
+                                        )
                                         break
-                            
+
                             # Strategy 3: Try URL extraction as fallback
-                            if not video_id:
+                            if not source_id:
                                 try:
                                     source_id = extract_video_id(filename)
-                                    if video_id:
-                                        source_record = db_service.get_source(video_id)
+                                    if source_id:
+                                        source_record = db_service.get_source(source_id)
                                         if source_record:
-                                            logger.info(f"✅ Extracted video_id via URL pattern: {video_id}")
+                                            logger.info(
+                                                f"✅ Extracted video_id via URL pattern: {source_id}"
+                                            )
                                 except:
-                                    logger.debug("Could not extract video_id from URL pattern")
-                        
-                        if not video_record:
+                                    logger.debug(
+                                        "Could not extract video_id from URL pattern"
+                                    )
+
+                        if not source_record:
                             logger.debug(f"⚠️ No metadata found for file: {filename}")
-                            logger.debug(f"   This is normal for local files or files downloaded outside the app")
-                        
+                            logger.debug(
+                                f"   This is normal for local files or files downloaded outside the app"
+                            )
+
                         if source_record:
                             # Retrieve platform tags from relationship
                             tags = []
@@ -1266,10 +1286,12 @@ class EnhancedTranscriptionWorker(QThread):
                             # Debug logging for tags and metadata
                             tags_count = len(video_metadata["tags"])
                             categories_count = len(video_metadata["categories"])
-                            has_thumbnail = bool(video_metadata.get("thumbnail_local_path"))
+                            has_thumbnail = bool(
+                                video_metadata.get("thumbnail_local_path")
+                            )
                             has_description = bool(video_metadata.get("description"))
                             logger.info(
-                                f"✅ Retrieved YouTube metadata for {video_id}: {source_record.title} "
+                                f"✅ Retrieved YouTube metadata for {source_id}: {source_record.title} "
                                 f"(tags: {tags_count}, categories: {categories_count}, "
                                 f"thumbnail: {has_thumbnail}, description: {has_description})"
                             )
@@ -1278,11 +1300,19 @@ class EnhancedTranscriptionWorker(QThread):
                                     f"Tags: {video_metadata['tags'][:5]}..."
                                 )  # Show first 5 tags
                             if categories_count > 0:
-                                logger.debug(f"Categories: {video_metadata['categories']}")
+                                logger.debug(
+                                    f"Categories: {video_metadata['categories']}"
+                                )
                             if has_thumbnail:
-                                logger.debug(f"Thumbnail path: {video_metadata['thumbnail_local_path']}")
+                                logger.debug(
+                                    f"Thumbnail path: {video_metadata['thumbnail_local_path']}"
+                                )
                             if has_description:
-                                desc_preview = video_metadata['description'][:100] + "..." if len(video_metadata['description']) > 100 else video_metadata['description']
+                                desc_preview = (
+                                    video_metadata["description"][:100] + "..."
+                                    if len(video_metadata["description"]) > 100
+                                    else video_metadata["description"]
+                                )
                                 logger.debug(f"Description preview: {desc_preview}")
 
                     except Exception as e:
@@ -1325,7 +1355,9 @@ class EnhancedTranscriptionWorker(QThread):
                         processing_kwargs_with_output["diarization"] = False
                     processing_kwargs_with_output[
                         "enable_color_coding"
-                    ] = self.gui_settings.get("enable_color_coding", False)  # Default to False
+                    ] = self.gui_settings.get(
+                        "enable_color_coding", False
+                    )  # Default to False
 
                     # Pass cancellation token for proper stop support
                     processing_kwargs_with_output[
@@ -1442,14 +1474,14 @@ class EnhancedTranscriptionWorker(QThread):
                                     if match:
                                         source_id = match.group(1)
 
-                                if video_id:
+                                if source_id:
                                     db_service = DatabaseService()
-                                    source_record = db_service.get_source(video_id)
+                                    source_record = db_service.get_source(source_id)
 
-                                    if video_record and source_record.url:
+                                    if source_record and source_record.url:
                                         # Re-download with fresh IP and transcribe with large model
                                         logger.info(
-                                            f"🔄 Audio corruption detected for {video_id}, attempting re-download and transcription with large model"
+                                            f"🔄 Audio corruption detected for {source_id}, attempting re-download and transcription with large model"
                                         )
                                         self.transcription_step_updated.emit(
                                             f"🔄 Re-downloading {file_name} with fresh IP...",
@@ -1616,11 +1648,11 @@ class EnhancedTranscriptionWorker(QThread):
                                             )
                                     else:
                                         logger.warning(
-                                            f"Could not find source URL for video_id {video_id} in database"
+                                            f"Could not find source URL for source_id {source_id} in database"
                                         )
                                 else:
                                     logger.warning(
-                                        f"Could not extract video_id from filename: {filename}"
+                                        f"Could not extract source_id from filename: {filename}"
                                     )
 
                             except Exception as recovery_error:
@@ -1758,7 +1790,7 @@ class EnhancedTranscriptionWorker(QThread):
 
             from ...core.system2_orchestrator import System2Orchestrator
 
-            # Extract video ID from file path or generate one
+            # Extract source ID from file path or generate one
             source_id = Path(file_path).stem
 
             # Create orchestrator instance
@@ -1767,7 +1799,7 @@ class EnhancedTranscriptionWorker(QThread):
             # Create and execute a pipeline job
             job_id = orchestrator.create_job(
                 "pipeline",  # Database job type (not JobType enum)
-                video_id,
+                source_id,
                 config={
                     "source": "local_file",
                     "file_path": file_path,
@@ -1781,21 +1813,21 @@ class EnhancedTranscriptionWorker(QThread):
             )
 
             # Execute the job (process_job is async, so we need to run it with asyncio)
-            logger.info(f"System 2 pipeline initiated for {video_id} (job: {job_id})")
+            logger.info(f"System 2 pipeline initiated for {source_id} (job: {job_id})")
             result = asyncio.run(orchestrator.process_job(job_id))
 
             if result.get("status") == "succeeded":
                 self.transcription_step_updated.emit(
                     f"✅ System 2 pipeline completed for {Path(file_path).name}", 0
                 )
-                logger.info(f"System 2 pipeline succeeded for {video_id}")
+                logger.info(f"System 2 pipeline succeeded for {source_id}")
             else:
                 error_msg = result.get("error_message", "Unknown error")
                 self.transcription_step_updated.emit(
                     f"⚠️ Pipeline completed with issues: {error_msg}", 0
                 )
                 logger.warning(
-                    f"System 2 pipeline had issues for {video_id}: {error_msg}"
+                    f"System 2 pipeline had issues for {source_id}: {error_msg}"
                 )
 
         except Exception as e:
@@ -2107,7 +2139,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         language_label_layout.setContentsMargins(0, 0, 0, 0)
         language_label_layout.setSpacing(6)
         language_label = QLabel("Language:")
-        language_label.setMinimumWidth(130)  # Fixed width for alignment with Transcription Model
+        language_label.setMinimumWidth(
+            130
+        )  # Fixed width for alignment with Transcription Model
         language_label_layout.addWidget(language_label)
         language_label_layout.addWidget(self.language_combo)
         language_label_layout.addStretch()  # Keep compact
@@ -2288,7 +2322,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # Horizontal layout for checkboxes on same line
         checkbox_row = QHBoxLayout()
         checkbox_row.setSpacing(15)
-        
+
         # Enable multi-account checkbox
         self.enable_cookies_checkbox = QCheckBox("Enable multi-account")
         self.enable_cookies_checkbox.setChecked(True)
@@ -2311,7 +2345,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self._on_setting_changed
         )
         checkbox_row.addWidget(self.disable_proxies_with_cookies_checkbox)
-        
+
         checkbox_row.addStretch()  # Push checkboxes to the left
         cookie_layout.addLayout(checkbox_row)
 
@@ -2337,7 +2371,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # Single horizontal row for all delay controls
         delay_row = QHBoxLayout()
         delay_row.setSpacing(15)
-        
+
         # Min delay
         min_delay_label = QLabel("Min delay:")
         delay_row.addWidget(min_delay_label)
@@ -2379,13 +2413,15 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.randomization_spinbox.setValue(25)  # ±25% default
         self.randomization_spinbox.setSuffix(" %")
         self.randomization_spinbox.setMaximumWidth(70)
-        self.randomization_spinbox.setStyleSheet("QSpinBox { color: white; }")  # White text
+        self.randomization_spinbox.setStyleSheet(
+            "QSpinBox { color: white; }"
+        )  # White text
         self.randomization_spinbox.setToolTip(
             "Percentage of random variation in delays (e.g., 25 = ±25%)"
         )
         self.randomization_spinbox.valueChanged.connect(self._on_setting_changed)
         delay_row.addWidget(self.randomization_spinbox)
-        
+
         delay_row.addStretch()  # Push to left
         rate_limit_layout.addLayout(delay_row)
 
@@ -2778,7 +2814,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # CRITICAL: Enforce strict mode ONLY if no valid exemption exists
         # Block if: strict_mode=True AND proxy_unchecked AND NOT using cookie exemption
         # Allow if: cookie authentication is enabled with "disable proxies" option
-        if urls and strict_mode and not self.use_proxy_checkbox.isChecked() and not skip_proxy_test:
+        if (
+            urls
+            and strict_mode
+            and not self.use_proxy_checkbox.isChecked()
+            and not skip_proxy_test
+        ):
             self.append_log("🚫 BLOCKED: Proxy strict mode is enabled")
             self.append_log("⚠️ Proxy checkbox must be enabled when strict mode is on")
             self.append_log(
@@ -3990,12 +4031,14 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             if cookie_files:
                 # Temporarily disconnect signal to prevent save during load
                 try:
-                    self.cookie_manager.cookies_changed.disconnect(self._on_setting_changed)
+                    self.cookie_manager.cookies_changed.disconnect(
+                        self._on_setting_changed
+                    )
                 except:
                     pass  # Ignore if not connected
-                
+
                 self.cookie_manager.set_cookie_files(cookie_files)
-                
+
                 # Reconnect signal
                 self.cookie_manager.cookies_changed.connect(self._on_setting_changed)
 

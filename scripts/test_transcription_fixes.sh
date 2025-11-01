@@ -94,4 +94,3 @@ echo "   - Check logs for 'No thumbnail_local_path' or 'No description'"
 echo "   - This means the database doesn't have the data"
 echo "   - Re-download the video to populate database with metadata"
 echo ""
-

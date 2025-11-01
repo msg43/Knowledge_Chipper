@@ -926,7 +926,7 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
                 # Add hallucination prevention parameters
                 # These parameters help prevent Whisper from getting "stuck" and repeating phrases
-                
+
                 # Entropy threshold: Higher = more aggressive at stopping hallucinations
                 # Default is 2.40, we increase it for large models which are more prone to hallucinations
                 entropy_thold = kwargs.get("entropy_thold")
@@ -935,26 +935,30 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                     # self.model_name is "large" but actual model file is "ggml-large-v3"
                     if self.model_name == "large":
                         entropy_thold = 2.8  # More aggressive for large models
-                        logger.info("🎯 Using aggressive hallucination prevention for large model")
+                        logger.info(
+                            "🎯 Using aggressive hallucination prevention for large model"
+                        )
                     else:
-                        entropy_thold = 2.6  # Slightly higher than default for medium/small
+                        entropy_thold = (
+                            2.6  # Slightly higher than default for medium/small
+                        )
                 cmd.extend(["--entropy-thold", str(entropy_thold)])
-                
+
                 # Log probability threshold: Higher (less negative) = more likely to reject low-confidence segments
                 # Default is -1.00, we make it less strict to catch hallucinations
                 logprob_thold = kwargs.get("logprob_thold", -0.8)
                 cmd.extend(["--logprob-thold", str(logprob_thold)])
-                
+
                 # Maximum segment length: Prevents extremely long repetitive segments
                 # 0 = no limit, we set a reasonable limit to catch runaway hallucinations
                 max_len = kwargs.get("max_len", 200)  # 200 characters max per segment
                 cmd.extend(["--max-len", str(max_len)])
-                
+
                 # Temperature: 0 = deterministic, higher = more random
                 # Keep at 0 for consistency, but allow override
                 temperature = kwargs.get("temperature", 0.0)
                 cmd.extend(["--temperature", str(temperature)])
-                
+
                 logger.info(
                     f"🛡️ Hallucination prevention: entropy={entropy_thold}, "
                     f"logprob={logprob_thold}, max_len={max_len}, temp={temperature}"
@@ -1459,7 +1463,9 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                         try:
                             # whisper.cpp may output progress to either stdout or stderr
                             elapsed = time.time() - start_time
-                            self._parse_whisper_output_for_progress(line_stripped, elapsed)
+                            self._parse_whisper_output_for_progress(
+                                line_stripped, elapsed
+                            )
                         except Exception:
                             pass  # Don't let progress parsing errors interrupt streaming
             except Exception as e:

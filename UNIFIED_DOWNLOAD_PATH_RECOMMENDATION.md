@@ -507,4 +507,3 @@ downloaded_files = self._download_urls(
 - ✅ Easier to test and debug
 
 This is a clear case where **simpler is better**.
-

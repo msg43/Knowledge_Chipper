@@ -325,4 +325,3 @@ When adding a new GUI combo box:
 ✅ **Prevention Strategy Documented**  
 ✅ **No Linter Errors**  
 ✅ **Ready for Testing**
-

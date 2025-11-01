@@ -231,4 +231,3 @@ yt-dlp -f "ba[acodec=opus][vcodec=none]/ba[acodec^=mp4a][vcodec=none]/ba[vcodec=
 4. ✅ Android client (bypasses SABR)
 
 **Result:** 86% reduction in file size, bandwidth, and storage costs
-

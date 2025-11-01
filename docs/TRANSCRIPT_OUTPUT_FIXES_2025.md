@@ -191,4 +191,3 @@ In this video, I discuss the recent Ukrainian strikes on Russia's Druzhba oil pi
 - `docs/guides/CODEBASE_STRUCTURE.md` - Database schema
 - `config/channel_hosts.csv` - Known podcast hosts
 - `src/knowledge_system/services/file_generation.py` - File generation service
-

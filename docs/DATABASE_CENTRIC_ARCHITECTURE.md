@@ -250,4 +250,3 @@ New files (downloaded after this change) will:
 The system is now properly database-centric. Video ID in filename is **no longer required** for new downloads. The database is the single source of truth for metadata, and files are just files - their names don't matter.
 
 This is the correct architecture for a database-backed application.
-

@@ -144,4 +144,3 @@ See `docs/HALLUCINATION_FIX_2025.md` for detailed technical documentation includ
 ✅ **Complete** - Changes implemented, tested, and documented.
 
 The fix is **automatic** - no configuration changes needed. It will apply to all future transcriptions.
-

@@ -174,4 +174,3 @@ Potential future improvements:
 2. **Performance:** Skipping file I/O provides minor performance improvements for large batches
 3. **Use Case:** Most useful for automated pipelines where files are generated on-demand from database queries
 4. **Safety:** Database writes are guaranteed to happen regardless of format setting (defensive coding)
-
