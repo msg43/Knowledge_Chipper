@@ -863,12 +863,12 @@ class ClaimStore:
                 if fts_id and existing_tables:
                     if "claims_fts" in existing_tables:
                         cur.execute(
-                            "DELETE FROM claims_fts WHERE episode_id = ?",
+                            "DELETE FROM claims_fts WHERE source_id = ?",
                             (fts_id,),
                         )
                     if "evidence_fts" in existing_tables:
                         cur.execute(
-                            "DELETE FROM evidence_fts WHERE episode_id = ?",
+                            "DELETE FROM evidence_fts WHERE source_id = ?",
                             (fts_id,),
                         )
 
@@ -924,7 +924,7 @@ class ClaimStore:
                         cur.execute(
                             """
                             INSERT INTO claims_fts(
-                                claim_id, episode_id, canonical, claim_type
+                                claim_id, source_id, canonical, claim_type
                             ) VALUES(?, ?, ?, ?)
                             """,
                             (
@@ -943,7 +943,7 @@ class ClaimStore:
                                 cur.execute(
                                     """
                                     INSERT INTO evidence_fts(
-                                        claim_id, episode_id, quote
+                                        claim_id, source_id, quote
                                     ) VALUES(?, ?, ?)
                                     """,
                                     (

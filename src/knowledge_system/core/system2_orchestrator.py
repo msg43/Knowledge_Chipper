@@ -537,7 +537,7 @@ class System2Orchestrator:
 
     async def _process_mine(
         self,
-        episode_id: str,
+        source_id: str,
         config: dict[str, Any],
         checkpoint: dict[str, Any] | None,
         run_id: str,
@@ -551,13 +551,12 @@ class System2Orchestrator:
         from .system2_orchestrator_mining import process_mine_with_unified_pipeline
 
         return await process_mine_with_unified_pipeline(
-            self, episode_id, config, checkpoint, run_id
+            self, source_id, config, checkpoint, run_id
         )
 
     def _create_summary_from_mining(
         self,
         source_id: str,
-        episode_id: str,
         miner_outputs: list[Any],
         config: dict[str, Any],
     ) -> str:
@@ -624,7 +623,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE).
                 transcript_id=None,  # Could link to transcript if available
                 summary_text=summary_text,
                 summary_metadata_json={
-                    "episode_id": episode_id,
+                    "source_id": source_id,
                     "mining_timestamp": datetime.utcnow().isoformat(),
                 },
                 processing_type="hce",
@@ -653,7 +652,6 @@ This content was analyzed using Hybrid Claim Extraction (HCE).
     def _create_summary_from_pipeline_outputs(
         self,
         source_id: str,
-        episode_id: str,
         pipeline_outputs: Any,  # PipelineOutputs
         config: dict[str, Any],
     ) -> str:
@@ -735,7 +733,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 transcript_id=None,
                 summary_text=summary_text,
                 summary_metadata_json={
-                    "episode_id": episode_id,
+                    "source_id": source_id,
                     "mining_timestamp": datetime.utcnow().isoformat(),
                     "tier_distribution": {
                         "A": len([c for c in pipeline_outputs.claims if c.tier == "A"]),
@@ -776,7 +774,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
     async def _process_flagship(
         self,
-        episode_id: str,
+        source_id: str,
         config: dict[str, Any],
         checkpoint: dict[str, Any] | None,
         run_id: str,
@@ -799,7 +797,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             if checkpoint and checkpoint.get("stage") == "completed":
                 logger.info(f"Flagship evaluation already completed (from checkpoint)")
                 return checkpoint.get(
-                    "final_result", {"status": "succeeded", "output_id": episode_id}
+                    "final_result", {"status": "succeeded", "output_id": source_id}
                 )
 
             # Save initial checkpoint
@@ -810,12 +808,12 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
             if not miner_outputs:
                 logger.warning(
-                    f"No mining results found for episode {episode_id}. "
+                    f"No mining results found for source {source_id}. "
                     "Flagship evaluation is now integrated into UnifiedHCEPipeline."
                 )
                 final_result = {
                     "status": "succeeded",
-                    "output_id": episode_id,
+                    "output_id": source_id,
                     "result": {
                         "claims_evaluated": 0,
                         "claims_accepted": 0,
@@ -844,12 +842,12 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             claims_count = sum(len(o.claims) for o in miner_outputs)
 
             logger.info(
-                f"Flagship evaluation complete for {episode_id}: {claims_count} claims"
+                f"Flagship evaluation complete for {source_id}: {claims_count} claims"
             )
 
             final_result = {
                 "status": "succeeded",
-                "output_id": episode_id,
+                "output_id": source_id,
                 "result": {
                     "claims_evaluated": claims_count,
                     "claims_accepted": claims_count,
@@ -865,7 +863,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             return final_result
 
         except Exception as e:
-            logger.error(f"Flagship evaluation failed for {episode_id}: {e}")
+            logger.error(f"Flagship evaluation failed for {source_id}: {e}")
             # Save error checkpoint
             try:
                 self.save_checkpoint(run_id, {"stage": "failed", "error": str(e)})
@@ -877,7 +875,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
     async def _process_upload(
         self,
-        episode_id: str,
+        source_id: str,
         config: dict[str, Any],
         checkpoint: dict[str, Any] | None,
         run_id: str,
@@ -898,10 +896,10 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             if checkpoint and checkpoint.get("stage") == "completed":
                 logger.info(f"Upload already completed (from checkpoint)")
                 return checkpoint.get(
-                    "final_result", {"status": "succeeded", "output_id": episode_id}
+                    "final_result", {"status": "succeeded", "output_id": source_id}
                 )
 
-            logger.info(f"Processing upload for {episode_id}")
+            logger.info(f"Processing upload for {source_id}")
 
             # Save initial checkpoint
             self.save_checkpoint(
@@ -913,7 +911,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
             final_result = {
                 "status": "succeeded",
-                "output_id": episode_id,
+                "output_id": source_id,
                 "result": {"note": "Upload functionality pending implementation"},
             }
 
@@ -925,7 +923,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             return final_result
 
         except Exception as e:
-            logger.error(f"Upload failed for {episode_id}: {e}")
+            logger.error(f"Upload failed for {source_id}: {e}")
             # Save error checkpoint
             try:
                 self.save_checkpoint(run_id, {"stage": "failed", "error": str(e)})
@@ -1157,7 +1155,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
     def _rechunk_whisper_segments(
         self,
         whisper_segments: list[dict[str, Any]],
-        episode_id: str,
+        source_id: str,
         target_tokens: int = 750,
     ) -> list[Any]:
         """
@@ -1172,7 +1170,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
         Args:
             whisper_segments: Raw segments from Whisper (list of dicts with 'text', 'start', 'end', 'speaker')
-            episode_id: Episode identifier
+            source_id: Source identifier
             target_tokens: Target tokens per chunk (default 750)
 
         Returns:
@@ -1267,7 +1265,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
                 chunked_segments.append(
                     Segment(
-                        episode_id=episode_id,
+                        episode_id=source_id,
                         segment_id=f"chunk_{chunk_idx:04d}",
                         speaker=current_speaker
                         or "Unknown",  # Single speaker per chunk
@@ -1304,7 +1302,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             chunk_text = " ".join(current_chunk_parts)
             chunked_segments.append(
                 Segment(
-                    episode_id=episode_id,
+                    episode_id=source_id,
                     segment_id=f"chunk_{chunk_idx:04d}",
                     speaker=current_speaker or "Unknown",
                     t0=str(chunk_start_time),
@@ -1321,7 +1319,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
         return chunked_segments
 
     def _parse_transcript_to_segments(
-        self, transcript_text: str, episode_id: str
+        self, transcript_text: str, source_id: str
     ) -> list[Any]:
         """Parse transcript text into intelligent segments (chunks of ~500-1000 tokens).
 
@@ -1371,7 +1369,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 chunk_text = " ".join(current_chunk)
                 segments.append(
                     Segment(
-                        episode_id=episode_id,
+                        episode_id=source_id,
                         segment_id=f"seg_{segment_idx:04d}",
                         speaker="Unknown",
                         t0=f"00:{segment_idx*2:02d}:00",  # Approximate timestamps
@@ -1391,7 +1389,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 chunk_text = " ".join(current_chunk)
                 segments.append(
                     Segment(
-                        episode_id=episode_id,
+                        episode_id=source_id,
                         segment_id=f"seg_{segment_idx:04d}",
                         speaker="Unknown",
                         t0=f"00:{segment_idx*2:02d}:00",
@@ -1423,7 +1421,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
         return segments
 
     def _chunk_speaker_segments_intelligently(
-        self, speaker_segments: list[Any], episode_id: str, target_tokens: int = 750
+        self, speaker_segments: list[Any], source_id: str, target_tokens: int = 750
     ) -> list[Any]:
         """
         Chunk speaker-turn segments into larger segments while preserving speaker context.
@@ -1452,7 +1450,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 chunk_text = " ".join(current_chunk_texts)
                 chunked_segments.append(
                     Segment(
-                        episode_id=episode_id,
+                        episode_id=source_id,
                         segment_id=f"chunk_{chunk_idx:04d}",
                         speaker="Multiple",  # Chunked segments may have multiple speakers
                         t0="00:00:00",  # Approximate - would need proper timestamp tracking
@@ -1479,7 +1477,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 chunk_text = " ".join(current_chunk_texts)
                 chunked_segments.append(
                     Segment(
-                        episode_id=episode_id,
+                        episode_id=source_id,
                         segment_id=f"chunk_{chunk_idx:04d}",
                         speaker="Multiple",
                         t0="00:00:00",
