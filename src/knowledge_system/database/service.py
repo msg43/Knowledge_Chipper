@@ -444,16 +444,16 @@ class DatabaseService:
 
                 # Check each video's audio_file_path (handle path variations)
                 for video in videos:
-                    if source.audio_file_path:
+                    if video.audio_file_path:
                         try:
                             stored_path = str(Path(video.audio_file_path).resolve())
                             if stored_path == file_path_normalized:
                                 # Add platform categories as a dynamic property
                                 categories = self._get_platform_categories_for_source(
-                                    session, source.source_id
+                                    session, video.source_id
                                 )
                                 # Store as dynamic attribute (not persisted to DB)
-                                source.categories_json = (
+                                video.categories_json = (
                                     categories if categories else []
                                 )
                                 return video
@@ -524,7 +524,7 @@ class DatabaseService:
     ) -> bool:
         """
         Create an alias linking two source_ids that refer to the same content.
-        
+
         Args:
             primary_source_id: The primary source_id (e.g., YouTube video ID)
             alias_source_id: The alias source_id (e.g., podcast source_id)
@@ -533,14 +533,15 @@ class DatabaseService:
             match_method: Method used to match ('title_fuzzy', 'title_exact', 'date_proximity', 'manual', 'guid')
             match_metadata: Additional metadata about the match (JSON)
             verified_by: Who verified this alias ('system' or user ID)
-            
+
         Returns:
             True if alias created successfully
         """
         try:
-            from .models import SourceIDAlias
             import uuid
-            
+
+            from .models import SourceIDAlias
+
             with self.get_session() as session:
                 # Check if alias already exists
                 existing = (
@@ -551,13 +552,13 @@ class DatabaseService:
                     )
                     .first()
                 )
-                
+
                 if existing:
                     logger.debug(
                         f"Alias already exists: {primary_source_id} ↔ {alias_source_id}"
                     )
                     return True
-                
+
                 # Create new alias
                 alias = SourceIDAlias(
                     alias_id=str(uuid.uuid4()),
@@ -569,16 +570,16 @@ class DatabaseService:
                     match_metadata=match_metadata or {},
                     verified_by=verified_by,
                 )
-                
+
                 session.add(alias)
                 session.commit()
-                
+
                 logger.info(
                     f"Created source alias: {primary_source_id} ↔ {alias_source_id} "
                     f"(confidence={match_confidence:.2f}, method={match_method})"
                 )
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to create source alias: {e}")
             return False
@@ -586,16 +587,16 @@ class DatabaseService:
     def get_source_aliases(self, source_id: str) -> list[str]:
         """
         Get all source_ids that are aliases of the given source_id.
-        
+
         Args:
             source_id: Source ID to look up
-            
+
         Returns:
             List of related source_ids (bidirectional lookup)
         """
         try:
             from .models import SourceIDAlias
-            
+
             with self.get_session() as session:
                 # Find all aliases where this source_id is either primary or alias
                 aliases_as_primary = (
@@ -603,20 +604,20 @@ class DatabaseService:
                     .filter(SourceIDAlias.primary_source_id == source_id)
                     .all()
                 )
-                
+
                 aliases_as_alias = (
                     session.query(SourceIDAlias.primary_source_id)
                     .filter(SourceIDAlias.alias_source_id == source_id)
                     .all()
                 )
-                
+
                 # Combine and flatten
                 related_ids = [a[0] for a in aliases_as_primary] + [
                     a[0] for a in aliases_as_alias
                 ]
-                
+
                 return related_ids
-                
+
         except Exception as e:
             logger.error(f"Failed to get source aliases for {source_id}: {e}")
             return []
@@ -624,10 +625,10 @@ class DatabaseService:
     def source_exists_or_has_alias(self, source_id: str) -> tuple[bool, str | None]:
         """
         Check if a source exists, or if an alias exists for it.
-        
+
         Args:
             source_id: Source ID to check
-            
+
         Returns:
             (exists, existing_source_id) where existing_source_id is the source_id
             that already exists in the database (either the original or an alias)
@@ -637,16 +638,16 @@ class DatabaseService:
             source = self.get_source(source_id)
             if source:
                 return (True, source_id)
-            
+
             # Check if any aliases exist
             aliases = self.get_source_aliases(source_id)
             for alias_id in aliases:
                 alias_source = self.get_source(alias_id)
                 if alias_source:
                     return (True, alias_id)
-            
+
             return (False, None)
-            
+
         except Exception as e:
             logger.error(f"Failed to check source existence for {source_id}: {e}")
             return (False, None)
@@ -659,13 +660,13 @@ class DatabaseService:
     ) -> bool:
         """
         Merge metadata from two sources that are aliases of each other.
-        
+
         Args:
             primary_source_id: Primary source ID
             secondary_source_id: Secondary source ID
             prefer_primary: If True, keep primary values when both exist.
                            If False, prefer secondary values.
-            
+
         Returns:
             True if merge successful
         """
@@ -681,14 +682,14 @@ class DatabaseService:
                     .filter(MediaSource.source_id == secondary_source_id)
                     .first()
                 )
-                
+
                 if not primary or not secondary:
                     logger.warning(
                         f"Cannot merge: one or both sources not found "
                         f"({primary_source_id}, {secondary_source_id})"
                     )
                     return False
-                
+
                 # Merge logic: fill in missing fields
                 fields_to_merge = [
                     "description",
@@ -705,11 +706,11 @@ class DatabaseService:
                     "comment_count",
                     "language",
                 ]
-                
+
                 for field in fields_to_merge:
                     primary_val = getattr(primary, field, None)
                     secondary_val = getattr(secondary, field, None)
-                    
+
                     if prefer_primary:
                         # Keep primary unless it's None
                         if primary_val is None and secondary_val is not None:
@@ -718,13 +719,13 @@ class DatabaseService:
                         # Prefer secondary
                         if secondary_val is not None:
                             setattr(primary, field, secondary_val)
-                
+
                 session.commit()
                 logger.info(
                     f"Merged metadata: {secondary_source_id} → {primary_source_id}"
                 )
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to merge source metadata: {e}")
             return False
@@ -1198,14 +1199,14 @@ class DatabaseService:
                 )
 
                 video_metadata = None
-                if video:
+                if source:
                     video_metadata = {
                         "source_id": source.source_id,
                         "title": source.title,
                         "url": source.url,
-                        "uploader": getattr(video, "uploader", None),
-                        "upload_date": getattr(video, "upload_date", None),
-                        "duration": getattr(video, "duration_seconds", None),
+                        "uploader": getattr(source, "uploader", None),
+                        "upload_date": getattr(source, "upload_date", None),
+                        "duration": getattr(source, "duration_seconds", None),
                         # Claim-centric schema doesn't have tags_json column
                         "tags": [],
                     }

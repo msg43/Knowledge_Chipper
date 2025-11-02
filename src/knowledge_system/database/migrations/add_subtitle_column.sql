@@ -7,4 +7,3 @@
 -- so we'll check if it exists first in the application code
 
 ALTER TABLE media_sources ADD COLUMN subtitle TEXT;
-

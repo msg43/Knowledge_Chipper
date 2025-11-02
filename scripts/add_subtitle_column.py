@@ -29,7 +29,9 @@ def add_subtitle_column(db_path: str = "data/knowledge_system.db") -> None:
     db_file = project_root / db_path
     if not db_file.exists():
         logger.info(f"Database does not exist yet: {db_file}")
-        logger.info("No migration needed - database will be created with correct schema")
+        logger.info(
+            "No migration needed - database will be created with correct schema"
+        )
         return
 
     logger.info(f"Checking database schema: {db_file}")
@@ -41,7 +43,7 @@ def add_subtitle_column(db_path: str = "data/knowledge_system.db") -> None:
         # Check if media_sources table exists
         cursor.execute(
             """
-            SELECT name FROM sqlite_master 
+            SELECT name FROM sqlite_master
             WHERE type='table' AND name='media_sources'
             """
         )
@@ -86,4 +88,3 @@ if __name__ == "__main__":
         print(f"❌ Migration failed: {e}")
         print("=" * 70)
         sys.exit(1)
-

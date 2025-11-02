@@ -115,7 +115,13 @@ class PodcastRSSDownloader:
 
         # Download matched episodes
         downloaded_files = []
-        for episode, youtube_source_id, youtube_url, confidence, method in matched_episodes:
+        for (
+            episode,
+            youtube_source_id,
+            youtube_url,
+            confidence,
+            method,
+        ) in matched_episodes:
             try:
                 audio_file, podcast_source_id = self._download_episode(
                     episode, rss_url, output_dir
@@ -259,8 +265,8 @@ class PodcastRSSDownloader:
             - confidence: Match confidence (0-1)
             - method: Match method used ('title_fuzzy', 'title_exact', 'date_proximity')
         """
-        from difflib import SequenceMatcher
         from datetime import datetime
+        from difflib import SequenceMatcher
 
         # Get YouTube video metadata
         youtube_metadata = self._get_youtube_metadata_for_matching(youtube_source_id)
@@ -310,7 +316,9 @@ class PodcastRSSDownloader:
         if title_similarity >= 0.9:
             return (True, title_similarity, "title_fuzzy")
         elif title_similarity >= 0.8 and date_match:
-            confidence = (title_similarity + 1.0) / 2  # Average of title sim and perfect date match
+            confidence = (
+                title_similarity + 1.0
+            ) / 2  # Average of title sim and perfect date match
             return (True, confidence, "title_fuzzy_date")
         elif title_similarity >= 0.7 and date_match:
             confidence = (title_similarity + 0.8) / 2

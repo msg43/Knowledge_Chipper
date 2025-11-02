@@ -953,7 +953,7 @@ class AudioProcessor(BaseProcessor):
         source_id = None
         if source_metadata and source_metadata.get("source_id"):
             source_id = source_metadata["source_id"]
-        
+
         if source_id:
             lines.append(f'source_id: "{source_id}"')
 
@@ -1872,12 +1872,12 @@ class AudioProcessor(BaseProcessor):
                                 file_url = f"file://{path.absolute()}"
 
                                 # Check if media source already exists (for re-runs)
-                                existing_video = db_service.get_source(media_id)
+                                existing_video = db_service.get_source(source_id)
                                 if not existing_video:
                                     # Create media source record
                                     # Use 'document' as source_type for local audio files (valid per schema)
                                     db_service.create_source(
-                                        video_id=media_id,
+                                        video_id=source_id,
                                         title=title,
                                         url=file_url,
                                         source_type="document",  # Valid: 'episode', 'document', 'youtube', 'pdf', 'article', 'podcast', 'rss'
@@ -1889,7 +1889,7 @@ class AudioProcessor(BaseProcessor):
                                         status="completed",
                                     )
                                     logger.info(
-                                        f"Created media source record: {media_id}"
+                                        f"Created media source record: {source_id}"
                                     )
 
                                 # Extract transcript data
@@ -1906,7 +1906,7 @@ class AudioProcessor(BaseProcessor):
 
                                 # Create transcript record (overwrites existing for re-runs)
                                 transcript_record = db_service.create_transcript(
-                                    video_id=media_id,
+                                    video_id=source_id,
                                     language=language,
                                     is_manual=False,
                                     transcript_text=transcript_text,
@@ -1929,7 +1929,7 @@ class AudioProcessor(BaseProcessor):
                                     enhanced_metadata[
                                         "database_transcript_id"
                                     ] = transcript_record.transcript_id
-                                    enhanced_metadata["database_media_id"] = media_id
+                                    enhanced_metadata["database_media_id"] = source_id
 
                                     # Queue for manual review if speaker dialog is enabled
                                     # Note: Automatic assignments were already applied before saving
@@ -1951,18 +1951,18 @@ class AudioProcessor(BaseProcessor):
                                             and gui_mode
                                             and not testing_mode
                                         ):
-                                            # Pass the transcript_id and media_id for speaker assignment
+                                            # Pass the transcript_id and source_id for speaker assignment
                                             kwargs_with_ids = kwargs.copy()
                                             kwargs_with_ids[
                                                 "transcript_id"
                                             ] = transcript_record.transcript_id
-                                            kwargs_with_ids["video_id"] = media_id
+                                            kwargs_with_ids["video_id"] = source_id
                                             kwargs_with_ids[
                                                 "database_transcript_id"
                                             ] = transcript_record.transcript_id
                                             kwargs_with_ids[
                                                 "database_media_id"
-                                            ] = media_id
+                                            ] = source_id
 
                                             # Queue for manual review (automatic assignments already applied)
                                             logger.info(

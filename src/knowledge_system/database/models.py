@@ -208,12 +208,8 @@ class SourceIDAlias(Base):
     verified_by = Column(String)
 
     # Relationships
-    primary_source = relationship(
-        "MediaSource", foreign_keys=[primary_source_id]
-    )
-    alias_source = relationship(
-        "MediaSource", foreign_keys=[alias_source_id]
-    )
+    primary_source = relationship("MediaSource", foreign_keys=[primary_source_id])
+    alias_source = relationship("MediaSource", foreign_keys=[alias_source_id])
 
     __table_args__ = (
         CheckConstraint(

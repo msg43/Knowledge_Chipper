@@ -34,7 +34,7 @@ def add_subtitle_column(db_path: str = "data/knowledge_system.db") -> None:
         # Check if media_sources table exists
         cursor.execute(
             """
-            SELECT name FROM sqlite_master 
+            SELECT name FROM sqlite_master
             WHERE type='table' AND name='media_sources'
             """
         )
@@ -79,4 +79,3 @@ if __name__ == "__main__":
         print(f"❌ Migration failed: {e}")
         print("=" * 70)
         exit(1)
-

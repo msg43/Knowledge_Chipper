@@ -472,4 +472,3 @@ The multi-source deduplication system is **complete and production-ready**. It s
 ```bash
 sqlite3 ~/.knowledge_system/knowledge_system.db < src/knowledge_system/database/migrations/add_source_aliases.sql
 ```
-
