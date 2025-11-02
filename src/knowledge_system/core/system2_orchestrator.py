@@ -1406,7 +1406,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             chunk_text = " ".join(current_chunk)
             segments.append(
                 Segment(
-                    episode_id=episode_id,
+                    episode_id=source_id,
                     segment_id=f"seg_{segment_idx:04d}",
                     speaker="Unknown",
                     t0=f"00:{segment_idx*2:02d}:00",
@@ -1494,7 +1494,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             chunk_text = " ".join(current_chunk_texts)
             chunked_segments.append(
                 Segment(
-                    episode_id=episode_id,
+                    episode_id=source_id,
                     segment_id=f"chunk_{chunk_idx:04d}",
                     speaker="Multiple",
                     t0="00:00:00",

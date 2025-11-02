@@ -96,4 +96,3 @@ fix: Restore accidentally deleted audio_processor.py and re-apply ID unification
 **Time to Fix:** ~5 minutes  
 **Impact:** High (app couldn't launch)  
 **Severity:** Critical (blocking)
-

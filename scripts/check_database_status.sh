@@ -90,4 +90,3 @@ echo ""
 echo "Check summaries:"
 echo "  sqlite3 $DB \"SELECT source_id, LENGTH(short_summary) as short_len, LENGTH(long_summary) as long_len FROM media_sources WHERE short_summary IS NOT NULL;\""
 echo ""
-
