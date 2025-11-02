@@ -95,11 +95,17 @@ class PodcastRSSDownloader:
         matched_episodes = []
         for episode in episodes:
             for youtube_source_id, youtube_url in target_source_ids.items():
-                if self._match_episode_to_youtube(
+                is_match, confidence, method = self._match_episode_to_youtube(
                     episode, youtube_source_id, youtube_url
-                ):
-                    matched_episodes.append((episode, youtube_source_id, youtube_url))
-                    logger.info(f"✅ Matched episode: {episode['title'][:50]}...")
+                )
+                if is_match:
+                    matched_episodes.append(
+                        (episode, youtube_source_id, youtube_url, confidence, method)
+                    )
+                    logger.info(
+                        f"✅ Matched episode: {episode['title'][:50]}... "
+                        f"(confidence={confidence:.2f}, method={method})"
+                    )
                     break
 
         logger.info(
@@ -109,7 +115,7 @@ class PodcastRSSDownloader:
 
         # Download matched episodes
         downloaded_files = []
-        for episode, youtube_source_id, youtube_url in matched_episodes:
+        for episode, youtube_source_id, youtube_url, confidence, method in matched_episodes:
             try:
                 audio_file, podcast_source_id = self._download_episode(
                     episode, rss_url, output_dir
@@ -117,6 +123,26 @@ class PodcastRSSDownloader:
                 if audio_file:
                     downloaded_files.append((audio_file, podcast_source_id))
                     logger.info(f"✅ Downloaded: {audio_file.name}")
+
+                    # Create source alias linking YouTube and podcast source_ids
+                    self.db_service.create_source_alias(
+                        primary_source_id=youtube_source_id,
+                        alias_source_id=podcast_source_id,
+                        alias_type="youtube_to_podcast",
+                        match_confidence=confidence,
+                        match_method=method,
+                        match_metadata={
+                            "episode_title": episode.get("title"),
+                            "youtube_url": youtube_url,
+                            "rss_url": rss_url,
+                        },
+                        verified_by="system",
+                    )
+
+                    logger.info(
+                        f"🔗 Created alias: {youtube_source_id} ↔ {podcast_source_id}"
+                    )
+
             except Exception as e:
                 logger.error(f"Failed to download episode {episode['title'][:30]}: {e}")
 
@@ -216,7 +242,7 @@ class PodcastRSSDownloader:
 
     def _match_episode_to_youtube(
         self, episode: dict, youtube_source_id: str, youtube_url: str
-    ) -> bool:
+    ) -> tuple[bool, float, str]:
         """
         Match RSS episode to YouTube video by title/date.
 
@@ -228,23 +254,121 @@ class PodcastRSSDownloader:
             youtube_url: YouTube video URL
 
         Returns:
-            True if episode matches YouTube video
+            (is_match, confidence, method) where:
+            - is_match: True if episode matches YouTube video
+            - confidence: Match confidence (0-1)
+            - method: Match method used ('title_fuzzy', 'title_exact', 'date_proximity')
         """
-        # TODO: Implement more sophisticated matching
-        # For now, we'll use a simple title-based match
-        # In production, you'd want to:
-        # 1. Normalize titles (remove punctuation, lowercase)
-        # 2. Check date proximity (published within 1-2 days)
-        # 3. Use fuzzy string matching (e.g., difflib.SequenceMatcher)
-        # 4. Check duration if available
+        from difflib import SequenceMatcher
+        from datetime import datetime
 
-        episode_title = episode.get("title", "").lower()
+        # Get YouTube video metadata
+        youtube_metadata = self._get_youtube_metadata_for_matching(youtube_source_id)
+        if not youtube_metadata:
+            return (False, 0.0, "no_youtube_metadata")
 
-        # Extract title from YouTube URL metadata if available
-        # For now, we'll just return False to indicate no match
-        # The actual matching logic would need YouTube metadata
+        episode_title = episode.get("title", "").lower().strip()
+        youtube_title = youtube_metadata.get("title", "").lower().strip()
 
-        return False  # Placeholder - needs YouTube metadata integration
+        # Method 1: Exact title match (after normalization)
+        if episode_title == youtube_title:
+            return (True, 1.0, "title_exact")
+
+        # Method 2: Fuzzy title match (using SequenceMatcher)
+        title_similarity = SequenceMatcher(None, episode_title, youtube_title).ratio()
+
+        # Method 3: Check date proximity (±2 days)
+        date_match = False
+        date_diff_days = None
+
+        episode_published = episode.get("published_parsed")
+        youtube_upload_date = youtube_metadata.get("upload_date")
+
+        if episode_published and youtube_upload_date:
+            try:
+                # Convert episode published to datetime
+                episode_date = datetime(*episode_published[:6])
+
+                # Convert YouTube upload_date (format: YYYYMMDD) to datetime
+                youtube_date = datetime.strptime(youtube_upload_date, "%Y%m%d")
+
+                # Calculate difference
+                date_diff = abs((episode_date - youtube_date).days)
+                date_diff_days = date_diff
+
+                # Match if within 2 days
+                if date_diff <= 2:
+                    date_match = True
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Date parsing failed: {e}")
+
+        # Decision logic:
+        # - Title similarity >= 0.9 → match (high confidence)
+        # - Title similarity >= 0.8 + date match → match (medium confidence)
+        # - Title similarity >= 0.7 + date match → match (low confidence)
+
+        if title_similarity >= 0.9:
+            return (True, title_similarity, "title_fuzzy")
+        elif title_similarity >= 0.8 and date_match:
+            confidence = (title_similarity + 1.0) / 2  # Average of title sim and perfect date match
+            return (True, confidence, "title_fuzzy_date")
+        elif title_similarity >= 0.7 and date_match:
+            confidence = (title_similarity + 0.8) / 2
+            return (True, confidence, "title_fuzzy_date")
+
+        # No match
+        return (False, title_similarity, "no_match")
+
+    def _get_youtube_metadata_for_matching(self, video_id: str) -> dict | None:
+        """
+        Get YouTube video metadata for matching.
+
+        First checks database, then falls back to yt-dlp if needed.
+
+        Args:
+            video_id: YouTube video ID
+
+        Returns:
+            Metadata dict with title, upload_date, duration, etc.
+        """
+        # Check database first (faster)
+        source = self.db_service.get_source(video_id)
+        if source:
+            return {
+                "title": source.title,
+                "upload_date": source.upload_date,
+                "duration_seconds": source.duration_seconds,
+                "uploader": source.uploader,
+            }
+
+        # Fall back to yt-dlp (slower but works for new videos)
+        try:
+            import yt_dlp
+
+            ydl_opts = {
+                "quiet": True,
+                "no_warnings": True,
+                "skip_download": True,
+            }
+
+            url = f"https://www.youtube.com/watch?v={video_id}"
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+
+                if not info:
+                    return None
+
+                return {
+                    "title": info.get("title"),
+                    "upload_date": info.get("upload_date"),
+                    "duration_seconds": info.get("duration"),
+                    "uploader": info.get("uploader"),
+                }
+
+        except Exception as e:
+            logger.debug(f"Failed to get YouTube metadata for {video_id}: {e}")
+            return None
 
     def _download_episode(
         self, episode: dict, feed_url: str, output_dir: Path

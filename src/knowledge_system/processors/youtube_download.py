@@ -1151,6 +1151,8 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     video_metadata = {
                                         "uploader": info.get("uploader", ""),
                                         "uploader_id": info.get("uploader_id", ""),
+                                        "channel_id": info.get("channel_id", ""),
+                                        "channel": info.get("channel", ""),
                                         "upload_date": info.get("upload_date", ""),
                                         "description": info.get("description", ""),
                                         "duration_seconds": info.get("duration"),

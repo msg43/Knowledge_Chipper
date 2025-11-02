@@ -179,6 +179,58 @@ class MediaSource(Base):
     )
 
 
+class SourceIDAlias(Base):
+    """Source ID aliases: Link different source_ids that refer to the same content."""
+
+    __tablename__ = "source_id_aliases"
+
+    # Primary key
+    alias_id = Column(String, primary_key=True)
+    primary_source_id = Column(
+        String,
+        ForeignKey("media_sources.source_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    alias_source_id = Column(
+        String,
+        ForeignKey("media_sources.source_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    alias_type = Column(String, nullable=False)
+
+    # Matching metadata
+    match_confidence = Column(Float)
+    match_method = Column(String)
+    match_metadata = Column(JSONEncodedType)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    verified_by = Column(String)
+
+    # Relationships
+    primary_source = relationship(
+        "MediaSource", foreign_keys=[primary_source_id]
+    )
+    alias_source = relationship(
+        "MediaSource", foreign_keys=[alias_source_id]
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "alias_type IN ('youtube_to_podcast', 'podcast_to_youtube', 'manual')",
+            name="ck_alias_type",
+        ),
+        CheckConstraint(
+            "match_method IN ('title_fuzzy', 'title_exact', 'date_proximity', 'manual', 'guid')",
+            name="ck_match_method",
+        ),
+        CheckConstraint(
+            "match_confidence BETWEEN 0 AND 1",
+            name="ck_match_confidence",
+        ),
+    )
+
+
 class Segment(Base):
     """Segments: Temporal chunks for sources (typically source_type='episode')."""
 

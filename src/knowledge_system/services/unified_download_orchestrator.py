@@ -80,15 +80,50 @@ class UnifiedDownloadOrchestrator:
                 f"🔍 Mapping {len(self.youtube_urls)} YouTube URLs to podcast RSS feeds..."
             )
 
-        # Step 1: Map YouTube URLs to podcast RSS feeds
-        rss_mappings = self.mapper.map_urls_batch(self.youtube_urls)
+        # Step 1: Filter out already-downloaded URLs (deduplication)
+        urls_to_process = []
+        skipped_count = 0
 
-        # Step 2: Split URLs into RSS-available and YouTube-only
+        for url in self.youtube_urls:
+            source_id = self.mapper._extract_youtube_source_id(url)
+            if not source_id:
+                continue
+
+            # Check if source exists or has an alias
+            exists, existing_source_id = self.db_service.source_exists_or_has_alias(
+                source_id
+            )
+
+            if exists:
+                logger.info(
+                    f"⏭️  Skipping {url[:60]}... (already exists as {existing_source_id})"
+                )
+                skipped_count += 1
+            else:
+                urls_to_process.append(url)
+
+        if skipped_count > 0:
+            logger.info(
+                f"📊 Deduplication: {skipped_count}/{len(self.youtube_urls)} URLs already downloaded"
+            )
+            if self.progress_callback:
+                self.progress_callback(
+                    f"⏭️  Skipped {skipped_count} already-downloaded URLs"
+                )
+
+        if not urls_to_process:
+            logger.info("✅ All URLs already downloaded, nothing to do")
+            return []
+
+        # Step 2: Map YouTube URLs to podcast RSS feeds
+        rss_mappings = self.mapper.map_urls_batch(urls_to_process)
+
+        # Step 3: Split URLs into RSS-available and YouTube-only
         rss_urls = {url: mapping for url, mapping in rss_mappings.items()}
 
         # Extract YouTube source_ids for all URLs
         youtube_source_ids = {}
-        for url in self.youtube_urls:
+        for url in urls_to_process:
             source_id = self.mapper._extract_youtube_source_id(url)
             if source_id:
                 youtube_source_ids[url] = source_id
