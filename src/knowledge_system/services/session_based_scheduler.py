@@ -85,6 +85,9 @@ class SessionBasedScheduler:
             f"state_file={self.state_file}"
         )
 
+        # Initialize download stage status for all URLs
+        self._init_download_stage_statuses()
+
     def start(self) -> list[tuple[Path, str]]:
         """
         Start scheduler (blocking).
@@ -112,9 +115,9 @@ class SessionBasedScheduler:
         # Run sessions until all URLs are downloaded
         while remaining_urls:
             # Find next account ready to run a session
-            account_idx, session = self._get_next_ready_session()
+            result = self._get_next_ready_session()
 
-            if account_idx is None:
+            if result is None:
                 # No accounts ready - wait for next session or cooldown to end
                 wait_time = self._get_next_session_wait_time()
                 logger.info(
@@ -128,6 +131,9 @@ class SessionBasedScheduler:
 
                 time.sleep(wait_time)
                 continue
+
+            # Unpack the result
+            account_idx, session = result
 
             # Run session for this account
             logger.info(
@@ -146,6 +152,22 @@ class SessionBasedScheduler:
             session_urls_with_ids = {
                 url: self.urls_with_source_ids[url] for url in session_urls
             }
+
+            # Update stage status for URLs in this session
+            for url in session_urls:
+                source_id = self.urls_with_source_ids[url]
+                self.db_service.upsert_stage_status(
+                    source_id=source_id,
+                    stage="download",
+                    status="in_progress",
+                    assigned_worker=f"Account_{account_idx+1}",
+                    metadata={
+                        "url": url,
+                        "session_start": datetime.now().isoformat(),
+                        "session_duration_min": session["duration_min"],
+                        "account_idx": account_idx,
+                    },
+                )
 
             # Run session
             downloaded_files = self._run_account_session(
@@ -190,6 +212,31 @@ class SessionBasedScheduler:
             self.state["accounts"].append(account_state)
 
         self._save_state()
+
+    def _init_download_stage_statuses(self) -> None:
+        """Initialize download stage status for all URLs."""
+        for url, source_id in self.urls_with_source_ids.items():
+            # Check if already downloaded
+            completed_source_ids = set()
+            for account in self.state.get("accounts", []):
+                completed_source_ids.update(account.get("completed_source_ids", []))
+
+            if source_id in completed_source_ids:
+                status = "completed"
+            else:
+                status = "queued"
+
+            # Create initial stage status
+            self.db_service.upsert_stage_status(
+                source_id=source_id,
+                stage="download",
+                status=status,
+                metadata={
+                    "url": url,
+                    "scheduler": "session_based",
+                    "total_accounts": len(self.cookie_files),
+                },
+            )
 
     def _generate_account_schedule(self, account_idx: int) -> list[dict]:
         """
@@ -363,7 +410,7 @@ class SessionBasedScheduler:
             asyncio.set_event_loop(loop)
 
             results = loop.run_until_complete(
-                scheduler.download_batch_parallel(
+                scheduler.download_batch_with_rotation(
                     urls=list(urls_with_source_ids.keys()),
                     output_dir=self.output_dir,
                 )
@@ -384,10 +431,45 @@ class SessionBasedScheduler:
                     account["completed_source_ids"].append(source_id)
                     account["total_downloads"] += 1
 
+                    # Update stage status to completed
+                    self.db_service.upsert_stage_status(
+                        source_id=source_id,
+                        stage="download",
+                        status="completed",
+                        progress_percent=100.0,
+                        metadata={
+                            "url": url,
+                            "audio_file": str(audio_file),
+                            "file_size_bytes": audio_file.stat().st_size
+                            if audio_file.exists()
+                            else 0,
+                            "completed_at": datetime.now().isoformat(),
+                        },
+                    )
+                else:
+                    # Mark failed downloads
+                    url = result.get("url")
+                    if url and url in urls_with_source_ids:
+                        source_id = urls_with_source_ids[url]
+                        self.db_service.upsert_stage_status(
+                            source_id=source_id,
+                            stage="download",
+                            status="failed",
+                            metadata={
+                                "url": url,
+                                "error": result.get("error", "Unknown error"),
+                                "failed_at": datetime.now().isoformat(),
+                            },
+                        )
+
             return downloaded_files
 
         except Exception as e:
+            import traceback
+
+            error_details = traceback.format_exc()
             logger.error(f"Session failed for Account {account_idx}: {e}")
+            logger.error(f"Full traceback:\n{error_details}")
 
             # Check if rate limiting error
             error_str = str(e).lower()
@@ -396,6 +478,9 @@ class SessionBasedScheduler:
                 for keyword in ["429", "403", "rate limit", "throttl"]
             ):
                 self._handle_rate_limiting(account_idx)
+            else:
+                # For non-rate-limiting errors, re-raise to propagate to GUI
+                raise
 
             return []
 
@@ -425,6 +510,23 @@ class SessionBasedScheduler:
             self.progress_callback(
                 f"🛑 Account {account_idx+1} rate limited - cooldown {cooldown_minutes}min"
             )
+
+        # Update URLs assigned to this account as blocked
+        for source_id in account.get("completed_source_ids", []):
+            continue  # Skip already completed
+
+        # Mark pending URLs for this account as blocked
+        self.db_service.upsert_stage_status(
+            source_id="placeholder",  # We need to track which URLs were assigned to this account
+            stage="download",
+            status="blocked",
+            assigned_worker=f"Account_{account_idx+1}",
+            metadata={
+                "reason": "rate_limited",
+                "cooldown_until": cooldown_end.isoformat(),
+                "cooldown_minutes": cooldown_minutes,
+            },
+        )
 
         self._save_state()
 

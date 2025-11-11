@@ -423,8 +423,18 @@ class VoiceFingerprintProcessor:
         fingerprint["duration"] = len(audio) / sample_rate
         fingerprint["feature_version"] = "1.0"
 
+        # 🔍 Debug: Log which features were successfully extracted
+        features_extracted = []
+        features_empty = []
+        for key in ["mfcc", "spectral", "prosodic", "wav2vec2", "ecapa"]:
+            if key in fingerprint:
+                if fingerprint[key] and len(fingerprint[key]) > 0:
+                    features_extracted.append(key)
+                else:
+                    features_empty.append(key)
+
         logger.info(
-            f"Voice fingerprint extracted with {len(fingerprint)} feature types"
+            f"Voice fingerprint extracted - Success: [{', '.join(features_extracted)}], Empty: [{', '.join(features_empty)}]"
         )
         return fingerprint
 
@@ -442,6 +452,10 @@ class VoiceFingerprintProcessor:
             "ecapa": 0.3,
         }
 
+        # 🔍 Debug: Log which features are available
+        features_available = []
+        features_missing = []
+
         for feature_type, weight in weights.items():
             if (
                 feature_type in fingerprint1
@@ -458,12 +472,24 @@ class VoiceFingerprintProcessor:
                         # Use cosine similarity
                         similarity = 1 - cosine(vec1, vec2)
                         similarities.append((similarity, weight))
+                        features_available.append(f"{feature_type}={similarity:.3f}")
+                    else:
+                        features_missing.append(f"{feature_type}(shape_mismatch)")
 
                 except Exception as e:
                     logger.warning(f"Error calculating {feature_type} similarity: {e}")
+                    features_missing.append(f"{feature_type}(error)")
                     continue
+            else:
+                features_missing.append(f"{feature_type}(missing)")
+
+        # 🔍 Debug: Log feature analysis
+        logger.debug(
+            f"Voice similarity features - Available: [{', '.join(features_available)}], Missing: [{', '.join(features_missing)}]"
+        )
 
         if not similarities:
+            logger.warning("⚠️ No valid features for voice similarity calculation!")
             return 0.0
 
         # Weighted average similarity
@@ -474,7 +500,13 @@ class VoiceFingerprintProcessor:
         weighted_similarity = (
             sum(sim * weight for sim, weight in similarities) / total_weight
         )
-        return max(0.0, min(1.0, weighted_similarity))  # Clamp to [0, 1]
+
+        final_score = max(0.0, min(1.0, weighted_similarity))  # Clamp to [0, 1]
+        logger.debug(
+            f"Voice similarity calculated: {final_score:.3f} from {len(similarities)} features (total weight: {total_weight:.2f})"
+        )
+
+        return final_score
 
     def enroll_speaker(
         self, speaker_name: str, audio_segments: list[np.ndarray]

@@ -40,6 +40,7 @@ class DownloadScheduler:
         min_delay: float = 180.0,
         max_delay: float = 300.0,
         disable_proxies_with_cookies: bool | None = None,
+        db_service=None,
     ):
         """
         Initialize download scheduler.
@@ -53,6 +54,7 @@ class DownloadScheduler:
             min_delay: Minimum seconds between downloads (default 180 = 3 min)
             max_delay: Maximum seconds between downloads (default 300 = 5 min)
             disable_proxies_with_cookies: Disable proxies when cookies are enabled
+            db_service: Database service for download tracking
         """
         self.cookie_file_path = cookie_file_path
         self.enable_sleep_period = enable_sleep_period
@@ -62,6 +64,7 @@ class DownloadScheduler:
         self.min_delay = min_delay
         self.max_delay = max_delay
         self.disable_proxies_with_cookies = disable_proxies_with_cookies
+        self.db_service = db_service
 
         # Initialize downloader
         self.downloader = YouTubeDownloadProcessor(
@@ -185,18 +188,19 @@ class DownloadScheduler:
             result = self.downloader.process(
                 input_data=url,
                 output_dir=output_dir,
+                db_service=self.db_service,
             )
 
             if result.success:
                 self.stats["downloads_successful"] += 1
                 logger.info(
-                    f"✅ Downloaded: {result.output_data} "
+                    f"✅ Downloaded: {result.data} "
                     f"({self.stats['downloads_successful']}/{self.stats['downloads_attempted']})"
                 )
                 return {
                     "success": True,
                     "url": url,
-                    "audio_file": result.output_data,
+                    "audio_file": result.data,
                     "metadata": result.metadata,
                 }
             else:

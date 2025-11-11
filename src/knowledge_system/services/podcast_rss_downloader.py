@@ -15,6 +15,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
+from tqdm import tqdm
 
 from ..database.service import DatabaseService
 from ..logger import get_logger
@@ -58,6 +59,94 @@ class PodcastRSSDownloader:
         self.db_service = db_service or DatabaseService()
         logger.info("PodcastRSSDownloader initialized")
 
+    def download_episode_by_id(
+        self,
+        rss_url: str,
+        episode_id: str,
+        output_dir: Path,
+    ) -> tuple[Path, str] | None:
+        """
+        Download a specific episode from RSS feed by episode ID.
+
+        Args:
+            rss_url: Podcast RSS feed URL
+            episode_id: Episode identifier (Apple Podcasts ID, RSS.com ID, or GUID)
+            output_dir: Directory to save downloaded audio file
+
+        Returns:
+            (audio_file_path, podcast_source_id) or None if not found
+
+        This method is useful when you have a direct link to a specific episode
+        (e.g., from Apple Podcasts or RSS.com) and want to download just that episode.
+        """
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info(
+            f"Downloading episode {episode_id} from RSS feed: {rss_url[:60]}..."
+        )
+
+        # Parse podcast feed
+        episodes = self._parse_podcast_feed(rss_url)
+        if not episodes:
+            logger.warning(f"No episodes found in RSS feed: {rss_url}")
+            return None
+
+        logger.info(
+            f"Found {len(episodes)} episodes in feed, searching for ID: {episode_id}"
+        )
+
+        # Find episode by ID
+        # Episode IDs can appear in different formats:
+        # - Apple Podcasts: ?i=1000734606759 (just the number)
+        # - RSS.com: https://rss.com/podcasts/zeihan/2296354 (full URL or just number)
+        # - GUID: Various formats
+        target_episode = None
+        for episode in episodes:
+            guid = episode.get("guid", "")
+            link = episode.get("link", "")
+
+            # Check if episode_id matches:
+            # 1. Exact match in GUID or link
+            # 2. Episode ID appears in GUID or link
+            if (
+                episode_id in guid
+                or episode_id in link
+                or guid.endswith(episode_id)
+                or link.endswith(episode_id)
+            ):
+                target_episode = episode
+                logger.info(f"✅ Found episode: {episode['title'][:50]}...")
+                break
+
+        if not target_episode:
+            logger.warning(f"Episode {episode_id} not found in RSS feed")
+            return None
+
+        # Download the episode
+        audio_url = target_episode["audio_url"]
+        audio_file = self._download_audio_file(audio_url, output_dir)
+
+        if not audio_file:
+            logger.error(f"Failed to download episode {episode_id}")
+            return None
+
+        # Generate podcast source_id
+        podcast_source_id = self._generate_podcast_source_id(
+            rss_url, target_episode["guid"]
+        )
+
+        # Store source metadata in database
+        self._store_source_metadata(
+            podcast_source_id,
+            target_episode,
+            rss_url,
+            str(audio_file),
+        )
+
+        logger.info(f"✅ Downloaded episode: {audio_file.name}")
+        return (audio_file, podcast_source_id)
+
     def download_from_rss(
         self,
         rss_url: str,
@@ -93,19 +182,59 @@ class PodcastRSSDownloader:
 
         # Match episodes to YouTube videos
         matched_episodes = []
-        for episode in episodes:
-            for youtube_source_id, youtube_url in target_source_ids.items():
-                is_match, confidence, method = self._match_episode_to_youtube(
-                    episode, youtube_source_id, youtube_url
-                )
-                if is_match:
-                    matched_episodes.append(
-                        (episode, youtube_source_id, youtube_url, confidence, method)
+        logger.info(
+            f"🔍 Matching {len(episodes)} episodes against {len(target_source_ids)} target(s)..."
+        )
+        logger.info(
+            f"💡 Will stop early once all {len(target_source_ids)} target(s) are matched"
+        )
+
+        # Track which targets have been matched
+        unmatched_targets = set(target_source_ids.keys())
+
+        # Use progress bar for terminal feedback
+        with tqdm(
+            total=len(episodes), desc="Matching episodes", unit="ep", disable=None
+        ) as pbar:
+            for idx, episode in enumerate(episodes, 1):
+                # Check against remaining unmatched targets only
+                for youtube_source_id in list(unmatched_targets):
+                    youtube_url = target_source_ids[youtube_source_id]
+                    is_match, confidence, method = self._match_episode_to_youtube(
+                        episode, youtube_source_id, youtube_url
                     )
+                    if is_match:
+                        matched_episodes.append(
+                            (
+                                episode,
+                                youtube_source_id,
+                                youtube_url,
+                                confidence,
+                                method,
+                            )
+                        )
+                        unmatched_targets.remove(youtube_source_id)
+                        logger.info(
+                            f"✅ [{len(matched_episodes)}/{len(target_source_ids)}] Matched: {episode['title'][:50]}... "
+                            f"(confidence={confidence:.2f}, method={method})"
+                        )
+                        pbar.set_postfix(
+                            {
+                                "matches": f"{len(matched_episodes)}/{len(target_source_ids)}",
+                                "remaining": len(unmatched_targets),
+                            }
+                        )
+                        break
+
+                pbar.update(1)
+
+                # Early exit: Stop if all targets matched
+                if not unmatched_targets:
                     logger.info(
-                        f"✅ Matched episode: {episode['title'][:50]}... "
-                        f"(confidence={confidence:.2f}, method={method})"
+                        f"✅ All {len(target_source_ids)} target(s) matched! Stopping early (checked {idx}/{len(episodes)} episodes)"
                     )
+                    pbar.total = idx  # Update progress bar total to current position
+                    pbar.refresh()
                     break
 
         logger.info(
@@ -115,14 +244,19 @@ class PodcastRSSDownloader:
 
         # Download matched episodes
         downloaded_files = []
-        for (
+        logger.info(f"📥 Downloading {len(matched_episodes)} matched episode(s)...")
+
+        for idx, (
             episode,
             youtube_source_id,
             youtube_url,
             confidence,
             method,
-        ) in matched_episodes:
+        ) in enumerate(matched_episodes, 1):
             try:
+                logger.info(
+                    f"[{idx}/{len(matched_episodes)}] Downloading: {episode['title'][:50]}..."
+                )
                 audio_file, podcast_source_id = self._download_episode(
                     episode, rss_url, output_dir
                 )
@@ -173,9 +307,10 @@ class PodcastRSSDownloader:
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
             }
 
-            logger.debug(f"Fetching podcast feed: {rss_url}")
+            logger.info(f"📡 Fetching podcast feed (timeout: 30s)...")
             response = requests.get(rss_url, headers=headers, timeout=30)
             response.raise_for_status()
+            logger.info(f"✅ Feed fetched successfully ({len(response.content)} bytes)")
 
             # Parse with feedparser
             feed_data = feedparser.parse(response.content)
@@ -215,13 +350,43 @@ class PodcastRSSDownloader:
             audio_length = None
 
             if hasattr(entry, "enclosures") and entry.enclosures:
+                # Collect all audio enclosures
+                audio_enclosures = []
                 for enclosure in entry.enclosures:
                     # Look for audio/* MIME types
                     if enclosure.get("type", "").startswith("audio/"):
-                        audio_url = enclosure.get("href") or enclosure.get("url")
-                        audio_type = enclosure.get("type")
-                        audio_length = enclosure.get("length")
-                        break
+                        audio_enclosures.append(enclosure)
+
+                # Prefer lowest quality (smallest file) to minimize bandwidth
+                # Sort by length (file size) ascending - smallest first
+                if audio_enclosures:
+                    # Sort by length if available, otherwise use first
+                    audio_enclosures_with_length = [
+                        e for e in audio_enclosures if e.get("length")
+                    ]
+
+                    if audio_enclosures_with_length:
+                        # Sort by length (ascending) - smallest file first
+                        selected = min(
+                            audio_enclosures_with_length,
+                            key=lambda e: int(e.get("length", 0)),
+                        )
+                        logger.debug(
+                            f"Selected lowest quality audio: "
+                            f"{int(selected.get('length', 0)) / 1024 / 1024:.1f} MB "
+                            f"({selected.get('type', 'unknown')})"
+                        )
+                    else:
+                        # No length info, just use first audio enclosure
+                        selected = audio_enclosures[0]
+                        logger.debug(
+                            f"Using first audio enclosure (no size info): "
+                            f"{selected.get('type', 'unknown')}"
+                        )
+
+                    audio_url = selected.get("href") or selected.get("url")
+                    audio_type = selected.get("type")
+                    audio_length = selected.get("length")
 
             if not audio_url:
                 return None
@@ -535,7 +700,7 @@ class PodcastRSSDownloader:
                 # Update existing source
                 self.db_service.update_source(
                     source_id=source_id,
-                    file_path=str(audio_file_path),
+                    audio_file_path=str(audio_file_path),
                     title=episode_data.get("title"),
                     description=episode_data.get("description"),
                 )
@@ -545,7 +710,7 @@ class PodcastRSSDownloader:
                 self.db_service.create_source(
                     source_id=source_id,
                     source_type="podcast",
-                    file_path=str(audio_file_path),
+                    audio_file_path=str(audio_file_path),
                     title=episode_data.get("title"),
                     description=episode_data.get("description"),
                     url=feed_url,

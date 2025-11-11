@@ -23,7 +23,6 @@ from .models import (
     Concept,
     ConceptAlias,
     ConceptEvidence,
-    Episode,
     EvidenceSpan,
     JargonEvidence,
     JargonTerm,
@@ -262,6 +261,7 @@ class ClaimStore:
                 claim.canonical = claim_data.canonical
                 claim.original_text = getattr(claim_data, "original_text", None)
                 claim.claim_type = claim_data.claim_type
+                claim.domain = getattr(claim_data, "domain", None)
                 claim.tier = claim_data.tier
 
                 # Scores (normalized - no JSON)

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 
 # Set terminal window size to larger dimensions (1400x900)
 # Silently ignore errors if Terminal window doesn't exist or is not accessible
@@ -7,7 +7,7 @@ osascript -e 'tell application "Terminal" to set number of columns of front wind
 osascript -e 'tell application "Terminal" to set number of rows of front window to 50' 2>/dev/null || true
 
 # Get the directory where this script is located
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+SCRIPT_DIR="$( cd "$( dirname "${(%):-%x}" )" &> /dev/null && pwd )"
 
 echo "Skip the Podcast GUI Launcher"
 echo "=============================="
@@ -28,7 +28,7 @@ if [ ! -d "venv" ]; then
     echo "  source venv/bin/activate"
     echo "  pip install -r requirements.txt"
     echo ""
-    read -p "Press any key to exit..."
+    read "?Press any key to exit..."
     exit 1
 fi
 
@@ -42,7 +42,7 @@ if ! ./venv/bin/python -c "import PyQt6" 2>/dev/null; then
     echo "  source venv/bin/activate"
     echo "  pip install PyQt6"
     echo ""
-    read -p "Press any key to exit..."
+    read "?Press any key to exit..."
     exit 1
 fi
 
@@ -56,7 +56,7 @@ if ! ./venv/bin/python -c "import sys; sys.path.insert(0, 'src'); import knowled
     echo "  source venv/bin/activate"
     echo "  pip install -e ."
     echo ""
-    read -p "Press any key to exit..."
+    read "?Press any key to exit..."
     exit 1
 fi
 

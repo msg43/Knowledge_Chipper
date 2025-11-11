@@ -89,6 +89,7 @@ Return a JSON object with four arrays: "claims", "jargon", "people", and "mental
 Each claim must include:
 - **claim_text**: The exact claim being made
 - **claim_type**: One of the 5 types above
+- **domain**: Broad field classification for searchability (e.g., "physics", "economics", "politics", "medicine", "technology"). Use general categories, NOT specific subfields.
 - **stance**: How the author presents it
 - **source_attribution**: "author" or "cited source: [name]"
 - **evidence_spans**: Array of supporting quotes
@@ -105,7 +106,7 @@ For each evidence span:
 Each jargon term must include:
 - **term**: The jargon term or phrase
 - **definition**: How it's defined or used in the document
-- **domain**: Academic field or discipline
+- **domain**: Broad field classification for searchability (e.g., "physics", "economics", "politics", "medicine", "technology"). Use general categories like "physics" not "quantum mechanics", "economics" not "monetary policy", "law" not "constitutional law". Choose the broadest relevant field.
 - **formally_defined**: Boolean - is it explicitly defined?
 - **evidence_spans**: Array of all uses/definitions
 

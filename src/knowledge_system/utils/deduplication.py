@@ -130,8 +130,8 @@ class VideoDeduplicationService:
             logger.debug(f"Using cached result for video {source_id}")
             return cached_result
 
-        # Check database for existing video
-        existing_video = self.db.get_video(source_id)
+        # Check database for existing video (using source_id)
+        existing_video = self.db.get_source(source_id)
 
         if not existing_video:
             # Video not in database - not a duplicate
@@ -149,6 +149,7 @@ class VideoDeduplicationService:
         self, source_id: str, existing_video, policy: DuplicationPolicy
     ) -> DeduplicationResult:
         """Apply deduplication policy to existing video."""
+        from pathlib import Path
 
         # Convert SQLAlchemy object to dict for easier handling
         # Use source_id (claim-centric schema) instead of source_id
@@ -161,18 +162,37 @@ class VideoDeduplicationService:
             "metadata_complete": getattr(existing_video, "metadata_complete", False),
         }
 
-        # CRITICAL: Check if video is actually complete (has both audio and metadata)
-        # Partial downloads should NOT be considered duplicates
-        is_complete = getattr(existing_video, "audio_downloaded", False) and getattr(
-            existing_video, "metadata_complete", False
-        )
+        # CRITICAL: Check if video is actually complete
+        # A video is only complete if:
+        # 1. Audio is marked as downloaded
+        # 2. Audio file actually exists on disk
+        # 3. Source has segments (transcription completed)
+
+        audio_downloaded = getattr(existing_video, "audio_downloaded", False)
+        audio_file_path = getattr(existing_video, "audio_file_path", None)
+        audio_exists_on_disk = False
+
+        if audio_file_path:
+            audio_path = Path(audio_file_path)
+            audio_exists_on_disk = audio_path.exists()
+
+        # Check if source has segments (transcription completed)
+        has_segments = self.db.has_segments_for_source(source_id)
+
+        is_complete = audio_downloaded and audio_exists_on_disk and has_segments
 
         if not is_complete:
             # Video exists but is incomplete - allow reprocessing
+            missing_parts = []
+            if not audio_downloaded:
+                missing_parts.append("audio not marked as downloaded")
+            if not audio_exists_on_disk:
+                missing_parts.append("audio file missing from disk")
+            if not has_segments:
+                missing_parts.append("no transcription segments")
+
             logger.info(
-                f"Video {source_id} exists but is incomplete "
-                f"(audio={getattr(existing_video, 'audio_downloaded', False)}, "
-                f"metadata={getattr(existing_video, 'metadata_complete', False)}). "
+                f"Video {source_id} exists but is incomplete: {', '.join(missing_parts)}. "
                 "Allowing reprocessing."
             )
             return DeduplicationResult(
@@ -180,10 +200,8 @@ class VideoDeduplicationService:
                 is_duplicate=False,  # Not a duplicate - needs completion
                 existing_video=video_data,
                 recommendations=[
-                    "Video has partial download - will attempt to complete",
-                    f"Missing: {'audio' if not getattr(existing_video, 'audio_downloaded', False) else ''}"
-                    f"{' and ' if not getattr(existing_video, 'audio_downloaded', False) and not getattr(existing_video, 'metadata_complete', False) else ''}"
-                    f"{'metadata' if not getattr(existing_video, 'metadata_complete', False) else ''}",
+                    "Video has incomplete processing - will attempt to complete",
+                    f"Missing: {', '.join(missing_parts)}",
                 ],
             )
 

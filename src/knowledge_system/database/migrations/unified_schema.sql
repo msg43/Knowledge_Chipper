@@ -9,7 +9,6 @@ PRAGMA foreign_keys=ON;
 -- Episodes table (namespaced for HCE)
 CREATE TABLE IF NOT EXISTS hce_episodes (
   source_id TEXT PRIMARY KEY,
-  source_id TEXT,
   title TEXT NOT NULL,
   subtitle TEXT,
   description TEXT,

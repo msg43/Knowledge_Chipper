@@ -419,18 +419,104 @@ class CookieFileManager(QWidget):
 
     def set_cookie_files(self, file_paths: list[str]):
         """Set cookie files from a list of paths"""
-        # Clear existing entries
-        while len(self.cookie_entries) > 1:
-            self._remove_cookie_entry()
+        logger.info(
+            f"🔧 CookieFileManager.set_cookie_files() called with {len(file_paths)} files"
+        )
+        logger.debug(f"   Paths: {file_paths}")
 
-        # Set first entry
-        if file_paths and len(self.cookie_entries) > 0:
-            self.cookie_entries[0]["file_input"].setText(file_paths[0])
+        # Block signals during the entire operation to prevent cascading saves
+        old_block_state = self.signalsBlocked()
+        self.blockSignals(True)
+        logger.debug(f"   Signals blocked (was: {old_block_state}, now: True)")
 
-        # Add remaining entries
-        for path in file_paths[1:]:
-            self._add_cookie_entry()
-            self.cookie_entries[-1]["file_input"].setText(path)
+        try:
+            # Clear existing entries (silently, without showing warnings)
+            initial_count = len(self.cookie_entries)
+            while len(self.cookie_entries) > 1:
+                entry = self.cookie_entries.pop()
+                entry["widget"].deleteLater()
+            logger.debug(
+                f"   Cleared {initial_count - len(self.cookie_entries)} existing entries"
+            )
+
+            # Set first entry (or clear it if no paths provided)
+            if len(self.cookie_entries) > 0:
+                if file_paths:
+                    self.cookie_entries[0]["file_input"].setText(file_paths[0])
+                    logger.debug(f"   Set first entry to: {file_paths[0]}")
+                else:
+                    self.cookie_entries[0]["file_input"].setText("")
+                    logger.debug(f"   Cleared first entry")
+
+            # Add remaining entries
+            for idx, path in enumerate(file_paths[1:], start=2):
+                logger.debug(f"   Adding entry {idx}: {path}")
+                # Manually add entry without triggering signals
+                entry_widget = QWidget()
+                entry_layout = QHBoxLayout()
+                entry_layout.setContentsMargins(5, 5, 5, 5)
+
+                # Account number
+                label = QLabel(f"Account {idx}:")
+                label.setMinimumWidth(80)
+                label.setStyleSheet("font-weight: bold;")
+                entry_layout.addWidget(label)
+
+                # File path input
+                file_input = QLineEdit()
+                file_input.setPlaceholderText(f"cookies_account_{idx}.txt")
+                file_input.setText(path)
+                file_input.textChanged.connect(self._on_cookie_file_changed)
+                entry_layout.addWidget(file_input, stretch=2)
+
+                # Browse button
+                browse_btn = QPushButton("Browse...")
+                browse_btn.clicked.connect(
+                    lambda checked, fi=file_input: self._browse_cookie(fi)
+                )
+                browse_btn.setMaximumWidth(100)
+                entry_layout.addWidget(browse_btn)
+
+                # Status indicator
+                status_icon = QLabel("⚪")
+                status_icon.setToolTip("Not tested")
+                status_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                status_icon.setMinimumWidth(30)
+                status_icon.setStyleSheet("font-size: 16pt;")
+                entry_layout.addWidget(status_icon)
+
+                entry_widget.setLayout(entry_layout)
+                self.cookie_layout.addWidget(entry_widget)
+
+                # Store entry
+                self.cookie_entries.append(
+                    {
+                        "widget": entry_widget,
+                        "label": label,
+                        "file_input": file_input,
+                        "status_icon": status_icon,
+                        "is_valid": None,
+                        "error_message": None,
+                    }
+                )
+
+            self._update_status()
+            logger.debug(f"   Status updated")
+
+        finally:
+            # Restore signal blocking state
+            self.blockSignals(old_block_state)
+            logger.debug(f"   Signals restored to: {old_block_state}")
+
+            # Verify final state
+            final_files = self.get_all_cookie_files()
+            logger.info(
+                f"✅ CookieFileManager.set_cookie_files() complete: {len(final_files)} files loaded"
+            )
+            if len(final_files) != len(file_paths):
+                logger.error(
+                    f"❌ Mismatch! Expected {len(file_paths)} files, but have {len(final_files)}"
+                )
 
     def get_account_count(self) -> int:
         """Get number of cookie accounts configured"""

@@ -16,9 +16,9 @@ import json
 import logging
 import pickle
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable
 
 import numpy as np
 
@@ -161,23 +161,117 @@ class WikiDataCategorizer:
             )
             raise
 
+    def _build_enriched_content(
+        self, multi_source_metadata: dict, transcript: str = ""
+    ) -> str:
+        """
+        Build enriched source content from multi-source metadata.
+
+        Combines metadata from primary source and all aliased sources,
+        preferring the longest/richest descriptions.
+
+        Args:
+            multi_source_metadata: Dict with 'primary_source' and 'aliased_sources'
+            transcript: Optional transcript text to append
+
+        Returns:
+            Enriched source content string for categorization
+        """
+        parts = []
+
+        primary = multi_source_metadata.get("primary_source", {})
+        aliases = multi_source_metadata.get("aliased_sources", [])
+
+        # Add title (prefer primary, but use alias if primary missing)
+        title = primary.get("title")
+        if not title and aliases:
+            title = aliases[0].get("title")
+        if title:
+            parts.append(f"Title: {title}")
+
+        # Find longest description across all sources
+        descriptions = []
+        if primary.get("description"):
+            descriptions.append(("primary", primary["description"]))
+        for i, alias in enumerate(aliases):
+            if alias.get("description"):
+                descriptions.append((f"alias_{i}", alias["description"]))
+
+        if descriptions:
+            # Sort by length and use the longest
+            descriptions.sort(key=lambda x: len(x[1]), reverse=True)
+            longest_source, longest_desc = descriptions[0]
+
+            parts.append(f"Description: {longest_desc}")
+
+            # If we have multiple good descriptions, note the source
+            if len(descriptions) > 1:
+                logger.debug(
+                    f"Using description from {longest_source} "
+                    f"({len(longest_desc)} chars vs {len(descriptions[1][1])} chars)"
+                )
+
+        # Add channel/author info
+        channel = primary.get("uploader") or primary.get("author")
+        if not channel and aliases:
+            channel = aliases[0].get("uploader") or aliases[0].get("author")
+        if channel:
+            parts.append(f"Channel/Author: {channel}")
+
+        # Add transcript if provided
+        if transcript:
+            # Limit transcript length for categorization (first 2000 chars usually sufficient)
+            transcript_preview = transcript[:2000]
+            if len(transcript) > 2000:
+                transcript_preview += "..."
+            parts.append(f"\nTranscript excerpt:\n{transcript_preview}")
+
+        return "\n\n".join(parts)
+
     def categorize_source(
         self,
-        source_content: str,
-        llm_generate_func: Callable,
+        source_content: str | None = None,
+        llm_generate_func: Callable | None = None,
         use_few_shot: bool = False,
+        multi_source_metadata: dict | None = None,
+        transcript: str = "",
     ) -> list[dict]:
         """
         Two-stage source categorization with reasoning-first prompting.
 
+        Supports both single-source and multi-source metadata for enriched categorization.
+
         Args:
-            source_content: Content to categorize (title + description + transcript)
+            source_content: Content to categorize (title + description + transcript).
+                          Optional if multi_source_metadata is provided.
             llm_generate_func: Function to call LLM (must support structured output)
             use_few_shot: Add examples for smaller models (8B Llama)
+            multi_source_metadata: Optional multi-source metadata dict with structure:
+                                  {'primary_source': {...}, 'aliased_sources': [...]}
+                                  If provided, will build enriched source_content
+            transcript: Optional transcript text to append (used with multi_source_metadata)
 
         Returns:
             List of matched categories with approval status and metrics
         """
+        # Build enriched source_content from multi-source metadata if provided
+        if multi_source_metadata:
+            source_content = self._build_enriched_content(
+                multi_source_metadata, transcript
+            )
+            logger.info(
+                f"Built enriched source content from multi-source metadata "
+                f"({len(source_content)} chars)"
+            )
+
+        if not source_content:
+            raise ValueError(
+                "Either source_content or multi_source_metadata must be provided"
+            )
+
+        if not llm_generate_func:
+            raise ValueError("llm_generate_func is required")
+
         stage1_start = time.time()
 
         # === STAGE 1: Free-form LLM with REASONING-FIRST ===

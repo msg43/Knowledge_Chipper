@@ -135,7 +135,10 @@ class SpeakerProcessor(BaseProcessor):
         Args:
             diarization_segments: List of diarization segments with speaker IDs and timing
             transcript_segments: List of transcript segments with text and timing
-            metadata: Optional metadata about the recording
+            metadata: Optional metadata about the recording. Can be either:
+                     - Old format: Single dict with fields (backward compatible)
+                     - New format: {'primary_source': {...}, 'aliased_sources': [...]}
+                       for multi-source metadata (YouTube + RSS, etc.)
             audio_path: Optional path to audio file for voice fingerprinting
 
         Returns:
@@ -178,10 +181,32 @@ class SpeakerProcessor(BaseProcessor):
                 speaker_data.segment_count += 1
 
             # 🚨 NEW: Use voice fingerprinting to merge similar speakers before text assignment
+            speaker_count_before_voice = len(speaker_map)
             self._voice_fingerprint_merge_speakers(speaker_map, audio_path)
+            speaker_count_after_voice = len(speaker_map)
+
+            if speaker_count_after_voice < speaker_count_before_voice:
+                logger.info(
+                    f"✅ Voice fingerprinting merged speakers: {speaker_count_before_voice} → {speaker_count_after_voice}"
+                )
+            elif speaker_count_before_voice > 1:
+                logger.warning(
+                    f"⚠️ Voice fingerprinting did NOT merge speakers (still have {speaker_count_before_voice} speakers)"
+                )
 
             # 🚨 NEW: Check for potential over-segmentation and merge similar speakers
+            speaker_count_before_heuristic = len(speaker_map)
             self._detect_and_merge_oversegmented_speakers(speaker_map)
+            speaker_count_after_heuristic = len(speaker_map)
+
+            if speaker_count_after_heuristic < speaker_count_before_heuristic:
+                logger.info(
+                    f"✅ Heuristic merging merged speakers: {speaker_count_before_heuristic} → {speaker_count_after_heuristic}"
+                )
+            elif speaker_count_before_heuristic > 1:
+                logger.warning(
+                    f"⚠️ Heuristic merging did NOT merge speakers (still have {speaker_count_before_heuristic} speakers)"
+                )
 
             # 🚨 CRITICAL FIX: Clean up data FIRST before LLM analysis
             self._validate_and_fix_speaker_segments(speaker_map)
@@ -578,8 +603,19 @@ class SpeakerProcessor(BaseProcessor):
                     self._voice_fingerprint_merge_speakers_fallback(speaker_map)
                     return
 
+                # 🔍 DIAGNOSTIC: Verify audio file format before loading
+                logger.info(f"🔍 Loading audio for voice fingerprinting: {audio_file}")
+                logger.info(
+                    f"🔍 File exists: {audio_file.exists()}, Size: {audio_file.stat().st_size / (1024*1024):.2f} MB"
+                )
+
                 full_audio = load_audio_for_voice_processing(audio_file)
                 sample_rate = 16000
+
+                # 🔍 DIAGNOSTIC: Verify loaded audio properties
+                logger.info(
+                    f"🔍 Audio loaded - Shape: {full_audio.shape}, Sample rate: {sample_rate}Hz, Duration: {len(full_audio)/sample_rate:.2f}s"
+                )
 
                 # Extract voice fingerprints for each speaker
                 speaker_fingerprints = {}
@@ -639,6 +675,12 @@ class SpeakerProcessor(BaseProcessor):
                         # Calculate voice similarity
                         similarity_score = voice_processor.calculate_voice_similarity(
                             fingerprint1, fingerprint2
+                        )
+
+                        # 🔍 ALWAYS log similarity scores for debugging
+                        logger.info(
+                            f"🔍 Voice similarity: {speaker1_id} vs {speaker2_id} = {similarity_score:.3f} "
+                            f"(threshold: 0.7, will_merge: {similarity_score > 0.7})"
                         )
 
                         # Use 0.7 threshold for merging (70% similar = same person)
@@ -846,7 +888,7 @@ class SpeakerProcessor(BaseProcessor):
                                 speaker_data.total_duration -= (
                                     segment.end - segment.start
                                 )
-                                logger.error(
+                                logger.warning(
                                     f"🔧 Removed duplicate segment from {speaker_id}"
                                 )
 
@@ -1114,15 +1156,59 @@ class SpeakerProcessor(BaseProcessor):
         Returns:
             List of known host names for this channel, or None
         """
+        # 🔍 DIAGNOSTIC: Log whether this function is being called at all
+        logger.info("🔍 _get_known_hosts_from_channel() called")
+
         if not metadata:
+            logger.warning(
+                "⚠️ No metadata provided for channel host lookup - CSV will not be used"
+            )
             return None
 
         # Get channel identifier from metadata
-        # Try channel_id first (YouTube), then fall back to channel name
+        # Try channel_id first (YouTube), then RSS feed URL, then fall back to channel name
         channel_id = metadata.get("channel_id")
+        rss_feed_url = metadata.get("rss_url") or metadata.get("feed_url")
+        source_id = metadata.get("source_id")
         channel_name = metadata.get("uploader") or metadata.get("channel")
 
-        if not channel_id and not channel_name:
+        # 🔍 DIAGNOSTIC: Log what channel info we extracted
+        logger.info(
+            f"🔍 Extracted channel info - ID: {channel_id}, Name: {channel_name}, RSS: {rss_feed_url}, Source: {source_id}"
+        )
+
+        # For RSS feeds: Try to find the YouTube channel_id via source aliases
+        if rss_feed_url and not channel_id and source_id:
+            try:
+                from ..database.service import DatabaseService
+
+                db_service = DatabaseService()
+
+                # Get all aliases for this source_id
+                aliases = db_service.get_source_aliases(source_id)
+
+                # Look for YouTube source_ids in aliases (optimized batch query)
+                if aliases:
+                    youtube_aliases = [
+                        a for a in aliases if not a.startswith("podcast_")
+                    ]
+                    if youtube_aliases:
+                        # Fetch all YouTube sources in one query (fixes N+1 problem)
+                        aliased_sources = db_service.get_sources_batch(youtube_aliases)
+                        for alias_source in aliased_sources:
+                            if (
+                                hasattr(alias_source, "channel_id")
+                                and alias_source.channel_id
+                            ):
+                                channel_id = alias_source.channel_id
+                                logger.info(
+                                    f"🔗 RSS feed mapped to YouTube channel: {rss_feed_url[:50]} → {channel_id}"
+                                )
+                                break
+            except Exception as e:
+                logger.debug(f"Failed to lookup YouTube channel for RSS feed: {e}")
+
+        if not channel_id and not rss_feed_url and not channel_name:
             logger.debug("No channel information in metadata")
             return None
 
@@ -1138,9 +1224,16 @@ class SpeakerProcessor(BaseProcessor):
                 / "channel_hosts.csv"
             )
 
+            # 🔍 DIAGNOSTIC: Verify CSV file exists and is accessible
+            logger.info(f"🔍 Looking for channel_hosts.csv at: {csv_path}")
+
             if not csv_path.exists():
-                logger.debug("channel_hosts.csv not found")
+                logger.warning(f"⚠️ channel_hosts.csv NOT FOUND at: {csv_path}")
                 return None
+
+            logger.info(
+                f"✅ channel_hosts.csv found, size: {csv_path.stat().st_size} bytes"
+            )
 
             # Build lookup dictionary
             channel_hosts = {}
@@ -1152,8 +1245,13 @@ class SpeakerProcessor(BaseProcessor):
                     if row.get("podcast_name"):
                         channel_hosts[row["podcast_name"]] = row["host_name"]
 
+            # 🔍 DIAGNOSTIC: Log how many entries were loaded
+            logger.info(
+                f"✅ Loaded {len(channel_hosts)} channel/podcast mappings from CSV"
+            )
+
         except Exception as e:
-            logger.warning(f"Failed to load channel mappings: {e}")
+            logger.error(f"❌ Failed to load channel mappings: {e}")
             return None
 
         # Try lookup by channel_id first (most reliable)
@@ -1162,6 +1260,14 @@ class SpeakerProcessor(BaseProcessor):
             host_name = channel_hosts.get(channel_id)
             if host_name:
                 logger.info(f"📺 Found host by channel ID: {channel_id} → {host_name}")
+
+        # Try lookup by RSS feed URL (second priority)
+        if not host_name and rss_feed_url:
+            host_name = channel_hosts.get(rss_feed_url)
+            if host_name:
+                logger.info(
+                    f"📡 Found host by RSS feed URL: {rss_feed_url[:50]} → {host_name}"
+                )
 
         # Fall back to channel name lookup (fuzzy match)
         if not host_name and channel_name:
@@ -1182,13 +1288,13 @@ class SpeakerProcessor(BaseProcessor):
                         break
 
         if not host_name:
-            logger.debug(
-                f"No host mapping found for channel: {channel_name or channel_id}"
+            logger.warning(
+                f"⚠️ CSV lookup FAILED - No host mapping found for channel: {channel_name or channel_id}"
             )
             return None
 
         logger.info(
-            f"📺 Channel '{channel_name or channel_id}' is hosted by: {host_name}"
+            f"✅ CSV lookup SUCCESS - Channel '{channel_name or channel_id}' is hosted by: {host_name}"
         )
         logger.info(f"   → LLM will use this context to match speakers to this name")
 
@@ -1605,13 +1711,27 @@ class SpeakerProcessor(BaseProcessor):
 
             # Update segments with assigned names
             if "segments" in updated_data:
+                updated_count = 0
+                unassigned_count = 0
                 for segment in updated_data["segments"]:
                     speaker_id = segment.get("speaker")
-                    if speaker_id and speaker_id in assignments:
-                        segment["speaker"] = assignments[speaker_id]
-                        segment[
-                            "original_speaker_id"
-                        ] = speaker_id  # Keep original for reference
+                    if speaker_id:
+                        if speaker_id in assignments:
+                            segment["speaker"] = assignments[speaker_id]
+                            segment[
+                                "original_speaker_id"
+                            ] = speaker_id  # Keep original for reference
+                            updated_count += 1
+                        else:
+                            unassigned_count += 1
+
+                logger.info(
+                    f"Updated {updated_count}/{len(updated_data['segments'])} segments with speaker names"
+                )
+                if unassigned_count > 0:
+                    logger.warning(
+                        f"⚠️  {unassigned_count} segments have unassigned speaker IDs"
+                    )
 
             # Add assignment metadata
             updated_data["speaker_assignments"] = assignments
@@ -1932,7 +2052,7 @@ class SpeakerProcessor(BaseProcessor):
                 # Get video title if available
                 video_title = None
                 try:
-                    video = db_service.get_video(source_id)
+                    video = db_service.get_source(source_id)
                     if video:
                         video_title = (
                             str(video.title) if hasattr(video, "title") else None

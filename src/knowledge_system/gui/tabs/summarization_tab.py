@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ...database.service import DatabaseService
 from ...logger import get_logger
 from ...utils.model_registry import get_provider_models
 from ...utils.ollama_manager import get_ollama_manager
@@ -83,8 +84,6 @@ class EnhancedSummarizationWorker(QThread):
         claims = hce_data.get("claims", [])
         people = hce_data.get("people", [])
         concepts = hce_data.get("concepts", [])
-        relations = hce_data.get("relations", [])
-        contradictions = hce_data.get("contradictions", [])
 
         # Categorize claims by tier
         tier_a_claims = [c for c in claims if c.get("tier") == "A"]
@@ -108,19 +107,6 @@ class EnhancedSummarizationWorker(QThread):
                     }
                 )
 
-        # Get sample contradictions
-        sample_contradictions = []
-        for contradiction in contradictions[:2]:  # Top 2 contradictions
-            claim1 = contradiction.get("claim1", {}).get("canonical", "")
-            claim2 = contradiction.get("claim2", {}).get("canonical", "")
-            if claim1 and claim2:
-                sample_contradictions.append(
-                    {
-                        "claim1": claim1[:100] + "..." if len(claim1) > 100 else claim1,
-                        "claim2": claim2[:100] + "..." if len(claim2) > 100 else claim2,
-                    }
-                )
-
         return {
             "filename": filename,
             "total_claims": len(claims),
@@ -129,10 +115,7 @@ class EnhancedSummarizationWorker(QThread):
             "tier_c_count": len(tier_c_claims),
             "people_count": len(people),
             "concepts_count": len(concepts),
-            "relations_count": len(relations),
-            "contradictions_count": len(contradictions),
             "top_claims": top_claims,
-            "sample_contradictions": sample_contradictions,
             "top_people": [p.get("name", "") for p in people[:5] if p.get("name")],
             "top_concepts": [c.get("name", "") for c in concepts[:5] if c.get("name")],
         }
@@ -203,12 +186,41 @@ class EnhancedSummarizationWorker(QThread):
                 # Get content type from gui_settings (already set by parent tab)
                 content_type = self.gui_settings.get("content_type", "transcript_own")
 
+                # Initialize db_service and event_bus for all file types
+                db_service = DatabaseService()
+                from ..queue_event_bus import get_queue_event_bus
+
+                event_bus = get_queue_event_bus()
+
                 # Handle database sources
                 if file_path.startswith("db://"):
                     # Extract source_id from db://SOURCE_ID format
                     source_id = file_path[5:]  # Remove "db://" prefix
                     # source_id used directly, no episode_ prefix
                     file_name = f"Database: {source_id}"
+
+                    # Update queue status to in_progress for summarization
+                    db_service.upsert_stage_status(
+                        source_id=source_id,
+                        stage="summarization",
+                        status="in_progress",
+                        progress_percent=0.0,
+                        metadata={
+                            "content_type": content_type,
+                            "provider": self.gui_settings.get("provider", "openai"),
+                            "model": self.gui_settings.get(
+                                "model", "gpt-4o-mini-2024-07-18"
+                            ),
+                        },
+                    )
+
+                    # Emit queue event
+                    event_bus.emit_stage_update(
+                        source_id=source_id,
+                        stage="summarization",
+                        status="in_progress",
+                        progress_percent=0.0,
+                    )
 
                     # Create mining job for database source
                     job_id = orchestrator.create_job(
@@ -220,6 +232,9 @@ class EnhancedSummarizationWorker(QThread):
                             "gui_settings": self.gui_settings,
                             "content_type": content_type,
                             "miner_model": f"{self.gui_settings.get('provider', 'openai')}:{self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')}",
+                            "output_dir": self.gui_settings.get(
+                                "output_dir"
+                            ),  # Extract output_dir to top level
                         },
                         auto_process=False,  # Manual job, don't chain
                     )
@@ -240,6 +255,9 @@ class EnhancedSummarizationWorker(QThread):
                             "gui_settings": self.gui_settings,
                             "content_type": content_type,
                             "miner_model": f"{self.gui_settings.get('provider', 'openai')}:{self.gui_settings.get('model', 'gpt-4o-mini-2024-07-18')}",
+                            "output_dir": self.gui_settings.get(
+                                "output_dir"
+                            ),  # Extract output_dir to top level
                         },
                         auto_process=False,  # Manual job, don't chain
                     )
@@ -268,6 +286,32 @@ class EnhancedSummarizationWorker(QThread):
                         success_count += 1
                         self.file_completed.emit(i + 1, total_count)
 
+                        # Update queue status to completed
+                        db_service.upsert_stage_status(
+                            source_id=source_id,
+                            stage="summarization",
+                            status="completed",
+                            progress_percent=100.0,
+                            metadata={
+                                "job_id": job_id,
+                                "run_id": result.get("run_id"),
+                                "claims_extracted": result.get("result", {}).get(
+                                    "claims_extracted", 0
+                                ),
+                                "processing_time": result.get("result", {}).get(
+                                    "processing_time_seconds"
+                                ),
+                            },
+                        )
+
+                        # Emit queue event
+                        event_bus.emit_stage_update(
+                            source_id=source_id,
+                            stage="summarization",
+                            status="completed",
+                            progress_percent=100.0,
+                        )
+
                         # Emit HCE analytics if available
                         if (
                             "result" in result
@@ -291,6 +335,28 @@ class EnhancedSummarizationWorker(QThread):
                         error_msg = result.get(
                             "error_message", result.get("error", "Processing failed")
                         )
+
+                        # Update queue status to failed
+                        db_service.upsert_stage_status(
+                            source_id=source_id,
+                            stage="summarization",
+                            status="failed",
+                            metadata={
+                                "job_id": job_id,
+                                "error": error_msg,
+                                "run_id": result.get("run_id"),
+                            },
+                        )
+
+                        # Emit queue event for failure
+                        event_bus.emit_stage_update(
+                            source_id=source_id,
+                            stage="summarization",
+                            status="failed",
+                            progress_percent=0.0,
+                            metadata={"error": error_msg},
+                        )
+
                         error_progress = SummarizationProgress(
                             current_file=file_path,
                             total_files=total_count,
@@ -307,6 +373,27 @@ class EnhancedSummarizationWorker(QThread):
                 except Exception as e:
                     failure_count += 1
                     logger.error(f"System 2 job failed for {file_path}: {e}")
+
+                    # Update queue status to failed
+                    db_service.upsert_stage_status(
+                        source_id=source_id,
+                        stage="summarization",
+                        status="failed",
+                        metadata={
+                            "error": str(e),
+                            "exception_type": type(e).__name__,
+                        },
+                    )
+
+                    # Emit queue event for exception
+                    event_bus.emit_stage_update(
+                        source_id=source_id,
+                        stage="summarization",
+                        status="failed",
+                        progress_percent=0.0,
+                        metadata={"error": str(e)},
+                    )
+
                     error_progress = SummarizationProgress(
                         current_file=file_path,
                         total_files=total_count,
@@ -579,7 +666,22 @@ class SummarizationTab(BaseTab):
         self.summarization_worker = None
         self.gui_settings = get_gui_settings_manager()
         self.tab_name = "Summarization"
+        self._tab_was_visible = False  # Track if tab was previously visible
         super().__init__(parent)
+
+    def showEvent(self, a0) -> None:  # type: ignore[override]
+        """Handle tab becoming visible - refresh database list if on database view."""
+        super().showEvent(a0)
+
+        # Only refresh if we're on the database view (not file view)
+        # and this is a real visibility change (not initial setup)
+        if hasattr(self, "source_stack") and self.source_stack.currentIndex() == 1:
+            # Small delay to ensure UI is ready
+            from PyQt6.QtCore import QTimer
+
+            QTimer.singleShot(100, self._refresh_database_list)
+
+        self._tab_was_visible = True
 
     @property
     def provider_combo(self):
@@ -802,35 +904,12 @@ class SummarizationTab(BaseTab):
         # Set tooltips for model combo as well
         # self.model_combo.setToolTip(formatted_model_tooltip)  # REMOVED - model_combo is now None
 
-        # Prompt file
-        prompt_label = QLabel("Prompt File:")
-        prompt_label.setToolTip(
-            "Path to custom prompt template file for claim extraction. Leave empty to use default HCE prompts."
-        )
-        default_template_path = (
-            "/Users/matthewgreer/Projects/Prompts/Summary Prompt.txt"
-        )
-        self.template_path_edit = QLineEdit(default_template_path)
-        self.template_path_edit.setMinimumWidth(200)  # Reduced from 280 to 200
-        self.template_path_edit.setToolTip(
-            "Path to custom prompt template file for claim extraction. Leave empty to use default HCE prompts."
-        )
-        self.template_path_edit.textChanged.connect(self._on_setting_changed)
-
-        settings_layout.addWidget(prompt_label, 1, 2)
-        settings_layout.addWidget(
-            self.template_path_edit, 1, 3, 1, 1
-        )  # Ensure proper spacing
-        browse_template_btn = QPushButton("Browse")
-        browse_template_btn.setFixedWidth(80)
-        browse_template_btn.clicked.connect(self._select_template)
-        browse_template_btn.setToolTip(
-            "Browse and select a custom prompt template file.\n"
-            "• Template files define how the AI analyzes your content\n"
-            "• Must be .txt files with specific formatting\n"
-            "• Leave empty to use built-in templates for each analysis type"
-        )
-        settings_layout.addWidget(browse_template_btn, 1, 4)
+        # Prompt file section REMOVED - prompts are now automatically selected based on Content Type
+        # The system uses:
+        #   - unified_miner_transcript_own.txt for "Transcript (Own)"
+        #   - unified_miner_transcript_third_party.txt for "Transcript (Third-party)"
+        #   - unified_miner_document.txt for "Document (PDF/eBook)" and "Document (White Paper)"
+        # These are hardcoded in the HCE pipeline and cannot be overridden via GUI
 
         # Output folder (only shown when not updating in-place)
         self.output_label = QLabel("Output Directory:")
@@ -1152,44 +1231,11 @@ class SummarizationTab(BaseTab):
             except Exception:
                 pass
 
-        # Trigger initial model population for default providers
-        # Use QTimer to ensure this happens after the UI is fully initialized
-        from PyQt6.QtCore import QTimer
-
-        def populate_initial_models():
-            try:
-                # For miner model
-                if hasattr(self, "miner_provider") and self.miner_provider:
-                    current_provider = self.miner_provider.currentText()
-                    if current_provider == "local":
-                        self._update_advanced_model_combo("local", self.miner_model)
-                        # Set default MVP LLM model if no model is selected
-                        if not self.miner_model.currentText():
-                            mvp_model = "qwen2.5:7b-instruct"
-                            idx = self.miner_model.findText(mvp_model)
-                            if idx >= 0:
-                                self.miner_model.setCurrentIndex(idx)
-
-                # For flagship judge model
-                if (
-                    hasattr(self, "flagship_judge_provider")
-                    and self.flagship_judge_provider
-                ):
-                    current_provider = self.flagship_judge_provider.currentText()
-                    if current_provider == "local":
-                        self._update_advanced_model_combo(
-                            "local", self.flagship_judge_model
-                        )
-                        # Set default MVP LLM model if no model is selected
-                        if not self.flagship_judge_model.currentText():
-                            mvp_model = "qwen2.5:7b-instruct"
-                            idx = self.flagship_judge_model.findText(mvp_model)
-                            if idx >= 0:
-                                self.flagship_judge_model.setCurrentIndex(idx)
-            except Exception as e:
-                logger.error(f"Error populating initial models: {e}")
-
-        QTimer.singleShot(100, populate_initial_models)  # Delay to ensure UI is ready
+        # NOTE: populate_initial_models() removed - it was redundant!
+        # Model population now happens in two places:
+        # 1. _load_settings() - called at T+200ms, sets provider and populates models
+        # 2. on_provider_changed() - called when user changes provider
+        # Both paths call _update_advanced_model_combo() which handles default selection
 
         # NOTE: Token budget spinboxes removed - feature was never implemented in backend
         # No code exists to enforce token limits, so these controls were misleading
@@ -1225,6 +1271,42 @@ class SummarizationTab(BaseTab):
         """Get the text for the start button."""
         return "Start Summarization"
 
+    def _get_content_type(self) -> str:
+        """Get content type from combo box (extracted to avoid duplication)."""
+        content_type_map = {
+            "Transcript (Own)": "transcript_own",
+            "Transcript (Third-party)": "transcript_third_party",
+            "Document (PDF/eBook)": "document_pdf",
+            "Document (White Paper)": "document_whitepaper",
+        }
+        return content_type_map.get(
+            self.content_type_combo.currentText(), "transcript_own"
+        )
+
+    def _build_gui_settings(self, provider: str, model: str) -> dict:
+        """Build GUI settings dictionary for processing (extracted to avoid duplication)."""
+        return {
+            "provider": provider,
+            "model": model,
+            "max_tokens": 10000,
+            "output_dir": self.output_edit.text() or None,
+            "update_in_place": False,
+            "create_separate_file": False,
+            "force_regenerate": False,
+            "analysis_type": "Document Summary",
+            "export_getreceipts": False,
+            "content_type": self._get_content_type(),
+            # Unified Pipeline HCE settings
+            "use_skim": True,
+            "miner_model_override": self._get_model_override(
+                self.miner_provider, self.miner_model
+            ),
+            "flagship_judge_model": self._get_model_override(
+                self.flagship_judge_provider, self.flagship_judge_model
+            ),
+            "max_workers": 1,  # Sequential processing for Ollama reliability
+        }
+
     def _start_processing(self) -> None:
         """Start the summarization process."""
         if not self.validate_inputs():
@@ -1259,97 +1341,23 @@ class SummarizationTab(BaseTab):
 
             # Store processing parameters for async model check
             self._pending_files = files
-            # Get content type from combo box
-            content_type_map = {
-                "Transcript (Own)": "transcript_own",
-                "Transcript (Third-party)": "transcript_third_party",
-                "Document (PDF/eBook)": "document_pdf",
-                "Document (White Paper)": "document_whitepaper",
-            }
-            content_type = content_type_map.get(
-                self.content_type_combo.currentText(), "transcript_own"
-            )
-
-            self._pending_gui_settings = {
-                "provider": provider,
-                "model": model,
-                "max_tokens": 10000,
-                "template_path": self.template_path_edit.text(),
-                "output_dir": self.output_edit.text() or None,
-                "update_in_place": False,
-                "create_separate_file": False,
-                "force_regenerate": False,
-                "analysis_type": "Document Summary",  # Fixed to Document Summary
-                "export_getreceipts": False,
-                "content_type": content_type,  # Add content type to settings
-                # New HCE settings
-                "use_skim": True,
-                "enable_routing": True,
-                "routing_threshold": 0.35,  # Default: 35%
-                "prompt_driven_mode": False,
-                "flagship_file_tokens": self.flagship_file_tokens_spin.value(),
-                "flagship_session_tokens": self.flagship_session_tokens_spin.value(),
-            }
+            self._pending_gui_settings = self._build_gui_settings(provider, model)
 
             # Start async model availability check
             self._start_async_model_check(model)
             return  # Exit early, processing will continue after model check
 
-        # Prepare settings
-        # Get content type from combo box
-        content_type_map = {
-            "Transcript (Own)": "transcript_own",
-            "Transcript (Third-party)": "transcript_third_party",
-            "Document (PDF/eBook)": "document_pdf",
-            "Document (White Paper)": "document_whitepaper",
-        }
-        content_type = content_type_map.get(
-            self.content_type_combo.currentText(), "transcript_own"
-        )
-
-        gui_settings = {
-            "provider": provider,
-            "model": model,
-            "max_tokens": 10000,
-            "template_path": self.template_path_edit.text(),
-            "output_dir": self.output_edit.text() or None,
-            "update_in_place": False,
-            "create_separate_file": False,
-            "force_regenerate": False,
-            "analysis_type": "Document Summary",  # Fixed to Document Summary
-            "export_getreceipts": False,
-            "content_type": content_type,  # Add content type to settings
-            # Unified Pipeline HCE settings
-            "use_skim": True,
-            "miner_model_override": self._get_model_override(
-                self.miner_provider, self.miner_model
-            ),
-            "flagship_judge_model": self._get_model_override(
-                self.flagship_judge_provider, self.flagship_judge_model
-            ),
-        }
-
-        # Start worker
-        self.summarization_worker = EnhancedSummarizationWorker(
-            files, self.settings, gui_settings, self
-        )
-        self.summarization_worker.progress_updated.connect(self._on_progress_updated)
-        self.summarization_worker.file_completed.connect(self._on_file_completed)
-        self.summarization_worker.processing_finished.connect(
-            self._on_processing_finished
-        )
-        self.summarization_worker.processing_error.connect(self._on_processing_error)
-        self.summarization_worker.hce_analytics_updated.connect(
-            self._on_hce_analytics_updated
-        )
-        self.summarization_worker.log_message.connect(self._on_worker_log_message)
-
-        self.active_workers.append(self.summarization_worker)
-        self.set_processing_state(True)
-        self.clear_log()
+        # Non-local provider: build settings and start worker immediately
+        gui_settings = self._build_gui_settings(provider, model)
+        self._start_summarization_worker(files, gui_settings)
 
         # Show informative startup message with file count and details
-        file_list = self._get_file_list()
+        # Use cached file list from _pending_files to avoid redundant call
+        file_list = (
+            self._pending_files
+            if hasattr(self, "_pending_files") and self._pending_files
+            else self._get_file_list()
+        )
         file_count = len(file_list)
         if file_count == 1:
             file_info = f"file: {Path(file_list[0]).name}"
@@ -1631,6 +1639,10 @@ class SummarizationTab(BaseTab):
 
     def _start_summarization_worker(self, files: list, gui_settings: dict) -> None:
         """Start the summarization worker with the provided settings."""
+        # Reset button text before starting processing
+        if hasattr(self, "start_btn"):
+            self.start_btn.setText(self._get_start_button_text())
+
         # Start worker
         self.summarization_worker = EnhancedSummarizationWorker(
             files, self.settings, gui_settings, self
@@ -1826,13 +1838,19 @@ class SummarizationTab(BaseTab):
 
         # Database table
         self.db_table = QTableWidget()
-        self.db_table.setColumnCount(5)
+        self.db_table.setColumnCount(6)
         self.db_table.setHorizontalHeaderLabels(
-            ["Select", "Title", "Duration", "Has Summary", "Token Count"]
+            ["Select", "Title", "Duration", "Has Summary", "Token Count", "Date Added"]
         )
         self.db_table.setAlternatingRowColors(True)
         self.db_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.db_table.setMinimumHeight(150)
+
+        # Enable sorting
+        self.db_table.setSortingEnabled(True)
+
+        # Connect cell click to toggle checkbox
+        self.db_table.cellClicked.connect(self._on_db_table_cell_clicked)
 
         # Set column widths
         self.db_table.setColumnWidth(0, 60)  # Select checkbox
@@ -1840,6 +1858,7 @@ class SummarizationTab(BaseTab):
         self.db_table.setColumnWidth(2, 80)  # Duration
         self.db_table.setColumnWidth(3, 100)  # Has Summary
         self.db_table.setColumnWidth(4, 100)  # Token Count
+        self.db_table.setColumnWidth(5, 120)  # Date Added
 
         db_layout.addWidget(self.db_table)
 
@@ -1863,6 +1882,8 @@ class SummarizationTab(BaseTab):
         from ...database import DatabaseService
         from ...utils.text_utils import estimate_tokens_improved
 
+        # Disable sorting while populating to avoid performance issues
+        self.db_table.setSortingEnabled(False)
         self.db_table.setRowCount(0)
 
         try:
@@ -1871,6 +1892,10 @@ class SummarizationTab(BaseTab):
             # Get all videos that have transcripts
             with db.get_session() as session:
                 from ...database.models import MediaSource, Summary, Transcript
+
+                # First, check how many transcripts exist in total
+                total_transcripts = session.query(Transcript).count()
+                logger.debug(f"Total transcripts in database: {total_transcripts}")
 
                 # Query for media sources with transcripts
                 query = (
@@ -1884,6 +1909,25 @@ class SummarizationTab(BaseTab):
                 )
 
                 videos = query.all()
+                logger.debug(
+                    f"Found {len(videos)} MediaSource records with transcripts"
+                )
+
+                # Diagnostic: Check for orphaned transcripts (transcripts without MediaSource)
+                if total_transcripts > len(videos):
+                    orphaned_transcripts = (
+                        session.query(Transcript)
+                        .outerjoin(
+                            MediaSource, Transcript.source_id == MediaSource.source_id
+                        )
+                        .filter(MediaSource.source_id.is_(None))
+                        .all()
+                    )
+                    if orphaned_transcripts:
+                        logger.warning(
+                            f"Found {len(orphaned_transcripts)} transcripts without MediaSource records. "
+                            f"Source IDs: {[t.source_id for t in orphaned_transcripts[:5]]}"
+                        )
 
                 for video in videos:
                     # Check if it has a summary
@@ -1915,9 +1959,11 @@ class SummarizationTab(BaseTab):
 
                     # Duration
                     duration_text = ""
+                    duration_seconds_for_sort = 0
                     if video.duration_seconds:
                         # Convert to int to handle float values
                         duration_int = int(video.duration_seconds)
+                        duration_seconds_for_sort = duration_int
                         hours = duration_int // 3600
                         minutes = (duration_int % 3600) // 60
                         seconds = duration_int % 60
@@ -1925,17 +1971,21 @@ class SummarizationTab(BaseTab):
                             duration_text = f"{hours}:{minutes:02d}:{seconds:02d}"
                         else:
                             duration_text = f"{minutes}:{seconds:02d}"
-                    self.db_table.setItem(
-                        row_position, 2, QTableWidgetItem(duration_text)
+                    duration_item = QTableWidgetItem(duration_text)
+                    # Store numeric value for proper sorting
+                    duration_item.setData(
+                        Qt.ItemDataRole.UserRole, duration_seconds_for_sort
                     )
+                    self.db_table.setItem(row_position, 2, duration_item)
 
                     # Has Summary
                     summary_text = "✓" if summary else "✗"
                     if summary:
                         summary_text += " (Re-summarize?)"
-                    self.db_table.setItem(
-                        row_position, 3, QTableWidgetItem(summary_text)
-                    )
+                    summary_item = QTableWidgetItem(summary_text)
+                    # Store boolean for sorting (True sorts before False)
+                    summary_item.setData(Qt.ItemDataRole.UserRole, 1 if summary else 0)
+                    self.db_table.setItem(row_position, 3, summary_item)
 
                     # Token Count (estimate)
                     token_count = 0
@@ -1943,15 +1993,39 @@ class SummarizationTab(BaseTab):
                         token_count = estimate_tokens_improved(
                             transcript.transcript_text, "default"
                         )
-                    self.db_table.setItem(
-                        row_position, 4, QTableWidgetItem(f"~{token_count:,}")
-                    )
+                    token_item = QTableWidgetItem(f"~{token_count:,}")
+                    # Store numeric value for proper sorting
+                    token_item.setData(Qt.ItemDataRole.UserRole, token_count)
+                    self.db_table.setItem(row_position, 4, token_item)
+
+                    # Date Added
+                    date_text = ""
+                    date_for_sort = None
+                    if video.created_at:
+                        date_for_sort = video.created_at
+                        # Format as readable date
+                        date_text = video.created_at.strftime("%Y-%m-%d %H:%M")
+                    date_item = QTableWidgetItem(date_text)
+                    # Store datetime for proper sorting
+                    if date_for_sort:
+                        # Convert to timestamp for sorting
+                        date_item.setData(
+                            Qt.ItemDataRole.UserRole, date_for_sort.timestamp()
+                        )
+                    else:
+                        date_item.setData(Qt.ItemDataRole.UserRole, 0)
+                    self.db_table.setItem(row_position, 5, date_item)
+
+            # Re-enable sorting after populating
+            self.db_table.setSortingEnabled(True)
 
             logger.info(
                 f"Database browser refreshed - found {self.db_table.rowCount()} transcripts"
             )
         except Exception as e:
             logger.error(f"Failed to refresh database list: {e}", exc_info=True)
+            # Re-enable sorting even on error
+            self.db_table.setSortingEnabled(True)
 
     def _filter_database_list(self, text: str) -> None:
         """Filter the database list based on search text."""
@@ -1961,6 +2035,26 @@ class SummarizationTab(BaseTab):
             if title_item:
                 match = text.lower() in title_item.text().lower()
                 self.db_table.setRowHidden(row, not match)
+
+    def _on_db_table_cell_clicked(self, row: int, column: int) -> None:
+        """Toggle checkbox when any cell in the row is clicked."""
+        checkbox = self.db_table.cellWidget(row, 0)
+        if checkbox and hasattr(checkbox, "isChecked"):
+            # Toggle the checkbox state
+            new_state = not checkbox.isChecked()
+            checkbox.setChecked(new_state)
+
+            # Get the title for logging
+            title_item = self.db_table.item(row, 1)
+            title = title_item.text() if title_item else "Unknown"
+            source_id = (
+                title_item.data(Qt.ItemDataRole.UserRole) if title_item else None
+            )
+
+            logger.debug(
+                f"🎯 Row {row} clicked: '{title}' (source_id={source_id}) - "
+                f"Checkbox now {'CHECKED' if new_state else 'UNCHECKED'}"
+            )
 
     def _select_all_db(self) -> None:
         """Select all items in the database table."""
@@ -2009,16 +2103,38 @@ class SummarizationTab(BaseTab):
         else:
             # Get selected items from database table
             sources = []
+            logger.info(
+                f"🎯 DEBUG: Scanning {self.db_table.rowCount()} rows in database table"
+            )
             for row in range(self.db_table.rowCount()):
                 checkbox = self.db_table.cellWidget(row, 0)
-                if checkbox and hasattr(checkbox, "isChecked") and checkbox.isChecked():
-                    # Get source_id stored in row data
-                    source_id = self.db_table.item(row, 1).data(
-                        Qt.ItemDataRole.UserRole
+                title_item = self.db_table.item(row, 1)
+                title = title_item.text() if title_item else "Unknown"
+
+                if checkbox and hasattr(checkbox, "isChecked"):
+                    is_checked = checkbox.isChecked()
+                    logger.debug(
+                        f"🎯   Row {row} ({title}): checkbox {'CHECKED' if is_checked else 'unchecked'}"
                     )
-                    if source_id:
-                        # Use special prefix to indicate database source
-                        sources.append(f"db://{source_id}")
+
+                    if is_checked:
+                        # Get source_id stored in row data
+                        source_id = (
+                            title_item.data(Qt.ItemDataRole.UserRole)
+                            if title_item
+                            else None
+                        )
+                        if source_id:
+                            # Use special prefix to indicate database source
+                            sources.append(f"db://{source_id}")
+                            logger.info(f"🎯     ✓ Added source: {source_id}")
+                        else:
+                            logger.warning(
+                                f"🎯     ✗ Row {row} checked but no source_id found!"
+                            )
+                else:
+                    logger.debug(f"🎯   Row {row} ({title}): no checkbox widget found")
+
             logger.info(
                 f"🎯 DEBUG: _get_file_list() returning {len(sources)} database sources"
             )
@@ -2251,15 +2367,45 @@ class SummarizationTab(BaseTab):
                 # Try to restore previous selection if it's still valid
                 if current_text and current_text in all_items:
                     model_combo.setCurrentText(current_text)
-                elif provider == "local" and not current_text:
-                    # For local provider with no selection, default to MVP LLM
-                    mvp_model = "qwen2.5:7b-instruct"
-                    if mvp_model in all_items:
-                        model_combo.setCurrentText(mvp_model)
-                    elif len(all_items) > 1:  # Has models besides empty option
-                        model_combo.setCurrentIndex(1)  # Select first real model
+                    logger.debug(f"Restored previous selection: '{current_text}'")
+                elif not current_text and len(all_items) > 1:
+                    # No previous selection - set a reasonable default
+                    if provider == "local":
+                        # For local provider, default to MVP LLM
+                        mvp_model = "qwen2.5:7b-instruct"
+                        logger.debug(
+                            f"No current selection, trying to set default: '{mvp_model}'"
+                        )
+                        # Try exact match first, then with " (Installed)" suffix
+                        if mvp_model in all_items:
+                            model_combo.setCurrentText(mvp_model)
+                            logger.debug(f"Set default (exact match): '{mvp_model}'")
+                        elif f"{mvp_model} (Installed)" in all_items:
+                            model_combo.setCurrentText(f"{mvp_model} (Installed)")
+                            logger.debug(
+                                f"Set default (with suffix): '{mvp_model} (Installed)'"
+                            )
+                        else:
+                            model_combo.setCurrentIndex(1)  # Select first real model
+                            logger.debug(
+                                f"Set default (first available): '{model_combo.itemText(1)}'"
+                            )
+                    else:
+                        # For cloud providers, select first available model (index 1, after empty option)
+                        model_combo.setCurrentIndex(1)
+                        logger.debug(
+                            f"Set default for {provider} (first available): '{model_combo.itemText(1)}'"
+                        )
+                elif not current_text:
+                    logger.debug(
+                        f"No models available for provider '{provider}', leaving empty"
+                    )
+                else:
+                    logger.debug(f"Keeping current selection: '{current_text}'")
 
-                logger.debug(f"Added {len(all_items)} items to model combo")
+                logger.debug(
+                    f"Added {len(all_items)} items to model combo, final selection: '{model_combo.currentText()}'"
+                )
 
             except Exception as e:
                 logger.warning(
@@ -2270,17 +2416,6 @@ class SummarizationTab(BaseTab):
 
         finally:
             model_combo.blockSignals(False)
-
-    def _select_template(self):
-        """Select a template file."""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select Template File",
-            str(Path.home()),
-            "Text Files (*.txt);;All Files (*)",
-        )
-        if file_path:
-            self.template_path_edit.setText(file_path)
 
     def _select_output(self):
         """Select output directory."""
@@ -2335,17 +2470,26 @@ class SummarizationTab(BaseTab):
             if not hasattr(self, "_last_logged_step"):
                 self._last_logged_step = None
                 self._last_logged_percent = -1
+                self._last_logged_time = 0
 
             current_step = progress.current_step
             file_percent = getattr(progress, "file_percent", 0)
             if file_percent is None:
                 file_percent = 0
 
-            # Only log if step changed OR percent increased by 10+ OR it's the first log
-            step_changed = current_step != self._last_logged_step
-            percent_jumped = abs(file_percent - self._last_logged_percent) >= 10
+            current_time = time.time()
 
-            if step_changed or percent_jumped or self._last_logged_step is None:
+            # Only log if step changed OR percent increased by 5+ OR 10 seconds passed OR it's the first log
+            step_changed = current_step != self._last_logged_step
+            percent_jumped = abs(file_percent - self._last_logged_percent) >= 5
+            time_elapsed = (current_time - self._last_logged_time) >= 10
+
+            if (
+                step_changed
+                or percent_jumped
+                or time_elapsed
+                or self._last_logged_step is None
+            ):
                 status = getattr(progress, "status", "")
 
                 # Create a detailed progress message
@@ -2367,6 +2511,7 @@ class SummarizationTab(BaseTab):
                 # Update tracking variables
                 self._last_logged_step = current_step
                 self._last_logged_percent = file_percent
+                self._last_logged_time = current_time
 
         # Initialize timing tracking (batch time already set when worker starts)
         if not hasattr(self, "_last_progress_update"):
@@ -2504,9 +2649,9 @@ class SummarizationTab(BaseTab):
             # Show chunk progress but throttle updates
             elif progress.status in ["processing_chunks", "chunk_completed"]:
                 if hasattr(progress, "percent"):
-                    # Only update every 10% or if significant time has passed
-                    if (progress.percent - self._last_progress_update >= 10) or (
-                        current_time - getattr(self, "_last_update_time", 0) > 30
+                    # Only update every 5% or if 10 seconds have passed
+                    if (progress.percent - self._last_progress_update >= 5) or (
+                        current_time - getattr(self, "_last_update_time", 0) > 10
                     ):
                         should_update = True
                         self._last_progress_update = progress.percent
@@ -2653,12 +2798,6 @@ class SummarizationTab(BaseTab):
                 self.append_log(f"   • People identified: {stats['people']}")
             if "concepts" in stats:
                 self.append_log(f"   • Concepts found: {stats['concepts']}")
-            if "relations" in stats:
-                self.append_log(f"   • Relations mapped: {stats['relations']}")
-            if "contradictions" in stats:
-                self.append_log(
-                    f"   • Contradictions detected: {stats['contradictions']}"
-                )
 
         # Calculate total batch time
         total_time_text = ""
@@ -2743,8 +2882,6 @@ class SummarizationTab(BaseTab):
                 "tier1_claims": 0,
                 "people": 0,
                 "concepts": 0,
-                "relations": 0,
-                "contradictions": 0,
             }
 
         # Aggregate statistics
@@ -2752,10 +2889,6 @@ class SummarizationTab(BaseTab):
         self._final_hce_stats["tier1_claims"] += analytics.get("tier_a_count", 0)
         self._final_hce_stats["people"] += analytics.get("people_count", 0)
         self._final_hce_stats["concepts"] += analytics.get("concepts_count", 0)
-        self._final_hce_stats["relations"] += analytics.get("relations_count", 0)
-        self._final_hce_stats["contradictions"] += analytics.get(
-            "contradictions_count", 0
-        )
 
         # Display claim analytics
         total_claims = analytics.get("total_claims", 0)
@@ -2815,20 +2948,6 @@ class SummarizationTab(BaseTab):
                             f"      📋 Primary routing reason: {routing_reason}"
                         )
 
-            # Show relations and contradictions
-            relations_count = analytics.get("relations_count", 0)
-            contradictions_count = analytics.get("contradictions_count", 0)
-
-            if relations_count > 0:
-                self.append_log(f"   🔗 Relations Mapped: {relations_count}")
-
-            if contradictions_count > 0:
-                self.append_log(f"   ⚠️ Contradictions Found: {contradictions_count}")
-                sample_contradictions = analytics.get("sample_contradictions", [])
-                for i, contradiction in enumerate(sample_contradictions, 1):
-                    self.append_log(f"      {i}. \"{contradiction['claim1']}\"")
-                    self.append_log("         vs. \"{contradiction['claim2']}\"")
-
             # Show top claims
             top_claims = analytics.get("top_claims", [])
             if top_claims:
@@ -2886,7 +3005,6 @@ class SummarizationTab(BaseTab):
                 self.output_edit,
                 self.provider_combo,
                 self.model_combo,
-                self.template_path_edit,
                 self.claim_tier_combo,
                 self.max_claims_spin,
                 # tier_a_threshold_spin and tier_b_threshold_spin removed - obsolete
@@ -2908,7 +3026,6 @@ class SummarizationTab(BaseTab):
                     "output_edit",
                     "provider_combo",
                     "model_combo",
-                    "template_path_edit",
                     "claim_tier_combo",
                     "max_claims_spin",
                     # "tier_a_threshold_spin", "tier_b_threshold_spin" removed
@@ -2966,7 +3083,11 @@ class SummarizationTab(BaseTab):
                     self.tab_name, "model", ""
                 )
                 if is_widget_valid(self.model_combo):
+                    # Try exact match first
                     index = self.model_combo.findText(saved_model)
+                    # If not found, try with " (Installed)" suffix for local models
+                    if index < 0 and saved_provider == "local":
+                        index = self.model_combo.findText(f"{saved_model} (Installed)")
                     if index >= 0:
                         self.model_combo.setCurrentIndex(index)
 
@@ -2990,18 +3111,7 @@ class SummarizationTab(BaseTab):
                         self.content_type_combo.setCurrentIndex(index)
 
                 # Load max tokens
-                # Load template path
-                default_template = (
-                    "/Users/matthewgreer/Projects/Prompts/Summary Prompt.txt"
-                )
-                saved_template = self.gui_settings.get_line_edit_text(
-                    self.tab_name, "template_path", ""
-                )
-                # Use default if saved template is empty
-                if not saved_template or not saved_template.strip():
-                    saved_template = default_template
-                if is_widget_valid(self.template_path_edit):
-                    self.template_path_edit.setText(saved_template)
+                # template_path removed - prompts are now automatically selected based on Content Type
 
                 # Load file list - add default file if list is empty
                 if is_widget_valid(self.file_list) and self.file_list.count() == 0:
@@ -3063,23 +3173,78 @@ class SummarizationTab(BaseTab):
                             f"{stage_name}_provider",
                             "",  # Let settings manager use settings.yaml
                         )
+                        logger.debug(
+                            f"Loading {stage_name}: saved_provider='{saved_provider}'"
+                        )
+
+                        # If no saved provider, default to "local" (MVP LLM approach)
+                        if not saved_provider:
+                            saved_provider = "local"
+                            logger.debug(f"  No saved provider, defaulting to 'local'")
+
                         if saved_provider:
                             index = provider_combo.findText(saved_provider)
+                            logger.debug(
+                                f"  Provider '{saved_provider}' found at index {index}"
+                            )
                             if index >= 0:
                                 provider_combo.setCurrentIndex(index)
+                                logger.debug(f"  Set provider combo to index {index}")
                                 # Update models for this provider
                                 self._update_advanced_model_combo(
                                     saved_provider, model_combo
+                                )
+                                logger.debug(
+                                    f"  Updated model combo for provider '{saved_provider}'"
                                 )
 
                         # Load model selection - let settings manager handle hierarchy
                         saved_model = self.gui_settings.get_combo_selection(
                             self.tab_name, f"{stage_name}_model", ""
                         )
+                        logger.debug(f"  saved_model='{saved_model}'")
                         if saved_model:
+                            # Try exact match first
                             index = model_combo.findText(saved_model)
+                            logger.debug(
+                                f"  Model '{saved_model}' exact match at index {index}"
+                            )
+                            # If not found, try with " (Installed)" suffix for local models
+                            if index < 0 and saved_provider == "local":
+                                index = model_combo.findText(
+                                    f"{saved_model} (Installed)"
+                                )
+                                logger.debug(
+                                    f"  Model '{saved_model} (Installed)' found at index {index}"
+                                )
                             if index >= 0:
                                 model_combo.setCurrentIndex(index)
+                                logger.debug(
+                                    f"  Set model combo to index {index} ('{model_combo.itemText(index)}')"
+                                )
+                            else:
+                                logger.warning(
+                                    f"  Model '{saved_model}' not found in combo! Available: {[model_combo.itemText(i) for i in range(model_combo.count())]}"
+                                )
+                        else:
+                            logger.debug(
+                                f"  No saved model for {stage_name}, current selection: '{model_combo.currentText()}'"
+                            )
+                            # Check what _update_advanced_model_combo set as default
+                            if model_combo.currentText():
+                                logger.debug(
+                                    f"  _update_advanced_model_combo set default: '{model_combo.currentText()}'"
+                                )
+                            elif model_combo.count() > 1:
+                                # Has models but none selected - this shouldn't happen with the new logic
+                                logger.warning(
+                                    f"  Model combo has {model_combo.count()} items but none selected after _update_advanced_model_combo!"
+                                )
+                            else:
+                                # No models available for this provider - this is expected if provider has no models
+                                logger.debug(
+                                    f"  Model combo is empty (no models available for provider '{saved_provider}')"
+                                )
                     except RuntimeError as e:
                         logger.debug(f"Widget access error for {stage_name}: {e}")
                         continue
@@ -3157,8 +3322,10 @@ class SummarizationTab(BaseTab):
 
             model_text = safe_get_text(self.model_combo, "model_combo")
             if model_text is not None:
+                # Remove " (Installed)" suffix if present to keep stored value clean
+                clean_model_text = model_text.replace(" (Installed)", "")
                 self.gui_settings.set_combo_selection(
-                    self.tab_name, "model", model_text
+                    self.tab_name, "model", clean_model_text
                 )
 
             # Save source selection (Files vs Database)
@@ -3177,11 +3344,7 @@ class SummarizationTab(BaseTab):
                 )
 
             # Save line edit text
-            template_text = safe_get_text(self.template_path_edit, "template_path_edit")
-            if template_text is not None:
-                self.gui_settings.set_line_edit_text(
-                    self.tab_name, "template_path", template_text
-                )
+            # template_path removed - prompts are now automatically selected based on Content Type
 
             # Save HCE settings
             claim_tier_text = safe_get_text(self.claim_tier_combo, "claim_tier_combo")
@@ -3234,11 +3397,13 @@ class SummarizationTab(BaseTab):
                         stage_provider_text,
                     )
 
-                # Save model selection
+                # Save model selection (strip " (Installed)" suffix to keep stored value clean)
                 stage_model_text = safe_get_text(model_combo, f"{stage_name}_model")
                 if stage_model_text is not None:
+                    # Remove " (Installed)" suffix if present
+                    clean_model_text = stage_model_text.replace(" (Installed)", "")
                     self.gui_settings.set_combo_selection(
-                        self.tab_name, f"{stage_name}_model", stage_model_text
+                        self.tab_name, f"{stage_name}_model", clean_model_text
                     )
 
             logger.info(f"✅ Successfully saved settings for {self.tab_name} tab")
@@ -3397,40 +3562,6 @@ class SummarizationTab(BaseTab):
         # Use colon separator for all other providers (NOT slash)
         return f"{provider}:{model}"
 
-    def _on_analysis_type_changed(self, analysis_type: str) -> None:
-        """Called when analysis type changes to auto-populate template path."""
-        # Convert analysis type to template filename dynamically
-        filename = _analysis_type_to_filename(analysis_type)
-        template_path = f"config/prompts/{filename}.txt"
-
-        # Check if the template file exists
-        if Path(template_path).exists():
-            self.template_path_edit.setText(template_path)
-            logger.debug(
-                f"🔄 Analysis type changed to '{analysis_type}', auto-populated template: {template_path}"
-            )
-        else:
-            logger.warning(
-                f"⚠️ Template file not found: {template_path} for analysis type '{analysis_type}'"
-            )
-            # Clear template path if file doesn't exist
-            self.template_path_edit.setText("")
-
-            # Show user-friendly warning message
-            self.show_warning(
-                "Template File Missing",
-                f"The template file for '{analysis_type}' was not found:\n\n"
-                f"Expected: {template_path}\n\n"
-                "To fix this:\n"
-                f"1. Create the file '{template_path}'\n"
-                "2. Add your custom prompt template\n"
-                f"3. Include {{text}} placeholder where content should go\n\n"
-                "The template path has been cleared. You can manually specify a different template file or create the missing one.",
-            )
-
-        # Trigger settings save after template path is updated
-        self._on_setting_changed()
-
     def _generate_session_report(
         self, success_count: int, failure_count: int, total_count: int, time_text: str
     ) -> None:
@@ -3457,8 +3588,8 @@ class SummarizationTab(BaseTab):
                     "enable_routing": True,
                     "routing_threshold": 35,  # Default: 35%
                     "prompt_driven_mode": False,
-                    "flagship_file_tokens": self.flagship_file_tokens_spin.value(),
-                    "flagship_session_tokens": self.flagship_session_tokens_spin.value(),
+                    "flagship_file_tokens": 8000,  # Default token limit per file
+                    "flagship_session_tokens": 128000,  # Default session token limit
                 },
                 "output_settings": {
                     "update_in_place": False,

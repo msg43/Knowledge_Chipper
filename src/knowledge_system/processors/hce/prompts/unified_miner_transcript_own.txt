@@ -84,6 +84,7 @@ Return a JSON object with four arrays: "claims", "jargon", "people", and "mental
 Each claim must include:
 - **claim_text**: The exact claim being made (precise and concise)
 - **claim_type**: One of the 5 types above (for data analysis only)
+- **domain**: Broad field classification for searchability (e.g., "physics", "economics", "politics", "medicine", "technology"). Use general categories, NOT specific subfields.
 - **stance**: How the speaker presents it (asserts/questions/opposes/neutral)
 - **speaker**: The speaker label from the transcript (e.g., "SPEAKER_00", "HOST", etc.)
 - **evidence_spans**: Array of supporting quotes with exact timestamps
@@ -101,7 +102,7 @@ Extract ALL mentions of the claim across the segment. For each evidence span:
 Each jargon term must include:
 - **term**: The jargon term or phrase
 - **definition**: Explanation of the term in context
-- **domain**: Field classification (economics, technology, medical, legal, scientific, business, or other)
+- **domain**: Broad field classification for searchability (e.g., "physics", "economics", "politics", "medicine", "technology"). Use general categories like "physics" not "quantum mechanics", "economics" not "monetary policy", "law" not "constitutional law". Choose the broadest relevant field.
 - **introduced_by**: Which speaker first used or explained the term
 - **evidence_spans**: Array of all uses of this term
 

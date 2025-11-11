@@ -76,6 +76,9 @@ class ScoredClaim(BaseModel):
     claim_id: str
     canonical: str
     claim_type: ClaimType
+    domain: str | None = (
+        None  # Broad field classification (e.g., 'physics', 'economics')
+    )
     evidence: list[EvidenceSpan]
     tier: Literal["A", "B", "C"] | None = None
     scores: dict[str, float] = Field(default_factory=dict)

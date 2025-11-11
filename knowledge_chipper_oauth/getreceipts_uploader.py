@@ -357,7 +357,9 @@ class GetReceiptsUploader:
                 "claim_id": claim_uuid,
                 "episode_id": episode_uuid,
                 "name": concept.get("name", ""),
-                "description": concept.get("description", ""),
+                # Try 'definition' first (new schema), fall back to 'description' (legacy)
+                "description": concept.get("definition")
+                or concept.get("description", ""),
                 "domain": concept.get("domain"),
                 "aliases": concept.get("aliases", []),
                 "key_concepts": concept.get("key_concepts", []),

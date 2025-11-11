@@ -28,6 +28,12 @@ def _format_segments_to_markdown_transcript(
     """
     Format transcript segments into properly formatted markdown with speaker separation.
 
+    Groups segments into logical paragraphs based on:
+    - Speaker changes (always starts new paragraph)
+    - Long pauses (7+ seconds)
+    - Sentence boundaries (for natural reading flow)
+    - Maximum paragraph length (900 chars, with sentence boundary preference)
+
     Args:
         segments: List of transcript segments with start, text, and optionally speaker
         include_speakers: Whether to include speaker information
@@ -36,23 +42,18 @@ def _format_segments_to_markdown_transcript(
         source_id: YouTube video ID for creating hyperlinked timestamps
 
     Returns:
-        Formatted markdown transcript content
+        Formatted markdown transcript content with logical paragraph breaks
     """
     if not segments:
         return ""
 
-    content_parts = []
-    previous_speaker = None
+    def ends_with_sentence_boundary(text: str) -> bool:
+        """Check if text ends with a sentence boundary."""
+        text = text.rstrip()
+        return text.endswith((".", "!", "?", '."', '!"', '?"', '.")', '!")', '?")'))
 
-    for segment in segments:
-        text = segment.get("text", "").strip()
-        if not text:
-            continue
-
-        speaker = segment.get("speaker", "")
-        start_time = segment.get("start", 0)
-
-        # Format timestamp with hyperlink for YouTube videos
+    def format_timestamp(start_time: float) -> str:
+        """Format timestamp with or without hyperlink."""
         if (
             include_timestamps
             and source_id is not None
@@ -61,49 +62,144 @@ def _format_segments_to_markdown_transcript(
             and source_id != ""
             and len(source_id) == 11
         ):
-            # Create hyperlinked timestamp for YouTube videos (only for valid video IDs)
+            # Create hyperlinked timestamp for YouTube videos
             timestamp_str = _format_timestamp_for_display(start_time)
             youtube_url = (
                 f"https://www.youtube.com/watch?v={source_id}&t={int(start_time)}s"
             )
-            timestamp_display = f"[{timestamp_str}]({youtube_url})"
+            return f"[{timestamp_str}]({youtube_url})"
         elif include_timestamps:
-            # Plain timestamp without hyperlink
-            timestamp_display = f"**{_format_timestamp_for_display(start_time)}**"
-        else:
-            timestamp_display = None
+            # Plain timestamp
+            return f"[{_format_timestamp_for_display(start_time)}]"
+        return ""
 
-        # Handle speaker formatting if diarization enabled and speakers should be included
-        if include_speakers and speaker and diarization_enabled:
-            # Add speaker change separator for better readability
-            if speaker != previous_speaker and previous_speaker is not None:
-                content_parts.append("---\n")
+    def format_speaker_display(speaker: str) -> str:
+        """Convert speaker ID to human-readable format."""
+        if speaker.startswith("SPEAKER_"):
+            speaker_num = speaker.replace("SPEAKER_", "")
+            try:
+                speaker_number = int(speaker_num) + 1
+                return f"Speaker {speaker_number}"
+            except (ValueError, TypeError):
+                return speaker
+        return speaker
 
-            # Convert speaker ID to human-readable format
-            speaker_display = speaker
-            if speaker.startswith("SPEAKER_"):
-                speaker_num = speaker.replace("SPEAKER_", "")
-                try:
-                    speaker_number = int(speaker_num) + 1
-                    speaker_display = f"Speaker {speaker_number}"
-                except (ValueError, TypeError):
-                    speaker_display = speaker
+    # Configuration for paragraph grouping
+    PAUSE_THRESHOLD_SECONDS = 7.0
+    MAX_PARAGRAPH_CHARS = 900
+    FORCE_BREAK_CHARS = 1200  # Force break even without sentence boundary
 
-            # Format: **Speaker Name**\n*timestamp*\n\ntext\n
-            content_parts.append(f"**{speaker_display}**")
-            if timestamp_display:
-                content_parts.append(f"*{timestamp_display}*\n")
-            content_parts.append(f"{text}\n")
+    content_parts = []
+    current_paragraph = []
+    current_speaker = None
+    paragraph_start_time = None
+    last_end_time = None
+    last_flushed_speaker = None  # Track last speaker label written
 
-            previous_speaker = speaker
-        elif timestamp_display:
-            # Format: **timestamp**\n\ntext\n
-            content_parts.append(f"{timestamp_display}\n")
-            content_parts.append(f"{text}\n")
-        else:
-            # Plain text format
-            content_parts.append(f"{text}\n")
+    def flush_paragraph():
+        """Write accumulated paragraph to content_parts."""
+        nonlocal current_paragraph, paragraph_start_time, current_speaker, last_flushed_speaker
 
+        if not current_paragraph:
+            return
+
+        paragraph_text = " ".join(current_paragraph).strip()
+        if not paragraph_text:
+            current_paragraph = []
+            paragraph_start_time = None
+            return
+
+        # Build paragraph with speaker and timestamp
+        paragraph_lines = []
+
+        if include_speakers and current_speaker and diarization_enabled:
+            speaker_display = format_speaker_display(current_speaker)
+            timestamp = (
+                format_timestamp(paragraph_start_time)
+                if paragraph_start_time is not None
+                else ""
+            )
+
+            # Only show speaker label if it changed from last paragraph (for readability in monologues)
+            if current_speaker != last_flushed_speaker:
+                if timestamp:
+                    paragraph_lines.append(f"**{speaker_display}** {timestamp}\n")
+                else:
+                    paragraph_lines.append(f"**{speaker_display}**\n")
+                last_flushed_speaker = current_speaker
+            elif timestamp:
+                # Same speaker, just show timestamp
+                paragraph_lines.append(f"{timestamp}\n")
+        elif include_timestamps and paragraph_start_time is not None:
+            timestamp = format_timestamp(paragraph_start_time)
+            paragraph_lines.append(f"{timestamp}\n")
+
+        paragraph_lines.append(f"{paragraph_text}\n")
+
+        content_parts.append("".join(paragraph_lines))
+        current_paragraph = []
+        paragraph_start_time = None
+
+    # Process segments into paragraphs
+    for segment in segments:
+        text = segment.get("text", "").strip()
+        if not text:
+            continue
+
+        speaker = segment.get("speaker", "")
+        start_time = segment.get("start", 0)
+        end_time = segment.get("end", start_time)
+
+        # Calculate if there's a long pause
+        long_pause = (
+            last_end_time is not None
+            and start_time is not None
+            and (float(start_time) - float(last_end_time)) >= PAUSE_THRESHOLD_SECONDS
+        )
+
+        # Calculate potential paragraph length
+        paragraph_candidate_length = len(" ".join(current_paragraph + [text]))
+
+        # Determine if we need a new paragraph
+        needs_new_paragraph = False
+        if current_paragraph:
+            # Always break on speaker change
+            if speaker != current_speaker:
+                needs_new_paragraph = True
+            # Break on long pauses
+            elif long_pause:
+                needs_new_paragraph = True
+            # For length-based breaks, prefer sentence boundaries
+            elif paragraph_candidate_length >= MAX_PARAGRAPH_CHARS:
+                if current_paragraph and ends_with_sentence_boundary(
+                    current_paragraph[-1]
+                ):
+                    needs_new_paragraph = True
+                # Force break if way over limit
+                elif paragraph_candidate_length >= FORCE_BREAK_CHARS:
+                    needs_new_paragraph = True
+
+        if needs_new_paragraph:
+            flush_paragraph()
+
+        # Start new paragraph if needed
+        if not current_paragraph:
+            current_speaker = speaker
+            paragraph_start_time = float(start_time) if start_time is not None else None
+
+        current_paragraph.append(text)
+        last_end_time = (
+            float(end_time)
+            if end_time is not None
+            else float(start_time)
+            if start_time is not None
+            else None
+        )
+
+    # Flush any remaining paragraph
+    flush_paragraph()
+
+    # Join with blank lines between paragraphs for readability
     return "\n".join(content_parts)
 
 
@@ -186,7 +282,7 @@ class FileGenerationService:
         """
         try:
             # Get video and transcript data
-            video = self.db.get_video(source_id)
+            video = self.db.get_source(source_id)
             if not video:
                 logger.error(f"Video {source_id} not found in database")
                 return None
@@ -264,8 +360,6 @@ class FileGenerationService:
             markdown_content = f"""---
 {yaml_frontmatter}---
 {hashtags_section}
-# {video.title}
-
 **Video URL:** [{video.url}]({video.url})
 **Uploader:** {video.uploader or 'Unknown'}
 **Duration:** {self._format_duration(video.duration_seconds)}
@@ -304,11 +398,270 @@ class FileGenerationService:
             logger.error(f"Failed to generate transcript markdown for {source_id}: {e}")
             return None
 
+    def append_summary_to_transcript(
+        self, source_id: str, summary_id: str | None = None
+    ) -> Path | None:
+        """
+        Append summary data (claims, people, concepts) to existing transcript markdown file.
+
+        This reads claims directly from the database and appends them to the transcript file
+        instead of creating a separate summary file.
+
+        Args:
+            source_id: YouTube video ID
+            summary_id: Specific summary ID (uses latest if None)
+
+        Returns:
+            Path to updated transcript file, or None if failed
+        """
+        try:
+            from sqlalchemy.orm import Session
+
+            from ..database.models import (
+                Claim,
+                ClaimConcept,
+                ClaimPerson,
+                Concept,
+                Person,
+            )
+
+            # Get source data
+            video = self.db.get_source(source_id)
+            if not video:
+                logger.error(f"Source {source_id} not found in database")
+                return None
+
+            # Get summary data
+            summaries = self.db.get_summaries_for_video(source_id)
+            if not summaries:
+                logger.error(f"No summaries found for video {source_id}")
+                return None
+
+            summary = (
+                summaries[0]
+                if not summary_id
+                else next((s for s in summaries if s.summary_id == summary_id), None)
+            )
+            if not summary:
+                logger.error(f"Summary {summary_id} not found")
+                return None
+
+            # Find existing transcript markdown file
+            # Strategy 1: Check GeneratedFile table
+            from ..database.models import GeneratedFile
+
+            transcript_path = None
+
+            with self.db.Session() as session:
+                generated_file = (
+                    session.query(GeneratedFile)
+                    .filter_by(source_id=source_id, file_type="transcript_md")
+                    .order_by(GeneratedFile.created_at.desc())
+                    .first()
+                )
+
+                if generated_file:
+                    transcript_path = Path(generated_file.file_path)
+                    if not transcript_path.exists():
+                        logger.warning(
+                            f"Tracked transcript file not found: {transcript_path}"
+                        )
+                        transcript_path = None
+
+            # Strategy 2: Search output directory for transcript file
+            if not transcript_path:
+                logger.info(f"Searching output directory for transcript file...")
+                # Sanitize title for filename matching
+                safe_title = "".join(
+                    c for c in video.title if c.isalnum() or c in (" ", "-", "_")
+                ).rstrip()
+
+                # Look for files - try multiple patterns
+                search_patterns = [
+                    f"*{source_id}*.md",  # Has source_id in name
+                    f"{safe_title}.md",  # Exact title match
+                    f"*{safe_title[:40]}*.md",  # Partial title match
+                ]
+
+                for pattern in search_patterns:
+                    matches = list(self.output_dir.glob(pattern))
+                    # Filter out summary files and special files
+                    matches = [
+                        m
+                        for m in matches
+                        if not m.name.startswith("Summary_")
+                        and not m.name.endswith("_enhanced.md")
+                        and not m.name.endswith("_color_coded.html")
+                    ]
+                    if matches:
+                        # Use the most recently modified file
+                        transcript_path = max(matches, key=lambda p: p.stat().st_mtime)
+                        logger.info(f"Found transcript file: {transcript_path}")
+                        break
+
+                if not transcript_path:
+                    logger.error(
+                        f"No transcript markdown file found for {source_id} in {self.output_dir}"
+                    )
+                    logger.error(f"Tried patterns: {search_patterns}")
+                    return None
+
+            # Read existing transcript content
+            with open(transcript_path, encoding="utf-8") as f:
+                existing_content = f.read()
+
+            # Check if summary section already exists
+            if "## Summary" in existing_content and "## Claims" in existing_content:
+                logger.info(
+                    f"Summary already appended to {transcript_path}, updating..."
+                )
+                # Remove existing summary sections
+                parts = existing_content.split("## Summary")
+                existing_content = parts[0].rstrip()
+
+            # Get claims from database
+            with self.db.Session() as session:
+                claims = (
+                    session.query(Claim)
+                    .filter(Claim.source_id == source_id)
+                    .order_by(Claim.tier, Claim.importance_score.desc())
+                    .all()
+                )
+
+                # Get people mentioned in claims
+                people = (
+                    session.query(Person)
+                    .join(ClaimPerson)
+                    .join(Claim)
+                    .filter(Claim.source_id == source_id)
+                    .distinct()
+                    .all()
+                )
+
+                # Get concepts mentioned in claims
+                concepts = (
+                    session.query(Concept)
+                    .join(ClaimConcept)
+                    .join(Claim)
+                    .filter(Claim.source_id == source_id)
+                    .distinct()
+                    .all()
+                )
+
+            # Build summary section
+            summary_section = f"\n\n## Summary\n\n"
+
+            # Add summary text if available
+            if summary.summary_text:
+                # Clean up dictionary formatting if present
+                summary_text = summary.summary_text
+                if summary_text.startswith("{") and "paragraphs" in summary_text:
+                    # This is a dict string, try to extract meaningful text
+                    import ast
+
+                    try:
+                        summary_dict = ast.literal_eval(summary_text)
+                        if (
+                            isinstance(summary_dict, dict)
+                            and "paragraphs" in summary_dict
+                        ):
+                            paragraphs = summary_dict["paragraphs"]
+                            summary_text = "\n\n".join(
+                                p.get("text", "")
+                                for p in paragraphs
+                                if isinstance(p, dict)
+                            )
+                    except:
+                        pass  # Use as-is if parsing fails
+
+                summary_section += f"{summary_text}\n\n"
+
+            summary_section += (
+                f"**Analyzed by:** {summary.llm_model} ({summary.llm_provider})\n"
+            )
+            summary_section += f"**Processing Cost:** ${summary.processing_cost:.4f}\n"
+
+            # Add Claims section
+            if claims:
+                summary_section += f"\n## Claims ({len(claims)} extracted)\n\n"
+
+                # Group by tier
+                tier_a = [c for c in claims if c.tier == "A"]
+                tier_b = [c for c in claims if c.tier == "B"]
+                tier_c = [c for c in claims if c.tier == "C"]
+
+                if tier_a:
+                    summary_section += "### 🥇 Tier A Claims (High Confidence)\n\n"
+                    for i, claim in enumerate(tier_a, 1):
+                        summary_section += f"{i}. **{claim.canonical}**\n"
+                        if claim.claim_type:
+                            summary_section += f"   - *Type:* {claim.claim_type}\n"
+                        if claim.importance_score:
+                            summary_section += (
+                                f"   - *Importance:* {claim.importance_score:.1f}/10\n"
+                            )
+                        summary_section += "\n"
+
+                if tier_b:
+                    summary_section += "### 🥈 Tier B Claims (Medium Confidence)\n\n"
+                    for i, claim in enumerate(tier_b, 1):
+                        summary_section += f"{i}. {claim.canonical}\n"
+                    summary_section += "\n"
+
+                if tier_c:
+                    summary_section += f"### 🥉 Tier C Claims (Lower Confidence)\n\n"
+                    summary_section += f"*{len(tier_c)} additional claims with lower confidence scores*\n\n"
+
+            # Add People section
+            if people:
+                summary_section += f"## People ({len(people)} mentioned)\n\n"
+                for person in people:
+                    summary_section += f"- **{person.name}**"
+                    if person.description:
+                        summary_section += f": {person.description}"
+                    summary_section += "\n"
+                summary_section += "\n"
+
+            # Add Concepts section
+            if concepts:
+                summary_section += f"## Concepts ({len(concepts)} identified)\n\n"
+                for concept in concepts:
+                    summary_section += f"- **{concept.name}**"
+                    if concept.description:
+                        summary_section += f": {concept.description}"
+                    summary_section += "\n"
+                summary_section += "\n"
+
+            # Add metadata footer
+            summary_section += f"---\n*Summary generated from Knowledge System database on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n"
+
+            # Write updated content
+            updated_content = existing_content + summary_section
+            with open(transcript_path, "w", encoding="utf-8") as f:
+                f.write(updated_content)
+
+            logger.info(f"✅ Appended summary data to transcript: {transcript_path}")
+            logger.info(
+                f"   Added {len(claims)} claims, {len(people)} people, {len(concepts)} concepts"
+            )
+
+            return transcript_path
+
+        except Exception as e:
+            logger.error(f"Failed to append summary to transcript for {source_id}: {e}")
+            import traceback
+
+            logger.debug(traceback.format_exc())
+            return None
+
     def generate_summary_markdown(
         self, source_id: str, summary_id: str | None = None
     ) -> Path | None:
         """
         Generate markdown summary file from database data.
+
+        DEPRECATED: Use append_summary_to_transcript() instead to append
+        summary data to the existing transcript file.
 
         Args:
             source_id: YouTube video ID
@@ -318,10 +671,10 @@ class FileGenerationService:
             Path to generated markdown file, or None if failed
         """
         try:
-            # Get video and summary data
-            video = self.db.get_video(source_id)
+            # Get source and summary data
+            video = self.db.get_source(source_id)
             if not video:
-                logger.error(f"Video {source_id} not found in database")
+                logger.error(f"Source {source_id} not found in database")
                 return None
 
             summaries = self.db.get_summaries_for_video(source_id)
@@ -384,8 +737,9 @@ class FileGenerationService:
                 )
             else:
                 # Legacy format for non-HCE summaries
-                markdown_content = """---
-{yaml.dump(frontmatter, default_flow_style=False)}---
+                yaml_frontmatter = yaml.dump(frontmatter, default_flow_style=False)
+                markdown_content = f"""---
+{yaml_frontmatter}---
 
 # Summary: {video.title}
 
@@ -532,7 +886,7 @@ class FileGenerationService:
 
         try:
             # Get video and transcript data
-            video = self.db.get_video(source_id)
+            video = self.db.get_source(source_id)
             transcripts = self.db.get_transcripts_for_video(source_id)
 
             if not video or not transcripts:
@@ -1139,7 +1493,7 @@ class FileGenerationService:
         """
         try:
             # Get video and HCE summary data
-            video = self.db.get_video(source_id)
+            video = self.db.get_source(source_id)
             if not video:
                 logger.error(f"Video {source_id} not found in database")
                 return None
@@ -1277,7 +1631,7 @@ class FileGenerationService:
         """
         try:
             # Get video and HCE summary data
-            video = self.db.get_video(source_id)
+            video = self.db.get_source(source_id)
             if not video:
                 return None
 
@@ -1368,7 +1722,7 @@ class FileGenerationService:
         """
         try:
             # Get video and HCE summary data
-            video = self.db.get_video(source_id)
+            video = self.db.get_source(source_id)
             if not video:
                 return None
 
@@ -1438,302 +1792,10 @@ class FileGenerationService:
             logger.error(f"Failed to generate evidence mapping: {e}")
             return None
 
-    def generate_summary_markdown_from_pipeline(
-        self,
-        source_id: str,
-        pipeline_outputs,  # PipelineOutputs
-    ) -> Path | None:
-        """
-        Generate summary markdown from rich PipelineOutputs with source metadata.
-
-        This version includes evidence spans, relations, categories, and
-        YouTube/source metadata for complete context.
-        """
-        try:
-            output_file = self.summaries_dir / f"{source_id}_summary.md"
-
-            # Fetch source metadata
-            video_metadata = None
-            try:
-                source_id = source_id.replace("episode_", "")
-                with self.db_service.get_session() as session:
-                    from ..database.models import MediaSource
-
-                    source = (
-                        session.query(MediaSource)
-                        .filter_by(source_id=source_id)
-                        .first()
-                    )
-                    if source:
-                        video_metadata = {
-                            "title": source.title,
-                            "description": source.description,
-                            "uploader": source.uploader,
-                            "upload_date": source.upload_date,
-                            "duration_seconds": source.duration_seconds,
-                            # Claim-centric schema doesn't have tags_json or video_chapters_json
-                            "tags": None,
-                            "chapters": None,
-                            "url": source.url,
-                        }
-            except Exception as e:
-                logger.warning(f"Could not fetch source metadata: {e}")
-
-            # Build comprehensive markdown
-            markdown_lines = [
-                f"# Summary: {source_id}",
-                "",
-            ]
-
-            # Add source metadata section if available
-            if video_metadata:
-                # Handle duration_seconds safely (may be None)
-                duration_seconds = video_metadata.get("duration_seconds") or 0
-                duration_minutes = duration_seconds // 60 if duration_seconds else 0
-
-                markdown_lines.extend(
-                    [
-                        "## Source Information",
-                        f"- **Title:** {video_metadata.get('title', 'N/A')}",
-                        f"- **Author/Channel:** {video_metadata.get('uploader', 'N/A')}",
-                        f"- **Upload Date:** {video_metadata.get('upload_date', 'N/A')}",
-                        f"- **Duration:** {duration_minutes} minutes",
-                        f"- **URL:** {video_metadata.get('url', 'N/A')}",
-                        "",
-                    ]
-                )
-
-                if desc := video_metadata.get("description"):
-                    markdown_lines.extend(
-                        [
-                            "### Description",
-                            desc[:500] + ("..." if len(desc) > 500 else ""),
-                            "",
-                        ]
-                    )
-
-                if tags := video_metadata.get("tags"):
-                    markdown_lines.extend(
-                        [
-                            "### Tags",
-                            ", ".join(tags[:20]),
-                            "",
-                        ]
-                    )
-
-                if chapters := video_metadata.get("chapters"):
-                    markdown_lines.extend(
-                        [
-                            "### Chapters",
-                            "",
-                        ]
-                    )
-                    for ch in chapters[:10]:  # Limit to 10 chapters
-                        start_time = ch.get("start_time", "0:00")
-                        ch_title = ch.get("title", "Unknown")
-                        markdown_lines.append(f"- [{start_time}] {ch_title}")
-                    markdown_lines.append("")
-
-            markdown_lines.extend(
-                [
-                    "## Overview",
-                    f"- **Claims:** {len(pipeline_outputs.claims)}",
-                    f"  - Tier A: {len([c for c in pipeline_outputs.claims if c.tier == 'A'])}",
-                    f"  - Tier B: {len([c for c in pipeline_outputs.claims if c.tier == 'B'])}",
-                    f"  - Tier C: {len([c for c in pipeline_outputs.claims if c.tier == 'C'])}",
-                    f"- **Evidence Spans:** {sum(len(c.evidence) for c in pipeline_outputs.claims)}",
-                    f"- **People:** {len(pipeline_outputs.people)}",
-                    f"- **Concepts:** {len(pipeline_outputs.concepts)}",
-                    f"- **Jargon:** {len(pipeline_outputs.jargon)}",
-                    f"- **Relations:** {len(pipeline_outputs.relations)}",
-                    f"- **Categories:** {len(pipeline_outputs.structured_categories)}",
-                    "",
-                ]
-            )
-
-            # Add short summary if available
-            if pipeline_outputs.short_summary:
-                markdown_lines.extend(
-                    [
-                        "## Short Summary",
-                        "",
-                        pipeline_outputs.short_summary,
-                        "",
-                    ]
-                )
-
-            # Add Tier A claims with evidence and metadata
-            tier_a_claims = [c for c in pipeline_outputs.claims if c.tier == "A"]
-            if tier_a_claims:
-                markdown_lines.extend(
-                    [
-                        "## Top Claims (Tier A)",
-                        "",
-                    ]
-                )
-                for claim in tier_a_claims[:20]:  # Top 20
-                    markdown_lines.append(f"### {claim.canonical}")
-
-                    # Enhanced metadata display
-                    metadata_parts = [
-                        f"**Type:** {claim.claim_type}",
-                        f"**Tier:** {claim.tier}",
-                    ]
-
-                    # Add temporality info
-                    if hasattr(claim, "temporality_score") and claim.temporality_score:
-                        temporal_labels = {
-                            1: "Immediate",
-                            2: "Short-term",
-                            3: "Medium-term",
-                            4: "Long-term",
-                            5: "Timeless",
-                        }
-                        temporal_label = temporal_labels.get(
-                            claim.temporality_score, "Unknown"
-                        )
-                        conf = getattr(claim, "temporality_confidence", 0.5)
-                        metadata_parts.append(
-                            f"**Temporality:** {temporal_label} (confidence: {conf:.2f})"
-                        )
-
-                    # Add scores
-                    if hasattr(claim, "scores") and claim.scores:
-                        score_str = ", ".join(
-                            [
-                                f"{k}={v:.2f}"
-                                for k, v in claim.scores.items()
-                                if v is not None
-                            ]
-                        )
-                        if score_str:
-                            metadata_parts.append(f"**Scores:** {score_str}")
-
-                    markdown_lines.append(" | ".join(metadata_parts))
-
-                    if claim.evidence:
-                        markdown_lines.append("")
-                        markdown_lines.append("**Evidence:**")
-                        for ev in claim.evidence[:3]:  # Top 3 evidence spans
-                            if ev.quote:
-                                timestamp = f"[{ev.t0}]" if ev.t0 else ""
-                                markdown_lines.append(f'- {timestamp} "{ev.quote}"')
-                    markdown_lines.append("")
-
-            # Add people mentions
-            if pipeline_outputs.people:
-                markdown_lines.extend(
-                    [
-                        "## People Mentioned",
-                        "",
-                    ]
-                )
-                for person in pipeline_outputs.people[:30]:  # Top 30
-                    name = (
-                        person.normalized
-                        or person.surface
-                        or getattr(person, "name", "Unknown")
-                    )
-                    timestamp = f" [{person.t0}]" if person.t0 else ""
-                    # PersonMention doesn't have context_quote, use surface form instead
-                    context = (
-                        f': "{person.surface}"'
-                        if person.surface and person.surface != name
-                        else ""
-                    )
-                    markdown_lines.append(f"- **{name}**{timestamp}{context}")
-                markdown_lines.append("")
-
-            # Add concepts/mental models
-            if pipeline_outputs.concepts:
-                markdown_lines.extend(
-                    [
-                        "## Mental Models & Concepts",
-                        "",
-                    ]
-                )
-                for concept in pipeline_outputs.concepts[:20]:  # Top 20
-                    timestamp = (
-                        f" [{concept.first_mention_ts}]"
-                        if concept.first_mention_ts
-                        else ""
-                    )
-                    definition = f": {concept.definition}" if concept.definition else ""
-                    markdown_lines.append(
-                        f"- **{concept.name}**{timestamp}{definition}"
-                    )
-                markdown_lines.append("")
-
-            # Add jargon
-            if pipeline_outputs.jargon:
-                markdown_lines.extend(
-                    [
-                        "## Jargon & Technical Terms",
-                        "",
-                    ]
-                )
-                for term in pipeline_outputs.jargon[:30]:  # Top 30
-                    definition = f": {term.definition}" if term.definition else ""
-                    markdown_lines.append(f"- **{term.term}**{definition}")
-                markdown_lines.append("")
-
-            # Add relations
-            if pipeline_outputs.relations:
-                markdown_lines.extend(
-                    [
-                        "## Claim Relations",
-                        "",
-                    ]
-                )
-                for rel in pipeline_outputs.relations[:20]:  # Top 20
-                    markdown_lines.append(
-                        f"- {rel.source_claim_id} **{rel.type}** {rel.target_claim_id}"
-                    )
-                    if rel.rationale:
-                        markdown_lines.append(f"  - {rel.rationale}")
-                markdown_lines.append("")
-
-            # Add categories
-            if pipeline_outputs.structured_categories:
-                markdown_lines.extend(
-                    [
-                        "## Categories",
-                        "",
-                    ]
-                )
-                for cat in pipeline_outputs.structured_categories:
-                    confidence = (
-                        f" (confidence: {cat.coverage_confidence:.2f})"
-                        if cat.coverage_confidence
-                        else ""
-                    )
-                    wikidata = f" [Q{cat.wikidata_qid}]" if cat.wikidata_qid else ""
-                    markdown_lines.append(
-                        f"- **{cat.category_name}**{wikidata}{confidence}"
-                    )
-                markdown_lines.append("")
-
-            # Add long summary if available
-            if pipeline_outputs.long_summary:
-                markdown_lines.extend(
-                    [
-                        "## Detailed Analysis",
-                        "",
-                        pipeline_outputs.long_summary,
-                        "",
-                    ]
-                )
-
-            # Write file
-            markdown_content = "\n".join(markdown_lines)
-            output_file.write_text(markdown_content, encoding="utf-8")
-            logger.info(f"Generated rich summary: {output_file}")
-
-            return output_file
-
-        except Exception as e:
-            logger.error(f"Failed to generate summary markdown: {e}")
-            return None
+    # NOTE: generate_summary_markdown_from_pipeline() has been REMOVED
+    # The unified pipeline now calls generate_summary_markdown() which reads from database
+    # This ensures ONE consistent format using _generate_hce_markdown() for all summaries
+    # See system2_orchestrator_mining.py line ~407 for the call site
 
 
 # Convenience functions

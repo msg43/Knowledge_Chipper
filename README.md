@@ -83,15 +83,33 @@ Instead of manually listening to hours of podcasts or reading through long docum
    - "Document (White Paper)" for technical papers
 4. The system adapts its analysis approach automatically
 
-### The 7 Tabs Explained
+### The 8 Tabs Explained
 
 1. **Introduction**: Quick tour and getting started guide
 2. **Transcribe**: Upload YouTube URLs or local files for processing
-3. **Summarize**: Extract knowledge from transcripts or documents
-4. **Review**: Browse and edit extracted claims, organized by importance
-5. **Upload**: Optional cloud storage backup (future feature)
-6. **Monitor**: Watch folders for automatic processing of new files
-7. **Settings**: Configure API keys, models, and preferences
+3. **Prompts**: Manage analysis templates and prompts
+4. **Summarize**: Extract knowledge from transcripts or documents
+5. **Queue**: Monitor real-time progress of all processing jobs
+6. **Review**: Browse and edit extracted claims, organized by importance
+7. **Monitor**: Watch folders for automatic processing of new files
+8. **Settings**: Configure API keys, models, and preferences
+
+### The Queue Tab - Real-Time Pipeline Monitoring
+
+The Queue tab provides complete visibility into your processing pipeline:
+
+- **Real-time Status**: See exactly where each file is in the processing pipeline
+- **Progress Tracking**: Monitor download percentages, transcription progress, and analysis status
+- **Multi-Stage View**: Track items through Download → Transcription → Summarization → Analysis
+- **Worker Assignment**: See which download account is handling each file
+- **Performance Metrics**: View throughput rates and processing statistics
+
+**Key Features:**
+- Auto-refreshes every 5 seconds
+- Filter by stage (Download, Transcription, etc.) or status (In Progress, Failed, etc.)
+- Color-coded statuses for quick visual scanning
+- Pagination for large processing batches
+- Search by title or URL
 
 ### The Summarize Tab in Detail
 

@@ -67,65 +67,68 @@ class TestMinerValidation:
 
     @pytest.fixture
     def validator(self):
-        """Create validator with test schemas."""
-        validator = SchemaValidator()
-        # Add test schemas
-        validator.schemas["miner_input"] = {
-            "type": "object",
-            "required": ["segment"],
-            "properties": {
-                "segment": {
-                    "type": "object",
-                    "required": ["segment_id", "text"],
-                    "properties": {
-                        "segment_id": {"type": "string"},
-                        "text": {"type": "string"},
-                    },
-                }
-            },
-        }
-        validator.schemas["miner_output"] = {
-            "type": "object",
-            "required": ["claims", "jargon", "people", "mental_models"],
-            "properties": {
-                "claims": {"type": "array"},
-                "jargon": {"type": "array"},
-                "people": {"type": "array"},
-                "mental_models": {"type": "array"},
-            },
-        }
-        return validator
+        """Create validator with actual schemas loaded from files."""
+        # Use the real validator which loads schemas from the schemas directory
+        return get_validator()
 
-    def test_validate_miner_input_valid(self, validator, sample_miner_input):
+    def test_validate_miner_input_valid(self, validator, sample_miner_input_v2):
         """Test validating valid miner input."""
-        is_valid, errors = validator.validate_miner_input(sample_miner_input)
-        assert is_valid
+        is_valid, errors = validator.validate(sample_miner_input_v2, "miner_input")
+        assert is_valid, f"Validation failed with errors: {errors}"
         assert not errors
 
     def test_validate_miner_input_invalid(self, validator):
         """Test validating invalid miner input."""
         invalid_input = {"wrong_field": "value"}
-        is_valid, errors = validator.validate_miner_input(invalid_input)
+        is_valid, errors = validator.validate(invalid_input, "miner_input")
         assert not is_valid
         assert errors
 
-    def test_validate_miner_output_valid(self, validator, sample_miner_output):
+    def test_validate_miner_output_valid(self, validator, sample_miner_output_v2):
         """Test validating valid miner output."""
-        is_valid, errors = validator.validate_miner_output(sample_miner_output)
-        assert is_valid
+        is_valid, errors = validator.validate(sample_miner_output_v2, "miner_output")
+        assert is_valid, f"Validation failed with errors: {errors}"
         assert not errors
 
     def test_validate_miner_output_invalid(self, validator):
         """Test validating invalid miner output."""
         # Missing required fields
         invalid_output = {"claims": []}
-        is_valid, errors = validator.validate_miner_output(invalid_output)
+        is_valid, errors = validator.validate(invalid_output, "miner_output")
         assert not is_valid
-        assert any("jargon" in str(e) for e in errors)
+        assert any(
+            "jargon" in str(e) or "people" in str(e) or "mental_models" in str(e)
+            for e in errors
+        )
 
 
 class TestFlagshipValidation:
     """Test flagship schema validation."""
+
+    @pytest.fixture
+    def validator(self):
+        """Create validator with actual schemas loaded from files."""
+        return get_validator()
+
+    def test_validate_flagship_input_valid(self, validator, sample_flagship_input_v2):
+        """Test validating valid flagship input."""
+        is_valid, errors = validator.validate(
+            sample_flagship_input_v2, "flagship_input"
+        )
+        assert is_valid, f"Validation failed with errors: {errors}"
+        assert not errors
+
+    def test_validate_flagship_output_valid(self, validator, sample_flagship_output_v2):
+        """Test validating valid flagship output."""
+        is_valid, errors = validator.validate(
+            sample_flagship_output_v2, "flagship_output"
+        )
+        assert is_valid, f"Validation failed with errors: {errors}"
+        assert not errors
+
+
+class TestSchemaRepairOld:
+    """Test schema repair functionality (old tests - keeping for reference)."""
 
     @pytest.fixture
     def validator(self):
@@ -149,18 +152,6 @@ class TestFlagshipValidation:
             },
         }
         return validator
-
-    def test_validate_flagship_input_valid(self, validator, sample_flagship_input):
-        """Test validating valid flagship input."""
-        is_valid, errors = validator.validate_flagship_input(sample_flagship_input)
-        assert is_valid
-        assert not errors
-
-    def test_validate_flagship_output_valid(self, validator, sample_flagship_output):
-        """Test validating valid flagship output."""
-        is_valid, errors = validator.validate_flagship_output(sample_flagship_output)
-        assert is_valid
-        assert not errors
 
 
 class TestSchemaRepair:

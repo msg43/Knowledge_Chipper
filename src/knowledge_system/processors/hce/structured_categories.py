@@ -83,6 +83,7 @@ class StructuredCategoryAnalyzer:
 
             # Prepare analysis prompt
             prompt_text = self.template.format(
+                episode_id=outputs.source_id,
                 source_id=outputs.source_id,
                 num_claims=len(outputs.claims),
                 claims_sample="\n".join(
@@ -295,7 +296,7 @@ def analyze_structured_categories(
         return categories
 
     except Exception as e:
-        logger.error(f"Failed to analyze structured categories: {e}")
+        logger.warning(f"Category analysis unavailable (skipping): {e}")
         return []
 
 

@@ -40,6 +40,23 @@ async def process_mine_with_unified_pipeline(
     }
     """
 
+    # Initialize completed_segment_ids early for error handling
+    completed_segment_ids = set()
+
+    # Import queue event bus for real-time updates
+    from ..gui.queue_event_bus import QueueEventBus
+
+    event_bus = QueueEventBus()
+
+    # Update HCE mining stage status to in_progress
+    orchestrator.db_service.upsert_stage_status(
+        source_id=source_id,
+        stage="hce_mining",
+        status="in_progress",
+        metadata={"job_run_id": run_id},
+    )
+    event_bus.emit_stage_update(source_id, "hce_mining", "in_progress")
+
     try:
         # Check if already completed
         if checkpoint and checkpoint.get("stage") == "completed":
@@ -49,6 +66,12 @@ async def process_mine_with_unified_pipeline(
             return checkpoint.get(
                 "final_result", {"status": "succeeded", "output_id": source_id}
             )
+
+        # Get file_path early (may be None for DB-only sources)
+        file_path = config.get("file_path")
+
+        # Determine processing mode: DB-centric (no file_path) vs File-centric (file_path provided)
+        is_db_centric = file_path is None
 
         # 1. Load transcript segments (prefer DB over file)
         if orchestrator.progress_callback:
@@ -72,22 +95,23 @@ async def process_mine_with_unified_pipeline(
             segments = orchestrator._rechunk_whisper_segments(
                 whisper_segments, source_id
             )
-            logger.info(
-                f"📦 Re-chunked into {len(segments)} optimized segments for HCE mining"
-            )
 
         # FALLBACK: Parse from markdown file if DB segments not available
         if not segments:
-            file_path = config.get("file_path")
             if not file_path:
                 raise KnowledgeSystemError(
                     f"No segments in DB and no file_path provided for source {source_id}",
                     ErrorCode.INVALID_INPUT,
                 )
 
-            logger.info(
-                f"⚠️ No DB segments found, falling back to parsing markdown file: {file_path}"
-            )
+            # Only show warning if we expected DB segments (DB-centric mode)
+            if is_db_centric:
+                logger.warning(
+                    f"⚠️ No DB segments found for {source_id}, falling back to parsing markdown file: {file_path}"
+                )
+            else:
+                # File-centric mode: this is expected behavior
+                logger.info(f"📄 Processing standalone markdown file: {file_path}")
             transcript_text = Path(file_path).read_text()
 
             if orchestrator.progress_callback:
@@ -124,10 +148,7 @@ async def process_mine_with_unified_pipeline(
                 },
             }
 
-        logger.info(f"📄 Parsed {len(segments)} segments for mining")
-
         # 3. Check for completed segments and filter if resuming
-        completed_segment_ids = set()
         if checkpoint and checkpoint.get("stage") == "mining":
             completed_segment_ids = set(checkpoint.get("completed_segments", []))
             if completed_segment_ids:
@@ -163,14 +184,18 @@ async def process_mine_with_unified_pipeline(
 
         # 3b. Create EpisodeBundle with metadata
         episode_bundle = EpisodeBundle(
-            episode_id=source_id, segments=segments, video_metadata=video_metadata
+            source_id=source_id, segments=segments, video_metadata=video_metadata
         )
 
         # 4. Configure HCE Pipeline
         miner_model = config.get("miner_model", "ollama:qwen2.5:7b-instruct")
 
         # Allow configuration of parallelization
-        max_workers = config.get("max_workers", None)  # None = auto-calculate
+        # Check gui_settings first (from GUI), then top-level config
+        gui_settings = config.get("gui_settings", {})
+        max_workers = config.get("max_workers") or gui_settings.get(
+            "max_workers"
+        )  # None = auto-calculate
         enable_parallel = config.get("enable_parallel_processing", True)
 
         hce_config = PipelineConfigFlex(
@@ -248,6 +273,15 @@ async def process_mine_with_unified_pipeline(
         # 7. Process with full pipeline (mining + evaluation + categories)
         logger.info(f"🚀 Starting UnifiedHCEPipeline for {len(segments)} segments")
 
+        # Update flagship evaluation to in_progress (happens within mining now)
+        orchestrator.db_service.upsert_stage_status(
+            source_id=source_id,
+            stage="flagship_evaluation",
+            status="in_progress",
+            metadata={"job_run_id": run_id},
+        )
+        event_bus.emit_stage_update(source_id, "flagship_evaluation", "in_progress")
+
         # Save checkpoint before starting mining
         orchestrator.save_checkpoint(
             run_id,
@@ -310,17 +344,15 @@ async def process_mine_with_unified_pipeline(
             # CRITICAL: Store segments BEFORE storing claims
             # This ensures foreign key constraints are satisfied when storing evidence spans
             # Pass source_id and episode_title so the episode record can be created if needed
-            episode_title = Path(file_path).stem
-            claim_store.store_segments(
-                source_id, segments, source_id=source_id, episode_title=episode_title
-            )
+            # Use file_path if available, otherwise fall back to source_id
+            source_title = Path(file_path).stem if file_path else source_id
+            claim_store.store_segments(source_id, segments, source_title=source_title)
             logger.info(f"💾 Stored {len(segments)} segments for episode {source_id}")
 
             claim_store.upsert_pipeline_outputs(
                 pipeline_outputs,
                 source_id=source_id,
                 source_type="episode",
-                episode_title=Path(file_path).stem,
             )
             logger.info("💾 Stored claims with evidence to claim-centric database")
 
@@ -357,7 +389,20 @@ async def process_mine_with_unified_pipeline(
         # in the episodes table by ClaimStore.upsert_pipeline_outputs()
         logger.info(f"📋 Episode summaries stored in episodes table")
 
-        # 10. Generate summary markdown file
+        # 9b. Create Summary record in summaries table for markdown generation
+        # This is required for generate_summary_markdown() to work
+        try:
+            summary_id = orchestrator._create_summary_from_pipeline_outputs(
+                source_id, pipeline_outputs, config
+            )
+            logger.info(f"✅ Summary record created: {summary_id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to create summary record: {e}")
+            # Continue anyway - we have the data in episodes table
+
+        # 10. Append summary data to transcript markdown file
+        # This appends claims, people, concepts directly to the existing transcript file
+        # instead of creating a separate summary file
         summary_file_path = None
         try:
             from ..services.file_generation import FileGenerationService
@@ -368,12 +413,15 @@ async def process_mine_with_unified_pipeline(
             else:
                 file_gen = FileGenerationService()
 
-            summary_file_path = file_gen.generate_summary_markdown_from_pipeline(
-                source_id, source_id, pipeline_outputs
-            )
+            # Append summary data to transcript file
+            summary_file_path = file_gen.append_summary_to_transcript(source_id)
 
             if summary_file_path:
-                logger.info(f"✅ Summary file: {summary_file_path}")
+                logger.info(f"✅ Summary appended to transcript: {summary_file_path}")
+            else:
+                logger.warning(
+                    f"⚠️ Failed to append summary to transcript for {source_id}"
+                )
 
         except Exception as e:
             logger.error(f"❌ Summary file generation failed: {e}")
@@ -428,6 +476,30 @@ async def process_mine_with_unified_pipeline(
 
         logger.info(f"✅ Mining job completed and checkpoint saved")
 
+        # Mark both HCE and flagship stages as completed
+        orchestrator.db_service.upsert_stage_status(
+            source_id=source_id,
+            stage="hce_mining",
+            status="completed",
+            metadata={
+                "job_run_id": run_id,
+                "claims_extracted": final_result["result"].get("claims_extracted", 0),
+            },
+        )
+        orchestrator.db_service.upsert_stage_status(
+            source_id=source_id,
+            stage="flagship_evaluation",
+            status="completed",
+            metadata={
+                "job_run_id": run_id,
+                "tier_a_claims": final_result["result"].get("claims_tier_a", 0),
+                "tier_b_claims": final_result["result"].get("claims_tier_b", 0),
+                "tier_c_claims": final_result["result"].get("claims_tier_c", 0),
+            },
+        )
+        event_bus.emit_stage_update(source_id, "hce_mining", "completed")
+        event_bus.emit_stage_update(source_id, "flagship_evaluation", "completed")
+
         return final_result
 
     except Exception as e:
@@ -449,4 +521,14 @@ async def process_mine_with_unified_pipeline(
             )
         except Exception as checkpoint_error:
             logger.warning(f"Failed to save error checkpoint: {checkpoint_error}")
+
+        # Mark HCE mining as failed (flagship eval stays pending)
+        orchestrator.db_service.upsert_stage_status(
+            source_id=source_id,
+            stage="hce_mining",
+            status="failed",
+            metadata={"job_run_id": run_id, "error": str(e)},
+        )
+        event_bus.emit_stage_update(source_id, "hce_mining", "failed")
+
         raise

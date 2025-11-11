@@ -66,6 +66,7 @@ Return a JSON object with four arrays: "claims", "jargon", "people", and "mental
 Each claim must include:
 - **claim_text**: The exact claim being made (precise and concise)
 - **claim_type**: One of the 5 types above (for data analysis only)
+- **domain**: Broad field classification for searchability (e.g., "physics", "economics", "politics", "medicine", "technology"). Use general categories, NOT specific subfields.
 - **stance**: How the speaker presents it (asserts/questions/opposes/neutral)
 - **evidence_spans**: Array of supporting quotes with exact timestamps
 
@@ -81,7 +82,7 @@ Extract ALL mentions of the claim across the segment. For each evidence span:
 Each jargon term must include:
 - **term**: The jargon term or phrase
 - **definition**: Explanation of the term in context
-- **domain**: Field classification (economics, technology, medical, legal, scientific, business, or other)
+- **domain**: Broad field classification for searchability (e.g., "physics", "economics", "politics", "medicine", "technology"). Use general categories like "physics" not "quantum mechanics", "economics" not "monetary policy", "law" not "constitutional law". Choose the broadest relevant field.
 - **evidence_spans**: Array of all uses of this term
 
 **IMPORTANT FOR JARGON EVIDENCE:**
@@ -310,7 +311,7 @@ Extract ALL mentions/applications of the model across the segment. For each evid
     <extraction>
 {
   "name": "Circle of Competence",
-  "description": "Investment framework where one only invests in businesses within their area of genuine understanding, staying within known boundaries rather than venturing into unfamiliar territory",
+  "definition": "Investment framework where one only invests in businesses within their area of genuine understanding, staying within known boundaries rather than venturing into unfamiliar territory",
   "context_quote": "I use what I call the 'Circle of Competence' approach - only invest in businesses you genuinely understand. Stay within your circle, know its boundaries",
   "timestamp": "11:30"
 }
@@ -323,7 +324,7 @@ Extract ALL mentions/applications of the model across the segment. For each evid
     <extraction>
 {
   "name": "Falsificationism / Popperian method",
-  "description": "Scientific framework where theories are tested by attempting to disprove them rather than confirm them, gaining confidence through surviving falsification attempts",
+  "definition": "Scientific framework where theories are tested by attempting to disprove them rather than confirm them, gaining confidence through surviving falsification attempts",
   "context_quote": "The scientific method is really about falsification, not confirmation. You don't try to prove your theory right - you try to prove it wrong",
   "timestamp": "14:45"
 }
@@ -334,9 +335,9 @@ Extract ALL mentions/applications of the model across the segment. For each evid
   <good_example>
     <input>"Porter's Five Forces helps you analyze industry competition by looking at five factors: threat of new entrants, bargaining power of suppliers, bargaining power of buyers, threat of substitutes, and rivalry among existing competitors."</input>
     <extraction>
-{
-  "name": "Porter's Five Forces",
-  "description": "Strategic framework for analyzing industry competition through five factors: threat of new entrants, supplier power, buyer power, threat of substitutes, and competitive rivalry",
+    {
+      "name": "Porter's Five Forces",
+      "definition": "Strategic framework for analyzing industry competition through five factors: threat of new entrants, supplier power, buyer power, threat of substitutes, and competitive rivalry",
   "context_quote": "Porter's Five Forces helps you analyze industry competition by looking at five factors: threat of new entrants, bargaining power of suppliers, bargaining power of buyers, threat of substitutes, and rivalry among existing competitors",
   "timestamp": "18:20"
 }
@@ -541,13 +542,13 @@ Extract ALL mentions/applications of the model across the segment. For each evid
   <bad_mental_models>
     <example>
       <input>"We should use common sense here."</input>
-      <bad_extraction>{"name": "common sense", "description": "using common sense"}</bad_extraction>
+      <bad_extraction>{"name": "common sense", "definition": "using common sense"}</bad_extraction>
       <explanation>DON'T extract vague appeals to general reasoning.</explanation>
     </example>
 
     <example>
       <input>"Think about supply and demand."</input>
-      <bad_extraction>{"name": "supply and demand", "description": "economic concept"}</bad_extraction>
+      <bad_extraction>{"name": "supply and demand", "definition": "economic concept"}</bad_extraction>
       <explanation>DON'T extract casual mentions. Only extract when a framework is actually being explained or meaningfully applied.</explanation>
     </example>
   </bad_mental_models>

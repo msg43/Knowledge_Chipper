@@ -619,7 +619,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE).
         with self.db_service.get_session() as session:
             summary = Summary(
                 summary_id=summary_id,
-                video_id=source_id,
+                source_id=source_id,
                 transcript_id=None,  # Could link to transcript if available
                 summary_text=summary_text,
                 summary_metadata_json={
@@ -715,13 +715,13 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             provider = "unknown"
             model = miner_model
 
-        # Ensure a MediaSource exists for FK integrity on summaries.video_id
+        # Ensure a MediaSource exists for FK integrity on summaries.source_id
         try:
             if not self.db_service.source_exists(source_id):
                 fallback_title = Path(config.get("file_path", source_id)).stem
                 source_url = config.get("source_url", f"local://{source_id}")
                 self.db_service.create_source(
-                    video_id=source_id, title=fallback_title, url=source_url
+                    source_id=source_id, title=fallback_title, url=source_url
                 )
         except Exception as _e:
             logger.warning(f"Could not ensure MediaSource for {source_id}: {_e}")
@@ -729,7 +729,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
         with self.db_service.get_session() as session:
             summary = Summary(
                 summary_id=summary_id,
-                video_id=source_id,
+                source_id=source_id,
                 transcript_id=None,
                 summary_text=summary_text,
                 summary_metadata_json={
@@ -1130,11 +1130,42 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
         Returns raw Whisper segments (typically 30-150 segments for a few minutes of audio).
         These need to be re-chunked for efficient HCE processing.
+
+        Tries two approaches:
+        1. Load from Segment table (claim-centric schema)
+        2. Load from Transcript.transcript_segments_json (legacy)
         """
         try:
+            # APPROACH 1: Try loading from Segment table (claim-centric schema)
+            from ..database.models import Segment
+
+            with self.db_service.get_session() as session:
+                segments_from_table = (
+                    session.query(Segment).filter(Segment.source_id == source_id).all()
+                )
+
+                if segments_from_table:
+                    # Convert Segment objects to dict format expected by rechunker
+                    segments = []
+                    for seg in segments_from_table:
+                        segments.append(
+                            {
+                                "text": seg.text,
+                                "start": seg.start_time,
+                                "end": seg.end_time,
+                                "speaker": seg.speaker or "Unknown",
+                            }
+                        )
+
+                    logger.info(
+                        f"📊 Loaded {len(segments)} segments from Segment table for {source_id}"
+                    )
+                    return segments
+
+            # APPROACH 2: Fallback to Transcript.transcript_segments_json (legacy)
             transcripts = self.db_service.get_transcripts_for_video(source_id)
             if not transcripts:
-                logger.debug(f"No transcripts found in DB for video {source_id}")
+                logger.debug(f"No transcripts found in DB for source {source_id}")
                 return None
 
             # Get the most recent transcript
@@ -1143,7 +1174,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
             if segments and len(segments) > 0:
                 logger.info(
-                    f"📊 Loaded {len(segments)} raw Whisper segments from database for {source_id}"
+                    f"📊 Loaded {len(segments)} raw Whisper segments from Transcript table for {source_id}"
                 )
                 return segments
 
@@ -1265,7 +1296,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
                 chunked_segments.append(
                     Segment(
-                        episode_id=source_id,
+                        source_id=source_id,
                         segment_id=f"chunk_{chunk_idx:04d}",
                         speaker=current_speaker
                         or "Unknown",  # Single speaker per chunk
@@ -1302,7 +1333,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             chunk_text = " ".join(current_chunk_parts)
             chunked_segments.append(
                 Segment(
-                    episode_id=source_id,
+                    source_id=source_id,
                     segment_id=f"chunk_{chunk_idx:04d}",
                     speaker=current_speaker or "Unknown",
                     t0=str(chunk_start_time),
@@ -1321,15 +1352,82 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
     def _parse_transcript_to_segments(
         self, transcript_text: str, source_id: str
     ) -> list[Any]:
-        """Parse transcript text into intelligent segments (chunks of ~500-1000 tokens).
+        """Parse transcript text into segments, preserving speaker boundaries if present.
 
         FALLBACK METHOD: Only used when DB segments are not available.
         Prefer _load_transcript_segments_from_db() + _rechunk_whisper_segments() instead.
+
+        Supports two formats:
+        1. Speaker-attributed format: [MM:SS] (Speaker Name): text
+        2. Plain text format: chunks by tokens (~750 tokens/segment)
         """
+        import re
+
         from ..processors.hce.types import Segment
         from ..utils.text_utils import estimate_tokens_improved
 
         segments = []
+
+        # Try to parse speaker-attributed format first
+        # Pattern: [MM:SS] (Speaker Name): text
+        speaker_pattern = r"\[(\d{2}:\d{2})\]\s*\(([^)]+)\):\s*(.+?)(?=\n\[|\Z)"
+        speaker_matches = re.findall(speaker_pattern, transcript_text, re.DOTALL)
+
+        if speaker_matches:
+            # Speaker-attributed format detected - preserve speaker segments
+            logger.info(
+                f"📝 Detected {len(speaker_matches)} speaker-attributed segments in markdown"
+            )
+
+            for idx, (timestamp, speaker, text) in enumerate(speaker_matches):
+                # Parse timestamp (MM:SS format)
+                try:
+                    parts = timestamp.split(":")
+                    if len(parts) == 2:
+                        minutes, seconds = map(int, parts)
+                        start_seconds = minutes * 60 + seconds
+                        t0 = f"{minutes//60:02d}:{minutes%60:02d}:{seconds:02d}"
+                        # Estimate end time (use next segment's start or add 30 seconds)
+                        if idx + 1 < len(speaker_matches):
+                            next_timestamp = speaker_matches[idx + 1][0]
+                            next_parts = next_timestamp.split(":")
+                            next_minutes, next_seconds = map(int, next_parts)
+                            end_seconds = next_minutes * 60 + next_seconds
+                            t1 = f"{next_minutes//60:02d}:{next_minutes%60:02d}:{next_seconds:02d}"
+                        else:
+                            end_seconds = start_seconds + 30
+                            t1 = f"{(start_seconds+30)//3600:02d}:{((start_seconds+30)%3600)//60:02d}:{(start_seconds+30)%60:02d}"
+                    else:
+                        # Fallback to approximate timestamps
+                        t0 = f"00:{idx*2:02d}:00"
+                        t1 = f"00:{(idx+1)*2:02d}:00"
+                except (ValueError, IndexError):
+                    # Fallback to approximate timestamps
+                    t0 = f"00:{idx*2:02d}:00"
+                    t1 = f"00:{(idx+1)*2:02d}:00"
+
+                # Clean up text (remove extra whitespace)
+                clean_text = " ".join(text.split())
+
+                if clean_text and clean_text != "[BLANK_AUDIO]":
+                    segments.append(
+                        Segment(
+                            source_id=source_id,
+                            segment_id=f"seg_{idx:04d}",
+                            speaker=speaker.strip(),
+                            t0=t0,
+                            t1=t1,
+                            text=clean_text,
+                        )
+                    )
+
+            logger.info(
+                f"📊 Created {len(segments)} segments from speaker-attributed transcript"
+            )
+            return segments
+
+        # Fallback: Plain text format - chunk by tokens
+        logger.info("📝 No speaker attribution detected, chunking by tokens")
 
         # Clean transcript: remove headers, combine into paragraphs
         lines = transcript_text.split("\n")
@@ -1353,8 +1451,6 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
         max_tokens = 1000
 
         # Split into sentences for better chunking
-        import re
-
         sentences = re.split(r"(?<=[.!?])\s+", full_text)
 
         current_chunk = []
@@ -1369,7 +1465,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 chunk_text = " ".join(current_chunk)
                 segments.append(
                     Segment(
-                        episode_id=source_id,
+                        source_id=source_id,
                         segment_id=f"seg_{segment_idx:04d}",
                         speaker="Unknown",
                         t0=f"00:{segment_idx*2:02d}:00",  # Approximate timestamps
@@ -1389,7 +1485,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 chunk_text = " ".join(current_chunk)
                 segments.append(
                     Segment(
-                        episode_id=source_id,
+                        source_id=source_id,
                         segment_id=f"seg_{segment_idx:04d}",
                         speaker="Unknown",
                         t0=f"00:{segment_idx*2:02d}:00",
@@ -1406,7 +1502,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             chunk_text = " ".join(current_chunk)
             segments.append(
                 Segment(
-                    episode_id=source_id,
+                    source_id=source_id,
                     segment_id=f"seg_{segment_idx:04d}",
                     speaker="Unknown",
                     t0=f"00:{segment_idx*2:02d}:00",
@@ -1450,7 +1546,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 chunk_text = " ".join(current_chunk_texts)
                 chunked_segments.append(
                     Segment(
-                        episode_id=source_id,
+                        source_id=source_id,
                         segment_id=f"chunk_{chunk_idx:04d}",
                         speaker="Multiple",  # Chunked segments may have multiple speakers
                         t0="00:00:00",  # Approximate - would need proper timestamp tracking
@@ -1477,7 +1573,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 chunk_text = " ".join(current_chunk_texts)
                 chunked_segments.append(
                     Segment(
-                        episode_id=source_id,
+                        source_id=source_id,
                         segment_id=f"chunk_{chunk_idx:04d}",
                         speaker="Multiple",
                         t0="00:00:00",
@@ -1494,7 +1590,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
             chunk_text = " ".join(current_chunk_texts)
             chunked_segments.append(
                 Segment(
-                    episode_id=source_id,
+                    source_id=source_id,
                     segment_id=f"chunk_{chunk_idx:04d}",
                     speaker="Multiple",
                     t0="00:00:00",

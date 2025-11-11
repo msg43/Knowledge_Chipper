@@ -136,23 +136,75 @@ class LLMSpeakerValidator:
         return analysis_data
 
     def _create_validation_prompt(self, analysis_data: dict) -> str:
-        """Create LLM prompt for speaker validation."""
+        """Create LLM prompt for speaker validation with multi-source metadata support."""
         metadata = analysis_data.get("metadata", {})
         speakers = analysis_data.get("speakers", {})
 
-        # Build context
+        # Build context - handle both old single-source and new multi-source formats
         context_lines = []
-        if metadata.get("title"):
-            context_lines.append(f"Video/Podcast Title: {metadata['title']}")
-        if metadata.get("uploader"):
-            context_lines.append(f"Channel/Host: {metadata['uploader']}")
-        if metadata.get("description"):
-            desc = (
-                metadata["description"][:200] + "..."
-                if len(metadata["description"]) > 200
-                else metadata["description"]
-            )
-            context_lines.append(f"Description: {desc}")
+
+        # Check if this is multi-source format
+        if "primary_source" in metadata or "aliased_sources" in metadata:
+            # New multi-source format
+            primary = metadata.get("primary_source", {})
+            aliases = metadata.get("aliased_sources", [])
+
+            # Primary source
+            if primary and primary.get("title"):
+                context_lines.append(
+                    f"PRIMARY SOURCE ({primary.get('source_type', 'unknown').upper()}):"
+                )
+                context_lines.append(f"  Title: {primary.get('title')}")
+                if primary.get("description"):
+                    desc = (
+                        primary["description"][:200] + "..."
+                        if len(primary["description"]) > 200
+                        else primary["description"]
+                    )
+                    context_lines.append(f"  Description: {desc}")
+                if primary.get("uploader") or primary.get("author"):
+                    context_lines.append(
+                        f"  Channel/Host: {primary.get('uploader') or primary.get('author')}"
+                    )
+
+            # Aliased sources
+            for i, alias in enumerate(aliases, 1):
+                if alias and alias.get("title"):
+                    context_lines.append(
+                        f"\nALIASED SOURCE #{i} ({alias.get('source_type', 'unknown').upper()}):"
+                    )
+                    context_lines.append(f"  Title: {alias.get('title')}")
+                    if alias.get("description"):
+                        # Use more of the aliased description (often richer)
+                        desc = (
+                            alias["description"][:300] + "..."
+                            if len(alias["description"]) > 300
+                            else alias["description"]
+                        )
+                        context_lines.append(f"  Description: {desc}")
+                    if alias.get("uploader") or alias.get("author"):
+                        context_lines.append(
+                            f"  Channel/Host: {alias.get('uploader') or alias.get('author')}"
+                        )
+
+            if aliases:
+                context_lines.append(
+                    "\nNote: Multiple sources available. Use all metadata for validation."
+                )
+
+        else:
+            # Old single-source format (backward compatibility)
+            if metadata.get("title"):
+                context_lines.append(f"Video/Podcast Title: {metadata['title']}")
+            if metadata.get("uploader"):
+                context_lines.append(f"Channel/Host: {metadata['uploader']}")
+            if metadata.get("description"):
+                desc = (
+                    metadata["description"][:200] + "..."
+                    if len(metadata["description"]) > 200
+                    else metadata["description"]
+                )
+                context_lines.append(f"Description: {desc}")
 
         _context = (
             "\n".join(context_lines) if context_lines else "No metadata available"

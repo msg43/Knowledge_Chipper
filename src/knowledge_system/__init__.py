@@ -29,6 +29,13 @@ except ImportError:
     warnings.filterwarnings(
         "ignore", message=".*std\\(\\): degrees of freedom.*", category=UserWarning
     )
+    # Suppress SyntaxWarnings from pyannote.database (invalid escape sequences)
+    warnings.filterwarnings(
+        "ignore", category=SyntaxWarning, module="pyannote.database.util"
+    )
+    warnings.filterwarnings(
+        "ignore", category=SyntaxWarning, module="pyannote.database.loader"
+    )
 
 
 def _resolve_version() -> str:

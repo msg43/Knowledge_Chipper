@@ -48,6 +48,18 @@ class YouTubeDownloadProcessor(BaseProcessor):
     _cookie_cache_timestamp = 0
     _cookie_cache_ttl = 3600  # Cache cookies for 1 hour
     _cookiejar_cache = None  # Cache the actual cookiejar object
+    AUDIO_EXTENSIONS = (
+        "m4a",
+        "opus",
+        "webm",
+        "ogg",
+        "mp3",
+        "aac",
+        "wav",
+        "flac",
+        "mp4",
+    )
+    MIN_VALID_AUDIO_BYTES = 200 * 1024  # 200 KB minimum for valid audio file
 
     def __init__(
         self,
@@ -71,10 +83,11 @@ class YouTubeDownloadProcessor(BaseProcessor):
             "quiet": False,  # Changed to False to capture stderr messages
             "no_warnings": False,  # Changed to False to see warnings
             "noprogress": True,  # Disable yt-dlp's built-in progress to avoid parsing errors with "stalled" messages
-            # OPTIMAL: Audio-only with worst quality to minimize traffic
-            # Use worstaudio to get smallest available format (often m4a format 139 @ 48-50kbps)
-            # Sort by ascending bitrate and sample rate to ensure we get the absolute smallest
-            "format": "worstaudio[vcodec=none]/worstaudio",
+            # OPTIMAL: Audio-only format selection
+            # Use bestaudio (ba) to get best available audio-only format
+            # Handles language-specific tracks (e.g. 139-9, 249-0) automatically
+            # Fallback to worst if no audio-only available
+            "format": "ba/worst",
             # Sort by ascending audio bitrate (+abr) and sample rate (+asr) = smallest file first
             "format_sort": ["+abr", "+asr"],
             "outtmpl": "%(title)s [%(id)s].%(ext)s",
@@ -157,15 +170,274 @@ class YouTubeDownloadProcessor(BaseProcessor):
             True if rate limiting detected
         """
         error_lower = error_msg.lower()
-        return any(
-            [
-                "429" in error_msg,
-                "403" in error_msg,
-                "too many requests" in error_lower,
-                "rate limit" in error_lower,
-                "throttl" in error_lower,
+
+        # Check for actual HTTP error codes (not just "403" appearing in text)
+        # Must be "HTTP Error 403" or "HTTP Error 429" format
+        http_errors = [
+            "http error 429" in error_lower,
+            "http error 403" in error_lower,
+            "http 429" in error_lower,
+            "http 403" in error_lower,
+        ]
+
+        # Check for explicit rate limiting messages
+        rate_limit_messages = [
+            "too many requests" in error_lower,
+            "rate limit" in error_lower,
+            "throttl" in error_lower,
+        ]
+
+        return any(http_errors) or any(rate_limit_messages)
+
+    def _validate_archive_entries(
+        self, archive_path: Path, output_dir: Path, video_id: str | None = None
+    ) -> None:
+        """
+        Validate archive entries to prevent edge case where failed downloads are marked as complete.
+
+        Removes archive entries if:
+        1. The downloaded file doesn't exist
+        2. The file is suspiciously small (< 200KB - likely corrupted/incomplete)
+
+        Args:
+            archive_path: Path to yt-dlp archive file
+            output_dir: Directory where files should be downloaded
+            video_id: Optional specific video ID to check (if None, checks all)
+        """
+        if not archive_path.exists():
+            return  # No archive file yet
+
+        try:
+            min_required_kb = self.MIN_VALID_AUDIO_BYTES // 1024
+
+            # Read archive file
+            with open(archive_path, encoding="utf-8") as f:
+                archive_lines = f.readlines()
+
+            # Track entries to keep vs remove
+            entries_to_keep = []
+            entries_removed = []
+
+            for line in archive_lines:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    entries_to_keep.append(line)
+                    continue
+
+                # Archive format: "youtube VIDEO_ID" or "platform ID"
+                parts = line.split()
+                if len(parts) < 2:
+                    entries_to_keep.append(line)
+                    continue
+
+                platform = parts[0]
+                entry_video_id = parts[1]
+
+                # If checking specific video, only validate that one
+                if video_id and entry_video_id != video_id:
+                    entries_to_keep.append(line)
+                    continue
+
+                # Find the corresponding file
+                file_found = False
+                file_valid = False
+
+                # Check for common audio formats
+                for ext in self.AUDIO_EXTENSIONS:
+                    # Try to find file with video ID in name
+                    potential_files = list(output_dir.glob(f"*{entry_video_id}*.{ext}"))
+
+                    for file_path in potential_files:
+                        if file_path.exists():
+                            file_found = True
+                            file_size = file_path.stat().st_size
+
+                            if file_size >= self.MIN_VALID_AUDIO_BYTES:
+                                file_valid = True
+                                logger.debug(
+                                    f"✅ Archive entry valid: {entry_video_id} -> {file_path.name} ({file_size:,} bytes)"
+                                )
+                                break
+                            else:
+                                logger.warning(
+                                    f"⚠️  Archive entry has corrupt file: {entry_video_id} -> {file_path.name} ({file_size} bytes < {self.MIN_VALID_AUDIO_BYTES} bytes)"
+                                )
+
+                    if file_valid:
+                        break
+
+                if file_valid:
+                    # Keep this entry - file exists and is valid size
+                    entries_to_keep.append(line)
+                elif file_found:
+                    # File exists but too small - remove entry so yt-dlp will re-download
+                    entries_removed.append(f"{entry_video_id} (file too small)")
+                    logger.info(
+                        f"🔧 Removing corrupt archive entry: {entry_video_id} (file < {min_required_kb}KB - will re-download)"
+                    )
+                else:
+                    # File doesn't exist - remove entry so yt-dlp will re-download
+                    entries_removed.append(f"{entry_video_id} (file missing)")
+                    logger.info(
+                        f"🔧 Removing stale archive entry: {entry_video_id} (file not found - will re-download)"
+                    )
+
+            # Write back cleaned archive if any entries were removed
+            if entries_removed:
+                with open(archive_path, "w", encoding="utf-8") as f:
+                    for line in entries_to_keep:
+                        f.write(line + "\n")
+
+                logger.info(
+                    f"✅ Cleaned archive file: removed {len(entries_removed)} invalid entries"
+                )
+                for entry in entries_removed[:5]:  # Show first 5
+                    logger.info(f"   - {entry}")
+                if len(entries_removed) > 5:
+                    logger.info(f"   ... and {len(entries_removed) - 5} more")
+            else:
+                logger.debug("Archive validation passed - all entries valid")
+
+        except Exception as e:
+            logger.warning(f"Failed to validate archive file: {e} - continuing anyway")
+
+    def _find_existing_audio_file(
+        self,
+        output_dir: Path,
+        source_id: str | None,
+        db_service=None,
+    ) -> Path | None:
+        """
+        Locate an existing audio file for a previously downloaded video.
+
+        Args:
+            output_dir: Directory to search for audio files.
+            source_id: YouTube video ID to match.
+            db_service: Optional database service to look up stored audio paths.
+
+        Returns:
+            Path to existing audio file if found and valid, otherwise None.
+        """
+
+        if not source_id:
+            return None
+
+        try:
+            candidate_files = []
+            for ext in self.AUDIO_EXTENSIONS:
+                candidate_files.extend(output_dir.glob(f"*{source_id}*.{ext}"))
+
+            valid_candidates = [
+                path
+                for path in candidate_files
+                if path.is_file() and path.stat().st_size >= self.MIN_VALID_AUDIO_BYTES
             ]
-        )
+
+            if valid_candidates:
+                valid_candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                logger.info(
+                    f"♻️ Reusing existing audio file for {source_id}: {valid_candidates[0].name}"
+                )
+                return valid_candidates[0]
+
+            if candidate_files:
+                logger.warning(
+                    f"Found existing files for {source_id} but they are below {self.MIN_VALID_AUDIO_BYTES} bytes"
+                )
+        except Exception as search_error:
+            logger.warning(
+                f"Failed to search for existing audio files for {source_id}: {search_error}"
+            )
+
+        if db_service:
+            try:
+                source_record = db_service.get_source(source_id)
+                if source_record and source_record.audio_file_path:
+                    audio_path = Path(source_record.audio_file_path).expanduser()
+                    if (
+                        audio_path.exists()
+                        and audio_path.stat().st_size >= self.MIN_VALID_AUDIO_BYTES
+                    ):
+                        logger.info(
+                            f"♻️ Reusing database-tracked audio file for {source_id}: {audio_path.name}"
+                        )
+                        return audio_path
+                    elif audio_path.exists():
+                        logger.warning(
+                            f"Audio file for {source_id} is too small ({audio_path.stat().st_size} bytes)"
+                        )
+                    else:
+                        logger.warning(
+                            f"Database audio_file_path for {source_id} does not exist on disk: {audio_path}"
+                        )
+            except Exception as db_error:
+                logger.warning(
+                    f"Failed to look up existing audio in database for {source_id}: {db_error}"
+                )
+
+        return None
+
+    def _delete_existing_audio_files(
+        self, output_dir: Path, source_id: str | None
+    ) -> None:
+        """Remove any audio files on disk that match the provided source ID."""
+
+        if not source_id:
+            return
+
+        try:
+            for ext in self.AUDIO_EXTENSIONS:
+                for file_path in output_dir.glob(f"*{source_id}*.{ext}"):
+                    if file_path.exists():
+                        try:
+                            file_path.unlink()
+                            logger.info(
+                                f"🧹 Removed existing audio file before force re-download: {file_path.name}"
+                            )
+                        except Exception as cleanup_error:
+                            logger.warning(
+                                f"Failed to delete existing audio file {file_path}: {cleanup_error}"
+                            )
+        except Exception as e:
+            logger.warning(
+                f"Error while removing existing audio files for {source_id}: {e}"
+            )
+
+    def _remove_archive_entry(self, archive_path: Path, source_id: str) -> None:
+        """Remove a single video entry from the yt-dlp archive file."""
+
+        if not archive_path.exists():
+            return
+
+        try:
+            with open(archive_path, encoding="utf-8") as f:
+                lines = f.readlines()
+
+            updated_lines = []
+            removed = False
+            for line in lines:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    updated_lines.append(line)
+                    continue
+
+                parts = stripped.split()
+                if len(parts) >= 2 and parts[1] == source_id:
+                    removed = True
+                    continue
+
+                updated_lines.append(line)
+
+            if removed:
+                with open(archive_path, "w", encoding="utf-8") as f:
+                    f.writelines(updated_lines)
+                logger.info(
+                    f"🧹 Removed {source_id} from download archive to allow fresh download"
+                )
+        except Exception as archive_error:
+            logger.warning(
+                f"Failed to remove {source_id} from download archive: {archive_error}"
+            )
 
     def _trigger_cooldown(self, progress_callback=None):
         """
@@ -254,6 +526,11 @@ class YouTubeDownloadProcessor(BaseProcessor):
         session_manager = kwargs.get("session_manager")
         db_service = kwargs.get("db_service")
         cancellation_token = kwargs.get("cancellation_token")
+        allow_existing_audio = kwargs.pop("allow_existing_audio", True)
+        force_redownload = kwargs.pop("force_redownload", False)
+
+        if force_redownload:
+            allow_existing_audio = False
 
         urls = extract_urls(input_data)
         if not urls:
@@ -487,29 +764,20 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     f"✅ yt-dlp cookiefile option set to: {ydl_opts.get('cookiefile')}"
                 )
 
-                # NOTE: Keep session-based jitter even with cookies for better anti-bot protection
-                # Old behavior was to disable ALL sleep intervals with cookies, but research shows
-                # that jitter is MORE effective than rigid delays, even with authenticated requests
+                # Disable sleep intervals when using cookies - authenticated requests don't need delays
+                # The scheduler handles delays between videos, so yt-dlp doesn't need to sleep
+                ydl_opts["sleep_interval"] = 0
+                ydl_opts["max_sleep_interval"] = 0
+                ydl_opts["sleep_interval_requests"] = 0
                 logger.info(
-                    f"✅ Using session-based jitter with authenticated cookies (better anti-bot)"
+                    f"✅ Disabled yt-dlp sleep intervals (using cookies - scheduler handles delays)"
                 )
 
-                # Use tv_embedded client for most reliable format listings
-                # tv_embedded exposes classic DASH entries and is less impacted by SABR-only manifests
-                # Standard web client increasingly returns SABR-only which can hide formats
-                # tv_embedded provides more complete format availability for audio-only extraction
-                ydl_opts["extractor_args"] = {
-                    "youtube": {
-                        "player_client": [
-                            "tv_embedded",  # Most reliable for DASH format listings
-                            "android",  # Fallback if tv_embedded fails
-                            "web",  # Last resort fallback
-                        ],
-                        "player_skip": ["configs"],  # Skip unnecessary config downloads
-                    }
-                }
+                # NOTE: Do NOT use tv_embedded client when using cookies
+                # tv_embedded breaks audio-only format selection with ba/worst
+                # The default client works perfectly with cookies for audio-only downloads
                 logger.info(
-                    f"✅ Configured yt-dlp to use tv_embedded client (most reliable for audio-only DASH formats)"
+                    f"✅ Using default client (works best with cookies for audio-only)"
                 )
 
                 if progress_callback:
@@ -657,6 +925,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
         all_files = []
         all_thumbnails = []
         errors = []
+        reused_existing_audio_records = []
 
         import random
         import time
@@ -695,6 +964,17 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 )
                 if youtube_id_match:
                     source_id = youtube_id_match.group(1)
+
+                # Validate archive: Remove entries for files that are missing or too small
+                # This fixes edge case where download failed but was marked as complete
+                if yt_config.use_download_archive and source_id:
+                    archive_path = Path(yt_config.download_archive_path).expanduser()
+                    self._validate_archive_entries(archive_path, output_dir, source_id)
+                    if force_redownload:
+                        self._remove_archive_entry(archive_path, source_id)
+
+                if force_redownload and source_id:
+                    self._delete_existing_audio_files(output_dir, source_id)
 
                 # Single-use IP strategy: Generate unique session ID for each video
                 current_proxy_url = None
@@ -746,42 +1026,48 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 audio_file_format = None
 
                 try:
-                    # Test proxy connectivity and extract metadata
-                    # IMPORTANT: Include full ydl_opts (cookies, Android client, etc)
-                    test_opts = {**ydl_opts, "proxy": current_proxy_url}
-                    test_opts.update(
-                        {
-                            "quiet": True,
-                            "no_warnings": True,
-                            "extract_flat": True,
-                            "socket_timeout": 30,
-                        }
-                    )
+                    # Skip connectivity test when using cookies - cookies provide authentication
+                    # and the test is redundant (and can trigger wrong format selection)
+                    if not self.enable_cookies:
+                        # Test proxy connectivity (only when NOT using cookies)
+                        test_opts = {**ydl_opts, "proxy": current_proxy_url}
+                        test_opts.update(
+                            {
+                                "quiet": True,
+                                "no_warnings": True,
+                                "extract_flat": True,  # Safe to use when no cookies
+                                "socket_timeout": 30,
+                            }
+                        )
 
-                    proxy_type = "PacketStream" if use_proxy else "Direct (NO PROXY)"
-                    with yt_dlp.YoutubeDL(test_opts) as ydl_test:
-                        logger.info(f"Testing {proxy_type} connectivity for: {url}")
-                        if progress_callback and not use_proxy:
-                            progress_callback(
-                                "⚠️ WARNING: Using direct connection (no proxy protection)"
-                            )
-                        if progress_callback:
-                            progress_callback(f"🔗 Testing {proxy_type} connectivity...")
+                        proxy_type = (
+                            "PacketStream" if use_proxy else "Direct (NO PROXY)"
+                        )
+                        with yt_dlp.YoutubeDL(test_opts) as ydl_test:
+                            logger.info(f"Testing {proxy_type} connectivity for: {url}")
+                            if progress_callback and not use_proxy:
+                                progress_callback(
+                                    "⚠️ WARNING: Using direct connection (no proxy protection)"
+                                )
+                            if progress_callback:
+                                progress_callback(
+                                    f"🔗 Testing {proxy_type} connectivity..."
+                                )
 
-                        # Quick connectivity test
-                        test_info = ydl_test.extract_info(url, download=False)
-                        if not test_info:
-                            raise Exception(
-                                "Connectivity test failed - no video info returned"
-                            )
+                            # Quick connectivity test
+                            test_info = ydl_test.extract_info(url, download=False)
+                            if not test_info:
+                                raise Exception(
+                                    "Connectivity test failed - no video info returned"
+                                )
 
-                        logger.info(f"✅ {proxy_type} connectivity test passed")
-                        if progress_callback:
-                            progress_callback(
-                                f"✅ {proxy_type} working - extracting metadata..."
-                            )
+                            logger.info(f"✅ {proxy_type} connectivity test passed")
+                            if progress_callback:
+                                progress_callback(
+                                    f"✅ {proxy_type} working - extracting metadata..."
+                                )
 
-                    # Extract full metadata (without format validation to avoid proxy issues)
+                    # Extract full metadata
                     # IMPORTANT: Merge full ydl_opts (with cookies, Android client, etc)
                     metadata_opts = {**ydl_opts, "proxy": current_proxy_url}
                     metadata_opts.update(
@@ -996,14 +1282,15 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         )
 
                             if info is None:
-                                # yt-dlp returned None - check if files were actually downloaded
-                                # Sometimes yt-dlp returns None after successful post-processing
+                                # yt-dlp returned None - this can happen for two reasons:
+                                # 1. Video was already in archive (expected - will find existing file)
+                                # 2. Post-processing completed but info wasn't returned (rare edge case)
                                 # Look for any common audio formats since the actual format depends on YouTube's availability
-                                logger.warning(
-                                    f"yt-dlp returned None for {url}, searching for downloaded files in {output_dir}"
+                                logger.debug(
+                                    f"yt-dlp returned None for {url} (likely already in archive), checking for files in {output_dir}"
                                 )
                                 downloaded_files = []
-                                for ext in ["m4a", "opus", "webm", "ogg", "mp3", "aac"]:
+                                for ext in self.AUDIO_EXTENSIONS:
                                     found = list(output_dir.glob(f"*.{ext}"))
                                     logger.debug(
                                         f"   Searching *.{ext}: found {len(found)} files"
@@ -1030,9 +1317,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                 )
 
                                 if downloaded_files:
-                                    # Files exist! This is a false negative - download succeeded
-                                    logger.warning(
-                                        f"yt-dlp returned None but files were downloaded for {url}"
+                                    # Files exist! This happens when post-processing completes but info isn't returned
+                                    logger.info(
+                                        f"✅ Found newly downloaded files for {url} (post-processing completed)"
                                     )
                                     if progress_callback:
                                         progress_callback(
@@ -1067,60 +1354,114 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         ],  # Extension without dot
                                     }
                                 else:
-                                    # No files found - this is a real error
-                                    # Check if we captured any stderr output from yt-dlp
-                                    stderr_output = (
-                                        captured_stderr.getvalue()
-                                        if captured_stderr
-                                        else ""
-                                    )
-
-                                    # Log captured stderr for debugging
-                                    if stderr_output:
-                                        logger.error(
-                                            f"Captured stderr from yt-dlp for {url}:\n{stderr_output}"
+                                    existing_audio = None
+                                    if allow_existing_audio:
+                                        existing_audio = self._find_existing_audio_file(
+                                            output_dir,
+                                            source_id,
+                                            db_service=db_service,
                                         )
-                                        # Extract the actual error message from stderr
-                                        error_lines = [
-                                            line
-                                            for line in stderr_output.split("\n")
-                                            if line.strip()
-                                        ]
-                                        if error_lines:
-                                            error_msg = error_lines[
-                                                0
-                                            ]  # First non-empty line usually has the main error
+
+                                    if existing_audio:
+                                        logger.info(
+                                            f"♻️ Video already downloaded (in archive), using existing file: {existing_audio.name}"
+                                        )
+                                        if progress_callback:
+                                            progress_callback(
+                                                "♻️ Using previously downloaded audio (already in archive)"
+                                            )
+
+                                        all_files.append(str(existing_audio))
+                                        audio_downloaded_successfully = True
+                                        audio_file_path_for_db = str(existing_audio)
+                                        if existing_audio.exists():
+                                            audio_file_size = (
+                                                existing_audio.stat().st_size
+                                            )
+                                            audio_suffix = existing_audio.suffix[1:]
+                                            audio_file_format = (
+                                                audio_suffix if audio_suffix else None
+                                            )
                                         else:
-                                            error_msg = "yt-dlp failed to download video (no error message captured)"
+                                            audio_file_size = None
+                                            audio_file_format = (
+                                                existing_audio.suffix[1:]
+                                                if existing_audio.suffix
+                                                else None
+                                            )
+
+                                        files_already_tracked = True
+                                        info = {
+                                            "title": existing_audio.stem,
+                                            "id": source_id or "unknown",
+                                            "ext": existing_audio.suffix[1:]
+                                            if existing_audio.suffix
+                                            else "",
+                                        }
+
+                                        reused_existing_audio_records.append(
+                                            {
+                                                "path": str(existing_audio),
+                                                "size_bytes": audio_file_size,
+                                                "source_id": source_id,
+                                                "url": url,
+                                            }
+                                        )
                                     else:
-                                        error_msg = "Failed to extract any player response; please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U"
+                                        # No files found - this is a real error
+                                        # Check if we captured any stderr output from yt-dlp
+                                        stderr_output = (
+                                            captured_stderr.getvalue()
+                                            if captured_stderr
+                                            else ""
+                                        )
 
-                                    logger.error(
-                                        f"No info extracted for {url}: {error_msg}"
-                                    )
-
-                                    # Provide user-friendly error message
-                                    if progress_callback:
-                                        if (
-                                            "bot" in error_msg.lower()
-                                            or "sign in" in error_msg.lower()
-                                        ):
-                                            progress_callback(
-                                                "❌ YouTube bot detection - video blocked. Try again later or use different proxy."
+                                        # Log captured stderr for debugging
+                                        if stderr_output:
+                                            logger.error(
+                                                f"Captured stderr from yt-dlp for {url}:\n{stderr_output}"
                                             )
-                                        elif (
-                                            "403" in error_msg
-                                            or "forbidden" in error_msg.lower()
-                                        ):
-                                            progress_callback(
-                                                "❌ Access denied - YouTube may be blocking this proxy IP"
-                                            )
+                                            # Extract the actual error message from stderr
+                                            error_lines = [
+                                                line
+                                                for line in stderr_output.split("\n")
+                                                if line.strip()
+                                            ]
+                                            if error_lines:
+                                                error_msg = error_lines[
+                                                    0
+                                                ]  # First non-empty line usually has the main error
+                                            else:
+                                                error_msg = "yt-dlp failed to download video (no error message captured)"
                                         else:
-                                            progress_callback(
-                                                f"❌ Failed to download: {error_msg[:100]}"
-                                            )
-                                    # Raise exception to be caught by outer handler which adds to errors list
-                                    raise Exception(error_msg)
+                                            error_msg = "Failed to extract any player response; please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U"
+
+                                        logger.error(
+                                            f"No info extracted for {url}: {error_msg}"
+                                        )
+
+                                        # Provide user-friendly error message
+                                        if progress_callback:
+                                            if (
+                                                "bot" in error_msg.lower()
+                                                or "sign in" in error_msg.lower()
+                                            ):
+                                                progress_callback(
+                                                    "❌ YouTube bot detection - video blocked. Try again later or use different proxy."
+                                                )
+                                            elif (
+                                                "403" in error_msg
+                                                or "forbidden" in error_msg.lower()
+                                            ):
+                                                progress_callback(
+                                                    "❌ Access denied - YouTube may be blocking this proxy IP"
+                                                )
+                                            else:
+                                                progress_callback(
+                                                    f"❌ Failed to download: {error_msg[:100]}"
+                                                )
+                                        # Raise exception to be caught by outer handler which adds to errors list
+                                        raise Exception(error_msg)
 
                             # Calculate download metrics for cost tracking
                             download_end_time = datetime.now()
@@ -1151,8 +1492,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     video_metadata = {
                                         "uploader": info.get("uploader", ""),
                                         "uploader_id": info.get("uploader_id", ""),
-                                        "channel_id": info.get("channel_id", ""),
-                                        "channel": info.get("channel", ""),
+                                        # Note: channel_id and channel removed - not MediaSource fields
                                         "upload_date": info.get("upload_date", ""),
                                         "description": info.get("description", ""),
                                         "duration_seconds": info.get("duration"),
@@ -1162,6 +1502,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         "tags_json": tags,
                                         "categories_json": info.get("categories", []),
                                         "thumbnail_url": info.get("thumbnail", ""),
+                                        "thumbnail_local_path": info.get(
+                                            "thumbnail_local_path", ""
+                                        ),
                                         "source_type": "youtube",
                                         "status": (
                                             "completed"
@@ -1177,7 +1520,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                                     # Create or update video record with full metadata
                                     video = db_service.create_source(
-                                        video_id=source_id,
+                                        source_id=source_id,
                                         title=video_title,
                                         url=url,
                                         **video_metadata,
@@ -1185,13 +1528,13 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                                     if not video:
                                         raise Exception(
-                                            "Database create_video returned None"
+                                            "Database create_source returned None"
                                         )
 
                                     # Update audio download status
                                     if audio_downloaded_successfully:
                                         db_service.update_audio_status(
-                                            video_id=source_id,
+                                            source_id=source_id,
                                             audio_file_path=audio_file_path_for_db,
                                             audio_downloaded=True,
                                             audio_file_size_bytes=audio_file_size,
@@ -1200,7 +1543,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
 
                                     # Update metadata status
                                     db_service.update_metadata_status(
-                                        video_id=source_id,
+                                        source_id=source_id,
                                         metadata_complete=metadata_extracted,
                                     )
 
@@ -1210,7 +1553,7 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                         or not metadata_extracted
                                     ):
                                         db_service.mark_for_retry(
-                                            video_id=source_id,
+                                            source_id=source_id,
                                             needs_metadata_retry=not metadata_extracted,
                                             needs_audio_retry=not audio_downloaded_successfully,
                                             failure_reason=(
@@ -1505,6 +1848,25 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                             )
                                             if thumbnail_path:
                                                 all_thumbnails.append(thumbnail_path)
+                                                # Store thumbnail path in info for database storage
+                                                if info:
+                                                    info[
+                                                        "thumbnail_local_path"
+                                                    ] = thumbnail_path
+                                                # Update database with thumbnail path
+                                                if source_id and db_service:
+                                                    try:
+                                                        db_service.update_source(
+                                                            source_id,
+                                                            thumbnail_local_path=thumbnail_path,
+                                                        )
+                                                        logger.debug(
+                                                            f"✅ Updated thumbnail path in database: {thumbnail_path}"
+                                                        )
+                                                    except Exception as e:
+                                                        logger.warning(
+                                                            f"Failed to update thumbnail path in database: {e}"
+                                                        )
 
                             # Handle thumbnail download even if files were already tracked
                             if files_already_tracked and download_thumbnails:
@@ -1513,6 +1875,23 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                 )
                                 if thumbnail_path:
                                     all_thumbnails.append(thumbnail_path)
+                                    # Store thumbnail path in info for database storage
+                                    if info:
+                                        info["thumbnail_local_path"] = thumbnail_path
+                                    # Update database with thumbnail path
+                                    if source_id and db_service:
+                                        try:
+                                            db_service.update_source(
+                                                source_id,
+                                                thumbnail_local_path=thumbnail_path,
+                                            )
+                                            logger.debug(
+                                                f"✅ Updated thumbnail path in database: {thumbnail_path}"
+                                            )
+                                        except Exception as e:
+                                            logger.warning(
+                                                f"Failed to update thumbnail path in database: {e}"
+                                            )
 
                         except Exception as download_error:
                             download_error_msg = str(download_error)
@@ -1619,36 +1998,44 @@ class YouTubeDownloadProcessor(BaseProcessor):
                         )
                     time.sleep(delay)
 
+        result_data = {
+            "downloaded_files": all_files,
+            "downloaded_thumbnails": all_thumbnails,
+            "errors": errors,
+            "output_format": output_format,
+            "output_dir": str(output_dir),
+            "count": len(all_files),
+            "thumbnail_count": len(all_thumbnails),
+            "urls_processed": len(urls),
+            "duplicates_skipped": (
+                len(duplicate_results) if "duplicate_results" in locals() else 0
+            ),
+            "total_urls_input": (
+                original_count if "original_count" in locals() else len(urls)
+            ),
+        }
+
+        result_metadata = {
+            "files_downloaded": len(all_files),
+            "thumbnails_downloaded": len(all_thumbnails),
+            "errors_count": len(errors),
+            "urls_processed": len(urls),
+            "duplicates_skipped": (
+                len(duplicate_results) if "duplicate_results" in locals() else 0
+            ),
+            "deduplication_enabled": True,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+        if reused_existing_audio_records:
+            result_data["reused_existing_audio"] = reused_existing_audio_records
+            result_metadata["reused_existing_audio"] = reused_existing_audio_records
+
         return ProcessorResult(
             success=len(errors) == 0,
-            data={
-                "downloaded_files": all_files,
-                "downloaded_thumbnails": all_thumbnails,
-                "errors": errors,
-                "output_format": output_format,
-                "output_dir": str(output_dir),
-                "count": len(all_files),
-                "thumbnail_count": len(all_thumbnails),
-                "urls_processed": len(urls),
-                "duplicates_skipped": (
-                    len(duplicate_results) if "duplicate_results" in locals() else 0
-                ),
-                "total_urls_input": (
-                    original_count if "original_count" in locals() else len(urls)
-                ),
-            },
+            data=result_data,
             errors=errors if errors else None,
-            metadata={
-                "files_downloaded": len(all_files),
-                "thumbnails_downloaded": len(all_thumbnails),
-                "errors_count": len(errors),
-                "urls_processed": len(urls),
-                "duplicates_skipped": (
-                    len(duplicate_results) if "duplicate_results" in locals() else 0
-                ),
-                "deduplication_enabled": True,
-                "timestamp": datetime.now().isoformat(),
-            },
+            metadata=result_metadata,
         )
 
 

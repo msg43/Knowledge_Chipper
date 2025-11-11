@@ -16,14 +16,18 @@ from .ollama_manager import InstallationProgress, get_ollama_manager
 logger = get_logger(__name__)
 
 # Recommended model for speaker attribution (excellent JSON compliance, good at text analysis)
-MVP_MODEL = "qwen2.5:7b-instruct"  # 7B instruct model, ~4GB download, excellent JSON schema compliance
+# NOTE: Ollama stores models without the -instruct suffix even when pulled with it
+# e.g., "ollama pull qwen2.5:7b-instruct" stores as "qwen2.5:7b"
+MVP_MODEL = "qwen2.5:7b"  # 7B model, ~4GB download, excellent JSON schema compliance
 
 # Alternative models in order of preference
+# These match the ACTUAL names Ollama returns from get_available_models()
 MVP_MODEL_ALTERNATIVES = [
-    "qwen2.5:7b-instruct",  # 7B, 4GB - excellent JSON compliance, best for structured output
-    "qwen2.5:3b-instruct",  # 3B, 2GB - smaller Qwen instruct option
-    "llama3.2:3b-instruct",  # 3B, 2GB - fallback instruct option
-    "phi3:3.8b-mini-instruct",  # 3.8B, 2.3GB - very good at text
+    "qwen2.5:7b",  # 7B, 4GB - excellent JSON compliance, best for structured output
+    "qwen2.5:14b",  # 14B, 8GB - higher quality for Max/Ultra systems
+    "qwen2.5:3b",  # 3B, 2GB - smaller Qwen option for base systems
+    "llama3.2:3b",  # 3B, 2GB - fallback option
+    "phi3:3.8b",  # 3.8B, 2.3GB - very good at text
 ]
 
 
@@ -35,36 +39,104 @@ class MVPLLMSetup:
         self.settings = get_settings()
 
     def is_mvp_ready(self) -> bool:
-        """Check if MVP LLM is ready to use."""
+        """
+        Check if MVP LLM is ready to use.
+
+        Returns True if Ollama is running and has ANY usable model installed.
+        We now use a robust fallback system, so any model is better than none.
+        """
         try:
             # Check if Ollama is running
             if not self.ollama_manager.is_service_running():
                 return False
 
-            # Check if MVP model is available
+            # Check if ANY model is available (we have robust fallback now)
             installed_models = self.ollama_manager.get_available_models()
-            model_names = [model.name for model in installed_models]
 
-            return any(model in model_names for model in MVP_MODEL_ALTERNATIVES)
+            # As long as there's at least one model, we can use it
+            return len(installed_models) > 0
 
         except Exception as e:
             logger.debug(f"Error checking MVP LLM status: {e}")
             return False
 
     def get_available_mvp_model(self) -> str | None:
-        """Get the best available MVP model."""
+        """
+        Get the best available MVP model with robust fallback.
+
+        Priority order:
+        1. Preferred models (MVP_MODEL_ALTERNATIVES)
+        2. Any Qwen model (our preferred family)
+        3. Any Llama model (good fallback)
+        4. Any other available model (better than nothing)
+
+        Returns the best available model or None if Ollama has no models at all.
+        """
         try:
             installed_models = self.ollama_manager.get_available_models()
             model_names = [model.name for model in installed_models]
 
-            # Return first available model from preferences
+            if not model_names:
+                logger.warning("No Ollama models installed")
+                return None
+
+            # PRIORITY 1: Return first match from our preferred list
             for model in MVP_MODEL_ALTERNATIVES:
                 if model in model_names:
+                    logger.info(f"✅ Using preferred MVP model: {model}")
                     return model
 
-            return None
+            # PRIORITY 2: Any Qwen model (our preferred family)
+            qwen_models = [m for m in model_names if m.startswith("qwen")]
+            if qwen_models:
+                # Prefer larger models (better quality)
+                qwen_models.sort(
+                    reverse=True
+                )  # "qwen2.5:14b" > "qwen2.5:7b" > "qwen2.5:3b"
+                logger.info(
+                    f"⚠️ Using fallback Qwen model: {qwen_models[0]} (preferred models not found)"
+                )
+                return qwen_models[0]
 
-        except Exception:
+            # PRIORITY 3: Any Llama model (good general fallback)
+            llama_models = [m for m in model_names if "llama" in m.lower()]
+            if llama_models:
+                # Prefer instruct models, then larger models
+                instruct_models = [m for m in llama_models if "instruct" in m.lower()]
+                if instruct_models:
+                    instruct_models.sort(reverse=True)
+                    logger.info(
+                        f"⚠️ Using fallback Llama model: {instruct_models[0]} (Qwen not found)"
+                    )
+                    return instruct_models[0]
+                else:
+                    llama_models.sort(reverse=True)
+                    logger.info(
+                        f"⚠️ Using fallback Llama model: {llama_models[0]} (Qwen not found)"
+                    )
+                    return llama_models[0]
+
+            # PRIORITY 4: ANY available model (better than failing completely)
+            # Prefer models with "instruct" in the name (better for our use case)
+            instruct_models = [m for m in model_names if "instruct" in m.lower()]
+            if instruct_models:
+                logger.warning(
+                    f"⚠️ Using generic fallback model: {instruct_models[0]} (no preferred models found)"
+                )
+                logger.warning("   Speaker attribution quality may be reduced")
+                return instruct_models[0]
+
+            # Last resort: just use the first available model
+            logger.warning(
+                f"⚠️ Using last-resort fallback model: {model_names[0]} (no instruct models found)"
+            )
+            logger.warning(
+                "   Speaker attribution quality may be significantly reduced"
+            )
+            return model_names[0]
+
+        except Exception as e:
+            logger.error(f"Error finding available model: {e}")
             return None
 
     def should_auto_setup(self) -> bool:

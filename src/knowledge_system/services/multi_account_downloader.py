@@ -83,6 +83,7 @@ class MultiAccountDownloadScheduler:
                 min_delay=min_delay,
                 max_delay=max_delay,
                 disable_proxies_with_cookies=disable_proxies_with_cookies,
+                db_service=db_service,
             )
             for cf in cookie_files
         ]

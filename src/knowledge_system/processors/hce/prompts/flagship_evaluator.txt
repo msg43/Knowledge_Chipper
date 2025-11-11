@@ -22,7 +22,7 @@ Reject claims that are:
 ✗ Unsupported speculation
 ✗ Duplicate or redundant with other claims
 
-### IMPORTANCE SCORING (0.0 - 1.0)
+### IMPORTANCE SCORING (1-10 Scale)
 Consider:
 - Intellectual significance and depth
 - Relevance to core themes and arguments
@@ -30,7 +30,7 @@ Consider:
 - Non-obviousness and insight value
 - Centrality to the speaker's message
 
-### NOVELTY SCORING (0.0 - 1.0)
+### NOVELTY SCORING (1-10 Scale)
 Consider:
 - How surprising or unexpected the claim is
 - Whether it challenges conventional wisdom
@@ -38,7 +38,7 @@ Consider:
 - Originality of the insight or interpretation
 - Rarity of this type of observation
 
-### CONFIDENCE SCORING (0.0 - 1.0)
+### CONFIDENCE SCORING (1-10 Scale)
 Consider:
 - Quality and strength of supporting evidence
 - Clarity and precision of the claim statement

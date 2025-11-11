@@ -88,6 +88,7 @@ Return a JSON object with four arrays: "claims", "jargon", "people", and "mental
 Each claim must include:
 - **claim_text**: The exact claim being made (corrected for obvious errors)
 - **claim_type**: One of the 5 types above (for data analysis only)
+- **domain**: Broad field classification for searchability (e.g., "physics", "economics", "politics", "medicine", "technology"). Use general categories, NOT specific subfields.
 - **stance**: How the speaker presents it (asserts/questions/opposes/neutral)
 - **speaker**: Use available speaker info or "Unknown"
 - **evidence_spans**: Array of supporting quotes
@@ -106,7 +107,7 @@ For each evidence span:
 Each jargon term must include:
 - **term**: The jargon term (standardized spelling)
 - **definition**: Explanation of the term in context
-- **domain**: Field classification
+- **domain**: Broad field classification for searchability (e.g., "physics", "economics", "politics", "medicine", "technology"). Use general categories like "physics" not "quantum mechanics", "economics" not "monetary policy", "law" not "constitutional law". Choose the broadest relevant field.
 - **evidence_spans**: Array of uses (with corrections noted)
 
 Each person must include:

@@ -76,6 +76,8 @@ class DownloadCleanupService:
 
         try:
             with self.db_service.get_session() as session:
+                from datetime import timedelta
+
                 from ..database import MediaSource
 
                 # Get all videos with audio_file_path set (claim-centric schema doesn't track audio_downloaded)
@@ -85,9 +87,27 @@ class DownloadCleanupService:
                     .all()
                 )
 
+                # Only warn about missing files from the last 30 days
+                # Older entries are likely from moved/deleted files or old output directories
+                cutoff_date = datetime.now() - timedelta(days=30)
+
                 for video in videos_with_audio:
                     audio_path = Path(video.audio_file_path)
                     if not audio_path.exists():
+                        # Skip test files and temporary paths
+                        if "/tmp/" in str(audio_path) or "test_" in video.source_id:
+                            logger.debug(
+                                f"Skipping test/temp file: {video.source_id} -> {video.audio_file_path}"
+                            )
+                            continue
+
+                        # Only warn about recent entries (last 30 days)
+                        if video.processed_at and video.processed_at < cutoff_date:
+                            logger.debug(
+                                f"Skipping old entry (>{cutoff_date.date()}): {video.source_id} -> {video.audio_file_path}"
+                            )
+                            continue
+
                         logger.warning(
                             f"Audio file missing for {video.source_id}: {video.audio_file_path}"
                         )
@@ -103,7 +123,7 @@ class DownloadCleanupService:
 
                 logger.info(
                     f"Validated {len(videos_with_audio)} videos with audio paths. "
-                    f"Found {len(self.cleanup_report['missing_audio_files'])} missing files."
+                    f"Found {len(self.cleanup_report['missing_audio_files'])} missing files (recent only, ignoring test/old entries)."
                 )
 
         except Exception as e:

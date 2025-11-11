@@ -273,6 +273,10 @@ class SchemaValidator:
                                     claim["stance"], "neutral"
                                 )
 
+                        # Ensure domain exists (required field)
+                        if "domain" not in claim:
+                            claim["domain"] = "general"
+
             # People: ensure required fields exist (v2 schema)
             if "people" in repaired and isinstance(repaired["people"], list):
                 for person in repaired["people"]:
@@ -359,9 +363,9 @@ class SchemaValidator:
                                             evidence["context_type"], "exact"
                                         )
 
-                        # Ensure domain exists
+                        # Ensure domain exists (no validation - free-form string)
                         if "domain" not in term:
-                            term["domain"] = "other"
+                            term["domain"] = "general"
 
             # Mental models: ensure required fields exist (v2 schema)
             if "mental_models" in repaired and isinstance(

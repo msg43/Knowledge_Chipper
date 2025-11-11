@@ -704,13 +704,10 @@ def aggregate_hce_analytics(batch_results: list[BatchResult]) -> dict[str, Any]:
         "tier_c_claims": 0,
         "total_people": 0,
         "total_concepts": 0,
-        "total_relations": 0,
-        "total_contradictions": 0,
         "unique_people": set(),
         "unique_concepts": set(),
         "cross_file_patterns": [],
         "processing_time_total": sum(r.processing_time for r in batch_results),
-        "files_with_contradictions": 0,
         "avg_claims_per_file": 0,
     }
 
@@ -729,8 +726,6 @@ def aggregate_hce_analytics(batch_results: list[BatchResult]) -> dict[str, Any]:
         # Aggregate entity counts
         aggregated["total_people"] += analytics.get("people_count", 0)
         aggregated["total_concepts"] += analytics.get("concepts_count", 0)
-        aggregated["total_relations"] += analytics.get("relations_count", 0)
-        aggregated["total_contradictions"] += analytics.get("contradictions_count", 0)
 
         # Track unique entities across files
         for person in analytics.get("top_people", []):
@@ -740,10 +735,6 @@ def aggregate_hce_analytics(batch_results: list[BatchResult]) -> dict[str, Any]:
         for concept in analytics.get("top_concepts", []):
             if concept:
                 aggregated["unique_concepts"].add(concept)
-
-        # Track files with contradictions
-        if analytics.get("contradictions_count", 0) > 0:
-            aggregated["files_with_contradictions"] += 1
 
     # Calculate derived metrics
     if successful_results:

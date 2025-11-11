@@ -199,13 +199,32 @@ class LLMSpeakerSuggester:
             all_names = [name for name, _ in suggestions.values()]
             unique_names = set(all_names)
             if len(all_names) != len(unique_names):
-                logger.error(
-                    f"🚨 CRITICAL: Still have duplicate names after validation!"
+                # This is actually GOOD if it's a single-speaker video!
+                # LLM correctly assigned same name to multiple speaker IDs
+                name_counts = {}
+                for speaker_id, (name, conf) in suggestions.items():
+                    if name not in name_counts:
+                        name_counts[name] = []
+                    name_counts[name].append(speaker_id)
+
+                for name, speaker_ids in name_counts.items():
+                    if len(speaker_ids) > 1:
+                        logger.info(
+                            f"✅ LLM correctly assigned '{name}' to {len(speaker_ids)} speaker IDs: {speaker_ids}"
+                        )
+                        logger.info(
+                            f"   This is CORRECT behavior for single-speaker content that was over-segmented by diarization"
+                        )
+
+            # Check if we have multiple speakers but only one unique name
+            # This suggests single-speaker content that was over-segmented
+            if len(speaker_segments) > 1 and len(unique_names) == 1:
+                logger.info(
+                    f"🎯 SINGLE-SPEAKER DETECTION: {len(speaker_segments)} speaker IDs but only 1 unique name ('{list(unique_names)[0]}')"
                 )
-                logger.error(f"All names: {all_names}")
-                logger.error(f"Unique names: {list(unique_names)}")
-                # Force fix any remaining duplicates
-                suggestions = self._force_fix_duplicates(suggestions)
+                logger.info(
+                    f"   This indicates diarization over-segmented a monologue/solo podcast"
+                )
 
             return suggestions
 
@@ -224,7 +243,9 @@ class LLMSpeakerSuggester:
 
         Args:
             speaker_segments: Speaker segments to analyze
-            metadata: Video/podcast metadata
+            metadata: Video/podcast metadata. Can be either:
+                     - Old format: Single dict with fields (backward compatible)
+                     - New format: {'primary_source': {...}, 'aliased_sources': [...]}
             known_hosts: Optional list of known host names for this channel
                         (e.g., ["Jeff Snider", "Emil Kalinowski"])
         """
@@ -232,36 +253,109 @@ class LLMSpeakerSuggester:
         # Build comprehensive metadata section (don't truncate description)
         metadata_text = "No metadata available"
         if metadata:
-            parts = []
-            if metadata.get("title"):
-                parts.append(f"Title: {metadata['title']}")
-            if metadata.get("uploader"):
-                channel_name = metadata["uploader"]
-                parts.append(f"Channel: {channel_name}")
+            # Check if this is multi-source format
+            if "primary_source" in metadata or "aliased_sources" in metadata:
+                # New multi-source format
+                parts = []
 
-                # Check if we have a learned mapping for this channel
-                try:
-                    from ..database.speaker_models import get_speaker_db_service
+                primary = metadata.get("primary_source", {})
+                aliases = metadata.get("aliased_sources", [])
 
-                    db_service = get_speaker_db_service()
-                    known_host = db_service.get_channel_host_mapping(channel_name)
-                    if known_host:
+                # Primary source metadata
+                if primary and primary.get("title"):
+                    parts.append(
+                        f"PRIMARY SOURCE ({primary.get('source_type', 'unknown').upper()}):"
+                    )
+                    parts.append(f"  Title: {primary.get('title')}")
+
+                    if primary.get("description"):
+                        parts.append(f"  Description: {primary.get('description')}")
+
+                    if primary.get("uploader") or primary.get("author"):
+                        channel = primary.get("uploader") or primary.get("author")
+                        parts.append(f"  Channel/Author: {channel}")
+
+                        # Check for learned channel mapping
+                        try:
+                            from ..database.speaker_models import get_speaker_db_service
+
+                            db_service = get_speaker_db_service()
+                            known_host = db_service.get_channel_host_mapping(channel)
+                            if known_host:
+                                parts.append(
+                                    f"  Known Host: {known_host} (from previous corrections)"
+                                )
+                        except Exception as e:
+                            logger.debug(f"Could not check channel mapping: {e}")
+
+                    if primary.get("channel_id"):
+                        parts.append(f"  Channel ID: {primary.get('channel_id')}")
+                    if primary.get("url"):
+                        parts.append(f"  URL: {primary.get('url')}")
+
+                # Aliased sources metadata
+                for i, alias in enumerate(aliases, 1):
+                    if alias and alias.get("title"):
                         parts.append(
-                            f"Known Host: {known_host} (from previous corrections)"
+                            f"\nALIASED SOURCE #{i} ({alias.get('source_type', 'unknown').upper()}):"
                         )
-                except Exception as e:
-                    logger.debug(f"Could not check channel mapping: {e}")
+                        parts.append(f"  Title: {alias.get('title')}")
 
-            if metadata.get("description"):
-                # Use FULL description for name extraction
-                parts.append(f"Description: {metadata['description']}")
-            # Add any other useful metadata
-            if metadata.get("channel_id"):
-                parts.append(f"Channel ID: {metadata['channel_id']}")
-            if metadata.get("uploader_id"):
-                parts.append(f"Uploader ID: {metadata['uploader_id']}")
-            if parts:
-                metadata_text = "\n".join(parts)
+                        if alias.get("description"):
+                            # Use FULL description from aliased source (often richer)
+                            parts.append(f"  Description: {alias.get('description')}")
+
+                        if alias.get("uploader") or alias.get("author"):
+                            channel = alias.get("uploader") or alias.get("author")
+                            parts.append(f"  Channel/Author: {channel}")
+
+                        if alias.get("channel_id"):
+                            parts.append(f"  Channel ID: {alias.get('channel_id')}")
+                        if alias.get("view_count"):
+                            parts.append(f"  Views: {alias.get('view_count'):,}")
+                        if alias.get("url"):
+                            parts.append(f"  URL: {alias.get('url')}")
+
+                if aliases:
+                    parts.append(
+                        "\nNote: This content is available from multiple platforms. Use ALL available metadata to identify speakers. Longer descriptions typically have more detail about guests."
+                    )
+
+                if parts:
+                    metadata_text = "\n".join(parts)
+
+            else:
+                # Old single-source format (backward compatibility)
+                parts = []
+                if metadata.get("title"):
+                    parts.append(f"Title: {metadata['title']}")
+                if metadata.get("uploader"):
+                    channel_name = metadata["uploader"]
+                    parts.append(f"Channel: {channel_name}")
+
+                    # Check if we have a learned mapping for this channel
+                    try:
+                        from ..database.speaker_models import get_speaker_db_service
+
+                        db_service = get_speaker_db_service()
+                        known_host = db_service.get_channel_host_mapping(channel_name)
+                        if known_host:
+                            parts.append(
+                                f"Known Host: {known_host} (from previous corrections)"
+                            )
+                    except Exception as e:
+                        logger.debug(f"Could not check channel mapping: {e}")
+
+                if metadata.get("description"):
+                    # Use FULL description for name extraction
+                    parts.append(f"Description: {metadata['description']}")
+                # Add any other useful metadata
+                if metadata.get("channel_id"):
+                    parts.append(f"Channel ID: {metadata['channel_id']}")
+                if metadata.get("uploader_id"):
+                    parts.append(f"Uploader ID: {metadata['uploader_id']}")
+                if parts:
+                    metadata_text = "\n".join(parts)
 
         # Build speaker sections with first 3 minutes of content (180 seconds)
         # Extended from 2 to 3 minutes to capture speakers who don't speak immediately
@@ -339,16 +433,19 @@ class LLMSpeakerSuggester:
 
         prompt = (
             "You are identifying speakers in a podcast/interview transcript.\n\n"
-            f"CRITICAL REQUIREMENT: You have {num_speakers} speakers total. Each MUST get a DIFFERENT, DESCRIPTIVE name.\n\n"
+            f"SPEAKER DETECTION: The diarization system detected {num_speakers} speaker ID(s). HOWEVER, diarization can sometimes incorrectly split ONE person into multiple IDs.\n\n"
             f"{known_hosts_section}"
             "🚨 CRITICAL RULES - VIOLATION = FAILURE 🚨\n"
-            "1. NO DUPLICATE NAMES: Each speaker gets a UNIQUE name (NEVER assign 'John Smith' to multiple speakers)\n"
+            "1. SKEPTICALLY EVALUATE: Before assigning different names, determine if multiple speaker IDs are actually the SAME person\n"
+            "   - Check if speech patterns, vocabulary, and topics are similar across speaker IDs\n"
+            "   - Check if metadata indicates a single-speaker format (solo podcast, monologue, commentary)\n"
+            "   - If speaker IDs appear to be the same person, assign the SAME name to all of them\n"
             "2. NO EMPTY NAMES: Every speaker MUST have a name assigned\n"
             "3. NO GENERIC LABELS: NEVER use 'Speaker 1', 'Speaker 2', 'Unknown Speaker' or similar generic labels\n"
             "4. METADATA NAMES WIN: Title/description names ALWAYS beat speech transcription variants\n"
             "5. PHONETIC MATCHING: 'Stacy Rasgon' (title) beats 'Stacey Raskin' (speech transcription error)\n"
             "6. WHEN UNCERTAIN: Infer descriptive names from context, roles, or characteristics\n\n"
-            "VALIDATION CHECK: After assigning names, verify each speaker has a DIFFERENT, DESCRIPTIVE name.\n\n"
+            "VALIDATION CHECK: Verify that speakers with DIFFERENT names are actually DIFFERENT people, not diarization errors.\n\n"
             "CONTEXT: In most podcasts:\n"
             "- Guest names are mentioned in the description/title\n"
             "- Host names may be in the description or can be inferred from channel name\n"
@@ -398,6 +495,17 @@ class LLMSpeakerSuggester:
                     speaker_id not in suggestions
                     or not suggestions[speaker_id][0].strip()
                 ):
+                    # 🚨 CRITICAL FIX: LLM failed to provide name for this speaker
+                    logger.error(
+                        f"🚨 CRITICAL: LLM did not provide name for {speaker_id} - this should NEVER happen!"
+                    )
+                    logger.error(
+                        f"   All suggestions received: {list(suggestions.keys())}"
+                    )
+                    logger.error(
+                        f"   All speakers in segments: {list(speaker_segments.keys())}"
+                    )
+
                     # Assign a descriptive name based on speaker position
                     speaker_num = speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
                     try:
@@ -408,10 +516,10 @@ class LLMSpeakerSuggester:
                         descriptive_name = "Unknown Speaker X"
                     suggestions[speaker_id] = (descriptive_name, 0.2)
                     logger.warning(
-                        f"Fixed empty name for {speaker_id} -> '{descriptive_name}'"
+                        f"Emergency fallback: {speaker_id} -> '{descriptive_name}'"
                     )
 
-            # Rule 2: Ensure all names are unique (no duplicates)
+            # Rule 2: Check for duplicate names (but this is now ALLOWED if LLM determined they're the same person)
             name_counts = {}
             for speaker_id, (name, conf) in suggestions.items():
                 name_lower = name.lower().strip()
@@ -420,57 +528,14 @@ class LLMSpeakerSuggester:
                 else:
                     name_counts[name_lower] = [(speaker_id, name, conf)]
 
-            # Fix duplicates by adding numbers or different strategies
+            # Log duplicate names but DON'T fix them - LLM may have correctly determined they're the same person
             for name_lower, speakers_with_name in name_counts.items():
                 if len(speakers_with_name) > 1:
-                    logger.error(
-                        f"🚨 CRITICAL: Found duplicate name '{speakers_with_name[0][1]}' assigned to {len(speakers_with_name)} speakers - FIXING!"
+                    logger.info(
+                        f"✅ LLM assigned same name '{speakers_with_name[0][1]}' to {len(speakers_with_name)} speaker IDs "
+                        f"(likely diarization split same person into multiple IDs)"
                     )
-
-                    # More aggressive duplicate fixing strategies
-                    for i, (speaker_id, name, conf) in enumerate(speakers_with_name):
-                        if i == 0:
-                            # Keep first one as-is
-                            continue
-                        elif i == 1:
-                            # Second one gets " 2" suffix
-                            new_name = f"{name} 2"
-                        elif i == 2:
-                            # Third one gets letter-based naming
-                            speaker_num = (
-                                speaker_id.replace("SPEAKER_", "").lstrip("0") or "0"
-                            )
-                            try:
-                                num = int(speaker_num)
-                                letter = chr(65 + num)
-                                new_name = f"Unknown Speaker {letter}"
-                            except (ValueError, IndexError):
-                                new_name = f"Person {i + 1}"
-                        else:
-                            # Additional ones get person-based names
-                            new_name = f"Person {i + 1}"
-
-                        suggestions[speaker_id] = (
-                            new_name,
-                            max(0.1, conf - 0.3),
-                        )  # Lower confidence for fixes
-                        logger.error(
-                            f"🔧 FIXED duplicate: {speaker_id} -> '{new_name}' (was '{name}')"
-                        )
-
-            # Final validation: Absolutely ensure no duplicates remain
-            final_names = [name for name, _ in suggestions.values()]
-            if len(final_names) != len({name.lower() for name in final_names}):
-                logger.error(
-                    "🚨 EMERGENCY: Duplicates still exist after fixing - applying emergency fallback"
-                )
-                # Emergency fallback: assign descriptive unknown names
-                # Note: This should rarely happen since LLM should always provide names
-                for i, speaker_id in enumerate(sorted(speaker_segments.keys())):
-                    suggestions[speaker_id] = (f"Unknown Speaker {chr(65+i)}", 0.1)
-                    logger.error(
-                        f"🚨 EMERGENCY ASSIGN: {speaker_id} -> 'Unknown Speaker {chr(65+i)}'"
-                    )
+                    # No longer "fixing" duplicates - they're intentional when diarization splits one person
 
             return suggestions
 

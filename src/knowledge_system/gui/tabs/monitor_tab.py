@@ -504,6 +504,9 @@ class MonitorTab(BaseTab, FileOperationsMixin):
                             "source": "monitor_tab_auto",
                             "file_path": str(file_path),
                             "miner_model": f"{self.settings.llm.provider}:gpt-4o-mini-2024-07-18",
+                            "output_dir": str(
+                                self.settings.paths.summaries
+                            ),  # Use default summaries path
                         },
                         auto_process=False,
                     )

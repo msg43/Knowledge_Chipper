@@ -36,6 +36,14 @@ def suppress_ml_library_warnings() -> None:
         "ignore", category=UserWarning, module="pyannote.audio.core.io"
     )
 
+    # PyAnnote Database SyntaxWarnings (invalid escape sequences in their code)
+    warnings.filterwarnings(
+        "ignore", category=SyntaxWarning, module="pyannote.database.util"
+    )
+    warnings.filterwarnings(
+        "ignore", category=SyntaxWarning, module="pyannote.database.loader"
+    )
+
     # Message-based filters for specific warning content
     warnings.filterwarnings(
         "ignore", message=".*load_with_torchcodec.*", category=UserWarning

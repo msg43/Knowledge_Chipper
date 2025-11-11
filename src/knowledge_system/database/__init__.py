@@ -35,6 +35,7 @@ from .models import (
     Segment,
     SourcePlatformCategory,
     SourcePlatformTag,
+    SourceStageStatus,
     Summary,
     Transcript,
     UserTag,
@@ -62,6 +63,7 @@ __all__ = [
     "GeneratedFile",
     "ProcessingJob",
     "BrightDataSession",
+    "SourceStageStatus",
     "Base",
     "DatabaseService",
     # HCE models

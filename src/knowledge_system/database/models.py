@@ -18,6 +18,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     String,
@@ -169,6 +170,9 @@ class MediaSource(Base):
     )
     bright_data_sessions = relationship(
         "BrightDataSession", back_populates="source", cascade="all, delete-orphan"
+    )
+    stage_statuses = relationship(
+        "SourceStageStatus", back_populates="source", cascade="all, delete-orphan"
     )
 
     __table_args__ = (
@@ -616,6 +620,74 @@ class QualityMetrics(Base):
         return f"<QualityMetrics(metric_id='{self.metric_id}', model_name='{self.model_name}', avg_user_rating={self.avg_user_rating})>"
 
 
+class SourceStageStatus(Base):
+    """Unified view of pipeline stage status for queue visibility."""
+
+    __tablename__ = "source_stage_statuses"
+
+    # Composite primary key
+    source_id = Column(
+        String(50),
+        ForeignKey("media_sources.source_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    stage = Column(
+        String(30), primary_key=True
+    )  # 'download', 'transcription', 'summarization', 'hce_mining', 'flagship_evaluation'
+
+    # Status tracking
+    status = Column(
+        String(20), nullable=False, default="pending"
+    )  # 'pending', 'queued', 'scheduled', 'in_progress', 'completed', 'failed', 'blocked', 'not_applicable', 'skipped'
+    priority = Column(Integer, default=5)  # 1-10, lower is higher priority
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Progress tracking
+    progress_percent = Column(Float, default=0.0)  # 0-100
+
+    # Worker assignment (for distributed processing)
+    assigned_worker = Column(String(100))  # Worker ID or account name
+
+    # Stage-specific metadata
+    metadata_json = Column(
+        JSONEncodedType
+    )  # Flexible storage for stage-specific data (e.g., session schedule, retry count, error details)
+
+    # Relationships
+    source = relationship("MediaSource", back_populates="stage_statuses")
+
+    # Constraints
+    __table_args__ = (
+        CheckConstraint(
+            "stage IN ('download', 'transcription', 'summarization', 'hce_mining', 'flagship_evaluation')",
+            name="ck_stage_type",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'queued', 'scheduled', 'in_progress', 'completed', 'failed', 'blocked', 'not_applicable', 'skipped')",
+            name="ck_status_type",
+        ),
+        CheckConstraint(
+            "priority BETWEEN 1 AND 10",
+            name="ck_priority_range",
+        ),
+        CheckConstraint(
+            "progress_percent BETWEEN 0 AND 100",
+            name="ck_progress_range",
+        ),
+        # Create indexes for common queries
+        Index("idx_stage_status", "stage", "status"),
+        Index("idx_source_stage", "source_id", "stage"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<SourceStageStatus(source_id='{self.source_id}', stage='{self.stage}', status='{self.status}', progress={self.progress_percent:.1f}%)>"
+
+
 # ============================================================================
 # CORE: Claims (Fundamental Unit)
 # ============================================================================
@@ -638,6 +710,7 @@ class Claim(Base):
     canonical = Column(Text, nullable=False)
     original_text = Column(Text)
     claim_type = Column(String)
+    domain = Column(String)  # Broad field classification (e.g., 'physics', 'economics')
 
     # System evaluation (from HCE)
     tier = Column(String)

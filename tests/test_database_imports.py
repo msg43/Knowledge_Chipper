@@ -24,7 +24,6 @@ def test_all_database_models_importable():
         ClaimRelation,
         Concept,
         DatabaseService,
-        Episode,
         EvidenceSpan,
         GeneratedFile,
         JargonTerm,
@@ -40,7 +39,6 @@ def test_all_database_models_importable():
     assert MediaSource is not None
     assert Transcript is not None
     assert Summary is not None
-    assert Episode is not None
     assert Claim is not None
     assert DatabaseService is not None
 

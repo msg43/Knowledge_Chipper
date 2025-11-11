@@ -1,6 +1,6 @@
 import os
 import tempfile
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -445,10 +445,34 @@ class AudioProcessor(BaseProcessor):
             # Extract transcript segments for processing
             transcript_segments = transcript_data.get("segments", [])
 
-            # Prepare speaker data with metadata for enhanced suggestions
-            metadata = kwargs.get("metadata", {})
+            # Get metadata from all sources (non-destructive multi-source approach)
+            source_id = kwargs.get("source_id")
+            if source_id and self.db_service:
+                logger.info(f"🔍 Retrieving metadata from all sources for {source_id}")
+                all_metadata = self.db_service.get_all_source_metadata(source_id)
+
+                # Log what we found
+                primary = all_metadata.get("primary_source")
+                aliases = all_metadata.get("aliased_sources", [])
+                if primary:
+                    logger.info(
+                        f"   Primary: {primary.get('source_type')} - {primary.get('title', '')[:50]}..."
+                    )
+                for i, alias in enumerate(aliases, 1):
+                    logger.info(
+                        f"   Alias #{i}: {alias.get('source_type')} - {alias.get('title', '')[:50]}..."
+                    )
+            else:
+                # Fallback for non-database sources (local files, etc.)
+                logger.debug("No source_id or db_service, using metadata from kwargs")
+                all_metadata = {
+                    "primary_source": kwargs.get("metadata", {}),
+                    "aliased_sources": [],
+                }
+
+            # Prepare speaker data with multi-source metadata for enhanced suggestions
             speaker_data_list = speaker_processor.prepare_speaker_data(
-                diarization_segments, transcript_segments, metadata, recording_path
+                diarization_segments, transcript_segments, all_metadata, recording_path
             )
 
             if not speaker_data_list:
@@ -551,8 +575,13 @@ class AudioProcessor(BaseProcessor):
 
                     # If we have a callback, use it to trigger the dialog non-blocking
                     if self.speaker_assignment_callback:
-                        # Pass task_id so the dialog knows which task to complete
-                        enhanced_metadata = metadata.copy()
+                        # Pass task_id and multi-source metadata to the dialog
+                        # Use all_metadata (multi-source) instead of metadata (single-source)
+                        enhanced_metadata = (
+                            all_metadata.copy()
+                            if isinstance(all_metadata, dict)
+                            else {}
+                        )
                         enhanced_metadata["task_id"] = task_id
 
                         # This should be non-blocking - just emit a signal
@@ -650,6 +679,21 @@ class AudioProcessor(BaseProcessor):
         except Exception as e:
             logger.error(f"Error showing speaker assignment dialog: {e}")
             return None
+
+    def _should_queue_speaker_review(self, kwargs: dict) -> bool:
+        """
+        Determine if speaker assignment should be queued for manual review.
+
+        Returns True only if:
+        1. Dialog is explicitly requested (show_speaker_dialog=True)
+        2. Running in GUI mode (gui_mode=True)
+        3. NOT in testing mode (KNOWLEDGE_CHIPPER_TESTING_MODE != "1")
+        """
+        show_dialog = kwargs.get("show_speaker_dialog", True)
+        gui_mode = kwargs.get("gui_mode", False)
+        testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
+
+        return show_dialog and gui_mode and not testing_mode
 
     def _get_automatic_speaker_assignments(
         self, speaker_data_list: list, recording_path: str
@@ -768,7 +812,15 @@ class AudioProcessor(BaseProcessor):
                         logger.error(
                             f"Emergency fallback: {speaker_data.speaker_id} -> 'Unknown Speaker {letter}'"
                         )
-                    except (ValueError, IndexError):
+                    except ValueError:
+                        # speaker_num not a valid integer
+                        logger.debug(
+                            f"Could not parse speaker number from {speaker_data.speaker_id}"
+                        )
+                        assignments[speaker_data.speaker_id] = speaker_data.speaker_id
+                    except (IndexError, OverflowError):
+                        # chr(65 + num) out of range (too many speakers)
+                        logger.debug(f"Speaker number out of letter range")
                         assignments[speaker_data.speaker_id] = speaker_data.speaker_id
 
             if assignments:
@@ -944,184 +996,474 @@ class AudioProcessor(BaseProcessor):
         source_metadata: dict | None = None,
     ) -> str:
         """Create markdown content from transcription data and metadata."""
-        lines = []
 
-        # YAML frontmatter
-        lines.append("---")
+        def _escape_quotes(value: str | None) -> str:
+            if value is None:
+                return ""
+            sanitized = str(value).replace('"', '\\"')
+            sanitized = sanitized.replace("\r\n", "\n").replace("\r", "\n")
+            sanitized = sanitized.replace("\n", "\\n")
+            return sanitized
+
+        def _format_human_date(value: Any) -> str | None:
+            if value is None:
+                return None
+            if isinstance(value, datetime):
+                return value.strftime("%B %d, %Y")
+            if isinstance(value, date):
+                return value.strftime("%B %d, %Y")
+            if isinstance(value, str):
+                cleaned = value.strip()
+                if not cleaned:
+                    return None
+                try:
+                    if cleaned.isdigit() and len(cleaned) == 8:
+                        parsed = datetime.strptime(cleaned, "%Y%m%d")
+                    else:
+                        parsed = datetime.fromisoformat(cleaned)
+                    return parsed.strftime("%B %d, %Y")
+                except ValueError:
+                    return cleaned
+            return str(value)
+
+        frontmatter: list[str] = ["---"]
 
         # Add source_id FIRST (critical for ID extraction by Process Tab)
         source_id = None
         if source_metadata and source_metadata.get("source_id"):
-            source_id = source_metadata["source_id"]
-
-        if source_id:
-            lines.append(f'source_id: "{source_id}"')
+            source_id = str(source_metadata["source_id"])
+            frontmatter.append(f'source_id: "{_escape_quotes(source_id)}"')
 
         # Determine source type
+        source_type = "Local Audio"
         if source_metadata is not None:
-            # Check source_type in metadata
-            if "source_type" in source_metadata:
-                source_type_raw = source_metadata["source_type"]
-                # Map database values to display names
-                if source_type_raw == "youtube":
-                    source_type = "YouTube"
-                elif source_type_raw == "rss":
-                    source_type = "RSS"
-                elif source_type_raw == "upload":
-                    source_type = "Upload"
-                else:
-                    source_type = source_type_raw.title()
+            raw_type = source_metadata.get("source_type") or ""
+            raw_type_str = str(raw_type).lower()
+            source_type_map = {
+                "youtube": "YouTube",
+                "youtube_video": "YouTube",
+                "rss": "RSS",
+                "podcast": "Podcast",
+                "upload": "Upload",
+                "vimeo": "Vimeo",
+            }
+            if raw_type_str in source_type_map:
+                source_type = source_type_map[raw_type_str]
+            elif raw_type_str:
+                source_type = str(raw_type).replace("_", " ").title()
             else:
-                # Default to YouTube if video metadata exists but no source_type
                 source_type = "YouTube"
 
+        display_title: str | None = None
+        formatted_upload_date: str | None = None
+        video_duration_seconds: int | None = None
+        tags_list: list[str] = []
+        categories_list: list[str] = []
+        thumbnail_path: str | None = None
+        thumbnail_url: str | None = None
+        video_url: str = ""
+        video_id: str = ""
+        description_text: str | None = None
+        view_count_value: int | None = None
+        like_count_value: int | None = None
+        comment_count_value: int | None = None
+        uploader_value: str | None = None
+        uploader_id_value: str | None = None
+
         if source_metadata is not None:
-            # Use YouTube metadata for title and source info
-            safe_title = source_metadata.get("title", "Unknown").replace('"', '\\"')
-            lines.append(f'title: "{safe_title}"')
-            lines.append(f'source: "{source_metadata.get("url", "")}"')
-            lines.append(f'video_id: "{source_metadata.get("video_id", "")}"')
+            raw_title = source_metadata.get("title") or "Unknown"
+            display_title = str(raw_title)
+            frontmatter.append(f'title: "{_escape_quotes(display_title)}"')
 
-            # Add uploader info
-            if source_metadata.get("uploader"):
-                lines.append(f'uploader: "{source_metadata["uploader"]}"')
+            video_url = str(source_metadata.get("url") or "")
+            if video_url:
+                frontmatter.append(f'source: "{_escape_quotes(video_url)}"')
 
-            # Add upload date
-            if source_metadata.get("upload_date"):
+            if source_metadata.get("video_id"):
+                video_id = str(source_metadata.get("video_id"))
+                frontmatter.append(f'video_id: "{_escape_quotes(video_id)}"')
+
+            uploader_value = source_metadata.get("uploader")
+            if uploader_value:
+                frontmatter.append(f'uploader: "{_escape_quotes(str(uploader_value))}"')
+
+            uploader_id_value = source_metadata.get("uploader_id")
+            if uploader_id_value:
+                frontmatter.append(
+                    f'uploader_id: "{_escape_quotes(str(uploader_id_value))}"'
+                )
+
+            channel_id_value = source_metadata.get("channel_id")
+            if channel_id_value:
+                frontmatter.append(
+                    f'channel_id: "{_escape_quotes(str(channel_id_value))}"'
+                )
+
+            upload_date_raw = source_metadata.get("upload_date")
+            formatted_upload_date = _format_human_date(upload_date_raw)
+            if formatted_upload_date:
+                frontmatter.append(
+                    f'upload_date: "{_escape_quotes(formatted_upload_date)}"'
+                )
+
+            duration_raw = source_metadata.get("duration")
+            if duration_raw is None:
+                duration_raw = source_metadata.get("duration_seconds")
+            if duration_raw is not None:
                 try:
-                    date_obj = datetime.strptime(
-                        source_metadata["upload_date"], "%Y%m%d"
+                    video_duration_seconds = int(float(duration_raw))
+                except (TypeError, ValueError):
+                    video_duration_seconds = None
+            if video_duration_seconds is not None:
+                frontmatter.append(
+                    f'duration: "{self._format_duration(video_duration_seconds)}"'
+                )
+
+            view_count = source_metadata.get("view_count")
+            if view_count is not None:
+                try:
+                    view_count_value = int(view_count)
+                    frontmatter.append(f"view_count: {view_count_value}")
+                except (TypeError, ValueError):
+                    view_count_value = None
+
+            like_count = source_metadata.get("like_count")
+            if like_count is not None:
+                try:
+                    like_count_value = int(like_count)
+                    frontmatter.append(f"like_count: {like_count_value}")
+                except (TypeError, ValueError):
+                    like_count_value = None
+
+            comment_count = source_metadata.get("comment_count")
+            if comment_count is not None:
+                try:
+                    comment_count_value = int(comment_count)
+                    frontmatter.append(f"comment_count: {comment_count_value}")
+                except (TypeError, ValueError):
+                    comment_count_value = None
+
+            tags = source_metadata.get("tags") or []
+            if isinstance(tags, str):
+                tags_list = [tags]
+            elif isinstance(tags, list):
+                tags_list = [str(tag) for tag in tags if tag]
+            if tags_list:
+                safe_tags = ", ".join(f'"{_escape_quotes(tag)}"' for tag in tags_list)
+                frontmatter.append(f"tags: [{safe_tags}]")
+                frontmatter.append(f"tags_count: {len(tags_list)}")
+
+            categories = source_metadata.get("categories") or source_metadata.get(
+                "youtube_categories"
+            )
+            if isinstance(categories, str):
+                categories_list = [categories]
+            elif isinstance(categories, list):
+                categories_list = [str(cat) for cat in categories if cat]
+            if categories_list:
+                safe_categories = ", ".join(
+                    f'"{_escape_quotes(cat)}"' for cat in categories_list
+                )
+                frontmatter.append(f"categories: [{safe_categories}]")
+                frontmatter.append(f"categories_count: {len(categories_list)}")
+
+            description_text = source_metadata.get("description")
+            if description_text:
+                trimmed_description = description_text.strip()
+                if trimmed_description:
+                    # Fix: Ensure we don't accidentally skip the first character
+                    # The issue was [:277].rstrip() could remove the first char if it was whitespace
+                    if len(trimmed_description) > 280:
+                        preview = trimmed_description[:277] + "..."
+                    else:
+                        preview = trimmed_description
+                    frontmatter.append(
+                        f'description_preview: "{_escape_quotes(preview)}"'
                     )
-                    lines.append(f'upload_date: "{date_obj.strftime("%B %d, %Y")}"')
-                except (ValueError, TypeError):
-                    lines.append(f'upload_date: "{source_metadata["upload_date"]}"')
 
-            # Add duration from video metadata if available
-            if source_metadata.get("duration"):
-                duration_seconds = source_metadata["duration"]
-                minutes = duration_seconds // 60
-                seconds = duration_seconds % 60
-                lines.append(f'duration: "{minutes}:{seconds:02d}"')
-
-            # Add view count if available
-            if source_metadata.get("view_count"):
-                lines.append(f"view_count: {source_metadata['view_count']}")
-
-            # Add tags if available
-            if source_metadata.get("tags"):
-                safe_tags = [tag.replace('"', '\\"') for tag in source_metadata["tags"]]
-                tags_yaml = "[" + ", ".join(f'"{tag}"' for tag in safe_tags) + "]"
-                lines.append(f"tags: {tags_yaml}")
-                lines.append(f"# Total tags: {len(source_metadata['tags'])}")
-
-            # Add YouTube categories if available
-            if source_metadata.get("categories"):
-                categories = source_metadata["categories"]
-                if isinstance(categories, list):
-                    safe_categories = [cat.replace('"', '\\"') for cat in categories]
-                    categories_yaml = (
-                        "[" + ", ".join(f'"{cat}"' for cat in safe_categories) + "]"
+            raw_thumbnail_path = source_metadata.get("thumbnail_local_path")
+            if raw_thumbnail_path:
+                try:
+                    thumb_posix = Path(raw_thumbnail_path).as_posix()
+                    thumbnail_path = thumb_posix
+                    frontmatter.append(
+                        f'thumbnail_path: "{_escape_quotes(thumb_posix)}"'
                     )
-                    lines.append(f"youtube_categories: {categories_yaml}")
-                elif isinstance(categories, str):
-                    safe_category = categories.replace('"', '\\"')
-                    lines.append(f'youtube_category: "{safe_category}"')
+                except Exception:
+                    thumbnail_path = str(raw_thumbnail_path)
 
-            # Add transcription date for YouTube videos too
-            trans_date = datetime.now()
-            lines.append(f'transcription_date: "{trans_date.strftime("%B %d, %Y")}"')
-
-            # Note the transcription type based on source
-            lines.append(f'transcription_type: "{source_type}"')
+            thumbnail_url_raw = source_metadata.get("thumbnail_url")
+            if thumbnail_url_raw:
+                thumbnail_url = str(thumbnail_url_raw)
+                frontmatter.append(f'thumbnail_url: "{_escape_quotes(thumbnail_url)}"')
         else:
-            # Local audio file - use existing logic
             raw_filename = audio_metadata.get("filename", "Unknown")
             clean_title = (
                 raw_filename.rsplit(".", 1)[0] if "." in raw_filename else raw_filename
             )
-            lines.append(f'title: "{clean_title}"')
+            display_title = clean_title.replace("_", " ").strip() or clean_title
+            frontmatter.append(f'title: "{_escape_quotes(display_title)}"')
+            frontmatter.append(f'source_file: "{_escape_quotes(raw_filename)}"')
+            frontmatter.append(f'source: "{source_type}"')
 
-            lines.append(f'source_file: "{raw_filename}"')
-            lines.append(f'source: "{source_type}"')
-
-            # Format transcription date more nicely (like YouTube's "August 02, 2025")
-            trans_date = datetime.now()
-            lines.append(f'transcription_date: "{trans_date.strftime("%B %d, %Y")}"')
-            lines.append(f'transcription_type: "{source_type}"')
-
-            lines.append(
-                f'file_format: "{audio_metadata.get("file_format", "unknown")}"'
-            )
+            file_format_value = audio_metadata.get("file_format")
+            if file_format_value:
+                frontmatter.append(
+                    f'file_format: "{_escape_quotes(str(file_format_value))}"'
+                )
 
             if audio_metadata.get("file_size_mb"):
-                lines.append(f'file_size_mb: {audio_metadata["file_size_mb"]:.2f}')
+                frontmatter.append(
+                    f'file_size_mb: {audio_metadata["file_size_mb"]:.2f}'
+                )
 
-            if audio_metadata.get("duration_formatted"):
-                lines.append(f'duration: "{audio_metadata["duration_formatted"]}"')
+            duration_formatted = audio_metadata.get("duration_formatted")
+            if duration_formatted:
+                frontmatter.append(f'duration: "{duration_formatted}"')
+
+            created_date_value = audio_metadata.get("created_date")
+            if created_date_value:
+                frontmatter.append(
+                    f'created_date: "{_escape_quotes(str(created_date_value))}"'
+                )
+
+            modified_date_value = audio_metadata.get("modified_date")
+            if modified_date_value:
+                frontmatter.append(
+                    f'modified_date: "{_escape_quotes(str(modified_date_value))}"'
+                )
+
+        frontmatter.append(f'source_type: "{source_type}"')
+
+        trans_date = datetime.now()
+        frontmatter.append(f'transcription_date: "{trans_date.strftime("%B %d, %Y")}"')
+        frontmatter.append(f'transcription_type: "{source_type}"')
 
         # Language detection (try to get real language instead of "unknown")
-        language = transcription_data.get("language", "unknown")
+        language = transcription_data.get("language", "unknown") or "unknown"
         if language == "unknown" and transcription_data.get("text"):
-            # Simple language hint based on common words
             text_sample = transcription_data.get("text", "")[:500].lower()
             if any(word in text_sample for word in [" the ", " and ", " is ", " are "]):
                 language = "en"
-        lines.append(f'language: "{language}"')
+        frontmatter.append(f'language: "{language}"')
 
-        lines.append(f'transcription_model: "{model_metadata.get("model", "unknown")}"')
-        lines.append(f'text_length: {len(transcription_data.get("text", ""))}')
-        lines.append(f'segments_count: {len(transcription_data.get("segments", []))}')
+        frontmatter.append(
+            f'transcription_model: "{_escape_quotes(str(model_metadata.get("model", "unknown")))}"'
+        )
+
+        if model_metadata.get("device"):
+            frontmatter.append(
+                f'device: "{_escape_quotes(str(model_metadata.get("device")))}"'
+            )
+
+        frontmatter.append(f'text_length: {len(transcription_data.get("text", ""))}')
+        frontmatter.append(
+            f'segments_count: {len(transcription_data.get("segments", []))}'
+        )
 
         if model_metadata.get("diarization_enabled"):
-            lines.append("diarization_enabled: true")
+            frontmatter.append("diarization_enabled: true")
 
-        lines.append(f"include_timestamps: {include_timestamps}")
-        lines.append("---")
-        lines.append("")
+        frontmatter.append(
+            f"include_timestamps: {'true' if include_timestamps else 'false'}"
+        )
+        frontmatter.append("---")
 
-        # Add thumbnail if available (for YouTube videos)
+        lines = frontmatter + [""]
+
+        # Note: We don't add an H1 heading here because Obsidian and similar markdown viewers
+        # automatically display the YAML title field as the document heading.
+        # Adding a redundant H1 would create duplicate titles in the UI.
+
+        # Insert thumbnail imagery for rich context
         if source_metadata is not None:
-            thumbnail_path = source_metadata.get("thumbnail_local_path")
+            thumbnail_rendered = False
             if thumbnail_path:
-                # Convert to relative path if it's in the output directory structure
-                from pathlib import Path
+                thumb_candidate = Path(thumbnail_path)
+                if thumb_candidate.exists():
+                    # 🔧 FIX: Use relative path instead of absolute path for portability
+                    # Extract just the relative portion (e.g., "downloads/youtube/Thumbnails/filename.jpg")
+                    # or "Thumbnails/filename.jpg" depending on structure
+                    thumb_path_str = str(thumb_candidate)
 
-                thumb_path = Path(thumbnail_path)
-                if thumb_path.exists():
-                    # Use relative path from transcript location
-                    lines.append(f"![Thumbnail]({thumbnail_path})")
+                    # Try to find common base directories to make path relative
+                    if "downloads/youtube/Thumbnails" in thumb_path_str:
+                        # Extract from "downloads/youtube/Thumbnails" onwards
+                        relative_path = thumb_path_str[
+                            thumb_path_str.find("downloads/youtube/Thumbnails") :
+                        ]
+                    elif "Thumbnails" in thumb_path_str:
+                        # Extract from "Thumbnails" onwards
+                        relative_path = thumb_path_str[
+                            thumb_path_str.find("Thumbnails") :
+                        ]
+                    else:
+                        # Fallback: just use filename
+                        relative_path = f"Thumbnails/{thumb_candidate.name}"
+
+                    lines.append(f"![Thumbnail]({relative_path})")
                     lines.append("")
+                    thumbnail_rendered = True
+            if not thumbnail_rendered and thumbnail_url:
+                lines.append(f"![Thumbnail]({thumbnail_url})")
+                lines.append("")
+
+        if source_metadata is not None:
+            if description_text:
+                # Use "YouTube Description" for YouTube videos, "Description" for others
+                if source_type == "YouTube":
+                    lines.append("## YouTube Description")
+                else:
+                    lines.append("## Description")
+                lines.append("")
+                for desc_line in description_text.strip().splitlines():
+                    if desc_line:
+                        lines.append(f"> {desc_line}")
+                    else:
+                        lines.append(">")
+                lines.append("")
+        else:
+            lines.append("## File Metadata")
+            lines.append("")
+            lines.append(
+                f"- **Source File:** {audio_metadata.get('filename', 'Unknown')}"
+            )
+            if audio_metadata.get("file_format"):
+                lines.append(
+                    f"- **Format:** {audio_metadata.get('file_format', 'unknown').upper()}"
+                )
+            if audio_metadata.get("file_size_mb"):
+                lines.append(f"- **Size:** {audio_metadata['file_size_mb']:.2f} MB")
+            if audio_metadata.get("duration_formatted"):
+                lines.append(f"- **Duration:** {audio_metadata['duration_formatted']}")
+            lines.append("")
 
         # Full transcript section
         lines.append("## Full Transcript")
         lines.append("")
 
-        # Format transcript with segments if available and multiple segments exist
         segments = transcription_data.get("segments", [])
-        if len(segments) > 1:
-            for segment in segments:
-                start_time = segment.get("start", 0)
-                text = segment.get("text", "").strip()
-                speaker = segment.get("speaker", "")
+        if segments:
+            # Optimized for better markdown readability:
+            # - Shorter paragraphs for easier scanning
+            # - More aggressive breaking on pauses for natural flow
+            # - Prioritize sentence boundaries for clean breaks
+            pause_threshold_seconds = 3.0  # Break on shorter pauses (was 7.0)
+            max_paragraph_chars = 500  # Shorter paragraphs for readability (was 900)
+            force_break_chars = 700  # Force break at reasonable length (was 1200)
+            current_paragraph: list[str] = []
+            current_speaker = ""
+            paragraph_start_time: float | None = None
+            last_end_time: float | None = None
+            last_flushed_speaker = ""  # Track last speaker label written
 
-                if text:
-                    if include_timestamps:
-                        timestamp = self._format_duration(start_time)
-                        if speaker:
-                            lines.append(f"**{timestamp}** ({speaker}): {text}")
-                        else:
-                            lines.append(f"**{timestamp}**: {text}")
+            def flush_paragraph() -> None:
+                nonlocal current_paragraph, paragraph_start_time, current_speaker, last_flushed_speaker
+                if not current_paragraph:
+                    return
+                paragraph_text = " ".join(current_paragraph).strip()
+                if not paragraph_text:
+                    current_paragraph = []
+                    paragraph_start_time = None
+                    return
+
+                # Format with speaker and timestamp on header line for readability
+                speaker_label = current_speaker.strip()
+
+                # Only show speaker label if it changed from last paragraph (for readability in monologues)
+                if speaker_label and speaker_label != last_flushed_speaker:
+                    if include_timestamps and paragraph_start_time is not None:
+                        # Format: **Speaker** [timestamp]
+                        timestamp_str = self._format_duration(
+                            int(round(paragraph_start_time))
+                        )
+                        lines.append(f"**{speaker_label}** [{timestamp_str}]")
                     else:
-                        # No timestamps - just speaker and text
-                        if speaker:
-                            lines.append(f"({speaker}): {text}")
-                        else:
-                            lines.append(text)
-                    lines.append("")
+                        # Format: **Speaker**
+                        lines.append(f"**{speaker_label}**")
+                    last_flushed_speaker = speaker_label
+                elif include_timestamps and paragraph_start_time is not None:
+                    # Same speaker or no speaker, just show timestamp
+                    timestamp_str = self._format_duration(
+                        int(round(paragraph_start_time))
+                    )
+                    lines.append(f"[{timestamp_str}]")
+
+                # Add paragraph text
+                lines.append(paragraph_text)
+                lines.append("")  # Blank line between paragraphs
+
+                current_paragraph = []
+                paragraph_start_time = None
+
+            def ends_with_sentence_boundary(text: str) -> bool:
+                """Check if text ends with a sentence boundary (period, !, ?, etc.)"""
+                text = text.rstrip()
+                return text.endswith(
+                    (".", "!", "?", '."', '!"', '?"', '.")', '!")', '?")')
+                )
+
+            for segment in segments:
+                text = (segment.get("text") or "").strip()
+                if not text:
+                    continue
+
+                start_time = segment.get("start")
+                end_time = segment.get("end")
+                normalized_speaker = (segment.get("speaker") or "").strip()
+
+                long_pause = (
+                    last_end_time is not None
+                    and start_time is not None
+                    and (float(start_time) - float(last_end_time))
+                    >= pause_threshold_seconds
+                )
+
+                paragraph_candidate_length = len(" ".join(current_paragraph + [text]))
+
+                needs_new_paragraph = False
+                if current_paragraph:
+                    # Always break on speaker change
+                    if normalized_speaker != current_speaker:
+                        needs_new_paragraph = True
+                    # Break on long pauses (now more sensitive - 3s instead of 7s)
+                    elif long_pause:
+                        needs_new_paragraph = True
+                    # For length-based breaks, prioritize sentence boundaries
+                    elif paragraph_candidate_length >= max_paragraph_chars:
+                        # Check if the last segment ended with a sentence boundary
+                        if current_paragraph and ends_with_sentence_boundary(
+                            current_paragraph[-1]
+                        ):
+                            needs_new_paragraph = True
+                        # If we're way over the limit, force a break
+                        elif paragraph_candidate_length >= force_break_chars:
+                            needs_new_paragraph = True
+                    # Break on explicit paragraph markers
+                    elif "\n\n" in text:
+                        needs_new_paragraph = True
+
+                if needs_new_paragraph:
+                    flush_paragraph()
+
+                if not current_paragraph:
+                    current_speaker = normalized_speaker
+                    paragraph_start_time = (
+                        float(start_time) if start_time is not None else None
+                    )
+
+                current_paragraph.append(text)
+
+                if end_time is not None:
+                    last_end_time = float(end_time)
+                elif start_time is not None:
+                    last_end_time = float(start_time)
+
+            flush_paragraph()
         else:
-            # Single segment or plain text
             text = transcription_data.get("text", "").strip()
-            lines.append(text)
+            if text:
+                lines.append(text)
 
         return "\n".join(lines)
 
@@ -1153,13 +1495,31 @@ class AudioProcessor(BaseProcessor):
                 logger.error(f"Failed to create output directory {output_dir}: {e}")
                 return None
 
-            # Create filename
-            base_name = audio_path.stem
-            safe_name = "".join(
-                c for c in base_name if c.isalnum() or c in (" ", "-", "_")
-            ).rstrip()
-            safe_name = safe_name.replace(" ", "_")
-            filename = f"{safe_name}_transcript.md"
+            # Create filename - use clean title from metadata if available
+            if source_metadata and source_metadata.get("title"):
+                # Use the clean title from metadata (preferred for YouTube videos)
+                import re
+
+                raw_title = str(source_metadata.get("title", ""))
+                # Remove video ID pattern [11 chars] if present
+                clean_title = re.sub(
+                    r"\s*\[[a-zA-Z0-9_-]{11}\]\s*$", "", raw_title
+                ).strip()
+                # Sanitize for filename - keep spaces for better readability in file browsers
+                safe_name = "".join(
+                    c for c in clean_title if c.isalnum() or c in (" ", "-", "_")
+                ).rstrip()
+                # Keep spaces in filename for natural display in Obsidian and file browsers
+            else:
+                # Fallback to audio filename for local files
+                base_name = audio_path.stem
+                safe_name = "".join(
+                    c for c in base_name if c.isalnum() or c in (" ", "-", "_")
+                ).rstrip()
+                # Keep spaces in filename for natural display
+
+            # Don't append "_transcript" suffix - use clean title as-is
+            filename = f"{safe_name}.md"
             output_path = output_dir / filename
 
             logger.debug(f"Attempting to save transcript to: {output_path}")
@@ -1185,7 +1545,7 @@ class AudioProcessor(BaseProcessor):
                 # Verify file was written
                 if output_path.exists() and output_path.stat().st_size > 0:
                     logger.info(
-                        f"✅ Transcript saved successfully: {output_path} ({len(markdown_content):,} characters)"
+                        f"📝 Transcript markdown file saved: {output_path} ({len(markdown_content):,} characters)"
                     )
                     return output_path
                 else:
@@ -1301,6 +1661,23 @@ class AudioProcessor(BaseProcessor):
         # Initialize diarization variables at function scope to avoid scope issues
         diarization_segments = None
         diarization_successful = False
+
+        # Get source_id for queue tracking
+        source_id = kwargs.get("source_id")
+
+        # Update queue status to in_progress
+        if source_id and self.db_service:
+            self.db_service.upsert_stage_status(
+                source_id=source_id,
+                stage="transcription",
+                status="in_progress",
+                progress_percent=0.0,
+                metadata={
+                    "model": current_model,
+                    "audio_duration_seconds": audio_duration,
+                    "audio_file": str(path),
+                },
+            )
 
         # Smart recovery: try current model, then one upgrade
         max_attempts = 2
@@ -1722,7 +2099,13 @@ class AudioProcessor(BaseProcessor):
                         # This ensures the markdown file has real names, not SPEAKER_00
                         if diarization_successful and diarization_segments:
                             logger.info(
-                                "Applying automatic speaker assignments before saving..."
+                                "🎯 Applying automatic speaker assignments before saving..."
+                            )
+                            logger.info(
+                                f"   Diarization successful: {diarization_successful}"
+                            )
+                            logger.info(
+                                f"   Diarization segments count: {len(diarization_segments) if diarization_segments else 0}"
                             )
                             try:
                                 from .speaker_processor import SpeakerProcessor
@@ -1730,20 +2113,38 @@ class AudioProcessor(BaseProcessor):
                                 speaker_processor = SpeakerProcessor()
                                 transcript_segments = final_data.get("segments", [])
 
-                                # Prepare speaker data with metadata for enhanced suggestions
-                                # Use source_metadata if available, otherwise fall back to metadata
-                                metadata_for_speaker = kwargs.get(
-                                    "source_metadata"
-                                ) or kwargs.get("metadata", {})
-                                speaker_data_list = (
-                                    speaker_processor.prepare_speaker_data(
-                                        diarization_segments,
-                                        transcript_segments,
-                                        metadata_for_speaker,
-                                        str(
-                                            path
-                                        ),  # Pass audio path for voice fingerprinting
+                                # Get metadata from all sources (non-destructive multi-source approach)
+                                source_id = kwargs.get("source_id")
+                                if source_id and self.db_service:
+                                    logger.info(
+                                        f"🔍 Retrieving metadata from all sources for {source_id}"
                                     )
+                                    all_metadata = (
+                                        self.db_service.get_all_source_metadata(
+                                            source_id
+                                        )
+                                    )
+                                else:
+                                    # Fallback for non-database sources (local files, etc.)
+                                    logger.debug(
+                                        "No source_id or db_service, using metadata from kwargs"
+                                    )
+                                    metadata_for_speaker = kwargs.get(
+                                        "source_metadata"
+                                    ) or kwargs.get("metadata", {})
+                                    all_metadata = {
+                                        "primary_source": metadata_for_speaker,
+                                        "aliased_sources": [],
+                                    }
+
+                                # Prepare speaker data with multi-source metadata for enhanced suggestions
+                                speaker_data_list = speaker_processor.prepare_speaker_data(
+                                    diarization_segments,
+                                    transcript_segments,
+                                    all_metadata,
+                                    str(
+                                        output_path
+                                    ),  # Pass converted WAV path for voice fingerprinting (same file used for diarization)
                                 )
 
                                 if speaker_data_list:
@@ -1771,25 +2172,47 @@ class AudioProcessor(BaseProcessor):
                                         final_data["speaker_assignments"] = assignments
                                     else:
                                         logger.warning(
-                                            "No automatic speaker assignments could be generated"
+                                            "⚠️ No automatic speaker assignments could be generated"
                                         )
                                 else:
                                     logger.warning(
-                                        "No speaker data prepared for automatic assignment"
+                                        "⚠️ No speaker data prepared for automatic assignment"
                                     )
                             except Exception as e:
                                 logger.error(
-                                    f"Failed to apply automatic speaker assignments: {e}"
+                                    f"❌ Failed to apply automatic speaker assignments: {e}",
+                                    exc_info=True,
                                 )
+                                # Add failure info to metadata so user can see what happened
+                                enhanced_metadata["speaker_assignment_failed"] = True
+                                enhanced_metadata["speaker_assignment_error"] = str(e)
                                 # Continue anyway - markdown will have generic SPEAKER_00 labels
+                        else:
+                            # 🚨 CRITICAL: This block should NOT be reached if diarization was enabled!
+                            if diarization_enabled:
+                                logger.error(
+                                    f"🚨 CRITICAL: Diarization was enabled but speaker assignment skipped!"
+                                )
+                                logger.error(
+                                    f"   diarization_successful: {diarization_successful}"
+                                )
+                                logger.error(
+                                    f"   diarization_segments: {diarization_segments is not None}"
+                                )
+                                logger.error(
+                                    f"   This means diarization failed or segments are missing"
+                                )
 
-                        # Save to markdown if output directory is specified
+                        # Save to markdown if output directory is specified AND format is not "none"
                         output_dir = kwargs.get("output_dir")
+                        output_format = kwargs.get(
+                            "format", "md"
+                        )  # Default to markdown if not specified
                         include_timestamps = kwargs.get("timestamps", True)
                         enable_color_coding = kwargs.get("enable_color_coding", True)
                         saved_file = None
 
-                        if output_dir:
+                        if output_dir and output_format != "none":
                             # Ensure output_dir is a Path object
                             output_dir = Path(output_dir)
                             temp_result = ProcessorResult(
@@ -1840,20 +2263,26 @@ class AudioProcessor(BaseProcessor):
                                 enhanced_metadata["saved_markdown_file"] = str(
                                     saved_file
                                 )
+                        elif output_format == "none":
+                            logger.info(
+                                "📝 Output format set to 'none' - skipping file creation, will save to database only"
+                            )
+                        else:
+                            logger.debug(
+                                f"Skipping file creation: output_dir={output_dir}, format={output_format}"
+                            )
 
-                        # Save to database if database service is available
+                        # Save to database - db_service is required for claim-centric architecture
                         db_service = kwargs.get("db_service")
                         if not db_service:
-                            # Try to create a database service if not provided
-                            try:
-                                from ..database.service import DatabaseService
-
-                                db_service = DatabaseService()
-                                logger.info("Created fallback DatabaseService instance")
-                            except Exception as e:
-                                logger.warning(
-                                    f"Could not create database service - transcripts will not be saved to DB: {e}"
-                                )
+                            # Database service is required - don't create fallback
+                            logger.error(
+                                "❌ db_service not provided - cannot save to database (required for claim-centric architecture)"
+                            )
+                            enhanced_metadata["database_save_failed"] = True
+                            enhanced_metadata[
+                                "database_error"
+                            ] = "db_service parameter not provided"
 
                         if db_service and final_data:
                             try:
@@ -1861,26 +2290,67 @@ class AudioProcessor(BaseProcessor):
                                 import hashlib
                                 from datetime import datetime
 
-                                # Use hash of absolute path for consistent ID across re-runs
-                                path_hash = hashlib.md5(
-                                    str(path.absolute()).encode(), usedforsecurity=False
-                                ).hexdigest()[:8]
-                                source_id = f"audio_{path.stem}_{path_hash}"
+                                # Check if source_id is provided (e.g., from YouTube download)
+                                source_metadata = kwargs.get("source_metadata")
+                                source_id = None
+                                if source_metadata and source_metadata.get("source_id"):
+                                    source_id = source_metadata["source_id"]
+                                    logger.info(
+                                        f"Using existing source_id from metadata: {source_id}"
+                                    )
 
-                                # Extract metadata for media source
-                                title = path.stem.replace("_", " ").title()
-                                file_url = f"file://{path.absolute()}"
+                                # If no source_id provided, generate one from file path
+                                if not source_id:
+                                    # Use hash of absolute path for consistent ID across re-runs
+                                    path_hash = hashlib.md5(
+                                        str(path.absolute()).encode(),
+                                        usedforsecurity=False,
+                                    ).hexdigest()[:8]
+                                    source_id = f"audio_{path.stem}_{path_hash}"
+                                    logger.info(
+                                        f"Generated new source_id from file path: {source_id}"
+                                    )
 
-                                # Check if media source already exists (for re-runs)
-                                existing_video = db_service.get_source(source_id)
-                                if not existing_video:
-                                    # Create media source record
-                                    # Use 'document' as source_type for local audio files (valid per schema)
+                                # Check if media source already exists (for re-runs or YouTube downloads)
+                                existing_source = db_service.get_source(source_id)
+                                if existing_source:
+                                    # Update existing source with latest data
+                                    logger.info(
+                                        f"Using existing media source: {source_id}"
+                                    )
+                                    db_service.update_source(
+                                        source_id=source_id,
+                                        duration_seconds=audio_duration,
+                                        status="completed",
+                                        processed_at=datetime.now(),
+                                    )
+                                else:
+                                    # Create new media source record only for local files
+                                    # (YouTube videos should already have MediaSource from download phase)
+                                    title = (
+                                        source_metadata.get("title")
+                                        if source_metadata
+                                        else path.stem.replace("_", " ").title()
+                                    )
+                                    file_url = (
+                                        source_metadata.get("url")
+                                        if source_metadata
+                                        else f"file://{path.absolute()}"
+                                    )
+                                    source_type = (
+                                        source_metadata.get("source_type")
+                                        if source_metadata
+                                        else "document"
+                                    )
+
+                                    logger.info(
+                                        f"Creating new media source record: {source_id}"
+                                    )
                                     db_service.create_source(
-                                        video_id=source_id,
+                                        source_id=source_id,
                                         title=title,
                                         url=file_url,
-                                        source_type="document",  # Valid: 'episode', 'document', 'youtube', 'pdf', 'article', 'podcast', 'rss'
+                                        source_type=source_type,  # Valid: 'episode', 'document', 'youtube', 'pdf', 'article', 'podcast', 'rss'
                                         duration_seconds=audio_duration,
                                         upload_date=datetime.now().strftime(
                                             "%Y%m%d"
@@ -1891,6 +2361,19 @@ class AudioProcessor(BaseProcessor):
                                     logger.info(
                                         f"Created media source record: {source_id}"
                                     )
+
+                                    # Mark download stage as skipped for local files
+                                    if source_type == "document":
+                                        db_service.upsert_stage_status(
+                                            source_id=source_id,
+                                            stage="download",
+                                            status="skipped",
+                                            progress_percent=100.0,
+                                            metadata={
+                                                "reason": "local_file",
+                                                "file_path": str(path.absolute()),
+                                            },
+                                        )
 
                                 # Extract transcript data
                                 transcript_text = final_data.get("text", "")
@@ -1906,7 +2389,7 @@ class AudioProcessor(BaseProcessor):
 
                                 # Create transcript record (overwrites existing for re-runs)
                                 transcript_record = db_service.create_transcript(
-                                    video_id=source_id,
+                                    source_id=source_id,
                                     language=language,
                                     is_manual=False,
                                     transcript_text=transcript_text,
@@ -1924,33 +2407,27 @@ class AudioProcessor(BaseProcessor):
 
                                 if transcript_record:
                                     logger.info(
-                                        f"Saved transcript to database: {transcript_record.transcript_id}"
+                                        f"💾 Transcript saved to database: {transcript_record.transcript_id}"
                                     )
                                     enhanced_metadata[
                                         "database_transcript_id"
                                     ] = transcript_record.transcript_id
                                     enhanced_metadata["database_media_id"] = source_id
 
+                                    # Log final success - both markdown and database saved
+                                    logger.info(
+                                        f"✅ Transcription complete: markdown + database saved successfully"
+                                    )
+
                                     # Queue for manual review if speaker dialog is enabled
                                     # Note: Automatic assignments were already applied before saving
                                     if diarization_successful and diarization_segments:
-                                        show_dialog = kwargs.get(
-                                            "show_speaker_dialog", True
-                                        )
-                                        gui_mode = kwargs.get("gui_mode", False)
-                                        testing_mode = (
-                                            os.environ.get(
-                                                "KNOWLEDGE_CHIPPER_TESTING_MODE"
-                                            )
-                                            == "1"
+                                        # Determine if manual review should be queued
+                                        should_queue_review = (
+                                            self._should_queue_speaker_review(kwargs)
                                         )
 
-                                        # Only queue for manual review if dialog is explicitly requested
-                                        if (
-                                            show_dialog
-                                            and gui_mode
-                                            and not testing_mode
-                                        ):
+                                        if should_queue_review:
                                             # Pass the transcript_id and source_id for speaker assignment
                                             kwargs_with_ids = kwargs.copy()
                                             kwargs_with_ids[
@@ -1985,13 +2462,15 @@ class AudioProcessor(BaseProcessor):
 
                             except Exception as e:
                                 logger.error(
-                                    f"Failed to save transcript to database: {e}"
+                                    f"❌ Failed to save transcript to database: {e}"
                                 )
                                 logger.error(f"Database error type: {type(e).__name__}")
                                 logger.error(f"Database error details: {str(e)}")
-                                # Continue anyway - at least markdown file was saved
-                                logger.warning(
-                                    "Transcript saved to markdown but NOT to database"
+                                logger.error(
+                                    "⚠️  CRITICAL: Markdown file saved but database save FAILED"
+                                )
+                                logger.error(
+                                    "⚠️  This transcription will be marked as FAILED (database is required)"
                                 )
                                 # IMPORTANT: Database save failure should affect success reporting
                                 # Based on memory requirement: all transcriptions must write to database
@@ -2010,17 +2489,35 @@ class AudioProcessor(BaseProcessor):
                         if database_save_failed:
                             # Based on memory requirement: all transcriptions must write to database
                             logger.error(
-                                "Transcription completed but database save failed - reporting as failure"
+                                "❌ TRANSCRIPTION FAILED: Database save required but failed"
                             )
                             return ProcessorResult(
                                 success=False,
                                 errors=[
-                                    "Transcription completed but database save failed"
+                                    "Database save failed (required for claim-centric architecture)"
                                 ],
-                                data=final_data,
+                                data=None,  # Don't include data if we're reporting failure
                                 metadata=enhanced_metadata,
                             )
                         else:
+                            # Update queue status to completed
+                            if source_id and self.db_service:
+                                self.db_service.upsert_stage_status(
+                                    source_id=source_id,
+                                    stage="transcription",
+                                    status="completed",
+                                    progress_percent=100.0,
+                                    metadata={
+                                        "model": current_model,
+                                        "transcript_id": enhanced_metadata.get(
+                                            "database_transcript_id"
+                                        ),
+                                        "processing_time_seconds": enhanced_metadata.get(
+                                            "processing_time_seconds"
+                                        ),
+                                    },
+                                )
+
                             return ProcessorResult(
                                 success=True,
                                 data=final_data,
@@ -2087,6 +2584,19 @@ class AudioProcessor(BaseProcessor):
         # Clean up temporary file before returning
         if output_path and output_path.exists():
             output_path.unlink(missing_ok=True)
+
+        # Update queue status to failed
+        if source_id and self.db_service:
+            self.db_service.upsert_stage_status(
+                source_id=source_id,
+                stage="transcription",
+                status="failed",
+                metadata={
+                    "error": final_error,
+                    "retry_count": max_attempts,
+                    "final_model": current_model,
+                },
+            )
 
         return ProcessorResult(success=False, errors=[final_error])
 

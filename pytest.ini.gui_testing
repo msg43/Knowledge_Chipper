@@ -2,10 +2,14 @@
 # GUI Testing Configuration
 # Skip network-dependent tests that hang in offscreen mode
 
-# Skip YouTube URL tests (require proxy configuration and network)
+# Test markers for organization
 markers =
     skip_youtube: marks tests that require YouTube/download functionality (deselect during debugging)
     skip_network: marks tests that require network access
+    slow: marks tests as slow (deselect with '-m "not slow"')
+    requires_ollama: marks tests that require Ollama to be running
+    requires_api_key: marks tests that require API keys
+    integration: marks tests as integration tests (may take longer)
 
 addopts =
     -v
@@ -13,3 +17,11 @@ addopts =
     -x
     --timeout=1800
     -m "not skip_youtube"
+    --strict-markers
+
+# Timeout settings
+timeout = 1800
+timeout_method = thread
+
+# Qt-specific settings (for pytest-qt)
+qt_api = pyqt6

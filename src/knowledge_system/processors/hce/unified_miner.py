@@ -106,6 +106,10 @@ class UnifiedMiner:
     def mine_segment(self, segment: Segment) -> UnifiedMinerOutput:
         """Extract all entity types from a single segment."""
 
+        logger.debug(
+            f"🔍 Starting mining for segment {segment.segment_id} ({segment.t0}-{segment.t1})"
+        )
+
         # Prepare segment data for the prompt
         segment_data = {
             "segment_id": segment.segment_id,
@@ -119,6 +123,7 @@ class UnifiedMiner:
         full_prompt = f"{self.template}\n\nSEGMENT TO ANALYZE:\n{json.dumps(segment_data, indent=2)}"
 
         try:
+            logger.debug(f"📤 Sending LLM request for segment {segment.segment_id}")
             # Try structured JSON generation first (for Ollama models)
             raw_result = None
             if hasattr(self.llm, "generate_structured_json"):
@@ -126,23 +131,16 @@ class UnifiedMiner:
                     raw_result = self.llm.generate_structured_json(
                         full_prompt, "miner_output"
                     )
-                    import logging
-
-                    logger = logging.getLogger(__name__)
                     logger.debug(
                         "🔒 Using structured outputs with schema enforcement for miner"
                     )
                 except Exception as e:
-                    import logging
-
                     # Import error classes from the correct location
                     import sys
                     import traceback
 
                     sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
                     from knowledge_system.errors import ErrorCode, KnowledgeSystemError
-
-                    logger = logging.getLogger(__name__)
 
                     # If this is a critical error (like invalid provider), don't fall back - re-raise
                     if (
@@ -173,10 +171,9 @@ class UnifiedMiner:
             if raw_result is None:
                 raw_result = self.llm.generate_json(full_prompt)
 
-            # Debug logging
-            import logging
+            logger.info(f"📥 Received LLM response for segment {segment.segment_id}")
 
-            logger = logging.getLogger(__name__)
+            # Debug logging
             logger.debug(f"🔍 MINER DEBUG: raw_result type: {type(raw_result)}")
             logger.debug(f"🔍 MINER DEBUG: raw_result value: {raw_result}")
 
@@ -205,9 +202,6 @@ class UnifiedMiner:
             # and migrate v1 flat structure to v2 nested structure if needed
             repaired_result, is_valid, errors = repair_and_validate_miner_output(result)
             if not is_valid:
-                import logging
-
-                logger = logging.getLogger(__name__)
                 logger.warning(
                     f"Miner output failed schema validation after repair: {errors}"
                 )
@@ -220,17 +214,23 @@ class UnifiedMiner:
             output = UnifiedMinerOutput(result)
             if not output.is_valid():
                 # Return empty structure if invalid
+                logger.warning(
+                    f"⚠️  Segment {segment.segment_id} output invalid, returning empty"
+                )
                 return UnifiedMinerOutput(
                     {"claims": [], "jargon": [], "people": [], "mental_models": []}
                 )
 
+            logger.info(
+                f"✅ Segment {segment.segment_id} mining complete: "
+                f"{len(output.claims)} claims, {len(output.jargon)} jargon, "
+                f"{len(output.people)} people, {len(output.mental_models)} concepts"
+            )
+
             return output
 
         except Exception as e:
-            import logging
             import traceback
-
-            logger = logging.getLogger(__name__)
 
             # Safely convert exception to string (handle ErrorCode enums in exception args)
             try:
@@ -240,9 +240,10 @@ class UnifiedMiner:
                 logger.debug(f"Exception formatting error: {format_error}")
                 logger.debug(f"Exception args: {e.args}")
 
-            logger.warning(
-                f"Unified mining failed for segment {segment.segment_id}: {error_msg}"
+            logger.error(
+                f"❌ Unified mining failed for segment {segment.segment_id}: {error_msg}"
             )
+            logger.debug(f"Full traceback:\n{traceback.format_exc()}")
 
             # Return empty structure on failure
             return UnifiedMinerOutput(

@@ -736,7 +736,7 @@ class BaseTab(QWidget):
                 else:  # Linux
                     subprocess.run(["xdg-open", str(report_path)])
 
-                self.append_log(f"📄 Opened report: {Path(report_path).name}")
+                self.append_log(f"📄 Opening report: {report_path}")
             except Exception as e:
                 self.show_error("Error", f"Failed to open report: {e}")
         else:

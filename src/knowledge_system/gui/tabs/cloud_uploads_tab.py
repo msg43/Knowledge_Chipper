@@ -303,14 +303,10 @@ class CloudUploadsTab(BaseTab):
         parent_layout.addWidget(self.legacy_auth_widget)
 
     def _toggle_legacy_auth(self) -> None:
-        """Toggle visibility of legacy auth section."""
-        is_visible = self.legacy_auth_widget.isVisible()
-        self.legacy_auth_widget.setVisible(not is_visible)
-
-        if is_visible:
-            self.legacy_auth_toggle.setText("▶ Advanced: Direct Email/Password Sign-In")
-        else:
-            self.legacy_auth_toggle.setText("▼ Advanced: Direct Email/Password Sign-In")
+        """Toggle visibility of legacy auth section (no longer used)."""
+        # Legacy auth section removed - this method kept for compatibility
+        # but does nothing since legacy_auth_widget no longer exists
+        pass
 
     def _create_database_section(self) -> QGroupBox:
         """Create database selection section."""
@@ -1091,28 +1087,14 @@ Episodes: {stats.get('total_episodes', 0)}"""
         self._refresh_auth_ui()
 
     def _sign_in(self) -> None:
-        """Sign in to Supabase."""
-        if not self.auth or not self.auth.is_available():
-            QMessageBox.warning(
-                self, "Auth Unavailable", "Supabase authentication is not available"
-            )
-            return
-
-        email = self.email_edit.text().strip()
-        password = self.password_edit.text()
-
-        if not email or not password:
-            QMessageBox.information(
-                self, "Missing Credentials", "Please enter email and password"
-            )
-            return
-
-        success, message = self.auth.sign_in(email, password)
-        if success:
-            self._refresh_auth_ui()
-            self.password_edit.clear()  # Clear password for security
-        else:
-            QMessageBox.warning(self, "Sign In Failed", message)
+        """Sign in to Supabase (legacy - no longer used, OAuth is primary)."""
+        # Legacy email/password auth removed - OAuth is the primary auth method
+        QMessageBox.information(
+            self,
+            "OAuth Required",
+            "Please use the 'Sign In via Skipthepodcast.com' button for authentication.\n\n"
+            "Direct email/password sign-in has been replaced with secure OAuth authentication.",
+        )
 
     def _sign_up(self) -> None:
         """Sign up for Supabase account."""

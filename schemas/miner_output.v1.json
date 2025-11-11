@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "MinerOutputV1",
-  "description": "Output schema for the Unified Miner system - flat structure optimized for Ollama structured outputs",
+  "description": "Output schema for Unified Miner - matches database requirements with full evidence structure (now aligned with v2)",
   "type": "object",
   "required": ["claims", "jargon", "people", "mental_models"],
   "properties": {
@@ -10,7 +10,7 @@
       "description": "Extracted claims from the content",
       "items": {
         "type": "object",
-        "required": ["claim_text", "claim_type", "stance"],
+        "required": ["claim_text", "claim_type", "domain", "stance", "evidence_spans"],
         "properties": {
           "claim_text": {
             "type": "string",
@@ -22,22 +22,59 @@
             "enum": ["factual", "causal", "normative", "forecast", "definition"],
             "description": "Type of claim being made"
           },
+          "domain": {
+            "type": "string",
+            "description": "Broad field classification for searchability (e.g., 'physics', 'economics', 'politics')"
+          },
           "stance": {
             "type": "string",
             "enum": ["asserts", "questions", "opposes", "neutral"],
             "description": "Speaker's stance toward the claim"
           },
-          "timestamp": {
-            "type": "string",
-            "description": "Timestamp of when the claim was first mentioned (MM:SS or HH:MM:SS)"
-          },
-          "evidence_quote": {
-            "type": "string",
-            "description": "Supporting quote from the text (optional)"
-          },
-          "evidence_timestamp": {
-            "type": "string",
-            "description": "Timestamp of the evidence_quote for jump-to navigation (MM:SS or HH:MM:SS)"
+          "evidence_spans": {
+            "type": "array",
+            "description": "Array of evidence supporting this claim (can have multiple)",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["segment_id", "quote", "t0", "t1"],
+              "properties": {
+                "segment_id": {
+                  "type": "string",
+                  "description": "ID of the segment where this evidence appears"
+                },
+                "quote": {
+                  "type": "string",
+                  "description": "The exact quote supporting the claim"
+                },
+                "t0": {
+                  "type": "string",
+                  "description": "Start timestamp (MM:SS or HH:MM:SS)"
+                },
+                "t1": {
+                  "type": "string",
+                  "description": "End timestamp (MM:SS or HH:MM:SS)"
+                },
+                "context_t0": {
+                  "type": "string",
+                  "description": "Start of extended context (optional)"
+                },
+                "context_t1": {
+                  "type": "string",
+                  "description": "End of extended context (optional)"
+                },
+                "context_text": {
+                  "type": "string",
+                  "description": "Extended context around the quote (1-2 sentences)"
+                },
+                "context_type": {
+                  "type": "string",
+                  "enum": ["exact", "extended", "segment"],
+                  "description": "Type of context provided",
+                  "default": "exact"
+                }
+              }
+            }
           }
         }
       }
@@ -47,7 +84,7 @@
       "description": "Technical terms and domain-specific vocabulary",
       "items": {
         "type": "object",
-        "required": ["term", "definition"],
+        "required": ["term", "definition", "domain", "evidence_spans"],
         "properties": {
           "term": {
             "type": "string",
@@ -57,39 +94,119 @@
             "type": "string",
             "description": "Brief definition of the term"
           },
-          "context_quote": {
+          "domain": {
             "type": "string",
-            "description": "Direct quote from the segment where the term is used"
+            "description": "Domain or field this jargon belongs to (e.g., 'constitutional law', 'quantum mechanics', 'behavioral economics')"
           },
-          "timestamp": {
-            "type": "string",
-            "description": "Timestamp in MM:SS or HH:MM:SS format (NO REGEX)"
+          "evidence_spans": {
+            "type": "array",
+            "description": "Array of evidence showing usage of this term",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["segment_id", "quote", "t0", "t1"],
+              "properties": {
+                "segment_id": {
+                  "type": "string",
+                  "description": "ID of the segment where this term appears"
+                },
+                "quote": {
+                  "type": "string",
+                  "description": "Quote showing how the term is used"
+                },
+                "t0": {
+                  "type": "string",
+                  "description": "Start timestamp (MM:SS or HH:MM:SS)"
+                },
+                "t1": {
+                  "type": "string",
+                  "description": "End timestamp (MM:SS or HH:MM:SS)"
+                },
+                "context_text": {
+                  "type": "string",
+                  "description": "Extended context showing usage"
+                }
+              }
+            }
           }
         }
       }
     },
     "people": {
       "type": "array",
-      "description": "People mentioned in the content",
+      "description": "People and organizations mentioned in the content",
       "items": {
         "type": "object",
-        "required": ["name"],
+        "required": ["name", "normalized_name", "entity_type", "mentions"],
         "properties": {
           "name": {
             "type": "string",
-            "description": "Name of the person mentioned"
+            "description": "Name of the person/organization as mentioned"
+          },
+          "normalized_name": {
+            "type": "string",
+            "description": "Standardized form of the name (e.g., 'First Last')"
+          },
+          "entity_type": {
+            "type": "string",
+            "enum": ["person", "organization"],
+            "description": "Whether this is a person or organization"
           },
           "role_or_description": {
             "type": "string",
             "description": "Their role or how they're described"
           },
-          "context_quote": {
-            "type": "string",
-            "description": "Quote showing how they're mentioned"
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confidence in the identification (0.0-1.0)",
+            "default": 0.8
           },
-          "timestamp": {
-            "type": "string",
-            "description": "Timestamp in MM:SS or HH:MM:SS format (NO REGEX)"
+          "external_ids": {
+            "type": "object",
+            "description": "External identifiers for entity resolution",
+            "properties": {
+              "wikidata": {
+                "type": "string",
+                "description": "WikiData QID (e.g., 'Q47213')"
+              },
+              "wikipedia": {
+                "type": "string",
+                "description": "Wikipedia page title"
+              }
+            }
+          },
+          "mentions": {
+            "type": "array",
+            "description": "Array of all mentions of this person/org",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["segment_id", "surface_form", "quote", "t0", "t1"],
+              "properties": {
+                "segment_id": {
+                  "type": "string",
+                  "description": "ID of the segment where mentioned"
+                },
+                "surface_form": {
+                  "type": "string",
+                  "description": "How they were referred to in this mention"
+                },
+                "quote": {
+                  "type": "string",
+                  "description": "Quote showing the mention"
+                },
+                "t0": {
+                  "type": "string",
+                  "description": "Start timestamp (MM:SS or HH:MM:SS)"
+                },
+                "t1": {
+                  "type": "string",
+                  "description": "End timestamp (MM:SS or HH:MM:SS)"
+                }
+              }
+            }
           }
         }
       }
@@ -99,23 +216,53 @@
       "description": "Frameworks, concepts, or approaches discussed",
       "items": {
         "type": "object",
-        "required": ["name", "description"],
+        "required": ["name", "definition", "evidence_spans"],
         "properties": {
           "name": {
             "type": "string",
             "description": "Name of the mental model or framework"
           },
-          "description": {
+          "definition": {
             "type": "string",
             "description": "Explanation of the model/framework"
           },
-          "context_quote": {
-            "type": "string",
-            "description": "Quote showing how it's discussed"
+          "aliases": {
+            "type": "array",
+            "description": "Alternative names for this model",
+            "items": {
+              "type": "string"
+            }
           },
-          "timestamp": {
-            "type": "string",
-            "description": "Timestamp in MM:SS or HH:MM:SS format (NO REGEX)"
+          "evidence_spans": {
+            "type": "array",
+            "description": "Array of evidence showing discussion/application",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["segment_id", "quote", "t0", "t1"],
+              "properties": {
+                "segment_id": {
+                  "type": "string",
+                  "description": "ID of the segment where discussed"
+                },
+                "quote": {
+                  "type": "string",
+                  "description": "Quote showing the discussion"
+                },
+                "t0": {
+                  "type": "string",
+                  "description": "Start timestamp (MM:SS or HH:MM:SS)"
+                },
+                "t1": {
+                  "type": "string",
+                  "description": "End timestamp (MM:SS or HH:MM:SS)"
+                },
+                "context_text": {
+                  "type": "string",
+                  "description": "Extended context showing explanation/application"
+                }
+              }
+            }
           }
         }
       }

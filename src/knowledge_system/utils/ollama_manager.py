@@ -56,9 +56,18 @@ class InstallationProgress:
 class OllamaManager:
     """Manages Ollama service and model operations."""
 
-    def __init__(self, base_url: str = "http://localhost:11434") -> None:
+    def __init__(
+        self, base_url: str = "http://localhost:11434", timeout: int | None = None
+    ) -> None:
         self.base_url = base_url.rstrip("/")
-        self.timeout = 120  # Increased for HCE processing
+        # Get timeout from parameter or config
+        if timeout is not None:
+            self.timeout = timeout
+        else:
+            from ..config import get_settings
+
+            settings = get_settings()
+            self.timeout = settings.local_config.timeout  # Use config timeout (600s)
         # Model registry cache - persistent until manually refreshed
         self._registry_cache: list[ModelInfo] = []
         self._cache_valid: bool = False

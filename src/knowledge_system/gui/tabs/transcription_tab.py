@@ -2,12 +2,13 @@
 
 import os
 import random
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -18,6 +19,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QSpinBox,
@@ -57,6 +59,7 @@ class EnhancedTranscriptionWorker(QThread):
         object, str, object, str
     )  # speaker_data_list, recording_path, metadata, task_id
     log_message = pyqtSignal(str)  # Log messages from processing pipeline
+    existing_audio_decision_requested = pyqtSignal(dict)
 
     def __init__(
         self, files: Any, settings: Any, gui_settings: Any, parent: Any = None
@@ -84,6 +87,8 @@ class EnhancedTranscriptionWorker(QThread):
 
         self.cancellation_token = CancellationToken()
         self.log_handler = None  # Will be set when processing starts
+        self._existing_audio_decision_event = threading.Event()
+        self._existing_audio_decision_response = True
 
     def _transcription_progress_callback(
         self, step_description_or_dict: Any, progress_percent: int | None = None
@@ -152,6 +157,22 @@ class EnhancedTranscriptionWorker(QThread):
             f"Processing continues without blocking."
         )
         return None  # Non-blocking - assignment will be handled asynchronously
+
+    @pyqtSlot(bool)
+    def set_existing_audio_decision(self, decision: bool) -> None:
+        """Receive the user's decision about reusing existing audio."""
+
+        self._existing_audio_decision_response = decision
+        self._existing_audio_decision_event.set()
+
+    def _await_existing_audio_decision(self, payload: dict) -> bool:
+        """Emit decision request to main thread and block until resolved."""
+
+        self._existing_audio_decision_event.clear()
+        self._existing_audio_decision_response = True
+        self.existing_audio_decision_requested.emit(payload)
+        self._existing_audio_decision_event.wait()
+        return self._existing_audio_decision_response
 
     def _apply_youtube_delay(self, median_delay: int, is_first: bool = False):
         """Apply randomized delay between YouTube downloads."""
@@ -308,6 +329,43 @@ class EnhancedTranscriptionWorker(QThread):
                         progress_callback=download_progress_callback,
                         cancellation_token=self.cancellation_token,
                     )
+
+                    reuse_records = []
+                    if result.metadata:
+                        reuse_records = (
+                            result.metadata.get("reused_existing_audio", []) or []
+                        )
+                    if not reuse_records and result.data:
+                        reuse_records = (
+                            result.data.get("reused_existing_audio", []) or []
+                        )
+
+                    if reuse_records:
+                        reuse_info = reuse_records[0]
+                        decision_payload = {
+                            "url": url,
+                            "file_path": reuse_info.get("path"),
+                            "size_bytes": reuse_info.get("size_bytes"),
+                            "source_id": reuse_info.get("source_id"),
+                        }
+                        use_existing = self._await_existing_audio_decision(
+                            decision_payload
+                        )
+
+                        if not use_existing:
+                            self.transcription_step_updated.emit(
+                                "♻️ Re-downloading to replace existing audio...",
+                                int(download_range_start),
+                            )
+                            result = downloader.process(
+                                url,
+                                output_dir=downloads_dir,
+                                db_service=db_service,
+                                progress_callback=download_progress_callback,
+                                cancellation_token=self.cancellation_token,
+                                allow_existing_audio=False,
+                                force_redownload=True,
+                            )
 
                     if result.success and result.data.get("downloaded_files"):
                         audio_file = result.data["downloaded_files"][0]
@@ -655,14 +713,14 @@ class EnhancedTranscriptionWorker(QThread):
         downloads_dir: Path,
     ) -> list[Path]:
         """
-        Download URLs using unified download path with YouTube-to-RSS mapping.
+        Download URLs using unified download path with optional YouTube-to-RSS mapping.
 
         Handles 0, 1, or multiple cookie files with consistent behavior:
         - 0 cookies: No authentication, safe rate limiting
         - 1 cookie: Single scheduler with deduplication and failover
         - 2+ cookies: Parallel schedulers with load distribution
 
-        NEW: Automatically maps YouTube URLs to podcast RSS feeds when available,
+        RSS Mapping: When enabled, automatically maps YouTube URLs to podcast RSS feeds,
         downloading from RSS (no rate limiting) and falling back to YouTube.
         """
         import asyncio
@@ -708,6 +766,9 @@ class EnhancedTranscriptionWorker(QThread):
         # Create database service
         db_service = DatabaseService()
 
+        # Get RSS mapping setting from gui_settings (default to False if not set)
+        enable_rss_mapping = self.gui_settings.get("enable_rss_mapping", False)
+
         # Create unified orchestrator (handles RSS + YouTube)
         orchestrator = UnifiedDownloadOrchestrator(
             youtube_urls=urls,
@@ -715,6 +776,7 @@ class EnhancedTranscriptionWorker(QThread):
             output_dir=downloads_dir,
             db_service=db_service,
             progress_callback=progress_callback,
+            enable_rss_mapping=enable_rss_mapping,
         )
 
         # Run unified orchestrator (RSS + YouTube in parallel)
@@ -724,9 +786,10 @@ class EnhancedTranscriptionWorker(QThread):
             # Returns: [(audio_file_path, source_id), ...]
             files_with_source_ids = loop.run_until_complete(orchestrator.process_all())
 
-            # Store source_id metadata for downstream processing
+            # Ensure MediaSource records exist with audio_file_path
+            # (This is now handled by the download processors, but we verify here)
             for audio_file, source_id in files_with_source_ids:
-                self._store_source_id_metadata(audio_file, source_id)
+                self._ensure_source_record_has_file_path(audio_file, source_id)
 
             # Extract just file paths for return
             downloaded_files = [Path(path) for path, _ in files_with_source_ids]
@@ -741,24 +804,51 @@ class EnhancedTranscriptionWorker(QThread):
 
         return downloaded_files
 
-    def _store_source_id_metadata(self, audio_file: Path, source_id: str) -> None:
+    def _ensure_source_record_has_file_path(
+        self, audio_file: Path, source_id: str
+    ) -> None:
         """
-        Store source_id in sidecar file for downstream processing.
+        Ensure MediaSource record has audio_file_path set.
+
+        This is the database-centric approach that replaces sidecar files.
+        The transcription pipeline will use get_source_by_file_path() to
+        look up the source_id from the audio file path.
 
         Args:
             audio_file: Path to audio file
             source_id: Source ID for this file
         """
+        from ...database.service import DatabaseService
+
         try:
-            metadata_file = audio_file.with_suffix(".source_id")
-            metadata_file.write_text(source_id)
-            logger.debug(
-                f"Stored source_id metadata: {source_id} -> {metadata_file.name}"
-            )
+            db_service = DatabaseService()
+
+            # Check if source exists
+            source = db_service.get_source(source_id)
+
+            if source:
+                # Update audio_file_path if not set or different
+                if source.audio_file_path != str(audio_file):
+                    db_service.update_source(
+                        source_id=source_id, audio_file_path=str(audio_file)
+                    )
+                    logger.debug(
+                        f"Updated audio_file_path for {source_id}: {audio_file.name}"
+                    )
+            else:
+                # Create minimal source record if it doesn't exist
+                # (This shouldn't happen if download processors work correctly)
+                logger.warning(f"Source {source_id} not found, creating minimal record")
+                db_service.create_source(
+                    source_id=source_id,
+                    title=audio_file.stem,  # Use filename as title
+                    url="",  # Will be filled in later
+                    source_type="unknown",
+                    audio_file_path=str(audio_file),
+                )
+
         except Exception as e:
-            logger.warning(
-                f"Failed to store source_id metadata for {audio_file.name}: {e}"
-            )
+            logger.error(f"Failed to ensure source record for {source_id}: {e}")
 
     def _test_and_filter_cookies(self, cookie_files: list[str]) -> list[str]:
         """Test cookie files and return only valid ones"""
@@ -1171,9 +1261,31 @@ class EnhancedTranscriptionWorker(QThread):
                                 if match:
                                     potential_id = match.group(1)
                                     # Verify it's not just random characters by checking database
-                                    test_record = db_service.get_video(potential_id)
+                                    test_record = db_service.get_source(potential_id)
+                                    resolved_source_id = None
+
                                     if test_record:
-                                        source_id = potential_id
+                                        resolved_source_id = potential_id
+                                    else:
+                                        (
+                                            exists,
+                                            canonical_id,
+                                        ) = db_service.source_exists_or_has_alias(
+                                            potential_id
+                                        )
+                                        if exists and canonical_id:
+                                            alias_record = db_service.get_source(
+                                                canonical_id
+                                            )
+                                            if alias_record:
+                                                test_record = alias_record
+                                                resolved_source_id = canonical_id
+                                                logger.info(
+                                                    f"🔗 Resolved alias {potential_id} → {canonical_id}"
+                                                )
+
+                                    if test_record and resolved_source_id:
+                                        source_id = resolved_source_id
                                         source_record = test_record
                                         logger.info(
                                             f"✅ Found source_id in filename: {source_id} (pattern: {pattern})"
@@ -1186,7 +1298,28 @@ class EnhancedTranscriptionWorker(QThread):
                                     source_id = extract_video_id(filename)
                                     if source_id:
                                         source_record = db_service.get_source(source_id)
-                                        if source_record:
+                                        resolved_source_id = source_id
+
+                                        if not source_record:
+                                            (
+                                                exists,
+                                                canonical_id,
+                                            ) = db_service.source_exists_or_has_alias(
+                                                source_id
+                                            )
+                                            if exists and canonical_id:
+                                                alias_record = db_service.get_source(
+                                                    canonical_id
+                                                )
+                                                if alias_record:
+                                                    source_record = alias_record
+                                                    resolved_source_id = canonical_id
+                                                    logger.info(
+                                                        f"🔗 Resolved alias {source_id} → {canonical_id}"
+                                                    )
+
+                                        if source_record and resolved_source_id:
+                                            source_id = resolved_source_id
                                             logger.info(
                                                 f"✅ Extracted source_id via URL pattern: {source_id}"
                                             )
@@ -1202,27 +1335,16 @@ class EnhancedTranscriptionWorker(QThread):
                             )
 
                         if source_record:
-                            # Retrieve platform tags from relationship
-                            tags = []
-                            if source_record.platform_tags:
-                                tags = [
-                                    tag_assoc.tag.tag_name
-                                    for tag_assoc in source_record.platform_tags
-                                    if tag_assoc.tag
-                                ]
-
-                            # Retrieve platform categories from relationship
-                            categories = []
-                            if source_record.platform_categories:
-                                categories = [
-                                    cat_assoc.category.category_name
-                                    for cat_assoc in source_record.platform_categories
-                                    if cat_assoc.category
-                                ]
+                            # Retrieve platform metadata from preloaded lists to avoid detached session issues
+                            tags = getattr(source_record, "tags_json", None) or []
+                            categories = (
+                                getattr(source_record, "categories_json", None) or []
+                            )
 
                             # Convert database record to metadata dict for audio processor
                             video_metadata = {
                                 "source_id": source_record.source_id,
+                                "video_id": source_record.source_id,  # For backward compatibility with markdown template
                                 "title": source_record.title,
                                 "url": source_record.url,
                                 "uploader": source_record.uploader,
@@ -1237,7 +1359,7 @@ class EnhancedTranscriptionWorker(QThread):
                                 "thumbnail_local_path": source_record.thumbnail_local_path,
                             }
                             processing_kwargs_with_output[
-                                "video_metadata"
+                                "source_metadata"
                             ] = video_metadata
 
                             # Debug logging for tags and metadata
@@ -1373,6 +1495,12 @@ class EnhancedTranscriptionWorker(QThread):
                         self.transcription_step_updated.emit(step_msg, 100)
 
                         # Track successful file with details
+                        # Extract source_id from metadata for database-based summarization
+                        source_id = (
+                            result.metadata.get("database_media_id")
+                            if result.metadata
+                            else None
+                        )
                         self.successful_files.append(
                             {
                                 "file": file_name,
@@ -1381,6 +1509,7 @@ class EnhancedTranscriptionWorker(QThread):
                                     Path(saved_file).name if saved_file else None
                                 ),
                                 "saved_file_path": saved_file,  # Store full path for summarization tab
+                                "source_id": source_id,  # Store source_id for database lookup
                             }
                         )
 
@@ -1569,6 +1698,14 @@ class EnhancedTranscriptionWorker(QThread):
                                                     else None
                                                 )
 
+                                                # Extract source_id from retry metadata
+                                                retry_source_id = (
+                                                    retry_result.metadata.get(
+                                                        "database_media_id"
+                                                    )
+                                                    if retry_result.metadata
+                                                    else None
+                                                )
                                                 self.successful_files.append(
                                                     {
                                                         "file": file_name,
@@ -1579,6 +1716,7 @@ class EnhancedTranscriptionWorker(QThread):
                                                             else None
                                                         ),
                                                         "saved_file_path": saved_file,
+                                                        "source_id": retry_source_id,  # Store source_id for database lookup
                                                         "recovery_note": "Recovered after re-download with large model",
                                                     }
                                                 )
@@ -1737,7 +1875,13 @@ class EnhancedTranscriptionWorker(QThread):
             )
 
         except Exception as e:
-            self.processing_error.emit(str(e))
+            import traceback
+
+            error_msg = str(e) if str(e) else "Unknown error occurred"
+            error_details = traceback.format_exc()
+            logger.error(f"❌ Transcription worker error: {error_msg}")
+            logger.error(f"Full traceback:\n{error_details}")
+            self.processing_error.emit(f"{error_msg}\n\nSee logs for full traceback.")
 
     def _handle_auto_process(self, file_path: str, transcript_data: dict) -> None:
         """Handle System 2 auto-process pipeline."""
@@ -2083,7 +2227,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         )
         layout.addWidget(model_label_widget, 0, 0, 1, 2)
 
-        # Language selection - wrap label + widget together
+        # Language selection - compact label + widget
+        layout.addWidget(QLabel("Language:"), 0, 2)
         self.language_combo = QComboBox()
         self.language_combo.addItems(
             ["en", "auto", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh"]
@@ -2091,20 +2236,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.language_combo.setCurrentText("auto")
         self.language_combo.setMaximumWidth(100)  # Compact width
         self.language_combo.currentTextChanged.connect(self._on_setting_changed)
-        language_label_widget = QWidget()
-        language_label_layout = QHBoxLayout(language_label_widget)
-        language_label_layout.setContentsMargins(0, 0, 0, 0)
-        language_label_layout.setSpacing(6)
-        language_label = QLabel("Language:")
-        language_label.setMinimumWidth(
-            130
-        )  # Fixed width for alignment with Transcription Model
-        language_label_layout.addWidget(language_label)
-        language_label_layout.addWidget(self.language_combo)
-        language_label_layout.addStretch()  # Keep compact
         language_tooltip = "Select the language of the audio. 'auto' lets Whisper detect the language automatically. Specifying the exact language can improve accuracy."
         self.language_combo.setToolTip(f"<b>Language:</b><br/><br/>{language_tooltip}")
-        layout.addWidget(language_label_widget, 0, 2, 1, 2)
+        layout.addWidget(self.language_combo, 0, 3)
 
         # Checkboxes on same row (row 0, columns 4, 5, 6)
         self.timestamps_checkbox = QCheckBox("Include timestamps")
@@ -2126,14 +2260,19 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.diarization_checkbox.toggled.connect(self._on_diarization_toggled)
         layout.addWidget(self.diarization_checkbox, 0, 5)
 
+        # DISABLED: Color-coded transcripts feature causes YAML corruption
+        # The enhanced markdown with HTML color codes breaks YAML frontmatter parsing
+        # Normal transcripts with speaker assignment work perfectly without color coding
         self.color_coded_checkbox = QCheckBox("Generate color-coded transcripts")
-        self.color_coded_checkbox.setChecked(False)  # Default to unchecked
+        self.color_coded_checkbox.setChecked(False)  # Always disabled
+        self.color_coded_checkbox.setEnabled(False)  # Disable UI control
         self.color_coded_checkbox.setToolTip(
-            "Generate HTML and enhanced markdown transcripts with color-coded speakers. "
-            "Creates visually appealing transcripts for easy speaker identification."
+            "⚠️ DISABLED: This feature causes YAML formatting issues. "
+            "Use speaker assignment without color coding for best results."
         )
         self.color_coded_checkbox.toggled.connect(self._on_setting_changed)
-        layout.addWidget(self.color_coded_checkbox, 0, 6)
+        self.color_coded_checkbox.setVisible(False)  # Hide from UI
+        # layout.addWidget(self.color_coded_checkbox, 0, 6)  # Commented out - checkbox hidden
 
         # Row 1: GPU Acceleration | Format | Checkboxes side by side
         # Wrap GPU Acceleration label + widget together
@@ -2157,24 +2296,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         )
         layout.addWidget(device_label_widget, 1, 0, 1, 2)
 
-        # Format - wrap label + widget together
+        # Format - compact label + widget
+        layout.addWidget(QLabel("Format:"), 1, 2)
         self.format_combo = QComboBox()
         self.format_combo.addItems(["md", "none"])
         self.format_combo.setCurrentText("md")
         self.format_combo.setMaximumWidth(80)  # Compact width
         self.format_combo.currentTextChanged.connect(self._on_setting_changed)
-        format_label_widget = QWidget()
-        format_label_layout = QHBoxLayout(format_label_widget)
-        format_label_layout.setContentsMargins(0, 0, 0, 0)
-        format_label_layout.setSpacing(6)
-        format_label = QLabel("Format:")
-        format_label.setMinimumWidth(130)  # Fixed width for alignment
-        format_label_layout.addWidget(format_label)
-        format_label_layout.addWidget(self.format_combo)
-        format_label_layout.addStretch()  # Keep compact
         format_tooltip = "Output format: 'md' for Markdown with YAML frontmatter and metadata, 'none' to save to database only without creating output files."
         self.format_combo.setToolTip(f"<b>Format:</b><br/><br/>{format_tooltip}")
-        layout.addWidget(format_label_widget, 1, 2, 1, 2)
+        layout.addWidget(self.format_combo, 1, 3)
 
         # Checkboxes on row 1
         self.overwrite_checkbox = QCheckBox("Overwrite existing transcripts")
@@ -2194,17 +2325,49 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.speaker_assignment_checkbox.toggled.connect(self._on_setting_changed)
         layout.addWidget(self.speaker_assignment_checkbox, 1, 5)
 
-        self.use_proxy_checkbox = QCheckBox("Enable PacketStream proxy")
-        self.use_proxy_checkbox.setChecked(True)  # Default to using proxy if configured
-        self.use_proxy_checkbox.setToolTip(
-            "Enable PacketStream residential proxies to avoid YouTube bot detection.\n"
-            "• Recommended when downloading multiple videos\n"
-            "• Requires PacketStream credentials in Settings tab\n"
-            "• Unchecked: Direct download (faster but may trigger bot detection)\n"
-            "• Checked: Proxy download (slower but more reliable for bulk downloads)"
+        # YouTube to RSS mapping checkbox
+        # POSITIONED ABOVE Proxy selector per user request
+        self.enable_rss_mapping_checkbox = QCheckBox("Enable YT→RSS")
+        self.enable_rss_mapping_checkbox.setChecked(False)  # Default to unchecked
+        self.enable_rss_mapping_checkbox.setToolTip(
+            "When enabled, YouTube URLs are first checked to see if an identical episode\n"
+            "is available via podcast RSS feed. RSS downloads are faster and more reliable.\n\n"
+            "When disabled, YouTube URLs are downloaded directly from YouTube.\n\n"
+            "Note: RSS mapping requires network access to search for matching podcast episodes."
         )
-        self.use_proxy_checkbox.toggled.connect(self._on_setting_changed)
-        layout.addWidget(self.use_proxy_checkbox, 1, 6)
+        self.enable_rss_mapping_checkbox.toggled.connect(self._on_setting_changed)
+        layout.addWidget(
+            self.enable_rss_mapping_checkbox, 0, 6
+        )  # Row 0, Position 6 (above proxy)
+
+        # Proxy mode selector - custom layout for precise positioning
+        # POSITIONED BELOW YT→RSS checkbox per user request
+        proxy_container = QWidget()
+        proxy_layout = QHBoxLayout(proxy_container)
+        proxy_layout.setContentsMargins(-20, 0, 0, 0)  # Move left 20 pixels
+        proxy_layout.setSpacing(6)
+
+        proxy_label = QLabel("Proxy:")
+        proxy_layout.addWidget(proxy_label)
+
+        self.proxy_mode_combo = QComboBox()
+        self.proxy_mode_combo.addItems(["Auto", "Always", "Never"])
+        self.proxy_mode_combo.setCurrentIndex(0)  # Default to Auto
+        self.proxy_mode_combo.setMinimumWidth(90)  # 80 + 10 pixels wider
+        self.proxy_mode_combo.setToolTip(
+            "Control proxy usage for YouTube downloads:\n\n"
+            "• Auto (recommended): Disables proxies when using cookies (home IP + cookies is most reliable),\n"
+            "  enables proxies otherwise\n\n"
+            "• Always: Force PacketStream proxy usage (requires credentials in Settings)\n\n"
+            "• Never: Always use direct connection (faster but may trigger bot detection)"
+        )
+        self.proxy_mode_combo.currentIndexChanged.connect(self._on_setting_changed)
+        proxy_layout.addWidget(self.proxy_mode_combo)
+        proxy_layout.addStretch()
+
+        layout.addWidget(
+            proxy_container, 1, 6, 1, 2
+        )  # Row 1, Position 6, span 2 columns for space
 
         # Output directory with custom layout for tooltip positioning
         layout.addWidget(QLabel("Output Directory:"), 2, 0)
@@ -2276,54 +2439,34 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         cookie_group.setFlat(True)  # Make it more compact
         cookie_layout = QVBoxLayout()
 
-        # Horizontal layout for checkboxes on same line
-        checkbox_row = QHBoxLayout()
-        checkbox_row.setSpacing(15)
-
-        # Enable multi-account checkbox
-        self.enable_cookies_checkbox = QCheckBox("Enable multi-account")
-        self.enable_cookies_checkbox.setChecked(True)
-        self.enable_cookies_checkbox.setToolTip(
-            "Use cookies from 1-6 throwaway Google accounts.\n"
-            "More accounts = faster downloads (3 recommended for large batches).\n\n"
-            "Each account downloads with safe 3-5 min delays.\n"
-            "Automatic failover if any account's cookies go stale."
-        )
-        checkbox_row.addWidget(self.enable_cookies_checkbox)
-
-        # Disable proxies checkbox - same line
-        self.disable_proxies_with_cookies_checkbox = QCheckBox("Disable proxies")
-        self.disable_proxies_with_cookies_checkbox.setChecked(True)
-        self.disable_proxies_with_cookies_checkbox.setToolTip(
-            "Automatically disable proxies when using cookies.\n"
-            "Recommended: Use cookies + home IP for best results."
-        )
-        self.disable_proxies_with_cookies_checkbox.toggled.connect(
-            self._on_setting_changed
-        )
-        checkbox_row.addWidget(self.disable_proxies_with_cookies_checkbox)
-
-        checkbox_row.addStretch()  # Push checkboxes to the left
-        cookie_layout.addLayout(checkbox_row)
-
         # Multi-account cookie manager widget
+        # Cookie authentication is automatically enabled when cookie files are provided
+        # Multi-account mode is automatically enabled when multiple cookie files are provided
         self.cookie_manager = CookieFileManager()
-        self.cookie_manager.setEnabled(False)
         self.cookie_manager.cookies_changed.connect(self._on_setting_changed)
         cookie_layout.addWidget(self.cookie_manager)
-
-        # Connect enable checkbox to enable/disable controls
-        self.enable_cookies_checkbox.toggled.connect(self._on_cookies_toggled)
 
         cookie_group.setLayout(cookie_layout)
         layout.addWidget(cookie_group, 3, 0, 1, 7)
 
         # Rate Limiting Section - collapsible
-        rate_limit_group = QGroupBox("Rate Limiting (Anti-Bot Protection)")
+        rate_limit_group = QGroupBox("Rate Limiting (Per-Account Anti-Bot Protection)")
         rate_limit_group.setCheckable(True)
         rate_limit_group.setChecked(False)  # Start collapsed
         rate_limit_group.setFlat(True)  # Make it more compact
         rate_limit_layout = QVBoxLayout()
+
+        # Explanation text
+        explanation_label = QLabel(
+            "⏱️ These delays apply <b>per account</b> in multi-account mode. With multiple accounts downloading "
+            "<b>concurrently</b> from the same IP (like a family household), overall throughput is much faster "
+            "while each account maintains human-like behavior patterns."
+        )
+        explanation_label.setWordWrap(True)
+        explanation_label.setStyleSheet(
+            "color: #888; font-size: 11px; padding: 5px; margin-bottom: 8px;"
+        )
+        rate_limit_layout.addWidget(explanation_label)
 
         # Single horizontal row for all delay controls
         delay_row = QHBoxLayout()
@@ -2340,7 +2483,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.min_delay_spinbox.setMaximumWidth(90)
         self.min_delay_spinbox.setStyleSheet("QSpinBox { color: white; }")  # White text
         self.min_delay_spinbox.setToolTip(
-            "Minimum delay between YouTube downloads (seconds)"
+            "Minimum delay between downloads for each account (seconds).\n"
+            "With 6 accounts, effective rate is 6x faster than this delay."
         )
         self.min_delay_spinbox.valueChanged.connect(self._on_setting_changed)
         delay_row.addWidget(self.min_delay_spinbox)
@@ -2356,7 +2500,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.max_delay_spinbox.setMaximumWidth(90)
         self.max_delay_spinbox.setStyleSheet("QSpinBox { color: white; }")  # White text
         self.max_delay_spinbox.setToolTip(
-            "Maximum delay between YouTube downloads (seconds)"
+            "Maximum delay between downloads for each account (seconds).\n"
+            "With 6 accounts, effective rate is 6x faster than this delay."
         )
         self.max_delay_spinbox.valueChanged.connect(self._on_setting_changed)
         delay_row.addWidget(self.max_delay_spinbox)
@@ -2374,7 +2519,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             "QSpinBox { color: white; }"
         )  # White text
         self.randomization_spinbox.setToolTip(
-            "Percentage of random variation in delays (e.g., 25 = ±25%)"
+            "Percentage of random variation in delays (e.g., 25 = ±25%).\n"
+            "Adds unpredictability to avoid bot detection patterns."
         )
         self.randomization_spinbox.valueChanged.connect(self._on_setting_changed)
         delay_row.addWidget(self.randomization_spinbox)
@@ -2760,31 +2906,34 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         settings = get_settings()
         strict_mode = getattr(settings.youtube_processing, "proxy_strict_mode", True)
 
-        # Check if we should skip proxy test (cookies enabled + disable proxies)
-        # This is checked FIRST because cookie auth is an exemption from strict mode
-        # When using cookies with home IP, strict mode enforcement is bypassed
-        skip_proxy_test = (
-            self.enable_cookies_checkbox.isChecked()
-            and self.disable_proxies_with_cookies_checkbox.isChecked()
-        )
+        # Determine proxy mode from combo box
+        # 0 = Auto (disable with cookies)
+        # 1 = Always use proxies
+        # 2 = Never use proxies
+        proxy_mode = self.proxy_mode_combo.currentIndex()
 
-        # CRITICAL: Enforce strict mode ONLY if no valid exemption exists
-        # Block if: strict_mode=True AND proxy_unchecked AND NOT using cookie exemption
-        # Allow if: cookie authentication is enabled with "disable proxies" option
-        if (
-            urls
-            and strict_mode
-            and not self.use_proxy_checkbox.isChecked()
-            and not skip_proxy_test
-        ):
+        # Determine if we should use proxies based on mode and cookie state
+        # Cookies are automatically enabled when cookie files are present
+        cookie_files = self.cookie_manager.get_all_cookie_files()
+        cookies_enabled = len(cookie_files) > 0
+
+        if proxy_mode == 0:  # Auto
+            should_use_proxy = not cookies_enabled
+        elif proxy_mode == 1:  # Always
+            should_use_proxy = True
+        else:  # Never (mode == 2)
+            should_use_proxy = False
+
+        # CRITICAL: Enforce strict mode ONLY if trying to use direct connection without exemption
+        # Block if: strict_mode=True AND not using proxies AND NOT using cookie exemption
+        if urls and strict_mode and not should_use_proxy and not cookies_enabled:
             self.append_log("🚫 BLOCKED: Proxy strict mode is enabled")
-            self.append_log("⚠️ Proxy checkbox must be enabled when strict mode is on")
+            self.append_log("⚠️ Direct connections blocked without proxies or cookies")
+            self.append_log("🛡️ Blocked to protect your IP from YouTube bans")
             self.append_log(
-                "🛡️ Direct connections blocked to protect your IP from YouTube bans"
+                "💡 Fix: Change 'Proxy Mode' to 'Auto' or 'Always use proxies'"
             )
-            self.append_log(
-                "💡 Fix: Check the 'Use proxy for YouTube downloads' checkbox above"
-            )
+            self.append_log("💡 Or: Enable cookie authentication")
             self.append_log(
                 "💡 Alternative: Disable strict mode in Settings > YouTube Processing"
             )
@@ -2793,19 +2942,22 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             QMessageBox.critical(
                 self,
                 "Proxy Required",
-                "Proxy strict mode is enabled but the proxy checkbox is not checked.\n\n"
+                "Proxy strict mode is enabled but you're trying to use direct connection without cookies.\n\n"
                 "Direct YouTube connections are blocked to protect your IP address from rate limits and bans.\n\n"
-                "Please check the 'Use proxy for YouTube downloads' checkbox, "
-                "or disable strict mode in Settings > YouTube Processing (not recommended).",
+                "Please either:\n"
+                "• Change Proxy Mode to 'Auto' or 'Always use proxies'\n"
+                "• Enable cookie authentication\n"
+                "• Disable strict mode in Settings > YouTube Processing (not recommended)",
             )
             return
 
-        if skip_proxy_test:
+        # Log proxy decision
+        if not should_use_proxy and cookies_enabled:
             self.append_log(
-                "🍪 Using cookies with home IP - proxies disabled as configured"
+                "🍪 Using cookies with home IP - proxies disabled (Auto mode)"
             )
             packetstream_available = False
-        elif urls and self.use_proxy_checkbox.isChecked():
+        elif urls and should_use_proxy:
             try:
                 from ...utils.packetstream_proxy import PacketStreamProxyManager
 
@@ -2916,63 +3068,48 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                     self.append_log(
                         "⚠️ Proceeding with direct download (strict mode disabled)"
                     )
-        elif urls:
-            if strict_mode and self.use_proxy_checkbox.isChecked():
-                # User wants proxy but it's not working - already handled above
-                pass
-            elif urls and not self.use_proxy_checkbox.isChecked():
-                if strict_mode and not skip_proxy_test:
-                    # Only block if cookies are NOT being used as an exemption
-                    self.append_log("🚫 BLOCKED: Proxy strict mode enabled")
-                    self.append_log(
-                        "⚠️ Proxy checkbox is disabled but strict mode requires proxy"
-                    )
-                    self.append_log(
-                        "🛡️ Direct connections blocked to protect your IP from YouTube bans"
-                    )
-                    self.append_log(
-                        "💡 Fix: Enable proxy checkbox OR disable strict mode in Settings"
-                    )
-                    from PyQt6.QtWidgets import QMessageBox
-
-                    QMessageBox.critical(
-                        self,
-                        "Proxy Required",
-                        "Proxy strict mode is enabled but proxy usage is disabled.\n\n"
-                        "Direct YouTube connections are blocked to protect your IP address from rate limits and bans.\n\n"
-                        "Please enable the proxy checkbox or disable strict mode in Settings > YouTube Processing (not recommended).",
-                    )
-                    return
-                elif not skip_proxy_test:
-                    # Warn user about risks of direct download (only if not using cookies)
-                    self.append_log("⚠️ WARNING: Direct download mode (proxy disabled)")
-                    self.append_log(
-                        "⚠️ YouTube may flag your IP as a bot and block downloads"
-                    )
-                    self.append_log(
-                        "⚠️ This happens even for single videos without a proxy"
-                    )
-                    self.append_log("💡 RECOMMENDATION: Enable the proxy checkbox above")
-                    self.append_log(
-                        "ℹ️ Proceeding with sequential downloads + delays (minimal protection)"
-                    )
+        elif urls and not should_use_proxy:
+            # Direct download mode (no proxy)
+            if not cookies_enabled:
+                # Warn user about risks of direct download without cookies
+                self.append_log(
+                    "⚠️ WARNING: Direct download mode (no proxy, no cookies)"
+                )
+                self.append_log(
+                    "⚠️ YouTube may flag your IP as a bot and block downloads"
+                )
+                self.append_log(
+                    "💡 RECOMMENDATION: Use 'Auto' proxy mode with cookies, or 'Always use proxies'"
+                )
+                self.append_log(
+                    "ℹ️ Proceeding with sequential downloads + delays (minimal protection)"
+                )
 
         # Pass both URLs and local files to worker
         gui_settings["urls"] = urls
         gui_settings["local_files"] = local_files
-        gui_settings["use_proxy"] = self.use_proxy_checkbox.isChecked()
+        gui_settings["use_proxy"] = should_use_proxy
         gui_settings["packetstream_available"] = packetstream_available
         gui_settings[
             "youtube_delay"
         ] = 5  # Default delay (legacy setting, rate limiting now handled by min/max delay spinboxes)
 
-        # Pass cookie settings to worker (multi-account support)
-        gui_settings["enable_cookies"] = self.enable_cookies_checkbox.isChecked()
+        # Pass cookie settings to worker (automatically enabled when cookie files are present)
         gui_settings["cookie_files"] = self.cookie_manager.get_all_cookie_files()
+        gui_settings["enable_cookies"] = len(gui_settings["cookie_files"]) > 0
         gui_settings["use_multi_account"] = len(gui_settings["cookie_files"]) > 1
+
+        # Pass RSS mapping setting to worker
         gui_settings[
-            "disable_proxies_with_cookies"
-        ] = self.disable_proxies_with_cookies_checkbox.isChecked()
+            "enable_rss_mapping"
+        ] = self.enable_rss_mapping_checkbox.isChecked()
+
+        # Proxy mode: 0=Auto, 1=Always, 2=Never
+        gui_settings["proxy_mode"] = self.proxy_mode_combo.currentIndex()
+        # For backwards compatibility with YouTubeDownloadProcessor
+        gui_settings["disable_proxies_with_cookies"] = (
+            proxy_mode == 0 or proxy_mode == 2
+        )
 
         # Start transcription worker
         self.transcription_worker = EnhancedTranscriptionWorker(
@@ -2992,6 +3129,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self._handle_speaker_assignment_request
         )
         self.transcription_worker.log_message.connect(self._on_worker_log_message)
+        self.transcription_worker.existing_audio_decision_requested.connect(
+            self._on_existing_audio_decision_requested
+        )
 
         self.active_workers.append(self.transcription_worker)
         self.transcription_worker.start()
@@ -3096,6 +3236,60 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # Also print download progress to terminal/console for visibility
         if "Downloading" in step_description or "Download" in step_description:
             print(f"  {log_message}")
+
+    def _on_existing_audio_decision_requested(self, payload: dict) -> None:
+        """Show modal prompt asking whether to reuse existing audio or re-download."""
+
+        try:
+            file_path = payload.get("file_path")
+            source_id = payload.get("source_id")
+            size_bytes = payload.get("size_bytes") or 0
+            if size_bytes >= 1024 * 1024:
+                size_display = f"{size_bytes / (1024 * 1024):.2f} MB"
+            elif size_bytes >= 1024:
+                size_display = f"{size_bytes / 1024:.1f} KB"
+            elif size_bytes:
+                size_display = f"{size_bytes} bytes"
+            else:
+                size_display = "Unknown size"
+
+            filename_display = Path(file_path).name if file_path else "Unknown file"
+            message_lines = [
+                "Audio for this URL already exists on disk.",
+                "",
+                f"File: {filename_display}",
+                f"Size: {size_display}",
+            ]
+            if source_id:
+                message_lines.append(f"Video ID: {source_id}")
+            message_lines.extend(
+                [
+                    "",
+                    "Choose an option:",
+                    "• Yes — use the existing audio",
+                    "• No — download a fresh copy",
+                ]
+            )
+
+            result = QMessageBox.question(
+                self,
+                "Existing Audio Detected",
+                "\n".join(message_lines),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+
+            use_existing = result == QMessageBox.StandardButton.Yes
+        except Exception as e:
+            logger.error(f"Error showing existing audio prompt: {e}")
+            use_existing = True
+        finally:
+            try:
+                self.transcription_worker.set_existing_audio_decision(use_existing)
+            except Exception as response_error:
+                logger.error(
+                    f"Failed to send existing audio decision back to worker: {response_error}"
+                )
 
         # Handle unknown progress (-1 sentinel value)
         # This happens when whisper.cpp is processing but doesn't report numeric progress yet
@@ -3650,7 +3844,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
     def _switch_to_summarization_with_files(
         self, successful_files: list[dict], output_dir: str | None
     ):
-        """Switch to summarization tab and load the transcribed files."""
+        """Switch to summarization tab, select database mode, check transcripts, and auto-start."""
         # First, switch to the summarization tab
         self.navigate_to_tab.emit("Summarize")
 
@@ -3661,47 +3855,98 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             for i in range(main_window.tabs.count()):
                 if main_window.tabs.tabText(i) == "Summarize":
                     summarization_tab = main_window.tabs.widget(i)
-                    # Convert successful_files to file paths
-                    file_paths = []
+
+                    # Extract source_ids from successful files
+                    source_ids = []
                     for file_info in successful_files:
-                        # First try to get the full saved file path (new field)
-                        saved_file_path = file_info.get("saved_file_path")
-                        if saved_file_path and Path(saved_file_path).exists():
-                            file_paths.append(str(saved_file_path))
-                            continue
+                        # Get source_id from the file info
+                        # Try multiple approaches to extract source_id
+                        source_id = file_info.get("source_id")
 
-                        # Fallback: Try to reconstruct path from filename and output directory
-                        file_path = file_info.get("file")
-                        if file_path and output_dir:
-                            file_path_obj = Path(file_path)
-                            output_path = Path(output_dir)
-                            # Construct the expected transcript filename
-                            base_name = file_path_obj.stem
-                            # Try with _transcript suffix (most common)
-                            transcript_file = output_path / f"{base_name}_transcript.md"
-                            if transcript_file.exists():
-                                file_paths.append(str(transcript_file))
-                                continue
+                        if not source_id:
+                            # Fallback: extract from file path
+                            file_path = file_info.get("file") or file_info.get(
+                                "saved_file_path"
+                            )
+                            if file_path:
+                                # Remove _transcript suffix if present, get stem
+                                source_id = Path(file_path).stem.replace(
+                                    "_transcript", ""
+                                )
 
-                            # Try without _transcript suffix
-                            transcript_file = output_path / f"{base_name}.md"
-                            if transcript_file.exists():
-                                file_paths.append(str(transcript_file))
-                                continue
+                        if source_id:
+                            source_ids.append(source_id)
 
-                    # Load the files into the summarization tab
-                    if file_paths and hasattr(summarization_tab, "file_list"):
-                        summarization_tab.file_list.clear()
-                        for file_path in file_paths:
-                            summarization_tab.file_list.addItem(file_path)
+                    if not source_ids:
                         if hasattr(summarization_tab, "append_log"):
                             summarization_tab.append_log(
-                                f"✅ Loaded {len(file_paths)} transcript files from transcription"
+                                "⚠️ Could not determine source IDs from transcribed files"
                             )
-                    elif hasattr(summarization_tab, "append_log"):
-                        summarization_tab.append_log(
-                            "⚠️ No transcript files found to load"
-                        )
+                        break
+
+                    # Switch to Database mode
+                    if hasattr(summarization_tab, "database_radio"):
+                        summarization_tab.database_radio.setChecked(True)
+                        # This will trigger _on_source_changed which refreshes the database list
+
+                        # Small delay to ensure database list is refreshed
+                        from PyQt6.QtCore import QTimer
+
+                        def select_and_start():
+                            """Select the transcribed items and auto-start summarization."""
+                            # Check the boxes for our source_ids
+                            if hasattr(summarization_tab, "db_table"):
+                                checked_count = 0
+                                for row in range(summarization_tab.db_table.rowCount()):
+                                    # Get source_id from the title item's UserRole data
+                                    title_item = summarization_tab.db_table.item(row, 1)
+                                    if title_item:
+                                        row_source_id = title_item.data(
+                                            Qt.ItemDataRole.UserRole
+                                        )
+                                        if row_source_id in source_ids:
+                                            # Check the checkbox in column 0
+                                            checkbox_widget = (
+                                                summarization_tab.db_table.cellWidget(
+                                                    row, 0
+                                                )
+                                            )
+                                            if checkbox_widget and hasattr(
+                                                checkbox_widget, "setChecked"
+                                            ):
+                                                checkbox_widget.setChecked(True)
+                                                checked_count += 1
+
+                                if checked_count > 0:
+                                    if hasattr(summarization_tab, "append_log"):
+                                        summarization_tab.append_log(
+                                            f"✅ Selected {checked_count} transcribed source(s) from database"
+                                        )
+
+                                    # Auto-start summarization
+                                    if hasattr(summarization_tab, "_start_processing"):
+                                        summarization_tab.append_log(
+                                            "🚀 Auto-starting summarization..."
+                                        )
+                                        summarization_tab._start_processing()
+                                else:
+                                    if hasattr(summarization_tab, "append_log"):
+                                        summarization_tab.append_log(
+                                            "⚠️ Transcribed sources not found in database. They may need a moment to sync."
+                                        )
+                            else:
+                                if hasattr(summarization_tab, "append_log"):
+                                    summarization_tab.append_log(
+                                        "⚠️ Database table not available"
+                                    )
+
+                        # Wait 300ms for database refresh to complete
+                        QTimer.singleShot(300, select_and_start)
+                    else:
+                        if hasattr(summarization_tab, "append_log"):
+                            summarization_tab.append_log(
+                                "⚠️ Database mode not available in summarization tab"
+                            )
                     break
 
     # Hardware recommendations methods moved to Settings tab
@@ -3717,7 +3962,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             "diarization": self.diarization_checkbox.isChecked(),
             "overwrite": self.overwrite_checkbox.isChecked(),
             "enable_speaker_assignment": self.speaker_assignment_checkbox.isChecked(),
-            "enable_color_coding": self.color_coded_checkbox.isChecked(),
+            "enable_color_coding": False,  # Always disabled - causes YAML corruption
             "output_dir": self.output_dir_input.text().strip() or None,
             # Thread management handled by dynamic resource system
             "batch_size": 16,  # Default batch size
@@ -3840,13 +4085,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.diarization_checkbox,
                 self.speaker_assignment_checkbox,
                 self.color_coded_checkbox,
-                self.use_proxy_checkbox,
-                self.enable_cookies_checkbox,
+                self.enable_rss_mapping_checkbox,
+                self.proxy_mode_combo,
                 self.cookie_manager,
                 self.min_delay_spinbox,
                 self.max_delay_spinbox,
                 self.randomization_spinbox,
-                self.disable_proxies_with_cookies_checkbox,
             ]
 
             widgets_to_block = [w for w in candidate_widgets if is_widget_valid(w)]
@@ -3880,14 +4124,25 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 # Settings manager handles the hierarchy:
                 # 1. Session state (last used)
                 # 2. settings.yaml (transcription.whisper_model)
-                # 3. Fallback to empty string if neither exists
+                # 3. Fallback to "medium" (default from config.py)
                 saved_model = self.gui_settings.get_combo_selection(
-                    self.tab_name, "model", ""
+                    self.tab_name,
+                    "model",
+                    "medium",  # Default to medium, not empty string
                 )
                 if saved_model:
                     index = self.model_combo.findText(saved_model)
                     if index >= 0:
                         self.model_combo.setCurrentIndex(index)
+                    else:
+                        # If saved model not found, fall back to medium
+                        logger.warning(
+                            f"Saved model '{saved_model}' not found in available models. "
+                            f"Falling back to 'medium'."
+                        )
+                        index = self.model_combo.findText("medium")
+                        if index >= 0:
+                            self.model_combo.setCurrentIndex(index)
 
                 # Load device selection
                 saved_device = self.gui_settings.get_combo_selection(
@@ -3965,39 +4220,73 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             # Ensure diarization state is properly reflected in UI
             self._on_diarization_toggled(self.diarization_checkbox.isChecked())
 
-            # Load YouTube proxy settings (delay now handled by rate limiting section)
-            self.use_proxy_checkbox.setChecked(
+            # Load RSS mapping checkbox state (default to False)
+            self.enable_rss_mapping_checkbox.setChecked(
                 self.gui_settings.get_checkbox_state(
-                    self.tab_name, "use_youtube_proxy", True
+                    self.tab_name, "enable_rss_mapping", False
                 )
             )
 
-            # Load cookie authentication settings (multi-account support)
-            self.enable_cookies_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(
-                    self.tab_name, "enable_cookies", True
-                )
+            # Load proxy mode (0=Auto, 1=Always, 2=Never)
+            saved_proxy_mode = self.gui_settings.get_combo_selection(
+                self.tab_name, "proxy_mode", "Auto"
             )
+            index = self.proxy_mode_combo.findText(saved_proxy_mode)
+            if index >= 0:
+                self.proxy_mode_combo.setCurrentIndex(index)
+            else:
+                # Fallback: default to Auto
+                self.proxy_mode_combo.setCurrentIndex(0)
 
-            # Load cookie files list
+            # Load cookie files list (cookie auth is automatically enabled when files are present)
             cookie_files = self.gui_settings.get_list_setting(
                 self.tab_name, "cookie_files", []
             )
 
-            logger.debug(f"📂 Loaded cookie files: {cookie_files}")
             if cookie_files:
-                # Temporarily disconnect signal to prevent save during load
-                try:
-                    self.cookie_manager.cookies_changed.disconnect(
-                        self._on_setting_changed
-                    )
-                except:
-                    pass  # Ignore if not connected
+                logger.info(
+                    f"📂 Loading {len(cookie_files)} cookie file(s): {[Path(f).name for f in cookie_files]}"
+                )
+                logger.info(f"   Full paths: {cookie_files}")
+            else:
+                logger.debug(f"📂 No cookie files to load")
 
+            # Verify cookie_manager widget is valid before loading
+            if not hasattr(self, "cookie_manager") or self.cookie_manager is None:
+                logger.error(
+                    "❌ Cookie manager widget not initialized! Cannot load cookie files."
+                )
+                return
+
+            # Temporarily disconnect signal to prevent save during load
+            try:
+                self.cookie_manager.cookies_changed.disconnect(self._on_setting_changed)
+                logger.debug("   Disconnected cookies_changed signal for loading")
+            except:
+                logger.debug("   cookies_changed signal was not connected")
+                pass  # Ignore if not connected
+
+            if cookie_files:
+                logger.debug(
+                    f"   Calling cookie_manager.set_cookie_files() with {len(cookie_files)} files"
+                )
                 self.cookie_manager.set_cookie_files(cookie_files)
 
-                # Reconnect signal
-                self.cookie_manager.cookies_changed.connect(self._on_setting_changed)
+                # Verify the files were actually set
+                loaded_files = self.cookie_manager.get_all_cookie_files()
+                if loaded_files:
+                    logger.info(
+                        f"✅ Successfully loaded {len(loaded_files)} cookie file(s) into UI"
+                    )
+                else:
+                    logger.error(
+                        f"❌ Failed to load cookie files into UI! Expected {len(cookie_files)}, got 0"
+                    )
+
+            # ALWAYS reconnect signal, even if no cookies were loaded
+            # This ensures future cookie additions will be saved
+            self.cookie_manager.cookies_changed.connect(self._on_setting_changed)
+            logger.debug("✅ Cookie file change signal reconnected")
 
             # Load rate limiting settings
             self.min_delay_spinbox.setValue(
@@ -4009,14 +4298,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.randomization_spinbox.setValue(
                 self.gui_settings.get_spinbox_value(self.tab_name, "randomization", 25)
             )
-            self.disable_proxies_with_cookies_checkbox.setChecked(
-                self.gui_settings.get_checkbox_state(
-                    self.tab_name, "disable_proxies_with_cookies", True
-                )
-            )
-
-            # Trigger cookie toggle to set initial control states
-            self._on_cookies_toggled(self.enable_cookies_checkbox.isChecked())
 
             logger.debug(f"Loaded settings for {self.tab_name} tab")
         except Exception as e:
@@ -4070,23 +4351,29 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.tab_name, "overwrite_existing", self.overwrite_checkbox.isChecked()
             )
 
-            # Save YouTube proxy and delay settings
-            self.gui_settings.set_checkbox_state(
-                self.tab_name, "use_youtube_proxy", self.use_proxy_checkbox.isChecked()
-            )
-            # youtube_delay setting deprecated - now handled by rate limiting min/max delays
-
-            # Save cookie authentication settings (multi-account support)
+            # Save RSS mapping checkbox state
             self.gui_settings.set_checkbox_state(
                 self.tab_name,
-                "enable_cookies",
-                self.enable_cookies_checkbox.isChecked(),
+                "enable_rss_mapping",
+                self.enable_rss_mapping_checkbox.isChecked(),
             )
-            # Save cookie files list
+
+            # Save proxy mode
+            self.gui_settings.set_combo_selection(
+                self.tab_name, "proxy_mode", self.proxy_mode_combo.currentText()
+            )
+
+            # Save cookie files list (cookie auth is automatically enabled when files are present)
             cookie_files = self.cookie_manager.get_all_cookie_files()
-            logger.debug(f"💾 Saving cookie files: {cookie_files}")
+            logger.info(
+                f"💾 Saving {len(cookie_files)} cookie file(s): {[Path(f).name for f in cookie_files] if cookie_files else '[]'}"
+            )
+            logger.debug(f"   Full paths: {cookie_files}")
             self.gui_settings.set_list_setting(
                 self.tab_name, "cookie_files", cookie_files
+            )
+            logger.debug(
+                f"   ✅ Cookie files written to session: {self.tab_name}.cookie_files"
             )
 
             # Save rate limiting settings
@@ -4099,11 +4386,6 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             self.gui_settings.set_spinbox_value(
                 self.tab_name, "randomization", self.randomization_spinbox.value()
             )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name,
-                "disable_proxies_with_cookies",
-                self.disable_proxies_with_cookies_checkbox.isChecked(),
-            )
 
             logger.debug(f"Saved settings for {self.tab_name} tab")
         except Exception as e:
@@ -4113,70 +4395,28 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         """Called when any setting changes to automatically save."""
         self._save_settings()
 
-    def _on_cookies_toggled(self, checked: bool):
-        """Enable/disable cookie-related controls."""
-        # Enable/disable the multi-account cookie manager
-        self.cookie_manager.setEnabled(checked)
-        self._on_setting_changed()
-
     def _validate_cookie_settings(self) -> bool:
         """Validate cookie settings before starting YouTube downloads.
 
         Returns:
-            bool: True if validation passes or user acknowledges risk, False otherwise
+            bool: True if validation passes, False otherwise
         """
-        from PyQt6.QtWidgets import QMessageBox
+        from pathlib import Path
 
-        # Check if cookies are enabled but no files are selected
-        if self.enable_cookies_checkbox.isChecked():
-            cookie_files = self.cookie_manager.get_all_cookie_files()
+        # Check if cookie files are provided and validate them
+        cookie_files = self.cookie_manager.get_all_cookie_files()
 
-            if not cookie_files:
-                # Show warning about no cookies selected
-                msg_box = QMessageBox(self)
-                msg_box.setIcon(QMessageBox.Icon.Warning)
-                msg_box.setWindowTitle("⚠️ No Cookie Files Selected")
-                msg_box.setText(
-                    "<b style='color: #d32f2f; font-size: 14pt;'>WARNING: No Cookie Files Selected!</b>"
+        if cookie_files:
+            # Cookie files specified - verify they exist
+            missing_files = [f for f in cookie_files if not Path(f).exists()]
+            if missing_files:
+                self.show_warning(
+                    "Cookie Files Not Found",
+                    f"The following cookie file(s) do not exist:\n\n"
+                    + "\n".join(missing_files)
+                    + "\n\nPlease select valid cookie files or remove them from the list.",
                 )
-                msg_box.setInformativeText(
-                    "<p>You have enabled cookie authentication but haven't selected any cookie files.</p>"
-                    "<p><b>Recommended Actions:</b></p>"
-                    "<ul>"
-                    "<li><b>Option 1 (Safest):</b> Click 'Cancel', create throwaway Google account(s), export cookies, and upload the file(s)</li>"
-                    "<li><b>Option 2:</b> Uncheck 'Enable cookie authentication' to proceed without cookies (may hit rate limits)</li>"
-                    "</ul>"
-                )
-                msg_box.setStandardButtons(
-                    QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
-                )
-                msg_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
-
-                result = msg_box.exec()
-
-                if result == QMessageBox.StandardButton.Cancel:
-                    logger.info(
-                        "User cancelled YouTube download - no cookie files selected"
-                    )
-                    return False
-                else:
-                    logger.warning(
-                        "⚠️ User proceeding with YouTube downloads without cookies"
-                    )
-                    return True
-            else:
-                # Cookie files specified - verify they exist
-                from pathlib import Path
-
-                missing_files = [f for f in cookie_files if not Path(f).exists()]
-                if missing_files:
-                    self.show_warning(
-                        "Cookie Files Not Found",
-                        f"The following cookie file(s) do not exist:\n\n"
-                        + "\n".join(missing_files)
-                        + "\n\nPlease select valid cookie files or disable cookie authentication.",
-                    )
-                    return False
+                return False
 
         return True
 
@@ -4327,9 +4567,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         """Handle toggling of diarization checkbox."""
         # Enable/disable speaker assignment options based on diarization setting
         self.speaker_assignment_checkbox.setEnabled(checked)
-        self.color_coded_checkbox.setEnabled(checked)
+        # Note: color_coded_checkbox is always disabled (feature causes YAML issues)
 
         if not checked:
             # If diarization is disabled, also disable speaker assignment features
             self.speaker_assignment_checkbox.setChecked(False)
-            self.color_coded_checkbox.setChecked(False)

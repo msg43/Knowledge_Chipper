@@ -32,7 +32,7 @@ from PyQt6.QtWidgets import (
 from ...database import DatabaseService
 
 # Use models for claim-centric schema compatibility
-from ...database.models import Claim, Episode
+from ...database.models import Claim, MediaSource
 from ...logger import get_logger
 
 logger = get_logger(__name__)
@@ -233,12 +233,12 @@ class ClaimsTableModel(QAbstractTableModel):
         super().__init__(parent)
         self.db_service = db_service
         self.claims: list[Claim] = []
-        self.episodes: dict[str, Episode] = {}
+        self.sources: dict[str, MediaSource] = {}
         self.modified_rows = set()
 
         # Column definitions matching TECHNICAL_SPECIFICATIONS.md
         self.columns = [
-            ("Episode", "episode_title"),
+            ("Source", "title"),
             ("Claim", "canonical"),
             ("Type", "claim_type"),
             ("Importance", "importance"),
@@ -255,13 +255,13 @@ class ClaimsTableModel(QAbstractTableModel):
         """Load claims from database with optional episode filter."""
         try:
             with self.db_service.get_session() as session:
-                # Load episodes
+                # Load sources
                 try:
-                    episodes = session.query(Episode).all()
-                    self.episodes = {ep.source_id: ep for ep in episodes}
+                    sources = session.query(MediaSource).all()
+                    self.sources = {ep.source_id: ep for ep in sources}
                 except Exception as e:
-                    logger.warning(f"Could not load episodes: {e}")
-                    self.episodes = {}
+                    logger.warning(f"Could not load sources: {e}")
+                    self.sources = {}
 
                 # Load claims
                 try:
@@ -279,7 +279,7 @@ class ClaimsTableModel(QAbstractTableModel):
         except Exception as e:
             logger.error(f"Database error in load_data: {e}")
             self.claims = []
-            self.episodes = {}
+            self.sources = {}
             self.modified_rows.clear()
 
         # Always clear modified rows when reloading
@@ -313,8 +313,8 @@ class ClaimsTableModel(QAbstractTableModel):
         col_name, col_attr = self.columns[index.column()]
 
         if role == Qt.ItemDataRole.DisplayRole:
-            if col_name == "Episode":
-                episode = self.episodes.get(claim.source_id)
+            if col_name == "Source":
+                episode = self.sources.get(claim.source_id)
                 return episode.title if episode else claim.source_id
             elif col_name == "Modified":
                 return "✓" if index.row() in self.modified_rows else ""
@@ -334,7 +334,7 @@ class ClaimsTableModel(QAbstractTableModel):
                 return str(value) if value else ""
 
         elif role == Qt.ItemDataRole.EditRole:
-            if col_name not in ["Episode", "Modified"]:
+            if col_name not in ["Source", "Modified"]:
                 if col_name in ["Importance", "Novelty", "Confidence"]:
                     # Extract from scores_json for editing
                     scores = extract_scores(claim)
@@ -492,8 +492,8 @@ class ClaimsTableModel(QAbstractTableModel):
 
         col_name = self.columns[index.column()][0]
 
-        # Episode and Modified columns are not editable
-        if col_name in ["Episode", "Modified"]:
+        # Source and Modified columns are not editable
+        if col_name in ["Source", "Modified"]:
             return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
 
         return (
@@ -573,10 +573,10 @@ class ReviewTabSystem2(QWidget):
 
         # Episode filter
         self.episode_combo = QComboBox()
-        self.episode_combo.addItem("All Episodes")
+        self.episode_combo.addItem("All Sources")
         self._populate_episodes()
         self.episode_combo.currentTextChanged.connect(self._on_episode_filter_changed)
-        header_layout.addWidget(QLabel("Episode:"))
+        header_layout.addWidget(QLabel("Source:"))
         header_layout.addWidget(self.episode_combo)
 
         # Refresh button
@@ -690,16 +690,16 @@ class ReviewTabSystem2(QWidget):
         """Populate episode filter combo box."""
         try:
             with self.db_service.get_session() as session:
-                episodes = session.query(Episode).order_by(Episode.title).all()
-                for episode in episodes:
+                sources = session.query(MediaSource).order_by(MediaSource.title).all()
+                for episode in sources:
                     self.episode_combo.addItem(episode.title, episode.source_id)
         except Exception as e:
-            logger.warning(f"Could not populate episodes dropdown: {e}")
-            # Keep just the "All Episodes" option if database fails
+            logger.warning(f"Could not populate sources dropdown: {e}")
+            # Keep just the "All Sources" option if database fails
 
     def _on_episode_filter_changed(self, text: str):
         """Handle episode filter change."""
-        if text == "All Episodes":
+        if text == "All Sources":
             self.model.load_data()
         else:
             source_id = self.episode_combo.currentData()
@@ -756,7 +756,7 @@ class ReviewTabSystem2(QWidget):
     def _refresh_data(self):
         """Manually refresh data from database."""
         current_filter = self.episode_combo.currentText()
-        if current_filter == "All Episodes":
+        if current_filter == "All Sources":
             self.model.load_data()
         else:
             source_id = self.episode_combo.currentData()
@@ -860,7 +860,7 @@ class ReviewTabSystem2(QWidget):
 
                     # Write data
                     for claim in self.model.claims:
-                        episode = self.model.episodes.get(claim.source_id)
+                        episode = self.model.sources.get(claim.source_id)
 
                         # Extract scores
                         scores = extract_scores(claim)
@@ -911,7 +911,7 @@ class ReviewTabSystem2(QWidget):
                     # Group by episode
                     episode_claims = {}
                     for claim in self.model.claims:
-                        episode = self.model.episodes.get(claim.source_id)
+                        episode = self.model.sources.get(claim.source_id)
                         episode_title = episode.title if episode else claim.source_id
                         if episode_title not in episode_claims:
                             episode_claims[episode_title] = []
@@ -960,11 +960,11 @@ class ReviewTabSystem2(QWidget):
 
         if filename:
             try:
-                export_data = {"episodes": [], "claims": []}
+                export_data = {"sources": [], "claims": []}
 
-                # Export episodes
-                for source_id, episode in self.model.episodes.items():
-                    export_data["episodes"].append(
+                # Export sources
+                for source_id, episode in self.model.sources.items():
+                    export_data["sources"].append(
                         {
                             "source_id": episode.source_id,
                             "title": episode.title,
@@ -1006,7 +1006,7 @@ class ReviewTabSystem2(QWidget):
                 QMessageBox.information(
                     self,
                     "Export Complete",
-                    f"Successfully exported {len(self.model.claims)} claims and {len(export_data['episodes'])} episodes to {filename}",
+                    f"Successfully exported {len(self.model.claims)} claims and {len(export_data['sources'])} sources to {filename}",
                 )
 
             except Exception as e:
@@ -1055,7 +1055,7 @@ class ReviewTabSystem2(QWidget):
             # Prepare claims data for upload
             claims_data = []
             for claim in self.model.claims:
-                episode = self.model.episodes.get(claim.source_id)
+                episode = self.model.sources.get(claim.source_id)
 
                 # Build episode data
                 episode_data = None
@@ -1098,7 +1098,7 @@ class ReviewTabSystem2(QWidget):
 
             # Convert to session data format
             session_data = {
-                "episodes": [],
+                "sources": [],
                 "claims": [],
                 "evidence_spans": [],
                 "people": [],
@@ -1113,7 +1113,7 @@ class ReviewTabSystem2(QWidget):
                     claim_upload.episode_data
                     and claim_upload.source_id not in seen_episodes
                 ):
-                    session_data["episodes"].append(claim_upload.episode_data)
+                    session_data["sources"].append(claim_upload.episode_data)
                     seen_episodes.add(claim_upload.source_id)
 
                 session_data["claims"].append(
@@ -1161,7 +1161,7 @@ class ReviewTabSystem2(QWidget):
                     "Upload Complete",
                     f"Successfully uploaded {total_uploaded} records to Skip The Podcast web!\n\n"
                     f"Claims: {len(upload_results.get('claims', []))}\n"
-                    f"Episodes: {len(upload_results.get('episodes', []))}",
+                    f"Sources: {len(upload_results.get('sources', []))}",
                 )
 
             except Exception as upload_error:

@@ -49,6 +49,7 @@ from .tabs import APIKeysTab  # Settings tab  # noqa: E402
 from .tabs import IntroductionTab  # Introduction tab  # noqa: E402
 from .tabs import MonitorTab  # Monitor tab (renamed from WatcherTab)  # noqa: E402
 from .tabs import PromptsTab  # Prompts tab  # noqa: E402
+from .tabs import QueueTab  # Queue tab  # noqa: E402
 from .tabs import SummarizationTab  # Summarize tab  # noqa: E402
 from .tabs import TranscriptionTab  # Transcribe tab  # noqa: E402
 
@@ -243,11 +244,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Skip the Podcast")
         # Make window resizable with reasonable default size and minimum size
         self.resize(
-            792, 1800
-        )  # Starting width reduced by 40% from 1320 (40% reduction = 792)
-        self.setMinimumSize(
-            600, 700
-        )  # Reduced minimum width proportionally to allow 40% reduction
+            1030, 1800
+        )  # Starting width increased by 30% from 792 (30% increase = 1030)
+        self.setMinimumSize(600, 700)  # Minimum width kept at 600
 
         # Create central widget and main layout
         central_widget = QWidget()
@@ -308,14 +307,15 @@ class MainWindow(QMainWindow):
 
     def _create_tabs(self) -> None:
         """Create System 2 tabs per SYSTEM_2_IMPLEMENTATION_GUIDE.md specification."""
-        # System 2 has exactly 7 tabs in this order:
+        # System 2 has exactly 8 tabs in this order:
         # 1. Introduction
         # 2. Transcribe (includes auto-process checkbox)
         # 3. Prompts (prompt and schema management)
         # 4. Summarize
-        # 5. Review (spreadsheet editor with export options)
-        # 6. Monitor (renamed from File Watcher)
-        # 7. Settings (includes web authentication)
+        # 5. Queue (pipeline status visualization)
+        # 6. Review (spreadsheet editor with export options)
+        # 7. Monitor (renamed from File Watcher)
+        # 8. Settings (includes web authentication)
 
         # 1. Introduction tab - conditionally shown based on user preference
         self.introduction_tab = IntroductionTab(self)
@@ -345,7 +345,13 @@ class MainWindow(QMainWindow):
         summarization_tab = SummarizationTab(self)
         self.tabs.addTab(summarization_tab, "Summarize")
 
-        # 5. Review tab (spreadsheet editor)
+        # 5. Queue tab - shows pipeline status
+        from .tabs.queue_tab import QueueTab
+
+        self.queue_tab = QueueTab(self)
+        self.tabs.addTab(self.queue_tab, "Queue")
+
+        # 6. Review tab (spreadsheet editor)
         try:
             from .tabs.review_tab_system2 import ReviewTabSystem2
 
@@ -358,11 +364,11 @@ class MainWindow(QMainWindow):
             placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.tabs.addTab(placeholder, "Review")
 
-        # 6. Monitor tab (renamed from File Watcher)
+        # 7. Monitor tab (renamed from File Watcher)
         monitor_tab = MonitorTab(self)
         self.tabs.addTab(monitor_tab, "Monitor")
 
-        # 7. Settings tab (includes web authentication)
+        # 8. Settings tab (includes web authentication)
         self.api_keys_tab = APIKeysTab(self)
         self.tabs.addTab(self.api_keys_tab, "Settings")
 

@@ -88,6 +88,7 @@ def migrate_to_system2(session: Session):
         ("upload_timestamp", "TIMESTAMP"),
         ("upload_error", "TEXT"),
         ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+        ("domain", "TEXT"),  # Broad field classification
     ]
 
     try:

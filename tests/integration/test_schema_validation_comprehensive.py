@@ -48,22 +48,13 @@ class TestSchemaLoading:
 class TestMinerInputValidation:
     """Test miner input schema validation."""
 
-    def test_valid_miner_input(self):
+    def test_valid_miner_input(self, sample_miner_input_v2):
         """Test valid miner input passes validation."""
         validator = SchemaValidator()
 
-        valid_input = {
-            "segment": {
-                "segment_id": "seg_001",
-                "speaker": "Speaker A",
-                "timestamp_start": "00:00:00",
-                "timestamp_end": "00:00:30",
-                "text": "This is a test segment with sufficient text content for processing.",
-            }
-        }
-
-        result = validator.validate_miner_input(valid_input)
-        assert result is True
+        is_valid, errors = validator.validate_miner_input(sample_miner_input_v2)
+        assert is_valid, f"Validation failed with errors: {errors}"
+        assert not errors
 
     def test_miner_input_with_context(self):
         """Test miner input with optional context."""
@@ -84,8 +75,8 @@ class TestMinerInputValidation:
             },
         }
 
-        result = validator.validate_miner_input(input_with_context)
-        assert result is True
+        is_valid, errors = validator.validate_miner_input(input_with_context)
+        assert is_valid, f"Validation failed with errors: {errors}"
 
     def test_invalid_miner_input_missing_required(self):
         """Test that missing required fields are caught."""
@@ -101,8 +92,9 @@ class TestMinerInputValidation:
             }
         }
 
-        result = validator.validate_miner_input(invalid_input)
-        assert result is False
+        is_valid, errors = validator.validate_miner_input(invalid_input)
+        assert not is_valid
+        assert errors
 
     def test_invalid_timestamp_format(self):
         """Test that invalid timestamp formats are caught."""
@@ -118,8 +110,9 @@ class TestMinerInputValidation:
             }
         }
 
-        result = validator.validate_miner_input(invalid_input)
-        assert result is False
+        is_valid, errors = validator.validate_miner_input(invalid_input)
+        assert not is_valid
+        assert errors
 
 
 class TestMinerOutputValidation:

@@ -51,7 +51,7 @@ class MentalModel(BaseModel):
     """Conceptual framework, model, or way of thinking."""
 
     name: str = Field(description="Name or title of the mental model")
-    description: str = Field(description="Explanation of the mental model or framework")
+    definition: str = Field(description="Explanation of the mental model or framework")
     context_quote: str = Field(description="Quote illustrating the mental model")
     timestamp: str = Field(description="When it's discussed")
 

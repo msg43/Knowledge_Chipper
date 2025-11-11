@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS claims (
     canonical TEXT NOT NULL,
     original_text TEXT,
     claim_type TEXT CHECK (claim_type IN ('factual', 'causal', 'normative', 'forecast', 'definition')),
+    domain TEXT,  -- Broad field classification (e.g., 'physics', 'economics', 'politics')
 
     -- System evaluation (from HCE)
     tier TEXT CHECK (tier IN ('A', 'B', 'C')),
@@ -170,6 +171,7 @@ CREATE TABLE IF NOT EXISTS claims (
 CREATE INDEX idx_claims_source ON claims(source_id);
 CREATE INDEX idx_claims_tier ON claims(tier);
 CREATE INDEX idx_claims_type ON claims(claim_type);
+CREATE INDEX idx_claims_domain ON claims(domain);
 CREATE INDEX idx_claims_verification ON claims(verification_status);
 CREATE INDEX idx_claims_flagged ON claims(flagged_for_review) WHERE flagged_for_review = 1;
 CREATE INDEX idx_claims_created ON claims(created_at);

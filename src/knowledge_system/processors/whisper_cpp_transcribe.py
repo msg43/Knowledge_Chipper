@@ -1670,8 +1670,8 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
             if self._audio_duration > 0:
                 timestamp_progress = int((current_seconds / self._audio_duration) * 100)
-                # Only report if it's a meaningful update (at least 5% increment)
-                if timestamp_progress > self._last_whisper_progress + 4:
+                # Only report if it's a meaningful update (at least 2% increment)
+                if timestamp_progress > self._last_whisper_progress + 1:
                     self._last_whisper_progress = timestamp_progress
 
                     speed_info = ""

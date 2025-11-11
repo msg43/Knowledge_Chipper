@@ -10,6 +10,7 @@ import json
 import logging
 from typing import Any
 
+from ....config import get_settings
 from ....core.llm_adapter import get_llm_adapter
 from ....errors import ErrorCode, KnowledgeSystemError
 
@@ -29,6 +30,7 @@ class System2LLM:
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        timeout: int | None = None,
     ):
         """
         Initialize System 2 LLM wrapper.
@@ -38,12 +40,28 @@ class System2LLM:
             model: Model name (defaults based on provider)
             temperature: Sampling temperature
             max_tokens: Max tokens to generate
+            timeout: Request timeout in seconds (defaults from config)
         """
         self.provider = provider
         self.model = model or self._get_default_model(provider)
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.adapter = get_llm_adapter()
+
+        # Get timeout from parameter or config
+        if timeout is not None:
+            self.timeout = timeout
+        else:
+            settings = get_settings()
+            # Use local_config.timeout for local providers, otherwise default to 300s
+            if provider in ["ollama", "local"]:
+                self.timeout = settings.local_config.timeout
+            else:
+                self.timeout = 300  # 5 minutes for cloud APIs
+
+        logger.debug(
+            f"System2LLM initialized with {self.timeout}s timeout for {provider}"
+        )
 
         # For compatibility with structured output
         self.supports_structured = provider == "ollama"
@@ -87,50 +105,62 @@ class System2LLM:
 
         Synchronous wrapper for compatibility with existing code.
         """
-        try:
-            # Check if we're already in an async context
+        import queue
+        import threading
+
+        # ALWAYS use thread-based approach when there might be an event loop
+        # This is safer than trying to detect worker threads vs main thread
+        def run_async_in_thread():
+            """Run async function in a dedicated thread with its own event loop."""
             try:
-                loop = asyncio.get_running_loop()
-                # We're in an async context - we need to run in a NEW event loop in a separate thread
-                import threading
+                # Create fresh event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    return loop.run_until_complete(
+                        self._complete_async(prompt, **kwargs)
+                    )
+                finally:
+                    loop.close()
+                    asyncio.set_event_loop(None)
+            except Exception as e:
+                raise e
 
-                result_container = []
-                exception_container = []
+        # Try to detect if we're in an async context
+        try:
+            asyncio.get_running_loop()
+            # There's a loop - use thread approach
+            result_queue = queue.Queue()
 
-                def run_in_new_loop():
-                    """Run the async function in a completely new event loop in this thread."""
-                    try:
-                        # Create a new event loop for this thread
-                        new_loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(new_loop)
-                        try:
-                            result = new_loop.run_until_complete(
-                                self._complete_async(prompt, **kwargs)
-                            )
-                            result_container.append(result)
-                        finally:
-                            new_loop.close()
-                            asyncio.set_event_loop(None)
-                    except Exception as e:
-                        exception_container.append(e)
+            def thread_wrapper():
+                try:
+                    result = run_async_in_thread()
+                    result_queue.put(("success", result))
+                except Exception as e:
+                    result_queue.put(("error", e))
 
-                # Run in a separate thread with its own event loop
-                thread = threading.Thread(target=run_in_new_loop)
-                thread.start()
-                thread.join()
+            thread = threading.Thread(target=thread_wrapper, daemon=True)
+            thread.start()
+            thread.join(timeout=self.timeout)
 
-                if exception_container:
-                    raise exception_container[0]
-                return result_container[0]
+            if thread.is_alive():
+                raise KnowledgeSystemError(
+                    f"LLM request timed out after {self.timeout} seconds",
+                    ErrorCode.LLM_API_ERROR,
+                )
 
-            except RuntimeError:
-                # No running loop - safe to use asyncio.run()
-                return asyncio.run(self._complete_async(prompt, **kwargs))
-        except Exception as e:
-            logger.error(f"Completion failed: {e}")
-            raise KnowledgeSystemError(
-                f"Failed to generate completion: {e}", ErrorCode.LLM_API_ERROR
-            ) from e
+            try:
+                status, value = result_queue.get_nowait()
+                if status == "error":
+                    raise value
+                return value
+            except queue.Empty:
+                raise KnowledgeSystemError(
+                    "Thread completed but no result available", ErrorCode.LLM_API_ERROR
+                )
+        except RuntimeError:
+            # No loop detected - safe to run directly
+            return run_async_in_thread()
 
     async def _generate_json_async(self, prompt: str, **kwargs) -> dict[str, Any]:
         """Async JSON generation through the adapter."""
@@ -164,48 +194,59 @@ class System2LLM:
 
         Synchronous wrapper for compatibility.
         """
-        try:
-            # Check if we're already in an async context
+        import queue
+        import threading
+
+        def run_async_in_thread():
+            """Run async function in a dedicated thread with its own event loop."""
             try:
-                loop = asyncio.get_running_loop()
-                # We're in an async context - we need to run in a NEW event loop in a separate thread
-                import threading
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    return loop.run_until_complete(
+                        self._generate_json_async(prompt, **kwargs)
+                    )
+                finally:
+                    loop.close()
+                    asyncio.set_event_loop(None)
+            except Exception as e:
+                raise e
 
-                result_container = []
-                exception_container = []
+        # Try to detect if we're in an async context
+        try:
+            asyncio.get_running_loop()
+            # There's a loop - use thread approach
+            result_queue = queue.Queue()
 
-                def run_in_new_loop():
-                    """Run the async function in a completely new event loop in this thread."""
-                    try:
-                        # Create a new event loop for this thread
-                        new_loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(new_loop)
-                        try:
-                            result = new_loop.run_until_complete(
-                                self._generate_json_async(prompt, **kwargs)
-                            )
-                            result_container.append(result)
-                        finally:
-                            new_loop.close()
-                            asyncio.set_event_loop(None)
-                    except Exception as e:
-                        exception_container.append(e)
+            def thread_wrapper():
+                try:
+                    result = run_async_in_thread()
+                    result_queue.put(("success", result))
+                except Exception as e:
+                    result_queue.put(("error", e))
 
-                # Run in a separate thread with its own event loop
-                thread = threading.Thread(target=run_in_new_loop)
-                thread.start()
-                thread.join()
+            thread = threading.Thread(target=thread_wrapper, daemon=True)
+            thread.start()
+            thread.join(timeout=self.timeout)
 
-                if exception_container:
-                    raise exception_container[0]
-                return result_container[0]
+            if thread.is_alive():
+                raise KnowledgeSystemError(
+                    f"LLM request timed out after {self.timeout} seconds",
+                    ErrorCode.LLM_API_ERROR,
+                )
 
-            except RuntimeError:
-                # No running loop - safe to use asyncio.run()
-                return asyncio.run(self._generate_json_async(prompt, **kwargs))
-        except Exception as e:
-            logger.error(f"JSON generation failed: {e}")
-            raise
+            try:
+                status, value = result_queue.get_nowait()
+                if status == "error":
+                    raise value
+                return value
+            except queue.Empty:
+                raise KnowledgeSystemError(
+                    "Thread completed but no result available", ErrorCode.LLM_API_ERROR
+                )
+        except RuntimeError:
+            # No loop detected - safe to run directly
+            return run_async_in_thread()
 
     async def _generate_structured_json_async(
         self, prompt: str, schema_name: str, **kwargs
@@ -271,54 +312,61 @@ class System2LLM:
 
         Falls back to regular JSON generation for other providers.
         """
-        try:
-            # Check if we're already in an async context
+        import queue
+        import threading
+
+        def run_async_in_thread():
+            """Run async function in a dedicated thread with its own event loop."""
             try:
-                loop = asyncio.get_running_loop()
-                # We're in an async context - we need to run in a NEW event loop in a separate thread
-                # Using asyncio.run() directly would fail with "cannot be called from a running event loop"
-                import concurrent.futures
-                import threading
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    return loop.run_until_complete(
+                        self._generate_structured_json_async(
+                            prompt, schema_name, **kwargs
+                        )
+                    )
+                finally:
+                    loop.close()
+                    asyncio.set_event_loop(None)
+            except Exception as e:
+                raise e
 
-                result_container = []
-                exception_container = []
+        # Try to detect if we're in an async context
+        try:
+            asyncio.get_running_loop()
+            # There's a loop - use thread approach
+            result_queue = queue.Queue()
 
-                def run_in_new_loop():
-                    """Run the async function in a completely new event loop in this thread."""
-                    try:
-                        # Create a new event loop for this thread
-                        new_loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(new_loop)
-                        try:
-                            result = new_loop.run_until_complete(
-                                self._generate_structured_json_async(
-                                    prompt, schema_name, **kwargs
-                                )
-                            )
-                            result_container.append(result)
-                        finally:
-                            new_loop.close()
-                            asyncio.set_event_loop(None)
-                    except Exception as e:
-                        exception_container.append(e)
+            def thread_wrapper():
+                try:
+                    result = run_async_in_thread()
+                    result_queue.put(("success", result))
+                except Exception as e:
+                    result_queue.put(("error", e))
 
-                # Run in a separate thread with its own event loop
-                thread = threading.Thread(target=run_in_new_loop)
-                thread.start()
-                thread.join()
+            thread = threading.Thread(target=thread_wrapper, daemon=True)
+            thread.start()
+            thread.join(timeout=self.timeout)
 
-                if exception_container:
-                    raise exception_container[0]
-                return result_container[0]
-
-            except RuntimeError:
-                # No running loop - safe to use asyncio.run()
-                return asyncio.run(
-                    self._generate_structured_json_async(prompt, schema_name, **kwargs)
+            if thread.is_alive():
+                raise KnowledgeSystemError(
+                    f"LLM request timed out after {self.timeout} seconds",
+                    ErrorCode.LLM_API_ERROR,
                 )
-        except Exception as e:
-            logger.error(f"Structured JSON generation failed: {e}")
-            raise
+
+            try:
+                status, value = result_queue.get_nowait()
+                if status == "error":
+                    raise value
+                return value
+            except queue.Empty:
+                raise KnowledgeSystemError(
+                    "Thread completed but no result available", ErrorCode.LLM_API_ERROR
+                )
+        except RuntimeError:
+            # No loop detected - safe to run directly
+            return run_async_in_thread()
 
     def get_stats(self) -> dict[str, Any]:
         """Get LLM usage statistics."""

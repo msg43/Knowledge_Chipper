@@ -5,6 +5,7 @@ from .claim_search_tab import ClaimSearchTab
 from .introduction_tab import IntroductionTab
 from .process_tab import ProcessTab
 from .prompts_tab import PromptsTab
+from .queue_tab import QueueTab
 from .speaker_attribution_tab import SpeakerAttributionTab
 from .summarization_tab import SummarizationTab
 from .summary_cleanup_tab import SummaryCleanupTab
@@ -32,6 +33,7 @@ __all__ = [
     "MonitorTab",
     "TranscriptionTab",
     "SummarizationTab",
+    "QueueTab",
     "ClaimSearchTab",
     "SpeakerAttributionTab",
     "SummaryCleanupTab",

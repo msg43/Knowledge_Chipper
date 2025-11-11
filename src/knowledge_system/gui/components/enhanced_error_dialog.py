@@ -254,9 +254,7 @@ class EnhancedErrorDialog(QDialog):
         # Error description
         self.error_description = QLabel("")
         self.error_description.setWordWrap(True)
-        self.error_description.setStyleSheet(
-            "color: #333; font-size: 12px; margin-bottom: 10px;"
-        )
+        self.error_description.setStyleSheet("font-size: 12px; margin-bottom: 10px;")
         layout.addWidget(self.error_description)
 
         # Solutions section
@@ -289,7 +287,7 @@ class EnhancedErrorDialog(QDialog):
         # Technical details (collapsible)
         self.technical_label = QLabel("🔧 Technical Details:")
         self.technical_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-        self.technical_label.setStyleSheet("color: #333; margin-top: 15px;")
+        self.technical_label.setStyleSheet("margin-top: 15px;")
         layout.addWidget(self.technical_label)
 
         self.technical_details = QTextEdit()
@@ -415,7 +413,7 @@ class EnhancedErrorDialog(QDialog):
         for solution in error_info["solutions"]:
             solution_label = QLabel(solution)
             solution_label.setWordWrap(True)
-            solution_label.setStyleSheet("margin: 2px 0; color: #333;")
+            solution_label.setStyleSheet("margin: 2px 0;")
             self.solutions_layout.addWidget(solution_label)
 
         # Set technical details
@@ -493,6 +491,20 @@ def show_enhanced_error(
     parent, title: str, message: str, context: str = "", details: str = ""
 ) -> None:
     """Convenience function to show enhanced error dialog."""
+    import logging
+    import traceback as tb
+
+    logger = logging.getLogger(__name__)
+
+    # Handle empty/None messages
+    if not message or message.strip() == "":
+        logger.error("show_enhanced_error called with empty message!")
+        logger.error(f"Title: {title}")
+        logger.error(f"Context: {context}")
+        logger.error(f"Details: {details}")
+        logger.error(f"Caller traceback:\n{tb.format_stack()}")
+        message = "An error occurred but no error message was provided. Check the logs for details."
+
     try:
         from PyQt6.QtCore import QThread, QTimer
         from PyQt6.QtWidgets import QApplication
@@ -513,8 +525,10 @@ def show_enhanced_error(
             QTimer.singleShot(0, _do_show)
             return
         _do_show()
-    except Exception:
+    except Exception as e:
         # Best-effort fallback
+        logger.error(f"Error showing error dialog: {e}")
+        logger.error(tb.format_exc())
         dialog = EnhancedErrorDialog(parent)
         dialog.show_error(title, message, context, details)
         dialog.exec()

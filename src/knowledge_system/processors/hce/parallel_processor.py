@@ -235,7 +235,7 @@ class ParallelHCEProcessor:
             return [processor_func(items[0])]
 
         logger.info(
-            f"⚡ Processing {len(items)} segments with {self.max_workers} parallel workers"
+            f"⚡ Processing {len(items)} items with {self.max_workers} parallel workers (use_asyncio={use_asyncio})"
         )
 
         # Use asyncio for I/O-bound LLM calls (much more efficient)
@@ -264,20 +264,34 @@ class ParallelHCEProcessor:
 
             # Submit first batch
             initial_batch_size = min(self.max_workers, len(items))
+            logger.info(f"📤 Submitting initial batch of {initial_batch_size} tasks")
             for i in range(initial_batch_size):
                 future = executor.submit(processor_func, items[i])
                 future_to_index[future] = i
                 submitted_count += 1
                 self.active_tasks += 1
+            logger.info(f"✅ Initial batch submitted, waiting for completions...")
 
             # Process completed futures and submit new ones
             max_iterations = len(items) * 10  # Safety limit to prevent infinite loops
             iteration_count = 0
+            last_status_log = time.time()
 
             while (
                 submitted_count < len(items) or future_to_index
             ) and iteration_count < max_iterations:
                 iteration_count += 1
+
+                # Periodic status logging (every 10 seconds)
+                if time.time() - last_status_log > 10:
+                    logger.info(
+                        f"🔄 Status: {completed_count}/{len(items)} completed, "
+                        f"{submitted_count}/{len(items)} submitted, "
+                        f"{len(future_to_index)} active tasks, "
+                        f"iteration {iteration_count}"
+                    )
+                    last_status_log = time.time()
+
                 # Check memory pressure before submitting new tasks
                 pressure_level, message = self.memory_handler.check_memory_pressure()
 
@@ -328,8 +342,14 @@ class ParallelHCEProcessor:
                         try:
                             results[index] = completed_future.result()
                             completed_count += 1
+                            logger.debug(
+                                f"✅ Task {index} completed successfully ({completed_count}/{len(items)})"
+                            )
                         except Exception as e:
-                            logger.error(f"Task {index} failed: {e}")
+                            logger.error(f"❌ Task {index} failed: {e}")
+                            import traceback
+
+                            logger.debug(f"Full traceback:\n{traceback.format_exc()}")
                             results[index] = None
 
                         self.active_tasks -= 1
@@ -342,6 +362,9 @@ class ParallelHCEProcessor:
 
                     # Submit next task if available and memory allows
                     if submitted_count < len(items) and pressure_level < 3:
+                        logger.debug(
+                            f"📤 Submitting task {submitted_count} ({submitted_count+1}/{len(items)})"
+                        )
                         future = executor.submit(processor_func, items[submitted_count])
                         future_to_index[future] = submitted_count
                         submitted_count += 1

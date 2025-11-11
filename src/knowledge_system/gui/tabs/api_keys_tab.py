@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QFormLayout,
     QFrame,
     QGridLayout,
     QGroupBox,
@@ -17,6 +18,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressDialog,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -523,10 +525,50 @@ class APIKeysTab(BaseTab):
 
         # Settings Tests section removed per user request
 
+        # Processing & Monitoring section
+        processing_section = self._create_processing_section()
+        main_layout.addWidget(processing_section)
+
         # Hardware Recommendations section - moved from Local Transcription tab
         # Hardware recommendations removed - now handled automatically during installation
 
         main_layout.addStretch()
+
+    def _create_processing_section(self) -> QGroupBox:
+        """Create processing & monitoring settings section."""
+        group = QGroupBox("Processing & Monitoring")
+        layout = QFormLayout(group)
+
+        # Queue refresh interval
+        self.queue_refresh_spin = QSpinBox()
+        self.queue_refresh_spin.setRange(1, 60)
+        self.queue_refresh_spin.setSuffix(" seconds")
+        self.queue_refresh_spin.setValue(5)  # Default 5 seconds
+        self.queue_refresh_spin.setToolTip(
+            "How often the Queue tab refreshes its display.\n"
+            "• Lower values: More responsive but higher CPU usage\n"
+            "• Higher values: Less CPU usage but delayed updates\n"
+            "• Recommended: 5-10 seconds for most use cases"
+        )
+
+        # Connect to save settings
+        self.queue_refresh_spin.valueChanged.connect(
+            lambda v: self.gui_settings.set_value(
+                "Processing", "queue_refresh_interval", v
+            )
+        )
+
+        # Load saved value
+        saved_interval = self.gui_settings.get_value(
+            "Processing", "queue_refresh_interval", 5
+        )
+        self.queue_refresh_spin.setValue(saved_interval)
+
+        layout.addRow("Queue Refresh Interval:", self.queue_refresh_spin)
+
+        # Add more processing/monitoring settings here in the future
+
+        return group
 
     def _create_web_auth_section(self) -> QGroupBox:
         """Create authentication section for Skip The Podcast Web."""

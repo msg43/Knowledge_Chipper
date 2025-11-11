@@ -3,7 +3,7 @@ System 2 LLM Adapter
 
 Centralizes all LLM API calls with:
 - Hardware tier-specific concurrency limits
-- Memory-aware throttling (70% threshold)
+- Memory-aware throttling (80% threshold)
 - Exponential backoff for rate limits
 - Request/response tracking
 - Cost estimation
@@ -11,6 +11,7 @@ Centralizes all LLM API calls with:
 
 import asyncio
 import logging
+import threading
 import time
 from datetime import datetime, timedelta
 from typing import Any
@@ -132,6 +133,13 @@ class LLMAdapter:
         """Initialize the LLM adapter."""
         self.db_service = db_service or DatabaseService()
 
+        # Load settings for timeout configuration
+        from ..config import get_settings
+
+        settings = get_settings()
+        self.local_timeout = settings.local_config.timeout  # Get from config (600s)
+        self.cloud_timeout = 300  # 5 minutes for cloud APIs
+
         # Detect hardware tier
         if hardware_specs is None:
             hardware_specs = detect_hardware_specs()
@@ -163,12 +171,14 @@ class LLMAdapter:
 
         logger.info(
             f"LLM Adapter initialized for {self.hardware_tier} tier "
-            f"(max {self.max_concurrent} concurrent cloud / {effective_local} local requests)"
+            f"(max {self.max_concurrent} concurrent cloud / {effective_local} local requests, "
+            f"local timeout: {self.local_timeout}s)"
         )
 
         # Concurrency control - separate semaphores for cloud and local
-        self.cloud_semaphore = asyncio.Semaphore(self.max_concurrent)
-        self.local_semaphore = asyncio.Semaphore(effective_local)
+        self.cloud_semaphore = threading.Semaphore(self.max_concurrent)
+        self.local_semaphore = threading.Semaphore(effective_local)
+        self._active_lock = threading.Lock()
         self.active_requests = 0
 
         # Rate limiters per provider
@@ -180,7 +190,7 @@ class LLMAdapter:
         }
 
         # Memory throttler
-        self.memory_throttler = MemoryThrottler(70.0)
+        self.memory_throttler = MemoryThrottler(80.0)
 
         # Cost tracking
         self.cost_per_1k_tokens = {
@@ -274,53 +284,57 @@ class LLMAdapter:
         semaphore = self.local_semaphore if is_local else self.cloud_semaphore
         max_concurrent = self.max_concurrent_local if is_local else self.max_concurrent
 
-        # Acquire concurrency slot
-        async with semaphore:
+        # Acquire concurrency slot using thread-based semaphore to allow cross-event-loop usage
+        await asyncio.to_thread(semaphore.acquire)
+        with self._active_lock:
             self.active_requests += 1
-            provider_type = "local" if is_local else "cloud"
-            logger.debug(
-                f"LLM request starting ({self.active_requests} active, {max_concurrent} max {provider_type})"
-            )
+            active_requests = self.active_requests
 
-            try:
-                # Build request payload
-                request_payload = {
-                    "model": model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    **kwargs,
-                }
+        provider_type = "local" if is_local else "cloud"
+        logger.debug(
+            f"LLM request starting ({active_requests} active, {max_concurrent} max {provider_type})"
+        )
 
-                # Track request in database
-                request_id = self._track_request(provider, model, request_payload)
+        try:
+            # Build request payload
+            request_payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                **kwargs,
+            }
 
-                # Make the actual API call
-                response = await self._call_provider(provider, model, request_payload)
+            # Track request in database
+            request_id = self._track_request(provider, model, request_payload)
 
-                # Track response
-                response_time_ms = int((time.time() - start_time) * 1000)
-                self._track_response(request_id, response, response_time_ms)
+            # Make the actual API call
+            response = await self._call_provider(provider, model, request_payload)
 
-                # Estimate cost
-                cost = self._estimate_cost(provider, model, response)
-                if cost > 0:
-                    logger.debug(f"Estimated cost: ${cost:.4f}")
+            # Track response
+            response_time_ms = int((time.time() - start_time) * 1000)
+            self._track_response(request_id, response, response_time_ms)
 
-                return response
+            # Estimate cost
+            cost = self._estimate_cost(provider, model, response)
+            if cost > 0:
+                logger.debug(f"Estimated cost: ${cost:.4f}")
 
-            except Exception as e:
-                # Handle rate limit errors
-                if "rate" in str(e).lower() or "429" in str(e):
-                    rate_limiter.trigger_backoff()
+            return response
 
+        except Exception as e:
+            # Handle rate limit errors
+            if "rate" in str(e).lower() or "429" in str(e):
+                rate_limiter.trigger_backoff()
+
+            raise KnowledgeSystemError(
+                f"LLM request failed: {e}", ErrorCode.LLM_API_ERROR
+            ) from e
+
+        finally:
+            with self._active_lock:
                 self.active_requests -= 1
-                raise KnowledgeSystemError(
-                    f"LLM request failed: {e}", ErrorCode.LLM_API_ERROR
-                ) from e
-
-            finally:
-                self.active_requests -= 1
+            semaphore.release()
 
     async def _call_provider(
         self, provider: str, model: str, payload: dict[str, Any]
@@ -364,8 +378,11 @@ class LLMAdapter:
 
         try:
             async with aiohttp.ClientSession() as session:
+                # Use configurable timeout from settings (default 600s for local)
                 async with session.post(
-                    url, json=request_payload, timeout=aiohttp.ClientTimeout(total=300)
+                    url,
+                    json=request_payload,
+                    timeout=aiohttp.ClientTimeout(total=self.local_timeout),
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()

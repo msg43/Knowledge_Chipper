@@ -6,6 +6,7 @@ for the SQLite database with comprehensive video processing tracking.
 """
 
 import os
+import re
 import sys
 import uuid
 from datetime import datetime, timedelta
@@ -16,6 +17,7 @@ from sqlalchemy import desc, func, or_, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..logger import get_logger
+from ..utils.file_io import overwrite_or_insert_summary_section
 from .models import (
     BrightDataSession,
     Claim,
@@ -32,6 +34,7 @@ from .models import (
     PlatformTag,
     ProcessingJob,
     QualityMetrics,
+    Segment,
     SourcePlatformCategory,
     SourcePlatformTag,
     Summary,
@@ -327,17 +330,22 @@ class DatabaseService:
             if not tag_name or not isinstance(tag_name, str):
                 continue
 
+            sanitized_tag = self._sanitize_tag_name(tag_name)
+            if not sanitized_tag:
+                continue
+
             # Get or create platform tag
             platform_tag = (
                 session.query(PlatformTag)
                 .filter(
-                    PlatformTag.platform == platform, PlatformTag.tag_name == tag_name
+                    PlatformTag.platform == platform,
+                    PlatformTag.tag_name == sanitized_tag,
                 )
                 .first()
             )
 
             if not platform_tag:
-                platform_tag = PlatformTag(platform=platform, tag_name=tag_name)
+                platform_tag = PlatformTag(platform=platform, tag_name=sanitized_tag)
                 session.add(platform_tag)
                 session.flush()  # Get the tag_id
 
@@ -398,6 +406,53 @@ class DatabaseService:
             )
             session.add(source_category)
 
+    def _sanitize_tag_name(self, tag_name: str) -> str:
+        """Normalize tag names by replacing spaces/dots with underscores."""
+        if not isinstance(tag_name, str):
+            return ""
+
+        sanitized = tag_name.strip()
+        if not sanitized:
+            return ""
+
+        sanitized = re.sub(r"[\.\s]+", "_", sanitized)
+        sanitized = re.sub(r"_+", "_", sanitized)
+        return sanitized
+
+    def _normalize_platform_tag(
+        self, session: Session, tag: PlatformTag
+    ) -> PlatformTag | None:
+        """Ensure stored platform tags use sanitized naming (merging duplicates)."""
+        if not tag or not tag.tag_name:
+            return tag
+
+        sanitized = self._sanitize_tag_name(tag.tag_name)
+        if not sanitized or sanitized == tag.tag_name:
+            return tag
+
+        existing = (
+            session.query(PlatformTag)
+            .filter(
+                PlatformTag.platform == tag.platform,
+                PlatformTag.tag_name == sanitized,
+            )
+            .first()
+        )
+
+        if existing:
+            session.query(SourcePlatformTag).filter(
+                SourcePlatformTag.tag_id == tag.tag_id
+            ).update(
+                {SourcePlatformTag.tag_id: existing.tag_id}, synchronize_session=False
+            )
+            session.delete(tag)
+            session.flush()
+            return existing
+
+        tag.tag_name = sanitized
+        session.flush()
+        return tag
+
     def get_source(self, source_id: str) -> MediaSource | None:
         """Get source by ID (using claim-centric schema with source_id)."""
         try:
@@ -409,18 +464,55 @@ class DatabaseService:
                     .first()
                 )
 
-                # Add platform categories as a dynamic property
+                # Add platform categories/tags as dynamic properties
                 if source:
                     categories = self._get_platform_categories_for_source(
                         session, source_id
                     )
-                    # Store as dynamic attribute (not persisted to DB)
+                    tags = self._get_platform_tags_for_source(session, source_id)
+                    # Store as dynamic attributes (not persisted to DB)
                     source.categories_json = categories if categories else []
+                    source.tags_json = tags if tags else []
 
                 return source
         except Exception as e:
             logger.error(f"Failed to get source {source_id}: {e}")
             return None
+
+    def get_sources_batch(self, source_ids: list[str]) -> list[MediaSource]:
+        """
+        Get multiple sources in a single query (optimized for batch lookups).
+
+        Args:
+            source_ids: List of source IDs to fetch
+
+        Returns:
+            List of MediaSource objects (may be shorter than input if some don't exist)
+        """
+        if not source_ids:
+            return []
+
+        try:
+            with self.get_session() as session:
+                sources = (
+                    session.query(MediaSource)
+                    .filter(MediaSource.source_id.in_(source_ids))
+                    .all()
+                )
+
+                # Add platform categories/tags for each source
+                for source in sources:
+                    categories = self._get_platform_categories_for_source(
+                        session, source.source_id
+                    )
+                    tags = self._get_platform_tags_for_source(session, source.source_id)
+                    source.categories_json = categories if categories else []
+                    source.tags_json = tags if tags else []
+
+                return sources
+        except Exception as e:
+            logger.error(f"Failed to batch get sources: {e}")
+            return []
 
     def get_source_by_file_path(self, file_path: str) -> MediaSource | None:
         """Get source by audio file path (database-centric lookup).
@@ -452,10 +544,12 @@ class DatabaseService:
                                 categories = self._get_platform_categories_for_source(
                                     session, video.source_id
                                 )
-                                # Store as dynamic attribute (not persisted to DB)
-                                video.categories_json = (
-                                    categories if categories else []
+                                tags = self._get_platform_tags_for_source(
+                                    session, video.source_id
                                 )
+                                # Store as dynamic attributes (not persisted to DB)
+                                video.categories_json = categories if categories else []
+                                video.tags_json = tags if tags else []
                                 return video
                         except (OSError, ValueError):
                             # Handle invalid paths gracefully
@@ -466,6 +560,44 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to get video by file path {file_path}: {e}")
             return None
+
+    def _get_platform_tags_for_source(self, session, source_id: str) -> list[str]:
+        """Get platform tags for a source from the normalized tables."""
+        try:
+            tag_records = (
+                session.query(PlatformTag)
+                .join(
+                    SourcePlatformTag,
+                    PlatformTag.tag_id == SourcePlatformTag.tag_id,
+                )
+                .filter(SourcePlatformTag.source_id == source_id)
+                .all()
+            )
+
+            sanitized_tags: list[str] = []
+            dirty = False
+
+            for tag in tag_records:
+                normalized = self._normalize_platform_tag(session, tag)
+                if normalized is None:
+                    continue
+                sanitized_tags.append(normalized.tag_name)
+                if normalized.tag_name != tag.tag_name:
+                    dirty = True
+
+            if dirty:
+                try:
+                    session.commit()
+                except Exception as commit_error:
+                    session.rollback()
+                    logger.error(
+                        f"Failed to normalize tags for {source_id}: {commit_error}"
+                    )
+
+            return sanitized_tags
+        except Exception as e:
+            logger.debug(f"Could not retrieve platform tags for {source_id}: {e}")
+            return []
 
     def _get_platform_categories_for_source(self, session, source_id: str) -> list[str]:
         """Get platform categories for a source from the normalized tables."""
@@ -652,6 +784,87 @@ class DatabaseService:
             logger.error(f"Failed to check source existence for {source_id}: {e}")
             return (False, None)
 
+    def has_segments_for_source(self, source_id: str) -> bool:
+        """
+        Check if a source has segments (transcription completed).
+
+        Args:
+            source_id: Source ID to check
+
+        Returns:
+            True if source has segments, False otherwise
+        """
+        try:
+            with self.get_session() as session:
+                segment_count = (
+                    session.query(Segment)
+                    .filter(Segment.source_id == source_id)
+                    .count()
+                )
+                return segment_count > 0
+        except Exception as e:
+            logger.error(f"Failed to check segments for {source_id}: {e}")
+            return False
+
+    def source_is_fully_processed(self, source_id: str) -> tuple[bool, str | None]:
+        """
+        Check if a source has been fully downloaded and transcribed.
+
+        A source is considered fully processed if:
+        1. It exists in the database (or has an alias)
+        2. The audio file exists on disk
+        3. It has segments (transcription completed)
+
+        Args:
+            source_id: Source ID to check
+
+        Returns:
+            (is_complete, existing_source_id) where existing_source_id is the source_id
+            that already exists in the database (either the original or an alias)
+        """
+        from pathlib import Path
+
+        try:
+            # First check if source exists
+            exists, existing_source_id = self.source_exists_or_has_alias(source_id)
+            if not exists or not existing_source_id:
+                return (False, None)
+
+            # Get the source
+            source = self.get_source(existing_source_id)
+            if not source:
+                return (False, None)
+
+            # Check if audio file exists on disk
+            if source.audio_file_path:
+                audio_path = Path(source.audio_file_path)
+                if not audio_path.exists():
+                    logger.info(
+                        f"Source {existing_source_id} exists in DB but audio file missing: {audio_path}"
+                    )
+                    return (False, existing_source_id)
+            else:
+                logger.info(
+                    f"Source {existing_source_id} exists in DB but has no audio_file_path"
+                )
+                return (False, existing_source_id)
+
+            # Check if source has segments (transcription completed)
+            if not self.has_segments_for_source(existing_source_id):
+                logger.info(
+                    f"Source {existing_source_id} exists with audio but has no segments (not transcribed)"
+                )
+                return (False, existing_source_id)
+
+            # All checks passed - source is fully processed
+            return (True, existing_source_id)
+
+        except Exception as e:
+            logger.error(
+                f"Failed to check if source is fully processed for {source_id}: {e}"
+            )
+            return (False, None)
+
     def merge_source_metadata(
         self,
         primary_source_id: str,
@@ -729,6 +942,141 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to merge source metadata: {e}")
             return False
+
+    def get_all_source_metadata(self, source_id: str) -> dict:
+        """
+        Get metadata from source and all aliased sources (non-destructive).
+
+        Returns metadata from the primary source and all aliased sources,
+        preserving provenance and allowing LLMs to reason across multiple
+        metadata sets.
+
+        Args:
+            source_id: Primary source ID to retrieve metadata for
+
+        Returns:
+            Dictionary with structure:
+            {
+                'primary_source': {
+                    'source_id': str,
+                    'source_type': str,
+                    'title': str,
+                    'description': str,
+                    'uploader': str,
+                    'channel_id': str,
+                    'url': str,
+                    ... (all relevant fields)
+                },
+                'aliased_sources': [
+                    {
+                        'source_id': str,
+                        'source_type': str,
+                        'title': str,
+                        'description': str,
+                        ... (all relevant fields)
+                    },
+                    ...
+                ]
+            }
+
+        Example:
+            For an RSS podcast episode with a YouTube alias:
+            {
+                'primary_source': {
+                    'source_id': 'podcast_xyz789',
+                    'source_type': 'podcast',
+                    'title': 'Dr. Andrew Huberman: Sleep',
+                    'description': 'Episode 123',  # Minimal
+                    'url': 'https://lexfridman.com/feed'
+                },
+                'aliased_sources': [
+                    {
+                        'source_id': 'video_abc123',
+                        'source_type': 'youtube',
+                        'title': 'Dr. Andrew Huberman: Sleep & Focus',
+                        'description': 'In this episode...',  # Rich!
+                        'channel_id': 'UCSHZKyawb77ixDdsGog4iWA',
+                        'view_count': 1500000
+                    }
+                ]
+            }
+        """
+        try:
+            # Get primary source
+            source = self.get_source(source_id)
+            if not source:
+                logger.warning(f"Source {source_id} not found")
+                return {"primary_source": None, "aliased_sources": []}
+
+            # Convert primary source to dict
+            primary_metadata = {
+                "source_id": source.source_id,
+                "source_type": source.source_type,
+                "title": source.title,
+                "description": source.description,
+                "uploader": source.uploader,
+                "uploader_id": source.uploader_id,
+                "author": source.author,
+                "organization": source.organization,
+                "channel_id": getattr(source, "channel_id", None),
+                "upload_date": source.upload_date,
+                "recorded_at": source.recorded_at,
+                "published_at": source.published_at,
+                "duration_seconds": source.duration_seconds,
+                "view_count": source.view_count,
+                "like_count": source.like_count,
+                "comment_count": source.comment_count,
+                "language": source.language,
+                "url": source.url,
+            }
+
+            # Get all aliases
+            alias_ids = self.get_source_aliases(source_id)
+            aliased_metadata = []
+
+            for alias_id in alias_ids:
+                alias = self.get_source(alias_id)
+                if alias:
+                    aliased_metadata.append(
+                        {
+                            "source_id": alias.source_id,
+                            "source_type": alias.source_type,
+                            "title": alias.title,
+                            "description": alias.description,
+                            "uploader": alias.uploader,
+                            "uploader_id": alias.uploader_id,
+                            "author": alias.author,
+                            "organization": alias.organization,
+                            "channel_id": getattr(alias, "channel_id", None),
+                            "upload_date": alias.upload_date,
+                            "recorded_at": alias.recorded_at,
+                            "published_at": alias.published_at,
+                            "duration_seconds": alias.duration_seconds,
+                            "view_count": alias.view_count,
+                            "like_count": alias.like_count,
+                            "comment_count": alias.comment_count,
+                            "language": alias.language,
+                            "url": alias.url,
+                        }
+                    )
+
+            if aliased_metadata:
+                logger.info(
+                    f"📚 Retrieved metadata from {len(aliased_metadata)} aliased source(s) for {source_id}"
+                )
+                for alias in aliased_metadata:
+                    logger.debug(
+                        f"   → {alias['source_type']}: {alias['title'][:50]}..."
+                    )
+
+            return {
+                "primary_source": primary_metadata,
+                "aliased_sources": aliased_metadata,
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get all source metadata for {source_id}: {e}")
+            return {"primary_source": None, "aliased_sources": []}
 
     def source_exists(self, source_id: str) -> bool:
         """Check if source exists in database."""
@@ -1221,6 +1569,62 @@ class DatabaseService:
     # SUMMARY OPERATIONS
     # =============================================================================
 
+    def _update_transcript_summary_section(
+        self,
+        session: Session,
+        source_id: str,
+        summary_text: str,
+        summary_id: str,
+    ) -> None:
+        """Append or update the summary section within the transcript markdown file."""
+        try:
+            transcript_record = (
+                session.query(GeneratedFile)
+                .filter(
+                    GeneratedFile.source_id == source_id,
+                    GeneratedFile.file_type == "transcript_md",
+                    GeneratedFile.file_format == "md",
+                )
+                .order_by(desc(GeneratedFile.created_at))
+                .first()
+            )
+
+            if not transcript_record:
+                logger.debug(
+                    f"No tracked transcript markdown found for {source_id}; skipping summary append"
+                )
+                return
+
+            transcript_path = Path(transcript_record.file_path)
+            if not transcript_path.exists():
+                logger.debug(
+                    f"Tracked transcript path missing for {source_id}: {transcript_path}"
+                )
+                return
+
+            additional_yaml_fields = {
+                "latest_summary_id": summary_id,
+                "summary_last_updated": datetime.utcnow().isoformat(),
+            }
+
+            overwrite_or_insert_summary_section(
+                transcript_path,
+                summary_text.strip(),
+                additional_yaml_fields=additional_yaml_fields,
+            )
+
+            transcript_record.summary_id = summary_id
+            transcript_record.last_modified = datetime.utcnow()
+            session.commit()
+
+            logger.info(
+                f"Appended summary section to transcript markdown: {transcript_path}"
+            )
+        except Exception as exc:
+            logger.error(
+                f"Failed to append summary section to transcript for {source_id}: {exc}"
+            )
+
     def create_summary(
         self,
         source_id: str,
@@ -1248,6 +1652,9 @@ class DatabaseService:
                 session.add(summary)
                 session.commit()
                 logger.info(f"Created summary: {summary_id}")
+                self._update_transcript_summary_section(
+                    session, source_id, summary_text, summary_id
+                )
                 return summary
         except Exception as e:
             logger.error(f"Failed to create summary for {source_id}: {e}")
@@ -2077,3 +2484,284 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Bulk insert failed for {table_name}: {e}")
             raise
+
+    # =============================================================================
+    # QUEUE STAGE STATUS OPERATIONS
+    # =============================================================================
+
+    def upsert_stage_status(
+        self,
+        source_id: str,
+        stage: str,
+        status: str,
+        priority: int = 5,
+        progress_percent: float = 0.0,
+        assigned_worker: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        """
+        Create or update stage status for queue visibility.
+
+        Args:
+            source_id: Source ID
+            stage: Pipeline stage ('download', 'transcription', 'summarization', 'hce_mining', 'flagship_evaluation')
+            status: Status ('pending', 'queued', 'scheduled', 'in_progress', 'completed', 'failed', 'blocked', 'not_applicable', 'skipped')
+            priority: Priority 1-10 (lower is higher priority)
+            progress_percent: Progress 0-100
+            assigned_worker: Worker/account assigned
+            metadata: Stage-specific metadata
+
+        Returns:
+            True if successful
+        """
+        import os
+
+        queue_debug = os.getenv("QUEUE_DEBUG", "").lower() in ("1", "true", "yes")
+
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            with self.get_session() as session:
+                from .models import MediaSource, SourceStageStatus
+
+                if queue_debug:
+                    logger.debug(
+                        f"[QUEUE_DB] upsert_stage_status: source_id={source_id}, "
+                        f"stage={stage}, status={status}, progress={progress_percent:.1f}%, "
+                        f"metadata={metadata}"
+                    )
+
+                # Ensure MediaSource exists before creating stage status
+                # This prevents foreign key constraint failures
+                media_source = (
+                    session.query(MediaSource)
+                    .filter(MediaSource.source_id == source_id)
+                    .first()
+                )
+
+                if not media_source:
+                    # Create a minimal MediaSource record
+                    # Extract URL from metadata if available
+                    url = (
+                        metadata.get("url", f"youtube://{source_id}")
+                        if metadata
+                        else f"youtube://{source_id}"
+                    )
+
+                    media_source = MediaSource(
+                        source_id=source_id,
+                        source_type="youtube",  # Default to youtube, can be updated later
+                        title=f"Queued: {source_id}",  # Placeholder title
+                        url=url,
+                    )
+                    session.add(media_source)
+                    session.flush()  # Ensure it's written before stage status
+
+                    if queue_debug:
+                        logger.debug(
+                            f"[QUEUE_DB] Created placeholder MediaSource for {source_id}"
+                        )
+
+                # Check if stage status record exists
+                existing = (
+                    session.query(SourceStageStatus)
+                    .filter(
+                        SourceStageStatus.source_id == source_id,
+                        SourceStageStatus.stage == stage,
+                    )
+                    .first()
+                )
+
+                if existing:
+                    # Update existing record
+                    existing.status = status
+                    existing.priority = priority
+                    existing.progress_percent = progress_percent
+                    existing.assigned_worker = assigned_worker
+                    if metadata:
+                        existing.metadata_json = metadata
+
+                    # Update timestamps based on status
+                    if (
+                        status in ("in_progress", "scheduled")
+                        and not existing.started_at
+                    ):
+                        existing.started_at = datetime.utcnow()
+                    elif status in ("completed", "failed", "blocked"):
+                        existing.completed_at = datetime.utcnow()
+                else:
+                    # Create new record
+                    new_status = SourceStageStatus(
+                        source_id=source_id,
+                        stage=stage,
+                        status=status,
+                        priority=priority,
+                        progress_percent=progress_percent,
+                        assigned_worker=assigned_worker,
+                        metadata_json=metadata,
+                    )
+
+                    # Set timestamps based on initial status
+                    if status in ("in_progress", "scheduled"):
+                        new_status.started_at = datetime.utcnow()
+                    elif status in ("completed", "failed", "blocked"):
+                        new_status.started_at = datetime.utcnow()
+                        new_status.completed_at = datetime.utcnow()
+
+                    session.add(new_status)
+
+                try:
+                    session.commit()
+                except IntegrityError:
+                    # Race condition: another transaction inserted the record
+                    # Roll back and retry with an update
+                    session.rollback()
+                    existing = (
+                        session.query(SourceStageStatus)
+                        .filter(
+                            SourceStageStatus.source_id == source_id,
+                            SourceStageStatus.stage == stage,
+                        )
+                        .first()
+                    )
+
+                    if existing:
+                        # Update the record that was inserted by the other transaction
+                        existing.status = status
+                        existing.priority = priority
+                        existing.progress_percent = progress_percent
+                        existing.assigned_worker = assigned_worker
+                        if metadata:
+                            existing.metadata_json = metadata
+
+                        # Update timestamps based on status
+                        if (
+                            status in ("in_progress", "scheduled")
+                            and not existing.started_at
+                        ):
+                            existing.started_at = datetime.utcnow()
+                        elif status in ("completed", "failed", "blocked"):
+                            existing.completed_at = datetime.utcnow()
+
+                        session.commit()
+                    else:
+                        # This shouldn't happen, but log it if it does
+                        logger.warning(
+                            f"IntegrityError occurred but no existing record found for "
+                            f"{source_id}/{stage}"
+                        )
+                        return False
+
+                logger.debug(
+                    f"Updated stage status: source_id={source_id}, stage={stage}, "
+                    f"status={status}, progress={progress_percent:.1f}%"
+                )
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to upsert stage status for {source_id}/{stage}: {e}")
+            return False
+
+    def get_source_stage_statuses(self, source_id: str) -> list[dict[str, Any]]:
+        """
+        Get all stage statuses for a source.
+
+        Returns:
+            List of stage status dicts
+        """
+        try:
+            with self.get_session() as session:
+                from .models import SourceStageStatus
+
+                statuses = (
+                    session.query(SourceStageStatus)
+                    .filter(SourceStageStatus.source_id == source_id)
+                    .order_by(SourceStageStatus.stage)
+                    .all()
+                )
+
+                return [
+                    {
+                        "source_id": s.source_id,
+                        "stage": s.stage,
+                        "status": s.status,
+                        "priority": s.priority,
+                        "created_at": s.created_at,
+                        "started_at": s.started_at,
+                        "completed_at": s.completed_at,
+                        "last_updated": s.last_updated,
+                        "progress_percent": s.progress_percent,
+                        "assigned_worker": s.assigned_worker,
+                        "metadata": s.metadata_json,
+                    }
+                    for s in statuses
+                ]
+
+        except Exception as e:
+            logger.error(f"Failed to get stage statuses for {source_id}: {e}")
+            return []
+
+    def get_queue_by_stage(
+        self,
+        stage: str,
+        status_filter: list[str] | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """
+        Get queue items for a specific stage.
+
+        Args:
+            stage: Pipeline stage to query
+            status_filter: Optional list of statuses to include
+            limit: Max results
+            offset: Pagination offset
+
+        Returns:
+            List of queue items with source and status info
+        """
+        try:
+            with self.get_session() as session:
+                from .models import MediaSource, SourceStageStatus
+
+                query = (
+                    session.query(SourceStageStatus, MediaSource)
+                    .join(
+                        MediaSource,
+                        MediaSource.source_id == SourceStageStatus.source_id,
+                    )
+                    .filter(SourceStageStatus.stage == stage)
+                )
+
+                if status_filter:
+                    query = query.filter(SourceStageStatus.status.in_(status_filter))
+
+                results = (
+                    query.order_by(
+                        SourceStageStatus.priority, SourceStageStatus.created_at
+                    )
+                    .limit(limit)
+                    .offset(offset)
+                    .all()
+                )
+
+                return [
+                    {
+                        "source_id": status.source_id,
+                        "title": source.title,
+                        "url": source.url,
+                        "stage": status.stage,
+                        "status": status.status,
+                        "priority": status.priority,
+                        "progress_percent": status.progress_percent,
+                        "assigned_worker": status.assigned_worker,
+                        "created_at": status.created_at,
+                        "started_at": status.started_at,
+                        "metadata": status.metadata_json,
+                    }
+                    for status, source in results
+                ]
+
+        except Exception as e:
+            logger.error(f"Failed to get queue for stage {stage}: {e}")
+            return []
