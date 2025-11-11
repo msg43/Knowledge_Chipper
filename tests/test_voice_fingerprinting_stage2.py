@@ -14,7 +14,19 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-import soundfile as sf
+
+try:
+    import soundfile as sf
+
+    SOUNDFILE_AVAILABLE = True
+except ImportError:
+    SOUNDFILE_AVAILABLE = False
+    sf = None
+
+# Skip all tests in this module if soundfile is not available
+pytestmark = pytest.mark.skipif(
+    not SOUNDFILE_AVAILABLE, reason="soundfile library not available"
+)
 
 from src.knowledge_system.database.speaker_models import (
     SpeakerDatabaseService,
