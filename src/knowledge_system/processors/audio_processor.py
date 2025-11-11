@@ -507,6 +507,11 @@ class AudioProcessor(BaseProcessor):
                 if self.progress_callback:
                     self.progress_callback("💡 Using basic speaker suggestions")
 
+            # Prepare metadata dictionary for speaker assignment
+            metadata = (
+                all_metadata.get("primary_source", {}).copy() if all_metadata else {}
+            )
+
             # Store MVP availability for speaker processor to use
             if mvp_available:
                 metadata["mvp_llm_available"] = True

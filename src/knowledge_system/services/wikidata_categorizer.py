@@ -99,7 +99,7 @@ class WikiDataCategorizer:
         if self.embeddings_file.exists():
             # Load cached embeddings
             with open(self.embeddings_file, "rb") as f:
-                cache = pickle.load(f)
+                cache = pickle.load(f)  # nosec B301
                 self.embeddings = cache["embeddings"]
                 self.category_texts = cache["category_texts"]
                 self.embedding_model_name = cache.get(

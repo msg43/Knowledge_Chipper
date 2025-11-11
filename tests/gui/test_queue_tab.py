@@ -217,9 +217,10 @@ class TestQueueTab:
         queue_tab.queue_table.setRowCount(1)
 
         # Add source_id to actions column
-        action_item = queue_tab.queue_table.item(0, 7) or queue_tab.queue_table.setItem(
-            0, 7, QTableWidgetItem()
-        )
+        from PyQt6.QtWidgets import QTableWidgetItem
+
+        if not queue_tab.queue_table.item(0, 7):
+            queue_tab.queue_table.setItem(0, 7, QTableWidgetItem())
         action_item = queue_tab.queue_table.item(0, 7)
         action_item.setData(Qt.ItemDataRole.UserRole, "test_source_123")
 

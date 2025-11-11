@@ -14,6 +14,9 @@
 # B306: mktemp - Legacy code for temp file creation
 # B113: requests without timeout - Some legitimate cases
 # B608: SQL expressions - Using parameterized queries safely
+# B602: subprocess with shell=True - Required on Windows for 'start' command
+# B301: pickle usage - Used for trusted local cache files only
+# B403: pickle import - Used for trusted local cache files only
 skips:
   - B404
   - B603
@@ -29,6 +32,9 @@ skips:
   - B113
   - B608
   - B324
+  - B602
+  - B301
+  - B403
 
 # Set confidence level
 confidence: HIGH
