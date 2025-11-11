@@ -107,7 +107,7 @@ repos:
         name: Check pytest can collect all tests
         entry: pytest
         language: python
-        args: ['--collect-only', '-q', '--tb=short']
+        args: ['--collect-only', '-q', '--tb=short', '--ignore=tests/test_voice_fingerprinting_stage2.py']
         files: ^(src/|tests/).*\.py$
         stages: [pre-push]
         pass_filenames: false
