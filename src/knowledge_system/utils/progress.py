@@ -18,10 +18,10 @@ The progress system has been split into focused modules:
 # Import all classes for backward compatibility
 from .cancellation import CancellationError, CancellationToken
 from .display import ProgressDisplay
+from .progress_tracker import ProgressTracker
 from .tracking import (
     ExtractionProgress,
     MOCProgress,
-    ProgressTracker,
     SummarizationProgress,
     TaskInfo,
     TaskStatus,

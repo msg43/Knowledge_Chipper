@@ -18,7 +18,8 @@ from rich.progress import (
 )
 from rich.table import Table
 
-from .tracking import ProgressTracker, TaskInfo
+from .progress_tracker import ProgressTracker
+from .tracking import TaskInfo
 
 
 class ProgressDisplay:
