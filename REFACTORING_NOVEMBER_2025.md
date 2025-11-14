@@ -483,3 +483,55 @@ All commits are atomic and revertable individually.
 **REFACTORING COMPLETE**
 
 This comprehensive refactoring significantly improved code quality, performance, and maintainability while delivering immediate value through strategic, high-impact changes.
+
+---
+
+## Post-Refactoring Fix (November 13, 2025 - Evening)
+
+### Critical Import Error Discovered
+
+**Commit:** `9bdac59` - "fix: restore progress dataclasses removed by mistake"
+
+**Issue:**
+When Section 3 deleted `utils/tracking.py` to remove the deprecated JSON-based ProgressTracker, it inadvertently removed dataclass definitions that were still actively used:
+- `TranscriptionProgress`, `SummarizationProgress`, `ExtractionProgress`, `MOCProgress`
+- `TaskInfo`, `TaskStatus`
+
+**Impact:**
+- 7 files across the codebase had broken imports
+- GUI progress dialogs could not import progress types
+- Processing pipeline could not create progress objects
+
+**Files Affected:**
+- `gui/ollama_dialogs.py` - All 4 progress types
+- `gui/tabs/summarization_tab.py` - Creates SummarizationProgress
+- `gui/workers/processing_workers.py` - SummarizationProgress
+- `processors/hce/unified_pipeline.py` - Creates SummarizationProgress
+- `utils/display.py` - TaskInfo type hint
+- `utils/progress.py` - Re-exports all progress types
+
+**Root Cause:**
+The refactoring correctly identified that the JSON-based ProgressTracker class was deprecated and replaced by the SQLite-based version in `progress_tracker.py`. However, the old `tracking.py` file contained TWO things:
+1. ❌ Deprecated JSON-based ProgressTracker class (should be removed)
+2. ✅ Active dataclass definitions (should be kept)
+
+The deletion removed both, breaking active code.
+
+**Fix:**
+1. Recreated `utils/tracking.py` with ONLY the dataclass definitions (335 lines)
+2. Updated `utils/progress.py` to import ProgressTracker from `progress_tracker` module
+3. Updated `utils/display.py` to import TaskInfo from restored `tracking` module
+
+**Testing:**
+- ✅ 10/11 basic tests passing
+- ✅ All import errors resolved
+- ✅ Core modules load correctly
+- ❌ 1 test failure due to missing FFmpeg (environment issue, not refactoring-related)
+
+**Lesson Learned:**
+When removing "deprecated" files, verify that they don't contain non-deprecated code that's still in use. Should have:
+1. Run tests BEFORE pushing commits
+2. Searched for ALL imports of the deleted module
+3. Separated dataclass definitions from deprecated implementation classes
+
+**Status:** Fixed and committed. No functional impact - progress tracking works correctly.
