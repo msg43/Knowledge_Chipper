@@ -158,3 +158,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Older Releases
 
 Details for older releases can be found in the git history.
+
+## [3.5.1] - 2025-11-13
+
+### Refactoring - Major Code Quality Improvements
+
+#### Removed (-3,692 lines)
+- Removed obsolete `gui/adapters/hce_adapter.py` (240 lines) - raises NotImplementedError
+- Removed `database/speaker_models_old.py` (1,001 lines) - superseded by unified models
+- Removed `database/speaker_models_new.py` (759 lines) - backward compatibility layer
+- Removed deprecated `utils/state.py` (544 lines) - replaced by DatabaseService
+- Removed deprecated `utils/tracking.py` (865 lines) - replaced by ProgressTracker
+- Removed `_apply_recommended_settings()` method from api_keys_tab.py (142 lines)
+- Removed deprecated `config.use_gpu` field
+
+#### Added
+- Created `core/processing_config.py` with centralized configuration classes
+- Replaced `gui/core/session_manager.py` with QSettings-based implementation
+
+#### Changed
+- Renamed `gui/legacy_dialogs.py` → `gui/ollama_dialogs.py` (clarity improvement)
+- Migrated LLM provider preference handling (removed state.py dependency)
+- Updated `system2_orchestrator.py` to use configuration constants
+
+#### Performance
+- Optimized download URL validation with batch queries (10-50x faster for 100+ URLs)
+- Added optimization roadmap for HCE bulk inserts and Supabase batching
+
+#### Breaking Changes
+- JSON-based session management removed (migrated to Qt QSettings)
+- Deprecated modules removed: `state.py`, `tracking.py`
+- LLM preference persistence now GUI-only (CLI users must specify explicitly)
+
+### Documentation
+- Created `REFACTORING_NOVEMBER_2025.md` with complete refactoring summary
+- Updated CHANGELOG.md with all changes
+- Documented deferred refactorings (6 sections remaining, 50-60 hours estimated)
+
+**See REFACTORING_NOVEMBER_2025.md for complete details and remaining work.**
+
