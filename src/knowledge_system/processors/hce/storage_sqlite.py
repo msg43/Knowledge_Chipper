@@ -95,6 +95,8 @@ def upsert_pipeline_outputs(
             )
 
         # Upsert claims
+        # TODO: OPTIMIZATION - Use executemany() for 5-10x speedup on bulk inserts
+        # Collect all claim data, then: cur.executemany(query, claim_data_list)
         for claim in out.claims:
             # Get first mention timestamp from evidence
             first_mention_ts = claim.evidence[0].t0 if claim.evidence else None

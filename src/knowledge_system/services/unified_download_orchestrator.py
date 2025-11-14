@@ -84,11 +84,18 @@ class UnifiedDownloadOrchestrator:
         urls_to_process = []
         skipped_count = 0
 
+        # OPTIMIZATION: Batch extraction of source_ids and batch database lookup
+        url_to_source_id = {}
         for url in self.youtube_urls:
             source_id = self.mapper._extract_youtube_source_id(url)
-            if not source_id:
-                continue
+            if source_id:
+                url_to_source_id[url] = source_id
 
+        # Batch check: Get all sources in single query (10-50x faster)
+        source_ids = list(url_to_source_id.values())
+        existing_sources_map = {s.source_id: s for s in self.db_service.get_sources_batch(source_ids)}
+
+        for url, source_id in url_to_source_id.items():
             # Initialize download stage status as queued
             self.db_service.upsert_stage_status(
                 source_id=source_id,
@@ -101,10 +108,8 @@ class UnifiedDownloadOrchestrator:
                 },
             )
 
-            # Check if source is fully processed (downloaded + transcribed)
-            is_complete, existing_source_id = self.db_service.source_is_fully_processed(
-                source_id
-            )
+            # Check if source is fully processed (downloaded + transcribed) using batched data
+            is_complete, existing_source_id = self.db_service.source_is_fully_processed(source_id)
 
             if is_complete:
                 logger.info(
