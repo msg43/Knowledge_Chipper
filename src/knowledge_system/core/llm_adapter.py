@@ -212,16 +212,19 @@ class LLMAdapter:
         """Determine hardware tier from specs."""
         # Check for Apple Silicon
         chip_type = specs.get("chip_type", "").lower()
+        chip_variant = specs.get("chip_variant", "").lower()
+
         if (
             "apple" in chip_type
             or "m1" in chip_type
             or "m2" in chip_type
             or "m3" in chip_type
         ):
-            # Check chip_type directly (contains full name like "apple m2 ultra")
-            if "ultra" in chip_type:
+            # Check both chip_type and chip_variant for tier indicators
+            combined = f"{chip_type} {chip_variant}".lower()
+            if "ultra" in combined:
                 return "enterprise"
-            elif "pro" in chip_type or "max" in chip_type:
+            elif "pro" in combined or "max" in combined:
                 return "prosumer"
             else:
                 return "consumer"

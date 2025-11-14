@@ -170,6 +170,15 @@ class DatabaseService:
         """Get a new database session."""
         return self.Session()
 
+    def close(self) -> None:
+        """Close the database connection and dispose of the engine.
+
+        This should be called when the database service is no longer needed,
+        typically in test teardown or application shutdown.
+        """
+        if hasattr(self, 'engine') and self.engine:
+            self.engine.dispose()
+
     def _run_system2_migration(self):
         """Run System 2 migration if needed."""
         try:
