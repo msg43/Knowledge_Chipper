@@ -8,6 +8,7 @@ All tests are fully automated with timeouts.
 
 import asyncio
 import os
+import threading
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -215,20 +216,20 @@ class TestLLMAdapterMocking:
         assert adapter.max_concurrent > 0
         assert adapter.hardware_tier in ["consumer", "prosumer", "enterprise"]
 
-    @pytest.mark.asyncio
-    async def test_adapter_semaphore(self, adapter):
-        """Test that semaphore is properly initialized."""
-        assert hasattr(adapter, "semaphore")
-        assert isinstance(adapter.semaphore, asyncio.Semaphore)
+    def test_adapter_semaphore(self, adapter):
+        """Test that semaphores are properly initialized."""
+        # LLMAdapter uses threading.Semaphore, not asyncio.Semaphore
+        assert hasattr(adapter, "cloud_semaphore")
+        assert hasattr(adapter, "local_semaphore")
+        assert isinstance(adapter.cloud_semaphore, threading.Semaphore)
+        assert isinstance(adapter.local_semaphore, threading.Semaphore)
 
-        # Semaphore value should match max_concurrent
-        # Note: We can't directly inspect semaphore value, but we can test it works
-        async def dummy_task():
-            async with adapter.semaphore:
-                await asyncio.sleep(0.01)
+        # Test that semaphores can be acquired and released
+        assert adapter.cloud_semaphore.acquire(blocking=False)
+        adapter.cloud_semaphore.release()
 
-        # Should be able to acquire semaphore
-        await dummy_task()
+        assert adapter.local_semaphore.acquire(blocking=False)
+        adapter.local_semaphore.release()
 
 
 class TestEventLoopRegressionPrevention:

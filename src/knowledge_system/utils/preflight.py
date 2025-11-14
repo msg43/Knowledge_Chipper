@@ -4,11 +4,12 @@ These checks are intentionally fast (<200ms typical) and avoid any heavy
 imports, network calls, or GPU/ML initialization. They are meant to catch the
 most common "app starts but immediately crashes" issues on end-user machines.
 
-Set KC_SKIP_PREFLIGHT=1 to skip these checks.
+Set KC_SKIP_PREFLIGHT=1 or KNOWLEDGE_CHIPPER_TESTING_MODE=1 to skip these checks.
 """
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 
@@ -53,5 +54,11 @@ def check_yt_dlp() -> None:
 
 def quick_preflight() -> None:
     """Run minimal, fast checks. Raises PreflightError on problems."""
+    # Skip preflight checks in testing mode
+    if os.environ.get("KC_SKIP_PREFLIGHT") == "1":
+        return
+    if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1":
+        return
+
     check_ffmpeg()
     check_yt_dlp()

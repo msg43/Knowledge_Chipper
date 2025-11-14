@@ -20,46 +20,20 @@ from knowledge_system.processors.hce.schema_validator import (
 class TestSchemaLoading:
     """Test schema loading and initialization."""
 
-    def test_load_schemas_from_root(self, monkeypatch):
+    def test_load_schemas_from_root(self):
         """Test loading schemas from root schemas directory."""
-        # Create mock schema directory
-        mock_root = Path("/mock/root")
-        schema_dir = mock_root / "schemas"
-
-        def mock_exists(self):
-            return str(self) == str(schema_dir)
-
-        def mock_glob(self, pattern):
-            if str(self) == str(schema_dir) and pattern == "*.json":
-                return [
-                    Path(schema_dir / "miner_input.v1.json"),
-                    Path(schema_dir / "miner_output.v1.json"),
-                ]
-            return []
-
-        monkeypatch.setattr(Path, "exists", mock_exists)
-        monkeypatch.setattr(Path, "glob", mock_glob)
-
-        # Mock file reading
-        def mock_open(path, *args, **kwargs):
-            if "miner_input" in str(path):
-                content = '{"type": "object", "properties": {}}'
-            else:
-                content = '{"type": "object", "properties": {}}'
-
-            from io import StringIO
-
-            return StringIO(content)
-
-        monkeypatch.setattr("builtins.open", mock_open)
-
+        # Use real schemas from the repository
         validator = SchemaValidator()
 
-        # Should have loaded versioned and base names
+        # Should have loaded versioned and base names from actual schema files
         assert "miner_input.v1" in validator.schemas
         assert "miner_input" in validator.schemas
         assert "miner_output.v1" in validator.schemas
         assert "miner_output" in validator.schemas
+
+        # Verify schemas are actual dict objects, not empty
+        assert isinstance(validator.schemas["miner_input.v1"], dict)
+        assert len(validator.schemas["miner_input.v1"]) > 0
 
 
 class TestMinerValidation:
