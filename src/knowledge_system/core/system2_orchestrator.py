@@ -1215,9 +1215,9 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
 
         # Create chunking configuration with overlap
         config = ChunkingConfig(
-            max_chunk_tokens=1000,
-            overlap_tokens=100,  # 100 token overlap when hitting max boundary
-            min_chunk_tokens=300,  # Lower minimum for active conversations
+            max_chunk_tokens=CHUNKING.MAX_CHUNK_TOKENS,
+            overlap_tokens=CHUNKING.OVERLAP_TOKENS,  # 100 token overlap when hitting max boundary
+            min_chunk_tokens=CHUNKING.MIN_CHUNK_TOKENS,  # Lower minimum for active conversations
             prefer_sentence_boundaries=True,
             prefer_paragraph_boundaries=False,  # Not relevant for transcripts
         )
