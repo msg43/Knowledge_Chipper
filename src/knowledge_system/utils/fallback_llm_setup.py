@@ -240,7 +240,7 @@ class FallbackLLMSetup:
         """Configure settings to use fallback LLM."""
         try:
             # Update settings to use local provider with fallback model
-            from ..utils.state import get_state_manager
+            # Removed deprecated state import - no longer needed
 
             state_manager = get_state_manager()
             state_manager.update_preferences(

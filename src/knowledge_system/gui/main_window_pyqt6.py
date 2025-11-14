@@ -38,7 +38,6 @@ def _get_build_date() -> str:
 from .components.progress_tracking import EnhancedProgressBar  # noqa: E402
 
 # Import core GUI components
-from .core.session_manager import get_session_manager  # noqa: E402
 from .core.settings_manager import get_gui_settings_manager  # noqa: E402
 
 # Import dialogs
@@ -101,7 +100,6 @@ class MainWindow(QMainWindow):
         self.settings = get_settings()
 
         # Initialize session and GUI settings managers
-        self.session_manager = get_session_manager()
         self.gui_settings = get_gui_settings_manager()
 
         # Load API keys into environment variables immediately
