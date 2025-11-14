@@ -222,7 +222,6 @@ class TranscriptionConfig(BaseModel):
         pattern="^(auto|cpu|cuda|mps)$",
         description="Processing device: auto (detect best), cpu, cuda (NVIDIA), mps (Apple Silicon)",
     )
-    use_gpu: bool = True  # Deprecated - use device instead
     diarization: bool = True
     min_words: int = Field(default=50, ge=1)
     use_whisper_cpp: bool = False
