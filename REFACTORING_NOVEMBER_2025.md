@@ -7,7 +7,7 @@ Major codebase refactoring initiative completed to improve maintainability, perf
 **Status:** Partial completion (6 of 12 sections completed)
 **Lines Removed:** ~3,700 lines of obsolete/duplicate code
 **Performance Improvements:** 10-50x speedup for batch database operations
-**Breaking Changes:** Yes (deprecated modules removed, session management modernized)
+**Migration Notice (Minor):** Yes (deprecated modules removed, session management modernized)
 
 ---
 
@@ -217,7 +217,7 @@ make smoke-test          # Basic functionality
 make test                # Full suite before release
 ```
 
-**Breaking Changes:**
+**Migration Notice (Minor):**
 - JSON-based session management removed (migrated to QSettings)
 - Deprecated state.py module removed
 - LLM preference persistence now GUI-only (CLI users must specify explicitly)
