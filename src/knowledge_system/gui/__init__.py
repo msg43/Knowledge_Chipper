@@ -8,7 +8,7 @@ import os as _os
 from .dialogs.ffmpeg_prompt_dialog import FFmpegPromptDialog
 from .dialogs.ffmpeg_setup_dialog import FFmpegSetupDialog
 from .dialogs.first_run_setup_dialog import FirstRunSetupDialog
-from .legacy_dialogs import (
+from .ollama_dialogs import (
     ExtractionProgressDialog,
     MOCProgressDialog,
     ModelDownloadDialog,

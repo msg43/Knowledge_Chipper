@@ -36,7 +36,7 @@ from ..components.rich_log_display import ProcessorLogIntegrator, RichLogDisplay
 from ..components.simple_progress_bar import SimpleTranscriptionProgressBar
 from ..core.settings_manager import get_gui_settings_manager
 from ..dialogs.claim_validation_dialog import ClaimValidationDialog
-from ..legacy_dialogs import ModelDownloadDialog, OllamaServiceDialog
+from ..ollama_dialogs import ModelDownloadDialog, OllamaServiceDialog
 
 logger = get_logger(__name__)
 
@@ -1521,7 +1521,7 @@ class SummarizationTab(BaseTab):
         """Show Ollama service dialog on main thread (thread-safe)."""
         from PyQt6.QtWidgets import QDialog
 
-        from ..legacy_dialogs import OllamaServiceDialog
+        from ..ollama_dialogs import OllamaServiceDialog
 
         dialog = OllamaServiceDialog(self)
 
@@ -1582,7 +1582,7 @@ class SummarizationTab(BaseTab):
 
         from PyQt6.QtWidgets import QDialog
 
-        from ..legacy_dialogs import ModelDownloadDialog
+        from ..ollama_dialogs import ModelDownloadDialog
 
         clean_model_name = model.replace(" (Installed)", "")
         clean_model_name = re.sub(r" \(\d+ GB\)$", "", clean_model_name)
@@ -3451,7 +3451,7 @@ class SummarizationTab(BaseTab):
                 # Show download dialog (reuse existing method)
                 from PyQt6.QtWidgets import QDialog
 
-                from ..legacy_dialogs import ModelDownloadDialog
+                from ..ollama_dialogs import ModelDownloadDialog
 
                 logger.info(
                     f"Model '{clean_model_name}' not installed, showing download dialog"
@@ -3512,7 +3512,7 @@ class SummarizationTab(BaseTab):
                 # Show download dialog
                 from PyQt6.QtWidgets import QDialog
 
-                from ..legacy_dialogs import ModelDownloadDialog
+                from ..ollama_dialogs import ModelDownloadDialog
 
                 logger.info(
                     f"Advanced model '{clean_model_name}' not installed, showing download dialog"

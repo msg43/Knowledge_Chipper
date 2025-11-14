@@ -737,7 +737,7 @@ class MainWindow(QMainWindow):
         """Force Ollama installation on fresh installs."""
         try:
             from ..utils.ollama_manager import get_ollama_manager
-            from .legacy_dialogs import OllamaInstallDialog
+            from .ollama_dialogs import OllamaInstallDialog
 
             ollama_manager = get_ollama_manager()
 
