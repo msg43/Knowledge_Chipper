@@ -16,6 +16,10 @@ import os
 # Remove ffmpeg from PATH to break preflight
 os.environ['PATH'] = '/tmp'
 
+# Ensure preflight runs (not skipped by testing mode)
+os.environ.pop('KNOWLEDGE_CHIPPER_TESTING_MODE', None)
+os.environ.pop('KC_SKIP_PREFLIGHT', None)
+
 try:
     from knowledge_system.gui import launch_gui
     print("ERROR: App should not have imported successfully!")
@@ -84,6 +88,10 @@ import os
 
 # Break PATH to cause ffmpeg failure
 os.environ['PATH'] = '/tmp'
+
+# Ensure preflight runs (not skipped by testing mode)
+os.environ.pop('KNOWLEDGE_CHIPPER_TESTING_MODE', None)
+os.environ.pop('KC_SKIP_PREFLIGHT', None)
 
 try:
     from knowledge_system.gui import launch_gui

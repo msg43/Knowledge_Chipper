@@ -65,13 +65,14 @@ def sample_miner_output() -> dict[str, Any]:
             {
                 "claim_text": "The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices",
                 "claim_type": "causal",
+                "domain": "economics",
                 "stance": "asserts",
-                "context_quote": "quantitative easing program has fundamentally altered the relationship",
-                "timestamp": "00:10",
                 "evidence_spans": [
                     {
+                        "segment_id": "seg_001",
                         "quote": "QE has fundamentally altered the relationship",
-                        "timestamp": "00:10",
+                        "t0": "00:00:10",
+                        "t1": "00:00:15",
                     }
                 ],
             }
@@ -79,31 +80,60 @@ def sample_miner_output() -> dict[str, Any]:
         "jargon": [
             {
                 "term": "quantitative easing",
-                "usage_context": "The Federal Reserve's quantitative easing program",
-                "implied_meaning": "Central bank policy of creating money to buy assets",
-                "timestamp": "00:05",
+                "definition": "Central bank policy of creating money to buy assets",
+                "domain": "economics",
+                "evidence_spans": [
+                    {
+                        "segment_id": "seg_001",
+                        "quote": "The Federal Reserve's quantitative easing program",
+                        "t0": "00:00:05",
+                        "t1": "00:00:08",
+                    }
+                ],
             },
             {
                 "term": "wealth effect",
-                "usage_context": "creates what economists call a 'wealth effect'",
-                "implied_meaning": "Economic theory that rising asset values increase consumer spending",
-                "timestamp": "00:25",
+                "definition": "Economic theory that rising asset values increase consumer spending",
+                "domain": "economics",
+                "evidence_spans": [
+                    {
+                        "segment_id": "seg_001",
+                        "quote": "creates what economists call a 'wealth effect'",
+                        "t0": "00:00:25",
+                        "t1": "00:00:28",
+                    }
+                ],
             },
         ],
         "people": [
             {
                 "name": "Federal Reserve",
+                "normalized_name": "Federal Reserve",
+                "entity_type": "organization",
                 "role_or_description": "US Central Bank",
-                "context_quote": "The Federal Reserve's quantitative easing program",
-                "timestamp": "00:05",
+                "mentions": [
+                    {
+                        "segment_id": "seg_001",
+                        "surface_form": "Federal Reserve",
+                        "quote": "The Federal Reserve's quantitative easing program",
+                        "t0": "00:00:05",
+                        "t1": "00:00:07",
+                    }
+                ],
             }
         ],
         "mental_models": [
             {
                 "name": "wealth effect mechanism",
-                "description": "Framework explaining how monetary policy affects consumer behavior through asset price changes",
-                "context_quote": "creates what economists call a 'wealth effect'",
-                "timestamp": "00:25",
+                "definition": "Framework explaining how monetary policy affects consumer behavior through asset price changes",
+                "evidence_spans": [
+                    {
+                        "segment_id": "seg_001",
+                        "quote": "creates what economists call a 'wealth effect'",
+                        "t0": "00:00:25",
+                        "t1": "00:00:28",
+                    }
+                ],
             }
         ],
     }

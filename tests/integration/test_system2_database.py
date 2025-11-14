@@ -37,14 +37,11 @@ class TestJobTable:
     """Test Job table operations."""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
-        """Setup test environment."""
-        self.db_service = DatabaseService()
-        # Cleanup before to ensure clean state
-        cleanup_test_jobs(self.db_service, job_id_prefix="test_job")
+    def setup(self, integration_test_database):
+        """Setup test environment with isolated test database."""
+        self.db_service = integration_test_database
         yield
-        # Cleanup after each test
-        cleanup_test_jobs(self.db_service, job_id_prefix="test_job")
+        # Database is automatically cleaned up by integration_test_database fixture
 
     def test_create_job(self):
         """Test creating a job."""
@@ -119,10 +116,9 @@ class TestJobRunTable:
     """Test JobRun table operations."""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
-        """Setup test environment."""
-        self.db_service = DatabaseService()
-        cleanup_test_jobs(self.db_service, job_id_prefix="test_job")
+    def setup(self, integration_test_database):
+        """Setup test environment with isolated test database."""
+        self.db_service = integration_test_database
 
         # Create a job for testing
         self.test_job = create_test_job(
@@ -133,7 +129,7 @@ class TestJobRunTable:
         )
 
         yield
-        cleanup_test_jobs(self.db_service, job_id_prefix="test_job")
+        # Database is automatically cleaned up by integration_test_database fixture
 
     def test_create_job_run(self):
         """Test creating a job run."""
@@ -227,10 +223,9 @@ class TestLLMRequestResponseTable:
     """Test LLMRequest and LLMResponse table operations."""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
-        """Setup test environment."""
-        self.db_service = DatabaseService()
-        cleanup_test_jobs(self.db_service, job_id_prefix="test_job")
+    def setup(self, integration_test_database):
+        """Setup test environment with isolated test database."""
+        self.db_service = integration_test_database
 
         # Create job and run for testing
         self.test_job = create_test_job(
@@ -247,7 +242,7 @@ class TestLLMRequestResponseTable:
         )
 
         yield
-        cleanup_test_jobs(self.db_service, job_id_prefix="test_job")
+        # Database is automatically cleaned up by integration_test_database fixture
 
     def test_create_llm_request(self):
         """Test creating an LLM request."""
@@ -359,9 +354,9 @@ class TestDatabaseConfiguration:
     """Test database configuration for System 2."""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
-        """Setup test environment."""
-        self.db_service = DatabaseService()
+    def setup(self, integration_test_database):
+        """Setup test environment with isolated test database."""
+        self.db_service = integration_test_database
 
     def test_wal_mode_enabled(self):
         """Test that WAL mode is enabled for better concurrency."""

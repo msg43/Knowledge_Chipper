@@ -53,9 +53,11 @@ SAMPLE_MINER_OUTPUT = {
         {
             "claim_text": "AI safety is a critical concern for modern systems",
             "claim_type": "normative",
+            "domain": "artificial_intelligence",
             "stance": "asserts",
             "evidence_spans": [
                 {
+                    "segment_id": "seg1",
                     "quote": "AI safety is a critical concern for modern systems.",
                     "t0": "00:00:00",
                     "t1": "00:00:05",
@@ -67,17 +69,30 @@ SAMPLE_MINER_OUTPUT = {
         {
             "term": "AI safety",
             "definition": "The field of research aimed at ensuring artificial intelligence systems behave safely and beneficially",
-            "context_quote": "AI safety is a critical concern for modern systems.",
-            "timestamp": "00:00:00",
+            "domain": "artificial_intelligence",
+            "evidence_spans": [
+                {
+                    "segment_id": "seg1",
+                    "quote": "AI safety is a critical concern for modern systems.",
+                    "t0": "00:00:00",
+                    "t1": "00:00:05",
+                }
+            ],
         }
     ],
     "people": [],
     "mental_models": [
         {
             "name": "Risk-based AI development",
-            "description": "The approach of prioritizing safety considerations in AI system design",
-            "context_quote": "AI safety is a critical concern for modern systems.",
-            "timestamp": "00:00:00",
+            "definition": "The approach of prioritizing safety considerations in AI system design",
+            "evidence_spans": [
+                {
+                    "segment_id": "seg1",
+                    "quote": "AI safety is a critical concern for modern systems.",
+                    "t0": "00:00:00",
+                    "t1": "00:00:05",
+                }
+            ],
         }
     ],
 }

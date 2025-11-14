@@ -112,15 +112,16 @@ def sample_miner_output_v2():
         "people": [
             {
                 "name": "Johannes Kepler",
-                "role": "astronomer",
-                "domain": "astronomy",
-                "evidence_spans": [
+                "normalized_name": "Johannes Kepler",
+                "entity_type": "person",
+                "role_or_description": "astronomer",
+                "mentions": [
                     {
                         "segment_id": "seg_001",
-                        "quote": "Johannes Kepler",
+                        "surface_form": "Johannes Kepler",
+                        "quote": "This fundamental fact of astronomy was established by Johannes Kepler in the 17th century.",
                         "t0": "00:01:30",
                         "t1": "00:01:32",
-                        "context_text": "This fundamental fact of astronomy was established by Johannes Kepler in the 17th century.",
                     }
                 ],
             }
