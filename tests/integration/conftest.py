@@ -167,41 +167,42 @@ def sample_flagship_input_v2():
     """
     return {
         "content_summary": "An educational video about astronomy covering the basics of planetary motion and orbital mechanics. The speaker discusses how Earth orbits the Sun and introduces key historical figures in astronomy.",
-        "claims": [
+        "claims_to_evaluate": [
             {
                 "claim_text": "The Earth orbits around the Sun in an elliptical path",
                 "claim_type": "factual",
-                "domain": "astronomy",
                 "stance": "asserts",
                 "evidence_spans": [
                     {
-                        "segment_id": "seg_001",
                         "quote": "The Earth orbits around the Sun in an elliptical path",
                         "t0": "00:01:00",
                         "t1": "00:01:05",
                     }
                 ],
+                "speaker": "Dr. Jane Smith",
+                "segment_id": "seg_001",
             },
             {
                 "claim_text": "Johannes Kepler established the laws of planetary motion in the 17th century",
                 "claim_type": "factual",
-                "domain": "astronomy",
                 "stance": "asserts",
                 "evidence_spans": [
                     {
-                        "segment_id": "seg_001",
                         "quote": "established by Johannes Kepler in the 17th century",
                         "t0": "00:01:30",
                         "t1": "00:01:35",
                     }
                 ],
+                "speaker": "Dr. Jane Smith",
+                "segment_id": "seg_001",
             },
         ],
-        "metadata": {
-            "source_id": "video_123",
-            "source_title": "Introduction to Astronomy",
-            "total_segments": 10,
-            "extraction_timestamp": "2025-11-10T00:00:00Z",
+        "episode_metadata": {
+            "episode_id": "video_123",
+            "title": "Introduction to Astronomy",
+            "duration": "00:10:00",
+            "speakers": ["Dr. Jane Smith"],
+            "key_topics": ["astronomy", "planetary motion"],
         },
     }
 
@@ -212,25 +213,46 @@ def sample_flagship_output_v2():
     Provide sample flagship evaluator output in v2 schema format.
     """
     return {
-        "flagged_claims": [
+        "evaluated_claims": [
             {
-                "claim_text": "The Earth orbits around the Sun in an elliptical path",
-                "tier": "high",
-                "confidence": 0.95,
+                "original_claim_text": "The Earth orbits around the Sun in an elliptical path",
+                "decision": "accept",
                 "reasoning": "Well-established scientific fact with strong evidence",
-                "domain": "astronomy",
-            }
+                "importance": 8.5,
+                "novelty": 2.0,
+                "confidence_final": 9.5,
+                "rank": 1,
+                "tier": "A",
+            },
+            {
+                "original_claim_text": "Johannes Kepler established the laws of planetary motion in the 17th century",
+                "decision": "accept",
+                "reasoning": "Historical fact with solid evidence",
+                "importance": 7.0,
+                "novelty": 3.0,
+                "confidence_final": 8.0,
+                "rank": 2,
+                "tier": "B",
+            },
         ],
         "summary_assessment": {
+            "total_claims_processed": 2,
+            "claims_accepted": 2,
+            "claims_rejected": 0,
+            "claims_merged": 0,
+            "claims_split": 0,
             "overall_quality": "high",
-            "claim_density": 0.2,
-            "domain_coverage": ["astronomy", "physics"],
-            "recommended_tier": "high",
+            "key_themes": ["astronomy", "planetary motion", "historical science"],
+            "recommendations": "Strong educational content with well-established facts",
+            "average_scores": {
+                "importance": 7.75,
+                "novelty": 2.5,
+                "confidence": 8.75,
+            },
         },
-        "metadata": {
-            "evaluator_model": "gpt-4",
-            "evaluation_timestamp": "2025-11-10T00:00:00Z",
-            "total_claims_evaluated": 2,
-            "flagged_count": 1,
+        "tier_distribution": {
+            "A": 1,
+            "B": 1,
+            "C": 0,
         },
     }

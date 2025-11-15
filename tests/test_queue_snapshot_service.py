@@ -209,12 +209,14 @@ class TestQueueSnapshotService(unittest.TestCase):
         mock_query.filter.return_value = mock_query
         mock_query.first.return_value = mock_source
 
-        # Test
-        snapshot = self.service.get_source_timeline("test_123")
+        # Mock _enrich_snapshot to avoid database queries
+        with patch.object(self.service, '_enrich_snapshot'):
+            # Test
+            snapshot = self.service.get_source_timeline("test_123")
 
-        self.assertIsNotNone(snapshot)
-        self.assertEqual(snapshot.source_id, "test_123")
-        self.assertEqual(len(snapshot.stage_statuses), 1)
+            self.assertIsNotNone(snapshot)
+            self.assertEqual(snapshot.source_id, "test_123")
+            self.assertEqual(len(snapshot.stage_statuses), 1)
 
     @patch("knowledge_system.services.queue_snapshot_service.logger")
     def test_get_stage_summary(self, mock_logger):

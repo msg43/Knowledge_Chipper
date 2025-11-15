@@ -149,7 +149,26 @@ class TestSchemaRepair:
 
     def test_repair_missing_fields(self, validator):
         """Test repairing missing required fields."""
-        broken_output = {"claims": [{"text": "test claim"}]}
+        # Create a broken output missing top-level arrays
+        broken_output = {
+            "claims": [
+                {
+                    "claim_text": "This is a valid test claim with proper structure",
+                    "claim_type": "factual",
+                    "domain": "general",
+                    "stance": "asserts",
+                    "evidence_spans": [
+                        {
+                            "segment_id": "seg_001",
+                            "quote": "test quote",
+                            "t0": "00:00:00",
+                            "t1": "00:00:05",
+                        }
+                    ],
+                }
+            ]
+        }
+        # Missing: jargon, people, mental_models
 
         repaired, is_valid, errors = validator.repair_and_validate(
             broken_output, "miner_output"

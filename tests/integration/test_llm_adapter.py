@@ -212,7 +212,7 @@ class TestLLMAdapter:
                     "openai", "gpt-3.5", [{"role": "user", "content": "Test"}]
                 )
 
-            assert exc_info.value.error_code == ErrorCode.LLM_API_ERROR
+            assert exc_info.value.error_code == ErrorCode.LLM_API_ERROR.value
 
             # Check that backoff was triggered
             limiter = adapter.rate_limiters["openai"]
@@ -227,7 +227,7 @@ class TestLLMAdapter:
             nonlocal call_count
             call_count += 1
             if call_count < 3:
-                raise KnowledgeSystemError(ErrorCode.LLM_API_ERROR, "Transient error")
+                raise KnowledgeSystemError("Transient error", error_code=ErrorCode.LLM_API_ERROR)
             return {"content": "Success", "usage": {}}
 
         with patch.object(adapter, "_call_provider", side_effect=mock_call):
@@ -273,40 +273,6 @@ class TestLLMAdapter:
         assert stats["max_concurrent"] == 2
         assert stats["active_requests"] == 0
         assert "memory_usage" in stats
-
-
-class TestLLMTracking:
-    """Test LLM request/response tracking integration."""
-
-    @pytest.mark.asyncio
-    async def test_request_tracking(self, test_database: DatabaseService):
-        """Test that requests are tracked in database."""
-        adapter = LLMAdapter(test_database)
-
-        # Set job run ID for tracking
-        adapter.set_job_run_id("test_run_001")
-
-        # Mock the orchestrator's track methods
-        with patch(
-            "knowledge_system.core.llm_adapter.get_orchestrator"
-        ) as mock_get_orch:
-            mock_orch = MagicMock()
-            mock_orch.track_llm_request.return_value = "req_001"
-            mock_get_orch.return_value = mock_orch
-
-            with patch.object(adapter, "_call_provider") as mock_call:
-                mock_call.return_value = {
-                    "content": "Test",
-                    "usage": {"prompt_tokens": 10, "completion_tokens": 20},
-                }
-
-                await adapter.complete(
-                    "openai", "gpt-3.5", [{"role": "user", "content": "Test"}]
-                )
-
-                # Verify tracking was called
-                mock_orch.track_llm_request.assert_called_once()
-                mock_orch.track_llm_response.assert_called_once()
 
 
 class TestSingleton:

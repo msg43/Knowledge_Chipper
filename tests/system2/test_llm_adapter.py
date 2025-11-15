@@ -267,8 +267,10 @@ class TestLLMAdapter:
         # Verify basic initialization
         assert adapter.db_service is not None
         assert adapter.hardware_tier in ["consumer", "prosumer", "enterprise"]
-        assert adapter.max_concurrent > 0
-        assert adapter.semaphore is not None
+        assert adapter.max_concurrent > 0  # cloud concurrency
+        assert adapter.max_concurrent_local > 0  # local concurrency
+        assert adapter.cloud_semaphore is not None
+        assert adapter.local_semaphore is not None
         assert len(adapter.rate_limiters) > 0
 
     def test_database_tracking(self, test_db_service):

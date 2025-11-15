@@ -84,10 +84,18 @@ class TestSchemaValidation:
         incomplete_output = {
             "claims": [
                 {
-                    "claim_text": "Test claim",
+                    "claim_text": "This is a test claim with enough length to meet schema requirements",
                     "claim_type": "factual",
+                    "domain": "general",
                     "stance": "asserts",
-                    "evidence_spans": [],
+                    "evidence_spans": [
+                        {
+                            "segment_id": "seg_001",
+                            "quote": "test quote",
+                            "t0": "00:00:00",
+                            "t1": "00:00:05",
+                        }
+                    ],
                 }
             ]
             # Missing jargon, people, mental_models
