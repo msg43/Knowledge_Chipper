@@ -41,6 +41,30 @@ class SessionManager:
         self.settings.setValue(key, value)
         self.settings.sync()
 
+    def get_window_geometry(self) -> dict[str, int] | None:
+        """Get saved window geometry."""
+        x = self.settings.value("window/geometry/x", None)
+        y = self.settings.value("window/geometry/y", None)
+        width = self.settings.value("window/geometry/width", None)
+        height = self.settings.value("window/geometry/height", None)
+
+        if all(v is not None for v in [x, y, width, height]):
+            return {
+                "x": int(x),
+                "y": int(y),
+                "width": int(width),
+                "height": int(height),
+            }
+        return None
+
+    def set_window_geometry(self, x: int, y: int, width: int, height: int) -> None:
+        """Save window geometry."""
+        self.settings.setValue("window/geometry/x", x)
+        self.settings.setValue("window/geometry/y", y)
+        self.settings.setValue("window/geometry/width", width)
+        self.settings.setValue("window/geometry/height", height)
+        self.settings.sync()
+
 
 # Global session manager instance
 _session_manager: SessionManager | None = None
