@@ -31,11 +31,29 @@ def _run(cmd: list[str]) -> tuple[int, str, str]:
 
 def check_ffmpeg() -> None:
     """Verify ffmpeg is available on PATH and runnable."""
-    if not shutil.which("ffmpeg"):
+    ffmpeg_path = shutil.which("ffmpeg")
+
+    # If not in PATH, check common Homebrew locations
+    if not ffmpeg_path:
+        homebrew_paths = [
+            "/opt/homebrew/bin/ffmpeg",  # Apple Silicon
+            "/usr/local/bin/ffmpeg",      # Intel Mac
+        ]
+        for path in homebrew_paths:
+            if os.path.exists(path):
+                ffmpeg_path = path
+                # Add Homebrew bin to PATH for this session
+                homebrew_bin = os.path.dirname(path)
+                if homebrew_bin not in os.environ.get("PATH", ""):
+                    os.environ["PATH"] = f"{homebrew_bin}:{os.environ.get('PATH', '')}"
+                break
+
+    if not ffmpeg_path:
         raise PreflightError(
             "FFmpeg not found. Install with: brew install ffmpeg, then relaunch."
         )
-    code, _, err = _run(["ffmpeg", "-version"])
+
+    code, _, err = _run([ffmpeg_path, "-version"])
     if code != 0:
         raise PreflightError(
             f"FFmpeg present but not runnable: {err or 'unknown error'}"
