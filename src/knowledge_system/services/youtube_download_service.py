@@ -266,12 +266,18 @@ class YouTubeDownloadService:
             )
 
             if result.success and result.data:
-                audio_file = Path(result.data.get("audio_path", ""))
-                if audio_file.exists():
-                    logger.info(f"✅ [{index}/{total}] Downloaded: {audio_file.name}")
-                    return DownloadResult(url, True, audio_file, None)
+                downloaded_files = result.data.get("downloaded_files", [])
+                if downloaded_files and len(downloaded_files) > 0:
+                    audio_file = Path(downloaded_files[0])
+                    if audio_file.exists():
+                        logger.info(f"✅ [{index}/{total}] Downloaded: {audio_file.name}")
+                        return DownloadResult(url, True, audio_file, None)
+                    else:
+                        error = f"Audio file not found on disk: {audio_file}"
+                        logger.error(f"❌ [{index}/{total}] {error}")
+                        return DownloadResult(url, False, None, error)
                 else:
-                    error = "Audio file not found after download"
+                    error = "No audio files in download result"
                     logger.error(f"❌ [{index}/{total}] {error}")
                     return DownloadResult(url, False, None, error)
             else:
