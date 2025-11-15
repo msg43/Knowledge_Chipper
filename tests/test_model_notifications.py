@@ -5,10 +5,14 @@ import shutil
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 
+@pytest.mark.manual
+@pytest.mark.skip(reason="Interactive script - requires manual execution. Run directly: python tests/test_model_notifications.py")
 def test_missing_models():
     """Test the notification system by temporarily hiding models."""
     print("🧪 Model Notification Test Script")

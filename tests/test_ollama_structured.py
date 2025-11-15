@@ -1,9 +1,21 @@
 #!/usr/bin/env python3
-"""Test if Ollama's structured outputs work with different schema complexities."""
+"""Test if Ollama's structured outputs work with different schema complexities.
+
+Integration test requiring Ollama server running locally.
+
+Requirements:
+- Ollama server running (default: http://localhost:11434)
+- Qwen2.5:7b-instruct model installed: `ollama pull qwen2.5:7b-instruct`
+
+To run manually:
+    python tests/test_ollama_structured.py
+"""
 
 import json
+import os
 import time
 
+import pytest
 import requests
 
 # Simple schema (no nesting, no regex)
@@ -93,7 +105,7 @@ FLAT_NO_REGEX = {
 }
 
 
-def test_schema(name, schema, prompt="Tell me a fact about AI."):
+def run_schema_test(name, schema, prompt="Tell me a fact about AI."):
     """Test if Ollama can generate with a given schema."""
     print(f"\n{'='*60}")
     print(f"Testing: {name}")
@@ -136,13 +148,13 @@ def main():
     results = {}
 
     # Test 1: Simple schema
-    results["simple"] = test_schema(
+    results["simple"] = run_schema_test(
         "Simple (no nesting)", SIMPLE_SCHEMA, "Give me your name and age."
     )
     time.sleep(2)
 
     # Test 2: Flat with timestamps (regex)
-    results["flat_regex"] = test_schema(
+    results["flat_regex"] = run_schema_test(
         "Flat with regex timestamps",
         FLAT_WITH_TIMESTAMPS,
         "Extract one claim from this: 'AI will transform healthcare in the next 5 years.'",
@@ -150,7 +162,7 @@ def main():
     time.sleep(2)
 
     # Test 3: Flat without regex
-    results["flat_no_regex"] = test_schema(
+    results["flat_no_regex"] = run_schema_test(
         "Flat without regex",
         FLAT_NO_REGEX,
         "Extract one claim from this: 'AI will transform healthcare in the next 5 years.'",
@@ -158,7 +170,7 @@ def main():
     time.sleep(2)
 
     # Test 4: Nested schema (like miner_output.v1.json)
-    results["nested"] = test_schema(
+    results["nested"] = run_schema_test(
         "Nested with regex (miner_output.v1)",
         NESTED_SCHEMA,
         "Extract one claim with evidence from this: 'Studies show AI improves diagnosis accuracy by 20%.'",
