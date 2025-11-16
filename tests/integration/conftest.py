@@ -1,12 +1,17 @@
 """
 Pytest fixtures specific to integration tests.
+
+These tests run in production mode by default (no TESTING_MODE bypass).
+Use the granular testing mode fixtures below to selectively skip expensive operations.
 """
+import os
 from collections.abc import Generator
 from pathlib import Path
 
 import pytest
 
 from knowledge_system.database import DatabaseService
+from knowledge_system.utils.testing_mode import ensure_production_mode
 
 
 @pytest.fixture
@@ -256,3 +261,170 @@ def sample_flagship_output_v2():
             "C": 0,
         },
     }
+
+
+# ============================================================================
+# Granular Testing Mode Fixtures
+# ============================================================================
+#
+# Integration tests run in PRODUCTION MODE by default (no TESTING_MODE bypass).
+# Use these fixtures to selectively skip expensive operations while testing
+# production code paths.
+#
+
+
+@pytest.fixture
+def production_mode():
+    """
+    Ensure test runs in full production mode (no bypasses).
+
+    Use this fixture for critical workflow tests that must validate
+    production behavior exactly as users experience it.
+
+    Example:
+        def test_critical_workflow(production_mode):
+            # This test runs with real preflight, real transcription, real LLM
+            pass
+    """
+    # Remove all testing mode environment variables
+    ensure_production_mode()
+
+    yield
+
+    # Cleanup: restore production mode after test
+    ensure_production_mode()
+
+
+@pytest.fixture
+def skip_llm():
+    """
+    Skip actual LLM calls (Ollama, OpenAI, etc.) but run everything else.
+
+    Use when:
+    - Testing non-LLM features (download, transcription, database)
+    - Running tests without Ollama installed
+    - Fast iteration on integration tests
+
+    Don't use when:
+    - Testing claim extraction or System2 orchestrator
+    - Verifying LLM integration
+
+    Example:
+        def test_download_and_transcribe(skip_llm):
+            # This test runs real download and transcription,
+            # but skips LLM-based claim extraction
+            pass
+    """
+    original_value = os.environ.get("SKIP_LLM")
+    os.environ["SKIP_LLM"] = "1"
+
+    yield
+
+    # Restore original state
+    if original_value is not None:
+        os.environ["SKIP_LLM"] = original_value
+    else:
+        os.environ.pop("SKIP_LLM", None)
+
+
+@pytest.fixture
+def fast_mode():
+    """
+    Use tiny/small models instead of production models.
+
+    When enabled:
+    - Whisper uses 'tiny' model instead of 'base'/'small'
+    - LLMs use smaller models if available
+    - Reduces test runtime significantly
+
+    Use when:
+    - Running integration tests quickly
+    - Testing workflow without caring about quality
+    - Developing new features
+
+    Don't use when:
+    - Testing actual output quality
+    - Benchmarking performance
+    - Validating production accuracy
+
+    Example:
+        def test_full_pipeline_workflow(fast_mode):
+            # This test runs the complete pipeline with tiny models
+            # Fast enough for development iteration
+            pass
+    """
+    original_value = os.environ.get("FAST_MODE")
+    os.environ["FAST_MODE"] = "1"
+
+    yield
+
+    # Restore original state
+    if original_value is not None:
+        os.environ["FAST_MODE"] = original_value
+    else:
+        os.environ.pop("FAST_MODE", None)
+
+
+@pytest.fixture
+def skip_transcription():
+    """
+    Skip actual Whisper transcription (use mock or empty result).
+
+    Use when:
+    - Testing non-transcription features
+    - Testing data flow without slow Whisper processing
+    - Running quick unit tests
+
+    Don't use when:
+    - Testing AudioProcessor
+    - Testing full pipeline workflows
+    - Verifying actual transcription output
+
+    Example:
+        def test_database_storage(skip_transcription):
+            # This test validates database operations
+            # without waiting for transcription
+            pass
+    """
+    original_value = os.environ.get("SKIP_TRANSCRIPTION")
+    os.environ["SKIP_TRANSCRIPTION"] = "1"
+
+    yield
+
+    # Restore original state
+    if original_value is not None:
+        os.environ["SKIP_TRANSCRIPTION"] = original_value
+    else:
+        os.environ.pop("SKIP_TRANSCRIPTION", None)
+
+
+@pytest.fixture
+def skip_preflight():
+    """
+    Skip preflight checks (FFmpeg, yt-dlp validation).
+
+    Use when:
+    - Testing non-download/transcode features
+    - CI environment without FFmpeg installed
+    - Running unit tests that don't need these dependencies
+
+    Don't use when:
+    - Testing actual download or transcription workflows
+    - Running integration tests
+    - Testing app startup sequence
+
+    Example:
+        def test_database_queries(skip_preflight):
+            # This test doesn't need FFmpeg or yt-dlp
+            pass
+    """
+    original_value = os.environ.get("SKIP_PREFLIGHT")
+    os.environ["SKIP_PREFLIGHT"] = "1"
+
+    yield
+
+    # Restore original state
+    if original_value is not None:
+        os.environ["SKIP_PREFLIGHT"] = original_value
+    else:
+        os.environ.pop("SKIP_PREFLIGHT", None)

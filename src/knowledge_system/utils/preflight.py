@@ -4,7 +4,8 @@ These checks are intentionally fast (<200ms typical) and avoid any heavy
 imports, network calls, or GPU/ML initialization. They are meant to catch the
 most common "app starts but immediately crashes" issues on end-user machines.
 
-Set KC_SKIP_PREFLIGHT=1 or KNOWLEDGE_CHIPPER_TESTING_MODE=1 to skip these checks.
+Set SKIP_PREFLIGHT=1 to skip these checks in tests.
+Legacy support: KC_SKIP_PREFLIGHT=1 or KNOWLEDGE_CHIPPER_TESTING_MODE=1 also work.
 """
 
 from __future__ import annotations
@@ -12,6 +13,18 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+
+# Import granular testing mode functions
+try:
+    from knowledge_system.utils.testing_mode import should_skip_preflight
+except ImportError:
+    # Fallback if testing_mode module is not available yet
+    def should_skip_preflight() -> bool:
+        return (
+            os.environ.get("KC_SKIP_PREFLIGHT") == "1" or
+            os.environ.get("SKIP_PREFLIGHT") == "1" or
+            os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
+        )
 
 
 class PreflightError(RuntimeError):
@@ -72,10 +85,10 @@ def check_yt_dlp() -> None:
 
 def quick_preflight() -> None:
     """Run minimal, fast checks. Raises PreflightError on problems."""
-    # Skip preflight checks in testing mode
-    if os.environ.get("KC_SKIP_PREFLIGHT") == "1":
-        return
-    if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1":
+    # Skip preflight checks if configured
+    # Uses granular testing mode controls (SKIP_PREFLIGHT=1)
+    # Also supports legacy environment variables for backward compatibility
+    if should_skip_preflight():
         return
 
     check_ffmpeg()
