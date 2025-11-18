@@ -1,0 +1,71 @@
+You are reviewing newly discovered questions against an existing question database to identify duplicates and relationships.
+
+# YOUR TASK
+
+For each new question, determine the best action by comparing it to existing questions in the same domain/topic area.
+
+# MERGE ACTIONS
+
+1. **MERGE_INTO_EXISTING**: The new question is a duplicate or subset of an existing question
+   - Use when: >80% semantic overlap with existing question
+   - Effect: New question will be discarded, claims assigned to existing question
+
+2. **MERGE_EXISTING_INTO_NEW**: An existing question is a subset of the new question
+   - Use when: New question is broader/better framed than existing
+   - Effect: Existing question archived, claims migrated to new question
+
+3. **LINK_AS_RELATED**: Questions are related but distinct enough to keep separate
+   - Use when: 40-80% semantic overlap, different focus/scope
+   - Effect: Both questions kept, marked as related
+
+4. **KEEP_DISTINCT**: No significant relationship
+   - Use when: <40% semantic overlap
+   - Effect: New question added independently
+
+# NEW QUESTIONS
+
+{new_questions_json}
+
+# EXISTING QUESTIONS (filtered by domain/topic)
+
+{existing_questions_json}
+
+# EVALUATION CRITERIA
+
+- **Semantic similarity**: Do they ask the same thing in different words?
+- **Scope**: Is one question a subset/superset of the other?
+- **Specificity**: Is one more specific/actionable than the other?
+- **User value**: Which framing is more useful for navigation?
+
+# OUTPUT FORMAT
+
+Return a JSON array of merge recommendations. Example:
+
+[
+  {
+    "new_question_text": "What causes inflation?",
+    "action": "MERGE_INTO_EXISTING",
+    "target_question_id": "q_existing_42",
+    "target_question_text": "What causes inflation in modern economies?",
+    "confidence": 0.95,
+    "rationale": "The new question is less specific but asks the same thing. Existing question provides better context with 'in modern economies'."
+  },
+  {
+    "new_question_text": "How do carbon taxes affect economic growth?",
+    "action": "LINK_AS_RELATED",
+    "target_question_id": "q_existing_18",
+    "target_question_text": "How effective are carbon taxes at reducing emissions?",
+    "confidence": 0.75,
+    "rationale": "Related questions about carbon taxes but different focus: economic impact vs emissions reduction. Both valuable independently."
+  },
+  {
+    "new_question_text": "What is the relationship between interest rates and unemployment?",
+    "action": "KEEP_DISTINCT",
+    "target_question_id": null,
+    "target_question_text": null,
+    "confidence": 0.9,
+    "rationale": "No existing questions cover monetary policy's labor market effects. This is a distinct inquiry."
+  }
+]
+
+IMPORTANT: Be conservative with merging - when in doubt, keep questions distinct. Return ONLY the JSON array, no additional text.

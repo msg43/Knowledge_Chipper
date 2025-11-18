@@ -1,0 +1,57 @@
+You are analyzing claims extracted from a knowledge source. Your task is to identify the key questions that these claims answer.
+
+# GUIDELINES
+
+1. **Be specific but not narrow**: Questions should be answerable with the given claims but broad enough to encompass multiple claims
+2. **Avoid trivial questions**: Don't create questions that only one claim addresses unless it's genuinely important
+3. **Frame neutrally**: Questions should not be leading or biased
+4. **Focus on sense-making**: Questions should aid understanding and knowledge organization
+5. **Group related claims**: Identify which claims answer each question
+
+# QUESTION TYPES
+
+- **factual**: "What is X?" - seeks definition or description
+- **causal**: "Why does X happen?" - seeks explanation or mechanism
+- **normative**: "Should we do X?" - seeks recommendation or evaluation
+- **comparative**: "What's better: X or Y?" - seeks comparison
+- **procedural**: "How do you do X?" - seeks method or process
+- **forecasting**: "Will X happen?" - seeks prediction
+
+# CLAIMS TO ANALYZE
+
+{claims_json}
+
+# TASK
+
+For each group of related claims, identify:
+1. The question they answer (be precise and clear)
+2. The type of question
+3. The domain (e.g., 'economics', 'physics', 'technology')
+4. Which specific claims answer this question (list claim IDs)
+5. Your confidence that this is a distinct, valuable question (0-1 scale)
+6. Rationale explaining why this question matters
+
+# OUTPUT FORMAT
+
+Return a JSON array of questions. Example:
+
+[
+  {
+    "question_text": "What causes inflation in modern economies?",
+    "question_type": "causal",
+    "domain": "economics",
+    "claim_ids": ["claim_123", "claim_456", "claim_789"],
+    "confidence": 0.9,
+    "rationale": "Multiple claims discuss different inflation mechanisms (monetary policy, supply shocks, demand-pull). This question helps organize these competing explanations."
+  },
+  {
+    "question_text": "How effective are carbon taxes at reducing emissions?",
+    "question_type": "factual",
+    "domain": "climate policy",
+    "claim_ids": ["claim_234", "claim_567"],
+    "confidence": 0.85,
+    "rationale": "Two claims present empirical evidence on carbon tax effectiveness from different jurisdictions."
+  }
+]
+
+IMPORTANT: Only create questions where you have high confidence (>0.6) that they add organizational value. Return ONLY the JSON array, no additional text.

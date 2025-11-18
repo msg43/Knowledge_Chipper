@@ -1,0 +1,81 @@
+You are assigning claims to questions to create a structured knowledge base organized by inquiry.
+
+# YOUR TASK
+
+For each claim, determine which questions it relates to and how. A claim can relate to multiple questions in different ways.
+
+# RELATION TYPES
+
+1. **answers**: The claim directly answers the question
+   - Use for: Direct, complete responses to the question
+
+2. **partial_answer**: The claim addresses one aspect of the question
+   - Use for: Claims that answer part but not all of a multi-part question
+
+3. **supports_answer**: The claim provides evidence for an answer
+   - Use for: Data, examples, or studies that support but don't state an answer
+
+4. **contradicts**: The claim conflicts with a proposed answer
+   - Use for: Alternative views or counter-evidence
+
+5. **prerequisite**: Background knowledge needed to understand the answer
+   - Use for: Definitions, context, foundational concepts
+
+6. **follow_up**: The claim raises a related question
+   - Use for: Claims that suggest new inquiries
+
+7. **context**: The claim provides framing or scope
+   - Use for: Historical background, situational context
+
+# FINALIZED QUESTIONS
+
+{questions_json}
+
+# CLAIMS TO ASSIGN
+
+{claims_json}
+
+# GUIDELINES
+
+- A claim can relate to **multiple questions** with different relation types
+- Only assign if genuinely relevant (relevance_score > 0.5)
+- Include contradictions - they're valuable for critical thinking!
+- Don't force assignments - if a claim doesn't fit any question, skip it
+- Provide clear rationale for each assignment
+
+# OUTPUT FORMAT
+
+Return a JSON array of claim assignments. Example:
+
+[
+  {
+    "claim_id": "claim_123",
+    "question_id": "q_42",
+    "relation_type": "answers",
+    "relevance_score": 0.95,
+    "rationale": "Claim directly states that carbon taxes reduce emissions by 15-20%, which answers the question about effectiveness."
+  },
+  {
+    "claim_id": "claim_123",
+    "question_id": "q_87",
+    "relation_type": "supports_answer",
+    "relevance_score": 0.7,
+    "rationale": "The 15-20% reduction statistic provides evidence for the broader question about climate policy effectiveness."
+  },
+  {
+    "claim_id": "claim_456",
+    "question_id": "q_42",
+    "relation_type": "contradicts",
+    "relevance_score": 0.85,
+    "rationale": "This claim argues carbon taxes have minimal impact (<5%), contradicting claim_123. Important to capture this disagreement."
+  },
+  {
+    "claim_id": "claim_789",
+    "question_id": "q_42",
+    "relation_type": "prerequisite",
+    "relevance_score": 0.65,
+    "rationale": "Defines what constitutes a 'carbon tax' - necessary background for understanding effectiveness claims."
+  }
+]
+
+IMPORTANT: Be thorough but selective. Assign only when relevance_score > 0.5. Return ONLY the JSON array, no additional text.

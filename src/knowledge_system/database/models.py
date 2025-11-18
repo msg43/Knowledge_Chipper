@@ -733,6 +733,9 @@ class Claim(Base):
     reviewed_by = Column(String)
     reviewed_at = Column(DateTime)
 
+    # User notes
+    user_notes = Column(Text)
+
     # Temporality analysis
     temporality_score = Column(Integer, default=3)
     temporality_confidence = Column(Float, default=0.5)
@@ -800,7 +803,7 @@ class Claim(Base):
             "user_confidence_override BETWEEN 0 AND 1", name="ck_user_confidence"
         ),
         CheckConstraint(
-            "verification_status IN ('unverified', 'verified', 'disputed', 'false')",
+            "verification_status IN ('unverified', 'verified', 'disputed', 'false', 'unverifiable')",
             name="ck_verification_status",
         ),
         CheckConstraint(
@@ -1713,6 +1716,293 @@ class SpeakerProcessingSession(Base):
 
     def __repr__(self):
         return f"<SpeakerProcessingSession(session_id='{self.session_id}', recording_path='{self.recording_path}')>"
+
+
+# ============================================================================
+# QUESTIONS: Organizing Claims by Inquiry
+# ============================================================================
+
+
+class Question(Base):
+    """Questions: Group claims by the inquiries they answer."""
+
+    __tablename__ = "questions"
+
+    # Primary key
+    question_id = Column(String, primary_key=True)
+
+    # Core content
+    question_text = Column(Text, nullable=False, unique=True)
+    normalized_text = Column(Text)
+    question_type = Column(String)
+
+    # Context and framing
+    description = Column(Text)
+    scope = Column(Text)
+    domain = Column(String)
+
+    # Question status
+    status = Column(String, default="open")
+
+    # Answer completeness tracking
+    answer_confidence = Column(Float, default=0.0)
+    answer_completeness = Column(Float, default=0.0)
+    has_consensus = Column(Boolean, default=False)
+
+    # Importance and prioritization
+    importance_score = Column(Float)
+    user_priority = Column(Integer)
+
+    # Temporal tracking
+    first_asked_at = Column(DateTime)
+    last_updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # User curation
+    created_by = Column(String)
+    reviewed = Column(Boolean, default=False)
+    notes = Column(Text)
+
+    # If merged
+    merged_into_question_id = Column(String, ForeignKey("questions.question_id"))
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    merged_into = relationship("Question", remote_side=[question_id], backref="merged_questions")
+    claim_mappings = relationship("QuestionClaim", back_populates="question", cascade="all, delete-orphan")
+    relations_as_source = relationship(
+        "QuestionRelation",
+        foreign_keys="QuestionRelation.source_question_id",
+        back_populates="source_question",
+        cascade="all, delete-orphan",
+    )
+    relations_as_target = relationship(
+        "QuestionRelation",
+        foreign_keys="QuestionRelation.target_question_id",
+        back_populates="target_question",
+        cascade="all, delete-orphan",
+    )
+    categories = relationship("QuestionCategory", back_populates="question", cascade="all, delete-orphan")
+    tags = relationship("QuestionTag", back_populates="question", cascade="all, delete-orphan")
+    people = relationship("QuestionPerson", back_populates="question", cascade="all, delete-orphan")
+    concepts = relationship("QuestionConcept", back_populates="question", cascade="all, delete-orphan")
+    jargon = relationship("QuestionJargon", back_populates="question", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        CheckConstraint(
+            "question_type IN ('factual', 'causal', 'normative', 'comparative', 'procedural', 'forecasting')",
+            name="ck_question_type",
+        ),
+        CheckConstraint(
+            "status IN ('open', 'answered', 'contested', 'abandoned', 'merged')",
+            name="ck_question_status",
+        ),
+        CheckConstraint("answer_confidence BETWEEN 0 AND 1", name="ck_answer_confidence"),
+        CheckConstraint("answer_completeness BETWEEN 0 AND 1", name="ck_answer_completeness"),
+        CheckConstraint("importance_score BETWEEN 0 AND 1", name="ck_q_importance"),
+    )
+
+
+class QuestionClaim(Base):
+    """Relationship between questions and claims."""
+
+    __tablename__ = "question_claims"
+
+    # Composite primary key
+    question_id = Column(
+        String, ForeignKey("questions.question_id", ondelete="CASCADE"), primary_key=True
+    )
+    claim_id = Column(
+        String, ForeignKey("claims.claim_id", ondelete="CASCADE"), primary_key=True
+    )
+
+    # Relationship type
+    relation_type = Column(String, default="answers")
+
+    # Strength and confidence
+    relevance_score = Column(Float)
+    confidence = Column(Float)
+
+    # User curation
+    user_approved = Column(Boolean, default=False)
+    user_rejected = Column(Boolean, default=False)
+    source = Column(String, default="system")
+
+    # Ordering
+    sequence = Column(Integer)
+
+    # Notes
+    rationale = Column(Text)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    question = relationship("Question", back_populates="claim_mappings")
+    claim = relationship("Claim")
+
+    __table_args__ = (
+        CheckConstraint(
+            "relation_type IN ('answers', 'partial_answer', 'supports_answer', 'contradicts', 'prerequisite', 'follow_up', 'context')",
+            name="ck_qc_relation_type",
+        ),
+        CheckConstraint("relevance_score BETWEEN 0 AND 1", name="ck_qc_relevance"),
+        CheckConstraint("confidence BETWEEN 0 AND 1", name="ck_qc_confidence"),
+    )
+
+
+class QuestionRelation(Base):
+    """Relationships between questions."""
+
+    __tablename__ = "question_relations"
+
+    # Primary key
+    relation_id = Column(Integer, primary_key=True, autoincrement=True)
+    source_question_id = Column(
+        String, ForeignKey("questions.question_id", ondelete="CASCADE"), nullable=False
+    )
+    target_question_id = Column(
+        String, ForeignKey("questions.question_id", ondelete="CASCADE"), nullable=False
+    )
+
+    relation_type = Column(String, nullable=False)
+    strength = Column(Float)
+    rationale = Column(Text)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    source_question = relationship(
+        "Question", foreign_keys=[source_question_id], back_populates="relations_as_source"
+    )
+    target_question = relationship(
+        "Question", foreign_keys=[target_question_id], back_populates="relations_as_target"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "relation_type IN ('prerequisite', 'follow_up', 'alternative', 'sub_question', 'super_question', 'related', 'conflicts_with')",
+            name="ck_qr_relation_type",
+        ),
+        CheckConstraint("strength BETWEEN 0 AND 1", name="ck_qr_strength"),
+        UniqueConstraint(
+            "source_question_id",
+            "target_question_id",
+            "relation_type",
+            name="uq_question_relation",
+        ),
+    )
+
+
+class QuestionCategory(Base):
+    """WikiData categories for questions."""
+
+    __tablename__ = "question_categories"
+
+    # Composite primary key
+    question_id = Column(
+        String, ForeignKey("questions.question_id", ondelete="CASCADE"), primary_key=True
+    )
+    wikidata_id = Column(
+        String, ForeignKey("wikidata_categories.wikidata_id"), primary_key=True
+    )
+
+    # System scores
+    relevance_score = Column(Float)
+    confidence = Column(Float)
+
+    # Primary category flag
+    is_primary = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    question = relationship("Question", back_populates="categories")
+    wikidata_category = relationship("WikiDataCategory")
+
+    __table_args__ = (
+        CheckConstraint("relevance_score BETWEEN 0 AND 1", name="ck_qcat_relevance"),
+        CheckConstraint("confidence BETWEEN 0 AND 1", name="ck_qcat_confidence"),
+    )
+
+
+class QuestionTag(Base):
+    """User tags for questions."""
+
+    __tablename__ = "question_tags"
+
+    # Composite primary key
+    question_id = Column(
+        String, ForeignKey("questions.question_id", ondelete="CASCADE"), primary_key=True
+    )
+    tag_id = Column(
+        Integer, ForeignKey("user_tags.tag_id", ondelete="CASCADE"), primary_key=True
+    )
+
+    added_by = Column(String)
+    added_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    question = relationship("Question", back_populates="tags")
+    tag = relationship("UserTag")
+
+
+class QuestionPerson(Base):
+    """People mentioned in questions."""
+
+    __tablename__ = "question_people"
+
+    # Composite primary key
+    question_id = Column(
+        String, ForeignKey("questions.question_id", ondelete="CASCADE"), primary_key=True
+    )
+    person_id = Column(
+        String, ForeignKey("people.person_id", ondelete="CASCADE"), primary_key=True
+    )
+
+    role = Column(String)
+
+    # Relationships
+    question = relationship("Question", back_populates="people")
+    person = relationship("Person")
+
+
+class QuestionConcept(Base):
+    """Concepts related to questions."""
+
+    __tablename__ = "question_concepts"
+
+    # Composite primary key
+    question_id = Column(
+        String, ForeignKey("questions.question_id", ondelete="CASCADE"), primary_key=True
+    )
+    concept_id = Column(
+        String, ForeignKey("concepts.concept_id", ondelete="CASCADE"), primary_key=True
+    )
+
+    # Relationships
+    question = relationship("Question", back_populates="concepts")
+    concept = relationship("Concept")
+
+
+class QuestionJargon(Base):
+    """Jargon terms in questions."""
+
+    __tablename__ = "question_jargon"
+
+    # Composite primary key
+    question_id = Column(
+        String, ForeignKey("questions.question_id", ondelete="CASCADE"), primary_key=True
+    )
+    jargon_id = Column(
+        String, ForeignKey("jargon_terms.jargon_id", ondelete="CASCADE"), primary_key=True
+    )
+
+    # Relationships
+    question = relationship("Question", back_populates="jargon")
+    jargon_term = relationship("JargonTerm")
 
 
 # Database initialization functions

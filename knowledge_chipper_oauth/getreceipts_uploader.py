@@ -2,13 +2,12 @@
 GetReceipts.org Data Uploader for Knowledge_Chipper
 
 This module handles uploading Knowledge_Chipper HCE data to GetReceipts.org
-Supabase database with proper authentication and data transformation.
+Supabase database with automatic device authentication (Happy-style).
 
 Usage:
     from getreceipts_uploader import GetReceiptsUploader
 
-    uploader = GetReceiptsUploader()
-    uploader.authenticate()
+    uploader = GetReceiptsUploader()  # Auto-authenticates with device credentials
     results = uploader.upload_session_data(session_data)
 
 Author: GetReceipts.org Team
@@ -16,10 +15,15 @@ License: MIT
 """
 
 import json
-from typing import Any, Dict, List, Optional
+import sys
+from pathlib import Path
+from typing import Any
 
-from getreceipts_auth import GetReceiptsAuth
 from supabase import Client, create_client
+
+# Add parent directory to path to import device_auth
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+from knowledge_system.services.device_auth import get_device_auth
 
 
 class GetReceiptsUploader:
@@ -27,51 +31,44 @@ class GetReceiptsUploader:
     Handles uploading Knowledge_Chipper data to GetReceipts.org
 
     This class:
-    1. Authenticates users via OAuth
+    1. Auto-authenticates with device credentials (silent, Happy-style)
     2. Transforms HCE data format to GetReceipts schema
-    3. Uploads data to Supabase with proper user attribution
+    3. Uploads data to Supabase with device attribution
     4. Handles all data types (episodes, claims, evidence, knowledge artifacts)
     """
 
     def __init__(
         self,
-        supabase_url: str = "https://your-project.supabase.co",
-        supabase_anon_key: str = "your-anon-key",
-        base_url: str = "http://localhost:3000",
+        supabase_url: str = "https://sdkxuiqcwlmbpjvjdpkj.supabase.co",
+        supabase_anon_key: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNka3h1aXFjd2xtYnBqdmpkcGtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTU3MzQsImV4cCI6MjA3MTM5MTczNH0.VoP6yX3GwyVjylgioTGchQYwPQ_K2xQFdHP5ani0vts",
     ):
         """
-        Initialize the uploader
+        Initialize the uploader with automatic device authentication
 
         Args:
             supabase_url: Supabase project URL
             supabase_anon_key: Supabase anonymous key
-            base_url: GetReceipts.org base URL for OAuth
         """
-        self.auth = GetReceiptsAuth(base_url)
-        self.supabase: Client = create_client(supabase_url, supabase_anon_key)
-        self.authenticated = False
+        self.device_auth = get_device_auth()
+        self.credentials = self.device_auth.get_credentials()
 
-    def authenticate(self) -> dict[str, Any]:
-        """
-        Authenticate user and set up Supabase session
+        # Create Supabase client with device credentials in headers
+        self.supabase: Client = create_client(
+            supabase_url,
+            supabase_anon_key,
+            options={
+                "headers": {
+                    "X-Device-ID": self.credentials["device_id"],
+                    "X-Device-Key": self.credentials["device_key"],
+                }
+            },
+        )
 
-        Returns:
-            Authentication result with user info
-        """
-        auth_result = self.auth.authenticate()
+        print(f"🔐 Using device ID: {self.credentials['device_id'][:8]}...")
 
-        # Set Supabase auth session using the access and refresh tokens
-        refresh_token = auth_result.get("refresh_token") or None
-        self.supabase.auth.set_session(auth_result["access_token"], refresh_token)
-
-        if refresh_token:
-            print("🔄 Supabase session established with refresh token")
-        else:
-            print("⚠️  Supabase session established without refresh token")
-
-        self.authenticated = True
-        print(f"🔐 Supabase session established for: {auth_result['user_info']['name']}")
-        return auth_result
+    def is_enabled(self) -> bool:
+        """Check if auto-upload is enabled"""
+        return self.device_auth.is_enabled()
 
     def upload_session_data(self, session_data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -88,13 +85,12 @@ class GetReceiptsUploader:
             session_data: Dictionary containing all HCE data tables
 
         Returns:
-            Dictionary with upload results for each table
-
-        Raises:
-            Exception: If not authenticated or upload fails
+            Dictionary with upload results for each table (empty if disabled)
         """
-        if not self.authenticated:
-            raise Exception("Not authenticated - call authenticate() first")
+        # Check if auto-upload is enabled
+        if not self.is_enabled():
+            print("⏭️  Auto-upload disabled - skipping GetReceipts upload")
+            return {}
 
         print("🚀 Starting upload to GetReceipts.org...")
         results = {}
@@ -499,35 +495,35 @@ class GetReceiptsUploader:
 
 # Example usage
 if __name__ == "__main__":
-    # Simple test of the upload system
+    # Simple test of the upload system (auto-authenticates with device credentials)
     uploader = GetReceiptsUploader()
 
     try:
-        # Authenticate first
-        auth_result = uploader.authenticate()
-        print(f"Authenticated as: {auth_result['user_info']['name']}")
+        # Check if enabled
+        if not uploader.is_enabled():
+            print("Auto-upload is disabled. Enable in Settings to upload.")
+        else:
+            # Example session data
+            test_data = {
+                "episodes": [
+                    {
+                        "episode_id": "test_ep_001",
+                        "title": "Test Episode",
+                        "url": "https://youtube.com/watch?v=test",
+                    }
+                ],
+                "claims": [
+                    {
+                        "claim_id": "test_claim_001",
+                        "canonical": "This is a test claim",
+                        "episode_id": "test_ep_001",
+                    }
+                ],
+            }
 
-        # Example session data
-        test_data = {
-            "episodes": [
-                {
-                    "episode_id": "test_ep_001",
-                    "title": "Test Episode",
-                    "url": "https://youtube.com/watch?v=test",
-                }
-            ],
-            "claims": [
-                {
-                    "claim_id": "test_claim_001",
-                    "canonical": "This is a test claim",
-                    "episode_id": "test_ep_001",
-                }
-            ],
-        }
-
-        # Upload data
-        results = uploader.upload_session_data(test_data)
-        print(f"Upload successful: {results}")
+            # Upload data (automatically uses device credentials)
+            results = uploader.upload_session_data(test_data)
+            print(f"Upload successful: {results}")
 
     except Exception as e:
         print(f"Test failed: {e}")

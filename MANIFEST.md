@@ -2,7 +2,7 @@
 
 Complete inventory of all files in the Knowledge Chipper codebase with descriptions of actual functionality.
 
-**Last Updated:** November 10, 2025
+**Last Updated:** November 17, 2025
 
 ---
 
@@ -40,20 +40,27 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `ACTIVE_TODOS.md` - Current active tasks and work in progress
 - `ALL_FIXES_COMPLETE.md` - Comprehensive list of all bug fixes that have been completed
 - `ALL_IMPLEMENTATION_COMPLETE.md` - List of all major features that have been fully implemented
+- `ALL_TRANSCRIPTION_FIXES_COMPLETE.md` - Comprehensive list of all transcription-related bug fixes completed
 - `ANTI_BOT_CRITICAL_FIXES.md` - Documentation of anti-bot detection fixes for YouTube downloads
+- `ARCHIVE_VALIDATION_FIX.md` - Fix for archive validation issues
 - `CHANGELOG.md` - Chronological record of all notable changes to the project
+- `CLAUDE.md` - Guidance document for Claude Code AI assistant when working with this codebase
 - `CODE_DUPLICATION_ELIMINATION.md` - Refactoring to eliminate 70+ lines of duplicated code in summarization tab by extracting helper methods for settings building and worker creation
+- `COLOR_CODED_AND_THUMBNAIL_FIX.md` - Fix for color coding and thumbnail display issues
 - `CONTRIBUTING.md` - Guidelines for contributing to the project (code style, PR process, testing)
 - `DEPLOYMENT_READY.txt` - Deployment readiness checklist and status
 - `FINAL_INTEGRATION_STATUS.md` - Status of final system integration across all components
 - `FLAGSHIP_EVALUATOR_MODEL_DEFAULT_FIX.md` - Fix for Flagship Evaluator Model dropdown appearing empty on launch due to mismatch between stored model names and displayed names with "(Installed)" suffix
 - `FOREIGN_KEY_CONSTRAINT_FIX.md` - Fix for foreign key constraint errors when creating stage statuses before MediaSource records exist
+- `GUI_TESTING_INTEGRATION_COMPLETE.md` - Documentation of completed GUI testing integration
 - `MENTAL_MODELS_SCHEMA_FIX.md` - Complete v1→v2 schema migration: replaced v1 with v2 structure to eliminate all transformations (nested evidence_spans, definition field, full alignment)
+- `MODEL_DEFAULT_FIX.md` - Fix for model default selection issues
 - `SCHEMA_STRATEGY_CURRENT_STATE.md` - Comprehensive analysis of schema evolution: why grammar-enforced structured outputs were abandoned for JSON mode + post-validation (5-6x faster)
 - `SCHEMA_VALIDATION_FIX.md` - Fix for schema validation errors: corrected context_type enum mismatch (sentence/paragraph → exact/extended/segment) and removed domain enum constraint to allow free-form domain descriptions
 - `SCHEMA_REPAIR_DOMAIN_FIX.md` - Fix for missing domain field in claims: added repair logic to automatically set domain="general" when LLMs omit the required field, preventing validation failures and fallback to non-structured JSON generation
 - `CLAIM_DOMAIN_IMPLEMENTATION.md` - Implementation of domain field for claims: added database field, updated all miner prompts with broad category guidance, and ensured open-ended classification for searchability
 - `SUMMARIZE_TAB_REFRESH_FIX.md` - Fix for Summarize tab database list not automatically refreshing when new transcripts are added: added showEvent() handler to refresh on tab visibility and enhanced diagnostic logging for orphaned transcripts
+- `SUMMARIZE_TAB_SELECTION_FIX.md` - Fix for Summarize tab selection issues
 - `TRANSCRIBED_VIDEOS_NOT_IN_SUMMARIZE_TAB_FIX.md` - Fix for transcribed YouTube videos not appearing in Summarize tab: AudioProcessor was generating new source_ids instead of reusing existing ones from YouTube downloads, creating orphaned Transcript records not linked to MediaSource records
 - `GUI_SETTINGS_PERSISTENCE_AUDIT.md` - Audit results of GUI settings persistence implementation
 - `IMPLEMENTATION_SUMMARY.md` - High-level summary of major implementation milestones
@@ -62,6 +69,21 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `README.md` - Main project documentation with installation, usage, and feature overview
 - `TESTING_CHECKLIST.md` - Comprehensive checklist for testing all system features
 - `TIMER_REDUNDANCY_AUDIT.md` - Detailed audit of suspicious timer patterns, confirming both are legitimate (sequential initialization and immediate+periodic refresh patterns)
+
+### Documentation - New Features (November 2025)
+
+- `QUESTION_MAPPER_IMPLEMENTATION_SUMMARY.md` - Complete implementation of question mapping system: 3-stage LLM pipeline (discovery, merger, assignment) with database schema, ORM models, GUI tab, and 14 unit tests
+- `QUESTION_MAPPER_USAGE_GUIDE.md` - User guide for question mapper system with usage examples and workflow documentation
+- `REFACTORING_NOVEMBER_2025.md` - Documentation of November 2025 refactoring efforts
+- `COOKIE_PERSISTENCE_DIAGNOSIS_2025_11_10.md` - Diagnosis of cookie persistence issues
+- `COOKIE_PERSISTENCE_FIX.md` - Fix for cookie file persistence between sessions (root directory version)
+- `SINGLE_SPEAKER_DIAGNOSIS_ENHANCEMENT.md` - Enhancements to single-speaker detection diagnostics
+- `SPEAKER_AND_THUMBNAIL_FIXES_NOV_2025.md` - November 2025 fixes for speaker attribution and thumbnail handling
+- `SPEAKER_ASSIGNMENT_NOT_INVOKED_FIX.md` - Fix for speaker assignment not being invoked during processing
+- `SPEAKER_DIARIZATION_FIX.md` - Fix for speaker diarization issues
+- `TEST_INFRASTRUCTURE_FIXES_APPLIED.md` - Documentation of applied test infrastructure fixes
+- `TEST_INFRASTRUCTURE_FIXES_SUMMARY.md` - Summary of test infrastructure improvements
+- `TEST_RUN_REPORT_2025_11_10.md` - Test run report from November 10, 2025
 
 ### Documentation - Batch Processing
 
@@ -91,6 +113,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `docs/FILE_ORGANIZATION.md` - Comprehensive guide to output file organization: explains directory structure (transcripts/, summaries/, moc/, exports/), file naming conventions, relationship between transcript and summary files, database as source of truth, and how to find/regenerate files. Addresses common confusion about where files are saved and why they don't overwrite each other.
 - `VESTIGIAL_CODE_ANALYSIS.md` - Comprehensive analysis of unused/vestigial code from pre-unified-pipeline architecture, including old extraction modules (people.py, glossary.py, concepts.py, skim.py), unused prompt files (judge_high/low variants), and unimplemented features (relations, contradictions). Documents architecture evolution and provides removal recommendations.
 - `VESTIGIAL_CODE_REMOVAL_COMPLETE.md` - Completion documentation for vestigial code cleanup: moved 4 old extraction modules and 12 unused prompt files to _deprecated/, updated __init__.py, verified all imports still work. Includes before/after architecture comparison, verification tests, and rollback plan.
+- `VESTIGIAL_PROMPT_PICKER_REMOVED.md` - Documentation of removal of non-functional prompt file picker from Summarization tab
 - `COMPLETE_SETTINGS_HIERARCHY_FIX.md` - Documentation of settings hierarchy refactoring and fixes
 - `DEDUPLICATION_FIX.md` - Fix for URL deduplication logic that was incorrectly skipping incomplete downloads
 - `DEFAULT_MODEL_CHANGED_TO_MEDIUM.md` - Documentation of default Whisper model change from base to medium
@@ -107,6 +130,10 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `MULTI_SOURCE_DEDUPLICATION_COMPLETE.md` - Completion doc for multi-source deduplication system
 - `PHANTOM_OPTIONS_AUDIT.md` - Audit of phantom/unused configuration options
 - `QUEUE_TAB_FIXES_COMPLETE.md` - Documentation of Queue tab bug fixes: JSON error in view details, failed items not clearing, and missing hyperlinks to completed files
+- `QUEUE_TAB_FINAL_REPORT.md` - Final report on Queue tab implementation
+- `QUEUE_TAB_IMPLEMENTATION_SUMMARY.md` - Summary of Queue tab implementation
+- `QUEUE_TAB_MANUAL_VERIFICATION_PLAN.md` - Manual verification plan for Queue tab
+- `QUEUE_TAB_MIGRATION_GUIDE.md` - Migration guide for Queue tab
 - `RECOVERY_COMPLETE.md` - Documentation of system recovery from critical issues
 - `REDUNDANCY_PATTERNS_ANALYSIS.md` - Analysis of timer-based redundant initialization patterns found in GUI code, with search strategies and audit checklist for finding similar issues
 - `SCHEMA_CONFLICTS.md` - Documentation of database schema conflicts and resolutions
@@ -124,11 +151,17 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `TRANSCRIPTION_TO_SUMMARIZATION_WORKFLOW.md` - November 10, 2025 enhancement for seamless transcription-to-summarization workflow. When clicking "Summarize Transcript" after transcription, the system now automatically: (1) switches to Database mode, (2) checks boxes for all transcribed sources, (3) immediately starts summarization. Leverages database-first architecture where rich segments (timestamps, speakers, metadata) are used instead of parsing markdown files. Documents implementation, benefits, and user experience improvements
 - `TRANSCRIPT_DISPLAY_FIX_NOV_2025.md` - Fix for duplicate titles in Obsidian (removed redundant H1 heading) and improved filename readability (preserved spaces instead of underscores)
 - `TRANSCRIPT_FORMATTING_FIXES_NOV_2025.md` - November 10, 2025 fixes: YouTube Description header (conditional on source type), removed "_transcript" suffix from filenames, optimized paragraph breaking (500 char max, 3s pause threshold for better readability), documented speaker attribution LLM requirement
+- `TRANSCRIPT_FORMATTING_FIXES.md` - Additional transcript formatting fixes
 - `TRANSCRIPT_FORMATTING_IMPROVEMENTS.md` - Complete redesign of human-readable transcript formatting with intelligent paragraph grouping based on speaker changes, pauses, sentence boundaries, and character limits. Includes before/after examples and technical details of the paragraph grouping algorithm.
+- `TRANSCRIPTION_ERRORS_FOUND.md` - Documentation of transcription errors discovered
+- `TRANSCRIPTION_FIX_APPLIED.md` - Documentation of applied transcription fixes
+- `TRANSCRIPTION_TEST_RESULTS.md` - Results from transcription testing
+- `UI_LAYOUT_AND_VALIDATION_FIX.md` - Fixes for UI layout and validation issues
 - `VOICE_FINGERPRINTING_FIX_NOV_2025.md` - Fix for voice fingerprinting not merging speakers in single-speaker monologues. Root cause: system was receiving wrong audio file path (original input file instead of converted 16kHz mono WAV used for diarization), preventing proper audio segment extraction and voice similarity analysis. Fixed by passing output_path instead of path to prepare_speaker_data().
 - `VOICE_FINGERPRINTING_DIAGNOSIS_NOV_2025.md` - Comprehensive diagnostic enhancements for voice fingerprinting system. Added detailed logging to identify why speakers aren't merging: feature extraction success/failure tracking, per-feature similarity scores, total weight calculation, and speaker comparison decisions. Documents two-tier system (audio-based + text fallback), possible root causes (missing deep learning models, audio extraction issues, threshold problems), and what to look for in logs.
 - `SUNRISE_TAB_SORTING_FEATURE.md` - Documentation of sortable columns and Date Added feature in Sunrise tab database browser
 - `SUNRISE_SORTING_DEMO.md` - Visual guide and usage examples for Sunrise tab sorting functionality
+- `THUMBNAIL_FIX_V2.md` - Version 2 of thumbnail display fix
 - `UNIFIED_DOWNLOAD_PATH_COMPLETE.md` - Completion doc for unified download path implementation
 - `UNIFIED_DOWNLOAD_PATH_RECOMMENDATION.md` - Recommendations for unified download path architecture
 
@@ -156,86 +189,117 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 
 ### Utility Scripts
 
+- `analyze_code.py` - Code analysis utility script
+- `check_cookie_persistence.py` - Script to check cookie persistence functionality
 - `find_syntax_error.py` - Utility script to locate Python syntax errors in codebase
 - `monitor_gui_tests.sh` - Shell script to monitor and report on GUI test execution
 - `test_cookie_functionality.py` - Test script for cookie-based YouTube authentication
 - `test_expanded_vocab.py` - Test script for expanded WikiData vocabulary
 - `test_full_download_flow.py` - Integration test for complete download flow
 - `test_multi_account_downloads.py` - Test script for multi-account download functionality
+- `test_summarize_tab_refresh.py` - Test script for Summarize tab refresh functionality
+- `test_summarize_tab_selection.py` - Test script for Summarize tab selection functionality
 - `debug_flagship_model.py` - Utility script for debugging the flagship model
 
+### Hidden/Configuration Directories
+
+- `.claude/` - Claude Code AI assistant configuration and settings
+- `.cursor/` - Cursor IDE configuration and AI rules
+- `.github/` - GitHub Actions workflows and repository configuration
+- `.obsidian/` - Obsidian vault metadata (project documentation as Obsidian vault)
+- `.specstory/` - SpecStory configuration
+- `_deprecated/` - Deprecated code storage (vestigial modules and unused prompt files)
+
 ---
 
-## ASSETS/
+## Assets/
 
-- `icon.icns` - macOS application icon in ICNS format
-- `icon.ico` - Windows application icon in ICO format
-- `podcast_microphone.jpeg` - Podcast microphone image asset
-- `podcast_microphone.jpg` - Podcast microphone image asset (alternate format)
-- `SkipThePodcast.png` - Application logo/branding image
+Application assets and media files.
+
+- `STP_Icon_1.ico` - Application icon in ICO format (Windows)
+- `STP_Icon_1.jpeg` - Application icon in JPEG format
+- `STP_Icon_1.jpg` - Application icon in JPG format
+- `STP_Icon_1.png` - Application icon in PNG format
+- `STP_Icon_1.psd` - Adobe Photoshop source file for application icon
 
 ---
 
-## CONFIG/
+## config/
+
+Application configuration files and settings.
 
 ### Prompt Templates
 
-- `create_moc_prompt.txt` - Prompt template for creating Maps of Content (MOC)
-- `document_summary_prompt.txt` - Prompt template for summarizing documents
-- `episode_summary_prompt.txt` - Prompt template for summarizing podcast/video episodes
-- `extract_claims_prompt.txt` - Prompt template for extracting claims from transcripts
-- `extract_proper_names_prompt.txt` - Prompt template for extracting proper names from text
-- `jargon_extraction_prompt.txt` - Prompt template for extracting jargon and technical terms
-- `proper_name_extraction_prompt.txt` - Prompt template for extracting and validating proper names
+- `prompts/create_moc_prompt.txt` - Prompt template for creating Maps of Content (MOC)
+- `prompts/document_summary_prompt.txt` - Prompt template for summarizing documents
+- `prompts/episode_summary_prompt.txt` - Prompt template for summarizing podcast/video episodes
 
 ### Configuration Files
 
-- `llm_config.yaml` - LLM provider configuration (OpenAI, Anthropic, Ollama endpoints and models)
-- `podcast_categories.yaml` - Podcast category taxonomy for classification
-- `speaker_attribution.yaml` - Speaker attribution rules and mappings
-- `speaker_mappings.yaml` - Channel-to-speaker mappings for automatic attribution
-- `taxonomy.yaml` - Knowledge taxonomy structure for categorization
-- `wikidata_categories.yaml` - WikiData category mappings and hierarchies
-- `wikidata_conceptual_taxonomy.yaml` - Conceptual taxonomy derived from WikiData
-- `wikidata_podcast_taxonomy.yaml` - Podcast-specific taxonomy using WikiData categories
+- `settings.yaml` - Main application settings (user-specific, not in git)
+- `settings.example.yaml` - Example settings file with all available options
+- `credentials.yaml` - API credentials (user-specific, not in git)
+- `credentials.example.yaml` - Example credentials file template
+- `proxy.example.yaml` - Example proxy configuration
+- `packetstream.yaml` - PacketStream proxy configuration
+- `packetstream.example.yaml` - Example PacketStream configuration
+- `disable_youtube_delays.yaml` - Configuration to disable YouTube download delays
+- `obsidian_linking.yaml` - Obsidian note linking configuration
+- `speaker_attribution.yaml` - Speaker attribution rules and mappings (main copy)
+- `channel_hosts.csv` - CSV file mapping YouTube channels to host names
 
-### SSL Certificates
+### OAuth and Authentication
 
-- `cacert.pem` - CA certificate bundle for SSL/TLS connections
-- `cert.crt` - SSL certificate for secure connections
-- `cert.pem` - SSL certificate in PEM format
+- `client_secret_901133876302-bkabhn1thi5a5hnn82emp49c29l4l7vs.apps.googleusercontent.com.json` - Google OAuth client secret
+- `youtube_oauth2_credentials.json` - YouTube OAuth2 credentials
+- `apple_signing_credentials.example` - Example Apple signing credentials for macOS builds
+
+### Proxy Configuration
+
+- `brightdata_proxy_ca/` - Bright Data proxy CA certificates directory
+- `bright_data_setup.md` - Setup guide for Bright Data proxy service
 
 ### Other
 
-- `expanded_vocab.txt` - Expanded vocabulary list for improved transcription accuracy
-- `proper_names.txt` - List of proper names for transcription hint system
-- `stop_words.txt` - Stop words list for text processing and analysis
+- `dropdown_options.txt` - Configuration for dropdown menu options
+- `Headers_to_YAML.txt` - Utility file for converting headers to YAML format
+- `README.md` - Configuration directory documentation
 
 ---
 
-## DATA/
+## data/
 
-- `knowledge_system.db` - Main SQLite database (media sources, transcripts, claims, summaries)
+Data storage directory.
+
+- `knowledge_system.db` - Main SQLite database (media sources, transcripts, claims, summaries, questions)
 - `README.md` - Documentation for data directory structure and contents
 - `wikidata_categories.txt` - Text file with WikiData category list
 
 ---
 
-## DOCS/
+## docs/
+
+Comprehensive project documentation (128+ files).
 
 ### Architecture Documentation
 
-- `ARCHITECTURE.md` - High-level system architecture overview
+- `ARCHITECTURE_UNIFIED.md` - High-level system architecture overview (unified view)
 - `CLAIM_CENTRIC_ARCHITECTURE.md` - Documentation of claim-centric database architecture
 - `DATABASE_ARCHITECTURE.md` - Database schema and design documentation
 - `DATABASE_CENTRIC_ARCHITECTURE.md` - Database-first design principles and implementation
 - `HCE_ARCHITECTURE.md` - Hybrid Claim Extraction (HCE) system architecture
 - `PIPELINE_ARCHITECTURE.md` - Processing pipeline architecture and flow
+- `DATABASE_PATTERNS.md` - Common database access patterns and best practices
+- `CLARIFICATIONS_ON_ARCHITECTURE.md` - Architectural clarifications and decisions
+- `API_ENTRY_POINTS.md` - Documentation of API entry points
 
 ### Feature Documentation
 
 - `AUTOMATIC_COOKIE_DETECTION.md` - Automatic cookie detection and multi-account mode activation
 - `COOKIE_PERSISTENCE_FIX.md` - Fix for cookie file persistence between sessions
+- `COOKIE_FILES_PERSISTENCE_FIX.md` - Additional cookie persistence fixes
+- `COOKIE_PERSISTENCE_AND_FORMAT_FIX_2025.md` - 2025 cookie persistence and format fixes
+- `COOKIE_PROXY_WIRING_FIX.md` - Fix for cookie and proxy integration
 - `DEDUPLICATION_SYSTEM.md` - URL and source deduplication system documentation
 - `EPISODE_FIRST_MIGRATION.md` - Migration to episode-first data model
 - `ERROR_HANDLING_IMPROVEMENTS.md` - Enhanced error handling and user feedback
@@ -255,11 +319,14 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `WIDGET_TESTING_FINAL_RESULTS.md` - Definitive results: 3 real bugs found out of 122 warnings
 - `BUGS_FIXED.md` - Documentation of the 3 real widget bugs found and fixed in CloudUploadsTab
 - `YOUTUBE_DOWNLOAD.md` - YouTube download system documentation
-- `VESTIGIAL_PROMPT_PICKER_REMOVED.md` - Documentation of removal of non-functional prompt file picker from Summarization tab
+- `CHANNEL_SPEAKER_MAPPINGS.md` - Channel to speaker mapping documentation
+- `CHANNEL_CONTEXT_EXAMPLE.md` - Examples of channel context usage
+- `CHANNEL_ID_EXTRACTION_ENHANCEMENT.md` - Enhancements to channel ID extraction
 
 ### Testing Documentation
 
 - `TESTING_STRATEGY.md` - Overall testing strategy and approach
+- `AUTOMATED_TESTING_GUIDE.md` - Guide for automated testing
 - `GUI_TESTING.md` - GUI testing methodology and tools
 - `INTEGRATION_TESTING.md` - Integration test documentation
 
@@ -269,30 +336,68 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `SUPABASE_INTEGRATION.md` - Supabase cloud storage integration
 - `WIKIDATA_INTEGRATION.md` - WikiData API integration documentation
 
+### System Maintenance Documentation
+
+- `YT_DLP_UPGRADE_PROCEDURE.md` - Procedure for upgrading yt-dlp
+- `YT_DLP_MONITORING_GUIDE.md` - Guide for monitoring yt-dlp releases
+- `DEPENDABOT_YTDLP_SETUP.md` - Dependabot setup for yt-dlp updates
+- `DEPENDENCY_UPDATE_STRATEGY.md` - Strategy for dependency updates
+- `DATABASE_SERVICE_LIFECYCLE.md` - Database service lifecycle management
+- `DATABASE_RECORD_DUPLICATION_AUDIT.md` - Audit of database record duplication issues
+- `DIST_FOLDER_CLEANUP.md` - Cleanup procedures for distribution folder
+- `CLEANUP_COMPLETE_SUMMARY.md` - Summary of completed cleanup tasks
+
+### User Guides
+
+- `QUEUE_TAB_USER_GUIDE.md` - User guide for Queue tab functionality
+- `FILE_ORGANIZATION.md` - Guide to output file organization and directory structure
+
+### Processing Documentation
+
+- `BATCH_PROCESSING_INTEGRATION.md` - Batch processing integration documentation
+- `CONVEYOR_BELT_BOTTLENECK_ANALYSIS.md` - Analysis of processing pipeline bottlenecks
+- `AUDIO_PROCESSOR_RECOVERY.md` - Audio processor recovery procedures
+- `AUDIO_ONLY_FORMAT_FIX_FINAL.md` - Final fix for audio-only format handling
+- `AUDIO_ONLY_FORMAT_FINAL_SOLUTION.md` - Final solution for audio-only format processing
+- `ALL_TIMESTAMPS_IMPLEMENTATION.md` - Implementation of timestamp handling
+- `DIVISION_BY_ZERO_FIX.md` - Fix for division by zero errors
+
+### Archive
+
+- `archive/` - Archived documentation (older versions and deprecated guides)
+- `adr/` - Architecture Decision Records (ADRs) documenting key architectural decisions
+
 ---
 
-## KNOWLEDGE_CHIPPER_OAUTH/
+## knowledge_chipper_oauth/
+
+OAuth authentication system for GetReceipts integration.
 
 - `README.md` - Documentation for OAuth authentication system
-- `requirements.txt` - Python dependencies for OAuth server
-- `oauth_server.py` - OAuth callback server for YouTube authentication
-- `oauth_client.py` - OAuth client for handling authentication flow
-- `token_manager.py` - Token storage and refresh management
-- `config.py` - OAuth configuration (client ID, secrets, scopes)
+- `requirements_oauth.txt` - Python dependencies for OAuth server
+- `getreceipts_auth.py` - GetReceipts OAuth authentication handler
+- `getreceipts_config.py` - GetReceipts OAuth configuration
+- `getreceipts_uploader.py` - GetReceipts upload service
+- `integration_example.py` - Integration example code
+- `manual_callback_test.py` - Manual OAuth callback testing script
 
 ---
 
-## OUTPUT/
+## output/
 
 Contains generated output files from processing operations:
 - Transcript markdown files (*.md)
 - JSON metadata files (*.json)
-- SQLite checkpoint databases (*.sqlite)
-- Processing logs and reports
+- Summary files
+- Maps of Content (MOC)
+- Exported files (SRT, VTT, JSON)
+- Downloaded media files
+
+**Note:** Files are organized in subdirectories by type (transcripts/, summaries/, moc/, exports/, downloads/youtube/)
 
 ---
 
-## PRETRAINED_MODELS/
+## pretrained_models/
 
 Contains downloaded Whisper models for offline transcription:
 - `ggml-base.bin` - Whisper base model
@@ -302,7 +407,9 @@ Contains downloaded Whisper models for offline transcription:
 
 ---
 
-## REQUIREMENTS/
+## requirements/
+
+Modular Python dependency specifications.
 
 - `base.txt` - Base Python dependencies required by all environments
 - `dev.txt` - Development dependencies (includes base + dev tools)
@@ -315,7 +422,9 @@ Contains downloaded Whisper models for offline transcription:
 
 ---
 
-## SCHEMAS/
+## schemas/
+
+JSON schemas for data validation.
 
 - `claim_schema.json` - JSON schema for claim objects
 - `episode_schema.json` - JSON schema for episode metadata
@@ -326,9 +435,9 @@ Contains downloaded Whisper models for offline transcription:
 
 ---
 
-## SCRIPTS/
+## scripts/
 
-Contains 200+ utility scripts for:
+Contains 196 utility scripts for:
 - Database migrations and fixes
 - Data cleanup and validation
 - Testing and diagnostics
@@ -342,10 +451,12 @@ Key scripts:
 - `improve_rss_quality_selection.py` - Improve RSS feed quality selection
 - `optimize_rss_matching.py` - Optimize YouTube to RSS matching performance
 - `add_domain_column_to_claims.py` - Migration script to add domain column to claims table for field classification
+- `bump_version.py` - Version bumping utility
+- `update_build_date.sh` - Update build date in documentation
 
 ---
 
-## SRC/KNOWLEDGE_SYSTEM/
+## src/knowledge_system/
 
 Main application package.
 
@@ -356,60 +467,54 @@ Main application package.
 - `config.py` - Configuration management (loads settings, environment variables, defaults)
 - `errors.py` - Custom exception hierarchy for domain-specific errors
 - `logger.py` - Logging configuration and setup for application-wide logging
+- `logger_system2.py` - Structured logging for System 2 processing (package root level)
 - `watchers.py` - File system watchers using watchdog to monitor for new/changed files
 - `py.typed` - Marker file indicating package supports type checking
-
-### COMMANDS/
-
-CLI command implementations.
-
-- `__init__.py` - Command module initialization
-- `database.py` - Database management commands (init, migrate, backup, restore)
-- `moc.py` - Maps of Content generation command
-- `process.py` - Main processing command (transcribe + summarize + extract)
-- `summarize.py` - Summarization command for transcripts and documents
-- `transcribe.py` - Transcription command for audio/video files
-- `upload.py` - Upload command for syncing to cloud storage
-- `voice_test.py` - Voice fingerprinting test and validation command
 
 ### CORE/
 
 Core orchestration and processing coordination.
 
-- `batch_processor.py` - Intelligent batch processing system for large-scale operations with features like smart resume, dynamic parallelization, and progress persistence.
-- `connected_processing_coordinator.py` - Coordinates connected processing stages with audio preservation and staging.
-- `dynamic_parallelization.py` - Dynamic parallelization system for optimal resource usage based on hardware specs.
-- `enhanced_hce_pipeline.py` - Enhanced HCE pipeline with dynamic parallelization.
-- `intelligent_processing_coordinator.py` - Intelligent coordinator with adaptive strategies for the entire processing pipeline.
-- `llm_adapter.py` - LLM provider abstraction layer (OpenAI, Anthropic, Ollama) with advanced features like rate limiting, cost tracking, and hardware-aware concurrency.
-- `parallel_processor.py` - Parallel processing integration for multi-core systems.
-- `system2_logger.py` - Structured logging for System 2 processing.
-- `system2_orchestrator.py` - Main orchestrator for System 2 processing with job management.
-- `system2_orchestrator_mining.py` - Mining integration for System 2 using UnifiedHCEPipeline.
-- `staging_location_examples.py` - Example code for audio staging locations.
-- `usage_example.py` - Usage examples for connected processing.
+- `__init__.py` - Core module initialization
+- `batch_processor.py` - Intelligent batch processing system for large-scale operations with features like smart resume, dynamic parallelization, and progress persistence
+- `checkpoint_manager.py` - Checkpoint management for resumable processing
+- `connected_processing_coordinator.py` - Coordinates connected processing stages with audio preservation and staging
+- `dynamic_parallelization.py` - Dynamic parallelization system for optimal resource usage based on hardware specs
+- `enhanced_hce_pipeline.py` - Enhanced HCE pipeline with dynamic parallelization
+- `intelligent_processing_coordinator.py` - Intelligent coordinator with adaptive strategies for the entire processing pipeline
+- `llm_adapter.py` - LLM provider abstraction layer (OpenAI, Anthropic, Ollama) with advanced features like rate limiting, cost tracking, and hardware-aware concurrency
+- `parallel_processor.py` - Parallel processing integration for multi-core systems
+- `processing_config.py` - Processing configuration management
+- `segment_processor.py` - Segment-level processing coordination
+- `staging_location_examples.py` - Example code for audio staging locations
+- `system2_logger.py` - Structured logging for System 2 processing
+- `system2_orchestrator.py` - Main orchestrator for System 2 processing with job management
+- `system2_orchestrator_mining.py` - Mining integration for System 2 using UnifiedHCEPipeline
+- `usage_example.py` - Usage examples for connected processing
 
 ### DATABASE/
 
 Database models, migrations, and service layer.
 
 - `__init__.py` - Database module initialization
-- `models.py` - SQLAlchemy models for all database tables, defining the comprehensive schema for the application.
-- `service.py` - Database service layer with high-level operations for interacting with the database.
-- `claim_store.py` - Claim-centric storage operations for the HCE system.
-- `speaker_models.py` - Speaker and voice fingerprint models, re-exported from the unified models.py for backward compatibility.
-- `system2_models.py` - System 2 processing job and checkpoint models for orchestration and LLM tracking.
-- `alembic_migrations.py` - Alembic migration management.
-- `apply_hce_migrations.py` - Apply HCE-specific database migrations.
-- `migrate_legacy_data.py` - Migrate legacy data to new schema.
-- `migrate_to_claim_centric.py` - Migrate to claim-centric architecture.
-- `load_wikidata_vocab.py` - Load WikiData vocabulary into database.
-- `download_podcast_categories.py` - Download podcast category taxonomy.
-- `download_wikidata_taxonomy.py` - Download WikiData taxonomy data.
-- `wikidata_seed.json` - Seed data for WikiData categories (~200 categories).
-- `wikidata_*.json` - Various WikiData taxonomy files (conceptual, podcast, merged).
+- `models.py` - SQLAlchemy models for all database tables, defining the comprehensive schema including Question* models
+- `service.py` - Database service layer with high-level operations including question management methods
+- `claim_store.py` - Claim-centric storage operations for the HCE system
+- `speaker_models.py` - Speaker and voice fingerprint models, re-exported from the unified models.py for backward compatibility
+- `system2_models.py` - System 2 processing job and checkpoint models for orchestration and LLM tracking
+- `alembic_migrations.py` - Alembic migration management
+- `apply_hce_migrations.py` - Apply HCE-specific database migrations
+- `migrate_legacy_data.py` - Migrate legacy data to new schema
+- `migrate_to_claim_centric.py` - Migrate to claim-centric architecture
+- `load_wikidata_vocab.py` - Load WikiData vocabulary into database
+- `download_podcast_categories.py` - Download podcast category taxonomy
+- `download_wikidata_taxonomy.py` - Download WikiData taxonomy data
+- `wikidata_seed.json` - Seed data for WikiData categories (~200 categories)
+- `wikidata_*.json` - Various WikiData taxonomy files (conceptual, podcast, merged)
 
 #### DATABASE/MIGRATIONS/
+
+SQL migration files for database schema changes.
 
 - `__init__.py` - Migrations module initialization
 - `unified_schema.sql` - Unified database schema (current production schema)
@@ -423,6 +528,9 @@ Database models, migrations, and service layer.
 - `2025_08_31_upload_tracking.sql` - Upload tracking for cloud sync
 - `2025_10_15_partial_download_tracking.sql` - Partial download tracking
 - `2025_11_05_source_stage_status.sql` - Source stage status tracking for queue visibility
+- `2025_11_16_add_questions_system.sql` - Question mapping system tables and views
+- `2025_11_16_add_user_notes_to_claims.sql` - Add user_notes field to claims table
+- `2025_11_16_fix_verification_status.sql` - Fix verification_status enum to include 'unverifiable'
 - `001_rename_videos_to_media_sources.py` - Rename videos table to media_sources
 - `003_add_enhanced_youtube_fields.py` - Add enhanced YouTube metadata fields
 - `003_speaker_assignment_enhancements.py` - Speaker assignment enhancements
@@ -430,6 +538,12 @@ Database models, migrations, and service layer.
 - `004_channel_host_mappings.py` - Channel to host mapping tables
 - `migration_004_channel_host_mappings.py` - Python migration for channel mappings
 - `system2_migration.py` - System 2 processing tables migration
+
+### EXAMPLES/
+
+Example code and usage demonstrations.
+
+- Example scripts demonstrating API usage and integration patterns
 
 ### GUI/
 
@@ -445,16 +559,23 @@ PyQt6-based graphical user interface.
 
 #### GUI/ADAPTERS/
 
+GUI adapters for backend integration.
+
+- `__init__.py` - Adapters module initialization
 - `hce_adapter.py` - Adapter for HCE system integration with GUI
 
 #### GUI/ASSETS/
 
+GUI asset resources.
+
+- `__init__.py` - Assets module initialization
 - `icons.py` - Icon resources and management
 
 #### GUI/COMPONENTS/
 
 Reusable GUI components.
 
+- `__init__.py` - Components module initialization
 - `base_tab.py` - Base class for all tab implementations
 - `completion_summary.py` - Completion summary display widget
 - `enhanced_error_dialog.py` - Enhanced error dialog with detailed information
@@ -465,34 +586,92 @@ Reusable GUI components.
 - `rich_log_display.py` - Rich log display with syntax highlighting
 - `simple_progress_bar.py` - Simple progress bar widget
 
+#### GUI/CORE/
+
+Core GUI infrastructure.
+
+- Core GUI utilities and base classes
+
 #### GUI/DIALOGS/
 
-Dialog windows for various operations (15 dialog implementations including queue_detail_dialog.py for queue item details).
+Dialog windows for various operations.
+
+- `__init__.py` - Dialogs module initialization
+- `batch_speaker_dialog.py` - Batch speaker assignment dialog
+- `claim_validation_dialog.py` - Claim validation review dialog
+- `comprehensive_first_run_dialog.py` - Comprehensive first-run setup wizard
+- `crash_recovery_dialog.py` - Crash recovery dialog
+- `diarization_ffmpeg_dialog.py` - Diarization and FFmpeg setup dialog
+- `diarization_setup_dialog.py` - Speaker diarization setup dialog
+- `ffmpeg_prompt_dialog.py` - FFmpeg installation prompt
+- `ffmpeg_setup_dialog.py` - FFmpeg setup wizard
+- `first_run_setup_dialog.py` - First run setup dialog
+- `hce_update_dialog.py` - HCE system update dialog
+- `model_tier_selection_dialog.py` - Model tier selection for evaluators
+- `queue_detail_dialog.py` - Queue item detail viewer
+- `sign_up_dialog.py` - User sign-up dialog
+- `speaker_assignment_dialog.py` - Speaker assignment dialog
+
+#### GUI/MIXINS/
+
+GUI mixins for shared functionality.
+
+- Mixin classes providing reusable GUI behaviors
 
 #### GUI/TABS/
 
-Main application tabs.
+Main application tabs (17 total).
 
-- `introduction_tab.py` - Introduction and welcome tab
-- `transcription_tab.py` - Transcription configuration and execution tab
-- `summarization_tab.py` - Summarization (Sunrise) tab with database browser supporting sortable columns including Date Added
-- `queue_tab.py` - Queue tab for real-time pipeline status visualization
-- `review_tab_system2.py` - Review tab for System 2 processing results
+- `__init__.py` - Tabs module initialization
+- `api_keys_tab.py` - API key management tab
+- `batch_processing_tab.py` - Batch processing configuration and execution tab
+- `claim_search_tab.py` - Claim search and filtering tab
+- `cloud_uploads_tab.py` - Cloud upload status and management tab
+- `introduction_tab.py` - Introduction and welcome tab with feature overview
+- `monitor_tab.py` - System monitoring and diagnostics tab
+- `process_tab.py` - Processing pipeline control tab
 - `prompts_tab.py` - Prompt template management tab
-- `settings_tab.py` - Application settings tab
-- `logs_tab.py` - Log viewer tab
-- Additional specialized tabs (16 total)
+- `question_review_tab.py` - Question mapping review and approval tab (NEW: Nov 2025)
+- `queue_tab.py` - Queue tab for real-time pipeline status visualization
+- `review_tab_system2.py` - Review tab for System 2 processing results and claim evaluation
+- `speaker_attribution_tab.py` - Speaker attribution configuration tab
+- `summarization_tab.py` - Summarization (Sunrise) tab with database browser supporting sortable columns including Date Added
+- `summary_cleanup_tab.py` - Summary cleanup and validation tab
+- `sync_status_tab.py` - Synchronization status tab for cloud services
+- `transcription_tab.py` - Transcription configuration and execution tab
+- `settings_tab.py` - Application settings tab (not listed above but exists)
+- `logs_tab.py` - Log viewer tab (not listed above but exists)
+
+#### GUI/UTILS/
+
+GUI utility functions.
+
+- GUI-specific utility functions and helpers
+- `log_integration.py` - Integration of backend logging with GUI display
 
 #### GUI/WIDGETS/
 
 Specialized widgets.
 
+- `__init__.py` - Widgets module initialization
 - `cookie_file_manager.py` - Cookie file management widget for multi-account downloads
-- Additional widgets (3 total)
+- `model_notification_widget.py` - Model availability notification widget
 
 #### GUI/WORKERS/
 
-Background worker threads for GUI operations (5 worker implementations).
+Background worker threads for GUI operations.
+
+- `__init__.py` - Workers module initialization
+- `dmg_update_worker.py` - DMG update checker worker
+- `ffmpeg_installer.py` - FFmpeg installation worker
+- `processing_workers.py` - Processing operation workers
+- `update_worker.py` - Application update checker worker
+
+### INTEGRATIONS/
+
+External service integrations.
+
+- Integration modules for third-party services
 
 ### PROCESSORS/
 
@@ -520,14 +699,17 @@ Hybrid Claim Extraction system.
 - `config_flex.py` - Flexible configuration for HCE pipeline
 - `context_expansion.py` - Context expansion for claims
 - `discourse.py` - Discourse analysis and structure
+- `entity_converters.py` - Entity type converters
 - `export.py` - Export HCE results to various formats
 - `flagship_evaluator.py` - Flagship claim evaluator for ranking and filtering claims
 - `global_index.py` - Global index for cross-document references
 - `health.py` - Health checks for HCE system
 - `io_utils.py` - I/O utilities for HCE
 - `model_uri_parser.py` - Parse model URIs (ollama://, openai://, local://, etc.)
+- `parallel_processor.py` - Parallel processing infrastructure for HCE with auto-scaling workers
 - `relations.py` - Relationship extraction between entities (currently disabled, returns empty list)
 - `schema_validator.py` - Validate and repair HCE output against JSON schemas
+- `sqlite_schema.sql` - SQLite schema for HCE storage tables
 - `storage_sqlite.py` - SQLite storage layer for HCE results with bulk insert optimization
 - `structured_categories.py` - WikiData-based structured category assignment
 - `temporal_numeric.py` - Temporal and numeric data extraction
@@ -535,13 +717,12 @@ Hybrid Claim Extraction system.
 - `types.py` - Type definitions for HCE system (EpisodeBundle, ScoredClaim, PipelineOutputs, etc.)
 - `unified_miner.py` - **ACTIVE:** Unified mining engine that extracts all entity types (claims, jargon, people, concepts) in a single pass
 - `unified_pipeline.py` - **ACTIVE:** Main HCE pipeline orchestrating mining → evaluation → summarization → categorization
-- `parallel_processor.py` - Parallel processing infrastructure for HCE with auto-scaling workers
-- `sqlite_schema.sql` - SQLite schema for HCE storage tables
 
 ##### PROCESSORS/HCE/EVALUATORS/
 
 Claim evaluators for quality assessment.
 
+- `__init__.py` - Evaluators module initialization
 - `concepts_evaluator.py` - Evaluate concept quality
 - `jargon_evaluator.py` - Evaluate jargon definitions
 - `people_evaluator.py` - Evaluate people/entity extractions
@@ -550,13 +731,48 @@ Claim evaluators for quality assessment.
 
 ML models for HCE.
 
+- `__init__.py` - Models module initialization
 - `cross_encoder.py` - Cross-encoder for semantic similarity
 - `embedder.py` - Sentence embeddings for semantic search
 - `llm_system2.py` - LLM integration for System 2 processing
 
 ##### PROCESSORS/HCE/PROMPTS/
 
-Prompt templates for HCE (25 prompt files).
+Prompt templates for HCE (13 prompt files).
+
+- `concepts_evaluator.txt` - Concepts evaluation prompt
+- `flagship_evaluator.txt` - Flagship evaluation prompt
+- `jargon_evaluator.txt` - Jargon evaluation prompt
+- `long_summary.txt` - Long-form summary generation prompt
+- `people_evaluator.txt` - People/entity evaluation prompt
+- `short_summary.txt` - Short summary generation prompt
+- `unified_miner_conservative.txt` - Conservative mining prompt
+- `unified_miner_document.txt` - Document-specific mining prompt
+- `unified_miner_liberal.txt` - Liberal mining prompt
+- `unified_miner_moderate.txt` - Moderate mining prompt (default)
+- `unified_miner_transcript_own.txt` - Own-transcript mining prompt
+- `unified_miner_transcript_third_party.txt` - Third-party transcript mining prompt
+- `unified_miner.txt` - Base unified mining prompt
+
+#### PROCESSORS/QUESTION_MAPPER/
+
+Question mapping system (NEW: November 2025).
+
+- `__init__.py` - Question mapper module initialization
+- `assignment.py` - Claim-to-question assignment stage (Stage 3)
+- `discovery.py` - Question discovery from claims (Stage 1)
+- `hce_integration.py` - Integration with HCE pipeline
+- `merger.py` - Question deduplication and merging (Stage 2)
+- `models.py` - Pydantic data models for question mapper
+- `orchestrator.py` - Question mapper pipeline orchestrator
+
+##### PROCESSORS/QUESTION_MAPPER/PROMPTS/
+
+Question mapper LLM prompts (3 prompts).
+
+- `assignment.txt` - Claim assignment prompt with 7 relation types
+- `discovery.txt` - Question discovery prompt with taxonomy
+- `merger.txt` - Question merging and deduplication prompt
 
 ### SERVICES/
 
@@ -564,6 +780,7 @@ High-level service layer.
 
 - `__init__.py` - Services module initialization
 - `claims_upload_service.py` - Upload claims to cloud storage
+- `download_base.py` - Base download service class
 - `download_scheduler.py` - Schedule and manage downloads
 - `file_generation.py` - Generate output files from database
 - `multi_account_downloader.py` - Multi-account YouTube downloader
@@ -610,15 +827,22 @@ SuperChunk system for advanced document processing (experimental).
 
 ### UTILS/
 
-Utility functions and helpers (90 utility files).
+Utility functions and helpers (90+ utility files).
 
-Key utilities:
+- `__init__.py` - Utils module initialization
 - `ad_detector.py` - Advertisement detection in podcast transcripts
 - `deduplication.py` - URL and source deduplication
 - `llm_speaker_suggester.py` - LLM-based speaker name suggestion
 - `llm_speaker_validator.py` - LLM-based speaker name validation
 - `rss_feed_extractor.py` - Extract RSS feeds from Apple Podcasts/RSS.com URLs
 - `warning_suppressions.py` - Centralized warning suppression configuration
+- Additional 80+ utility modules for various functions
+
+#### UTILS/PROXY/
+
+Proxy management utilities.
+
+- Proxy configuration and management utilities
 
 ### VOICE/
 
@@ -629,20 +853,33 @@ Voice fingerprinting and speaker verification.
 - `speaker_verification_service.py` - Speaker verification service
 - `voice_fingerprinting.py` - Voice fingerprinting using acoustic features
 
+### WORKERS/
+
+Background worker processes.
+
+- Background worker implementations for asynchronous processing
+
 ---
 
-## TESTS/
+## tests/
 
-Comprehensive test suite with 121 test files including:
+Comprehensive test suite with 70+ test files including:
 - Unit tests for all major components
 - Integration tests for end-to-end workflows
 - GUI tests with xvfb support
 - Performance tests
 - Database migration tests
+- Question mapper tests (14 tests)
+
+Key test files:
+- `test_question_mapper.py` - Question mapper system tests (14 tests, all passing)
+- `test_database_imports.py` - Database export validation
+- `test_basic.py` - Basic functionality tests
+- Additional 65+ test modules
 
 ---
 
-## STATE/
+## state/
 
 Runtime state directory for:
 - Session state persistence
@@ -652,33 +889,45 @@ Runtime state directory for:
 
 ---
 
-## LOGS/
+## logs/
 
-Application log files organized by date and component.
+Application log files organized by date and component (380+ log files).
 
 ---
 
-## TMP/
+## tmp/
 
 Temporary files during processing (automatically cleaned up).
 
 ---
 
-## TEST_OUTPUT/
+## test_output/
 
 Output from test runs for verification and debugging.
 
 ---
 
-## TEST_MODELS/
+## test_models/
 
 Test fixtures and mock models for testing.
 
 ---
 
-## TEST_TRANSCRIPTION/
+## test_transcription/
 
 Test fixtures for transcription testing.
+
+---
+
+## build/
+
+Build artifacts and distribution packages.
+
+---
+
+## dist/
+
+Distribution packages (100+ build artifacts).
 
 ---
 

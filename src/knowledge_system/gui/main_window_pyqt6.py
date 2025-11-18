@@ -362,6 +362,19 @@ class MainWindow(QMainWindow):
             placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.tabs.addTab(placeholder, "Review")
 
+        # 6.5. Question Review tab
+        try:
+            from .tabs.question_review_tab import QuestionReviewTab
+
+            question_review_tab = QuestionReviewTab(self)
+            self.tabs.addTab(question_review_tab, "Questions")
+        except ImportError as e:
+            logger.error(f"Question Review tab not available: {e}")
+            # Create placeholder
+            placeholder = QLabel("Question Review tab not available")
+            placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.tabs.addTab(placeholder, "Questions")
+
         # 7. Monitor tab (renamed from File Watcher)
         monitor_tab = MonitorTab(self)
         self.tabs.addTab(monitor_tab, "Monitor")

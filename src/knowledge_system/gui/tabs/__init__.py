@@ -23,6 +23,7 @@ except Exception:
     CloudUploadsTab = None  # type: ignore
 
 from .monitor_tab import MonitorTab
+from .question_review_tab import QuestionReviewTab
 from .transcription_tab import TranscriptionTab
 
 # YouTube tab removed - use Transcription tab for YouTube URLs
@@ -41,4 +42,5 @@ __all__ = [
     "CloudUploadsTab",
     "APIKeysTab",
     "PromptsTab",
+    "QuestionReviewTab",
 ]

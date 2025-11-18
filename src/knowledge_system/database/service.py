@@ -34,6 +34,8 @@ from .models import (
     PlatformTag,
     ProcessingJob,
     QualityMetrics,
+    Question,
+    QuestionClaim,
     Segment,
     SourcePlatformCategory,
     SourcePlatformTag,
@@ -2774,3 +2776,477 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to get queue for stage {stage}: {e}")
             return []
+
+    # ==========================================
+    # QUESTIONS SYSTEM METHODS
+    # ==========================================
+
+    def create_question(
+        self,
+        question_text: str,
+        question_type: str,
+        domain: str | None = None,
+        description: str | None = None,
+        scope: str | None = None,
+        importance_score: float | None = None,
+        **kwargs,
+    ) -> str:
+        """Create a new question in the database.
+
+        Args:
+            question_text: The question text (must be unique)
+            question_type: Type of question (factual, causal, etc.)
+            domain: Optional domain/topic area
+            description: Optional detailed description
+            scope: Optional scope clarification
+            importance_score: Optional importance score (0-1)
+            **kwargs: Additional fields (status, user_priority, notes, etc.)
+
+        Returns:
+            The generated question_id
+
+        Raises:
+            ValueError: If question_text already exists
+        """
+        try:
+            with self.get_session() as session:
+                from .models import Question
+
+                # Check for duplicate
+                existing = (
+                    session.query(Question)
+                    .filter_by(question_text=question_text)
+                    .first()
+                )
+                if existing:
+                    raise ValueError(
+                        f"Question already exists: {existing.question_id}"
+                    )
+
+                # Generate ID
+                question_id = f"q_{uuid.uuid4().hex[:12]}"
+
+                # Create normalized text for matching
+                normalized = self._normalize_question_text(question_text)
+
+                # Create question
+                question = Question(
+                    question_id=question_id,
+                    question_text=question_text,
+                    normalized_text=normalized,
+                    question_type=question_type,
+                    domain=domain,
+                    description=description,
+                    scope=scope,
+                    importance_score=importance_score,
+                    **kwargs,
+                )
+
+                session.add(question)
+                session.commit()
+
+                logger.info(f"Created question {question_id}: {question_text[:60]}")
+                return question_id
+
+        except Exception as e:
+            logger.error(f"Failed to create question: {e}")
+            raise
+
+    def get_question(self, question_id: str) -> dict[str, Any] | None:
+        """Get a question by ID.
+
+        Returns:
+            Question dict or None if not found
+        """
+        try:
+            with self.get_session() as session:
+                from .models import Question
+
+                q = session.query(Question).filter_by(question_id=question_id).first()
+                if not q:
+                    return None
+
+                return {
+                    "question_id": q.question_id,
+                    "question_text": q.question_text,
+                    "question_type": q.question_type,
+                    "domain": q.domain,
+                    "description": q.description,
+                    "scope": q.scope,
+                    "status": q.status,
+                    "answer_confidence": q.answer_confidence,
+                    "answer_completeness": q.answer_completeness,
+                    "has_consensus": q.has_consensus,
+                    "importance_score": q.importance_score,
+                    "user_priority": q.user_priority,
+                    "reviewed": q.reviewed,
+                    "notes": q.notes,
+                    "created_at": q.created_at,
+                    "updated_at": q.updated_at,
+                }
+
+        except Exception as e:
+            logger.error(f"Failed to get question {question_id}: {e}")
+            return None
+
+    def get_questions_by_domain(
+        self, domain: str, status_filter: list[str] | None = None
+    ) -> list[dict[str, Any]]:
+        """Get all questions in a domain.
+
+        Args:
+            domain: Domain to filter by
+            status_filter: Optional list of statuses to include
+
+        Returns:
+            List of question dicts
+        """
+        try:
+            with self.get_session() as session:
+                from .models import Question
+
+                query = session.query(Question).filter_by(domain=domain)
+
+                if status_filter:
+                    query = query.filter(Question.status.in_(status_filter))
+
+                questions = query.order_by(
+                    Question.importance_score.desc().nulls_last(),
+                    Question.created_at,
+                ).all()
+
+                return [
+                    {
+                        "question_id": q.question_id,
+                        "question_text": q.question_text,
+                        "question_type": q.question_type,
+                        "domain": q.domain,
+                        "status": q.status,
+                        "importance_score": q.importance_score,
+                        "reviewed": q.reviewed,
+                    }
+                    for q in questions
+                ]
+
+        except Exception as e:
+            logger.error(f"Failed to get questions for domain {domain}: {e}")
+            return []
+
+    def assign_claim_to_question(
+        self,
+        claim_id: str,
+        question_id: str,
+        relation_type: str,
+        relevance_score: float,
+        rationale: str | None = None,
+    ) -> bool:
+        """Assign a claim to a question with relation type.
+
+        Args:
+            claim_id: Claim to assign
+            question_id: Question to assign to
+            relation_type: How claim relates (answers, supports, etc.)
+            relevance_score: Relevance score (0-1)
+            rationale: Optional explanation of relationship
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self.get_session() as session:
+                from .models import QuestionClaim
+
+                # Check for duplicate assignment
+                existing = (
+                    session.query(QuestionClaim)
+                    .filter_by(claim_id=claim_id, question_id=question_id)
+                    .first()
+                )
+
+                if existing:
+                    # Update existing
+                    existing.relation_type = relation_type
+                    existing.relevance_score = relevance_score
+                    existing.rationale = rationale
+                    existing.assigned_at = datetime.utcnow()
+                    logger.debug(
+                        f"Updated claim-question assignment: "
+                        f"{claim_id} -> {question_id}"
+                    )
+                else:
+                    # Create new
+                    assignment = QuestionClaim(
+                        claim_id=claim_id,
+                        question_id=question_id,
+                        relation_type=relation_type,
+                        relevance_score=relevance_score,
+                        rationale=rationale,
+                    )
+                    session.add(assignment)
+                    logger.debug(
+                        f"Created claim-question assignment: "
+                        f"{claim_id} -> {question_id} ({relation_type})"
+                    )
+
+                session.commit()
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to assign claim to question: {e}")
+            return False
+
+    def get_claims_for_question(
+        self, question_id: str, relation_filter: list[str] | None = None
+    ) -> list[dict[str, Any]]:
+        """Get all claims assigned to a question.
+
+        Args:
+            question_id: Question to get claims for
+            relation_filter: Optional filter by relation types
+
+        Returns:
+            List of claim dicts with assignment metadata
+        """
+        try:
+            with self.get_session() as session:
+                from .models import Claim, QuestionClaim
+
+                query = (
+                    session.query(Claim, QuestionClaim)
+                    .join(QuestionClaim, Claim.claim_id == QuestionClaim.claim_id)
+                    .filter(QuestionClaim.question_id == question_id)
+                )
+
+                if relation_filter:
+                    query = query.filter(
+                        QuestionClaim.relation_type.in_(relation_filter)
+                    )
+
+                results = query.order_by(
+                    QuestionClaim.relevance_score.desc()
+                ).all()
+
+                return [
+                    {
+                        "claim_id": claim.claim_id,
+                        "claim_text": claim.claim_text,
+                        "relation_type": assignment.relation_type,
+                        "relevance_score": assignment.relevance_score,
+                        "rationale": assignment.rationale,
+                        "assigned_at": assignment.assigned_at,
+                    }
+                    for claim, assignment in results
+                ]
+
+        except Exception as e:
+            logger.error(f"Failed to get claims for question {question_id}: {e}")
+            return []
+
+    def get_questions_for_claim(self, claim_id: str) -> list[dict[str, Any]]:
+        """Get all questions a claim is assigned to.
+
+        Args:
+            claim_id: Claim to get questions for
+
+        Returns:
+            List of question dicts with assignment metadata
+        """
+        try:
+            with self.get_session() as session:
+                from .models import Question, QuestionClaim
+
+                results = (
+                    session.query(Question, QuestionClaim)
+                    .join(
+                        QuestionClaim,
+                        Question.question_id == QuestionClaim.question_id,
+                    )
+                    .filter(QuestionClaim.claim_id == claim_id)
+                    .order_by(QuestionClaim.relevance_score.desc())
+                    .all()
+                )
+
+                return [
+                    {
+                        "question_id": q.question_id,
+                        "question_text": q.question_text,
+                        "question_type": q.question_type,
+                        "relation_type": assignment.relation_type,
+                        "relevance_score": assignment.relevance_score,
+                    }
+                    for q, assignment in results
+                ]
+
+        except Exception as e:
+            logger.error(f"Failed to get questions for claim {claim_id}: {e}")
+            return []
+
+    def get_unreviewed_questions(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Get questions pending review.
+
+        Args:
+            limit: Maximum number to return
+
+        Returns:
+            List of question dicts ordered by importance
+        """
+        try:
+            with self.get_session() as session:
+                from .models import Question
+
+                questions = (
+                    session.query(Question)
+                    .filter_by(reviewed=False)
+                    .filter(Question.status != "merged")
+                    .order_by(
+                        Question.importance_score.desc().nulls_last(),
+                        Question.created_at,
+                    )
+                    .limit(limit)
+                    .all()
+                )
+
+                return [
+                    {
+                        "question_id": q.question_id,
+                        "question_text": q.question_text,
+                        "question_type": q.question_type,
+                        "domain": q.domain,
+                        "importance_score": q.importance_score,
+                        "created_at": q.created_at,
+                    }
+                    for q in questions
+                ]
+
+        except Exception as e:
+            logger.error(f"Failed to get unreviewed questions: {e}")
+            return []
+
+    def update_question_status(
+        self, question_id: str, reviewed: bool = True, **kwargs
+    ) -> bool:
+        """Update question review status and other fields.
+
+        Args:
+            question_id: Question to update
+            reviewed: Mark as reviewed
+            **kwargs: Additional fields to update (status, user_priority, notes, etc.)
+
+        Returns:
+            True if successful
+        """
+        try:
+            with self.get_session() as session:
+                from .models import Question
+
+                question = (
+                    session.query(Question).filter_by(question_id=question_id).first()
+                )
+
+                if not question:
+                    logger.warning(f"Question not found: {question_id}")
+                    return False
+
+                question.reviewed = reviewed
+                question.updated_at = datetime.utcnow()
+
+                for key, value in kwargs.items():
+                    if hasattr(question, key):
+                        setattr(question, key, value)
+
+                session.commit()
+                logger.info(f"Updated question {question_id}")
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to update question {question_id}: {e}")
+            return False
+
+    def merge_questions(
+        self, source_question_id: str, target_question_id: str
+    ) -> bool:
+        """Merge one question into another.
+
+        Args:
+            source_question_id: Question to merge (will be marked as merged)
+            target_question_id: Question to merge into (receives all assignments)
+
+        Returns:
+            True if successful
+        """
+        try:
+            with self.get_session() as session:
+                from .models import Question, QuestionClaim
+
+                # Verify both questions exist
+                source = (
+                    session.query(Question)
+                    .filter_by(question_id=source_question_id)
+                    .first()
+                )
+                target = (
+                    session.query(Question)
+                    .filter_by(question_id=target_question_id)
+                    .first()
+                )
+
+                if not source or not target:
+                    logger.error("Source or target question not found for merge")
+                    return False
+
+                # Migrate claim assignments
+                assignments = (
+                    session.query(QuestionClaim)
+                    .filter_by(question_id=source_question_id)
+                    .all()
+                )
+
+                for assignment in assignments:
+                    # Check if target already has this claim
+                    existing = (
+                        session.query(QuestionClaim)
+                        .filter_by(
+                            claim_id=assignment.claim_id,
+                            question_id=target_question_id,
+                        )
+                        .first()
+                    )
+
+                    if existing:
+                        # Keep higher relevance score
+                        if assignment.relevance_score > existing.relevance_score:
+                            existing.relevance_score = assignment.relevance_score
+                            existing.relation_type = assignment.relation_type
+                            existing.rationale = assignment.rationale
+                        session.delete(assignment)
+                    else:
+                        # Move to target
+                        assignment.question_id = target_question_id
+
+                # Mark source as merged
+                source.status = "merged"
+                source.merged_into_question_id = target_question_id
+                source.updated_at = datetime.utcnow()
+
+                session.commit()
+                logger.info(
+                    f"Merged question {source_question_id} into {target_question_id}"
+                )
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to merge questions: {e}")
+            return False
+
+    def _normalize_question_text(self, text: str) -> str:
+        """Normalize question text for matching.
+
+        Lowercases, removes punctuation, standardizes whitespace.
+        """
+        # Lowercase
+        text = text.lower()
+        # Remove punctuation except spaces
+        text = re.sub(r"[^\w\s]", "", text)
+        # Normalize whitespace
+        text = re.sub(r"\s+", " ", text).strip()
+        return text

@@ -1,8 +1,8 @@
 """
 Cloud Uploads Tab
 
-OAuth-based upload system for uploading claims and associated data
-directly to Skipthepodcast.com via authenticated user uploads.
+Auto-upload system for uploading claims and associated data
+directly to GetReceipts.org using device authentication.
 """
 
 from __future__ import annotations
@@ -35,9 +35,8 @@ from PyQt6.QtWidgets import (
 
 from ...logger import get_logger
 from ...services.claims_upload_service import ClaimsUploadService, ClaimUploadData
+from ...services.device_auth import get_device_auth
 from ..components.base_tab import BaseTab
-
-# Note: OAuth implementation now uses dynamic import from knowledge_chipper_oauth/
 
 
 logger = get_logger(__name__)
@@ -151,15 +150,9 @@ class CloudUploadsTab(BaseTab):
         self.upload_worker: DatabaseUploadWorker | None = None
         self.tab_name = "Cloud Uploads"
         self.uploader: GetReceiptsUploader | None = None
-        self.authenticated_user: dict[str, Any] | None = None
+        self.device_auth = get_device_auth()
         self.claims_service: ClaimsUploadService | None = None
         self.claims_data: list[ClaimUploadData] = []
-
-        # Initialize OAuth-related attributes
-        self._oauth_auth = None
-        self._auth_thread = None
-        self._check_timer = None
-        self._progress_dialog = None
 
         # Initialize UI attributes to None before calling super().__init__
         self.claims_table = None
@@ -167,6 +160,7 @@ class CloudUploadsTab(BaseTab):
         self.status_label = None
         self.progress_bar = None
         self.upload_log = None
+        self.auto_upload_checkbox = None
 
         super().__init__(parent)
 
@@ -216,19 +210,14 @@ class CloudUploadsTab(BaseTab):
         return widget
 
     def _create_auth_section(self) -> QGroupBox:
-        """Create authentication section."""
-        group = QGroupBox("Skipthepodcast Authentication")
+        """Create auto-upload settings section."""
+        group = QGroupBox("GetReceipts.org Auto-Upload")
         layout = QVBoxLayout(group)
 
-        # Auth status
-        self.auth_status_label = QLabel("Not authenticated")
-        self.auth_status_label.setStyleSheet("color: #666; font-style: italic;")
-        layout.addWidget(self.auth_status_label)
-
-        # Info text about OAuth flow
+        # Info text about auto-upload
         info_text = QLabel(
-            "🔐 Sign in via Skipthepodcast.com to upload your claims data.\n"
-            "This will open your browser for secure authentication."
+            "📤 Automatically upload claims, people, jargon, and concepts to your GetReceipts.org account.\n\n"
+            "Your device is automatically authenticated - no sign-in required!"
         )
         info_text.setWordWrap(True)
         info_text.setStyleSheet(
@@ -237,25 +226,26 @@ class CloudUploadsTab(BaseTab):
         )
         layout.addWidget(info_text)
 
-        # OAuth authentication button
-        self.oauth_btn = QPushButton("🌐 Sign In via Skipthepodcast.com")
-        self.oauth_btn.setStyleSheet(
-            "QPushButton { padding: 10px; font-size: 14px; background-color: #2196F3; color: white; border: none; border-radius: 6px; }"
-            "QPushButton:hover { background-color: #1976D2; }"
-            "QPushButton:disabled { background-color: #cccccc; }"
-        )
-        self.oauth_btn.clicked.connect(self._sign_in_with_oauth)
-        layout.addWidget(self.oauth_btn)
+        # Auto-upload toggle
+        self.auto_upload_checkbox = QCheckBox("Enable automatic uploads")
+        self.auto_upload_checkbox.setChecked(self.device_auth.is_enabled())
+        self.auto_upload_checkbox.setStyleSheet("font-size: 14px; padding: 8px;")
+        self.auto_upload_checkbox.stateChanged.connect(self._toggle_auto_upload)
+        layout.addWidget(self.auto_upload_checkbox)
 
-        # Sign out button
-        self.logout_btn = QPushButton("Sign Out")
-        self.logout_btn.setEnabled(False)
-        self.logout_btn.clicked.connect(self._sign_out)
-        layout.addWidget(self.logout_btn)
+        # Device ID display (for debugging/verification)
+        creds = self.device_auth.get_credentials()
+        device_id_display = QLabel(f"Device ID: {creds['device_id'][:16]}...")
+        device_id_display.setStyleSheet("color: #999; font-size: 10px; margin-top: 8px;")
+        device_id_display.setWordWrap(True)
+        layout.addWidget(device_id_display)
 
-        # Legacy email/password section removed - OAuth is the primary auth method
+        # Reset credentials button (advanced)
+        reset_btn = QPushButton("Reset Device Credentials")
+        reset_btn.setStyleSheet("font-size: 11px; padding: 4px;")
+        reset_btn.clicked.connect(self._reset_device_credentials)
+        layout.addWidget(reset_btn)
 
-        self._refresh_auth_ui()
         return group
 
     def _create_legacy_auth_section(self, parent_layout: QVBoxLayout) -> None:
@@ -755,380 +745,34 @@ Episodes: {stats.get('total_episodes', 0)}"""
 
         QMessageBox.critical(self, "Upload Error", f"Upload failed: {error_message}")
 
-    # Authentication methods
-    def _refresh_auth_ui(self) -> None:
-        """Refresh authentication UI state."""
-        is_authenticated = (
-            self.uploader is not None and self.authenticated_user is not None
+    # Device Auth methods
+    def _toggle_auto_upload(self, state: int) -> None:
+        """Toggle auto-upload on/off."""
+        enabled = state == Qt.CheckState.Checked.value
+        self.device_auth.set_enabled(enabled)
+
+        status = "enabled" if enabled else "disabled"
+        logger.info(f"Auto-upload {status}")
+        self.status_label.setText(f"Auto-upload {status}")
+
+    def _reset_device_credentials(self) -> None:
+        """Reset device credentials (generate new ones)."""
+        reply = QMessageBox.question(
+            self,
+            "Reset Device Credentials",
+            "This will generate new device credentials. Your existing uploads will remain, "
+            "but you'll need to re-link this device to your online account.\n\n"
+            "Are you sure you want to continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
 
-        # Update OAuth button
-        self.oauth_btn.setEnabled(not is_authenticated)
-
-        # Update legacy auth buttons (if they exist)
-        if hasattr(self, "login_btn"):
-            self.login_btn.setEnabled(not is_authenticated)
-
-        # Update logout button
-        self.logout_btn.setEnabled(is_authenticated)
-
-        if is_authenticated and self.authenticated_user:
-            email = self.authenticated_user.get("email", "Unknown")
-            name = self.authenticated_user.get("name", email)
-            self.auth_status_label.setText(f"✅ Signed in as: {name}")
-            self.auth_status_label.setStyleSheet("color: #4CAF50;")
-            self.oauth_btn.setText("✅ Signed In")
-        else:
-            self.auth_status_label.setText("❌ Not authenticated")
-            self.auth_status_label.setStyleSheet("color: #F44336;")
-            self.oauth_btn.setText("🌐 Sign In via Skipthepodcast.com")
-
-        self._update_upload_button_state()
-
-    def _sign_in_with_oauth(self) -> None:
-        """Sign in using GetReceipts OAuth flow."""
-        # Store reference for cancellation
-        self._oauth_auth = None
-
-        try:
-            # Initialize GetReceipts configuration using the new OAuth package
-            import os
-            import sys
-
-            oauth_package_path = os.path.join(
-                os.path.dirname(
-                    os.path.dirname(
-                        os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-                    )
-                ),
-                "knowledge_chipper_oauth",
-            )
-            if oauth_package_path not in sys.path:
-                sys.path.append(oauth_package_path)
-
-            # Check if the OAuth module files exist before importing
-            config_path = os.path.join(oauth_package_path, "getreceipts_config.py")
-            uploader_path = os.path.join(oauth_package_path, "getreceipts_uploader.py")
-
-            if not os.path.exists(config_path):
-                raise ImportError(
-                    f"OAuth authentication is not yet available. Missing config module at {config_path}"
-                )
-            if not os.path.exists(uploader_path):
-                raise ImportError(
-                    f"OAuth authentication is not yet available. Missing uploader module at {uploader_path}"
-                )
-
-            from getreceipts_config import get_config, set_production  # type: ignore
-            from getreceipts_uploader import GetReceiptsUploader  # type: ignore
-
-            set_production()  # Ensure we're using production URLs for OAuth
-            config = get_config()
-            self.uploader = GetReceiptsUploader(
-                supabase_url=config["supabase_url"],
-                supabase_anon_key=config["supabase_anon_key"],
-                base_url=config["base_url"],
-            )
-
-            # Store auth reference for potential cancellation
-            self._oauth_auth = self.uploader.auth
-
-            # Show progress dialog with proper cancellation handling
-            from PyQt6.QtCore import Qt, QTimer
-            from PyQt6.QtWidgets import QProgressDialog
-
-            progress = QProgressDialog(
-                "Waiting for authentication...", "Cancel", 0, 0, self
-            )
-            progress.setWindowTitle("Skipthepodcast Authentication")
-            progress.setWindowModality(Qt.WindowModality.WindowModal)
-            progress.setAutoClose(False)  # Manual control
-            progress.setAutoReset(False)  # Manual control
-
-            # Handle cancellation
-            def on_cancelled():
-                try:
-                    logger.info("OAuth authentication cancelled by user")
-
-                    # Stop the timer first
-                    if hasattr(self, "_check_timer") and self._check_timer:
-                        self._check_timer.stop()
-
-                    # Cancel OAuth authentication
-                    if self._oauth_auth and hasattr(
-                        self._oauth_auth, "cancel_authentication"
-                    ):
-                        self._oauth_auth.cancel_authentication()
-
-                    # Terminate authentication thread if running
-                    if (
-                        hasattr(self, "_auth_thread")
-                        and self._auth_thread
-                        and self._auth_thread.isRunning()
-                    ):
-                        self._auth_thread.terminate()
-                        self._auth_thread.wait(
-                            1000
-                        )  # Wait up to 1 second for termination
-
-                    # Clear authentication state
-                    self.uploader = None
-                    self.authenticated_user = None
-                    self._oauth_auth = None
-
-                    # Refresh UI
-                    self._refresh_auth_ui()
-
-                except Exception as e:
-                    logger.warning(f"Error during OAuth cancellation: {e}")
-                finally:
-                    try:
-                        if "progress" in locals() and progress:
-                            progress.close()
-                    except Exception as e:
-                        logger.warning(f"Error closing progress dialog: {e}")
-
-            progress.canceled.connect(on_cancelled)
-            progress.show()
-
-            # Update progress text to show steps
-            progress.setLabelText(
-                "🌐 Opening Skipthepodcast.com in your browser...\n\n"
-                "1. Sign in or create account on Skipthepodcast.com\n"
-                "2. Authorize Knowledge_Chipper access\n"
-                "3. Browser should redirect back automatically\n\n"
-                "⚠️ If browser stays on dashboard after login:\n"
-                "   • Look for 'Return to Knowledge Chipper' link\n"
-                "   • Or check the console for manual instructions\n\n"
-                "Waiting for authentication...\n\n"
-                "Click Cancel to abort the authentication process."
-            )
-
-            # Create a timer to periodically check if dialog was cancelled
-            check_timer = QTimer()
-            auth_completed = False
-            auth_result = None
-            auth_error = None
-
-            def check_progress():
-                try:
-                    if progress.wasCanceled():
-                        check_timer.stop()
-                        logger.info("OAuth progress dialog was cancelled")
-
-                        # Cleanup and terminate authentication
-                        if self._oauth_auth and hasattr(
-                            self._oauth_auth, "cancel_authentication"
-                        ):
-                            try:
-                                self._oauth_auth.cancel_authentication()
-                            except Exception as e:
-                                logger.warning(f"Error canceling OAuth: {e}")
-
-                        # Terminate thread if still running
-                        if (
-                            hasattr(self, "_auth_thread")
-                            and self._auth_thread
-                            and self._auth_thread.isRunning()
-                        ):
-                            self._auth_thread.terminate()
-                            self._auth_thread.wait(1000)
-
-                        # Clear references
-                        self._auth_thread = None
-                        self._check_timer = None
-                        self._progress_dialog = None
-
-                        return
-
-                    # Check if authentication completed (this will be set by the thread)
-                    if auth_completed:
-                        check_timer.stop()
-
-                        # Close progress dialog
-                        try:
-                            progress.close()
-                        except Exception as e:
-                            logger.warning(f"Error closing progress dialog: {e}")
-
-                        # Clean up thread
-                        if hasattr(self, "_auth_thread") and self._auth_thread:
-                            if self._auth_thread.isRunning():
-                                self._auth_thread.wait(1000)
-                            self._auth_thread = None
-
-                        # Clear references
-                        self._check_timer = None
-                        self._progress_dialog = None
-
-                        if auth_error:
-                            # Handle error in main thread
-                            try:
-                                self._handle_oauth_error(auth_error)
-                            except Exception as e:
-                                logger.error(f"Error handling OAuth error: {e}")
-                        elif auth_result:
-                            # Handle success in main thread
-                            try:
-                                self._handle_oauth_success(auth_result)
-                            except Exception as e:
-                                logger.error(f"Error handling OAuth success: {e}")
-                except Exception as e:
-                    logger.error(f"Error in OAuth progress check: {e}")
-                    try:
-                        check_timer.stop()
-                        progress.close()
-                    except Exception:
-                        pass
-
-            check_timer.timeout.connect(check_progress)
-            check_timer.start(500)  # Check every 500ms
-
-            # Start authentication in a separate thread to avoid blocking
-            from PyQt6.QtCore import QThread
-
-            class AuthThread(QThread):
-                def __init__(self, parent, uploader):
-                    super().__init__(parent)
-                    self.uploader = uploader
-
-                def run(self):
-                    nonlocal auth_completed, auth_result, auth_error
-                    try:
-                        auth_result = self.uploader.authenticate()
-                    except Exception as e:
-                        auth_error = e
-                    finally:
-                        auth_completed = True
-
-            auth_thread = AuthThread(self, self.uploader)
-
-            # Store references to prevent garbage collection
-            self._auth_thread = auth_thread
-            self._check_timer = check_timer
-            self._progress_dialog = progress
-
-            auth_thread.start()
-
-            # Return immediately - results will be handled by the timer
-            return
-
-        except ImportError as e:
-            # Handle missing OAuth dependencies with specific messaging
-            error_msg = str(e)
-            if "OAuth authentication is not yet available" in error_msg:
-                self._handle_oauth_error(e)
-            else:
-                # Handle other import errors
-                self._handle_oauth_error(
-                    ImportError(
-                        f"OAuth authentication is not yet available: {error_msg}"
-                    )
-                )
-        except Exception as e:
-            if "progress" in locals():
-                progress.close()
-            self._handle_oauth_error(e)
-
-    def _handle_oauth_success(self, auth_result):
-        """Handle successful OAuth authentication."""
-        try:
-            # Store authentication result
-            self.authenticated_user = auth_result["user_info"]
-
-            self._refresh_auth_ui()
+        if reply == QMessageBox.StandardButton.Yes:
+            new_creds = self.device_auth.reset_credentials()
             QMessageBox.information(
                 self,
-                "Authentication Successful",
-                f"Successfully signed in as {self.authenticated_user['name']}!\n\n"
-                "You can now upload your claims data to Skipthepodcast.com.",
+                "Credentials Reset",
+                f"New device credentials generated!\n\nDevice ID: {new_creds['device_id'][:16]}...",
             )
-        except Exception as e:
-            logger.error(f"Error handling OAuth success: {e}")
-            self._handle_oauth_error(e)
-
-    def _handle_oauth_error(self, error):
-        """Handle OAuth authentication error."""
-        logger.error(f"OAuth authentication error: {error}")
-
-        # Handle specific OAuth endpoint unavailable error differently
-        error_message = str(error)
-        if "OAuth authentication is not yet available" in error_message:
-            # Show a more detailed dialog for OAuth unavailability
-            from PyQt6.QtWidgets import QTextEdit
-
-            msg_box = QMessageBox(self)
-            msg_box.setWindowTitle("OAuth Not Available")
-            msg_box.setIcon(QMessageBox.Icon.Warning)
-            msg_box.setText("Sign-in via Skipthepodcast.com is not yet available")
-
-            # Create detailed text widget
-            details = QTextEdit()
-            details.setPlainText(error_message)
-            details.setReadOnly(True)
-            details.setMaximumHeight(300)
-            msg_box.setDetailedText(error_message)
-
-            msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
-            msg_box.exec()
-        elif "cancelled by user" in error_message.lower():
-            # Don't show error dialog for user cancellation
-            logger.info("OAuth authentication cancelled by user")
-        else:
-            # Show regular error dialog for other authentication errors
-            QMessageBox.critical(
-                self, "Authentication Error", f"OAuth error: {str(error)}"
-            )
-
-        # Clear authentication state on error
-        self.uploader = None
-        self.authenticated_user = None
-        self._oauth_auth = None
-        self._refresh_auth_ui()
-
-    def _sign_in(self) -> None:
-        """Sign in to Supabase (legacy - no longer used, OAuth is primary)."""
-        # Legacy email/password auth removed - OAuth is the primary auth method
-        QMessageBox.information(
-            self,
-            "OAuth Required",
-            "Please use the 'Sign In via Skipthepodcast.com' button for authentication.\n\n"
-            "Direct email/password sign-in has been replaced with secure OAuth authentication.",
-        )
-
-    def _sign_up(self) -> None:
-        """Sign up for Supabase account."""
-        if not self.auth or not self.auth.is_available():
-            QMessageBox.warning(
-                self, "Auth Unavailable", "Supabase authentication is not available"
-            )
-            return
-
-        try:
-            from ..dialogs.sign_up_dialog import SignUpDialog
-
-            dialog = SignUpDialog(self)
-            if dialog.exec():
-                email, password = dialog.get_values()
-                if email and password:
-                    success, message = self.auth.sign_up(email, password)
-                    if success:
-                        QMessageBox.information(
-                            self,
-                            "Check Your Email",
-                            "Account created. Check your email to verify before signing in.",
-                        )
-                    else:
-                        QMessageBox.warning(self, "Sign Up Failed", message)
-        except ImportError:
-            QMessageBox.warning(self, "Unavailable", "Sign-up dialog not available")
-
-    def _sign_out(self) -> None:
-        """Sign out of GetReceipts."""
-        self.uploader = None
-        self.authenticated_user = None
-        self._refresh_auth_ui()
-
-        QMessageBox.information(
-            self, "Signed Out", "Successfully signed out of Skipthepodcast.com"
-        )
+            # Refresh UI to show new device ID
+            self._setup_ui()
