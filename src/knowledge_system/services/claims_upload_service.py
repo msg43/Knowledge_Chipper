@@ -148,22 +148,38 @@ class ClaimsUploadService:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        try:
+            cursor.execute(
+                "ALTER TABLE claims ADD COLUMN hidden BOOLEAN DEFAULT 0"
+            )
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         conn.commit()
 
     def get_unuploaded_claims(self) -> list[ClaimUploadData]:
-        """Get all claims that haven't been uploaded or have been modified since last upload."""
+        """Get all claims that haven't been uploaded or have been modified since last upload.
+
+        EPHEMERAL-LOCAL ARCHITECTURE:
+        Only returns claims that are:
+        1. Not yet uploaded (upload_status != 'uploaded')
+        2. Not hidden (hidden = 0)
+
+        After upload, claims are hidden to maintain web as canonical source.
+        """
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
 
-                # Get claims that are pending upload or have never been uploaded
+                # Get claims that are pending upload AND not hidden
                 query = """
                 SELECT c.*, e.title as episode_title, e.source_id
                 FROM claims c
                 LEFT JOIN episodes e ON c.episode_id = e.episode_id
-                WHERE (c.upload_status IS NULL OR c.upload_status = 'pending' OR c.upload_status = 'failed')
-                   OR c.last_uploaded_at IS NULL
+                WHERE ((c.upload_status IS NULL OR c.upload_status = 'pending' OR c.upload_status = 'failed')
+                       OR c.last_uploaded_at IS NULL)
+                  AND (c.hidden IS NULL OR c.hidden = 0)
                 ORDER BY c.inserted_at DESC
                 """
 
@@ -287,6 +303,36 @@ class ClaimsUploadService:
         except Exception as e:
             logger.error(f"Error marking claims as failed: {e}")
 
+    def hide_uploaded_claims(self, claim_ids: list[tuple[str, str]]) -> None:
+        """Hide claims after successful upload (ephemeral-local architecture).
+
+        This removes uploaded claims from the Review Tab, maintaining web as canonical source.
+        Claims remain in local DB for reference but are hidden from user view.
+
+        Args:
+            claim_ids: List of (episode_id, claim_id) tuples to hide
+        """
+        if not claim_ids:
+            return
+
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+
+                for episode_id, claim_id in claim_ids:
+                    cursor.execute(
+                        """UPDATE claims
+                           SET hidden = 1
+                           WHERE episode_id = ? AND claim_id = ?""",
+                        (episode_id, claim_id),
+                    )
+
+                conn.commit()
+                logger.info(f"Hidden {len(claim_ids)} uploaded claims (ephemeral-local mode)")
+
+        except Exception as e:
+            logger.error(f"Error hiding uploaded claims: {e}")
+
     def get_database_stats(self) -> dict[str, Any]:
         """Get statistics about the database."""
         try:
@@ -299,10 +345,11 @@ class ClaimsUploadService:
                 cursor.execute("SELECT COUNT(*) FROM claims")
                 stats["total_claims"] = cursor.fetchone()[0]
 
-                # Count unuploaded claims
+                # Count unuploaded claims (not hidden)
                 cursor.execute(
                     """SELECT COUNT(*) FROM claims
-                       WHERE upload_status IS NULL OR upload_status = 'pending' OR upload_status = 'failed'"""
+                       WHERE (upload_status IS NULL OR upload_status = 'pending' OR upload_status = 'failed')
+                       AND (hidden IS NULL OR hidden = 0)"""
                 )
                 stats["unuploaded_claims"] = cursor.fetchone()[0]
 

@@ -694,7 +694,12 @@ Episodes: {stats.get('total_episodes', 0)}"""
             scrollbar.setValue(scrollbar.maximum())
 
     def _on_upload_finished(self, success_count: int, total_count: int) -> None:
-        """Handle upload completion."""
+        """Handle upload completion.
+
+        EPHEMERAL-LOCAL ARCHITECTURE:
+        After successful upload, claims are hidden from Review Tab to maintain
+        web as canonical source. Claims remain in local DB but are not shown.
+        """
         self.progress_bar.setVisible(False)
         self.upload_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
@@ -704,16 +709,24 @@ Episodes: {stats.get('total_episodes', 0)}"""
         )
 
         if success_count > 0:
-            # Mark successful claims as uploaded
+            # Mark successful claims as uploaded and hide them
             if self.claims_service:
                 selected_claims = self._get_selected_claims()
                 successful_ids = [
-                    (claim.source_id, claim.claim_id)
+                    (claim.episode_id, claim.claim_id)
                     for claim in selected_claims[:success_count]
                 ]
+                # Mark as uploaded
                 self.claims_service.mark_claims_uploaded(successful_ids)
 
-            # Reload claims to update the list
+                # EPHEMERAL: Hide uploaded claims (web is canonical)
+                self.claims_service.hide_uploaded_claims(successful_ids)
+
+                self.upload_log.append(
+                    f"📤 Uploaded claims moved to web (hidden from local view)"
+                )
+
+            # Reload claims to update the list (won't show hidden claims)
             self._load_claims()
             self._update_database_stats()
 
